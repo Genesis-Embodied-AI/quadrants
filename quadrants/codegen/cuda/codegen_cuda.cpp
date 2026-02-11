@@ -222,17 +222,17 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
     auto op = stmt->op_type;
 
-#define UNARY_STD(x)                                                      \
-  else if (op == UnaryOpType::x) {                                        \
+#define UNARY_STD(x)                                                       \
+  else if (op == UnaryOpType::x) {                                         \
     if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {        \
-      llvm_val[stmt] = call("__nv_" #x "f", input);                       \
+      llvm_val[stmt] = call("__nv_" #x "f", input);                        \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) { \
-      llvm_val[stmt] = call("__nv_" #x, input);                           \
+      llvm_val[stmt] = call("__nv_" #x, input);                            \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) { \
-      llvm_val[stmt] = call(#x, input);                                   \
-    } else {                                                              \
-      TI_NOT_IMPLEMENTED                                                  \
-    }                                                                     \
+      llvm_val[stmt] = call(#x, input);                                    \
+    } else {                                                               \
+      TI_NOT_IMPLEMENTED                                                   \
+    }                                                                      \
   }
     if (op == UnaryOpType::abs) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {

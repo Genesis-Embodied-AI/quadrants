@@ -53,17 +53,17 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     auto input_quadrants_type = stmt->operand->ret_type;
     auto op = stmt->op_type;
 
-#define UNARY_STD(x)                                                      \
-  else if (op == UnaryOpType::x) {                                        \
+#define UNARY_STD(x)                                                       \
+  else if (op == UnaryOpType::x) {                                         \
     if (input_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {        \
-      llvm_val[stmt] = call("__ocml_" #x "_f16", input);                  \
+      llvm_val[stmt] = call("__ocml_" #x "_f16", input);                   \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) { \
-      llvm_val[stmt] = call("__ocml_" #x "_f32", input);                  \
+      llvm_val[stmt] = call("__ocml_" #x "_f32", input);                   \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) { \
-      llvm_val[stmt] = call("__ocml_" #x "_f64", input);                  \
-    } else {                                                              \
-      TI_NOT_IMPLEMENTED                                                  \
-    }                                                                     \
+      llvm_val[stmt] = call("__ocml_" #x "_f64", input);                   \
+    } else {                                                               \
+      TI_NOT_IMPLEMENTED                                                   \
+    }                                                                      \
   }
     if (op == UnaryOpType::abs) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {

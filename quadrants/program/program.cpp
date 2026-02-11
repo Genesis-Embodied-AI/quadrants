@@ -190,9 +190,9 @@ void Program::destroy_snode_tree(SNodeTree *snode_tree) {
             compile_config().arch == Arch::vulkan);
 
   // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates
-  // a Quadrants Kernel to read/write the field in a JIT manner, which caches the
-  // compiled JIT Kernel so as to avoid recompilation when accessing the same
-  // field.
+  // a Quadrants Kernel to read/write the field in a JIT manner, which caches
+  // the compiled JIT Kernel so as to avoid recompilation when accessing the
+  // same field.
 
   // This cache uses the place-SNode's address (SNode*) as the key,
   // which becomes unsafe once the SNodeTree gets destroyed and that
@@ -385,7 +385,8 @@ void Program::delete_ndarray(Ndarray *ndarray) {
   // before it actually frees the memory. When `ti.reset()` is called, all
   // ndarrays allocated in this program should be gone and no longer valid in
   // Python. This isn't the best implementation, ndarrays should be managed by
-  // quadrants runtime instead of this giant program and it should be freed when:
+  // quadrants runtime instead of this giant program and it should be freed
+  // when:
   // - Python GC signals quadrants that it's no longer useful
   // - All kernels using it are executed.
   if (ndarrays_.count(ndarray) &&

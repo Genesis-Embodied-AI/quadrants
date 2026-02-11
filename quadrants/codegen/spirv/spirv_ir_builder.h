@@ -343,7 +343,8 @@ class IRBuilder {
   size_t get_primitive_type_size(const DataType &dt) const;
   // Get the spirv uint type with the same size of a given Quadrants data type
   SType get_primitive_uint_type(const DataType &dt) const;
-  // Get the Quadrants uint type with the same size of a given Quadrants data type
+  // Get the Quadrants uint type with the same size of a given Quadrants data
+  // type
   DataType get_quadrants_uint_type(const DataType &dt) const;
   // Get the pointer type that points to value_type
   SType get_storage_pointer_type(const SType &value_type);

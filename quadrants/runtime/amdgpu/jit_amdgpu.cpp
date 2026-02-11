@@ -42,8 +42,9 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   using namespace llvm;
 
   if (this->config_.print_kernel_llvm_ir) {
-    static FileSequenceWriter writer("quadrants_kernel_amdgpu_llvm_ir_{:04d}.ll",
-                                     "unoptimized LLVM IR (AMDGPU)");
+    static FileSequenceWriter writer(
+        "quadrants_kernel_amdgpu_llvm_ir_{:04d}.ll",
+        "unoptimized LLVM IR (AMDGPU)");
     writer.write(llvm_module.get());
   }
   auto triple_str = llvm_module->getTargetTriple();

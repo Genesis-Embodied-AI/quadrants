@@ -351,7 +351,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
     int task_count = ti_kernel->ti_kernel_attribs().tasks_attribs.size();
     if (task_count > apple_max_query_pool_count) {
       TI_WARN(
-          "Cannot concurrently profile more than 32 tasks in a single Quadrants "
+          "Cannot concurrently profile more than 32 tasks in a single "
+          "Quadrants "
           "kernel. Profiling aborted.");
       profiler_ = nullptr;
     } else if (device_->profiler_get_sampler_count() + task_count >

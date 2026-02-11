@@ -628,8 +628,8 @@ void TaskCodegen::visit(ReturnStmt *stmt) {
   // Function to traverse struct tree in depth-first order recursively to
   // calculate AccessChain indices.
   std::function<void(const quadrants::lang::Type *, int &, std::vector<int> &)>
-      calc_indices_and_store = [&](const quadrants::lang::Type *type, int &index,
-                                   std::vector<int> &indices) {
+      calc_indices_and_store = [&](const quadrants::lang::Type *type,
+                                   int &index, std::vector<int> &indices) {
         if (auto struct_type = type->cast<quadrants::lang::StructType>()) {
           for (int i = 0; i < struct_type->elements().size(); ++i) {
             indices.push_back(i);

@@ -51,9 +51,9 @@ from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
     cook_dtype,
     get_traceback,
-    quadrants_scope,
     is_quadrants_class,
     python_scope,
+    quadrants_scope,
     warning,
 )
 from quadrants.types.enums import SNodeGradType

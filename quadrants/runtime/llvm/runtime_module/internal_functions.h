@@ -1,22 +1,22 @@
 // Note that TI_ASSERT provided by runtime doesn't check fail immediately. As
 // a hack, we just check the last error code whenever we call TI_ASSERT.
-#define TI_TEST_CHECK(cond, r)                                 \
-  do {                                                         \
-    TI_ASSERT(cond);                                           \
-    if ((r)->error_code) {                                     \
+#define TI_TEST_CHECK(cond, r)                                  \
+  do {                                                          \
+    TI_ASSERT(cond);                                            \
+    if ((r)->error_code) {                                      \
       quadrants_printf((r), "%s", (r)->error_message_template); \
-      abort();                                                 \
-    }                                                          \
+      abort();                                                  \
+    }                                                           \
   } while (0)
 
-#define ATOMIC_INSERT(T)                                                    \
-  do {                                                                      \
-    auto base_ptr = reinterpret_cast<int##T *>(base_ptr_);                  \
-    int##T *num_triplets = base_ptr;                                        \
-    auto data_base_ptr = base_ptr + 1;                                      \
-    auto triplet_id = atomic_add_i##T(num_triplets, 1);                     \
-    data_base_ptr[triplet_id * 3] = i;                                      \
-    data_base_ptr[triplet_id * 3 + 1] = j;                                  \
+#define ATOMIC_INSERT(T)                                                     \
+  do {                                                                       \
+    auto base_ptr = reinterpret_cast<int##T *>(base_ptr_);                   \
+    int##T *num_triplets = base_ptr;                                         \
+    auto data_base_ptr = base_ptr + 1;                                       \
+    auto triplet_id = atomic_add_i##T(num_triplets, 1);                      \
+    data_base_ptr[triplet_id * 3] = i;                                       \
+    data_base_ptr[triplet_id * 3 + 1] = j;                                   \
     data_base_ptr[triplet_id * 3 + 2] = quadrants_union_cast<int##T>(value); \
   } while (0);
 
@@ -163,7 +163,7 @@ i32 test_active_mask(RuntimeContext *context) {
   while (remaining) {
     auto leader = cttz_i32(remaining);
     quadrants_printf(rt, "current leader %d bid %d tid %d\n", leader,
-                    block_idx(), thread_idx());
+                     block_idx(), thread_idx());
     warp_barrier(active_mask);
     remaining &= ~(1u << leader);
   }

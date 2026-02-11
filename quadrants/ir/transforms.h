@@ -205,8 +205,8 @@ void compile_function(IRNode *ir,
                       Function::IRStage target_stage);
 
 void compile_quadrants_functions(IRNode *ir,
-                                const CompileConfig &compile_config,
-                                Function::IRStage target_stage);
+                                 const CompileConfig &compile_config,
+                                 Function::IRStage target_stage);
 }  // namespace irpass
 
 }  // namespace quadrants::lang

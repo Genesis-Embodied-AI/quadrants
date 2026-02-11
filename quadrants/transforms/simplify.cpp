@@ -201,10 +201,11 @@ class BasicBlockSimplify : public IRVisitor {
           check_sum.get(),
           "The indices provided are too big!\n" + stmt->get_tb(),
           std::vector<Stmt *>());
-      // Because Quadrants's assertion is checked only after the execution of the
-      // kernel, when the linear index overflows and goes negative, we have to
-      // replace that with 0 to make sure that the rest of the kernel can still
-      // complete. Otherwise, Quadrants would crash due to illegal mem address.
+      // Because Quadrants's assertion is checked only after the execution of
+      // the kernel, when the linear index overflows and goes negative, we have
+      // to replace that with 0 to make sure that the rest of the kernel can
+      // still complete. Otherwise, Quadrants would crash due to illegal mem
+      // address.
       auto select = Stmt::make<TernaryOpStmt>(
           TernaryOpType::select, check_sum.get(), sum.get(), zero.get());
 

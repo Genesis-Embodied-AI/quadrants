@@ -574,7 +574,9 @@ class FuncBase:
                         f"Argument of type {type(v)} cannot be converted into required type {needed_arg_type}"
                     )
             else:
-                raise QuadrantsRuntimeTypeError(f"Argument {needed_arg_type} cannot be converted into required type {v}")
+                raise QuadrantsRuntimeTypeError(
+                    f"Argument {needed_arg_type} cannot be converted into required type {v}"
+                )
             return 1, False
         if issubclass(needed_arg_basetype, MatrixType):
             cast_func: Callable[[Any], int | float] | None = None

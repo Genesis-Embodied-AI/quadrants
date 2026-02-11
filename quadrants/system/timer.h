@@ -24,7 +24,7 @@ namespace quadrants {
   {                                                                  \
     char timer_name[1000];                                           \
     sprintf_s(timer_name, "%s[%d]: %s", __FILENAME__, __LINE__, #x); \
-    quadrants::Time::Timer _(timer_name);                             \
+    quadrants::Time::Timer _(timer_name);                            \
     x;                                                               \
   }
 #define TI_TIME(x) TIME(x)

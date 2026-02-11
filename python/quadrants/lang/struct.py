@@ -15,7 +15,12 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.matrix import Matrix, MatrixType
-from quadrants.lang.util import cook_dtype, quadrants_scope, in_python_scope, python_scope
+from quadrants.lang.util import (
+    cook_dtype,
+    in_python_scope,
+    python_scope,
+    quadrants_scope,
+)
 from quadrants.types import primitive_types
 from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout

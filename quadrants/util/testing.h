@@ -13,15 +13,15 @@ namespace quadrants {
 
 #define TI_CHECK_EQUAL(A, B, tolerance)              \
   {                                                  \
-    if (!quadrants::math::equal(A, B, tolerance)) {   \
+    if (!quadrants::math::equal(A, B, tolerance)) {  \
       std::cout << A << std::endl << B << std::endl; \
     }                                                \
-    CHECK(quadrants::math::equal(A, B, tolerance));   \
+    CHECK(quadrants::math::equal(A, B, tolerance));  \
   }
 
 #define TI_ASSERT_EQUAL(A, B, tolerance)             \
   {                                                  \
-    if (!quadrants::math::equal(A, B, tolerance)) {   \
+    if (!quadrants::math::equal(A, B, tolerance)) {  \
       std::cout << A << std::endl << B << std::endl; \
       TI_ERROR(#A " != " #B);                        \
     }                                                \

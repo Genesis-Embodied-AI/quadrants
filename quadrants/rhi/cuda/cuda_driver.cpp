@@ -28,7 +28,8 @@ bool CUDADriverBase::load_lib(std::string lib_linux, std::string lib_windows) {
 #elif defined(TI_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
-  static_assert(false, "Quadrants CUDA driver supports only Windows and Linux.");
+  static_assert(false,
+                "Quadrants CUDA driver supports only Windows and Linux.");
 #endif
 
   loader_ = std::make_unique<DynamicLoader>(lib_name);
@@ -48,7 +49,8 @@ bool CUDADriverBase::check_lib_loaded(std::string lib_linux,
 #elif defined(TI_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
-  static_assert(false, "Quadrants CUDA driver supports only Windows and Linux.");
+  static_assert(false,
+                "Quadrants CUDA driver supports only Windows and Linux.");
 #endif
 
   return DynamicLoader::check_lib_loaded(lib_name);

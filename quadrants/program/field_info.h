@@ -36,7 +36,7 @@ struct FieldInfo {
 };
 
 quadrants::lang::DevicePtr get_device_ptr(quadrants::lang::Program *program,
-                                         quadrants::lang::SNode *snode);
+                                          quadrants::lang::SNode *snode);
 
 }  // namespace ui
 

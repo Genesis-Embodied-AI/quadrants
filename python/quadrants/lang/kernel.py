@@ -48,7 +48,6 @@ from quadrants.types.enums import AutodiffMode
 from quadrants.types.utils import is_signed
 
 from ._func_base import FuncBase
-from ._quadrants_callable import QuadrantsCallable
 from ._kernel_types import (
     ArgsHash,
     CompiledKernelKeyType,
@@ -59,6 +58,7 @@ from ._kernel_types import (
     SrcLlCacheObservations,
 )
 from ._pruning import Pruning
+from ._quadrants_callable import QuadrantsCallable
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION

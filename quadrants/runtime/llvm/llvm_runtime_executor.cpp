@@ -410,7 +410,8 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
   }
 
   TI_TRACE("Allocating data structure of size {} bytes", root_size);
-  std::size_t rounded_size = quadrants::iroundup(root_size, quadrants_page_size);
+  std::size_t rounded_size =
+      quadrants::iroundup(root_size, quadrants_page_size);
 
   Ptr root_buffer = snode_tree_buffer_manager_->allocate(rounded_size, tree_id,
                                                          result_buffer);
@@ -674,7 +675,8 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
     runtime_objects_prealloc_size =
         size_t(fetch_result<uint64_t>(0, (uint64_t *)temp_result_ptr));
     temp_result_alloc.reset();
-    size_t result_buffer_size = sizeof(uint64) * quadrants_result_buffer_entries;
+    size_t result_buffer_size =
+        sizeof(uint64) * quadrants_result_buffer_entries;
 
     TI_TRACE("Allocating device memory {:.2f} MB",
              1.0 * (runtime_objects_prealloc_size + result_buffer_size) /

@@ -8,7 +8,7 @@ import pytest
 
 import quadrants as ti
 from quadrants.lang._kernel_types import KernelBatchedArgType
-from quadrants.lang.impl import QuadrantsSyntaxError, Kernel
+from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
 from tests import test_utils
 

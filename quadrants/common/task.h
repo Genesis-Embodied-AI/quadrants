@@ -68,9 +68,9 @@ task_invoke(const T &func, const std::vector<std::string> &params) {
 }
 
 #define TI_REGISTER_TASK(task)                                             \
-  class Task_##task : public quadrants::Task {                              \
+  class Task_##task : public quadrants::Task {                             \
     std::string run(const std::vector<std::string> &parameters) override { \
-      return quadrants::task_invoke<decltype(task)>(task, parameters);      \
+      return quadrants::task_invoke<decltype(task)>(task, parameters);     \
     }                                                                      \
   };                                                                       \
   TI_IMPLEMENTATION(Task, Task_##task, #task)

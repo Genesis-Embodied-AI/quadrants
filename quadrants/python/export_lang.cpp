@@ -54,15 +54,15 @@ void export_lang(py::module &m) {
   using namespace std::placeholders;
 
   py::register_exception<QuadrantsTypeError>(m, "QuadrantsTypeError",
-                                            PyExc_TypeError);
+                                             PyExc_TypeError);
   py::register_exception<QuadrantsSyntaxError>(m, "QuadrantsSyntaxError",
-                                              PyExc_SyntaxError);
+                                               PyExc_SyntaxError);
   py::register_exception<QuadrantsIndexError>(m, "QuadrantsIndexError",
-                                             PyExc_IndexError);
+                                              PyExc_IndexError);
   py::register_exception<QuadrantsRuntimeError>(m, "QuadrantsRuntimeError",
-                                               PyExc_RuntimeError);
+                                                PyExc_RuntimeError);
   py::register_exception<QuadrantsAssertionError>(m, "QuadrantsAssertionError",
-                                                 PyExc_AssertionError);
+                                                  PyExc_AssertionError);
   py::enum_<Arch>(m, "Arch", py::arithmetic())
 #define PER_ARCH(x) .value(#x, Arch::x)
 #include "quadrants/inc/archs.inc.h"

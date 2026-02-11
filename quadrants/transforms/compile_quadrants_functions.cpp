@@ -11,7 +11,7 @@ class CompileQuadrantsFunctions : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
   CompileQuadrantsFunctions(const CompileConfig &compile_config,
-                           Function::IRStage target_stage)
+                            Function::IRStage target_stage)
       : compile_config_(compile_config), target_stage_(target_stage) {
   }
 
@@ -42,8 +42,8 @@ class CompileQuadrantsFunctions : public BasicStmtVisitor {
 namespace irpass {
 
 void compile_quadrants_functions(IRNode *ir,
-                                const CompileConfig &compile_config,
-                                Function::IRStage target_stage) {
+                                 const CompileConfig &compile_config,
+                                 Function::IRStage target_stage) {
   TI_AUTO_PROF;
   CompileQuadrantsFunctions::run(ir, compile_config, target_stage);
 }

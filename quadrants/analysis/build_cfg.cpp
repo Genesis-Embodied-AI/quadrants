@@ -20,7 +20,8 @@ struct CFGFuncKey {
 namespace std {
 template <>
 struct hash<quadrants::lang::CFGFuncKey> {
-  std::size_t operator()(const quadrants::lang::CFGFuncKey &key) const noexcept {
+  std::size_t operator()(
+      const quadrants::lang::CFGFuncKey &key) const noexcept {
     return std::hash<quadrants::lang::FunctionKey>()(key.func_key) ^
            ((std::size_t)key.in_parallel_for << 32);
   }

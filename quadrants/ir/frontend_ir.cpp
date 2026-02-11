@@ -13,7 +13,7 @@ namespace quadrants::lang {
   do {                                                                     \
     if (x->ret_type == PrimitiveType::unknown) {                           \
       ErrorEmitter(                                                        \
-          QuadrantsTypeError(), x.expr.get(),                               \
+          QuadrantsTypeError(), x.expr.get(),                              \
           fmt::format("[{}] was not type-checked",                         \
                       ExpressionHumanFriendlyPrinter::expr_to_string(x))); \
     }                                                                      \

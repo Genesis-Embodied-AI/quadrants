@@ -230,8 +230,8 @@ class LlvmProgramImpl : public ProgramImpl {
   // 3. Each kernel is compiled into individual kernel_module
   //
   // However, all the llvm::Modules are owned by llvm::Context, which belongs to
-  // QuadrantsLLVMContext. Upon destruction, there's an implicit requirement that
-  // QuadrantsLLVMContext has to stay alive until all the llvm::Modules are
+  // QuadrantsLLVMContext. Upon destruction, there's an implicit requirement
+  // that QuadrantsLLVMContext has to stay alive until all the llvm::Modules are
   // destructed, otherwise there will be risks of dangling references.
   //
   // To guarantee the life cycle of llvm::Module stay aligned with

@@ -21,7 +21,7 @@ TEST(IsSameTypeTest, IsSameType) {
     for (auto t2 : types) {
       ASSERT_TRUE(quadrants::lang::is_same_type(t1, t2));
       ASSERT_TRUE(quadrants::lang::is_same_type(llvm::PointerType::get(t1, 0),
-                                               llvm::PointerType::get(t2, 0)));
+                                                llvm::PointerType::get(t2, 0)));
     }
   }
   auto func1 = llvm::FunctionType::get(

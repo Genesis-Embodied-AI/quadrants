@@ -13,9 +13,9 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.field import Field
 from quadrants.lang.util import (
     cook_dtype,
-    quadrants_scope,
-    is_quadrants_class,
     is_matrix_class,
+    is_quadrants_class,
+    quadrants_scope,
 )
 
 

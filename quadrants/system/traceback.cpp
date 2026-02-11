@@ -245,7 +245,8 @@ void print_traceback() {
   std::lock_guard<std::mutex> guard(traceback_printer_mutex);
   printf("\n");
   printf(
-      "                            * Quadrants Core - Stack Traceback *         "
+      "                            * Quadrants Core - Stack Traceback *        "
+      " "
       "  "
       "                  \n");
   printf(

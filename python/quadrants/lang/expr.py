@@ -7,7 +7,7 @@ from quadrants.lang import impl
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import QuadrantsCompilationError, QuadrantsTypeError
 from quadrants.lang.matrix import make_matrix
-from quadrants.lang.util import is_quadrants_class, is_matrix_class, to_numpy_type
+from quadrants.lang.util import is_matrix_class, is_quadrants_class, to_numpy_type
 from quadrants.types import primitive_types
 from quadrants.types.primitive_types import integer_types, real_types
 

@@ -71,7 +71,8 @@ namespace quadrants::lang {
 
 using namespace llvm;
 
-QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config, Arch arch)
+QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config,
+                                           Arch arch)
     : config_(config), arch_(arch) {
   TI_TRACE("Creating Quadrants llvm context for arch: {}", arch_name(arch));
   main_thread_id_ = std::this_thread::get_id();
@@ -223,7 +224,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_module_to_context(
 }
 
 std::unique_ptr<llvm::Module>
-QuadrantsLLVMContext::clone_module_to_this_thread_context(llvm::Module *module) {
+QuadrantsLLVMContext::clone_module_to_this_thread_context(
+    llvm::Module *module) {
   TI_TRACE("Cloning struct module");
   TI_ASSERT(module);
   auto this_context = get_this_thread_context();
@@ -680,7 +682,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(
 }
 
 void QuadrantsLLVMContext::add_struct_module(std::unique_ptr<Module> module,
-                                            int tree_id) {
+                                             int tree_id) {
   TI_AUTO_PROF;
   TI_ASSERT(std::this_thread::get_id() == main_thread_id_);
   auto this_thread_data = get_this_thread_data();
@@ -732,8 +734,10 @@ template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, int32 t);
 template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, int64 t);
 template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, uint32 t);
 template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, uint64 t);
-template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, float32 t);
-template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, float64 t);
+template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt,
+                                                         float32 t);
+template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt,
+                                                         float64 t);
 
 template <typename T>
 llvm::Value *QuadrantsLLVMContext::get_constant(T t) {
@@ -823,8 +827,8 @@ llvm::DataLayout QuadrantsLLVMContext::get_data_layout() {
 }
 
 void QuadrantsLLVMContext::insert_nvvm_annotation(llvm::Function *func,
-                                                 std::string key,
-                                                 int val) {
+                                                  std::string key,
+                                                  int val) {
   /*******************************************************************
   Example annotation from llvm PTX doc:
 
@@ -850,7 +854,7 @@ void QuadrantsLLVMContext::insert_nvvm_annotation(llvm::Function *func,
 }
 
 void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
-                                                       int block_dim) {
+                                                        int block_dim) {
   // Mark kernel function as a CUDA __global__ function
   // Add the nvvm annotation that it is considered a kernel function.
   insert_nvvm_annotation(func, "kernel", 1);
@@ -861,7 +865,8 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
   }
 }
 
-void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(llvm::Function *func) {
+void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(
+    llvm::Function *func) {
   func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
 }
 
@@ -1090,7 +1095,7 @@ LLVMCompiledKernel QuadrantsLLVMContext::link_compiled_tasks(
 }
 
 void QuadrantsLLVMContext::add_struct_for_func(llvm::Module *module,
-                                              int tls_size) {
+                                               int tls_size) {
   // Note that on CUDA local array allocation must have a compile-time
   // constant size. Therefore, instead of passing in the tls_buffer_size
   // argument, we directly clone the "parallel_struct_for" function and

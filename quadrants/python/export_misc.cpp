@@ -79,8 +79,8 @@ void export_misc(py::module &m) {
       .def("test", &Benchmark::test)
       .def("initialize", &Benchmark::initialize);
 
-#define TI_EXPORT_LOGGING(X)                 \
-  m.def(#X, [](const std::string &msg) {     \
+#define TI_EXPORT_LOGGING(X)                  \
+  m.def(#X, [](const std::string &msg) {      \
     quadrants::Logger::get_instance().X(msg); \
   });
 

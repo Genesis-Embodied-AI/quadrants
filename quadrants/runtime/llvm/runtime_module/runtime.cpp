@@ -139,14 +139,14 @@ __asm__(
   };
 
 // For fetching struct fields from device to host
-#define RUNTIME_STRUCT_FIELD(S, F)                                      \
-  extern "C" void runtime_##S##_get_##F(LLVMRuntime *runtime, S *s) {   \
+#define RUNTIME_STRUCT_FIELD(S, F)                                       \
+  extern "C" void runtime_##S##_get_##F(LLVMRuntime *runtime, S *s) {    \
     runtime->set_result(quadrants_result_buffer_runtime_query_id, s->F); \
   }
 
 #define RUNTIME_STRUCT_FIELD_ARRAY(S, F)                                     \
   extern "C" void runtime_##S##_get_##F(LLVMRuntime *runtime, S *s, int i) { \
-    runtime->set_result(quadrants_result_buffer_runtime_query_id, s->F[i]);   \
+    runtime->set_result(quadrants_result_buffer_runtime_query_id, s->F[i]);  \
   }
 
 using int8 = int8_t;
@@ -445,7 +445,7 @@ T debug_mul(RuntimeContext *ctx, T a, T b, const char *tb) {
   T c;
   if (__builtin_mul_overflow(a, b, &c)) {
     quadrants_printf(ctx->runtime, "Multiplication overflow detected in %s\n",
-                    tb);
+                     tb);
   }
   return c;
 }
@@ -511,8 +511,8 @@ struct ListManager {
         max_num_elements_per_chunk(num_elements_per_chunk),
         runtime(runtime) {
     quadrants_assert_runtime(runtime,
-                            is_power_of_two(max_num_elements_per_chunk),
-                            "max_num_elements_per_chunk must be POT.");
+                             is_power_of_two(max_num_elements_per_chunk),
+                             "max_num_elements_per_chunk must be POT.");
     lock = 0;
     num_elements = 0;
     log2chunk_num_elements = quadrants::log2int(num_elements_per_chunk);
@@ -836,10 +836,10 @@ void quadrants_assert(RuntimeContext *context, u1 test, const char *msg) {
 }
 
 void quadrants_assert_format(LLVMRuntime *runtime,
-                            u1 test,
-                            const char *format,
-                            int num_arguments,
-                            uint64 *arguments) {
+                             u1 test,
+                             const char *format,
+                             int num_arguments,
+                             uint64 *arguments) {
 #ifdef ARCH_amdgpu
   // TODO: find out why error with mark_force_no_inline
   //  llvm::SDValue llvm::SelectionDAG::getNode(unsigned int, const llvm::SDLoc
@@ -970,9 +970,9 @@ void runtime_get_memory_requirements(Ptr result_buffer,
   }
 
   size += quadrants::iroundup(i64(quadrants_global_tmp_buffer_size),
-                             quadrants_page_size);
+                              quadrants_page_size);
   size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states,
-                             quadrants_page_size);
+                              quadrants_page_size);
 
   reinterpret_cast<i64 *>(result_buffer)[0] = size;
 }
@@ -1772,7 +1772,7 @@ i32 linear_thread_idx(RuntimeContext *context) {
 
 void ListManager::touch_chunk(int chunk_id) {
   quadrants_assert_runtime(runtime, chunk_id < max_num_chunks,
-                          "List manager out of chunks.");
+                           "List manager out of chunks.");
   if (!chunks[chunk_id]) {
     locked_task(&lock, [&] {
       // may have been allocated during lock contention
@@ -1966,7 +1966,9 @@ struct printf_helper {
 };
 
 template <typename... Args>
-void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) {
+void quadrants_printf(LLVMRuntime *runtime,
+                      const char *format,
+                      Args &&...args) {
 #if ARCH_cuda
   printf_helper helper;
   helper.push_back(std::forward<Args>(args)...);

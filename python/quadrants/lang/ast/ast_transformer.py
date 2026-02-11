@@ -488,12 +488,16 @@ class ASTTransformer(Builder):
                             return_type.dtype in primitive_types.real_types
                             and not values.element_type() in primitive_types.all_types
                         ):
-                            raise QuadrantsRuntimeTypeError.get_ret(return_type.dtype.to_string(), values.element_type())
+                            raise QuadrantsRuntimeTypeError.get_ret(
+                                return_type.dtype.to_string(), values.element_type()
+                            )
                         elif (
                             return_type.dtype in primitive_types.integer_types
                             and not values.element_type() in primitive_types.integer_types
                         ):
-                            raise QuadrantsRuntimeTypeError.get_ret(return_type.dtype.to_string(), values.element_type())
+                            raise QuadrantsRuntimeTypeError.get_ret(
+                                return_type.dtype.to_string(), values.element_type()
+                            )
                         elif len(values.get_shape()) != return_type.ndim:
                             raise QuadrantsRuntimeTypeError(
                                 f"Return matrix ndim mismatch, expecting={return_type.ndim}, got={len(values.get_shape())}."

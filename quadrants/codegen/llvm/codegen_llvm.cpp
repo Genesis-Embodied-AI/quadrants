@@ -176,19 +176,19 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
   auto op = stmt->op_type;
   auto input_type = input->getType();
 
-#define UNARY_STD(x)                                                      \
-  else if (op == UnaryOpType::x) {                                        \
+#define UNARY_STD(x)                                                       \
+  else if (op == UnaryOpType::x) {                                         \
     if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {        \
-      llvm_val[stmt] = call(#x "_f32", input);                            \
+      llvm_val[stmt] = call(#x "_f32", input);                             \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) { \
-      llvm_val[stmt] = call(#x "_f64", input);                            \
+      llvm_val[stmt] = call(#x "_f64", input);                             \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) { \
-      llvm_val[stmt] = call(#x "_i32", input);                            \
+      llvm_val[stmt] = call(#x "_i32", input);                             \
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) { \
-      llvm_val[stmt] = call(#x "_i64", input);                            \
-    } else {                                                              \
-      TI_NOT_IMPLEMENTED                                                  \
-    }                                                                     \
+      llvm_val[stmt] = call(#x "_i64", input);                             \
+    } else {                                                               \
+      TI_NOT_IMPLEMENTED                                                   \
+    }                                                                      \
   }
   if (false) {
   }
@@ -1321,7 +1321,8 @@ void TaskCodeGenLLVM::visit(LocalStoreStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
-  TI_ASSERT((int)stmt->args.size() <= quadrants_error_message_max_num_arguments);
+  TI_ASSERT((int)stmt->args.size() <=
+            quadrants_error_message_max_num_arguments);
   auto argument_buffer_size = llvm::ArrayType::get(
       llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
 

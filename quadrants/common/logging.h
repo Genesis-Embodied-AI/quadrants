@@ -23,7 +23,7 @@ class logger;
 #endif
 
 #define SPD_AUGMENTED_LOG(X, ...)                                        \
-  quadrants::Logger::get_instance().X(                                    \
+  quadrants::Logger::get_instance().X(                                   \
       fmt::format("[{}:{}@{}] ", __FILENAME__, __FUNCTION__, __LINE__) + \
       fmt::format(__VA_ARGS__))
 
@@ -112,13 +112,13 @@ class logger;
 
 #define TI_LOG_SET_PATTERN(x) spdlog::set_pattern(x);
 
-#define TI_FLUSH_LOGGER                       \
-  {                                           \
+#define TI_FLUSH_LOGGER                        \
+  {                                            \
     quadrants::Logger::get_instance().flush(); \
   };
 
-#define TI_P(x)                                                  \
-  {                                                              \
+#define TI_P(x)                                                   \
+  {                                                               \
     TI_INFO("{}", quadrants::TextSerializer::serialize(#x, (x))); \
   }
 

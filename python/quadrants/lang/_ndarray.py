@@ -141,7 +141,9 @@ class Ndarray:
             numpy.ndarray: The result numpy array.
         """
         arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
-        from quadrants._kernels import ndarray_matrix_to_ext_arr  # pylint: disable=C0415
+        from quadrants._kernels import (
+            ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
+        )
 
         layout_is_aos = 1
         ndarray_matrix_to_ext_arr(self, arr, layout_is_aos, as_vector)
@@ -183,7 +185,9 @@ class Ndarray:
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
-        from quadrants._kernels import ext_arr_to_ndarray_matrix  # pylint: disable=C0415
+        from quadrants._kernels import (
+            ext_arr_to_ndarray_matrix,  # pylint: disable=C0415
+        )
 
         layout_is_aos = 1
         ext_arr_to_ndarray_matrix(arr, self, layout_is_aos, as_vector)

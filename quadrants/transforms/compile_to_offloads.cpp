@@ -69,10 +69,10 @@ void compile_to_offloads(IRNode *ir,
 
   dump_ir("quadrants1");
   irpass::compile_quadrants_functions(ir, config,
-                                     Function::IRStage::BeforeLowerAccess);
+                                      Function::IRStage::BeforeLowerAccess);
   irpass::analysis::gather_func_store_dests(ir);
   irpass::compile_quadrants_functions(ir, config,
-                                     Function::IRStage::OptimizedIR);
+                                      Function::IRStage::OptimizedIR);
   irpass::analysis::gather_func_store_dests(ir);
 
   irpass::eliminate_immutable_local_vars(ir);
