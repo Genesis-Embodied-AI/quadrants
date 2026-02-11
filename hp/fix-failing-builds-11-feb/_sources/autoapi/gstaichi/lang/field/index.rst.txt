@@ -1,0 +1,204 @@
+gstaichi.lang.field
+===================
+
+.. py:module:: gstaichi.lang.field
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.field.Field
+   gstaichi.lang.field.ScalarField
+   gstaichi.lang.field.BitpackedFields
+
+
+Module Contents
+---------------
+
+.. py:class:: Field(_vars)
+
+   GsTaichi field class.
+
+   A field is constructed by a list of field members.
+   For example, a scalar field has 1 field member, while a 3x3 matrix field has 9 field members.
+   A field member is a Python Expr wrapping a C++ FieldExpression.
+
+   :param vars: Field members.
+   :type vars: List[Expr]
+
+
+   .. py:attribute:: vars
+
+
+   .. py:attribute:: host_accessors
+      :value: None
+
+
+
+   .. py:attribute:: grad
+      :value: None
+
+
+
+   .. py:attribute:: dual
+      :value: None
+
+
+
+   .. py:property:: snode
+
+      Gets representative SNode for info purposes.
+
+      :returns: Representative SNode (SNode of first field member).
+      :rtype: SNode
+
+
+   .. py:property:: shape
+      :type: tuple[int, Ellipsis]
+
+
+
+   .. py:property:: dtype
+      :type: gstaichi._lib.core.gstaichi_python.DataTypeCxx
+
+
+
+   .. py:method:: parent(n=1)
+
+      n (int): the number of levels going up from the representative SNode.
+
+
+
+   .. py:method:: fill(val: int | float) -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: to_numpy(dtype: gstaichi._lib.core.gstaichi_python.DataTypeCxx | None = None)
+      :abstractmethod:
+
+
+      Converts `self` to a numpy array.
+
+      :returns: The result numpy array.
+      :rtype: numpy.ndarray
+
+
+
+   .. py:method:: to_torch(device=None)
+      :abstractmethod:
+
+
+      Converts `self` to a torch tensor.
+
+      :param device: The desired device of returned tensor.
+      :type device: torch.device, optional
+
+      :returns: The result torch tensor.
+      :rtype: torch.tensor
+
+
+
+   .. py:method:: from_numpy(arr)
+      :abstractmethod:
+
+
+      Loads all elements from a numpy array.
+
+      The shape of the numpy array needs to be the same as `self`.
+
+      :param arr: The source numpy array.
+      :type arr: numpy.ndarray
+
+
+
+   .. py:method:: from_torch(arr)
+
+      Loads all elements from a torch tensor.
+
+      The shape of the torch tensor needs to be the same as `self`.
+
+      :param arr: The source torch tensor.
+      :type arr: torch.tensor
+
+
+
+   .. py:method:: copy_from(other: Field) -> None
+
+      Copies all elements from another field.
+
+      The shape of the other field needs to be the same as `self`.
+
+
+
+.. py:class:: ScalarField(var)
+
+   Bases: :py:obj:`Field`
+
+
+   GsTaichi scalar field with SNode implementation.
+
+   :param var: Field member.
+   :type var: Expr
+
+
+   .. py:method:: to_dlpack()
+
+      Note: caller is responsible for calling ti.sync() between modifying the field, and
+      reading it.
+
+
+
+   .. py:method:: fill(val)
+
+      Fills this scalar field with a specified value.
+
+
+
+   .. py:method:: to_numpy(dtype=None)
+
+      Converts this field to a `numpy.ndarray`.
+
+
+
+   .. py:method:: to_torch(device=None)
+
+      Converts this field to a `torch.tensor`.
+
+
+
+   .. py:method:: from_numpy(arr)
+
+      Copies the data from a `numpy.ndarray` into this field.
+
+
+
+.. py:class:: BitpackedFields(max_num_bits)
+
+   GsTaichi bitpacked fields, where fields with quantized types are packed together.
+
+   :param max_num_bits: Maximum number of bits all fields inside can occupy in total. Only 32 or 64 is allowed.
+   :type max_num_bits: int
+
+
+   .. py:attribute:: fields
+      :value: []
+
+
+
+   .. py:attribute:: bit_struct_type_builder
+
+
+   .. py:method:: place(*args, shared_exponent=False)
+
+      Places a list of fields with quantized types inside.
+
+      :param \*args: A list of fields with quantized types to place.
+      :type \*args: List[Field]
+      :param shared_exponent: Whether the fields have a shared exponent.
+      :type shared_exponent: bool
+
+
+

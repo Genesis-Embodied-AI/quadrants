@@ -1,0 +1,834 @@
+gstaichi.lang.ops
+=================
+
+.. py:module:: gstaichi.lang.ops
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.ops.cast
+   gstaichi.lang.ops.bit_cast
+   gstaichi.lang.ops.sin
+   gstaichi.lang.ops.cos
+   gstaichi.lang.ops.asin
+   gstaichi.lang.ops.acos
+   gstaichi.lang.ops.sqrt
+   gstaichi.lang.ops.rsqrt
+   gstaichi.lang.ops.round
+   gstaichi.lang.ops.floor
+   gstaichi.lang.ops.ceil
+   gstaichi.lang.ops.frexp
+   gstaichi.lang.ops.tan
+   gstaichi.lang.ops.tanh
+   gstaichi.lang.ops.exp
+   gstaichi.lang.ops.log
+   gstaichi.lang.ops.abs
+   gstaichi.lang.ops.random
+   gstaichi.lang.ops.pow
+   gstaichi.lang.ops.atan2
+   gstaichi.lang.ops.raw_div
+   gstaichi.lang.ops.raw_mod
+   gstaichi.lang.ops.bit_shr
+   gstaichi.lang.ops.select
+   gstaichi.lang.ops.atomic_add
+   gstaichi.lang.ops.atomic_mul
+   gstaichi.lang.ops.atomic_sub
+   gstaichi.lang.ops.atomic_min
+   gstaichi.lang.ops.atomic_max
+   gstaichi.lang.ops.atomic_and
+   gstaichi.lang.ops.atomic_or
+   gstaichi.lang.ops.atomic_xor
+   gstaichi.lang.ops.max
+   gstaichi.lang.ops.min
+
+
+Module Contents
+---------------
+
+.. py:function:: cast(obj, dtype)
+
+   Copy and cast a scalar or a matrix to a specified data type.
+   Must be called in GsTaichi scope.
+
+   :param obj: Input scalar or matrix.
+   :type obj: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param dtype: A primitive type defined in :mod:`~gstaichi.types.primitive_types`.
+   :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+   :returns: A copy of `obj`, casted to the specified data type `dtype`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([0, 1, 2], ti.i32)
+       >>>     y = ti.cast(x, ti.f32)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [0.0, 1.0, 2.0]
+
+
+.. py:function:: bit_cast(obj, dtype)
+
+   Copy and cast a scalar to a specified data type with its underlying
+   bits preserved. Must be called in gstaichi scope.
+
+   This function is equivalent to `reinterpret_cast` in C++.
+
+   :param obj: Input scalar.
+   :type obj: :mod:`~gstaichi.types.primitive_types`
+   :param dtype: Target data type, must have             the same precision bits as the input (hence `f32` -> `f64` is not allowed).
+   :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+   :returns: A copy of `obj`, casted to the specified data type `dtype`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = 3.14
+       >>>     y = ti.bit_cast(x, ti.i32)
+       >>>     print(y)  # 1078523331
+       >>>
+       >>>     z = ti.bit_cast(y, ti.f32)
+       >>>     print(z)  # 3.14
+
+
+.. py:function:: sin(x)
+
+   Trigonometric sine, element-wise.
+
+   :param x: Angle, in radians.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The sine of each element of `x`.
+
+   Example::
+
+       >>> from math import pi
+       >>> x = ti.Matrix([-pi/2., 0, pi/2.])
+       >>> ti.sin(x)
+       [-1., 0., 1.]
+
+
+.. py:function:: cos(x)
+
+   Trigonometric cosine, element-wise.
+
+   :param x: Angle, in radians.
+   :type x: Union[:mod:`~gstaichi.type.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The cosine of each element of `x`.
+
+   Example::
+
+       >>> from math import pi
+       >>> x = ti.Matrix([-pi, 0, pi/2.])
+       >>> ti.cos(x)
+       [-1., 1., 0.]
+
+
+.. py:function:: asin(x)
+
+   Trigonometric inverse sine, element-wise.
+
+   The inverse of `sin` so that, if `y = sin(x)`, then `x = asin(y)`.
+
+   For input `x` not in the domain `[-1, 1]`, this function returns `nan` if         it's called in gstaichi scope, or raises exception if it's called in python scope.
+
+   :param x: A scalar or a matrix with elements in [-1, 1].
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The inverse sine of each element in `x`, in radians and in the closed             interval `[-pi/2, pi/2]`.
+
+   Example::
+
+       >>> from math import pi
+       >>> ti.asin(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi
+       [-90., 0., 90.]
+
+
+.. py:function:: acos(x)
+
+   Trigonometric inverse cosine, element-wise.
+
+   The inverse of `cos` so that, if `y = cos(x)`, then `x = acos(y)`.
+
+   For input `x` not in the domain `[-1, 1]`, this function returns `nan` if         it's called in gstaichi scope, or raises exception if it's called in python scope.
+
+   :param x: A scalar or a matrix with elements in [-1, 1].
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The inverse cosine of each element in `x`, in radians and in the closed             interval `[0, pi]`. This is a scalar if `x` is a scalar.
+
+   Example::
+
+       >>> from math import pi
+       >>> ti.acos(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi
+       [180., 90., 0.]
+
+
+.. py:function:: sqrt(x)
+
+   Return the non-negative square-root of a scalar or a matrix,
+   element wise. If `x < 0` an exception is raised.
+
+   :param x: The scalar or matrix whose square-roots are required.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The square-root `y` so that `y >= 0` and `y^2 = x`. `y` has the same type as `x`.
+
+   Example::
+
+       >>> x = ti.Matrix([1., 4., 9.])
+       >>> y = ti.sqrt(x)
+       >>> y
+       [1.0, 2.0, 3.0]
+
+
+.. py:function:: rsqrt(x)
+
+   The reciprocal of the square root function.
+
+   :param x: A scalar or a matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The reciprocal of `sqrt(x)`.
+
+
+.. py:function:: round(x, dtype=None)
+
+   Round to the nearest integer, element-wise.
+
+   :param x: A scalar or a matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param dtype: (:mod:`~gstaichi.types.primitive_types`): the returned type, default to `None`. If             set to `None` the retuned value will have the same type with `x`.
+
+   :returns: The nearest integer of `x`, with return value type `dtype`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1.5, 1.2, 2.7])
+       >>>     print(ti.round(x))
+       [-2., 1., 3.]
+
+
+.. py:function:: floor(x, dtype=None)
+
+   Return the floor of the input, element-wise.
+   The floor of the scalar `x` is the largest integer `k`, such that `k <= x`.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param dtype: (:mod:`~gstaichi.types.primitive_types`): the returned type, default to `None`. If             set to `None` the retuned value will have the same type with `x`.
+
+   :returns: The floor of each element in `x`, with return value type `dtype`.
+
+   Example::
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-1.1, 2.2, 3.])
+       >>>     y = ti.floor(x, ti.f64)
+       >>>     print(y)  # [-2.000000000000, 2.000000000000, 3.000000000000]
+
+
+.. py:function:: ceil(x, dtype=None)
+
+   Return the ceiling of the input, element-wise.
+
+   The ceil of the scalar `x` is the smallest integer `k`, such that `k >= x`.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param dtype: (:mod:`~gstaichi.types.primitive_types`): the returned type, default to `None`. If             set to `None` the retuned value will have the same type with `x`.
+
+   :returns: The ceiling of each element in `x`, with return value type `dtype`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([3.14, -1.5])
+       >>>     y = ti.ceil(x)
+       >>>     print(y)  # [4.0, -1.0]
+
+
+.. py:function:: frexp(x)
+
+.. py:function:: tan(x)
+
+   Trigonometric tangent function, element-wise.
+
+   Equivalent to `ti.sin(x)/ti.cos(x)` element-wise.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The tangent values of `x`.
+
+   Example::
+
+       >>> from math import pi
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-pi, pi/2, pi])
+       >>>     y = ti.tan(x)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [-0.0, -22877334.0, 0.0]
+
+
+.. py:function:: tanh(x)
+
+   Compute the hyperbolic tangent of `x`, element-wise.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The corresponding hyperbolic tangent values.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-1.0, 0.0, 1.0])
+       >>>     y = ti.tanh(x)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [-0.761594, 0.000000, 0.761594]
+
+
+.. py:function:: exp(x)
+
+   Compute the exponential of all elements in `x`, element-wise.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: Element-wise exponential of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-1.0, 0.0, 1.0])
+       >>>     y = ti.exp(x)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [0.367879, 1.000000, 2.718282]
+
+
+.. py:function:: log(x)
+
+   Compute the natural logarithm, element-wise.
+
+   The natural logarithm `log` is the inverse of the exponential function,
+   so that `log(exp(x)) = x`. The natural logarithm is logarithm in base `e`.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The natural logarithm of `x`, element-wise.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1.0, 0.0, 1.0])
+       >>>     y = ti.log(x)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [-nan, -inf, 0.000000]
+
+
+.. py:function:: abs(x)
+
+   Compute the absolute value :math:`|x|` of `x`, element-wise.
+
+   :param x: Input scalar or matrix.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The absolute value of each element in `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1.0, 0.0, 1.0])
+       >>>     y = ti.abs(x)
+       >>>     print(y)
+       >>>
+       >>> test()
+       [1.0, 0.0, 1.0]
+
+
+.. py:function:: random(dtype=float) -> Union[float, int]
+
+   Return a single random float/integer according to the specified data type.
+   Must be called in gstaichi scope.
+
+   If the required `dtype` is float type, this function returns a random number
+   sampled from the uniform distribution in the half-open interval [0, 1).
+
+   For integer types this function returns a random integer in the
+   half-open interval [0, 2^32) if a 32-bit integer is required,
+   or a random integer in the half-open interval [0, 2^64) if a
+   64-bit integer is required.
+
+   :param dtype: Type of the required random value.
+   :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+   :returns: A random value with type `dtype`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.random(float)
+       >>>     print(x)  # 0.090257
+       >>>
+       >>>     y = ti.random(ti.f64)
+       >>>     print(y)  # 0.716101627301
+       >>>
+       >>>     i = ti.random(ti.i32)
+       >>>     print(i)  # -963722261
+       >>>
+       >>>     j = ti.random(ti.i64)
+       >>>     print(j)  # 73412986184350777
+
+
+.. py:function:: pow(base, exponent)
+
+   First array elements raised to second array elements :math:`{base}^{exponent}`, element-wise.
+
+   The result type of two scalar operands is determined as follows:
+   - If the exponent is an integral value, then the result type takes the type of the base.
+   - Otherwise, the result type follows
+     [Implicit type casting in binary operations](https://docs.taichi-lang.org/docs/type#implicit-type-casting-in-binary-operations).
+
+   With the above rules, an integral value raised to a negative integral value cannot have a
+   feasible type. Therefore, an exception will be raised if debug mode or optimization passes
+   are on; otherwise 1 will be returned.
+
+   In the following situations, the result is undefined:
+   - A negative value raised to a non-integral value.
+   - A zero value raised to a non-positive value.
+
+   :param base: The bases.
+   :type base: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param exponent: The exponents.
+   :type exponent: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: `base` raised to `exponent`. This is a scalar if both `base` and `exponent` are scalars.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-2.0, 2.0])
+       >>>     y = -3
+       >>>     z = ti.pow(x, y)
+       >>>     print(z)
+       >>>
+       >>> test()
+       [-0.125000, 0.125000]
+
+
+.. py:function:: atan2(x1, x2)
+
+   Element-wise arc tangent of `x1/x2`.
+
+   :param x1: y-coordinates.
+   :type x1: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x2: x-coordinates.
+   :type x2: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: Angles in radians, in the range `[-pi, pi]`.
+             This is a scalar if both `x1` and `x2` are scalars.
+
+   Example::
+
+       >>> from math import pi
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Matrix([-1.0, 1.0, -1.0, 1.0])
+       >>>     y = ti.Matrix([-1.0, -1.0, 1.0, 1.0])
+       >>>     z = ti.atan2(y, x) * 180 / pi
+       >>>     print(z)
+       >>>
+       >>> test()
+       [-135.0, -45.0, 135.0, 45.0]
+
+
+.. py:function:: raw_div(x1, x2)
+
+   Return `x1 // x2` if both `x1`, `x2` are integers, otherwise return `x1/x2`.
+
+   :param x1: Dividend.
+   :type x1: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x2: Divisor.
+   :type x2: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: Return `x1 // x2` if both `x1`, `x2` are integers, otherwise return `x1/x2`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def main():
+       >>>     x = 5
+       >>>     y = 3
+       >>>     print(raw_div(x, y))  # 1
+       >>>     z = 4.0
+       >>>     print(raw_div(x, z))  # 1.25
+
+
+.. py:function:: raw_mod(x1, x2)
+
+   Return the remainder of `x1/x2`, element-wise.
+   This is the C-style `mod` function.
+
+   :param x1: The dividend.
+   :type x1: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x2: The divisor.
+   :type x2: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The remainder of `x1` divided by `x2`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def main():
+       >>>     print(ti.mod(-4, 3))  # 2
+       >>>     print(ti.raw_mod(-4, 3))  # -1
+
+
+.. py:function:: bit_shr(x1, x2)
+
+   Elements in `x1` shifted to the right by number of bits in `x2`.
+   Both `x1`, `x2` must have integer type.
+
+   :param x1: Input data.
+   :type x1: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x2: Number of bits to remove at the right of `x1`.
+   :type x2: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: Return `x1` with bits shifted `x2` times to the right.
+             This is a scalar if both `x1` and `x2` are scalars.
+
+   Example::
+       >>> @ti.kernel
+       >>> def main():
+       >>>     x = ti.Matrix([7, 8])
+       >>>     y = ti.Matrix([1, 2])
+       >>>     print(ti.bit_shr(x, y))
+       >>>
+       >>> main()
+       [3, 2]
+
+
+.. py:function:: select(cond, x1, x2)
+
+   Return an array drawn from elements in `x1` or `x2`,
+   depending on the conditions in `cond`.
+
+   :param cond: The array of conditions.
+   :type cond: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x1: The arrays where the output elements are taken from.
+   :type x1: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param x2: The arrays where the output elements are taken from.
+   :type x2: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The output at position `k` is the k-th element of `x1` if the k-th element
+             in `cond` is `True`, otherwise it's the k-th element of `x2`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def main():
+       >>>     cond = ti.Matrix([0, 1, 0, 1])
+       >>>     x = ti.Matrix([1, 2, 3, 4])
+       >>>     y = ti.Matrix([-1, -2, -3, -4])
+       >>>     print(ti.select(cond, x, y))
+       >>>
+       >>> main()
+       [-1, 2, -3, 4]
+
+
+.. py:function:: atomic_add(x, y)
+
+   Atomically compute `x + y`, store the result in `x`,
+   and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([0, 0, 0])
+       >>>     y = ti.Vector([1, 2, 3])
+       >>>     z = ti.atomic_add(x, y)
+       >>>     print(x)  # [1, 2, 3]  the new value of x
+       >>>     print(z)  # [0, 0, 0], the old value of x
+       >>>
+       >>>     ti.atomic_add(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_mul(x, y)
+
+   Atomically compute `x * y`, store the result in `x`,
+   and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([1, 2, 3])
+       >>>     y = ti.Vector([4, 5, 6])
+       >>>     z = ti.atomic_mul(x, y)
+       >>>     print(x)  # [1, 2, 3]  the new value of x
+       >>>     print(z)  # [4, 10, 18], the old value of x
+       >>>
+       >>>     ti.atomic_mul(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_sub(x, y)
+
+   Atomically subtract `x` by `y`, store the result in `x`,
+   and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([0, 0, 0])
+       >>>     y = ti.Vector([1, 2, 3])
+       >>>     z = ti.atomic_sub(x, y)
+       >>>     print(x)  # [-1, -2, -3]  the new value of x
+       >>>     print(z)  # [0, 0, 0], the old value of x
+       >>>
+       >>>     ti.atomic_sub(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_min(x, y)
+
+   Atomically compute the minimum of `x` and `y`, element-wise.
+   Store the result in `x`, and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = 2
+       >>>     y = 1
+       >>>     z = ti.atomic_min(x, y)
+       >>>     print(x)  # 1  the new value of x
+       >>>     print(z)  # 2, the old value of x
+       >>>
+       >>>     ti.atomic_min(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_max(x, y)
+
+   Atomically compute the maximum of `x` and `y`, element-wise.
+   Store the result in `x`, and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = 1
+       >>>     y = 2
+       >>>     z = ti.atomic_max(x, y)
+       >>>     print(x)  # 2  the new value of x
+       >>>     print(z)  # 1, the old value of x
+       >>>
+       >>>     ti.atomic_max(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_and(x, y)
+
+   Atomically compute the bit-wise AND of `x` and `y`, element-wise.
+   Store the result in `x`, and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input. When both are matrices they must have the same shape.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input. When both are matrices they must have the same shape.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1, 0, 1])
+       >>>     y = ti.Vector([1, 2, 3])
+       >>>     z = ti.atomic_and(x, y)
+       >>>     print(x)  # [1, 0, 1]  the new value of x
+       >>>     print(z)  # [-1, 0, 1], the old value of x
+       >>>
+       >>>     ti.atomic_and(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_or(x, y)
+
+   Atomically compute the bit-wise OR of `x` and `y`, element-wise.
+   Store the result in `x`, and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input. When both are matrices they must have the same shape.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input. When both are matrices they must have the same shape.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1, 0, 1])
+       >>>     y = ti.Vector([1, 2, 3])
+       >>>     z = ti.atomic_or(x, y)
+       >>>     print(x)  # [-1, 2, 3]  the new value of x
+       >>>     print(z)  # [-1, 0, 1], the old value of x
+       >>>
+       >>>     ti.atomic_or(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: atomic_xor(x, y)
+
+   Atomically compute the bit-wise XOR of `x` and `y`, element-wise.
+   Store the result in `x`, and return the old value of `x`.
+
+   `x` must be a writable target, constant expressions or scalars
+   are not allowed.
+
+   :param x: The input. When both are matrices they must have the same shape.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+   :param y: The input. When both are matrices they must have the same shape.
+   :type y: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     x = ti.Vector([-1, 0, 1])
+       >>>     y = ti.Vector([1, 2, 3])
+       >>>     z = ti.atomic_xor(x, y)
+       >>>     print(x)  # [-2, 2, 2]  the new value of x
+       >>>     print(z)  # [-1, 0, 1], the old value of x
+       >>>
+       >>>     ti.atomic_xor(1, x)  # will raise GsTaichiSyntaxError
+
+
+.. py:function:: max(*args)
+
+   Compute the maximum of the arguments, element-wise.
+
+   This function takes no effect on a single argument, even it's array-like.
+   When there are both scalar and matrix arguments in `args`, the matrices
+   must have the same shape, and scalars will be broadcasted to the same shape as the matrix.
+
+   :param args: (List[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]):             The input.
+
+   :returns: Maximum of the inputs.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def foo():
+       >>>     x = ti.Vector([0, 1, 2])
+       >>>     y = ti.Vector([3, 4, 5])
+       >>>     z = ti.max(x, y, 4)
+       >>>     print(z)  # [4, 4, 5]
+
+
+.. py:function:: min(*args)
+
+   Compute the minimum of the arguments, element-wise.
+
+   This function takes no effect on a single argument, even it's array-like.
+   When there are both scalar and matrix arguments in `args`, the matrices
+   must have the same shape, and scalars will be broadcasted to the same shape as the matrix.
+
+   :param args: (List[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]):             The input.
+
+   :returns: Minimum of the inputs.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def foo():
+       >>>     x = ti.Vector([0, 1, 2])
+       >>>     y = ti.Vector([3, 4, 5])
+       >>>     z = ti.min(x, y, 1)
+       >>>     print(z)  # [0, 1, 1]
+
+

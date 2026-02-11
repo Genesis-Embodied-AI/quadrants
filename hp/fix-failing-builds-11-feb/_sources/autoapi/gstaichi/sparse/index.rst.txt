@@ -1,0 +1,6 @@
+gstaichi.sparse
+===============
+
+.. py:module:: gstaichi.sparse
+
+

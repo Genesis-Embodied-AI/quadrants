@@ -1,0 +1,119 @@
+gstaichi.lang.kernel_impl
+=========================
+
+.. py:module:: gstaichi.lang.kernel_impl
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.kernel_impl.func
+   gstaichi.lang.kernel_impl.real_func
+   gstaichi.lang.kernel_impl.pyfunc
+   gstaichi.lang.kernel_impl.kernel
+   gstaichi.lang.kernel_impl.data_oriented
+
+
+Module Contents
+---------------
+
+.. py:function:: func(fn: Callable, is_real_function: bool = False) -> gstaichi.lang._gstaichi_callable.GsTaichiCallable
+
+   Marks a function as callable in GsTaichi-scope.
+
+   This decorator transforms a Python function into a GsTaichi one. GsTaichi
+   will JIT compile it into native instructions.
+
+   :param fn: The Python function to be decorated
+   :type fn: Callable
+   :param is_real_function: Whether the function is a real function
+   :type is_real_function: bool
+
+   :returns: The decorated function
+   :rtype: Callable
+
+   Example::
+
+       >>> @ti.func
+       >>> def foo(x):
+       >>>     return x + 2
+       >>>
+       >>> @ti.kernel
+       >>> def run():
+       >>>     print(foo(40))  # 42
+
+
+.. py:function:: real_func(fn: Callable) -> gstaichi.lang._gstaichi_callable.GsTaichiCallable
+
+.. py:function:: pyfunc(fn: Callable) -> gstaichi.lang._gstaichi_callable.GsTaichiCallable
+
+   Marks a function as callable in both GsTaichi and Python scopes.
+
+   When called inside the GsTaichi scope, GsTaichi will JIT compile it into
+   native instructions. Otherwise it will be invoked directly as a
+   Python function.
+
+   See also :func:`~gstaichi.lang.kernel_impl.func`.
+
+   :param fn: The Python function to be decorated
+   :type fn: Callable
+
+   :returns: The decorated function
+   :rtype: Callable
+
+
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False) -> Any
+
+   Marks a function as a GsTaichi kernel.
+
+   A GsTaichi kernel is a function written in Python, and gets JIT compiled by
+   GsTaichi into native CPU/GPU instructions (e.g. a series of CUDA kernels).
+   The top-level ``for`` loops are automatically parallelized, and distributed
+   to either a CPU thread pool or massively parallel GPUs.
+
+   Kernel's gradient kernel would be generated automatically by the AutoDiff system.
+
+   Example::
+
+       >>> x = ti.field(ti.i32, shape=(4, 8))
+       >>>
+       >>> @ti.kernel
+       >>> def run():
+       >>>     # Assigns all the elements of `x` in parallel.
+       >>>     for i in x:
+       >>>         x[i] = i
+
+
+.. py:function:: data_oriented(cls)
+
+   Marks a class as GsTaichi compatible.
+
+   To allow for modularized code, GsTaichi provides this decorator so that
+   GsTaichi kernels can be defined inside a class.
+
+   See also https://docs.taichi-lang.org/docs/odop
+
+   Example::
+
+       >>> @ti.data_oriented
+       >>> class TiArray:
+       >>>     def __init__(self, n):
+       >>>         self.x = ti.field(ti.f32, shape=n)
+       >>>
+       >>>     @ti.kernel
+       >>>     def inc(self):
+       >>>         for i in self.x:
+       >>>             self.x[i] += 1.0
+       >>>
+       >>> a = TiArray(32)
+       >>> a.inc()
+
+   :param cls: the class to be decorated
+   :type cls: Class
+
+   :returns: The decorated class.
+
+

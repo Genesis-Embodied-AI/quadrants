@@ -1,0 +1,735 @@
+gstaichi.math.mathimpl
+======================
+
+.. py:module:: gstaichi.math.mathimpl
+
+.. autoapi-nested-parse::
+
+   Math functions for glsl-like functions and other stuff.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.math.mathimpl.e
+   gstaichi.math.mathimpl.pi
+   gstaichi.math.mathimpl.inf
+   gstaichi.math.mathimpl.nan
+   gstaichi.math.mathimpl.vec2
+   gstaichi.math.mathimpl.vec3
+   gstaichi.math.mathimpl.vec4
+   gstaichi.math.mathimpl.ivec2
+   gstaichi.math.mathimpl.ivec3
+   gstaichi.math.mathimpl.ivec4
+   gstaichi.math.mathimpl.uvec2
+   gstaichi.math.mathimpl.uvec3
+   gstaichi.math.mathimpl.uvec4
+   gstaichi.math.mathimpl.mat2
+   gstaichi.math.mathimpl.mat3
+   gstaichi.math.mathimpl.mat4
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.math.mathimpl.mix
+   gstaichi.math.mathimpl.clamp
+   gstaichi.math.mathimpl.step
+   gstaichi.math.mathimpl.fract
+   gstaichi.math.mathimpl.smoothstep
+   gstaichi.math.mathimpl.sign
+   gstaichi.math.mathimpl.normalize
+   gstaichi.math.mathimpl.log2
+   gstaichi.math.mathimpl.reflect
+   gstaichi.math.mathimpl.degrees
+   gstaichi.math.mathimpl.radians
+   gstaichi.math.mathimpl.distance
+   gstaichi.math.mathimpl.refract
+   gstaichi.math.mathimpl.dot
+   gstaichi.math.mathimpl.cross
+   gstaichi.math.mathimpl.mod
+   gstaichi.math.mathimpl.translate
+   gstaichi.math.mathimpl.scale
+   gstaichi.math.mathimpl.rot_by_axis
+   gstaichi.math.mathimpl.rot_yaw_pitch_roll
+   gstaichi.math.mathimpl.rotation2d
+   gstaichi.math.mathimpl.rotation3d
+   gstaichi.math.mathimpl.eye
+   gstaichi.math.mathimpl.length
+   gstaichi.math.mathimpl.determinant
+   gstaichi.math.mathimpl.inverse
+   gstaichi.math.mathimpl.isinf
+   gstaichi.math.mathimpl.isnan
+   gstaichi.math.mathimpl.vdir
+   gstaichi.math.mathimpl.popcnt
+   gstaichi.math.mathimpl.clz
+
+
+Module Contents
+---------------
+
+.. py:data:: e
+   :value: 2.718281828459045
+
+
+   The mathematical constant e = 2.718281….
+   Directly imported from the Python standard library `math`.
+
+.. py:data:: pi
+   :value: 3.141592653589793
+
+
+   The mathematical constant π = 3.141592….
+   Directly imported from the Python standard library `math`.
+
+.. py:data:: inf
+   :value: inf
+
+
+   A floating-point positive infinity. (For negative infinity, use `-inf`).
+   Directly imported from the Python standard library `math`.
+
+.. py:data:: nan
+   :value: nan
+
+
+   A floating-point "not a number" (NaN) value.
+   Directly imported from the Python standard library `math`
+
+.. py:data:: vec2
+
+   2D floating vector type.
+
+.. py:data:: vec3
+
+   3D floating vector type.
+
+.. py:data:: vec4
+
+   4D floating vector type.
+
+.. py:data:: ivec2
+
+   2D signed int vector type.
+
+.. py:data:: ivec3
+
+   3D signed int vector type.
+
+.. py:data:: ivec4
+
+   3D signed int vector type.
+
+.. py:data:: uvec2
+
+   2D unsigned int vector type.
+
+.. py:data:: uvec3
+
+   3D unsigned int vector type.
+
+.. py:data:: uvec4
+
+   4D unsigned int vector type.
+
+.. py:data:: mat2
+
+   2x2 floating matrix type.
+
+.. py:data:: mat3
+
+   3x3 floating matrix type.
+
+.. py:data:: mat4
+
+   4x4 floating matrix type.
+
+.. py:function:: mix(x, y, a)
+
+   Performs a linear interpolation between `x` and `y` using
+   `a` to weight between them. The return value is computed as
+   `x * (1 - a) + a * y`.
+
+   The arguments can be scalars or :class:`~gstaichi.Matrix`,
+   as long as the operation can be performed.
+
+   This function is similar to the `mix` function in GLSL.
+
+   :param x: Specify
+             the start of the range in which to interpolate.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param y: Specify
+             the end of the range in which to interpolate.
+   :type y: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param a: Specify
+             the weight to use to interpolate between x and y.
+   :type a: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns:
+
+             The linear
+                 interpolation of `x` and `y` by weight `a`.
+   :rtype: (:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`)
+
+   Example::
+
+       >>> x = ti.Vector([1, 1, 1])
+       >>> y = ti.Vector([2, 2, 2])
+       >>> a = ti.Vector([1, 0, 0])
+       >>> ti.math.mix(x, y, a)
+       [2.000000, 1.000000, 1.000000]
+       >>> x = ti.Matrix([[1, 2], [2, 3]], ti.f32)
+       >>> y = ti.Matrix([[3, 5], [4, 5]], ti.f32)
+       >>> a = 0.5
+       >>> ti.math.mix(x, y, a)
+       [[2.000000, 3.500000], [3.000000, 4.000000]]
+
+
+.. py:function:: clamp(x, xmin, xmax)
+
+   Constrain a value to lie between two further values, element-wise.
+   The returned value is computed as `min(max(x, xmin), xmax)`.
+
+   The arguments can be scalars or :class:`~gstaichi.Matrix`,
+   as long as they can be broadcasted to a common shape.
+
+   :param x: Specify
+             the value to constrain.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param y: Specify
+             the lower end of the range into which to constrain `x`.
+   :type y: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param a: Specify
+             the upper end of the range into which to constrain `x`.
+   :type a: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: The value of `x` constrained to the range `xmin` to `xmax`.
+
+   Example::
+
+       >>> v = ti.Vector([0, 0.5, 1.0, 1.5])
+       >>> ti.math.clamp(v, 0.5, 1.0)
+       [0.500000, 0.500000, 1.000000, 1.000000]
+       >>> x = ti.Matrix([[0, 1], [-2, 2]], ti.f32)
+       >>> y = ti.Matrix([[1, 2], [1, 2]], ti.f32)
+       >>> ti.math.clamp(x, 0.5, y)
+       [[0.500000, 1.000000], [0.500000, 2.000000]]
+
+
+.. py:function:: step(edge, x)
+
+   Generate a step function by comparing two values, element-wise.
+
+   `step` generates a step function by comparing `x` to edge.
+   For element i of the return value, 0.0 is returned if x[i] < edge[i],
+   and 1.0 is returned otherwise.
+
+   The two arguments can be scalars or :class:`~gstaichi.Matrix`,
+   as long as they can be broadcasted to a common shape.
+
+   :param edge: Specify
+                the location of the edge of the step function.
+   :type edge: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param x: Specify
+             the value to be used to generate the step function.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: The return value is computed as `x >= edge`, with type promoted.
+
+   Example::
+
+       >>> x = ti.Matrix([[0, 1], [2, 3]], ti.f32)
+       >>> y = 1
+       >>> ti.math.step(x, y)
+       [[1.000000, 1.000000], [0.000000, 0.000000]]
+
+
+.. py:function:: fract(x)
+
+   Compute the fractional part of the argument, element-wise.
+   It's equivalent to `x - ti.floor(x)`.
+
+   :param x: The
+             input value.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: The fractional part of `x`.
+
+   Example::
+
+       >>> x = ti.Vector([-1.2, -0.7, 0.3, 1.2])
+       >>> ti.math.fract(x)
+       [0.800000, 0.300000, 0.300000, 0.200000]
+
+
+.. py:function:: smoothstep(edge0, edge1, x)
+
+   Performs smooth Hermite interpolation between 0 and 1 when
+   `edge0 < x < edge1`, element-wise.
+
+   The arguments can be scalars or :class:`~gstaichi.Matrix`,
+   as long as they can be broadcasted to a common shape.
+
+   This function is equivalent to the `smoothstep` in GLSL.
+
+   :param edge0: Specifies
+                 the value of the lower edge of the Hermite function.
+   :type edge0: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param edge1: Specifies
+                 the value of the upper edge of the Hermite function.
+   :type edge1: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param x: Specifies
+             the source value for interpolation.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: The smoothly interpolated value.
+
+   Example::
+
+       >>> edge0 = ti.Vector([0, 1, 2])
+       >>> edge1 = 1
+       >>> x = ti.Vector([0.5, 1.5, 2.5])
+       >>> ti.math.smoothstep(edge0, edge1, x)
+       [0.500000, 1.000000, 0.000000]
+
+
+.. py:function:: sign(x)
+
+   Extract the sign of the parameter, element-wise.
+
+   :param x: The
+             input value.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: -1.0 if `x` is less than 0.0, 0.0 if `x` is equal to 0.0,
+             and +1.0 if `x` is greater than 0.0.
+
+   Example::
+
+       >>> x = ti.Vector([-1.0, 0.0, 1.0])
+       >>> ti.math.sign(x)
+       [-1.000000, 0.000000, 1.000000]
+
+
+.. py:function:: normalize(v)
+
+   Calculates the unit vector in the same direction as the
+   original vector `v`.
+
+   It's equivalent to the `normalize` function is GLSL.
+
+   :param x: The vector to normalize.
+   :type x: :class:`~gstaichi.Matrix`
+
+   :returns: The normalized vector :math:`v/|v|`.
+
+   Example::
+
+       >>> v = ti.Vector([1, 2, 3])
+       >>> ti.math.normalize(v)
+       [0.267261, 0.534522, 0.801784]
+
+
+.. py:function:: log2(x)
+
+   Return the base 2 logarithm of `x`, so that if :math:`2^y=x`,
+   then :math:`y=\log2(x)`.
+
+   This is equivalent to the `log2` function is GLSL.
+
+   :param x: The input value.
+   :type x: :class:`~gstaichi.Matrix`
+
+   :returns: The base 2 logarithm of `x`.
+
+   Example::
+
+       >>> x = ti.Vector([1., 2., 3.])
+       >>> ti.math.log2(x)
+       [0.000000, 1.000000, 1.584962]
+
+
+.. py:function:: reflect(x, n)
+
+   Calculate the reflection direction for an incident vector.
+
+   For a given incident vector `x` and surface normal `n` this
+   function returns the reflection direction calculated as
+   :math:`x - 2.0 * dot(x, n) * n`.
+
+   This is equivalent to the `reflect` function is GLSL.
+
+   `n` should be normalized in order to achieve the desired result.
+
+   :param x: The incident vector.
+   :type x: :class:`~gstaichi.Matrix`
+   :param n: The normal vector.
+   :type n: :class:`~gstaichi.Matrix`
+
+   :returns: The reflected vector.
+
+   Example::
+
+       >>> x = ti.Vector([1., 2., 3.])
+       >>> n = ti.Vector([0., 1., 0.])
+       >>> ti.math.reflect(x, n)
+       [1.000000, -2.000000, 3.000000]
+
+
+.. py:function:: degrees(x)
+
+   Convert `x` in radians to degrees, element-wise.
+
+   :param x: The input angle in radians.
+   :type x: :class:`~gstaichi.Matrix`
+
+   :returns: angle in degrees.
+
+   Example::
+
+       >>> x = ti.Vector([-pi/2, pi/2])
+       >>> ti.math.degrees(x)
+       [-90.000000, 90.000000]
+
+
+.. py:function:: radians(x)
+
+   Convert `x` in degrees to radians, element-wise.
+
+   :param x: The input angle in degrees.
+   :type x: :class:`~gstaichi.Matrix`
+
+   :returns: angle in radians.
+
+   Example::
+
+       >>> x = ti.Vector([-90., 45., 90.])
+       >>> ti.math.radians(x) / pi
+       [-0.500000, 0.250000, 0.500000]
+
+
+.. py:function:: distance(x, y)
+
+   Calculate the distance between two points.
+
+   This function is equivalent to the `distance` function is GLSL.
+
+   :param x: The first input point.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param y: The second input point.
+   :type y: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: The distance between the two points.
+
+   Example::
+
+       >>> x = ti.Vector([0, 0, 0])
+       >>> y = ti.Vector([1, 1, 1])
+       >>> ti.math.distance(x, y)
+       1.732051
+
+
+.. py:function:: refract(x, n, eta)
+
+   Calculate the refraction direction for an incident vector.
+
+   This function is equivalent to the `refract` function in GLSL.
+
+   :param x: The incident vector.
+   :type x: :class:`~gstaichi.Matrix`
+   :param n: The normal vector.
+   :type n: :class:`~gstaichi.Matrix`
+   :param eta: The ratio of indices of refraction.
+   :type eta: float
+
+   :returns: The refraction direction vector.
+   :rtype: :class:`~gstaichi.Matrix`
+
+   Example::
+
+       >>> x = ti.Vector([1., 1., 1.])
+       >>> y = ti.Vector([0, 1., 0])
+       >>> ti.math.refract(x, y, 2.0)
+       [2.000000, -1.000000, 2.000000]
+
+
+.. py:function:: dot(x, y)
+
+   Calculate the dot product of two vectors.
+
+   :param x: The first input vector.
+   :type x: :class:`~gstaichi.Matrix`
+   :param y: The second input vector.
+   :type y: :class:`~gstaichi.Matrix`
+
+   :returns: The dot product of two vectors.
+
+   Example::
+
+       >>> x = ti.Vector([1., 1., 0.])
+       >>> y = ti.Vector([0., 1., 1.])
+       >>> ti.math.dot(x, y)
+       1.000000
+
+
+.. py:function:: cross(x, y)
+
+   Calculate the cross product of two vectors.
+
+   The two input vectors must have the same dimension :math:`d <= 3`.
+
+   This function calls the `cross` method of :class:`~gstaichi.Vector`.
+
+   :param x: The first input vector.
+   :type x: :class:`~gstaichi.Matrix`
+   :param y: The second input vector.
+   :type y: :class:`~gstaichi.Matrix`
+
+   :returns: The cross product of two vectors.
+
+   Example::
+
+       >>> x = ti.Vector([1., 0., 0.])
+       >>> y = ti.Vector([0., 1., 0.])
+       >>> ti.math.cross(x, y)
+       [0.000000, 0.000000, 1.000000]
+
+
+.. py:function:: mod(x, y)
+
+   Compute value of one parameter modulo another, element-wise.
+
+   :param x: The first input.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+   :param y: The second input.
+   :type y: :mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`
+
+   :returns: the value of `x` modulo `y`. This is computed as `x - y * floor(x/y)`.
+
+   Example::
+
+       >>> x = ti.Vector([-0.5, 0.5, 1.])
+       >>> y = 1.0
+       >>> ti.math.mod(x, y)
+       [0.500000, 0.500000, 0.000000]
+
+
+.. py:function:: translate(dx, dy, dz)
+
+   Constructs a translation Matrix with shape (4, 4).
+
+   :param dx: delta x.
+   :type dx: float
+   :param dy: delta y.
+   :type dy: float
+   :param dz: delta z.
+   :type dz: float
+
+   :returns: translation matrix.
+   :rtype: :class:`~gstaichi.math.mat4`
+
+   Example::
+
+       >>> ti.math.translate(1, 2, 3)
+       [[ 1. 0. 0. 1.]
+        [ 0. 1. 0. 2.]
+        [ 0. 0. 1. 3.]
+        [ 0. 0. 0. 1.]]
+
+
+.. py:function:: scale(sx, sy, sz)
+
+   Constructs a scale Matrix with shape (4, 4).
+
+   :param sx: scale x.
+   :type sx: float
+   :param sy: scale y.
+   :type sy: float
+   :param sz: scale z.
+   :type sz: float
+
+   :returns: scale matrix.
+   :rtype: :class:`~gstaichi.math.mat4`
+
+   Example::
+
+       >>> ti.math.scale(1, 2, 3)
+       [[ 1. 0. 0. 0.]
+        [ 0. 2. 0. 0.]
+        [ 0. 0. 3. 0.]
+        [ 0. 0. 0. 1.]]
+
+
+.. py:function:: rot_by_axis(axis, ang)
+
+   Returns the 4x4 matrix representation of a 3d rotation with given axis `axis` and angle `ang`.
+
+   :param axis: rotation axis
+   :type axis: vec3
+   :param ang: angle in radians unit
+   :type ang: float
+
+   :returns: rotation matrix
+   :rtype: :class:`~gstaichi.math.mat4`
+
+
+.. py:function:: rot_yaw_pitch_roll(yaw, pitch, roll)
+
+   Returns a 4x4 homogeneous rotation matrix representing the 3d rotation with Euler angles (rotate with Y axis first, X axis second, Z axis third).
+
+   :param yaw: yaw angle in radians unit
+   :type yaw: float
+   :param pitch: pitch angle in radians unit
+   :type pitch: float
+   :param roll: roll angle in radians unit
+   :type roll: float
+
+   :returns: rotation matrix
+   :rtype: :class:`~gstaichi.math.mat4`
+
+
+.. py:function:: rotation2d(ang)
+
+   Returns the matrix representation of a 2d counter-clockwise rotation,
+   given the angle of rotation.
+
+   :param ang: Angle of rotation in radians.
+   :type ang: float
+
+   :returns: 2x2 rotation matrix.
+   :rtype: :class:`~gstaichi.math.mat2`
+
+   Example::
+
+       >>>ti.math.rotation2d(ti.math.radians(30))
+       [[0.866025, -0.500000], [0.500000, 0.866025]]
+
+
+.. py:function:: rotation3d(ang_x, ang_y, ang_z)
+
+   Returns a 4x4 homogeneous rotation matrix representing the 3d rotation with Euler angles (rotate with Y axis first, X axis second, Z axis third).
+
+   :param ang_x: angle in radians unit around X axis
+   :type ang_x: float
+   :param ang_y: angle in radians unit around Y axis
+   :type ang_y: float
+   :param ang_z: angle in radians unit around Z axis
+   :type ang_z: float
+
+   :returns: rotation matrix
+   :rtype: :class:`~gstaichi.math.mat4`
+
+   .. rubric:: Example
+
+   >>> ti.math.rotation3d(0.52, -0.785, 1.046)
+   [[ 0.05048351 -0.61339645 -0.78816002  0.        ]
+   [ 0.65833154  0.61388511 -0.4355969   0.        ]
+   [ 0.75103329 -0.49688014  0.4348093   0.        ]
+   [ 0.          0.          0.          1.        ]]
+
+
+.. py:function:: eye(n: template())
+
+   Returns the nxn identity matrix.
+
+   Alias for :func:`~gstaichi.Matrix.identity`.
+
+
+.. py:function:: length(x)
+
+   Calculate the length of a vector.
+
+   This function is equivalent to the `length` function in GLSL.
+   :param x: The vector of which to calculate the length.
+   :type x: :class:`~gstaichi.Matrix`
+
+   :returns: The Euclidean norm of the vector.
+
+   Example::
+
+       >>> x = ti.Vector([1, 1, 1])
+       >>> ti.math.length(x)
+       1.732051
+
+
+.. py:function:: determinant(m)
+
+   Alias for :func:`gstaichi.Matrix.determinant`.
+
+
+.. py:function:: inverse(mat)
+
+   Calculate the inverse of a matrix.
+
+   This function is equivalent to the `inverse` function in GLSL.
+
+   :param mat: The matrix of which to take the inverse.             Supports only 2x2, 3x3 and 4x4 matrices.
+   :type mat: :class:`gstaichi.Matrix`
+
+   :returns: Inverse of the input matrix.
+
+   Example::
+
+       >>> m = ti.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])
+       >>> ti.math.inverse(m)
+       [[1.000000, -1.000000, 1.000000],
+        [0.000000, 1.000000, -1.000000],
+        [0.000000, 0.000000, 1.000000]]
+
+
+.. py:function:: isinf(x)
+
+   Determines whether the parameter is positive or negative infinity, element-wise.
+
+   :param x: The input.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`gstaichi.Matrix`
+
+   .. rubric:: Example
+
+   >>> x = ti.math.vec4(inf, -inf, nan, 1)
+   >>> ti.math.isinf(x)
+   [1, 1, 0, 0]
+
+   :returns: For each element i of the result, returns 1 if x[i] is posititve or negative floating point infinity and 0 otherwise.
+
+
+.. py:function:: isnan(x)
+
+   Determines whether the parameter is a number, element-wise.
+
+   :param x: The input.
+   :type x: :mod:`~gstaichi.types.primitive_types`, :class:`gstaichi.Matrix`
+
+   .. rubric:: Example
+
+   >>> x = ti.math.vec4(nan, -nan, inf, 1)
+   >>> ti.math.isnan(x)
+   [1, 1, 0, 0]
+
+   :returns: For each element i of the result, returns 1 if x[i] is posititve or negative floating point NaN (Not a Number) and 0 otherwise.
+
+
+.. py:function:: vdir(ang)
+
+   Returns the 2d unit vector with argument equals `ang`.
+
+   x (:mod:`~gstaichi.types.primitive_types`): The input angle in radians.
+
+   .. rubric:: Example
+
+   >>> x = pi / 2
+   >>> ti.math.vdir(x)
+   [0, 1]
+
+   :returns: a 2d vector with argument equals `ang`.
+
+
+.. py:function:: popcnt(x)
+
+.. py:function:: clz(x)
+

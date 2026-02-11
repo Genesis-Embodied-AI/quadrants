@@ -1,0 +1,24 @@
+gstaichi
+========
+
+.. py:module:: gstaichi
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/ad/index
+   /autoapi/gstaichi/algorithms/index
+   /autoapi/gstaichi/experimental/index
+   /autoapi/gstaichi/lang/index
+   /autoapi/gstaichi/linalg/index
+   /autoapi/gstaichi/math/index
+   /autoapi/gstaichi/profiler/index
+   /autoapi/gstaichi/sparse/index
+   /autoapi/gstaichi/tools/index
+   /autoapi/gstaichi/types/index
+
+

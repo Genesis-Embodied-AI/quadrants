@@ -1,0 +1,909 @@
+gstaichi.lang.matrix
+====================
+
+.. py:module:: gstaichi.lang.matrix
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.matrix.Matrix
+   gstaichi.lang.matrix.Vector
+   gstaichi.lang.matrix.MatrixField
+   gstaichi.lang.matrix.MatrixNdarray
+   gstaichi.lang.matrix.VectorNdarray
+
+
+Module Contents
+---------------
+
+.. py:class:: Matrix(arr, dt=None)
+
+   Bases: :py:obj:`gstaichi.lang.common_ops.GsTaichiOperations`
+
+
+   The matrix class.
+
+   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is
+   aligned continuously. We recommend only use matrix with no more than 32 elements for
+   efficiency considerations.
+
+   Note: in gstaichi a matrix is strictly two-dimensional and only stores scalars.
+
+   :param arr: the initial values of a matrix.
+   :type arr: Union[list, tuple, np.ndarray]
+   :param dt: the element data type.
+   :type dt: :mod:`~gstaichi.types.primitive_types`
+   :param ndim: the number of dimensions of the matrix; forced reshape if given.
+   :type ndim: int optional
+
+   Example::
+
+       use a 2d list to initialize a matrix
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     n = 5
+       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     print(M)  # a 5x5 matrix with integer elements
+
+       get the number of rows and columns via the `n`, `m` property:
+
+       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M.n  # number of rows
+       3
+       >>> M.m  # number of cols
+       >>> 2
+
+       you can even initialize a matrix with an empty list:
+
+       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M.n
+       2
+       >>> M.m
+       0
+
+
+   .. py:method:: get_shape()
+
+
+   .. py:method:: to_list()
+
+      Return this matrix as a 1D `list`.
+
+      This is similar to `numpy.ndarray`'s `flatten` and `ravel` methods,
+      the difference is that this function always returns a new list.
+
+
+
+   .. py:method:: cast(dtype)
+
+      Cast the matrix elements to a specified data type.
+
+      :param dtype: data type of the
+                    returned matrix.
+      :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+      :returns: A new matrix with the specified data dtype.
+      :rtype: :class:`gstaichi.Matrix`
+
+      Example::
+
+          >>> A = ti.Matrix([0, 1, 2], ti.i32)
+          >>> B = A.cast(ti.f32)
+          >>> B
+          [0.0, 1.0, 2.0]
+
+
+
+   .. py:method:: trace()
+
+      The sum of a matrix diagonal elements.
+
+      To call this method the matrix must be square-like.
+
+      :returns: The sum of a matrix diagonal elements.
+
+      Example::
+
+          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m.trace()
+          5
+
+
+
+   .. py:method:: inverse()
+
+      Returns the inverse of this matrix.
+
+      .. note:: The matrix dimension should be less than or equal to 4.
+
+      :returns: The inverse of a matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      :raises Exception: Inversions of matrices with sizes >= 5 are not supported.
+
+
+
+   .. py:method:: normalized(eps=0)
+
+      Normalize a vector, i.e. matrices with the second dimension being
+      equal to one.
+
+      The normalization of a vector `v` is a vector of length 1
+      and has the same direction with `v`. It's equal to `v/|v|`.
+
+      :param eps: a safe-guard value for sqrt, usually 0.
+      :type eps: float
+
+      Example::
+
+          >>> a = ti.Vector([3, 4], ti.f32)
+          >>> a.normalized()
+          [0.6, 0.8]
+
+
+
+   .. py:method:: transpose()
+
+      Returns the transpose of a matrix.
+
+      :returns: The transpose of this matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      Example::
+
+          >>> A = ti.Matrix([[0, 1], [2, 3]])
+          >>> A.transpose()
+          [[0, 2], [1, 3]]
+
+
+
+   .. py:method:: determinant()
+
+      Returns the determinant of this matrix.
+
+      .. note:: The matrix dimension should be less than or equal to 4.
+
+      :returns: The determinant of this matrix.
+      :rtype: dtype
+
+      :raises Exception: Determinants of matrices with sizes >= 5 are not supported.
+
+
+
+   .. py:method:: diag(dim, val)
+      :staticmethod:
+
+
+      Returns a diagonal square matrix with the diagonals filled
+      with `val`.
+
+      :param dim: the dimension of the wanted square matrix.
+      :type dim: int
+      :param val: value for the diagonal elements.
+      :type val: TypeVar
+
+      :returns: The wanted diagonal matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      Example::
+
+          >>> m = ti.Matrix.diag(3, 1)
+          [[1, 0, 0],
+           [0, 1, 0],
+           [0, 0, 1]]
+
+
+
+   .. py:method:: sum()
+
+      Return the sum of all elements.
+
+      Example::
+
+          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m.sum()
+          10
+
+
+
+   .. py:method:: norm(eps=0)
+
+      Returns the square root of the sum of the absolute squares
+      of its elements.
+
+      :param eps: a safe-guard value for sqrt, usually 0.
+      :type eps: Number
+
+      Example::
+
+          >>> a = ti.Vector([3, 4])
+          >>> a.norm()
+          5
+
+      :returns: The square root of the sum of the absolute squares of its elements.
+
+
+
+   .. py:method:: norm_inv(eps=0)
+
+      The inverse of the matrix :func:`~gstaichi.lang.matrix.Matrix.norm`.
+
+      :param eps: a safe-guard value for sqrt, usually 0.
+      :type eps: float
+
+      :returns: The inverse of the matrix/vector `norm`.
+
+
+
+   .. py:method:: norm_sqr()
+
+      Returns the sum of the absolute squares of its elements.
+
+
+
+   .. py:method:: max()
+
+      Returns the maximum element value.
+
+
+
+   .. py:method:: min()
+
+      Returns the minimum element value.
+
+
+
+   .. py:method:: any()
+
+      Test whether any element not equal zero.
+
+      :returns: `True` if any element is not equal zero, `False` otherwise.
+      :rtype: bool
+
+      Example::
+
+          >>> v = ti.Vector([0, 0, 1])
+          >>> v.any()
+          True
+
+
+
+   .. py:method:: all()
+
+      Test whether all element not equal zero.
+
+      :returns: `True` if all elements are not equal zero, `False` otherwise.
+      :rtype: bool
+
+      Example::
+
+          >>> v = ti.Vector([0, 0, 1])
+          >>> v.all()
+          False
+
+
+
+   .. py:method:: fill(val)
+
+      Fills the matrix with a specified value.
+
+      :param val: Value to fill.
+      :type val: Union[int, float]
+
+      Example::
+
+          >>> A = ti.Matrix([0, 1, 2, 3])
+          >>> A.fill(-1)
+          >>> A
+          [-1, -1, -1, -1]
+
+
+
+   .. py:method:: to_numpy()
+
+      Converts this matrix to a numpy array.
+
+      :returns: The result numpy array.
+      :rtype: numpy.ndarray
+
+      Example::
+
+          >>> A = ti.Matrix([[0], [1], [2], [3]])
+          >>> A.to_numpy()
+          >>> A
+          array([[0], [1], [2], [3]])
+
+
+
+   .. py:method:: zero(dt, n, m=None)
+      :staticmethod:
+
+
+      Constructs a Matrix filled with zeros.
+
+      :param dt: The desired data type.
+      :type dt: DataType
+      :param n: The first dimension (row) of the matrix.
+      :type n: int
+      :param m: The second dimension (column) of the matrix.
+      :type m: int, optional
+
+      :returns: A :class:`~gstaichi.lang.matrix.Matrix` instance filled with zeros.
+      :rtype: :class:`~gstaichi.lang.matrix.Matrix`
+
+
+
+   .. py:method:: one(dt, n, m=None)
+      :staticmethod:
+
+
+      Constructs a Matrix filled with ones.
+
+      :param dt: The desired data type.
+      :type dt: DataType
+      :param n: The first dimension (row) of the matrix.
+      :type n: int
+      :param m: The second dimension (column) of the matrix.
+      :type m: int, optional
+
+      :returns: A :class:`~gstaichi.lang.matrix.Matrix` instance filled with ones.
+      :rtype: :class:`~gstaichi.lang.matrix.Matrix`
+
+
+
+   .. py:method:: unit(n, i, dt=None)
+      :staticmethod:
+
+
+      Constructs a n-D vector with the `i`-th entry being equal to one and
+      the remaining entries are all zeros.
+
+      :param n: The length of the vector.
+      :type n: int
+      :param i: The index of the entry that will be filled with one.
+      :type i: int
+      :param dt: The desired data type.
+      :type dt: :mod:`~gstaichi.types.primitive_types`, optional
+
+      :returns: The returned vector.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      Example::
+
+          >>> A = ti.Matrix.unit(3, 1)
+          >>> A
+          [0, 1, 0]
+
+
+
+   .. py:method:: identity(dt, n)
+      :staticmethod:
+
+
+      Constructs an identity Matrix with shape (n, n).
+
+      :param dt: The desired data type.
+      :type dt: DataType
+      :param n: The number of rows/columns.
+      :type n: int
+
+      :returns: An `n x n` identity matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+
+
+   .. py:method:: field(n, m, dtype, shape=None, order=None, name='', offset=None, needs_grad=False, needs_dual=False, layout=Layout.AOS, ndim=None)
+      :classmethod:
+
+
+      Construct a data container to hold all elements of the Matrix.
+
+      :param n: The desired number of rows of the Matrix.
+      :type n: int
+      :param m: The desired number of columns of the Matrix.
+      :type m: int
+      :param dtype: The desired data type of the Matrix.
+      :type dtype: DataType, optional
+      :param shape: The desired shape of the Matrix.
+      :type shape: Union[int, tuple of int], optional
+      :param order: order of the shape laid out in memory.
+      :type order: str, optional
+      :param name: The custom name of the field.
+      :type name: string, optional
+      :param offset: The coordinate offset
+                     of all elements in a field.
+      :type offset: Union[int, tuple of int], optional
+      :param needs_grad: Whether the Matrix need grad field (reverse mode autodiff).
+      :type needs_grad: bool, optional
+      :param needs_dual: Whether the Matrix need dual field (forward mode autodiff).
+      :type needs_dual: bool, optional
+      :param layout: The field layout, either Array Of
+                     Structure (AOS) or Structure Of Array (SOA).
+      :type layout: Layout, optional
+
+      :returns: A matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+
+
+   .. py:method:: ndarray(n, m, dtype, shape)
+      :classmethod:
+
+
+      Defines a GsTaichi ndarray with matrix elements.
+      This function must be called in Python scope, and after `ti.init` is called.
+
+      :param n: Number of rows of the matrix.
+      :type n: int
+      :param m: Number of columns of the matrix.
+      :type m: int
+      :param dtype: Data type of each value.
+      :type dtype: DataType
+      :param shape: Shape of the ndarray.
+      :type shape: Union[int, tuple[int]]
+
+      Example::
+
+          The code below shows how a GsTaichi ndarray with matrix elements             can be declared and defined::
+
+              >>> x = ti.Matrix.ndarray(4, 5, ti.f32, shape=(16, 8))
+
+
+
+   .. py:method:: rows(rows)
+      :staticmethod:
+
+
+      Constructs a matrix by concatenating a list of
+      vectors/lists row by row. Must be called in GsTaichi scope.
+
+      :param rows: A list of Vector (1-D Matrix) or a list of list.
+      :type rows: List
+
+      :returns: A matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      Example::
+
+          >>> @ti.kernel
+          >>> def test():
+          >>>     v1 = ti.Vector([1, 2, 3])
+          >>>     v2 = ti.Vector([4, 5, 6])
+          >>>     m = ti.Matrix.rows([v1, v2])
+          >>>     print(m)
+          >>>
+          >>> test()
+          [[1, 2, 3], [4, 5, 6]]
+
+
+
+   .. py:method:: cols(cols)
+      :staticmethod:
+
+
+      Constructs a Matrix instance by concatenating Vectors/lists column by column.
+
+      :param cols: A list of Vector (1-D Matrix) or a list of list.
+      :type cols: List
+
+      :returns: A matrix.
+      :rtype: :class:`~gstaichi.Matrix`
+
+      Example::
+
+          >>> @ti.kernel
+          >>> def test():
+          >>>     v1 = ti.Vector([1, 2, 3])
+          >>>     v2 = ti.Vector([4, 5, 6])
+          >>>     m = ti.Matrix.cols([v1, v2])
+          >>>     print(m)
+          >>>
+          >>> test()
+          [[1, 4], [2, 5], [3, 6]]
+
+
+
+   .. py:method:: dot(other)
+
+      Performs the dot product of two vectors.
+
+      To call this method, both multiplicatives must be vectors.
+
+      :param other: The input Vector.
+      :type other: :class:`~gstaichi.Matrix`
+
+      :returns: The dot product result (scalar) of the two Vectors.
+      :rtype: DataType
+
+      Example::
+
+          >>> v1 = ti.Vector([1, 2, 3])
+          >>> v2 = ti.Vector([3, 4, 5])
+          >>> v1.dot(v2)
+          26
+
+
+
+   .. py:method:: cross(other)
+
+      Performs the cross product with the input vector (1-D Matrix).
+
+      Both two vectors must have the same dimension <= 3.
+
+      For two 2d vectors (x1, y1) and (x2, y2), the return value is the
+      scalar `x1*y2 - x2*y1`.
+
+      For two 3d vectors `v` and `w`, the return value is the 3d vector
+      `v x w`.
+
+      :param other: The input Vector.
+      :type other: :class:`~gstaichi.Matrix`
+
+      :returns: The cross product of the two Vectors.
+      :rtype: :class:`~gstaichi.Matrix`
+
+
+
+   .. py:method:: outer_product(other)
+
+      Performs the outer product with the input Vector (1-D Matrix).
+
+      The outer_product of two vectors `v = (x1, x2, ..., xn)`,
+      `w = (y1, y2, ..., yn)` is a `n` times `n` square matrix, and its `(i, j)`
+      entry is equal to `xi*yj`.
+
+      :param other: The input Vector.
+      :type other: :class:`~gstaichi.Matrix`
+
+      :returns: The outer product of the two Vectors.
+      :rtype: :class:`~gstaichi.Matrix`
+
+
+
+.. py:class:: Vector(arr, dt=None, **kwargs)
+
+   Bases: :py:obj:`Matrix`
+
+
+   The matrix class.
+
+   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is
+   aligned continuously. We recommend only use matrix with no more than 32 elements for
+   efficiency considerations.
+
+   Note: in gstaichi a matrix is strictly two-dimensional and only stores scalars.
+
+   :param arr: the initial values of a matrix.
+   :type arr: Union[list, tuple, np.ndarray]
+   :param dt: the element data type.
+   :type dt: :mod:`~gstaichi.types.primitive_types`
+   :param ndim: the number of dimensions of the matrix; forced reshape if given.
+   :type ndim: int optional
+
+   Example::
+
+       use a 2d list to initialize a matrix
+
+       >>> @ti.kernel
+       >>> def test():
+       >>>     n = 5
+       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     print(M)  # a 5x5 matrix with integer elements
+
+       get the number of rows and columns via the `n`, `m` property:
+
+       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M.n  # number of rows
+       3
+       >>> M.m  # number of cols
+       >>> 2
+
+       you can even initialize a matrix with an empty list:
+
+       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M.n
+       2
+       >>> M.m
+       0
+
+
+   .. py:method:: get_shape()
+
+
+   .. py:method:: field(n, dtype, *args, **kwargs)
+      :classmethod:
+
+
+      ti.Vector.field
+
+
+
+   .. py:method:: ndarray(n, dtype, shape)
+      :classmethod:
+
+
+      Defines a GsTaichi ndarray with vector elements.
+
+      :param n: Size of the vector.
+      :type n: int
+      :param dtype: Data type of each value.
+      :type dtype: DataType
+      :param shape: Shape of the ndarray.
+      :type shape: Union[int, tuple[int]]
+
+      .. rubric:: Example
+
+      The code below shows how a GsTaichi ndarray with vector elements can be declared and defined::
+
+          >>> x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))
+
+
+
+.. py:class:: MatrixField(_vars, n, m, ndim=2)
+
+   Bases: :py:obj:`gstaichi.lang.field.Field`
+
+
+   GsTaichi matrix field with SNode implementation.
+
+   :param vars: Field members.
+   :type vars: List[Expr]
+   :param n: Number of rows.
+   :type n: Int
+   :param m: Number of columns.
+   :type m: Int
+   :param ndim: Number of dimensions; forced reshape if given.
+   :type ndim: Int
+
+
+   .. py:attribute:: n
+
+
+   .. py:attribute:: m
+
+
+   .. py:attribute:: ndim
+      :value: 2
+
+
+
+   .. py:attribute:: ptr
+
+
+   .. py:method:: to_dlpack()
+
+      Note: caller is responsible for calling ti.sync() between modifying the field, and
+      reading it.
+
+
+
+   .. py:method:: get_scalar_field(*indices)
+
+      Creates a ScalarField using a specific field member.
+
+      :param indices: Specified indices of the field member.
+      :type indices: Tuple[Int]
+
+      :returns: The result ScalarField.
+      :rtype: ScalarField
+
+
+
+   .. py:method:: fill(val)
+
+      Fills this matrix field with specified values.
+
+      :param val: Values to fill,
+                  should have consistent dimension consistent with `self`.
+      :type val: Union[Number, Expr, List, Tuple, Matrix]
+
+
+
+   .. py:method:: to_numpy(keep_dims=False, dtype=None)
+
+      Converts the field instance to a NumPy array.
+
+      :param keep_dims: Whether to keep the dimension after conversion.
+                        When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
+                        When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
+                        For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
+      :type keep_dims: bool, optional
+      :param dtype: The desired data type of returned numpy array.
+      :type dtype: DataType, optional
+
+      :returns: The result NumPy array.
+      :rtype: numpy.ndarray
+
+
+
+   .. py:method:: to_torch(device=None, keep_dims=False)
+
+      Converts the field instance to a PyTorch tensor.
+
+      :param device: The desired device of returned tensor.
+      :type device: torch.device, optional
+      :param keep_dims: Whether to keep the dimension after conversion.
+                        See :meth:`~gstaichi.lang.field.MatrixField.to_numpy` for more detailed explanation.
+      :type keep_dims: bool, optional
+
+      :returns: The result torch tensor.
+      :rtype: torch.tensor
+
+
+
+   .. py:method:: from_numpy(arr)
+
+      Copies an `numpy.ndarray` into this field.
+
+      Example::
+
+          >>> m = ti.Matrix.field(2, 2, ti.f32, shape=(3, 3))
+          >>> arr = numpy.ones((3, 3, 2, 2))
+          >>> m.from_numpy(arr)
+
+
+
+.. py:class:: MatrixNdarray(n, m, dtype, shape)
+
+   Bases: :py:obj:`gstaichi.lang._ndarray.Ndarray`
+
+
+   GsTaichi ndarray with matrix elements.
+
+   :param n: Number of rows of the matrix.
+   :type n: int
+   :param m: Number of columns of the matrix.
+   :type m: int
+   :param dtype: Data type of each value.
+   :type dtype: DataType
+   :param shape: Shape of the ndarray.
+   :type shape: Union[int, tuple[int]]
+
+   Example::
+
+       >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+
+
+   .. py:attribute:: n
+
+
+   .. py:attribute:: m
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:attribute:: layout
+
+
+   .. py:attribute:: shape
+
+
+   .. py:attribute:: element_type
+
+
+   .. py:attribute:: arr
+
+
+   .. py:property:: element_shape
+
+      Returns the shape of each element (a 2D matrix) in this ndarray.
+
+      Example::
+
+          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+          >>> arr.element_shape
+          (2, 2)
+
+
+   .. py:method:: to_numpy()
+
+      Converts this ndarray to a `numpy.ndarray`.
+
+      Example::
+
+          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1))
+          >>> arr.to_numpy()
+          [[[[0. 0.]
+             [0. 0.]]]
+
+           [[[0. 0.]
+             [0. 0.]]]]
+
+
+
+   .. py:method:: from_numpy(arr)
+
+      Copies the data of a `numpy.ndarray` into this array.
+
+      Example::
+
+          >>> m = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1), layout=0)
+          >>> arr = np.ones((2, 1, 2, 2))
+          >>> m.from_numpy(arr)
+
+
+
+.. py:class:: VectorNdarray(n, dtype, shape)
+
+   Bases: :py:obj:`gstaichi.lang._ndarray.Ndarray`
+
+
+   GsTaichi ndarray with vector elements.
+
+   :param n: Size of the vector.
+   :type n: int
+   :param dtype: Data type of each value.
+   :type dtype: DataType
+   :param shape: Shape of the ndarray.
+   :type shape: Tuple[int]
+
+   Example::
+
+       >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+
+
+   .. py:attribute:: n
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:attribute:: layout
+
+
+   .. py:attribute:: shape
+
+
+   .. py:attribute:: element_type
+
+
+   .. py:attribute:: arr
+
+
+   .. py:property:: element_shape
+
+      Gets the dimension of the vector of this ndarray.
+
+      Example::
+
+          >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+          >>> a.element_shape
+          (3,)
+
+
+   .. py:method:: to_numpy()
+
+      Converts this vector ndarray to a `numpy.ndarray`.
+
+      Example::
+
+          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2))
+          >>> a.to_numpy()
+          array([[[0., 0., 0.],
+                  [0., 0., 0.]],
+
+                 [[0., 0., 0.],
+                  [0., 0., 0.]]], dtype=float32)
+
+
+
+   .. py:method:: from_numpy(arr)
+
+      Copies the data from a `numpy.ndarray` into this ndarray.
+
+      The shape and data type of `arr` must match this ndarray.
+
+      Example::
+
+          >>> import numpy as np
+          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2), 0)
+          >>> b = np.ones((2, 2, 3), dtype=np.float32)
+          >>> a.from_numpy(b)
+
+
+

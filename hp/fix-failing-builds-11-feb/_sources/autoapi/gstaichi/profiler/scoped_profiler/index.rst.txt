@@ -1,0 +1,46 @@
+gstaichi.profiler.scoped_profiler
+=================================
+
+.. py:module:: gstaichi.profiler.scoped_profiler
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.profiler.scoped_profiler.print_scoped_profiler_info
+   gstaichi.profiler.scoped_profiler.clear_scoped_profiler_info
+
+
+Module Contents
+---------------
+
+.. py:function:: print_scoped_profiler_info()
+
+   Print time elapsed on the host tasks in a hierarchical format.
+
+   This profiler is automatically on.
+
+   Call function imports from C++ : _ti_core.print_profile_info()
+
+   Example::
+
+           >>> import gstaichi as ti
+           >>> ti.init(arch=ti.cpu)
+           >>> var = ti.field(ti.f32, shape=1)
+           >>> @ti.kernel
+           >>> def compute():
+           >>>     var[0] = 1.0
+           >>>     print("Setting var[0] =", var[0])
+           >>> compute()
+           >>> ti.profiler.print_scoped_profiler_info()
+
+
+.. py:function:: clear_scoped_profiler_info()
+
+   Clear profiler's records about time elapsed on the host tasks.
+
+   Call function imports from C++ : _ti_core.clear_profile_info()
+
+

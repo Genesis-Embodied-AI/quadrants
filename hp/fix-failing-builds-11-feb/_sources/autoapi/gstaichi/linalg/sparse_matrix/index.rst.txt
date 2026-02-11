@@ -1,0 +1,128 @@
+gstaichi.linalg.sparse_matrix
+=============================
+
+.. py:module:: gstaichi.linalg.sparse_matrix
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.linalg.sparse_matrix.SparseMatrix
+   gstaichi.linalg.sparse_matrix.SparseMatrixBuilder
+
+
+Module Contents
+---------------
+
+.. py:class:: SparseMatrix(n=None, m=None, sm=None, dtype=f32, storage_format='col_major')
+
+   GsTaichi's Sparse Matrix class
+
+   A sparse matrix allows the programmer to solve a large linear system.
+
+   :param n: the first dimension of a sparse matrix.
+   :type n: int
+   :param m: the second dimension of a sparse matrix.
+   :type m: int
+   :param sm: another sparse matrix that will be built from.
+   :type sm: SparseMatrix
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:method:: transpose()
+
+      Sparse Matrix transpose.
+
+      :returns: The transposed sparse mastrix.
+
+
+
+   .. py:property:: shape
+
+      The shape of the sparse matrix.
+
+
+   .. py:method:: build_from_ndarray(ndarray)
+
+      Build the sparse matrix from a ndarray.
+
+      :param ndarray: the ndarray to build the sparse matrix from.
+      :type ndarray: Union[ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]
+
+      :raises GsTaichiRuntimeError: If the input is not a ndarray or the length is not divisible by 3.
+
+      Example::
+          >>> N = 5
+          >>> triplets = ti.Vector.ndarray(n=3, dtype=ti.f32, shape=10, layout=ti.Layout.AOS)
+          >>> @ti.kernel
+          >>> def fill(triplets: ti.types.ndarray()):
+          >>>     for i in range(N):
+          >>>        triplets[i] = ti.Vector([i, (i + 1) % N, i+1], dt=ti.f32)
+          >>> fill(triplets)
+          >>> A = ti.linalg.SparseMatrix(n=N, m=N, dtype=ti.f32)
+          >>> A.build_from_ndarray(triplets)
+          >>> print(A)
+          [0, 1, 0, 0, 0]
+          [0, 0, 2, 0, 0]
+          [0, 0, 0, 3, 0]
+          [0, 0, 0, 0, 4]
+          [5, 0, 0, 0, 0]
+
+
+
+   .. py:method:: mmwrite(filename)
+
+      Writes the sparse matrix to Matrix Market file-like target.
+
+      :param filename: the file name to write the sparse matrix to.
+      :type filename: str
+
+
+
+.. py:class:: SparseMatrixBuilder(num_rows=None, num_cols=None, max_num_triplets=0, dtype=f32, storage_format='col_major')
+
+   A python wrap around sparse matrix builder.
+
+   Use this builder to fill the sparse matrix.
+
+   :param num_rows: the first dimension of a sparse matrix.
+   :type num_rows: int
+   :param num_cols: the second dimension of a sparse matrix.
+   :type num_cols: int
+   :param max_num_triplets: the maximum number of triplets.
+   :type max_num_triplets: int
+   :param dtype: the data type of the sparse matrix.
+   :type dtype: ti.dtype
+   :param storage_format: the storage format of the sparse matrix.
+   :type storage_format: str
+
+
+   .. py:attribute:: num_rows
+      :value: None
+
+
+
+   .. py:attribute:: num_cols
+      :value: None
+
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:method:: print_triplets()
+
+      Print the triplets stored in the builder
+
+
+
+   .. py:method:: build(dtype=f32, _format='CSR')
+
+      Create a sparse matrix using the triplets
+
+
+

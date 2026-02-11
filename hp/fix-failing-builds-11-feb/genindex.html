@@ -1,0 +1,2964 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Index &#8212; GsTaichi 4.6.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'genindex';</script>
+    <link rel="index" title="Index" href="#" />
+    <link rel="search" title="Search" href="search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="4.6.1" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">GsTaichi 4.6.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none"></div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+
+<h1 id="index">Index</h1>
+
+<div class="genindex-jumpbox">
+ <a href="#A"><strong>A</strong></a>
+ | <a href="#B"><strong>B</strong></a>
+ | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
+ | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#G"><strong>G</strong></a>
+ | <a href="#H"><strong>H</strong></a>
+ | <a href="#I"><strong>I</strong></a>
+ | <a href="#J"><strong>J</strong></a>
+ | <a href="#K"><strong>K</strong></a>
+ | <a href="#L"><strong>L</strong></a>
+ | <a href="#M"><strong>M</strong></a>
+ | <a href="#N"><strong>N</strong></a>
+ | <a href="#O"><strong>O</strong></a>
+ | <a href="#P"><strong>P</strong></a>
+ | <a href="#Q"><strong>Q</strong></a>
+ | <a href="#R"><strong>R</strong></a>
+ | <a href="#S"><strong>S</strong></a>
+ | <a href="#T"><strong>T</strong></a>
+ | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
+ | <a href="#W"><strong>W</strong></a>
+ | <a href="#X"><strong>X</strong></a>
+ | <a href="#Z"><strong>Z</strong></a>
+ 
+</div>
+<h2 id="A">A</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.abs">abs() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.acos">acos() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.activate">activate() (in module gstaichi.lang.snode)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.active_mask">active_mask() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_face_channel">add_face_channel() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_face_id">add_face_id() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_face_piece">add_face_piece() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_faces">add_faces() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.add_mesh_attribute">add_mesh_attribute() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_alpha">add_vertex_alpha() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_channel">add_vertex_channel() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_color">add_vertex_color() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_id">add_vertex_id() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_normal">add_vertex_normal() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_piece">add_vertex_piece() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_pos">add_vertex_pos() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_rgba">add_vertex_rgba() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.add_vertex_vel">add_vertex_vel() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.adstack_enabled">adstack_enabled (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.all">all() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.all">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.all_equal">all_equal() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.all_nonzero">all_nonzero() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.all_true">all_true() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard.allows_for_loop">allows_for_loop (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard.allows_more_stmt">allows_more_stmt (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.amdgpu">amdgpu (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.analyze_pattern">analyze_pattern() (gstaichi.linalg.sparse_solver.SparseSolver method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.ArgMetadata.annotation">annotation (gstaichi.lang.kernel_arguments.ArgMetadata attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.any">any() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.any">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.any_nonzero">any_nonzero() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.any_true">any_true() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.append">append() (in module gstaichi.lang.snode)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.arch_uses_spv">arch_uses_spv() (in module gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.arg_at">arg_at() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.arg_features">arg_features (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.arg_foreach_check">arg_foreach_check() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.ArgMetadata">ArgMetadata (class in gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.arm64">arm64 (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.arr">arr (gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.arr">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.asin">asin() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.assert_list">assert_list() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.assert_tensor">assert_tensor() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.assert_vector">assert_vector() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.assume_in_range">assume_in_range() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.ast_builder">ast_builder (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.ast_builder">ast_builder() (gstaichi.lang.kernel.Kernel method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator">ASTGenerator (class in gstaichi.lang.kernel)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/symbol_resolver/index.html#gstaichi.lang.ast.symbol_resolver.ASTResolver">ASTResolver (class in gstaichi.lang.ast.symbol_resolver)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer">ASTTransformer (class in gstaichi.lang.ast.ast_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext">ASTTransformerFuncContext (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext">ASTTransformerGlobalContext (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atan2">atan2() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_add">atomic_add() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_and">atomic_and() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_max">atomic_max() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_min">atomic_min() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_mul">atomic_mul() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_or">atomic_or() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_sub">atomic_sub() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.atomic_xor">atomic_xor() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.autodiff_mode">autodiff_mode (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.autodiff_mode">(gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.AutodiffMode">AutodiffMode (in module gstaichi.lang.ast.ast_transformer)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.AutodiffMode">(in module gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.AutodiffMode">(in module gstaichi.types.enums)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.axes">axes() (in module gstaichi.lang.impl)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="B">B</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG.b">b (gstaichi.linalg.sparse_cg.SparseCG attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.ballot">ballot() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.barrier">barrier() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.bit_cast">bit_cast() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.bit_shr">bit_shr() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.BitpackedFields.bit_struct_type_builder">bit_struct_type_builder (gstaichi.lang.field.BitpackedFields attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.bitmasked">bitmasked() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.BitpackedFields">BitpackedFields (class in gstaichi.lang.field)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.block_local">block_local() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning">boundary_type_cast_warning() (in module gstaichi.lang.ast.ast_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopStatus.Break">Break (gstaichi.lang.ast.ast_transformer_utils.LoopStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.broadcast_first">broadcast_first() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder.build">build() (gstaichi.linalg.sparse_matrix.SparseMatrixBuilder method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AnnAssign">build_AnnAssign() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assert">build_Assert() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assign">build_Assign() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated">build_assign_annotated() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_basic">build_assign_basic() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack">build_assign_unpack() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Attribute">build_Attribute() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method">build_attribute_if_is_dynamic_snode_method() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AugAssign">build_AugAssign() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BinOp">build_BinOp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_bool_op">build_bool_op() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BoolOp">build_BoolOp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Break">build_Break() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Call">build_Call() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/call_transformer/index.html#gstaichi.lang.ast.ast_transformers.call_transformer.CallTransformer.build_Call">(gstaichi.lang.ast.ast_transformers.call_transformer.CallTransformer static method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Compare">build_Compare() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Constant">build_Constant() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Continue">build_Continue() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Dict">build_Dict() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_DictComp">build_DictComp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Expr">build_Expr() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ExtSlice">build_ExtSlice() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_For">build_For() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FormattedValue">build_FormattedValue() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix.build_from_ndarray">build_from_ndarray() (gstaichi.linalg.sparse_matrix.SparseMatrix method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FunctionDef">build_FunctionDef() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/function_def_transformer/index.html#gstaichi.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef">(gstaichi.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer static method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_grouped_ndrange_for">build_grouped_ndrange_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_If">build_If() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_IfExp">build_IfExp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Index">build_Index() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr">build_JoinedStr() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_keyword">build_keyword() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_List">build_List() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ListComp">build_ListComp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_mesh_for">build_mesh_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Module">build_Module() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Name">build_Name() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_NamedExpr">build_NamedExpr() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ndrange_for">build_ndrange_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_nested_mesh_for">build_nested_mesh_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Pass">build_Pass() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_range_for">build_range_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Return">build_Return() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Slice">build_Slice() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Starred">build_Starred() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_and">build_static_and() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_for">build_static_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_or">build_static_or() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.build_stmt">build_stmt (in module gstaichi.lang.ast.ast_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.build_stmts">build_stmts() (in module gstaichi.lang.ast.ast_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_struct_for">build_struct_for() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Subscript">build_Subscript() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Tuple">build_Tuple() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_UnaryOp">build_UnaryOp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_While">build_While() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.Builder">Builder (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="C">C</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard.c">c (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.LaunchContextBufferCache.cache">cache() (gstaichi.lang.kernel.LaunchContextBufferCache method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.cache_read_only">cache_read_only() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/call_transformer/index.html#gstaichi.lang.ast.ast_transformers.call_transformer.CallTransformer">CallTransformer (class in gstaichi.lang.ast.ast_transformers.call_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.cast">cast() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.cast">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.cast">(in module gstaichi.lang.ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.ceil">ceil() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.cells">cells (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.check_loop_var">check_loop_var() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.check_matmul">check_matmul() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.check_transpose">check_transpose() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.clamp">clamp() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.classfunc">classfunc (gstaichi.lang.func.Func attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.clear_kernel_profiler_info">clear_kernel_profiler_info() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/scoped_profiler/index.html#gstaichi.profiler.scoped_profiler.clear_scoped_profiler_info">clear_scoped_profiler_info() (in module gstaichi.profiler.scoped_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/intrinsics/index.html#gstaichi.lang.intrinsics.clock_counter">clock_counter() (in module gstaichi.lang.intrinsics)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/intrinsics/index.html#gstaichi.lang.intrinsics.clock_freq_hz">clock_freq_hz() (in module gstaichi.lang.intrinsics)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.clz">clz() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.collect_kernel_profiler_metrics">collect_kernel_profiler_metrics() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.cols">cols() (gstaichi.lang.matrix.Matrix static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.cols">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.comment">comment (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.compiled">compiled (gstaichi.lang.func.Func attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.compiled_kernel_data_by_key">compiled_kernel_data_by_key (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.compute">compute() (gstaichi.linalg.sparse_solver.SparseSolver method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.construct_kernel_ret">construct_kernel_ret() (gstaichi.lang.kernel.Kernel method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopStatus.Continue">Continue (gstaichi.lang.ast.ast_transformer_utils.LoopStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.copy_from">copy_from() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.copy_from">(gstaichi.lang.struct.StructField method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.corresponding_numpy_types">corresponding_numpy_types (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.cos">cos() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.counter">counter (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.cpu">cpu (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.create_variable">create_variable() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.cross">cross() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.cross">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.cross">(in module gstaichi.math.mathimpl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.ctx">ctx (gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.cuda">cuda (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.CuptiMetric">CuptiMetric (class in gstaichi.profiler.kernel_metrics)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.current_kernel">current_kernel (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.current_kernel">(gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.current_loop_scope">current_loop_scope() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.current_scope">current_scope (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.current_scope">current_scope() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.currently_compiling_materialize_key">currently_compiling_materialize_key (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.cxx_function_by_id">cxx_function_by_id (gstaichi.lang.func.Func attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.data_oriented">data_oriented() (in module gstaichi.lang.kernel_impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.dataclass">dataclass() (in module gstaichi.lang.struct)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.deactivate">deactivate() (in module gstaichi.lang.snode)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.deactivate_all">deactivate_all() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.deactivate_all_snodes">deactivate_all_snodes() (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_matrix_arg">decl_matrix_arg() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_ndarray_arg">decl_ndarray_arg() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_ret">decl_ret() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_scalar_arg">decl_scalar_arg() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_sparse_matrix">decl_sparse_matrix() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.decl_struct_arg">decl_struct_arg() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.ArgMetadata.default">default (gstaichi.lang.kernel_arguments.ArgMetadata attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.degrees">degrees() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.dense">dense() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.determinant">determinant() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.determinant">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.determinant">(in module gstaichi.math.mathimpl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability">DeviceCapability (class in gstaichi.types.enums)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.diag">diag() (gstaichi.lang.matrix.Matrix static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.diag">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.dim_lt">dim_lt() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.distance">distance() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.do_check">do_check() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.do_compile">do_compile() (gstaichi.lang.func.Func method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.dot">dot() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.dot">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.dot">(in module gstaichi.math.mathimpl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.dtype">dtype (gstaichi.lang.field.Field property)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixEntry.dtype">(gstaichi.lang.kernel_arguments.SparseMatrixEntry attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixProxy.dtype">(gstaichi.lang.kernel_arguments.SparseMatrixProxy attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.dtype">(gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.dtype">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.SharedArray.dtype">(gstaichi.lang.simt.block.SharedArray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG.dtype">(gstaichi.linalg.sparse_cg.SparseCG attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix.dtype">(gstaichi.linalg.sparse_matrix.SparseMatrix attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder.dtype">(gstaichi.linalg.sparse_matrix.SparseMatrixBuilder attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.dtype">(gstaichi.linalg.sparse_solver.SparseSolver attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.dual">dual (gstaichi.lang.field.Field attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.dual">(gstaichi.lang.struct.StructField attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.dump_ast">dump_ast (gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.dump_compile_config">dump_compile_config() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.dynamic">dynamic() (gstaichi.lang.snode.SNode method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="E">E</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.e">e (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.E">E() (in module gstaichi.lang.matrix_ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.edges">edges (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.elect">elect() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.element_shape">element_shape (gstaichi.lang.matrix.MatrixNdarray property)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.element_shape">(gstaichi.lang.matrix.VectorNdarray property)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.element_type">element_type (gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.element_type">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/annotations/index.html#gstaichi.types.annotations.Template.element_type">(gstaichi.types.annotations.Template attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.end_lineno">end_lineno (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.ensure_compiled">ensure_compiled() (gstaichi.lang.kernel.Kernel method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.entries">entries (gstaichi.lang.struct.Struct property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_add">exclusive_add() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_and">exclusive_and() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_max">exclusive_max() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_min">exclusive_min() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_mul">exclusive_mul() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_or">exclusive_or() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.exclusive_xor">exclusive_xor() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.exp">exp() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.expanding_dataclass_call_parameters">expanding_dataclass_call_parameters (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.export">export() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.export_ascii">export_ascii() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.export_frame">export_frame() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.export_frame_ascii">export_frame_ascii() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.extension">extension (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.eye">eye() (in module gstaichi.math.mathimpl)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.f16">f16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.f32">f32 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.f64">f64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.face_channels">face_channels (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.face_data">face_data (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.face_data_type">face_data_type (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.face_type">face_type (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.faces">faces (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.factorize">factorize() (gstaichi.linalg.sparse_solver.SparseSolver method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.fe_ll_cache_observations">fe_ll_cache_observations (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field">Field (class in gstaichi.lang.field)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.field">field() (gstaichi.lang.matrix.Matrix class method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Vector.field">(gstaichi.lang.matrix.Vector class method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.field">(gstaichi.lang.struct.Struct class method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.field">(in module gstaichi.lang.impl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.field_dict">field_dict (gstaichi.lang.struct.StructField attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.BitpackedFields.fields">fields (gstaichi.lang.field.BitpackedFields attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.file">file (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.fill">fill() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField.fill">(gstaichi.lang.field.ScalarField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.fill">(gstaichi.lang.matrix.Matrix method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.fill">(gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.fill">(gstaichi.lang.struct.StructField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.fill">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/quant/index.html#gstaichi.types.quant.fixed">fixed() (in module gstaichi.types.quant)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/quant/index.html#gstaichi.types.quant.float">float() (in module gstaichi.types.quant)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.float16">float16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.float32">float32 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.float64">float64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.floor">floor() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.Format">Format (in module gstaichi.types.enums)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.fract">fract() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.frexp">frexp() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.from_numpy">from_numpy() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField.from_numpy">(gstaichi.lang.field.ScalarField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.from_numpy">(gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.from_numpy">(gstaichi.lang.matrix.MatrixNdarray method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.from_numpy">(gstaichi.lang.matrix.VectorNdarray method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.from_numpy">(gstaichi.lang.struct.StructField method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.from_torch">from_torch() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.from_torch">(gstaichi.lang.struct.StructField method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func">Func (class in gstaichi.lang.func)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.func">func (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.func">func() (in module gstaichi.lang.kernel_impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.func_call_rvalue">func_call_rvalue() (gstaichi.lang.func.Func method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.function_counter">function_counter (gstaichi.lang.func.Func attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/function_def_transformer/index.html#gstaichi.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer">FunctionDefTransformer (class in gstaichi.lang.ast.ast_transformers.function_def_transformer)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.Mesh.generate_meta">generate_meta() (gstaichi.lang.mesh.Mesh static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.generic_visit">generic_visit() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiRuntimeTypeError.get">get() (gstaichi.lang.exception.GsTaichiRuntimeTypeError static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.get_addr">get_addr() (in module gstaichi.lang.snode)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.get_decorator">get_decorator() (in module gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.get_error_location">get_error_location() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.get_for_loop_targets">get_for_loop_targets() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.get_kernel_profiler_total_time">get_kernel_profiler_total_time() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.get_list_shape">get_list_shape() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.get_member_field">get_member_field() (gstaichi.lang.struct.StructField method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.get_pos_info">get_pos_info() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.get_position_as_numpy">get_position_as_numpy() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.get_predefined_cupti_metrics">get_predefined_cupti_metrics() (in module gstaichi.profiler.kernel_metrics)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.get_relation_access">get_relation_access() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.get_relation_size">get_relation_size() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiRuntimeTypeError.get_ret">get_ret() (gstaichi.lang.exception.GsTaichiRuntimeTypeError static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.get_scalar_field">get_scalar_field() (gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.get_shape">get_shape() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Vector.get_shape">(gstaichi.lang.matrix.Vector method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.get_type_for_kernel_args">get_type_for_kernel_args() (in module gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.get_var_by_name">get_var_by_name() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.global_context">global_context (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.global_thread_idx">global_thread_idx() (in module gstaichi.lang.misc)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.global_thread_idx">(in module gstaichi.lang.simt.block)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.global_vars">global_vars (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.gpu">gpu (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.grad">grad (gstaichi.lang.field.Field attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.grad">(gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.grad">(gstaichi.lang.struct.StructField attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.grouped">grouped() (in module gstaichi.lang.impl)</a>
+</li>
+      <li>
+    gstaichi
+
+      <ul>
+        <li><a href="autoapi/gstaichi/index.html#module-gstaichi">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.ad
+
+      <ul>
+        <li><a href="autoapi/gstaichi/ad/index.html#module-gstaichi.ad">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.algorithms
+
+      <ul>
+        <li><a href="autoapi/gstaichi/algorithms/index.html#module-gstaichi.algorithms">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.examples.lcg_python
+
+      <ul>
+        <li><a href="autoapi/gstaichi/examples/lcg_python/index.html#module-gstaichi.examples.lcg_python">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.examples.lcg_taichi
+
+      <ul>
+        <li><a href="autoapi/gstaichi/examples/lcg_taichi/index.html#module-gstaichi.examples.lcg_taichi">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.examples.minimal
+
+      <ul>
+        <li><a href="autoapi/gstaichi/examples/minimal/index.html#module-gstaichi.examples.minimal">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.experimental
+
+      <ul>
+        <li><a href="autoapi/gstaichi/experimental/index.html#module-gstaichi.experimental">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/index.html#module-gstaichi.lang">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.any_array
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/any_array/index.html#module-gstaichi.lang.any_array">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/index.html#module-gstaichi.lang.ast">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.ast_transformer
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#module-gstaichi.lang.ast.ast_transformer">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.ast_transformer_utils
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#module-gstaichi.lang.ast.ast_transformer_utils">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.ast_transformers
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/index.html#module-gstaichi.lang.ast.ast_transformers">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.ast_transformers.call_transformer
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/call_transformer/index.html#module-gstaichi.lang.ast.ast_transformers.call_transformer">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.ast_transformers.function_def_transformer
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/function_def_transformer/index.html#module-gstaichi.lang.ast.ast_transformers.function_def_transformer">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.checkers
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#module-gstaichi.lang.ast.checkers">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.symbol_resolver
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/symbol_resolver/index.html#module-gstaichi.lang.ast.symbol_resolver">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ast.transform
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/transform/index.html#module-gstaichi.lang.ast.transform">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.common_ops
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/common_ops/index.html#module-gstaichi.lang.common_ops">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.exception
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/exception/index.html#module-gstaichi.lang.exception">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.expr
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/expr/index.html#module-gstaichi.lang.expr">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.field
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#module-gstaichi.lang.field">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.func
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/func/index.html#module-gstaichi.lang.func">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.impl
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#module-gstaichi.lang.impl">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.intrinsics
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/intrinsics/index.html#module-gstaichi.lang.intrinsics">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.kernel
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#module-gstaichi.lang.kernel">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.kernel_arguments
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#module-gstaichi.lang.kernel_arguments">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.kernel_impl
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#module-gstaichi.lang.kernel_impl">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.matrix
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#module-gstaichi.lang.matrix">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.matrix_ops
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#module-gstaichi.lang.matrix_ops">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    gstaichi.lang.matrix_ops_utils
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#module-gstaichi.lang.matrix_ops_utils">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.mesh
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/mesh/index.html#module-gstaichi.lang.mesh">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.misc
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/misc/index.html#module-gstaichi.lang.misc">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.ops
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ops/index.html#module-gstaichi.lang.ops">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.runtime_ops
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/runtime_ops/index.html#module-gstaichi.lang.runtime_ops">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.shell
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/shell/index.html#module-gstaichi.lang.shell">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.simt
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/index.html#module-gstaichi.lang.simt">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.simt.block
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#module-gstaichi.lang.simt.block">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.simt.grid
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/grid/index.html#module-gstaichi.lang.simt.grid">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.simt.subgroup
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#module-gstaichi.lang.simt.subgroup">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.simt.warp
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#module-gstaichi.lang.simt.warp">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.snode
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#module-gstaichi.lang.snode">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.source_builder
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/source_builder/index.html#module-gstaichi.lang.source_builder">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.struct
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#module-gstaichi.lang.struct">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.lang.util
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/util/index.html#module-gstaichi.lang.util">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.linalg
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/index.html#module-gstaichi.linalg">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.linalg.matrixfree_cg
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#module-gstaichi.linalg.matrixfree_cg">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.linalg.sparse_cg
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#module-gstaichi.linalg.sparse_cg">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.linalg.sparse_matrix
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#module-gstaichi.linalg.sparse_matrix">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.linalg.sparse_solver
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#module-gstaichi.linalg.sparse_solver">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.math
+
+      <ul>
+        <li><a href="autoapi/gstaichi/math/index.html#module-gstaichi.math">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.math.mathimpl
+
+      <ul>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#module-gstaichi.math.mathimpl">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.profiler
+
+      <ul>
+        <li><a href="autoapi/gstaichi/profiler/index.html#module-gstaichi.profiler">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.profiler.kernel_metrics
+
+      <ul>
+        <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#module-gstaichi.profiler.kernel_metrics">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.profiler.kernel_profiler
+
+      <ul>
+        <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#module-gstaichi.profiler.kernel_profiler">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.profiler.memory_profiler
+
+      <ul>
+        <li><a href="autoapi/gstaichi/profiler/memory_profiler/index.html#module-gstaichi.profiler.memory_profiler">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.profiler.scoped_profiler
+
+      <ul>
+        <li><a href="autoapi/gstaichi/profiler/scoped_profiler/index.html#module-gstaichi.profiler.scoped_profiler">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.sparse
+
+      <ul>
+        <li><a href="autoapi/gstaichi/sparse/index.html#module-gstaichi.sparse">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.tools
+
+      <ul>
+        <li><a href="autoapi/gstaichi/tools/index.html#module-gstaichi.tools">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.tools.diagnose
+
+      <ul>
+        <li><a href="autoapi/gstaichi/tools/diagnose/index.html#module-gstaichi.tools.diagnose">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.tools.np2ply
+
+      <ul>
+        <li><a href="autoapi/gstaichi/tools/np2ply/index.html#module-gstaichi.tools.np2ply">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.tools.vtk
+
+      <ul>
+        <li><a href="autoapi/gstaichi/tools/vtk/index.html#module-gstaichi.tools.vtk">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/index.html#module-gstaichi.types">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.annotations
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/annotations/index.html#module-gstaichi.types.annotations">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.compound_types
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/compound_types/index.html#module-gstaichi.types.compound_types">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.enums
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/enums/index.html#module-gstaichi.types.enums">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.ndarray_type
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/ndarray_type/index.html#module-gstaichi.types.ndarray_type">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.primitive_types
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/primitive_types/index.html#module-gstaichi.types.primitive_types">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.quant
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/quant/index.html#module-gstaichi.types.quant">module</a>
+</li>
+      </ul></li>
+      <li>
+    gstaichi.types.utils
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/utils/index.html#module-gstaichi.types.utils">module</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.gstaichi_callable">gstaichi_callable (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiAssertionError">GsTaichiAssertionError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiCompilationError">GsTaichiCompilationError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiNameError">GsTaichiNameError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/common_ops/index.html#gstaichi.lang.common_ops.GsTaichiOperations">GsTaichiOperations (class in gstaichi.lang.common_ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiRuntimeError">GsTaichiRuntimeError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiRuntimeTypeError">GsTaichiRuntimeTypeError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiSyntaxError">GsTaichiSyntaxError</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/exception/index.html#gstaichi.lang.exception.GsTaichiTypeError">GsTaichiTypeError</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="H">H</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.has_print">has_print (gstaichi.lang.func.Func attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.has_print">(gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.CuptiMetric.header">header (gstaichi.profiler.kernel_metrics.CuptiMetric attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.host_accessors">host_accessors (gstaichi.lang.field.Field attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="I">I</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixEntry.i">i (gstaichi.lang.kernel_arguments.SparseMatrixEntry attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.i">(in module gstaichi.lang.misc)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.i16">i16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.i32">i32 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.i64">i64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.i8">i8 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.identity">identity() (gstaichi.lang.matrix.Matrix static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard.if_node">if_node (gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ij">ij (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ijk">ijk (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ijkl">ijkl (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ijl">ijl (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ik">ik (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.ikl">ikl (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.il">il (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_add">inclusive_add() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_and">inclusive_and() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_max">inclusive_max() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_min">inclusive_min() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_mul">inclusive_mul() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_or">inclusive_or() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.inclusive_xor">inclusive_xor() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.indent">indent (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.inf">inf (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.info">info() (gstaichi.linalg.sparse_solver.SparseSolver method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.init">init() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/quant/index.html#gstaichi.types.quant.int">int() (in module gstaichi.types.quant)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.int16">int16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.int32">int32 (in module gstaichi.types.primitive_types)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.int64">int64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.int8">int8 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.inverse">inverse() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.inverse">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.inverse">(in module gstaichi.math.mathimpl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.is_active">is_active() (in module gstaichi.lang.snode)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.is_extension_enabled">is_extension_enabled() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus.is_in_non_static_control_flow">is_in_non_static_control_flow (gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_non_static_control_flow">is_in_non_static_control_flow() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_static_for">is_in_static_for() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.StaticScopeStatus.is_in_static_scope">is_in_static_scope (gstaichi.lang.ast.ast_transformer_utils.StaticScopeStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_static_scope">is_in_static_scope() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.is_int_const">is_int_const() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/utils/index.html#gstaichi.types.utils.is_integral">is_integral (in module gstaichi.types.utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_kernel">is_kernel (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_pure">is_pure (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/utils/index.html#gstaichi.types.utils.is_real">is_real (in module gstaichi.types.utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_real_function">is_real_function (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.is_real_function">(gstaichi.lang.func.Func attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/utils/index.html#gstaichi.types.utils.is_signed">is_signed (in module gstaichi.types.utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute.is_static">is_static (gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/utils/index.html#gstaichi.types.utils.is_tensor">is_tensor (in module gstaichi.types.utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.is_tuple">is_tuple() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_var_declared">is_var_declared() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.isinf">isinf() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.isnan">isnan() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.items">items (gstaichi.lang.struct.Struct property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.ivec2">ivec2 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.ivec3">ivec3 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.ivec4">ivec4 (in module gstaichi.math.mathimpl)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="J">J</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixEntry.j">j (gstaichi.lang.kernel_arguments.SparseMatrixEntry attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.j">(in module gstaichi.lang.misc)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.jk">jk (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.jkl">jkl (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.jl">jl (in module gstaichi.lang.misc)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="K">K</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.k">k (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel">Kernel (class in gstaichi.lang.kernel)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.kernel">kernel() (in module gstaichi.lang.kernel_impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.kernel_args">kernel_args (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.kernel_counter">kernel_counter (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.kernel_cpp">kernel_cpp (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.kernel_function_info">kernel_function_info (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.kernel_name">kernel_name (gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker">KernelSimplicityASTChecker (class in gstaichi.lang.ast.checkers)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard">KernelSimplicityASTChecker.ScopeGuard (class in gstaichi.lang.ast.checkers)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.keys">keys (gstaichi.lang.struct.Struct property)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.keys">(gstaichi.lang.struct.StructField property)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.kl">kl (in module gstaichi.lang.misc)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="L">L</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.l">l (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.launch_context_buffer_cache">launch_context_buffer_cache (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.launch_kernel">launch_kernel() (gstaichi.lang.kernel.Kernel method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.launch_observations">launch_observations (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.LaunchContextBufferCache">LaunchContextBufferCache (class in gstaichi.lang.kernel)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.layout">layout (gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.layout">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.Layout">Layout (in module gstaichi.types.enums)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.lazy_dual">lazy_dual() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.lazy_grad">lazy_grad() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/examples/lcg_python/index.html#gstaichi.examples.lcg_python.lcg_np">lcg_np() (in module gstaichi.examples.lcg_python)</a>
+</li>
+      <li><a href="autoapi/gstaichi/examples/lcg_taichi/index.html#gstaichi.examples.lcg_taichi.lcg_ti">lcg_ti() (in module gstaichi.examples.lcg_taichi)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/examples/minimal/index.html#gstaichi.examples.minimal.lcg_ti">(in module gstaichi.examples.minimal)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.length">length() (in module gstaichi.lang.snode)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.length">(in module gstaichi.math.mathimpl)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#gstaichi.linalg.matrixfree_cg.LinearOperator">LinearOperator (class in gstaichi.linalg.matrixfree_cg)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.lineno_offset">lineno_offset (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.Mesh.load_meta">load_meta() (gstaichi.lang.mesh.Mesh static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.local_scopes">local_scopes (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.log">log() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.log2">log2() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard.loop_attribute">loop_attribute (gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.loop_config">loop_config() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_depth">loop_depth (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_scope_guard">loop_scope_guard() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_scopes">loop_scopes (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_status">loop_status() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute">LoopScopeAttribute (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeGuard">LoopScopeGuard (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopStatus">LoopStatus (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="M">M</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.m">m (gstaichi.lang.matrix.MatrixField attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.m">(gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/examples/lcg_python/index.html#gstaichi.examples.lcg_python.main">main() (in module gstaichi.examples.lcg_python)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/examples/lcg_taichi/index.html#gstaichi.examples.lcg_taichi.main">(in module gstaichi.examples.lcg_taichi)</a>
+</li>
+        <li><a href="autoapi/gstaichi/examples/minimal/index.html#gstaichi.examples.minimal.main">(in module gstaichi.examples.minimal)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard.mark_no_more_for_loop">mark_no_more_for_loop() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard.mark_no_more_stmt">mark_no_more_stmt() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.ScopeGuard method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.mat2">mat2 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.mat3">mat3 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.mat4">mat4 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.match_all">match_all() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.match_any">match_any() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.materialize">materialize() (gstaichi.lang.kernel.Kernel method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.materialized_kernels">materialized_kernels (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.matmul">matmul() (in module gstaichi.lang.matrix_ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix">Matrix (class in gstaichi.lang.matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG.matrix">matrix (gstaichi.linalg.sparse_cg.SparseCG attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.matrix">(gstaichi.linalg.sparse_solver.SparseSolver attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/compound_types/index.html#gstaichi.types.compound_types.matrix">matrix() (in module gstaichi.types.compound_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField">MatrixField (class in gstaichi.lang.matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#gstaichi.linalg.matrixfree_cg.MatrixFreeBICGSTAB">MatrixFreeBICGSTAB() (in module gstaichi.linalg.matrixfree_cg)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#gstaichi.linalg.matrixfree_cg.MatrixFreeCG">MatrixFreeCG() (in module gstaichi.linalg.matrixfree_cg)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray">MatrixNdarray (class in gstaichi.lang.matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#gstaichi.linalg.matrixfree_cg.LinearOperator.matvec">matvec() (gstaichi.linalg.matrixfree_cg.LinearOperator method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.max">max() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.max">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.max">(in module gstaichi.lang.ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.mem_sync">mem_sync() (in module gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/grid/index.html#gstaichi.lang.simt.grid.memfence">memfence() (in module gstaichi.lang.simt.grid)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.memory_barrier">memory_barrier() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.Mesh">Mesh (class in gstaichi.lang.mesh)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.mesh_local">mesh_local() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.mesh_patch_idx">mesh_patch_idx() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.mesh_ptr">mesh_ptr (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance">MeshInstance (class in gstaichi.lang.mesh)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.metal">metal (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.methods">methods (gstaichi.lang.struct.Struct property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.min">min() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.min">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.min">(in module gstaichi.lang.ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.mix">mix() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix.mmwrite">mmwrite() (gstaichi.linalg.sparse_matrix.SparseMatrix method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.mod">mod() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li>
+    module
+
+      <ul>
+        <li><a href="autoapi/gstaichi/index.html#module-gstaichi">gstaichi</a>
+</li>
+        <li><a href="autoapi/gstaichi/ad/index.html#module-gstaichi.ad">gstaichi.ad</a>
+</li>
+        <li><a href="autoapi/gstaichi/algorithms/index.html#module-gstaichi.algorithms">gstaichi.algorithms</a>
+</li>
+        <li><a href="autoapi/gstaichi/examples/lcg_python/index.html#module-gstaichi.examples.lcg_python">gstaichi.examples.lcg_python</a>
+</li>
+        <li><a href="autoapi/gstaichi/examples/lcg_taichi/index.html#module-gstaichi.examples.lcg_taichi">gstaichi.examples.lcg_taichi</a>
+</li>
+        <li><a href="autoapi/gstaichi/examples/minimal/index.html#module-gstaichi.examples.minimal">gstaichi.examples.minimal</a>
+</li>
+        <li><a href="autoapi/gstaichi/experimental/index.html#module-gstaichi.experimental">gstaichi.experimental</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/index.html#module-gstaichi.lang">gstaichi.lang</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/any_array/index.html#module-gstaichi.lang.any_array">gstaichi.lang.any_array</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/index.html#module-gstaichi.lang.ast">gstaichi.lang.ast</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#module-gstaichi.lang.ast.ast_transformer">gstaichi.lang.ast.ast_transformer</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#module-gstaichi.lang.ast.ast_transformer_utils">gstaichi.lang.ast.ast_transformer_utils</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/index.html#module-gstaichi.lang.ast.ast_transformers">gstaichi.lang.ast.ast_transformers</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/call_transformer/index.html#module-gstaichi.lang.ast.ast_transformers.call_transformer">gstaichi.lang.ast.ast_transformers.call_transformer</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformers/function_def_transformer/index.html#module-gstaichi.lang.ast.ast_transformers.function_def_transformer">gstaichi.lang.ast.ast_transformers.function_def_transformer</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#module-gstaichi.lang.ast.checkers">gstaichi.lang.ast.checkers</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/symbol_resolver/index.html#module-gstaichi.lang.ast.symbol_resolver">gstaichi.lang.ast.symbol_resolver</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/transform/index.html#module-gstaichi.lang.ast.transform">gstaichi.lang.ast.transform</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/common_ops/index.html#module-gstaichi.lang.common_ops">gstaichi.lang.common_ops</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/exception/index.html#module-gstaichi.lang.exception">gstaichi.lang.exception</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/expr/index.html#module-gstaichi.lang.expr">gstaichi.lang.expr</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#module-gstaichi.lang.field">gstaichi.lang.field</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/func/index.html#module-gstaichi.lang.func">gstaichi.lang.func</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#module-gstaichi.lang.impl">gstaichi.lang.impl</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/intrinsics/index.html#module-gstaichi.lang.intrinsics">gstaichi.lang.intrinsics</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#module-gstaichi.lang.kernel">gstaichi.lang.kernel</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#module-gstaichi.lang.kernel_arguments">gstaichi.lang.kernel_arguments</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#module-gstaichi.lang.kernel_impl">gstaichi.lang.kernel_impl</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#module-gstaichi.lang.matrix">gstaichi.lang.matrix</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#module-gstaichi.lang.matrix_ops">gstaichi.lang.matrix_ops</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#module-gstaichi.lang.matrix_ops_utils">gstaichi.lang.matrix_ops_utils</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/mesh/index.html#module-gstaichi.lang.mesh">gstaichi.lang.mesh</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/misc/index.html#module-gstaichi.lang.misc">gstaichi.lang.misc</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ops/index.html#module-gstaichi.lang.ops">gstaichi.lang.ops</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/runtime_ops/index.html#module-gstaichi.lang.runtime_ops">gstaichi.lang.runtime_ops</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/shell/index.html#module-gstaichi.lang.shell">gstaichi.lang.shell</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/index.html#module-gstaichi.lang.simt">gstaichi.lang.simt</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#module-gstaichi.lang.simt.block">gstaichi.lang.simt.block</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/grid/index.html#module-gstaichi.lang.simt.grid">gstaichi.lang.simt.grid</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#module-gstaichi.lang.simt.subgroup">gstaichi.lang.simt.subgroup</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#module-gstaichi.lang.simt.warp">gstaichi.lang.simt.warp</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#module-gstaichi.lang.snode">gstaichi.lang.snode</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/source_builder/index.html#module-gstaichi.lang.source_builder">gstaichi.lang.source_builder</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#module-gstaichi.lang.struct">gstaichi.lang.struct</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/util/index.html#module-gstaichi.lang.util">gstaichi.lang.util</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/index.html#module-gstaichi.linalg">gstaichi.linalg</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/matrixfree_cg/index.html#module-gstaichi.linalg.matrixfree_cg">gstaichi.linalg.matrixfree_cg</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#module-gstaichi.linalg.sparse_cg">gstaichi.linalg.sparse_cg</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#module-gstaichi.linalg.sparse_matrix">gstaichi.linalg.sparse_matrix</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#module-gstaichi.linalg.sparse_solver">gstaichi.linalg.sparse_solver</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/index.html#module-gstaichi.math">gstaichi.math</a>
+</li>
+        <li><a href="autoapi/gstaichi/math/mathimpl/index.html#module-gstaichi.math.mathimpl">gstaichi.math.mathimpl</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/index.html#module-gstaichi.profiler">gstaichi.profiler</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#module-gstaichi.profiler.kernel_metrics">gstaichi.profiler.kernel_metrics</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#module-gstaichi.profiler.kernel_profiler">gstaichi.profiler.kernel_profiler</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/memory_profiler/index.html#module-gstaichi.profiler.memory_profiler">gstaichi.profiler.memory_profiler</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/scoped_profiler/index.html#module-gstaichi.profiler.scoped_profiler">gstaichi.profiler.scoped_profiler</a>
+</li>
+        <li><a href="autoapi/gstaichi/sparse/index.html#module-gstaichi.sparse">gstaichi.sparse</a>
+</li>
+        <li><a href="autoapi/gstaichi/tools/index.html#module-gstaichi.tools">gstaichi.tools</a>
+</li>
+        <li><a href="autoapi/gstaichi/tools/diagnose/index.html#module-gstaichi.tools.diagnose">gstaichi.tools.diagnose</a>
+</li>
+        <li><a href="autoapi/gstaichi/tools/np2ply/index.html#module-gstaichi.tools.np2ply">gstaichi.tools.np2ply</a>
+</li>
+        <li><a href="autoapi/gstaichi/tools/vtk/index.html#module-gstaichi.tools.vtk">gstaichi.tools.vtk</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/index.html#module-gstaichi.types">gstaichi.types</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/annotations/index.html#module-gstaichi.types.annotations">gstaichi.types.annotations</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/compound_types/index.html#module-gstaichi.types.compound_types">gstaichi.types.compound_types</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/enums/index.html#module-gstaichi.types.enums">gstaichi.types.enums</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/ndarray_type/index.html#module-gstaichi.types.ndarray_type">gstaichi.types.ndarray_type</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/primitive_types/index.html#module-gstaichi.types.primitive_types">gstaichi.types.primitive_types</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/quant/index.html#module-gstaichi.types.quant">gstaichi.types.quant</a>
+</li>
+        <li><a href="autoapi/gstaichi/types/utils/index.html#module-gstaichi.types.utils">gstaichi.types.utils</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="N">N</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.n">n (gstaichi.lang.matrix.MatrixField attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.n">(gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.n">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.ArgMetadata.name">name (gstaichi.lang.kernel_arguments.ArgMetadata attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.name">(gstaichi.lang.struct.StructField attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.CuptiMetric.name">(gstaichi.profiler.kernel_metrics.CuptiMetric attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.nan">nan (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/ndarray_type/index.html#gstaichi.types.ndarray_type.NDArray">NDArray (in module gstaichi.types.ndarray_type)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/ndarray_type/index.html#gstaichi.types.ndarray_type.ndarray">ndarray (in module gstaichi.types.ndarray_type)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.ndarray">ndarray() (gstaichi.lang.matrix.Matrix class method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Vector.ndarray">(gstaichi.lang.matrix.Vector class method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.ndarray">(in module gstaichi.lang.impl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.ndim">ndim (gstaichi.lang.matrix.MatrixField attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/types/annotations/index.html#gstaichi.types.annotations.Template.ndim">(gstaichi.types.annotations.Template attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute.nearest_non_static_if">nearest_non_static_if (gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.new_scope">new_scope() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.no_activate">no_activate() (in module gstaichi.lang.misc)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_control_flow_guard">non_static_control_flow_guard() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_control_flow_status">non_static_control_flow_status (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeGuard.non_static_guard">non_static_guard (gstaichi.lang.ast.ast_transformer_utils.LoopScopeGuard attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard.non_static_guard">(gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard attribute)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_if_guard">non_static_if_guard() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard">NonStaticControlFlowGuard (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus">NonStaticControlFlowStatus (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticIfGuard">NonStaticIfGuard (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ReturnStatus.NoReturn">NoReturn (gstaichi.lang.ast.ast_transformer_utils.ReturnStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.norm">norm() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.norm">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.norm_inv">norm_inv() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.norm_inv">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.norm_sqr">norm_sqr() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.norm_sqr">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopStatus.Normal">Normal (gstaichi.lang.ast.ast_transformer_utils.LoopStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.normalize">normalize() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.normalized">normalized() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.normalized">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder.num_cols">num_cols (gstaichi.linalg.sparse_matrix.SparseMatrixBuilder attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.num_face_channels">num_face_channels (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.num_faces">num_faces (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder.num_rows">num_rows (gstaichi.linalg.sparse_matrix.SparseMatrixBuilder attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.num_vertex_channels">num_vertex_channels (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.num_vertices">num_vertices (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="O">O</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.one">one() (gstaichi.lang.matrix.Matrix static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.one">(in module gstaichi.lang.impl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.only_parse_function_def">only_parse_function_def (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.only_parse_function_def">(gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.outer_product">outer_product() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.outer_product">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="P">P</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.parent">parent() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.parent">(gstaichi.lang.snode.SNode method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.pass_idx">pass_idx (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.pi">pi (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.BitpackedFields.place">place() (gstaichi.lang.field.BitpackedFields method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.place">(gstaichi.lang.snode.SNode method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.ply_supported_types">ply_supported_types (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter">PLYWriter (class in gstaichi.tools.np2ply)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.pointer">pointer() (gstaichi.lang.snode.SNode method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.popcnt">popcnt() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.LaunchContextBufferCache.populate_launch_ctx_from_cache">populate_launch_ctx_from_cache() (gstaichi.lang.kernel.LaunchContextBufferCache method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.pow">pow() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.preconditions">preconditions() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.print_header">print_header() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.print_kernel_profiler_info">print_kernel_profiler_info() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/memory_profiler/index.html#gstaichi.profiler.memory_profiler.print_memory_profiler_info">print_memory_profiler_info() (in module gstaichi.profiler.memory_profiler)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/profiler/scoped_profiler/index.html#gstaichi.profiler.scoped_profiler.print_scoped_profiler_info">print_scoped_profiler_info() (in module gstaichi.profiler.scoped_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder.print_triplets">print_triplets() (gstaichi.linalg.sparse_matrix.SparseMatrixBuilder method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_dictcomp">process_dictcomp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_generators">process_generators() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_ifs">process_ifs() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_listcomp">process_listcomp() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.pruning">pruning (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixEntry.ptr">ptr (gstaichi.lang.kernel_arguments.SparseMatrixEntry attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixProxy.ptr">(gstaichi.lang.kernel_arguments.SparseMatrixProxy attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.ptr">(gstaichi.lang.matrix.MatrixField attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.ptr">(gstaichi.lang.snode.SNode attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.PureViolation">PureViolation (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.py_args">py_args (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/shell/index.html#gstaichi.lang.shell.pybuf_enabled">pybuf_enabled (in module gstaichi.lang.shell)</a>, <a href="autoapi/gstaichi/lang/shell/index.html#id0">[1]</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/func/index.html#gstaichi.lang.func.Func.pyfunc">pyfunc (gstaichi.lang.func.Func attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.pyfunc">pyfunc() (in module gstaichi.lang.kernel_impl)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Q">Q</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.quant_array">quant_array() (gstaichi.lang.snode.SNode method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.query_kernel_profiler_info">query_kernel_profiler_info() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="R">R</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.radians">radians() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.raise_on_templated_floats">raise_on_templated_floats (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.raised">raised (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.random">random() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.raw_div">raw_div() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.raw_mod">raw_mod() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/experimental/index.html#gstaichi.experimental.real_func">real_func() (in module gstaichi.experimental)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.real_func">(in module gstaichi.lang.kernel_impl)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_add">reduce_add() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_and">reduce_and() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_max">reduce_max() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_min">reduce_min() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_mul">reduce_mul() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_or">reduce_or() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.reduce_xor">reduce_xor() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.ref">ref() (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.reflect">reflect() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.refract">refract() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.relation_set">relation_set (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.rescale_index">rescale_index() (in module gstaichi.lang.snode)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.reset">reset() (gstaichi.lang.kernel.Kernel method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.reset">(in module gstaichi.lang.misc)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.reshape_list">reshape_list() (in module gstaichi.lang.ast.ast_transformer)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/symbol_resolver/index.html#gstaichi.lang.ast.symbol_resolver.ASTResolver.resolve_to">resolve_to() (gstaichi.lang.ast.symbol_resolver.ASTResolver static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.return_data">return_data (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.returned">returned (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ReturnStatus.ReturnedValue">ReturnedValue (gstaichi.lang.ast.ast_transformer_utils.ReturnStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ReturnStatus.ReturnedVoid">ReturnedVoid (gstaichi.lang.ast.ast_transformer_utils.ReturnStatus attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.returns">returns (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ReturnStatus">ReturnStatus (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.root">root (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.rot_by_axis">rot_by_axis() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.rot_yaw_pitch_roll">rot_yaw_pitch_roll() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.rotation2d">rotation2d() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.rotation3d">rotation3d() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.round">round() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.rows">rows() (gstaichi.lang.matrix.Matrix static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.rows">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.rsqrt">rsqrt() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.runtime">runtime (gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="S">S</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.same_shapes">same_shapes() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.sanity_check">sanity_check() (gstaichi.tools.np2ply.PLYWriter method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField">ScalarField (class in gstaichi.lang.field)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.CuptiMetric.scale">scale (gstaichi.profiler.kernel_metrics.CuptiMetric attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.scale">scale() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeGuard.scopes">scopes (gstaichi.lang.ast.ast_transformer_utils.LoopScopeGuard attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.VariableScopeGuard.scopes">(gstaichi.lang.ast.ast_transformer_utils.VariableScopeGuard attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.select">select() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_index_mapping">set_index_mapping() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.set_kernel_profiler_metrics">set_kernel_profiler_metrics() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/profiler/kernel_profiler/index.html#gstaichi.profiler.kernel_profiler.set_kernel_profiler_toolkit">set_kernel_profiler_toolkit() (in module gstaichi.profiler.kernel_profiler)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.set_loop_status">set_loop_status() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_num_patches">set_num_patches() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_owned_offset">set_owned_offset() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_patch_max_element_num">set_patch_max_element_num() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_relation_dynamic">set_relation_dynamic() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_relation_fixed">set_relation_fixed() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.set_total_offset">set_total_offset() (gstaichi.lang.mesh.MeshInstance method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.shape">shape (gstaichi.lang.field.Field property)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.shape">(gstaichi.lang.matrix.MatrixNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.shape">(gstaichi.lang.matrix.VectorNdarray attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode.shape">(gstaichi.lang.snode.SNode property)</a>
+</li>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix.shape">(gstaichi.linalg.sparse_matrix.SparseMatrix property)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.SharedArray.shared_array_proxy">shared_array_proxy (gstaichi.lang.simt.block.SharedArray attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.SharedArray">SharedArray (class in gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_down_f32">shfl_down_f32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_down_i32">shfl_down_i32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_sync_f32">shfl_sync_f32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_sync_i32">shfl_sync_i32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_up_f32">shfl_up_f32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_up_i32">shfl_up_i32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.shfl_xor_i32">shfl_xor_i32() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.should_check">should_check() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.shuffle">shuffle() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.shuffle_down">shuffle_down() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.shuffle_up">shuffle_up() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/subgroup/index.html#gstaichi.lang.simt.subgroup.shuffle_xor">shuffle_xor() (in module gstaichi.lang.simt.subgroup)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.sign">sign() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.sin">sin() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.smoothstep">smoothstep() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/snode/index.html#gstaichi.lang.snode.SNode">SNode (class in gstaichi.lang.snode)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.snode">snode (gstaichi.lang.field.Field property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.SNodeGradType">SNodeGradType (in module gstaichi.types.enums)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG.solve">solve() (gstaichi.linalg.sparse_cg.SparseCG method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver.solve">(gstaichi.linalg.sparse_solver.SparseSolver method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/types/annotations/index.html#gstaichi.types.annotations.sparse_matrix_builder">sparse_matrix_builder (class in gstaichi.types.annotations)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG">SparseCG (class in gstaichi.linalg.sparse_cg)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix">SparseMatrix (class in gstaichi.linalg.sparse_matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrixBuilder">SparseMatrixBuilder (class in gstaichi.linalg.sparse_matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixEntry">SparseMatrixEntry (class in gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixProxy">SparseMatrixProxy (class in gstaichi.lang.kernel_arguments)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_solver/index.html#gstaichi.linalg.sparse_solver.SparseSolver">SparseSolver (class in gstaichi.linalg.sparse_solver)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float">spirv_has_atomic_float (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float16">spirv_has_atomic_float16 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float16_add">spirv_has_atomic_float16_add (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float16_minmax">spirv_has_atomic_float16_minmax (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float64">spirv_has_atomic_float64 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float64_add">spirv_has_atomic_float64_add (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float64_minmax">spirv_has_atomic_float64_minmax (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float_add">spirv_has_atomic_float_add (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_float_minmax">spirv_has_atomic_float_minmax (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_atomic_int64">spirv_has_atomic_int64 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_float16">spirv_has_float16 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_float64">spirv_has_float64 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_int16">spirv_has_int16 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_int64">spirv_has_int64 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_int8">spirv_has_int8 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_no_integer_wrap_decoration">spirv_has_no_integer_wrap_decoration (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_non_semantic_info">spirv_has_non_semantic_info (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_physical_storage_buffer">spirv_has_physical_storage_buffer (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_subgroup_arithmetic">spirv_has_subgroup_arithmetic (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_subgroup_ballot">spirv_has_subgroup_ballot (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_subgroup_basic">spirv_has_subgroup_basic (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_subgroup_vote">spirv_has_subgroup_vote (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_has_variable_ptr">spirv_has_variable_ptr (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_version_1_3">spirv_version_1_3 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_version_1_4">spirv_version_1_4 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/enums/index.html#gstaichi.types.enums.DeviceCapability.spirv_version_1_5">spirv_version_1_5 (gstaichi.types.enums.DeviceCapability attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.sqrt">sqrt() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix_ops_utils/index.html#gstaichi.lang.matrix_ops_utils.square_matrix">square_matrix() (in module gstaichi.lang.matrix_ops_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.src">src (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.src_ll_cache_observations">src_ll_cache_observations (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.start_lineno">start_lineno (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.static">static() (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.static_assert">static_assert() (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.static_print">static_print() (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.static_scope_guard">static_scope_guard() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.static_scope_status">static_scope_status (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.StaticScopeGuard">StaticScopeGuard (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.StaticScopeStatus">StaticScopeStatus (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute.status">status (gstaichi.lang.ast.ast_transformer_utils.LoopScopeAttribute attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard.status">(gstaichi.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard attribute)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.StaticScopeGuard.status">(gstaichi.lang.ast.ast_transformer_utils.StaticScopeGuard attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.step">step() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.stop_grad">stop_grad() (in module gstaichi.lang.impl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct">Struct (class in gstaichi.lang.struct)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/compound_types/index.html#gstaichi.types.compound_types.struct">struct() (in module gstaichi.types.compound_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.struct_methods">struct_methods (gstaichi.lang.struct.StructField attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField">StructField (class in gstaichi.lang.struct)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel_arguments/index.html#gstaichi.lang.kernel_arguments.SparseMatrixProxy.subscript">subscript() (gstaichi.lang.kernel_arguments.SparseMatrixProxy method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.SharedArray.subscript">(gstaichi.lang.simt.block.SharedArray method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.sum">sum() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.sum">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/runtime_ops/index.html#gstaichi.lang.runtime_ops.sync">sync() (in module gstaichi.lang.runtime_ops)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.sync">(in module gstaichi.lang.simt.block)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.sync">(in module gstaichi.lang.simt.warp)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.sync_all_nonzero">sync_all_nonzero() (in module gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.sync_any_nonzero">sync_any_nonzero() (in module gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.sync_count_nonzero">sync_count_nonzero() (in module gstaichi.lang.simt.block)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="T">T</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.tan">tan() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ops/index.html#gstaichi.lang.ops.tanh">tanh() (in module gstaichi.lang.ops)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/annotations/index.html#gstaichi.types.annotations.Template">Template (class in gstaichi.types.annotations)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/annotations/index.html#gstaichi.types.annotations.template">template (in module gstaichi.types.annotations)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.template_slot_locations">template_slot_locations (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.template_vars">template_vars (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/block/index.html#gstaichi.lang.simt.block.thread_idx">thread_idx() (in module gstaichi.lang.simt.block)</a>
+</li>
+      <li><a href="autoapi/gstaichi/linalg/sparse_cg/index.html#gstaichi.linalg.sparse_cg.SparseCG.ti_arch">ti_arch (gstaichi.linalg.sparse_cg.SparseCG attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer/index.html#gstaichi.lang.ast.ast_transformer.ASTTransformer.ti_format_list_to_assert_msg">ti_format_list_to_assert_msg() (gstaichi.lang.ast.ast_transformer.ASTTransformer static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.Struct.to_dict">to_dict() (gstaichi.lang.struct.Struct method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField.to_dlpack">to_dlpack() (gstaichi.lang.field.ScalarField method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.to_dlpack">(gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.to_list">to_list() (gstaichi.lang.matrix.Matrix method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.to_numpy">to_numpy() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField.to_numpy">(gstaichi.lang.field.ScalarField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.to_numpy">(gstaichi.lang.matrix.Matrix method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.to_numpy">(gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixNdarray.to_numpy">(gstaichi.lang.matrix.MatrixNdarray method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray.to_numpy">(gstaichi.lang.matrix.VectorNdarray method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.to_numpy">(gstaichi.lang.struct.StructField method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.to_torch">to_torch() (gstaichi.lang.field.Field method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.ScalarField.to_torch">(gstaichi.lang.field.ScalarField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.MatrixField.to_torch">(gstaichi.lang.matrix.MatrixField method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/struct/index.html#gstaichi.lang.struct.StructField.to_torch">(gstaichi.lang.struct.StructField method)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.top_level">top_level (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker property)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.trace">trace() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.trace">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/ast/transform/index.html#gstaichi.lang.ast.transform.transform_tree">transform_tree() (in module gstaichi.lang.ast.transform)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.translate">translate() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.transpose">transpose() (gstaichi.lang.matrix.Matrix method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/linalg/sparse_matrix/index.html#gstaichi.linalg.sparse_matrix.SparseMatrix.transpose">(gstaichi.linalg.sparse_matrix.SparseMatrix method)</a>
+</li>
+        <li><a href="autoapi/gstaichi/lang/matrix_ops/index.html#gstaichi.lang.matrix_ops.transpose">(in module gstaichi.lang.matrix_ops)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.ASTGenerator.tree">tree (gstaichi.lang.kernel.ASTGenerator attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.type_map">type_map (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="U">U</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.u1">u1 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.u16">u16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.u32">u32 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.u64">u64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.u8">u8 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.uint1">uint1 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.uint16">uint16 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.uint32">uint32 (in module gstaichi.types.primitive_types)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.uint64">uint64 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/types/primitive_types/index.html#gstaichi.types.primitive_types.uint8">uint8 (in module gstaichi.types.primitive_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/simt/warp/index.html#gstaichi.lang.simt.warp.unique">unique() (in module gstaichi.lang.simt.warp)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.unit">unit() (gstaichi.lang.matrix.Matrix static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.used_py_dataclass_parameters_by_key_enforcing">used_py_dataclass_parameters_by_key_enforcing (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.uvec2">uvec2 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.uvec3">uvec3 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.uvec4">uvec4 (in module gstaichi.math.mathimpl)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/profiler/kernel_metrics/index.html#gstaichi.profiler.kernel_metrics.CuptiMetric.val_format">val_format (gstaichi.profiler.kernel_metrics.CuptiMetric attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.PureViolation.var_name">var_name (gstaichi.lang.ast.ast_transformer_utils.PureViolation attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.variable_scope_guard">variable_scope_guard() (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.VariableScopeGuard">VariableScopeGuard (class in gstaichi.lang.ast.ast_transformer_utils)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/field/index.html#gstaichi.lang.field.Field.vars">vars (gstaichi.lang.field.Field attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.vdir">vdir() (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.vec2">vec2 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.vec3">vec3 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/math/mathimpl/index.html#gstaichi.math.mathimpl.vec4">vec4 (in module gstaichi.math.mathimpl)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Vector">Vector (class in gstaichi.lang.matrix)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/types/compound_types/index.html#gstaichi.types.compound_types.vector">vector() (in module gstaichi.types.compound_types)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.VectorNdarray">VectorNdarray (class in gstaichi.lang.matrix)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.vertex_channels">vertex_channels (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.vertex_data">vertex_data (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/tools/np2ply/index.html#gstaichi.tools.np2ply.PLYWriter.vertex_data_type">vertex_data_type (gstaichi.tools.np2ply.PLYWriter attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/mesh/index.html#gstaichi.lang.mesh.MeshInstance.verts">verts (gstaichi.lang.mesh.MeshInstance attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/checkers/index.html#gstaichi.lang.ast.checkers.KernelSimplicityASTChecker.visit_for">visit_for() (gstaichi.lang.ast.checkers.KernelSimplicityASTChecker static method)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/ast/ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.visited_funcdef">visited_funcdef (gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/kernel/index.html#gstaichi.lang.kernel.Kernel.visited_functions">visited_functions (gstaichi.lang.kernel.Kernel attribute)</a>
+</li>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.vulkan">vulkan (in module gstaichi.lang.misc)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/tools/vtk/index.html#gstaichi.tools.vtk.write_vtk">write_vtk() (in module gstaichi.tools.vtk)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="X">X</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.x64">x64 (in module gstaichi.lang.misc)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/misc/index.html#gstaichi.lang.misc.x86_64">x86_64 (in module gstaichi.lang.misc)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Z">Z</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/gstaichi/lang/matrix/index.html#gstaichi.lang.matrix.Matrix.zero">zero() (gstaichi.lang.matrix.Matrix static method)</a>
+
+      <ul>
+        <li><a href="autoapi/gstaichi/lang/impl/index.html#gstaichi.lang.impl.zero">(in module gstaichi.lang.impl)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

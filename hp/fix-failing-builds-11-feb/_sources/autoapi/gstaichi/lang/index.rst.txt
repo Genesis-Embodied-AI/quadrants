@@ -1,0 +1,39 @@
+gstaichi.lang
+=============
+
+.. py:module:: gstaichi.lang
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/lang/any_array/index
+   /autoapi/gstaichi/lang/ast/index
+   /autoapi/gstaichi/lang/common_ops/index
+   /autoapi/gstaichi/lang/exception/index
+   /autoapi/gstaichi/lang/expr/index
+   /autoapi/gstaichi/lang/field/index
+   /autoapi/gstaichi/lang/func/index
+   /autoapi/gstaichi/lang/impl/index
+   /autoapi/gstaichi/lang/intrinsics/index
+   /autoapi/gstaichi/lang/kernel/index
+   /autoapi/gstaichi/lang/kernel_arguments/index
+   /autoapi/gstaichi/lang/kernel_impl/index
+   /autoapi/gstaichi/lang/matrix/index
+   /autoapi/gstaichi/lang/matrix_ops/index
+   /autoapi/gstaichi/lang/matrix_ops_utils/index
+   /autoapi/gstaichi/lang/mesh/index
+   /autoapi/gstaichi/lang/misc/index
+   /autoapi/gstaichi/lang/ops/index
+   /autoapi/gstaichi/lang/runtime_ops/index
+   /autoapi/gstaichi/lang/shell/index
+   /autoapi/gstaichi/lang/simt/index
+   /autoapi/gstaichi/lang/snode/index
+   /autoapi/gstaichi/lang/source_builder/index
+   /autoapi/gstaichi/lang/struct/index
+   /autoapi/gstaichi/lang/util/index
+
+
