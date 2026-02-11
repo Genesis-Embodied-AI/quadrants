@@ -57,7 +57,8 @@ class PtxCache final {
   };
 
   explicit PtxCache(const Config init_params,
-                    const CompileConfig &compile_config);
+                    const CompileConfig &compile_config,
+                    int compute_capability);
 
   void dump();
   void clean_offline_cache(offline_cache::CleanCachePolicy policy,
@@ -77,6 +78,7 @@ class PtxCache final {
 
   const Config config_;
   const CompileConfig &compile_config_;
+  const int compute_capability_;
 
   // caching_kernels_ in kernel_compilation_manager
   std::unordered_map<std::string, WrappedPtx> wrapped_by_key_;

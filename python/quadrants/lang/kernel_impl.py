@@ -25,7 +25,10 @@ _NONE, _REVERSE = (
 )
 
 
-def func(fn: Callable, is_real_function: bool = False) -> QuadrantsCallable:
+F = TypeVar("F", bound=Callable)
+
+
+def func(fn: F, is_real_function: bool = False) -> F:
     """Marks a function as callable in Quadrants-scope.
 
     This decorator transforms a Python function into a Quadrants one. Quadrants
@@ -54,11 +57,13 @@ def func(fn: Callable, is_real_function: bool = False) -> QuadrantsCallable:
     quadrants_callable = QuadrantsCallable(fn, fun)
     quadrants_callable._is_quadrants_function = True
     quadrants_callable._is_real_function = is_real_function
-    return quadrants_callable
+
+    update_wrapper(quadrants_callable, fn)
+    return cast(F, quadrants_callable)
 
 
 def real_func(fn: Callable) -> QuadrantsCallable:
-    return func(fn, is_real_function=True)
+    return func(fn, is_real_function=True)  # type: ignore
 
 
 def pyfunc(fn: Callable) -> QuadrantsCallable:
@@ -163,9 +168,6 @@ def _kernel_impl(_func: Callable, level_of_class_stackframe: int, verbose: bool 
     wrapped._adjoint = adjoint
     primal.quadrants_callable = wrapped
     return wrapped
-
-
-F = TypeVar("F", bound=Callable[..., typing.Any])
 
 
 @overload
