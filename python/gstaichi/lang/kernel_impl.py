@@ -63,7 +63,7 @@ def func(fn: F, is_real_function: bool = False) -> F:
 
 
 def real_func(fn: Callable) -> GsTaichiCallable:
-    return func(fn, is_real_function=True)
+    return func(fn, is_real_function=True)  # type: ignore
 
 
 def pyfunc(fn: Callable) -> GsTaichiCallable:
