@@ -1,0 +1,105 @@
+gstaichi.profiler.kernel_metrics
+================================
+
+.. py:module:: gstaichi.profiler.kernel_metrics
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.profiler.kernel_metrics.CuptiMetric
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.profiler.kernel_metrics.get_predefined_cupti_metrics
+
+
+Module Contents
+---------------
+
+.. py:class:: CuptiMetric(name='', header='unnamed_header', val_format='     {:8.0f} ', scale=1.0)
+
+   A class to add CUPTI metric for :class:`~gstaichi.profiler.kernel_profiler.KernelProfiler`.
+
+   This class is designed to add user selected CUPTI metrics.
+   Only available for the CUDA backend now, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.
+   For usage of this class, see examples in func :func:`~gstaichi.profiler.set_kernel_profiler_metrics` and :func:`~gstaichi.profiler.collect_kernel_profiler_metrics`.
+
+   :param name: name of metric that collected by CUPTI toolkit. used by :func:`~gstaichi.profiler.set_kernel_profiler_metrics` and :func:`~gstaichi.profiler.collect_kernel_profiler_metrics`.
+   :type name: str
+   :param header: column header of this metric, used by :func:`~gstaichi.profiler.print_kernel_profiler_info`.
+   :type header: str
+   :param val_format: format for print metric value (and unit of this value), used by :func:`~gstaichi.profiler.print_kernel_profiler_info`.
+   :type val_format: str
+   :param scale: scale of metric value, used by :func:`~gstaichi.profiler.print_kernel_profiler_info`.
+   :type scale: float
+
+   Example::
+
+       >>> import gstaichi as ti
+
+       >>> ti.init(kernel_profiler=True, arch=ti.cuda)
+       >>> num_elements = 128*1024*1024
+
+       >>> x = ti.field(ti.f32, shape=num_elements)
+       >>> y = ti.field(ti.f32, shape=())
+       >>> y[None] = 0
+
+       >>> @ti.kernel
+       >>> def reduction():
+       >>>     for i in x:
+       >>>         y[None] += x[i]
+
+       >>> global_op_atom = ti.profiler.CuptiMetric(
+       >>>     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',
+       >>>     header=' global.atom ',
+       >>>     val_format='    {:8.0f} ')
+
+       >>> # add and set user defined metrics
+       >>> profiling_metrics = ti.profiler.get_predefined_cupti_metrics('global_access') + [global_op_atom]
+       >>> ti.profiler.set_kernel_profile_metrics(profiling_metrics)
+
+       >>> for i in range(16):
+       >>>     reduction()
+       >>> ti.profiler.print_kernel_profiler_info('trace')
+
+   .. note:: For details about using CUPTI in GsTaichi, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.
+
+
+   .. py:attribute:: name
+      :value: ''
+
+
+
+   .. py:attribute:: header
+      :value: 'unnamed_header'
+
+
+
+   .. py:attribute:: val_format
+      :value: '     {:8.0f} '
+
+
+
+   .. py:attribute:: scale
+      :value: 1.0
+
+
+
+.. py:function:: get_predefined_cupti_metrics(name='')
+
+   Returns the specified cupti metric.
+
+   Accepted arguments are 'global_access', 'shared_access', 'atomic_access',
+   'cache_hit_rate', 'device_utilization'.
+
+   :param name: cupti metri name.
+   :type name: str
+
+

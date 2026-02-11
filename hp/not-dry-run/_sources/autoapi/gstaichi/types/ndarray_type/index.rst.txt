@@ -1,0 +1,36 @@
+gstaichi.types.ndarray_type
+===========================
+
+.. py:module:: gstaichi.types.ndarray_type
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.types.ndarray_type.ndarray
+   gstaichi.types.ndarray_type.NDArray
+
+
+Module Contents
+---------------
+
+.. py:data:: ndarray
+
+.. py:data:: NDArray
+
+   Alias for :class:`~gstaichi.types.ndarray_type.NdarrayType`.
+
+   Example::
+
+       >>> @ti.kernel
+       >>> def to_numpy(x: ti.types.ndarray(), y: ti.types.ndarray()):
+       >>>     for i in range(n):
+       >>>         x[i] = y[i]
+       >>>
+       >>> y = ti.ndarray(ti.f64, shape=n)
+       >>> ... # calculate y
+       >>> x = numpy.zeros(n)
+       >>> to_numpy(x, y)  # `x` will be filled with `y`'s data.
+

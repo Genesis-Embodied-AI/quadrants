@@ -1,0 +1,28 @@
+gstaichi.types.utils
+====================
+
+.. py:module:: gstaichi.types.utils
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.types.utils.is_signed
+   gstaichi.types.utils.is_integral
+   gstaichi.types.utils.is_real
+   gstaichi.types.utils.is_tensor
+
+
+Module Contents
+---------------
+
+.. py:data:: is_signed
+
+.. py:data:: is_integral
+
+.. py:data:: is_real
+
+.. py:data:: is_tensor
+

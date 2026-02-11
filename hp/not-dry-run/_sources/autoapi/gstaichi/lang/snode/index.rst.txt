@@ -1,0 +1,267 @@
+gstaichi.lang.snode
+===================
+
+.. py:module:: gstaichi.lang.snode
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.snode.SNode
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.snode.rescale_index
+   gstaichi.lang.snode.append
+   gstaichi.lang.snode.is_active
+   gstaichi.lang.snode.activate
+   gstaichi.lang.snode.deactivate
+   gstaichi.lang.snode.length
+   gstaichi.lang.snode.get_addr
+
+
+Module Contents
+---------------
+
+.. py:class:: SNode(ptr: gstaichi._lib.core.gstaichi_python.SNodeCxx)
+
+   A Python-side SNode wrapper.
+
+   For more information on GsTaichi's SNode system, please check out
+   these references:
+
+   * https://docs.taichi-lang.org/docs/sparse
+   * https://yuanming.gstaichi.graphics/publication/2019-gstaichi/gstaichi-lang.pdf
+
+   Arg:
+       ptr (pointer): The C++ side SNode pointer.
+
+
+   .. py:attribute:: ptr
+
+
+   .. py:method:: dense(axes: list[gstaichi._lib.core.gstaichi_python.Axis], dimensions: list[int] | int) -> SNode
+
+      Adds a dense SNode as a child component of `self`.
+
+      :param axes: Axes to activate.
+      :type axes: List[Axis]
+      :param dimensions: Shape of each axis.
+      :type dimensions: Union[List[int], int]
+
+      :returns: The added :class:`~gstaichi.lang.SNode` instance.
+
+
+
+   .. py:method:: pointer(axes: list[gstaichi._lib.core.gstaichi_python.Axis], dimensions: list[int] | int) -> SNode
+
+      Adds a pointer SNode as a child component of `self`.
+
+      :param axes: Axes to activate.
+      :type axes: List[Axis]
+      :param dimensions: Shape of each axis.
+      :type dimensions: Union[List[int], int]
+
+      :returns: The added :class:`~gstaichi.lang.SNode` instance.
+
+
+
+   .. py:method:: dynamic(axis: list[gstaichi._lib.core.gstaichi_python.Axis], dimension: int, chunk_size: int | None = None) -> SNode
+
+      Adds a dynamic SNode as a child component of `self`.
+
+      :param axis: Axis to activate, must be 1.
+      :type axis: List[Axis]
+      :param dimension: Shape of the axis.
+      :type dimension: int
+      :param chunk_size: Chunk size.
+      :type chunk_size: int
+
+      :returns: The added :class:`~gstaichi.lang.SNode` instance.
+
+
+
+   .. py:method:: bitmasked(axes: list[gstaichi._lib.core.gstaichi_python.Axis], dimensions: list[int] | int) -> SNode
+
+      Adds a bitmasked SNode as a child component of `self`.
+
+      :param axes: Axes to activate.
+      :type axes: List[Axis]
+      :param dimensions: Shape of each axis.
+      :type dimensions: Union[List[int], int]
+
+      :returns: The added :class:`~gstaichi.lang.SNode` instance.
+
+
+
+   .. py:method:: quant_array(axes: list[gstaichi._lib.core.gstaichi_python.Axis], dimensions: list[int] | int, max_num_bits: int) -> SNode
+
+      Adds a quant_array SNode as a child component of `self`.
+
+      :param axes: Axes to activate.
+      :type axes: List[Axis]
+      :param dimensions: Shape of each axis.
+      :type dimensions: Union[List[int], int]
+      :param max_num_bits: Maximum number of bits it can hold.
+      :type max_num_bits: int
+
+      :returns: The added :class:`~gstaichi.lang.SNode` instance.
+
+
+
+   .. py:method:: place(*args, offset: numbers.Number | tuple[numbers.Number] | None = None) -> SNode
+
+      Places a list of GsTaichi fields under the `self` container.
+
+      :param \*args: A list of GsTaichi fields to place.
+      :type \*args: List[ti.field]
+      :param offset: Offset of the field domain.
+      :type offset: Union[Number, tuple[Number]]
+
+      :returns: The `self` container.
+
+
+
+   .. py:method:: lazy_grad()
+
+      Automatically place the adjoint fields following the layout of their primal fields.
+
+      Users don't need to specify ``needs_grad`` when they define scalar/vector/matrix fields (primal fields) using autodiff.
+      When all the primal fields are defined, using ``gstaichi.root.lazy_grad()`` could automatically generate
+      their corresponding adjoint fields (gradient field).
+
+      To know more details about primal, adjoint fields and ``lazy_grad()``,
+      please see Page 4 and Page 13-14 of DiffGsTaichi Paper: https://arxiv.org/pdf/1910.00935.pdf
+
+
+
+   .. py:method:: lazy_dual()
+
+      Automatically place the dual fields following the layout of their primal fields.
+
+
+
+   .. py:method:: parent(n=1)
+
+      Gets an ancestor of `self` in the SNode tree.
+
+      :param n: the number of levels going up from `self`.
+      :type n: int
+
+      :returns: The n-th parent of `self`.
+      :rtype: Union[None, _Root, SNode]
+
+
+
+   .. py:property:: shape
+
+      Gets the number of elements from root in each axis of `self`.
+
+      :returns: The number of elements from root in each axis of `self`.
+      :rtype: Tuple[int]
+
+
+   .. py:method:: deactivate_all()
+
+      Recursively deactivate all children components of `self`.
+
+
+
+.. py:function:: rescale_index(a, b, I)
+
+   Rescales the index 'I' of field (or SNode) 'a' to match the shape of SNode 'b'.
+
+   :param a: Input gstaichi fields or snodes.
+   :type a: Union[:class:`~gstaichi.Field`, :class:`~gstaichi.MatrixField`
+   :param b: Input gstaichi fields or snodes.
+   :type b: Union[:class:`~gstaichi.Field`, :class:`~gstaichi.MatrixField`
+   :param I: grouped loop index.
+   :type I: Union[list, :class:`~gstaichi.Vector`]
+
+   :returns: rescaled grouped loop index
+   :rtype: Ib (:class:`~gstaichi.Vector`)
+
+
+.. py:function:: append(node, indices, val)
+
+   Append a value `val` to a SNode `node` at index `indices`.
+
+   :param node: Input SNode.
+   :type node: :class:`~gstaichi.SNode`
+   :param indices: the indices to visit.
+   :type indices: Union[int, :class:`~gstaichi.Vector`]
+   :param val: the data to be appended.
+   :type val: Union[:mod:`~gstaichi.types.primitive_types`, :mod:`~gstaichi.types.compound_types`]
+
+
+.. py:function:: is_active(node, indices)
+
+   Explicitly query whether a cell in a SNode `node` at location
+   `indices` is active or not.
+
+   :param node: Must be a pointer, hash or bitmasked node.
+   :type node: :class:`~gstaichi.SNode`
+   :param indices: the indices to visit.
+   :type indices: Union[int, list, :class:`~gstaichi.Vector`]
+
+   :returns: the cell `node[indices]` is active or not.
+   :rtype: bool
+
+
+.. py:function:: activate(node, indices)
+
+   Explicitly activate a cell of `node` at location `indices`.
+
+   :param node: Must be a pointer, hash or bitmasked node.
+   :type node: :class:`~gstaichi.SNode`
+   :param indices: the indices to activate.
+   :type indices: Union[int, :class:`~gstaichi.Vector`]
+
+
+.. py:function:: deactivate(node, indices)
+
+   Explicitly deactivate a cell of `node` at location `indices`.
+
+   After deactivation, the GsTaichi runtime automatically recycles and zero-fills
+   the memory of the deactivated cell.
+
+   :param node: Must be a pointer, hash or bitmasked node.
+   :type node: :class:`~gstaichi.SNode`
+   :param indices: the indices to deactivate.
+   :type indices: Union[int, :class:`~gstaichi.Vector`]
+
+
+.. py:function:: length(node, indices)
+
+   Return the length of the dynamic SNode `node` at index `indices`.
+
+   :param node: a dynamic SNode.
+   :type node: :class:`~gstaichi.SNode`
+   :param indices: the indices to query.
+   :type indices: Union[int, :class:`~gstaichi.Vector`]
+
+   :returns: the length of cell `node[indices]`.
+   :rtype: int
+
+
+.. py:function:: get_addr(f, indices)
+
+   Query the memory address (on CUDA/x64) of field `f` at index `indices`.
+
+   Currently, this function can only be called inside a gstaichi kernel.
+
+   :param f: Input gstaichi field for memory address query.
+   :type f: Union[:class:`~gstaichi.Field`, :class:`~gstaichi.MatrixField`]
+   :param indices: The specified field indices of the query.
+   :type indices: Union[int, :class:`~gstaichi.Vector`]
+
+   :returns: The memory address of `f[indices]`.
+   :rtype: ti.u64
+
+

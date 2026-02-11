@@ -1,0 +1,22 @@
+gstaichi.examples.lcg_taichi
+============================
+
+.. py:module:: gstaichi.examples.lcg_taichi
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.examples.lcg_taichi.lcg_ti
+   gstaichi.examples.lcg_taichi.main
+
+
+Module Contents
+---------------
+
+.. py:function:: lcg_ti(B: int, lcg_its: int, a: gstaichi.types.NDArray[gstaichi.i32, 1]) -> None
+
+.. py:function:: main() -> None
+

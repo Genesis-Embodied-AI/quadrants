@@ -1,0 +1,24 @@
+gstaichi.lang.shell
+===================
+
+.. py:module:: gstaichi.lang.shell
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.lang.shell.pybuf_enabled
+   gstaichi.lang.shell.pybuf_enabled
+
+
+Module Contents
+---------------
+
+.. py:data:: pybuf_enabled
+   :value: False
+
+
+.. py:data:: pybuf_enabled
+

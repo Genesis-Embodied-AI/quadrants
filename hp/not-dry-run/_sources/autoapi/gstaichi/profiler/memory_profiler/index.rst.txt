@@ -1,0 +1,24 @@
+gstaichi.profiler.memory_profiler
+=================================
+
+.. py:module:: gstaichi.profiler.memory_profiler
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.profiler.memory_profiler.print_memory_profiler_info
+
+
+Module Contents
+---------------
+
+.. py:function:: print_memory_profiler_info()
+
+   Memory profiling tool for LLVM backends with full sparse support.
+
+   This profiler is automatically on.
+
+

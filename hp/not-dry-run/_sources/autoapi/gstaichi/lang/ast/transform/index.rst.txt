@@ -1,0 +1,19 @@
+gstaichi.lang.ast.transform
+===========================
+
+.. py:module:: gstaichi.lang.ast.transform
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.transform.transform_tree
+
+
+Module Contents
+---------------
+
+.. py:function:: transform_tree(tree, ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext)
+

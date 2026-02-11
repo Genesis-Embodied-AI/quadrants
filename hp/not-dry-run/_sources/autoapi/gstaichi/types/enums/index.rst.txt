@@ -1,0 +1,168 @@
+gstaichi.types.enums
+====================
+
+.. py:module:: gstaichi.types.enums
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.types.enums.Layout
+   gstaichi.types.enums.AutodiffMode
+   gstaichi.types.enums.SNodeGradType
+   gstaichi.types.enums.Format
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.types.enums.DeviceCapability
+
+
+Module Contents
+---------------
+
+.. py:data:: Layout
+
+.. py:data:: AutodiffMode
+
+.. py:data:: SNodeGradType
+
+.. py:data:: Format
+
+.. py:class:: DeviceCapability
+
+   .. py:attribute:: spirv_version_1_3
+      :value: 'spirv_version=66304'
+
+
+
+   .. py:attribute:: spirv_version_1_4
+      :value: 'spirv_version=66560'
+
+
+
+   .. py:attribute:: spirv_version_1_5
+      :value: 'spirv_version=66816'
+
+
+
+   .. py:attribute:: spirv_has_int8
+      :value: 'spirv_has_int8'
+
+
+
+   .. py:attribute:: spirv_has_int16
+      :value: 'spirv_has_int16'
+
+
+
+   .. py:attribute:: spirv_has_int64
+      :value: 'spirv_has_int64'
+
+
+
+   .. py:attribute:: spirv_has_float16
+      :value: 'spirv_has_float16'
+
+
+
+   .. py:attribute:: spirv_has_float64
+      :value: 'spirv_has_float64'
+
+
+
+   .. py:attribute:: spirv_has_atomic_int64
+      :value: 'spirv_has_atomic_int64'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float16
+      :value: 'spirv_has_atomic_float16'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float16_add
+      :value: 'spirv_has_atomic_float16_add'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float16_minmax
+      :value: 'spirv_has_atomic_float16_minmax'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float
+      :value: 'spirv_has_atomic_float'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float_add
+      :value: 'spirv_has_atomic_float_add'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float_minmax
+      :value: 'spirv_has_atomic_float_minmax'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float64
+      :value: 'spirv_has_atomic_float64'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float64_add
+      :value: 'spirv_has_atomic_float64_add'
+
+
+
+   .. py:attribute:: spirv_has_atomic_float64_minmax
+      :value: 'spirv_has_atomic_float64_minmax'
+
+
+
+   .. py:attribute:: spirv_has_variable_ptr
+      :value: 'spirv_has_variable_ptr'
+
+
+
+   .. py:attribute:: spirv_has_physical_storage_buffer
+      :value: 'spirv_has_physical_storage_buffer'
+
+
+
+   .. py:attribute:: spirv_has_subgroup_basic
+      :value: 'spirv_has_subgroup_basic'
+
+
+
+   .. py:attribute:: spirv_has_subgroup_vote
+      :value: 'spirv_has_subgroup_vote'
+
+
+
+   .. py:attribute:: spirv_has_subgroup_arithmetic
+      :value: 'spirv_has_subgroup_arithmetic'
+
+
+
+   .. py:attribute:: spirv_has_subgroup_ballot
+      :value: 'spirv_has_subgroup_ballot'
+
+
+
+   .. py:attribute:: spirv_has_non_semantic_info
+      :value: 'spirv_has_non_semantic_info'
+
+
+
+   .. py:attribute:: spirv_has_no_integer_wrap_decoration
+      :value: 'spirv_has_no_integer_wrap_decoration'
+
+
+

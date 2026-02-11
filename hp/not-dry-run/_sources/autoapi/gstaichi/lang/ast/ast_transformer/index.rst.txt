@@ -1,0 +1,380 @@
+gstaichi.lang.ast.ast_transformer
+=================================
+
+.. py:module:: gstaichi.lang.ast.ast_transformer
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.ast_transformer.AutodiffMode
+   gstaichi.lang.ast.ast_transformer.build_stmt
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.ast_transformer.ASTTransformer
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.ast_transformer.reshape_list
+   gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning
+   gstaichi.lang.ast.ast_transformer.build_stmts
+
+
+Module Contents
+---------------
+
+.. py:data:: AutodiffMode
+
+.. py:function:: reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]
+
+.. py:function:: boundary_type_cast_warning(expression: gstaichi.lang.expr.Expr) -> None
+
+.. py:class:: ASTTransformer
+
+   Bases: :py:obj:`gstaichi.lang.ast.ast_transformer_utils.Builder`
+
+
+   .. py:method:: build_Name(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Name)
+      :staticmethod:
+
+
+
+   .. py:method:: build_AnnAssign(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.AnnAssign)
+      :staticmethod:
+
+
+
+   .. py:method:: build_assign_annotated(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool, annotation: Type)
+      :staticmethod:
+
+
+      Build an annotated assignment like this: target: annotation = value.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param target: A variable name. `target.id` holds the name as
+      :type target: ast.Name
+      :param a string.:
+      :param annotation: A type we hope to assign to the target
+      :param value: A node representing the value.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_Assign(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Assign) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_assign_unpack(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node_target: list | ast.Tuple, values, is_static_assign: bool)
+      :staticmethod:
+
+
+      Build the unpack assignments like this: (target1, target2) = (value1, value2).
+      The function should be called only if the node target is a tuple.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param node_target: A list or tuple object. `node_target.elts` holds a
+      :type node_target: ast.Tuple
+      :param list of nodes representing the elements.:
+      :param values: A node/list representing the values.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_assign_basic(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool)
+      :staticmethod:
+
+
+      Build basic assignment like this: target = value.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param target: A variable name. `target.id` holds the name as
+      :type target: ast.Name
+      :param a string.:
+      :param value: A node representing the value.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_NamedExpr(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.NamedExpr)
+      :staticmethod:
+
+
+
+   .. py:method:: is_tuple(node)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Subscript(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Subscript)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Slice(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Slice)
+      :staticmethod:
+
+
+
+   .. py:method:: build_ExtSlice(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.ExtSlice)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Tuple(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Tuple)
+      :staticmethod:
+
+
+
+   .. py:method:: build_List(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.List)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Dict(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Dict)
+      :staticmethod:
+
+
+
+   .. py:method:: process_listcomp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node, result) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: process_dictcomp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node, result) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: process_generators(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.GeneratorExp, now_comp, func, result)
+      :staticmethod:
+
+
+
+   .. py:method:: process_ifs(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.If, now_comp, now_if, func, result)
+      :staticmethod:
+
+
+
+   .. py:method:: build_ListComp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.ListComp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_DictComp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.DictComp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Index(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Index)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Constant(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Constant)
+      :staticmethod:
+
+
+
+   .. py:method:: build_keyword(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.keyword)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Starred(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Starred)
+      :staticmethod:
+
+
+
+   .. py:method:: build_FormattedValue(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FormattedValue)
+      :staticmethod:
+
+
+
+   .. py:method:: build_JoinedStr(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.JoinedStr)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Call(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Call) -> Any | None
+      :staticmethod:
+
+
+
+   .. py:method:: build_FunctionDef(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FunctionDef) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Return(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Return) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Module(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Module) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_attribute_if_is_dynamic_snode_method(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node) -> bool
+      :staticmethod:
+
+
+
+   .. py:method:: build_Attribute(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Attribute)
+      :staticmethod:
+
+
+
+   .. py:method:: build_BinOp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.BinOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_AugAssign(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.AugAssign)
+      :staticmethod:
+
+
+
+   .. py:method:: build_UnaryOp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.UnaryOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_bool_op(op)
+      :staticmethod:
+
+
+
+   .. py:method:: build_static_and(operands)
+      :staticmethod:
+
+
+
+   .. py:method:: build_static_or(operands)
+      :staticmethod:
+
+
+
+   .. py:method:: build_BoolOp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.BoolOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Compare(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Compare)
+      :staticmethod:
+
+
+
+   .. py:method:: get_for_loop_targets(node: ast.Name | ast.Tuple | Any) -> list
+      :staticmethod:
+
+
+      Returns the list of indices of the for loop |node|.
+      See also: https://docs.python.org/3/library/ast.html#ast.For
+
+
+
+   .. py:method:: build_static_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_range_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_ndrange_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_grouped_ndrange_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_struct_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_mesh_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_nested_mesh_for(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_For(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_While(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.While) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_If(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.If) -> ast.If | None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Expr(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Expr) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_IfExp(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.IfExp)
+      :staticmethod:
+
+
+
+   .. py:method:: ti_format_list_to_assert_msg(raw) -> tuple[str, list]
+      :staticmethod:
+
+
+
+   .. py:method:: build_Assert(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Assert) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Break(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Break) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Continue(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Continue) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Pass(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Pass) -> None
+      :staticmethod:
+
+
+
+.. py:data:: build_stmt
+
+.. py:function:: build_stmts(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, stmts: list[ast.stmt])
+

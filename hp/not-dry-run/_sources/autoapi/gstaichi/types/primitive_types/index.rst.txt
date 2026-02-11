@@ -1,0 +1,146 @@
+gstaichi.types.primitive_types
+==============================
+
+.. py:module:: gstaichi.types.primitive_types
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.types.primitive_types.float16
+   gstaichi.types.primitive_types.f16
+   gstaichi.types.primitive_types.float32
+   gstaichi.types.primitive_types.f32
+   gstaichi.types.primitive_types.float64
+   gstaichi.types.primitive_types.f64
+   gstaichi.types.primitive_types.int8
+   gstaichi.types.primitive_types.i8
+   gstaichi.types.primitive_types.int16
+   gstaichi.types.primitive_types.i16
+   gstaichi.types.primitive_types.int32
+   gstaichi.types.primitive_types.i32
+   gstaichi.types.primitive_types.int64
+   gstaichi.types.primitive_types.i64
+   gstaichi.types.primitive_types.uint8
+   gstaichi.types.primitive_types.uint1
+   gstaichi.types.primitive_types.u1
+   gstaichi.types.primitive_types.u8
+   gstaichi.types.primitive_types.uint16
+   gstaichi.types.primitive_types.u16
+   gstaichi.types.primitive_types.uint32
+   gstaichi.types.primitive_types.u32
+   gstaichi.types.primitive_types.uint64
+   gstaichi.types.primitive_types.u64
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.types.primitive_types.ref
+
+
+Module Contents
+---------------
+
+.. py:data:: float16
+
+   16-bit precision floating point data type.
+
+.. py:data:: f16
+
+   Alias for :const:`~gstaichi.types.primitive_types.float16`
+
+.. py:data:: float32
+
+   32-bit single precision floating point data type.
+
+.. py:data:: f32
+
+   Alias for :const:`~gstaichi.types.primitive_types.float32`
+
+.. py:data:: float64
+
+   64-bit double precision floating point data type.
+
+.. py:data:: f64
+
+   Alias for :const:`~gstaichi.types.primitive_types.float64`
+
+.. py:data:: int8
+
+   8-bit signed integer data type.
+
+.. py:data:: i8
+
+   Alias for :const:`~gstaichi.types.primitive_types.int8`
+
+.. py:data:: int16
+
+   16-bit signed integer data type.
+
+.. py:data:: i16
+
+   Alias for :const:`~gstaichi.types.primitive_types.int16`
+
+.. py:data:: int32
+
+   32-bit signed integer data type.
+
+.. py:data:: i32
+
+   Alias for :const:`~gstaichi.types.primitive_types.int32`
+
+.. py:data:: int64
+
+   64-bit signed integer data type.
+
+.. py:data:: i64
+
+   Alias for :const:`~gstaichi.types.primitive_types.int64`
+
+.. py:data:: uint8
+
+   8-bit unsigned integer data type.
+
+.. py:data:: uint1
+
+   1-bit unsigned integer data type. Same as booleans.
+
+.. py:data:: u1
+
+   Alias for :const:`~gstaichi.types.primitive_types.uint1`
+
+.. py:data:: u8
+
+   Alias for :const:`~gstaichi.types.primitive_types.uint8`
+
+.. py:data:: uint16
+
+   16-bit unsigned integer data type.
+
+.. py:data:: u16
+
+   Alias for :const:`~gstaichi.types.primitive_types.uint16`
+
+.. py:data:: uint32
+
+   32-bit unsigned integer data type.
+
+.. py:data:: u32
+
+   Alias for :const:`~gstaichi.types.primitive_types.uint32`
+
+.. py:data:: uint64
+
+   64-bit unsigned integer data type.
+
+.. py:data:: u64
+
+   Alias for :const:`~gstaichi.types.primitive_types.uint64`
+
+.. py:function:: ref(tp)
+

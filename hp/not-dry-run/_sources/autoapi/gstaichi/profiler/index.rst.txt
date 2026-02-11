@@ -1,0 +1,18 @@
+gstaichi.profiler
+=================
+
+.. py:module:: gstaichi.profiler
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/profiler/kernel_metrics/index
+   /autoapi/gstaichi/profiler/kernel_profiler/index
+   /autoapi/gstaichi/profiler/memory_profiler/index
+   /autoapi/gstaichi/profiler/scoped_profiler/index
+
+

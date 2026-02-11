@@ -1,0 +1,24 @@
+gstaichi.lang.ast.ast_transformers.function_def_transformer
+===========================================================
+
+.. py:module:: gstaichi.lang.ast.ast_transformers.function_def_transformer
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: FunctionDefTransformer
+
+   .. py:method:: build_FunctionDef(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FunctionDef, build_stmts: Callable[[gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, list[ast.stmt]], None]) -> None
+      :staticmethod:
+
+
+

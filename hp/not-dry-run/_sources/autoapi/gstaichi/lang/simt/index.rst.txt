@@ -1,0 +1,18 @@
+gstaichi.lang.simt
+==================
+
+.. py:module:: gstaichi.lang.simt
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/lang/simt/block/index
+   /autoapi/gstaichi/lang/simt/grid/index
+   /autoapi/gstaichi/lang/simt/subgroup/index
+   /autoapi/gstaichi/lang/simt/warp/index
+
+

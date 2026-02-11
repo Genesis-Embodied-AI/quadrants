@@ -1,0 +1,271 @@
+gstaichi.lang.impl
+==================
+
+.. py:module:: gstaichi.lang.impl
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.lang.impl.root
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.impl.static_print
+   gstaichi.lang.impl.static_assert
+   gstaichi.lang.impl.deactivate_all_snodes
+   gstaichi.lang.impl.field
+   gstaichi.lang.impl.ndarray
+   gstaichi.lang.impl.zero
+   gstaichi.lang.impl.one
+   gstaichi.lang.impl.axes
+   gstaichi.lang.impl.static
+   gstaichi.lang.impl.grouped
+   gstaichi.lang.impl.stop_grad
+
+
+Module Contents
+---------------
+
+.. py:function:: static_print(*args, __p=print, **kwargs)
+
+   The print function in GsTaichi scope.
+
+   This function is called at compile time and has no runtime overhead.
+
+
+.. py:function:: static_assert(cond, msg=None)
+
+   Throw AssertionError when `cond` is False.
+
+   This function is called at compile time and has no runtime overhead.
+   The bool value in `cond` must can be determined at compile time.
+
+   :param cond: an expression with a bool value.
+   :type cond: bool
+   :param msg: assertion message.
+   :type msg: str
+
+   Example::
+
+       >>> year = 2001
+       >>> @ti.kernel
+       >>> def test():
+       >>>     ti.static_assert(year % 4 == 0, "the year must be a lunar year")
+       AssertionError: the year must be a lunar year
+
+
+.. py:function:: deactivate_all_snodes()
+
+   Recursively deactivate all SNodes.
+
+
+.. py:data:: root
+
+   Root of the declared GsTaichi :func:`~gstaichi.lang.impl.field`s.
+
+   See also https://docs.taichi-lang.org/docs/layout
+
+   Example::
+
+       >>> x = ti.field(ti.f32)
+       >>> ti.root.pointer(ti.ij, 4).dense(ti.ij, 8).place(x)
+
+.. py:function:: field(dtype, *args, **kwargs)
+
+   Defines a GsTaichi field.
+
+   A GsTaichi field can be viewed as an abstract N-dimensional array, hiding away
+   the complexity of how its underlying :class:`~gstaichi.lang.snode.SNode` are
+   actually defined. The data in a GsTaichi field can be directly accessed by
+   a GsTaichi :func:`~gstaichi.lang.kernel_impl.kernel`.
+
+   See also https://docs.taichi-lang.org/docs/field
+
+   :param dtype: data type of the field. Note it can be vector or matrix types as well.
+   :type dtype: DataType
+   :param shape: shape of the field.
+   :type shape: Union[int, tuple[int]], optional
+   :param order: order of the shape laid out in memory.
+   :type order: str, optional
+   :param name: name of the field.
+   :type name: str, optional
+   :param offset: offset of the field domain.
+   :type offset: Union[int, tuple[int]], optional
+   :param needs_grad: whether this field participates in autodiff (reverse mode)
+                      and thus needs an adjoint field to store the gradients.
+   :type needs_grad: bool, optional
+   :param needs_dual: whether this field participates in autodiff (forward mode)
+                      and thus needs an dual field to store the gradients.
+   :type needs_dual: bool, optional
+
+   Example::
+
+       The code below shows how a GsTaichi field can be declared and defined::
+
+           >>> x1 = ti.field(ti.f32, shape=(16, 8))
+           >>> # Equivalently
+           >>> x2 = ti.field(ti.f32)
+           >>> ti.root.dense(ti.ij, shape=(16, 8)).place(x2)
+           >>>
+           >>> x3 = ti.field(ti.f32, shape=(16, 8), order='ji')
+           >>> # Equivalently
+           >>> x4 = ti.field(ti.f32)
+           >>> ti.root.dense(ti.j, shape=8).dense(ti.i, shape=16).place(x4)
+           >>>
+           >>> x5 = ti.field(ti.math.vec3, shape=(16, 8))
+
+
+
+.. py:function:: ndarray(dtype, shape, needs_grad=False)
+
+   Defines a GsTaichi ndarray with scalar elements.
+
+   :param dtype: Data type of each element. This can be either a scalar type like ti.f32 or a compound type like ti.types.vector(3, ti.i32).
+   :type dtype: Union[DataType, MatrixType]
+   :param shape: Shape of the ndarray.
+   :type shape: Union[int, tuple[int]]
+
+   .. rubric:: Example
+
+   The code below shows how a GsTaichi ndarray with scalar elements can be declared and defined::
+
+       >>> x = ti.ndarray(ti.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is ti.f32 scalar.
+       >>> vec3 = ti.types.vector(3, ti.i32)
+       >>> y = ti.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 ti.i32 scalars.
+       >>> matrix_ty = ti.types.matrix(3, 4, float)
+       >>> z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.
+
+
+.. py:function:: zero(x)
+
+   Returns an array of zeros with the same shape and type as the input. It's also a scalar
+   if the input is a scalar.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: A new copy of the input but filled with zeros.
+
+   Example::
+
+       >>> x = ti.Vector([1, 1])
+       >>> @ti.kernel
+       >>> def test():
+       >>>     y = ti.zero(x)
+       >>>     print(y)
+       [0, 0]
+
+
+.. py:function:: one(x)
+
+   Returns an array of ones with the same shape and type as the input. It's also a scalar
+   if the input is a scalar.
+
+   :param x: The input.
+   :type x: Union[:mod:`~gstaichi.types.primitive_types`, :class:`~gstaichi.Matrix`]
+
+   :returns: A new copy of the input but filled with ones.
+
+   Example::
+
+       >>> x = ti.Vector([0, 0])
+       >>> @ti.kernel
+       >>> def test():
+       >>>     y = ti.one(x)
+       >>>     print(y)
+       [1, 1]
+
+
+.. py:function:: axes(*x: int)
+
+   Defines a list of axes to be used by a field.
+
+   :param \*x: A list of axes to be activated
+
+   Note that GsTaichi has already provided a set of commonly used axes. For example,
+   `ti.ij` is just `axes(0, 1)` under the hood.
+
+
+.. py:function:: static(x, *xs) -> Any
+
+   Evaluates a GsTaichi-scope expression at compile time.
+
+   `static()` is what enables the so-called metaprogramming in GsTaichi. It is
+   in many ways similar to ``constexpr`` in C++.
+
+   See also https://docs.taichi-lang.org/docs/meta.
+
+   :param x: an expression to be evaluated
+   :type x: Any
+   :param \*xs: for Python-ish swapping assignment
+   :type \*xs: Any
+
+   .. rubric:: Example
+
+   The most common usage of `static()` is for compile-time evaluation::
+
+       >>> cond = False
+       >>>
+       >>> @ti.kernel
+       >>> def run():
+       >>>     if ti.static(cond):
+       >>>         do_a()
+       >>>     else:
+       >>>         do_b()
+
+   Depending on the value of ``cond``, ``run()`` will be directly compiled
+   into either ``do_a()`` or ``do_b()``. Thus there won't be a runtime
+   condition check.
+
+   Another common usage is for compile-time loop unrolling::
+
+       >>> @ti.kernel
+       >>> def run():
+       >>>     for i in ti.static(range(3)):
+       >>>         print(i)
+       >>>
+       >>> # The above will be unrolled to:
+       >>> @ti.kernel
+       >>> def run():
+       >>>     print(0)
+       >>>     print(1)
+       >>>     print(2)
+
+
+.. py:function:: grouped(x)
+
+   Groups the indices in the iterator returned by `ndrange()` into a 1-D vector.
+
+   This is often used when you want to iterate over all indices returned by `ndrange()`
+   in one `for` loop and a single index.
+
+   :param x: an iterator object returned by `ti.ndrange`.
+   :type x: :func:`~gstaichi.ndrange`
+
+   Example::
+       >>> # without ti.grouped
+       >>> for I in ti.ndrange(2, 3):
+       >>>     print(I)
+       prints 0, 1, 2, 3, 4, 5
+
+       >>> # with ti.grouped
+       >>> for I in ti.grouped(ti.ndrange(2, 3)):
+       >>>     print(I)
+       prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]
+
+
+.. py:function:: stop_grad(x)
+
+   Stops computing gradients during back propagation.
+
+   :param x: A field.
+   :type x: :class:`~gstaichi.Field`
+
+

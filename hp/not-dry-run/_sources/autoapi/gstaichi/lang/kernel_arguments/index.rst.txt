@@ -1,0 +1,86 @@
+gstaichi.lang.kernel_arguments
+==============================
+
+.. py:module:: gstaichi.lang.kernel_arguments
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.kernel_arguments.ArgMetadata
+   gstaichi.lang.kernel_arguments.SparseMatrixEntry
+   gstaichi.lang.kernel_arguments.SparseMatrixProxy
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.kernel_arguments.decl_scalar_arg
+   gstaichi.lang.kernel_arguments.get_type_for_kernel_args
+   gstaichi.lang.kernel_arguments.decl_matrix_arg
+   gstaichi.lang.kernel_arguments.decl_struct_arg
+   gstaichi.lang.kernel_arguments.decl_sparse_matrix
+   gstaichi.lang.kernel_arguments.decl_ndarray_arg
+   gstaichi.lang.kernel_arguments.decl_ret
+
+
+Module Contents
+---------------
+
+.. py:class:: ArgMetadata(annotation, name, default=inspect.Parameter.empty)
+
+   Metadata about an argument to a function
+
+
+   .. py:attribute:: annotation
+
+
+   .. py:attribute:: name
+
+
+   .. py:attribute:: default
+
+
+.. py:class:: SparseMatrixEntry(ptr, i, j, dtype)
+
+   .. py:attribute:: ptr
+
+
+   .. py:attribute:: i
+
+
+   .. py:attribute:: j
+
+
+   .. py:attribute:: dtype
+
+
+.. py:class:: SparseMatrixProxy(ptr, dtype)
+
+   .. py:attribute:: ptr
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:method:: subscript(i, j)
+
+
+.. py:function:: decl_scalar_arg(dtype, name)
+
+.. py:function:: get_type_for_kernel_args(dtype, name)
+
+.. py:function:: decl_matrix_arg(matrixtype, name)
+
+.. py:function:: decl_struct_arg(structtype, name)
+
+.. py:function:: decl_sparse_matrix(dtype, name)
+
+.. py:function:: decl_ndarray_arg(element_type: gstaichi._lib.core.gstaichi_python.DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: gstaichi._lib.core.gstaichi_python.BoundaryMode) -> gstaichi.lang.any_array.AnyArray
+
+.. py:function:: decl_ret(dtype)
+

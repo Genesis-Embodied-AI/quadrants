@@ -1,0 +1,86 @@
+gstaichi.lang.ast.checkers
+==========================
+
+.. py:module:: gstaichi.lang.ast.checkers
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.checkers.KernelSimplicityASTChecker
+
+
+Module Contents
+---------------
+
+.. py:class:: KernelSimplicityASTChecker(func)
+
+   Bases: :py:obj:`ast.NodeVisitor`
+
+
+   A node visitor base class that walks the abstract syntax tree and calls a
+   visitor function for every node found.  This function may return a value
+   which is forwarded by the `visit` method.
+
+   This class is meant to be subclassed, with the subclass adding visitor
+   methods.
+
+   Per default the visitor functions for the nodes are ``'visit_'`` +
+   class name of the node.  So a `TryFinally` node visit function would
+   be `visit_TryFinally`.  This behavior can be changed by overriding
+   the `visit` method.  If no visitor function exists for a node
+   (return value `None`) the `generic_visit` visitor is used instead.
+
+   Don't use the `NodeVisitor` if you want to apply changes to nodes during
+   traversing.  For this a special visitor exists (`NodeTransformer`) that
+   allows modifications.
+
+
+   .. py:class:: ScopeGuard(checker)
+
+      .. py:attribute:: c
+
+
+      .. py:property:: allows_for_loop
+
+
+      .. py:property:: allows_more_stmt
+
+
+      .. py:method:: mark_no_more_for_loop()
+
+
+      .. py:method:: mark_no_more_stmt()
+
+
+
+   .. py:method:: new_scope()
+
+
+   .. py:property:: current_scope
+
+
+   .. py:property:: top_level
+
+
+   .. py:method:: get_error_location(node)
+
+
+   .. py:method:: should_check(node)
+      :staticmethod:
+
+
+
+   .. py:method:: generic_visit(node)
+
+      Called if no explicit visitor function exists for a node.
+
+
+
+   .. py:method:: visit_for(node)
+      :staticmethod:
+
+
+
