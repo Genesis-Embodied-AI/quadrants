@@ -1,0 +1,76 @@
+gstaichi.types.quant
+====================
+
+.. py:module:: gstaichi.types.quant
+
+.. autoapi-nested-parse::
+
+   This module defines generators of quantized types.
+   For more details, read https://yuanming.gstaichi.graphics/publication/2021-quangstaichi/quangstaichi.pdf.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.types.quant.int
+   gstaichi.types.quant.fixed
+   gstaichi.types.quant.float
+
+
+Module Contents
+---------------
+
+.. py:function:: int(bits, signed=True, compute=None)
+
+   Generates a quantized type for integers.
+
+   :param bits: Number of bits.
+   :type bits: int
+   :param signed: Signed or unsigned.
+   :type signed: bool
+   :param compute: Type for computation.
+   :type compute: DataType
+
+   :returns: The specified type.
+   :rtype: DataType
+
+
+.. py:function:: fixed(bits, signed=True, max_value=1.0, compute=None, scale=None)
+
+   Generates a quantized type for fixed-point real numbers.
+
+   :param bits: Number of bits.
+   :type bits: int
+   :param signed: Signed or unsigned.
+   :type signed: bool
+   :param max_value: Maximum value of the number.
+   :type max_value: float
+   :param compute: Type for computation.
+   :type compute: DataType
+   :param scale: Scaling factor. The argument is prioritized over range.
+   :type scale: float
+
+   :returns: The specified type.
+   :rtype: DataType
+
+
+.. py:function:: float(exp, frac, signed=True, compute=None)
+
+   Generates a quantized type for floating-point real numbers.
+
+   :param exp: Number of exponent bits.
+   :type exp: int
+   :param frac: Number of fraction bits.
+   :type frac: int
+   :param signed: Signed or unsigned.
+   :type signed: bool
+   :param compute: Type for computation.
+   :type compute: DataType
+
+   :returns: The specified type.
+   :rtype: DataType
+
+

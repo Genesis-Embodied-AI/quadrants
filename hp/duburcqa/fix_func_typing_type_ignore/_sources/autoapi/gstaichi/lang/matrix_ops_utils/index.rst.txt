@@ -1,0 +1,58 @@
+gstaichi.lang.matrix_ops_utils
+==============================
+
+.. py:module:: gstaichi.lang.matrix_ops_utils
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.matrix_ops_utils.do_check
+   gstaichi.lang.matrix_ops_utils.preconditions
+   gstaichi.lang.matrix_ops_utils.arg_at
+   gstaichi.lang.matrix_ops_utils.assert_tensor
+   gstaichi.lang.matrix_ops_utils.assert_vector
+   gstaichi.lang.matrix_ops_utils.assert_list
+   gstaichi.lang.matrix_ops_utils.arg_foreach_check
+   gstaichi.lang.matrix_ops_utils.get_list_shape
+   gstaichi.lang.matrix_ops_utils.same_shapes
+   gstaichi.lang.matrix_ops_utils.square_matrix
+   gstaichi.lang.matrix_ops_utils.dim_lt
+   gstaichi.lang.matrix_ops_utils.is_int_const
+   gstaichi.lang.matrix_ops_utils.check_matmul
+   gstaichi.lang.matrix_ops_utils.check_transpose
+
+
+Module Contents
+---------------
+
+.. py:function:: do_check(checker_fns, *args, **kwargs)
+
+.. py:function:: preconditions(*checker_funcs)
+
+.. py:function:: arg_at(indices, *fns)
+
+.. py:function:: assert_tensor(m, msg='not tensor type: {}')
+
+.. py:function:: assert_vector(msg='expected a vector, got {}')
+
+.. py:function:: assert_list(x, msg='not a list: {}')
+
+.. py:function:: arg_foreach_check(*arg_indices, fns=[], logic='or', msg=None)
+
+.. py:function:: get_list_shape(x)
+
+.. py:function:: same_shapes(*xs)
+
+.. py:function:: square_matrix(x)
+
+.. py:function:: dim_lt(dim, limit)
+
+.. py:function:: is_int_const(x)
+
+.. py:function:: check_matmul(x, y)
+
+.. py:function:: check_transpose(x)
+

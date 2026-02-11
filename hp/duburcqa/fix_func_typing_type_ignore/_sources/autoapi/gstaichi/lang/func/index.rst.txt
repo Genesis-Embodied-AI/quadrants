@@ -1,0 +1,67 @@
+gstaichi.lang.func
+==================
+
+.. py:module:: gstaichi.lang.func
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.func.Func
+
+
+Module Contents
+---------------
+
+.. py:class:: Func(_func: Callable, _classfunc=False, _pyfunc=False, is_real_function=False)
+
+   Bases: :py:obj:`gstaichi.lang._func_base.FuncBase`
+
+
+   Base class for Kernels and Funcs
+
+
+   .. py:attribute:: function_counter
+      :value: 1
+
+
+
+   .. py:attribute:: compiled
+      :type:  dict[int, Callable]
+
+
+   .. py:attribute:: classfunc
+      :value: False
+
+
+
+   .. py:attribute:: pyfunc
+      :value: False
+
+
+
+   .. py:attribute:: is_real_function
+      :value: False
+
+
+
+   .. py:attribute:: cxx_function_by_id
+      :type:  dict[int, gstaichi._lib.core.gstaichi_python.Function]
+
+
+   .. py:attribute:: has_print
+      :value: False
+
+
+
+   .. py:method:: func_call_rvalue(key: gstaichi._lib.core.gstaichi_python.FunctionKey, args: tuple[Any, Ellipsis]) -> Any
+
+
+   .. py:method:: do_compile(key: gstaichi._lib.core.gstaichi_python.FunctionKey, args: tuple[Any, Ellipsis], arg_features: tuple[Any, Ellipsis]) -> None
+
+      only for real func
+
+
+

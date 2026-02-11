@@ -1,0 +1,32 @@
+gstaichi.types
+==============
+
+.. py:module:: gstaichi.types
+
+.. autoapi-nested-parse::
+
+   This module defines data types in GsTaichi:
+
+   - primitive: int, float, etc.
+   - compound: matrix, vector, struct.
+   - template: for reference types.
+   - ndarray: for arbitrary arrays.
+   - quant: for quantized types, see "https://yuanming.gstaichi.graphics/publication/2021-quangstaichi/quangstaichi.pdf"
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/types/annotations/index
+   /autoapi/gstaichi/types/compound_types/index
+   /autoapi/gstaichi/types/enums/index
+   /autoapi/gstaichi/types/ndarray_type/index
+   /autoapi/gstaichi/types/primitive_types/index
+   /autoapi/gstaichi/types/quant/index
+   /autoapi/gstaichi/types/utils/index
+
+
