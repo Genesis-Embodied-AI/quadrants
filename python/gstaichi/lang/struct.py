@@ -379,11 +379,14 @@ class StructField(Field):
 
     def __init__(self, field_dict, struct_methods, name=None, is_primal=True):
         # will not call Field initializer
+        # TODO: Why?
         self.field_dict = field_dict
         self.struct_methods = struct_methods
         self.name = name
         self.grad = None
         self.dual = None
+        self._shape: tuple[int, ...] | None = None
+        self._dtype: DataTypeCxx | None = None
         if is_primal:
             grad_field_dict = {}
             for k, v in self.field_dict.items():

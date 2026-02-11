@@ -1,7 +1,8 @@
-# type: ignore
+from typing import TYPE_CHECKING, cast
 
 import gstaichi.lang
 from gstaichi._lib import core as _ti_core
+from gstaichi._lib.core.gstaichi_python import DataTypeCxx
 from gstaichi._logging import warn
 from gstaichi.lang import impl
 from gstaichi.lang.exception import GsTaichiSyntaxError
@@ -11,6 +12,9 @@ from gstaichi.lang.util import (
     to_numpy_type,
     to_pytorch_type,
 )
+
+if TYPE_CHECKING:
+    from gstaichi.lang.expr import Expr
 
 
 class Field:
@@ -30,7 +34,11 @@ class Field:
         self.host_accessors = None
         self.grad = None
         self.dual = None
+        self._shape: tuple[int, ...] | None = None
+        self._dtype: DataTypeCxx | None = None
+        self.__name: str | None = None
 
+    # TODO: why do we have snode and _snode, that return the same thing?
     @property
     def snode(self):
         """Gets representative SNode for info purposes.
@@ -41,58 +49,39 @@ class Field:
         return self._snode
 
     @property
-    def _snode(self):
+    def _snode(self) -> "gstaichi.lang.snode.SNode":  # type: ignore
         """Gets representative SNode for info purposes.
 
         Returns:
             SNode: Representative SNode (SNode of first field member).
         """
-        return gstaichi.lang.snode.SNode(self.vars[0].ptr.snode())
+        return gstaichi.lang.snode.SNode(self.vars[0].ptr.snode())  # type: ignore
 
     @property
-    def shape(self):
-        """Gets field shape.
-
-        Returns:
-            Tuple[Int]: Field shape.
-        """
-        return self._snode.shape
+    def shape(self) -> tuple[int, ...]:
+        if not self._shape:
+            self._shape = cast(tuple[int, ...], self._snode.shape)
+        return self._shape
 
     @property
-    def dtype(self):
-        """Gets data type of each individual value.
-
-        Returns:
-            DataType: Data type of each individual value.
-        """
-        return self._snode._dtype
+    def dtype(self) -> DataTypeCxx:
+        if not self._dtype:
+            self._dtype = cast(DataTypeCxx, self._snode._dtype)
+        return self._dtype
 
     @property
-    def _name(self):
-        """Gets field name.
-
-        Returns:
-            str: Field name.
-        """
-        return self._snode._name
+    def _name(self) -> str:
+        if not self.__name:
+            self.__name = cast(str, self._snode._name)
+        return self.__name
 
     def parent(self, n=1):
-        """Gets an ancestor of the representative SNode in the SNode tree.
-
-        Args:
-            n (int): the number of levels going up from the representative SNode.
-
-        Returns:
-            SNode: The n-th parent of the representative SNode.
+        """
+        n (int): the number of levels going up from the representative SNode.
         """
         return self.snode.parent(n)
 
-    def _get_field_members(self):
-        """Gets field members.
-
-        Returns:
-            List[Expr]: Field members.
-        """
+    def _get_field_members(self) -> list["Expr"]:
         return self.vars
 
     def _loop_range(self):
@@ -103,36 +92,21 @@ class Field:
         """
         return self.vars[0].ptr.snode()
 
-    def _set_grad(self, grad):
-        """Sets corresponding grad field (reverse mode).
-        Args:
-            grad (Field): Corresponding grad field.
-        """
+    def _set_grad(self, grad: "Field") -> None:
+        """Sets corresponding grad field (reverse mode)."""
         self.grad = grad
 
-    def _set_dual(self, dual):
-        """Sets corresponding dual field (forward mode).
-
-        Args:
-            dual (Field): Corresponding dual field.
-        """
+    def _set_dual(self, dual: "Field") -> None:
+        """Sets corresponding dual field (forward mode)."""
         self.dual = dual
 
     @python_scope
-    def fill(self, val):
-        """Fills `self` with a specific value.
-
-        Args:
-            val (Union[int, float]): Value to fill.
-        """
+    def fill(self, val: int | float) -> None:
         raise NotImplementedError()
 
     @python_scope
-    def to_numpy(self, dtype=None):
+    def to_numpy(self, dtype: DataTypeCxx | None = None):
         """Converts `self` to a numpy array.
-
-        Args:
-            dtype (DataType, optional): The desired data type of returned numpy array.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -178,13 +152,10 @@ class Field:
         self._from_external_arr(arr.contiguous())
 
     @python_scope
-    def copy_from(self, other):
+    def copy_from(self, other: "Field") -> None:
         """Copies all elements from another field.
 
         The shape of the other field needs to be the same as `self`.
-
-        Args:
-            other (Field): The source field.
         """
         if not isinstance(other, Field):
             raise TypeError("Cannot copy from a non-field object")
@@ -195,28 +166,14 @@ class Field:
         tensor_to_tensor(self, other)
 
     @python_scope
-    def __setitem__(self, key, value):
-        """Sets field element in Python scope.
-
-        Args:
-            key (Union[List[int], int, None]): Coordinates of the field element.
-            value (element type): Value to set.
-        """
+    def __setitem__(self, key: list[int] | int | None, value: int | float) -> None:
         raise NotImplementedError()
 
     @python_scope
-    def __getitem__(self, key):
-        """Gets field element in Python scope.
-
-        Args:
-            key (Union[List[int], int, None]): Coordinates of the field element.
-
-        Returns:
-            element type: Value retrieved.
-        """
+    def __getitem__(self, key: list[int] | int | None) -> int | float:
         raise NotImplementedError()
 
-    def __str__(self):
+    def __str__(self) -> str:
         if gstaichi.lang.impl.inside_kernel():
             return self.__repr__()  # make pybind11 happy, see Matrix.__str__
         if self._snode.ptr is None:
@@ -232,7 +189,7 @@ class Field:
         if len(key) != len(self.shape):
             raise AssertionError("Slicing is not supported on ti.field")
 
-        return key + ((0,) * (_ti_core.get_max_num_indices() - len(key)))
+        return key + ((0,) * (_ti_core.get_max_num_indices() - len(key)))  # type: ignore
 
     def _initialize_host_accessors(self):
         if self.host_accessors:
@@ -241,7 +198,7 @@ class Field:
         self.host_accessors = [SNodeHostAccessor(e.ptr.snode()) for e in self.vars]
 
     def _host_access(self, key):
-        return [SNodeHostAccess(e, key) for e in self.host_accessors]
+        return [SNodeHostAccess(e, key) for e in self.host_accessors]  # type: ignore
 
     def __iter__(self):
         raise NotImplementedError("Struct for is only available in GsTaichi scope.")
@@ -289,11 +246,12 @@ class ScalarField(Field):
             dtype = to_numpy_type(self.dtype)
         import numpy as np  # pylint: disable=C0415
 
-        arr = np.zeros(shape=self.shape, dtype=dtype)
+        arr = np.zeros(shape=self.shape, dtype=dtype)  # type: ignore
         from gstaichi._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        gstaichi.lang.runtime_ops.sync()
+        # TODO: can we remove .runtime_ops here?
+        gstaichi.lang.runtime_ops.sync()  # type: ignore
         return arr
 
     @python_scope
@@ -306,7 +264,8 @@ class ScalarField(Field):
         from gstaichi._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
-        gstaichi.lang.runtime_ops.sync()
+        # TODO: can we remove .runtime_ops here?
+        gstaichi.lang.runtime_ops.sync()  # type: ignore
         return arr
 
     @python_scope
@@ -319,7 +278,8 @@ class ScalarField(Field):
         from gstaichi._kernels import ext_arr_to_tensor  # pylint: disable=C0415
 
         ext_arr_to_tensor(arr, self)
-        gstaichi.lang.runtime_ops.sync()
+        # TODO: can we remove .runtime_ops here?
+        gstaichi.lang.runtime_ops.sync()  # type: ignore
 
     @python_scope
     def from_numpy(self, arr):
@@ -333,7 +293,7 @@ class ScalarField(Field):
     @python_scope
     def __setitem__(self, key, value):
         self._initialize_host_accessors()
-        self.host_accessors[0].setter(value, *self._pad_key(key))
+        self.host_accessors[0].setter(value, *self._pad_key(key))  # type: ignore
 
     @python_scope
     def __getitem__(self, key):
@@ -349,7 +309,7 @@ class ScalarField(Field):
                     f"Detected illegal element of type: {type(key)}. "
                     f"Please be aware that slicing a ti.field is not supported so far."
                 )
-        return self.host_accessors[0].getter(*padded_key)
+        return self.host_accessors[0].getter(*padded_key)  # type: ignore
 
     def __repr__(self):
         # make interactive shell happy, prevent materialization
@@ -384,12 +344,12 @@ class SNodeHostAccessor:
             # same as above
             if (
                 impl.get_runtime().target_tape
-                and impl.get_runtime().target_tape.grad_checker
+                and impl.get_runtime().target_tape.grad_checker  # type: ignore
                 and not impl.get_runtime().grad_replaced
             ):
-                for x in impl.get_runtime().target_tape.grad_checker.to_check:
+                for x in impl.get_runtime().target_tape.grad_checker.to_check:  # type: ignore
                     assert snode != x.snode.ptr, "Overwritten is prohibitive when doing grad check."
-                impl.get_runtime().target_tape.insert(write_func, (key, value))
+                impl.get_runtime().target_tape.insert(write_func, (key, value))  # type: ignore
 
         self.getter = getter
         self.setter = setter

@@ -25,7 +25,10 @@ _NONE, _REVERSE = (
 )
 
 
-def func(fn: Callable, is_real_function: bool = False) -> GsTaichiCallable:
+F = TypeVar("F", bound=Callable)
+
+
+def func(fn: F, is_real_function: bool = False) -> F:
     """Marks a function as callable in GsTaichi-scope.
 
     This decorator transforms a Python function into a GsTaichi one. GsTaichi
@@ -54,11 +57,13 @@ def func(fn: Callable, is_real_function: bool = False) -> GsTaichiCallable:
     gstaichi_callable = GsTaichiCallable(fn, fun)
     gstaichi_callable._is_gstaichi_function = True
     gstaichi_callable._is_real_function = is_real_function
-    return gstaichi_callable
+
+    update_wrapper(gstaichi_callable, fn)
+    return cast(F, gstaichi_callable)
 
 
 def real_func(fn: Callable) -> GsTaichiCallable:
-    return func(fn, is_real_function=True)
+    return func(fn, is_real_function=True)  # type: ignore
 
 
 def pyfunc(fn: Callable) -> GsTaichiCallable:
@@ -163,9 +168,6 @@ def _kernel_impl(_func: Callable, level_of_class_stackframe: int, verbose: bool 
     wrapped._adjoint = adjoint
     primal.gstaichi_callable = wrapped
     return wrapped
-
-
-F = TypeVar("F", bound=Callable[..., typing.Any])
 
 
 @overload

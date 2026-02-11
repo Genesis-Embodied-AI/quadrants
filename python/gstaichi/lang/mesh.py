@@ -44,9 +44,12 @@ class MeshReorderedScalarFieldProxy(ScalarField):
         element_type: MeshElementType,
         g2r_field: ScalarField,
     ):
+        # TODO: why doesnt this call the baseclass constructor?
         self.vars = field.vars
         self.host_accessors = field.host_accessors
         self.grad = field.grad
+        self._shape: tuple[int, ...] | None = None
+        self._dtype: DataTypeCxx | None = None
 
         self.mesh_ptr = mesh_ptr
         self.element_type = element_type
@@ -73,6 +76,7 @@ class MeshReorderedMatrixFieldProxy(MatrixField):
         element_type: MeshElementType,
         g2r_field: ScalarField,
     ):
+        # TODO: why doesnt this call the baseclass constructor?
         self.vars = field.vars
         self.host_accessors = field.host_accessors
         self.grad = field.grad
@@ -80,6 +84,8 @@ class MeshReorderedMatrixFieldProxy(MatrixField):
         self.m = field.m
         self.ndim = field.ndim
         self.ptr = field.ptr
+        self._shape: tuple[int, ...] | None = None
+        self._dtype: DataTypeCxx | None = None
 
         self.mesh_ptr = mesh_ptr
         self.element_type = element_type
