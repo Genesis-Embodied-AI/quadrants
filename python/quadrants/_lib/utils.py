@@ -45,7 +45,7 @@ def import_ti_python_core():
         pyddir = os.path.dirname(os.path.realpath(__file__))
         os.environ["PATH"] += os.pathsep + pyddir
     try:
-        from quadrants._lib.core import (
+        from quadrants._lib.core import (  # pylint: disable=C0415
             quadrants_python as core,  # pylint: disable=C0415
         )
     except Exception as e:
