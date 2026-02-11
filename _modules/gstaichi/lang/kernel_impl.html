@@ -337,9 +337,12 @@
 <span class="p">)</span>
 
 
+<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;F&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="func">
 <a class="viewcode-back" href="../../../autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.func">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GsTaichiCallable</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in GsTaichi-scope.</span>
 
 <span class="sd">    This decorator transforms a Python function into a GsTaichi one. GsTaichi</span>
@@ -368,14 +371,16 @@
     <span class="n">gstaichi_callable</span> <span class="o">=</span> <span class="n">GsTaichiCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
     <span class="n">gstaichi_callable</span><span class="o">.</span><span class="n">_is_gstaichi_function</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">gstaichi_callable</span><span class="o">.</span><span class="n">_is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span>
-    <span class="k">return</span> <span class="n">gstaichi_callable</span></div>
+
+    <span class="n">update_wrapper</span><span class="p">(</span><span class="n">gstaichi_callable</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">gstaichi_callable</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="real_func">
 <a class="viewcode-back" href="../../../autoapi/gstaichi/lang/kernel_impl/index.html#gstaichi.lang.kernel_impl.real_func">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">real_func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GsTaichiCallable</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
 
@@ -484,9 +489,6 @@
     <span class="n">wrapped</span><span class="o">.</span><span class="n">_adjoint</span> <span class="o">=</span> <span class="n">adjoint</span>
     <span class="n">primal</span><span class="o">.</span><span class="n">gstaichi_callable</span> <span class="o">=</span> <span class="n">wrapped</span>
     <span class="k">return</span> <span class="n">wrapped</span>
-
-
-<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;F&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">])</span>
 
 
 <span class="nd">@overload</span>
