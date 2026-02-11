@@ -19,7 +19,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: func(fn: Callable, is_real_function: bool = False) -> quadrants.lang._quadrants_callable.QuadrantsCallable
+.. py:function:: func(fn: F, is_real_function: bool = False) -> F
 
    Marks a function as callable in Quadrants-scope.
 
