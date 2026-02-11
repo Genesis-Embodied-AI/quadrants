@@ -85,7 +85,8 @@ class Clean(clean):
         )
         for d in generated_folders:
             if os.path.exists(d):
-                remove_tree(d, dry_run=self.dry_run)
+                if not self.dry_run:
+                    remove_tree(d)
         generated_files = ["quadrants/common/commit_hash.h", "quadrants/common/version.h"]
         generated_files += glob.glob("quadrants/runtime/llvm/runtime_*.bc")
         generated_files += glob.glob("python/quadrants/_lib/core/*.so")
