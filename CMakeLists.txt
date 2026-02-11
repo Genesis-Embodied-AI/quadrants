@@ -173,7 +173,9 @@ if (TI_WITH_LLVM)
     endmacro()
 
     if (APPLE)
-      set(CLANG_OSX_FLAGS "-isysroot${CMAKE_OSX_SYSROOT}")
+        if(CMAKE_OSX_SYSROOT)
+          set(CLANG_OSX_FLAGS "-isysroot" "${CMAKE_OSX_SYSROOT}")
+      endif()
     endif()
 
     # Highest clang version that we've tested
