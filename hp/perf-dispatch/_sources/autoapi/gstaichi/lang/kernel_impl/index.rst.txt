@@ -19,7 +19,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: func(fn: Callable, is_real_function: bool = False) -> gstaichi.lang._gstaichi_callable.GsTaichiCallable
+.. py:function:: func(fn: F, is_real_function: bool = False) -> F
 
    Marks a function as callable in GsTaichi-scope.
 
