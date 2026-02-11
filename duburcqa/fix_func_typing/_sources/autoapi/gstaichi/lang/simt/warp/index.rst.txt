@@ -1,0 +1,61 @@
+gstaichi.lang.simt.warp
+=======================
+
+.. py:module:: gstaichi.lang.simt.warp
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.simt.warp.all_nonzero
+   gstaichi.lang.simt.warp.any_nonzero
+   gstaichi.lang.simt.warp.unique
+   gstaichi.lang.simt.warp.ballot
+   gstaichi.lang.simt.warp.shfl_sync_i32
+   gstaichi.lang.simt.warp.shfl_sync_f32
+   gstaichi.lang.simt.warp.shfl_up_i32
+   gstaichi.lang.simt.warp.shfl_up_f32
+   gstaichi.lang.simt.warp.shfl_down_i32
+   gstaichi.lang.simt.warp.shfl_down_f32
+   gstaichi.lang.simt.warp.shfl_xor_i32
+   gstaichi.lang.simt.warp.match_any
+   gstaichi.lang.simt.warp.match_all
+   gstaichi.lang.simt.warp.active_mask
+   gstaichi.lang.simt.warp.sync
+
+
+Module Contents
+---------------
+
+.. py:function:: all_nonzero(mask, predicate)
+
+.. py:function:: any_nonzero(mask, predicate)
+
+.. py:function:: unique(mask, predicate)
+
+.. py:function:: ballot(predicate)
+
+.. py:function:: shfl_sync_i32(mask, val, offset)
+
+.. py:function:: shfl_sync_f32(mask, val, offset)
+
+.. py:function:: shfl_up_i32(mask, val, offset)
+
+.. py:function:: shfl_up_f32(mask, val, offset)
+
+.. py:function:: shfl_down_i32(mask, val, offset)
+
+.. py:function:: shfl_down_f32(mask, val, offset)
+
+.. py:function:: shfl_xor_i32(mask, val, offset)
+
+.. py:function:: match_any(mask, value)
+
+.. py:function:: match_all(mask, val)
+
+.. py:function:: active_mask()
+
+.. py:function:: sync(mask)
+

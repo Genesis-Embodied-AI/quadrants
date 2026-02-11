@@ -1,0 +1,6 @@
+gstaichi.algorithms
+===================
+
+.. py:module:: gstaichi.algorithms
+
+

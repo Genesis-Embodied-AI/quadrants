@@ -1,0 +1,98 @@
+gstaichi.lang.mesh
+==================
+
+.. py:module:: gstaichi.lang.mesh
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.mesh.MeshInstance
+   gstaichi.lang.mesh.Mesh
+
+
+Module Contents
+---------------
+
+.. py:class:: MeshInstance
+
+   .. py:attribute:: mesh_ptr
+
+
+   .. py:attribute:: relation_set
+
+
+   .. py:attribute:: verts
+
+
+   .. py:attribute:: edges
+
+
+   .. py:attribute:: faces
+
+
+   .. py:attribute:: cells
+
+
+   .. py:method:: get_position_as_numpy()
+
+      Get the vertex position of current mesh to numpy array.
+
+      :returns: [x, y, z] with float-format.
+      :rtype: 3d numpy array
+
+
+
+   .. py:method:: set_owned_offset(element_type: MeshElementType, owned_offset: gstaichi.lang.field.ScalarField)
+
+
+   .. py:method:: set_total_offset(element_type: MeshElementType, total_offset: gstaichi.lang.field.ScalarField)
+
+
+   .. py:method:: set_index_mapping(element_type: MeshElementType, conv_type: ConvType, mapping: gstaichi.lang.field.ScalarField)
+
+
+   .. py:method:: set_num_patches(num_patches: int)
+
+
+   .. py:method:: set_patch_max_element_num(element_type: MeshElementType, max_element_num: int)
+
+
+   .. py:method:: set_relation_fixed(rel_type: MeshRelationType, value: gstaichi.lang.field.ScalarField)
+
+
+   .. py:method:: set_relation_dynamic(rel_type: MeshRelationType, value: gstaichi.lang.field.ScalarField, patch_offset: gstaichi.lang.field.ScalarField, offset: gstaichi.lang.field.ScalarField)
+
+
+   .. py:method:: add_mesh_attribute(element_type, snode, reorder_type)
+
+
+   .. py:method:: get_relation_size(from_index, to_element_type)
+
+
+   .. py:method:: get_relation_access(from_index, to_element_type, neighbor_idx_ptr)
+
+
+.. py:class:: Mesh
+
+   The Mesh type class.
+
+   MeshGsTaichi offers first-class support for triangular/tetrahedral meshes
+   and allows efficient computation on these irregular data structures,
+   only available for backends supporting `ti.extension.mesh`.
+
+   See more details in https://github.com/taichi-dev/meshgstaichi
+
+
+   .. py:method:: load_meta(filename)
+      :staticmethod:
+
+
+
+   .. py:method:: generate_meta(data)
+      :staticmethod:
+
+
+

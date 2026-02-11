@@ -1,0 +1,226 @@
+gstaichi.tools.np2ply
+=====================
+
+.. py:module:: gstaichi.tools.np2ply
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.tools.np2ply.PLYWriter
+
+
+Module Contents
+---------------
+
+.. py:class:: PLYWriter(num_vertices: int, num_faces=0, face_type='tri', comment='created by PLYWriter')
+
+   Writes `numpy.array` data to `ply` files.
+
+   :param num_vertices: number of vertices.
+   :type num_vertices: int
+   :param num_faces: number of faces.
+   :type num_faces: int, optional
+   :param face_type: `tri` or `quad`.
+   :type face_type: str
+   :param comment: comment message.
+   :type comment: str
+
+
+   .. py:attribute:: ply_supported_types
+      :value: ['char', 'uchar', 'short', 'ushort', 'int', 'uint', 'float', 'double']
+
+
+
+   .. py:attribute:: corresponding_numpy_types
+
+
+   .. py:attribute:: type_map
+
+
+   .. py:attribute:: num_vertices
+
+
+   .. py:attribute:: num_vertex_channels
+      :value: 0
+
+
+
+   .. py:attribute:: vertex_channels
+      :value: []
+
+
+
+   .. py:attribute:: vertex_data_type
+      :value: []
+
+
+
+   .. py:attribute:: vertex_data
+      :value: []
+
+
+
+   .. py:attribute:: num_faces
+      :value: 0
+
+
+
+   .. py:attribute:: num_face_channels
+      :value: 0
+
+
+
+   .. py:attribute:: face_channels
+      :value: []
+
+
+
+   .. py:attribute:: face_data_type
+      :value: []
+
+
+
+   .. py:attribute:: face_data
+      :value: []
+
+
+
+   .. py:attribute:: face_type
+      :value: 'tri'
+
+
+
+   .. py:attribute:: comment
+      :value: 'created by PLYWriter'
+
+
+
+   .. py:method:: add_vertex_channel(key: str, data_type: str, data: numpy.array)
+
+
+   .. py:method:: add_vertex_pos(x: numpy.array, y: numpy.array, z: numpy.array)
+
+      Set the (x, y, z) coordinates of the vertices.
+
+      :param x: x-coordinates of the vertices.
+      :type x: `numpy.array(float)`
+      :param y: y-coordinates of the vertices.
+      :type y: `numpy.array(float)`
+      :param z: z-coordinates of the vertices.
+      :type z: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_normal(nx: numpy.array, ny: numpy.array, nz: numpy.array)
+
+      Add normal vectors at the vertices.
+
+      The three arguments are all numpy arrays of float type and have
+      the same length.
+
+      :param nx: x-coordinates of the normal vectors.
+      :type nx: `numpy.array(float)`
+      :param ny: y-coordinates of the normal vectors.
+      :type ny: `numpy.array(float)`
+      :param nz: z-coordinates of the normal vectors.
+      :type nz: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_vel(vx: numpy.array, vy: numpy.array, vz: numpy.array)
+
+      Add velocity vectors at the vertices.
+
+      :param vx: x-coordinates of the velocity vectors.
+      :type vx: `numpy.array(float)`
+      :param vy: y-coordinates of the velocity vectors.
+      :type vy: `numpy.array(float)`
+      :param vz: z-coordinates of the velocity vectors.
+      :type vz: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_color(r: numpy.array, g: numpy.array, b: numpy.array)
+
+      Sets the (r, g, b) channels of the colors at the vertices.
+
+      The three arguments are all numpy arrays of float type and have
+      the same length.
+
+      :param r: the r-channel (red) of the colors.
+      :type r: `numpy.array(float)`
+      :param g: the g-channel (green) of the color.
+      :type g: `numpy.array(float)`
+      :param b: the b-channel (blue) of the colors.
+      :type b: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_alpha(alpha: numpy.array)
+
+      Sets the alpha-channel (transparent) of the vertex colors.
+
+      :param alpha: the alpha-channel (transparent) of the colors.
+      :type alpha: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_rgba(r: numpy.array, g: numpy.array, b: numpy.array, a: numpy.array)
+
+      Sets the (r, g, b, a) channels of the colors at the vertices.
+
+      :param r: the r-channel (red) of the colors.
+      :type r: `numpy.array(float)`
+      :param g: the g-channel (green) of the color.
+      :type g: `numpy.array(float)`
+      :param b: the b-channel (blue) of the colors.
+      :type b: `numpy.array(float)`
+      :param a: the a-channel (alpha) of the colors.
+      :type a: `numpy.array(float)`
+
+
+
+   .. py:method:: add_vertex_id()
+
+      Sets the ids of the vertices.
+
+      The id of a vertex is equal to its index in the vertex array.
+
+
+
+   .. py:method:: add_vertex_piece(piece: numpy.array)
+
+
+   .. py:method:: add_faces(indices: numpy.array)
+
+
+   .. py:method:: add_face_channel(key: str, data_type: str, data: numpy.array)
+
+
+   .. py:method:: add_face_id()
+
+
+   .. py:method:: add_face_piece(piece: numpy.array)
+
+
+   .. py:method:: sanity_check()
+
+
+   .. py:method:: print_header(path: str, _format: str)
+
+
+   .. py:method:: export(path)
+
+
+   .. py:method:: export_ascii(path)
+
+
+   .. py:method:: export_frame_ascii(series_num: int, path: str)
+
+
+   .. py:method:: export_frame(series_num: int, path: str)
+
+

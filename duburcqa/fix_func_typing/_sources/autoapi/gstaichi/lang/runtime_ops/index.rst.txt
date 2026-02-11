@@ -1,0 +1,23 @@
+gstaichi.lang.runtime_ops
+=========================
+
+.. py:module:: gstaichi.lang.runtime_ops
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.runtime_ops.sync
+
+
+Module Contents
+---------------
+
+.. py:function:: sync()
+
+   Blocks the calling thread until all the previously
+   launched GsTaichi kernels have completed.
+
+

@@ -1,0 +1,6 @@
+gstaichi.ad
+===========
+
+.. py:module:: gstaichi.ad
+
+

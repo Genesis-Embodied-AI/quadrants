@@ -1,0 +1,72 @@
+gstaichi.types.compound_types
+=============================
+
+.. py:module:: gstaichi.types.compound_types
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.types.compound_types.matrix
+   gstaichi.types.compound_types.vector
+   gstaichi.types.compound_types.struct
+
+
+Module Contents
+---------------
+
+.. py:function:: matrix(n=None, m=None, dtype=None)
+
+   Creates a matrix type with given shape and data type.
+
+   :param n: number of rows of the matrix.
+   :type n: int
+   :param m: number of columns of the matrix.
+   :type m: int
+   :param dtype: matrix data type.
+   :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+   :returns: A matrix type.
+
+   Example::
+
+       >>> mat2x2 = ti.types.matrix(2, 2, ti.f32)  # 2x2 matrix type
+       >>> M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type
+
+
+.. py:function:: vector(n=None, dtype=None)
+
+   Creates a vector type with given shape and data type.
+
+   :param n: dimension of the vector.
+   :type n: int
+   :param dtype: vector data type.
+   :type dtype: :mod:`~gstaichi.types.primitive_types`
+
+   :returns: A vector type.
+
+   Example::
+
+       >>> vec3 = ti.types.vector(3, ti.f32)  # 3d vector type
+       >>> v = vec3([1., 2., 3.])  # an instance of this type
+
+
+.. py:function:: struct(**kwargs)
+
+   Creates a struct type with given members.
+
+   :param kwargs: a dictionary contains the names and types of the
+                  struct members.
+   :type kwargs: dict
+
+   :returns: A struct type.
+
+   Example::
+
+       >>> vec3 = ti.types.vector(3, ti.f32)
+       >>> sphere = ti.types.struct(center=vec3, radius=float)
+       >>> s = sphere(center=vec3([0., 0., 0.]), radius=1.0)
+
+

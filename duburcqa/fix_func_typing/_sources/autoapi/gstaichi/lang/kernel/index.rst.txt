@@ -1,0 +1,148 @@
+gstaichi.lang.kernel
+====================
+
+.. py:module:: gstaichi.lang.kernel
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.kernel.LaunchContextBufferCache
+   gstaichi.lang.kernel.ASTGenerator
+   gstaichi.lang.kernel.Kernel
+
+
+Module Contents
+---------------
+
+.. py:class:: LaunchContextBufferCache
+
+   .. py:method:: cache(t_kernel, args_hash: gstaichi.lang._kernel_types.ArgsHash, launch_ctx: gstaichi._lib.core.gstaichi_python.KernelLaunchContext, launch_ctx_buffer: dict[gstaichi.lang._kernel_types.KernelBatchedArgType, list[tuple]]) -> None
+
+
+   .. py:method:: populate_launch_ctx_from_cache(args_hash: gstaichi.lang._kernel_types.ArgsHash, launch_ctx: gstaichi._lib.core.gstaichi_python.KernelLaunchContext) -> bool
+
+
+.. py:class:: ASTGenerator(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, kernel_name: str, current_kernel: Kernel, only_parse_function_def: bool, tree: ast.Module, dump_ast: bool)
+
+   .. py:attribute:: runtime
+
+
+   .. py:attribute:: current_kernel
+
+
+   .. py:attribute:: ctx
+
+
+   .. py:attribute:: kernel_name
+
+
+   .. py:attribute:: tree
+
+
+   .. py:attribute:: only_parse_function_def
+
+
+   .. py:attribute:: dump_ast
+
+
+.. py:class:: Kernel(_func: Callable, autodiff_mode: gstaichi.types.enums.AutodiffMode, _is_classkernel=False)
+
+   Bases: :py:obj:`gstaichi.lang._func_base.FuncBase`
+
+
+   Base class for Kernels and Funcs
+
+
+   .. py:attribute:: counter
+      :value: 0
+
+
+
+   .. py:attribute:: kernel_counter
+      :value: 0
+
+
+
+   .. py:attribute:: autodiff_mode
+
+
+   .. py:attribute:: grad
+      :type:  Kernel | None
+      :value: None
+
+
+
+   .. py:attribute:: kernel_cpp
+      :type:  None | gstaichi._lib.core.gstaichi_python.KernelCxx
+      :value: None
+
+
+
+   .. py:attribute:: materialized_kernels
+      :type:  dict[gstaichi.lang._kernel_types.CompiledKernelKeyType, gstaichi._lib.core.gstaichi_python.KernelCxx]
+
+
+   .. py:attribute:: has_print
+      :value: False
+
+
+
+   .. py:attribute:: gstaichi_callable
+      :type:  gstaichi.lang._gstaichi_callable.GsTaichiCallable | None
+      :value: None
+
+
+
+   .. py:attribute:: visited_functions
+      :type:  set[gstaichi.lang._wrap_inspect.FunctionSourceInfo]
+
+
+   .. py:attribute:: kernel_function_info
+      :type:  gstaichi.lang._wrap_inspect.FunctionSourceInfo | None
+      :value: None
+
+
+
+   .. py:attribute:: compiled_kernel_data_by_key
+      :type:  dict[gstaichi.lang._kernel_types.CompiledKernelKeyType, gstaichi._lib.core.gstaichi_python.CompiledKernelData]
+
+
+   .. py:attribute:: used_py_dataclass_parameters_by_key_enforcing
+      :type:  dict[gstaichi.lang._kernel_types.CompiledKernelKeyType, set[str]]
+
+
+   .. py:attribute:: src_ll_cache_observations
+      :type:  gstaichi.lang._kernel_types.SrcLlCacheObservations
+
+
+   .. py:attribute:: fe_ll_cache_observations
+      :type:  gstaichi.lang._kernel_types.FeLlCacheObservations
+
+
+   .. py:attribute:: launch_observations
+
+
+   .. py:attribute:: launch_context_buffer_cache
+
+
+   .. py:method:: ast_builder() -> gstaichi._lib.core.gstaichi_python.ASTBuilder
+
+
+   .. py:method:: reset() -> None
+
+
+   .. py:method:: materialize(key: CompiledKernelKeyType | None, py_args: tuple[Any, Ellipsis], arg_features=None)
+
+
+   .. py:method:: launch_kernel(key, t_kernel: gstaichi._lib.core.gstaichi_python.KernelCxx, compiled_kernel_data: gstaichi._lib.core.gstaichi_python.CompiledKernelData | None, *args) -> Any
+
+
+   .. py:method:: construct_kernel_ret(launch_ctx: gstaichi._lib.core.gstaichi_python.KernelLaunchContext, ret_type: Any, indices: tuple[int, Ellipsis])
+
+
+   .. py:method:: ensure_compiled(*py_args: tuple[Any, Ellipsis]) -> tuple[Callable, int, gstaichi.types.enums.AutodiffMode]
+
+

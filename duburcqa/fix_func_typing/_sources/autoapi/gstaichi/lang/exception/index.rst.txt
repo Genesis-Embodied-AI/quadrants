@@ -1,0 +1,89 @@
+gstaichi.lang.exception
+=======================
+
+.. py:module:: gstaichi.lang.exception
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   gstaichi.lang.exception.GsTaichiCompilationError
+   gstaichi.lang.exception.GsTaichiSyntaxError
+   gstaichi.lang.exception.GsTaichiNameError
+   gstaichi.lang.exception.GsTaichiTypeError
+   gstaichi.lang.exception.GsTaichiRuntimeError
+   gstaichi.lang.exception.GsTaichiAssertionError
+   gstaichi.lang.exception.GsTaichiRuntimeTypeError
+
+
+Module Contents
+---------------
+
+.. py:exception:: GsTaichiCompilationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Base class for all compilation exceptions.
+
+
+.. py:exception:: GsTaichiSyntaxError
+
+   Bases: :py:obj:`GsTaichiCompilationError`, :py:obj:`SyntaxError`
+
+
+   Thrown when a syntax error is found during compilation.
+
+
+.. py:exception:: GsTaichiNameError
+
+   Bases: :py:obj:`GsTaichiCompilationError`, :py:obj:`NameError`
+
+
+   Thrown when an undefine name is found during compilation.
+
+
+.. py:exception:: GsTaichiTypeError
+
+   Bases: :py:obj:`GsTaichiCompilationError`, :py:obj:`TypeError`
+
+
+   Thrown when a type mismatch is found during compilation.
+
+
+.. py:exception:: GsTaichiRuntimeError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Thrown when the compiled program cannot be executed due to unspecified reasons.
+
+
+.. py:exception:: GsTaichiAssertionError
+
+   Bases: :py:obj:`GsTaichiRuntimeError`, :py:obj:`AssertionError`
+
+
+   Thrown when assertion fails at runtime.
+
+
+.. py:exception:: GsTaichiRuntimeTypeError
+
+   Bases: :py:obj:`GsTaichiRuntimeError`, :py:obj:`TypeError`
+
+
+   Thrown when the compiled program cannot be executed due to unspecified reasons.
+
+
+   .. py:method:: get(pos, needed, provided)
+      :staticmethod:
+
+
+
+   .. py:method:: get_ret(needed, provided)
+      :staticmethod:
+
+
+

@@ -1,0 +1,85 @@
+gstaichi.lang.matrix_ops
+========================
+
+.. py:module:: gstaichi.lang.matrix_ops
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.matrix_ops.rows
+   gstaichi.lang.matrix_ops.cols
+   gstaichi.lang.matrix_ops.E
+   gstaichi.lang.matrix_ops.determinant
+   gstaichi.lang.matrix_ops.inverse
+   gstaichi.lang.matrix_ops.transpose
+   gstaichi.lang.matrix_ops.diag
+   gstaichi.lang.matrix_ops.sum
+   gstaichi.lang.matrix_ops.norm_sqr
+   gstaichi.lang.matrix_ops.norm
+   gstaichi.lang.matrix_ops.norm_inv
+   gstaichi.lang.matrix_ops.normalized
+   gstaichi.lang.matrix_ops.any
+   gstaichi.lang.matrix_ops.all
+   gstaichi.lang.matrix_ops.max
+   gstaichi.lang.matrix_ops.min
+   gstaichi.lang.matrix_ops.trace
+   gstaichi.lang.matrix_ops.fill
+   gstaichi.lang.matrix_ops.matmul
+   gstaichi.lang.matrix_ops.dot
+   gstaichi.lang.matrix_ops.cross
+   gstaichi.lang.matrix_ops.outer_product
+   gstaichi.lang.matrix_ops.cast
+
+
+Module Contents
+---------------
+
+.. py:function:: rows(rows)
+
+.. py:function:: cols(cols)
+
+.. py:function:: E(mat: template(), x: template(), y: template(), n: template())
+
+.. py:function:: determinant(mat)
+
+.. py:function:: inverse(mat)
+
+.. py:function:: transpose(mat)
+
+.. py:function:: diag(dim: template(), val: template())
+
+.. py:function:: sum(mat)
+
+.. py:function:: norm_sqr(mat)
+
+.. py:function:: norm(mat, eps=0.0)
+
+.. py:function:: norm_inv(mat, eps=0.0)
+
+.. py:function:: normalized(vec, eps=0.0)
+
+.. py:function:: any(mat)
+
+.. py:function:: all(mat)
+
+.. py:function:: max(mat)
+
+.. py:function:: min(mat)
+
+.. py:function:: trace(mat)
+
+.. py:function:: fill(mat: template(), val)
+
+.. py:function:: matmul(mat_x, mat_y)
+
+.. py:function:: dot(vec_x, vec_y)
+
+.. py:function:: cross(vec_x, vec_y)
+
+.. py:function:: outer_product(vec_x, vec_y)
+
+.. py:function:: cast(mat, dtype: template())
+

@@ -1,0 +1,112 @@
+gstaichi.lang.simt.subgroup
+===========================
+
+.. py:module:: gstaichi.lang.simt.subgroup
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.simt.subgroup.barrier
+   gstaichi.lang.simt.subgroup.memory_barrier
+   gstaichi.lang.simt.subgroup.elect
+   gstaichi.lang.simt.subgroup.all_true
+   gstaichi.lang.simt.subgroup.any_true
+   gstaichi.lang.simt.subgroup.all_equal
+   gstaichi.lang.simt.subgroup.broadcast_first
+   gstaichi.lang.simt.subgroup.reduce_add
+   gstaichi.lang.simt.subgroup.reduce_mul
+   gstaichi.lang.simt.subgroup.reduce_min
+   gstaichi.lang.simt.subgroup.reduce_max
+   gstaichi.lang.simt.subgroup.reduce_and
+   gstaichi.lang.simt.subgroup.reduce_or
+   gstaichi.lang.simt.subgroup.reduce_xor
+   gstaichi.lang.simt.subgroup.inclusive_add
+   gstaichi.lang.simt.subgroup.inclusive_mul
+   gstaichi.lang.simt.subgroup.inclusive_min
+   gstaichi.lang.simt.subgroup.inclusive_max
+   gstaichi.lang.simt.subgroup.inclusive_and
+   gstaichi.lang.simt.subgroup.inclusive_or
+   gstaichi.lang.simt.subgroup.inclusive_xor
+   gstaichi.lang.simt.subgroup.exclusive_add
+   gstaichi.lang.simt.subgroup.exclusive_mul
+   gstaichi.lang.simt.subgroup.exclusive_min
+   gstaichi.lang.simt.subgroup.exclusive_max
+   gstaichi.lang.simt.subgroup.exclusive_and
+   gstaichi.lang.simt.subgroup.exclusive_or
+   gstaichi.lang.simt.subgroup.exclusive_xor
+   gstaichi.lang.simt.subgroup.shuffle
+   gstaichi.lang.simt.subgroup.shuffle_xor
+   gstaichi.lang.simt.subgroup.shuffle_up
+   gstaichi.lang.simt.subgroup.shuffle_down
+
+
+Module Contents
+---------------
+
+.. py:function:: barrier()
+
+.. py:function:: memory_barrier()
+
+.. py:function:: elect()
+
+.. py:function:: all_true(cond)
+
+.. py:function:: any_true(cond)
+
+.. py:function:: all_equal(value)
+
+.. py:function:: broadcast_first(value)
+
+.. py:function:: reduce_add(value)
+
+.. py:function:: reduce_mul(value)
+
+.. py:function:: reduce_min(value)
+
+.. py:function:: reduce_max(value)
+
+.. py:function:: reduce_and(value)
+
+.. py:function:: reduce_or(value)
+
+.. py:function:: reduce_xor(value)
+
+.. py:function:: inclusive_add(value)
+
+.. py:function:: inclusive_mul(value)
+
+.. py:function:: inclusive_min(value)
+
+.. py:function:: inclusive_max(value)
+
+.. py:function:: inclusive_and(value)
+
+.. py:function:: inclusive_or(value)
+
+.. py:function:: inclusive_xor(value)
+
+.. py:function:: exclusive_add(value)
+
+.. py:function:: exclusive_mul(value)
+
+.. py:function:: exclusive_min(value)
+
+.. py:function:: exclusive_max(value)
+
+.. py:function:: exclusive_and(value)
+
+.. py:function:: exclusive_or(value)
+
+.. py:function:: exclusive_xor(value)
+
+.. py:function:: shuffle(value, index)
+
+.. py:function:: shuffle_xor(value, mask)
+
+.. py:function:: shuffle_up(value, offset)
+
+.. py:function:: shuffle_down(value, offset)
+

@@ -1,0 +1,314 @@
+gstaichi.lang.struct
+====================
+
+.. py:module:: gstaichi.lang.struct
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.struct.Struct
+   gstaichi.lang.struct.StructField
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.struct.dataclass
+
+
+Module Contents
+---------------
+
+.. py:class:: Struct(*args, **kwargs)
+
+   The Struct type class.
+
+       A struct is a dictionary-like data structure that stores members as
+       (key, value) pairs. Valid data members of a struct can be scalars,
+       matrices or other dictionary-like structures.
+
+       Args:
+           entries (Dict[str, Union[Dict, Expr, Matrix, Struct]]):             keys and values for struct members. Entries can optionally
+               include a dictionary of functions with the key '__struct_methods'
+               which will be attached to the struct for executing on the struct data.
+
+       Returns:
+           An instance of this struct.
+
+       Example::
+   _
+           >>> vec3 = ti.types.vector(3, ti.f32)
+           >>> a = ti.Struct(v=vec3([0, 0, 0]), t=1.0)
+           >>> print(a.items)
+           dict_items([('v', [0. 0. 0.]), ('t', 1.0)])
+           >>>
+           >>> B = ti.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)
+           >>> print(B.items)
+           dict_items([('v', [0. 0. 0.]), ('t', 1.0), ('A', {'v': [[0.], [0.], [0.]], 't': 1.0})])
+
+
+
+   .. py:property:: keys
+
+      Returns the list of member names in string format.
+
+      Example::
+
+         >>> vec3 = ti.types.vector(3, ti.f32)
+         >>> sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)
+         >>> a.keys
+         ['center', 'radius']
+
+
+   .. py:property:: entries
+
+
+   .. py:property:: methods
+
+
+   .. py:property:: items
+
+      Returns the items in this struct.
+
+      Example::
+
+          >>> vec3 = ti.types.vector(3, ti.f32)
+          >>> sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)
+          >>> sphere.items
+          dict_items([('center', 2), ('radius', 1.0)])
+
+
+   .. py:method:: to_dict(include_methods=False, include_ndim=False)
+
+      Converts the Struct to a dictionary.
+
+      :param include_methods: Whether any struct methods should be included
+                              in the result dictionary under the key '__struct_methods'.
+      :type include_methods: bool
+
+      :returns: The result dictionary.
+      :rtype: Dict
+
+
+
+   .. py:method:: field(members, methods={}, shape=None, name='<Struct>', offset=None, needs_grad=False, needs_dual=False, layout=Layout.AOS)
+      :classmethod:
+
+
+      Creates a :class:`~gstaichi.StructField` with each element
+      has this struct as its type.
+
+      :param members: a dict, each item is like `name: type`.
+      :type members: dict
+      :param methods: a dict of methods that should be included with
+                      the field.  Each struct item of the field will have the
+                      methods as instance functions.
+      :type methods: dict
+      :param shape: width and height of the field.
+      :type shape: Tuple[int]
+      :param offset: offset of the indices of the created field.
+                     For example if `offset=(-10, -10)` the indices of the field
+                     will start at `(-10, -10)`, not `(0, 0)`.
+      :type offset: Tuple[int]
+      :param needs_grad: enabling grad field (reverse mode autodiff) or not.
+      :type needs_grad: bool
+      :param needs_dual: enabling dual field (forward mode autodiff) or not.
+      :type needs_dual: bool
+      :param layout: AOS or SOA.
+
+      .. rubric:: Example
+
+      >>> vec3 = ti.types.vector(3, ti.f32)
+      >>> sphere = {"center": vec3, "radius": float}
+      >>> F = ti.Struct.field(sphere, shape=(3, 3))
+      >>> F
+      {'center': array([[[0., 0., 0.],
+          [0., 0., 0.],
+          [0., 0., 0.]],
+
+         [[0., 0., 0.],
+          [0., 0., 0.],
+          [0., 0., 0.]],
+
+         [[0., 0., 0.],
+          [0., 0., 0.],
+          [0., 0., 0.]]], dtype=float32), 'radius': array([[0., 0., 0.],
+         [0., 0., 0.],
+         [0., 0., 0.]], dtype=float32)}
+
+
+
+.. py:class:: StructField(field_dict, struct_methods, name=None, is_primal=True)
+
+   Bases: :py:obj:`gstaichi.lang.field.Field`
+
+
+   GsTaichi struct field with SNode implementation.
+
+      Instead of directly constraining Expr entries, the StructField object
+      directly hosts members as `Field` instances to support nested structs.
+
+   :param field_dict: Struct field members.
+   :type field_dict: Dict[str, Field]
+   :param struct_methods: Dictionary of functions to apply
+                          to each struct instance in the field.
+   :type struct_methods: Dict[str, callable]
+   :param name: The custom name of the field.
+   :type name: string, optional
+
+
+   .. py:attribute:: field_dict
+
+
+   .. py:attribute:: struct_methods
+
+
+   .. py:attribute:: name
+      :value: None
+
+
+
+   .. py:attribute:: grad
+      :value: None
+
+
+
+   .. py:attribute:: dual
+      :value: None
+
+
+
+   .. py:property:: keys
+
+      Returns the list of names of the field members.
+
+      Example::
+
+          >>> f1 = ti.Vector.field(3, ti.f32, shape=(3, 3))
+          >>> f2 = ti.field(ti.f32, shape=(3, 3))
+          >>> F = ti.StructField({"center": f1, "radius": f2})
+          >>> F.keys
+          ['center', 'radius']
+
+
+   .. py:method:: copy_from(other)
+
+      Copies all elements from another field.
+
+      The shape of the other field needs to be the same as `self`.
+
+      :param other: The source field.
+      :type other: Field
+
+
+
+   .. py:method:: fill(val)
+
+      Fills this struct field with a specified value.
+
+      :param val: Value to fill.
+      :type val: Union[int, float]
+
+
+
+   .. py:method:: get_member_field(key)
+
+      Creates a ScalarField using a specific field member.
+
+      :param key: Specified key of the field member.
+      :type key: str
+
+      :returns: The result ScalarField.
+      :rtype: ScalarField
+
+
+
+   .. py:method:: from_numpy(array_dict)
+
+      Copies the data from a set of `numpy.array` into this field.
+
+      The argument `array_dict` must be a dictionay-like object, it
+      contains all the keys in this field and the copying process
+      between corresponding items can be performed.
+
+
+
+   .. py:method:: from_torch(array_dict)
+
+      Copies the data from a set of `torch.tensor` into this field.
+
+      The argument `array_dict` must be a dictionay-like object, it
+      contains all the keys in this field and the copying process
+      between corresponding items can be performed.
+
+
+
+   .. py:method:: to_numpy()
+
+      Converts the Struct field instance to a dictionary of NumPy arrays.
+
+      The dictionary may be nested when converting nested structs.
+
+      :returns: The result NumPy array.
+      :rtype: Dict[str, Union[numpy.ndarray, Dict]]
+
+
+
+   .. py:method:: to_torch(device=None)
+
+      Converts the Struct field instance to a dictionary of PyTorch tensors.
+
+      The dictionary may be nested when converting nested structs.
+
+      :param device: The
+                     desired device of returned tensor.
+      :type device: torch.device, optional
+
+      :returns:
+
+                The result
+                    PyTorch tensor.
+      :rtype: Dict[str, Union[torch.Tensor, Dict]]
+
+
+
+.. py:function:: dataclass(cls)
+
+   Converts a class with field annotations and methods into a gstaichi struct type.
+
+   This will return a normal custom struct type, with the functions added to it.
+   Struct fields can be generated in the normal way from the struct type.
+   Functions in the class can be run on the struct instance.
+
+   This class decorator inspects the class for annotations and methods and
+       1.  Sets the annotations as fields for the struct
+       2.  Attaches the methods to the struct type
+
+   Example::
+
+       >>> @ti.dataclass
+       >>> class Sphere:
+       >>>     center: vec3
+       >>>     radius: ti.f32
+       >>>
+       >>>     @ti.func
+       >>>     def area(self):
+       >>>         return 4 * 3.14 * self.radius * self.radius
+       >>>
+       >>> my_spheres = Sphere.field(shape=(n, ))
+       >>> my_sphere[2].area()
+
+   :param cls: the class with annotations and methods to convert to a struct
+   :type cls: Class
+
+   :returns:
+
+             A gstaichi struct with the annotations as fields
+                 and methods from the class attached.
+
+

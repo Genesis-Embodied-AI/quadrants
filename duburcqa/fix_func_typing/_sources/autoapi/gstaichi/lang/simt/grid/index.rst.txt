@@ -1,0 +1,19 @@
+gstaichi.lang.simt.grid
+=======================
+
+.. py:module:: gstaichi.lang.simt.grid
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.lang.simt.grid.memfence
+
+
+Module Contents
+---------------
+
+.. py:function:: memfence()
+
