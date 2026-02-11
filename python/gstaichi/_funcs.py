@@ -130,21 +130,21 @@ def _svd2d(A, dt):
     R, S = _polar_decompose2d(A, dt)
     c, s = ops.cast(0.0, dt), ops.cast(0.0, dt)
     s1, s2 = ops.cast(0.0, dt), ops.cast(0.0, dt)
-    if abs(S[0, 1]) < 1e-5:
+    if abs(S[0, 1]) < 1e-5:  # type: ignore
         c, s = 1, 0
-        s1, s2 = S[0, 0], S[1, 1]
+        s1, s2 = S[0, 0], S[1, 1]  # type: ignore
     else:
-        tao = ops.cast(0.5, dt) * (S[0, 0] - S[1, 1])
-        w = ops.sqrt(tao**2 + S[0, 1] ** 2)
+        tao = ops.cast(0.5, dt) * (S[0, 0] - S[1, 1])  # type: ignore
+        w = ops.sqrt(tao**2 + S[0, 1] ** 2)  # type: ignore
         t = ops.cast(0.0, dt)
         if tao > 0:
-            t = S[0, 1] / (tao + w)
+            t = S[0, 1] / (tao + w)  # type: ignore
         else:
-            t = S[0, 1] / (tao - w)
+            t = S[0, 1] / (tao - w)  # type: ignore
         c = 1 / ops.sqrt(t**2 + 1)
         s = -t * c
-        s1 = c**2 * S[0, 0] - 2 * c * s * S[0, 1] + s**2 * S[1, 1]
-        s2 = s**2 * S[0, 0] + 2 * c * s * S[0, 1] + c**2 * S[1, 1]
+        s1 = c**2 * S[0, 0] - 2 * c * s * S[0, 1] + s**2 * S[1, 1]  # type: ignore
+        s2 = s**2 * S[0, 0] + 2 * c * s * S[0, 1] + c**2 * S[1, 1]  # type: ignore
     V = Matrix.zero(dt, 2, 2)
     if s1 < s2:
         tmp = s1
@@ -153,7 +153,7 @@ def _svd2d(A, dt):
         V = Matrix([[-s, c], [-c, -s]], dt=dt)
     else:
         V = Matrix([[c, s], [-s, c]], dt=dt)
-    U = R @ V
+    U = R @ V  # type: ignore
     return U, Matrix([[s1, ops.cast(0, dt)], [ops.cast(0, dt), s2]], dt=dt), V
 
 
