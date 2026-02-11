@@ -68,8 +68,8 @@ def probe_mirrors():
 
     try:
         resp = requests.get("http://botmaster.tgr:9000/misc/canary.txt", timeout=0.5)
-        if resp.ok and resp.text.strip() == "in-gstaichi-ci-environment":
-            info("Enabling GsTaichi CI cluster mirror")
+        if resp.ok and resp.text.strip() == "in-quadrants-ci-environment":
+            info("Enabling Quadrants CI cluster mirror")
             SHOULD_USE_MIRROR["ci"] = True
     except Exception:
         pass
@@ -111,7 +111,7 @@ def download_dep(url, outdir, *, strip=0, force=False, args=None, plain=False, e
     urls = [url]
 
     if SHOULD_USE_MIRROR["aliyun"]:
-        urls.append(f"https://gstaichi-bots.oss-cn-beijing.aliyuncs.com/depcache/{escaped}/{name}")
+        urls.append(f"https://quadrants-bots.oss-cn-beijing.aliyuncs.com/depcache/{escaped}/{name}")
 
     if SHOULD_USE_MIRROR["ci"]:
         urls.append(f"http://botmaster.tgr:9000/misc/depcache/{escaped}/{name}")

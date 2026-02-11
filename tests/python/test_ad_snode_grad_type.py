@@ -1,5 +1,5 @@
-import gstaichi as ti
-from gstaichi.types.enums import SNodeGradType
+import quadrants as ti
+from quadrants.types.enums import SNodeGradType
 
 from tests import test_utils
 

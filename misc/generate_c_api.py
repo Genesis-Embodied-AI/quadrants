@@ -1,7 +1,7 @@
 import re
 from os import system
 
-from gstaichi_json import (
+from quadrants_json import (
     Alias,
     BitField,
     BuiltInType,
@@ -288,9 +288,9 @@ def print_module_header(module: Module):
         ]
 
     out += [
-        "#ifndef GSTAICHI_H",
-        '#include "gstaichi.h"',
-        "#endif // GSTAICHI_H",
+        "#ifndef QUADRANTS_H",
+        '#include "quadrants.h"',
+        "#endif // QUADRANTS_H",
         "",
         "#ifdef __cplusplus",
         'extern "C" {',

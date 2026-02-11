@@ -3,9 +3,9 @@ import platform
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang import impl
-from gstaichi.lang.util import has_pytorch
+import quadrants as ti
+from quadrants.lang import impl
+from quadrants.lang.util import has_pytorch
 
 from tests import test_utils
 
@@ -399,7 +399,7 @@ def test_range_for_two_arguments():
 def test_range_for_three_arguments():
     a = ti.field(ti.i32, shape=(10,))
 
-    with pytest.raises(ti.GsTaichiCompilationError, match="Range should have 1 or 2 arguments, found 3"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="Range should have 1 or 2 arguments, found 3"):
 
         @ti.kernel
         def foo(x: ti.i32):
@@ -743,7 +743,7 @@ def test_static_assign():
 @test_utils.test()
 def test_static_assign_element():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="Static assign cannot be used on elements in arrays",
     ):
 
@@ -757,7 +757,7 @@ def test_static_assign_element():
 
 @test_utils.test()
 def test_recreate_variable():
-    with pytest.raises(ti.GsTaichiCompilationError, match="Recreating variables is not allowed"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="Recreating variables is not allowed"):
 
         @ti.kernel
         def foo():
@@ -768,8 +768,8 @@ def test_recreate_variable():
 
 
 @test_utils.test()
-def test_gstaichi_other_than_ti():
-    import gstaichi as tc
+def test_quadrants_other_than_ti():
+    import quadrants as tc
 
     @tc.func
     def bar(x: tc.template()):
@@ -851,7 +851,7 @@ def test_dict():
         return b[x]
 
     assert foo(1) == 2
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         foo(2)
 
 
@@ -914,10 +914,10 @@ def test_dictcomp_fail():
         a = {i: i * i for i in range(n) if i % 3 if i % 2}
         return a[m]
 
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         foo(5, 2)
 
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         foo(5, 3)
 
 
@@ -976,7 +976,7 @@ def test_func_default_value():
 
 @test_utils.test()
 def test_func_default_value_fail():
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
 
         @ti.func
         def bar(s, t=1):
@@ -996,7 +996,7 @@ def test_raise():
     ti.root.place(m)
 
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="Polar decomposition only supports 2D and 3D matrices.",
     ):
 

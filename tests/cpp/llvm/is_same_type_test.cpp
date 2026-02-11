@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
-#include "gstaichi/codegen/llvm/llvm_codegen_utils.h"
+#include "quadrants/codegen/llvm/llvm_codegen_utils.h"
 
 TEST(IsSameTypeTest, IsSameType) {
   llvm::LLVMContext ctx;
@@ -19,8 +19,8 @@ TEST(IsSameTypeTest, IsSameType) {
                                      structtype11, structtype12};
   for (auto t1 : types) {
     for (auto t2 : types) {
-      ASSERT_TRUE(gstaichi::lang::is_same_type(t1, t2));
-      ASSERT_TRUE(gstaichi::lang::is_same_type(llvm::PointerType::get(t1, 0),
+      ASSERT_TRUE(quadrants::lang::is_same_type(t1, t2));
+      ASSERT_TRUE(quadrants::lang::is_same_type(llvm::PointerType::get(t1, 0),
                                                llvm::PointerType::get(t2, 0)));
     }
   }
@@ -30,5 +30,5 @@ TEST(IsSameTypeTest, IsSameType) {
   auto func2 = llvm::FunctionType::get(
       structtype12, {structtype11, structtype1, structtype2, structtype},
       false);
-  ASSERT_TRUE(gstaichi::lang::is_same_type(func1, func2));
+  ASSERT_TRUE(quadrants::lang::is_same_type(func1, func2));
 }

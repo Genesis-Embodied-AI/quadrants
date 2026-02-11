@@ -1,6 +1,6 @@
 #include "tests/cpp/ir/ndarray_kernel.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 std::unique_ptr<Kernel> setup_kernel1(Program *prog) {
   IRBuilder builder1;
@@ -47,4 +47,4 @@ std::unique_ptr<Kernel> setup_kernel2(Program *prog) {
   ker2->finalize_rets();
   return ker2;
 }
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

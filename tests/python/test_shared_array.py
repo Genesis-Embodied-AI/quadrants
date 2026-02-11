@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi.math import vec4
+import quadrants as ti
+from quadrants.math import vec4
 
 from tests import test_utils
 

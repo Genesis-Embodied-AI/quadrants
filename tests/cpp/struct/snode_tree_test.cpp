@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/struct/snode_tree.h"
+#include "quadrants/struct/snode_tree.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(SNodeTree, GetSNodeToRootMapping) {
   constexpr int kSNodeSize = 16;
@@ -25,4 +25,4 @@ TEST(SNodeTree, GetSNodeToRootMapping) {
   }
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

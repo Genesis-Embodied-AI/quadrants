@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -76,7 +76,7 @@ def test_for_static_if_iter_static_ranges(is_static: bool) -> None:
                     break
 
     if is_static:
-        with pytest.raises(ti.GsTaichiCompilationError, match="You are trying to `break` a static `for` loop"):
+        with pytest.raises(ti.QuadrantsCompilationError, match="You are trying to `break` a static `for` loop"):
             k1(0, N_right)
     else:
         # Dynamic break is ok, since not static for range.
@@ -125,7 +125,7 @@ def test_for_static_if_no_ad1():
     if ti.is_extension_enabled(ti.extension.adstack):
         k1.grad()
     else:
-        with pytest.raises(ti.GsTaichiCompilationError):
+        with pytest.raises(ti.QuadrantsCompilationError):
             k1.grad()
 
 
@@ -162,5 +162,5 @@ def test_for_static_if_no_ad2():
     if ti.is_extension_enabled(ti.extension.adstack):
         k1.grad(use_static)
     else:
-        with pytest.raises(ti.GsTaichiCompilationError):
+        with pytest.raises(ti.QuadrantsCompilationError):
             k1.grad(use_static)

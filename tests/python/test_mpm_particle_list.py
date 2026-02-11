@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -49,6 +49,6 @@ class MPMSolver:
 @pytest.mark.run_in_serial
 @test_utils.test(require=ti.extension.sparse, exclude=[ti.metal], device_memory_GB=1.0)
 def test_mpm_particle_list_no_leakage():
-    # By default GsTaichi will allocate 0.5 GB for testing.
+    # By default Quadrants will allocate 0.5 GB for testing.
     mpm = MPMSolver(res=(128, 128))
     mpm.step()

@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang._kernel_types import KernelBatchedArgType
-from gstaichi.lang.impl import GsTaichiSyntaxError, Kernel
+import quadrants as ti
+from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang.impl import QuadrantsSyntaxError, Kernel
 
 from tests import test_utils
 
@@ -899,7 +899,7 @@ def test_template_mapper_cache(use_slots, monkeypatch):
         counter += 1
         return _extract_arg_orig(*args, **kwargs)
 
-    monkeypatch.setattr("gstaichi.lang._template_mapper_hotpath._extract_arg", _extract_arg)
+    monkeypatch.setattr("quadrants.lang._template_mapper_hotpath._extract_arg", _extract_arg)
 
     @dataclass(frozen=True, slots=use_slots)
     class MyStruct:
@@ -2396,7 +2396,7 @@ def test_pruning_star_args_error_not_at_end_another_arg() -> None:
     star_args = [3, 5]
 
     a = ti.ndarray(ti.i32, (10,))
-    with pytest.raises(GsTaichiSyntaxError) as e:
+    with pytest.raises(QuadrantsSyntaxError) as e:
         k1(a)
     assert "STARNOTLAST" in e.value.args[0]
 
@@ -2415,7 +2415,7 @@ def test_pruning_star_args_error_not_at_end_kwargs() -> None:
     star_args = [3, 5]
 
     a = ti.ndarray(ti.i32, (10,))
-    with pytest.raises(GsTaichiSyntaxError) as e:
+    with pytest.raises(QuadrantsSyntaxError) as e:
         k1(a)
     assert "STARNOTLAST" in e.value.args[0]
 

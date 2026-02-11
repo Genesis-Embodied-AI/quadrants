@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -34,7 +34,7 @@ def test_dictcomp_multiple_ifs():
 
     @ti.kernel
     def test() -> ti.i32:
-        # GsTaichi doesn't support global fields appearing anywhere after "for"
+        # Quadrants doesn't support global fields appearing anywhere after "for"
         # here.
         a = {x[j]: x[j] + j for j in range(100) if j > 2 if j < 5}
         return sum(a.values())

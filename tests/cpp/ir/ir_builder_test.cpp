@@ -1,14 +1,14 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/statements.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/statements.h"
 #include "tests/cpp/program/test_program.h"
 #include "tests/cpp/ir/ndarray_kernel.h"
 #ifdef TI_WITH_VULKAN
-#include "gstaichi/rhi/vulkan/vulkan_loader.h"
+#include "quadrants/rhi/vulkan/vulkan_loader.h"
 #endif
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(IRBuilder, Basic) {
   IRBuilder builder;
@@ -129,7 +129,7 @@ TEST(IRBuilder, ExternalPtr) {
 TEST(IRBuilder, Ndarray) {
   TestProgram test_prog;
 #ifdef TI_WITH_VULKAN
-  Arch arch = gstaichi::lang::vulkan::is_vulkan_api_available() ? Arch::vulkan
+  Arch arch = quadrants::lang::vulkan::is_vulkan_api_available() ? Arch::vulkan
                                                                 : Arch::x64;
 #else
   Arch arch = Arch::x64;
@@ -196,4 +196,4 @@ TEST(IRBuilder, AtomicOp) {
   prog->launch_kernel(compiled_kernel_data, launch_ctx);
   EXPECT_EQ(array[0], 3);
 }
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

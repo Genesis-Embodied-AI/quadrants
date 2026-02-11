@@ -18,7 +18,7 @@ from .tinysh import Command, CommandFailed, nice, sh
 
 
 # -- code --
-@banner("Build GsTaichi Wheel")
+@banner("Build Quadrants Wheel")
 def build_wheel(python: Command) -> None:
     extra = []
 

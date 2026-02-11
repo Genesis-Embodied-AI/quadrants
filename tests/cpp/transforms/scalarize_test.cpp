@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/transforms/scalarize.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/transforms/scalarize.h"
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(Scalarize, ScalarizeGlobalStore) {
   // Basic tests within a basic block
@@ -285,4 +285,4 @@ TEST(Scalarize, ScalarizeBugInvalidRedundantConstantRemoval) {
   EXPECT_TRUE(foundMatrixPtr);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

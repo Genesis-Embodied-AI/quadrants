@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/frontend_ir.h"
-#include "gstaichi/program/program.h"
-#include "gstaichi/ir/expression_ops.h"
-#include "gstaichi/program/compile_config.h"
+#include "quadrants/ir/frontend_ir.h"
+#include "quadrants/program/program.h"
+#include "quadrants/ir/expression_ops.h"
+#include "quadrants/program/compile_config.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(FrontendTypeInference, Const) {
   auto const_i64 = value<int64>(1LL << 63);
@@ -160,7 +160,7 @@ TEST(FrontendTypeInference, GlobalPtr_ExternalTensor) {
       PrimitiveType::u16, 1, std::vector<int>{0}, 0);
   auto global_ptr =
       ast_builder->expr_subscript(external_tensor, ExprGroup(index));
-  EXPECT_THROW(global_ptr->type_check(nullptr), GsTaichiTypeError);
+  EXPECT_THROW(global_ptr->type_check(nullptr), QuadrantsTypeError);
 }
 
 TEST(FrontendTypeInference, TensorElement) {
@@ -228,7 +228,7 @@ TEST(FrontendTypeInference, RangeAssumption) {
   auto const_f64 = value<float64>(5.0);
   const_f64->type_check(nullptr);
   auto invalid = assume_range(const_f32_a, const_f64, 0, 1);
-  EXPECT_THROW(invalid->type_check(nullptr), GsTaichiTypeError);
+  EXPECT_THROW(invalid->type_check(nullptr), QuadrantsTypeError);
 }
 
 TEST(FrontendTypeInference, LoopUnique) {
@@ -277,4 +277,4 @@ TEST(FrontendTypeInference, TensorTypeUnification) {
               ret_type->cast<TensorType>()->get_shape() == expected_shape);
   EXPECT_TRUE(lhs_type->get_shape() == expected_shape);
 }
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -15,7 +15,7 @@ def test_argument_error():
         def set_i32_notype(v):
             pass
 
-    except ti.GsTaichiSyntaxError:
+    except ti.QuadrantsSyntaxError:
         pass
 
     try:
@@ -24,7 +24,7 @@ def test_argument_error():
         def set_i32_args(*args):
             pass
 
-    except ti.GsTaichiSyntaxError:
+    except ti.QuadrantsSyntaxError:
         pass
 
     try:
@@ -33,7 +33,7 @@ def test_argument_error():
         def set_i32_kwargs(**kwargs):
             pass
 
-    except ti.GsTaichiSyntaxError:
+    except ti.QuadrantsSyntaxError:
         pass
 
     @ti.kernel

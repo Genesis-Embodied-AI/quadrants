@@ -1,5 +1,5 @@
-import gstaichi as ti
-from gstaichi.lang import impl
+import quadrants as ti
+from quadrants.lang import impl
 
 from tests import test_utils
 

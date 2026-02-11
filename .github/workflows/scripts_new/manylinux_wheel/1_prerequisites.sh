@@ -7,7 +7,7 @@ pip install --group dev
 
 yum install -y git wget
 # Note: following depends on the name of the repo:
-git config --global --add safe.directory /__w/gstaichi/gstaichi
+git config --global --add safe.directory /__w/quadrants/quadrants
 git submodule update --init --jobs 2
 
 LLVM_DIR=$(python download_llvm.py | tail -n 1)
@@ -20,7 +20,7 @@ which clang
 # without this, then the compiler checks will fail
 # eg:
 # - check for working compiler itself
-# - and also check for -Wno-unused-but-set-variable, in GsTaichiCXXFlags.cmake
+# - and also check for -Wno-unused-but-set-variable, in QuadrantsCXXFlags.cmake
 #   which will cause obscure compile errors for external/Eigen
 ln -s /usr/lib64/libstdc++.so.6 /usr/lib64/libstdc++.so
 

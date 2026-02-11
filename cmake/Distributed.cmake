@@ -2,7 +2,7 @@ if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR "Distributed compiling only supports Clang for now." )
 endif()
 
-message(WARNING "Enabling distributed compiling support, this is experimental and only tested in GsTaichi's internal CI/CD system, use at your own risk.")
+message(WARNING "Enabling distributed compiling support, this is experimental and only tested in Quadrants's internal CI/CD system, use at your own risk.")
 
 execute_process(
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -18,6 +18,6 @@ add_compile_options(--target=${TRIPLET})
 add_compile_options(-Wno-parentheses-equality)
 
 # False alarm caused by macro expansion
-# gstaichi/python/export_lang.cpp:1241
+# quadrants/python/export_lang.cpp:1241
 # MAKE_SPARSE_MATRIX(32, ColMajor, f)
 add_compile_options(-Wno-self-assign-overloaded)

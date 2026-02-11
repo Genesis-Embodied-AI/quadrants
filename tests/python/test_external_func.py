@@ -4,8 +4,8 @@ import tempfile
 
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.util import has_clangpp
+import quadrants as ti
+from quadrants.lang.util import has_clangpp
 
 from tests import test_utils
 

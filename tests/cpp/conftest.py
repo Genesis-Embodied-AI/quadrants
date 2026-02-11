@@ -109,7 +109,7 @@ class CPPTestItem(pytest.Item):
         self.args = args
 
     def runtest(self):
-        import gstaichi as ti
+        import quadrants as ti
 
         ti_lib_dir = Path(ti.__path__[0]) / "_lib" / "runtime"
 

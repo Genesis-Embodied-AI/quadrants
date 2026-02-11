@@ -1,5 +1,5 @@
-# https://forum.gstaichi.graphics/t/gstaichi/1003
-import gstaichi as ti
+# https://forum.quadrants.graphics/t/quadrants/1003
+import quadrants as ti
 
 ti.init(arch=ti.cpu)
 

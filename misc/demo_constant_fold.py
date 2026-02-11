@@ -1,5 +1,5 @@
-# https://github.com/taichi-dev/gstaichi/pull/839#issuecomment-626217806
-import gstaichi as ti
+# https://github.com/taichi-dev/quadrants/pull/839#issuecomment-626217806
+import quadrants as ti
 
 ti.init(print_ir=True)
 # ti.core.toggle_advanced_optimization(False)

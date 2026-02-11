@@ -1,6 +1,6 @@
-#include "gstaichi/struct/struct.h"
+#include "quadrants/struct/struct.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class FakeStructCompiler : public StructCompiler {
  public:
@@ -14,4 +14,4 @@ class FakeStructCompiler : public StructCompiler {
   }
 };
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

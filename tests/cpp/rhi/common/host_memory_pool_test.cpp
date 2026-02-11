@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/rhi/common/host_memory_pool.h"
+#include "quadrants/rhi/common/host_memory_pool.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class HostMemoryPoolTestHelper {
  public:
@@ -34,4 +34,4 @@ TEST(HostMemoryPool, AllocateMemory) {
   HostMemoryPoolTestHelper::setDefaultAllocatorSize(oldAllocatorSize);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang
