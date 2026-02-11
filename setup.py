@@ -72,7 +72,8 @@ class Clean(clean):
         super().run()
         self.build_temp = os.path.join(root_dir, "_skbuild")
         if os.path.exists(self.build_temp):
-            remove_tree(self.build_temp, dry_run=self.dry_run)
+            if self.dry_run:
+                remove_tree(self.build_temp)
         generated_folders = (
             "bin",
             "dist",
@@ -84,7 +85,8 @@ class Clean(clean):
         )
         for d in generated_folders:
             if os.path.exists(d):
-                remove_tree(d, dry_run=self.dry_run)
+                if self.dry_run:
+                    remove_tree(d)
         generated_files = ["gstaichi/common/commit_hash.h", "gstaichi/common/version.h"]
         generated_files += glob.glob("gstaichi/runtime/llvm/runtime_*.bc")
         generated_files += glob.glob("python/gstaichi/_lib/core/*.so")
