@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang import impl
+import quadrants as ti
+from quadrants.lang import impl
 
 from tests import test_utils
 
@@ -160,7 +160,7 @@ def test_static_in():
 
 @test_utils.test()
 def test_non_static_in():
-    with pytest.raises(ti.GsTaichiCompilationError, match='"In" is only supported inside `ti.static`.'):
+    with pytest.raises(ti.QuadrantsCompilationError, match='"In" is only supported inside `ti.static`.'):
 
         @ti.kernel
         def foo(a: ti.template()) -> ti.i32:

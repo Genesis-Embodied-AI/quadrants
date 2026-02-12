@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/transforms.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/transforms.h"
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class ConstantFoldTest : public ::testing::Test {
  protected:
@@ -565,4 +565,4 @@ TEST_F(ConstantFoldTest, BinaryAtan2) {
   EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
             0.);
 }
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

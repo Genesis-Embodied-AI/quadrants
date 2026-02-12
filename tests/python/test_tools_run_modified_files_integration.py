@@ -7,7 +7,7 @@ from typing import Generator, Iterable
 import pytest
 
 # I don't want to make python/tools a module, and I don't want to move this tool
-# into `gstaichi` namespace, so that leaves temporarily importing it somehow
+# into `quadrants` namespace, so that leaves temporarily importing it somehow
 tools_path = Path(__file__).parent.parent.parent / "python" / "tools" / "run_modified_files.py"
 spec = importlib.util.spec_from_file_location("run_modified_files", tools_path)
 run_modified_files = importlib.util.module_from_spec(spec)

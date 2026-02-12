@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -217,7 +217,7 @@ def test_invalid_place():
     p = ti.field(dtype=f15)
     bitpack = ti.BitpackedFields(max_num_bits=32)
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="At least 2 fields need to be placed when shared_exponent=True",
     ):
         bitpack.place(p, shared_exponent=True)

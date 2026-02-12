@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: manylinux_cpptests_${{ matrix.PYTHON_CP_VERSION }}_${{matrix.os}}
-          path: build/gstaichi_cpp_tests
+          path: build/quadrants_cpp_tests
 
   test_wheel:
     name: Manylinux wheel Test

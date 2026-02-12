@@ -50,7 +50,7 @@ Notes:
 Example:
 
 ```
-import gstaichi as ti
+import quadrants as ti
 from dataclasses import dataclass
 
 ti.init(arch=ti.gpu)

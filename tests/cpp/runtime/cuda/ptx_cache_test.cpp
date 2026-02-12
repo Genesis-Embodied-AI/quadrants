@@ -2,9 +2,9 @@
 
 #include "gtest/gtest.h"
 
-#include "gstaichi/runtime/cuda/ptx_cache.h"
+#include "quadrants/runtime/cuda/ptx_cache.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(PtxCache, TestBasic) {
   auto temp_dir = std::filesystem::temp_directory_path() / "PtxCache.TestBasic";
@@ -146,4 +146,4 @@ TEST(PtxCache, TestSmVersionPartitioning) {
   ASSERT_EQ(ptx_code_75, ptx_cache_75->load_ptx(key_75));
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

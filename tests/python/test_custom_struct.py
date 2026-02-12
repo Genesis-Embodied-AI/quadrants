@@ -1,8 +1,8 @@
 import numpy as np
 from pytest import approx
 
-import gstaichi as ti
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -23,7 +23,7 @@ def test_struct_member_access():
             y[i].a = i
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         for i in x:
             x[i].b = x[i].a
 
@@ -32,7 +32,7 @@ def test_struct_member_access():
             y[i].b = y[i].a * 2 + 1
 
     init()
-    run_gstaichi_scope()
+    run_quadrants_scope()
     for i in range(n):
         assert x[i].b == i
     run_python_scope()
@@ -56,7 +56,7 @@ def test_struct_whole_access():
             x[i] = ti.Struct(a=2 * i, b=1.01 * i)
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         for i in x:
             y[i].a = x[i].a * 2 + 1
             y[i].b = x[i].b * 2 + 1
@@ -69,7 +69,7 @@ def test_struct_whole_access():
     for i in range(n):
         assert x[i].a == 2 * i
         assert x[i].b == approx(1.01 * i, rel=1e-4)
-    run_gstaichi_scope()
+    run_quadrants_scope()
     for i in range(n):
         assert y[i].a == 4 * i + 1
         assert y[i].b == int((1.01 * i) * 2 + 1)
@@ -122,7 +122,7 @@ def test_matrix_type():
     ti.root.dense(ti.i, n).place(x)
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         for i in x:
             v = vec2f(i + 0.2)
             # also tests implicit cast
@@ -133,7 +133,7 @@ def test_matrix_type():
             v = vec2f(i + 0.2)
             x[i] = vec3i(i + 1.8, v)
 
-    run_gstaichi_scope()
+    run_quadrants_scope()
     for i in range(n):
         assert np.allclose(x[i].to_numpy(), np.array([i, i, i + 1]))
     run_python_scope()
@@ -150,7 +150,7 @@ def test_struct_type():
     x = mystruct.field(shape=(n,))
 
     @ti.kernel
-    def init_gstaichi_scope():
+    def init_quadrants_scope():
         for i in x:
             x[i] = mystruct(1)
 
@@ -159,7 +159,7 @@ def test_struct_type():
             x[i] = mystruct(3)
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         for i in x:
             v = vec3f(1)
             line = line3f(linedir=v, length=i + 0.5)
@@ -170,12 +170,12 @@ def test_struct_type():
             v = vec3f(1)
             x[i] = ti.Struct({"line": {"linedir": v, "length": i + 0.5}, "idx": i})
 
-    init_gstaichi_scope()
+    init_quadrants_scope()
     for i in range(n):
         assert x[i].idx == 0
         assert np.allclose(x[i].line.linedir.to_numpy(), 1.0)
         assert x[i].line.length == 0.0
-    run_gstaichi_scope()
+    run_quadrants_scope()
     for i in range(n):
         assert x[i].idx == i
         assert np.allclose(x[i].line.linedir.to_numpy(), 1.0)
@@ -217,7 +217,7 @@ def test_dataclass():
     # test function usage from python scope
     assert np.isclose(Sphere(center=vec3f(0.0), radius=2.0).py_scope_area(), 4.0 * 3.14 * 4.0)
 
-    # test function usage from gstaichi scope
+    # test function usage from quadrants scope
     @ti.kernel
     def get_area() -> ti.f32:
         sphere = Sphere(center=vec3f(0.0), radius=2.0)
@@ -225,7 +225,7 @@ def test_dataclass():
 
     assert np.isclose(get_area(), 4.0 * 3.14 * 4.0)
 
-    # test function usage from gstaichi scope with field
+    # test function usage from quadrants scope with field
     struct_field = Sphere.field(shape=(4,))
     struct_field[3] = Sphere(center=vec3f(0.0), radius=2.0)
 
@@ -251,7 +251,7 @@ def test_struct_assign():
             y[i] = line3f(linedir=vec3f(1), length=i + 0.5)
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         for i in x:
             x[i].idx = i
             x[i].line = y[i]
@@ -262,7 +262,7 @@ def test_struct_assign():
             x[i].line = y[i]
 
     init()
-    run_gstaichi_scope()
+    run_quadrants_scope()
     for i in range(n):
         assert x[i].idx == i
         assert np.allclose(x[i].line.linedir.to_numpy(), 1.0)
@@ -283,7 +283,7 @@ def test_compound_type_implicit_cast():
     structf = ti.types.struct(a=float, b=vec2f)
 
     @ti.kernel
-    def f2i_gstaichi_scope() -> int:
+    def f2i_quadrants_scope() -> int:
         s = structi(2.5, (2.5, 2.5))
         return s.a + s.b[0] + s.b[1]
 
@@ -292,7 +292,7 @@ def test_compound_type_implicit_cast():
         return s.a + s.b[0] + s.b[1]
 
     @ti.kernel
-    def i2f_gstaichi_scope() -> float:
+    def i2f_quadrants_scope() -> float:
         s = structf(2, (2, 2))
         return s.a + s.b[0] + s.b[1]
 
@@ -300,11 +300,11 @@ def test_compound_type_implicit_cast():
         s = structf(2, (2, 2))
         return s.a + s.b[0] + s.b[1]
 
-    int_value = f2i_gstaichi_scope()
+    int_value = f2i_quadrants_scope()
     assert isinstance(int_value, (int, np.integer)) and int_value == 6
     int_value = f2i_python_scope()
     assert isinstance(int_value, (int, np.integer)) and int_value == 6
-    float_value = i2f_gstaichi_scope()
+    float_value = i2f_quadrants_scope()
     assert isinstance(float_value, (float, np.floating)) and float_value == approx(6.0, rel=1e-4)
     float_value = i2f_python_scope()
     assert isinstance(float_value, (float, np.floating)) and float_value == approx(6.0, rel=1e-4)
@@ -318,7 +318,7 @@ def test_local_struct_assign():
     mystruct = ti.types.struct(line=line3f, idx=int)
 
     @ti.kernel
-    def run_gstaichi_scope():
+    def run_quadrants_scope():
         y = line3f(0)
         x = mystruct(0)
         x.idx = 0
@@ -330,12 +330,12 @@ def test_local_struct_assign():
         x.idx = 0
         x.line = y
 
-    run_gstaichi_scope()
+    run_quadrants_scope()
     run_python_scope()
 
 
 @test_utils.test(debug=True)
-def test_copy_python_scope_struct_to_gstaichi_scope():
+def test_copy_python_scope_struct_to_quadrants_scope():
     a = ti.Struct({"a": 2, "b": 3})
 
     @ti.kernel
@@ -351,7 +351,7 @@ def test_copy_python_scope_struct_to_gstaichi_scope():
 
 
 @test_utils.test(debug=True)
-def test_copy_struct_field_element_to_gstaichi_scope():
+def test_copy_struct_field_element_to_quadrants_scope():
     a = ti.Struct.field({"a": ti.i32, "b": ti.i32}, shape=())
     a[None].a = 2
     a[None].b = 3
@@ -372,7 +372,7 @@ def test_copy_struct_field_element_to_gstaichi_scope():
 
 
 @test_utils.test(debug=True)
-def test_copy_struct_in_gstaichi_scope():
+def test_copy_struct_in_quadrants_scope():
     @ti.kernel
     def test():
         a = ti.Struct({"a": 2, "b": 3})
@@ -411,7 +411,7 @@ def test_dataclass():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_name_collision():
-    # https://github.com/taichi-dev/gstaichi/issues/6652
+    # https://github.com/taichi-dev/quadrants/issues/6652
     @ti.dataclass
     class Foo:
         zoo: ti.f32
@@ -428,7 +428,7 @@ def test_name_collision():
 
 @test_utils.test(debug=True)
 def test_dataclass_as_member():
-    # https://github.com/taichi-dev/gstaichi/issues/6884
+    # https://github.com/taichi-dev/quadrants/issues/6884
     @ti.dataclass
     class A:
         i: int

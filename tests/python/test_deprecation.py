@@ -1,13 +1,13 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_remove_is_is_not():
-    with pytest.raises(ti.GsTaichiSyntaxError, match='Operator "is" in GsTaichi scope is not supported'):
+    with pytest.raises(ti.QuadrantsSyntaxError, match='Operator "is" in Quadrants scope is not supported'):
 
         @ti.kernel
         def func():

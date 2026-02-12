@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 # I don't want to make python/tools a module, and I don't want to move this tool
-# into `gstaichi` namespace, so that leaves temporarily importing it somehow
+# into `quadrants` namespace, so that leaves temporarily importing it somehow
 tools_path = Path(__file__).parent.parent.parent / "python" / "tools" / "markdown_link_check.py"
 spec = importlib.util.spec_from_file_location("markdown_link_check", tools_path)
 markdown_link_check = importlib.util.module_from_spec(spec)

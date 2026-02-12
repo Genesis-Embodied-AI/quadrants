@@ -2,8 +2,8 @@ import platform
 
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -137,7 +137,7 @@ def test_static_assert_message():
     def func():
         ti.static_assert(x == 4, "Oh, no!")
 
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         func()
 
 
@@ -170,5 +170,5 @@ def test_static_assert_nonstatic_condition():
         value = False
         ti.static_assert(value, "Oh, no!")
 
-    with pytest.raises(ti.GsTaichiTypeError, match="Static assert with non-static condition"):
+    with pytest.raises(ti.QuadrantsTypeError, match="Static assert with non-static condition"):
         foo()

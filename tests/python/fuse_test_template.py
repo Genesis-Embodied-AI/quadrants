@@ -1,6 +1,6 @@
 import time
 
-import gstaichi as ti
+import quadrants as ti
 
 
 def template_fuse_dense_x2y2z(

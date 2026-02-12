@@ -2,7 +2,7 @@ from inspect import currentframe, getframeinfo
 
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -10,7 +10,7 @@ from tests import test_utils
 @test_utils.test(print_full_traceback=False)
 def test_exception_multiline():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.GsTaichiNameError) as e:
+    with pytest.raises(ti.QuadrantsNameError) as e:
         # yapf: disable
         @ti.kernel
         def foo():
@@ -31,7 +31,7 @@ File "{frameinfo.filename}", line {frameinfo.lineno + 5}, in foo:
 @test_utils.test(print_full_traceback=False)
 def test_exception_from_func():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.GsTaichiNameError) as e:
+    with pytest.raises(ti.QuadrantsNameError) as e:
 
         @ti.func
         def baz():
@@ -66,7 +66,7 @@ def test_exception_from_func():
 @test_utils.test(print_full_traceback=False)
 def test_tab():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.GsTaichiNameError) as e:
+    with pytest.raises(ti.QuadrantsNameError) as e:
         # yapf: disable
         @ti.kernel
         def foo():
@@ -85,7 +85,7 @@ File "{file}", line {lineno + 5}, in foo:
 @test_utils.test(print_full_traceback=False)
 def test_super_long_line():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.GsTaichiNameError) as e:
+    with pytest.raises(ti.QuadrantsNameError) as e:
         # yapf: disable
         @ti.kernel
         def foo():
@@ -116,7 +116,7 @@ def test_exception_in_node_with_body():
             c = 1
             d = 1
 
-    with pytest.raises(ti.GsTaichiCompilationError) as e:
+    with pytest.raises(ti.QuadrantsCompilationError) as e:
         foo()
     lineno = frameinfo.lineno
     file = frameinfo.filename

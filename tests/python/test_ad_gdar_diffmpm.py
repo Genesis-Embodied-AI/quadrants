@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -142,7 +142,7 @@ def test_gdar_mpm():
 
         x_avg[None] = [0, 0]
 
-        with pytest.raises(ti.GsTaichiAssertionError):
+        with pytest.raises(ti.QuadrantsAssertionError):
             with ti.ad.Tape(loss=loss, validation=True):
                 set_v()
                 for s in range(steps - 1):

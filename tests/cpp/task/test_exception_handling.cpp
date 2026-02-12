@@ -1,8 +1,8 @@
-#include "gstaichi/common/task.h"
-#include "gstaichi/ir/ir.h"
-#include "gstaichi/ir/statements.h"
+#include "quadrants/common/task.h"
+#include "quadrants/ir/ir.h"
+#include "quadrants/ir/statements.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 // Simulate the AST transforms on the Google Colab Ubuntu kernels to see why it
 // crashes
@@ -99,4 +99,4 @@ auto test_exception_handling_auto = []() {
 TI_REGISTER_TASK(test_exception_handling);
 TI_REGISTER_TASK(test_exception_handling_auto);
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

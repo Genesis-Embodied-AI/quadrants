@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.exception import GsTaichiRuntimeError
+import quadrants as ti
+from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
@@ -59,7 +59,7 @@ def _ipow_negative_exp(dt):
     def foo(x: dt, y: ti.template()):
         z[None] = x**y
 
-    with pytest.raises(GsTaichiRuntimeError):
+    with pytest.raises(QuadrantsRuntimeError):
         foo(10, -10)
 
 

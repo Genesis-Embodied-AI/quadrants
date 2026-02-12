@@ -1,8 +1,8 @@
-gstaichi/_lib/runtime
-gstaichi/_lib/core/*.so
-gstaichi/_lib/core/*.pyd
-gstaichi.egg-info
-gstaichi/include
-gstaichi/assets
-gstaichi/tests
+quadrants/_lib/runtime
+quadrants/_lib/core/*.so
+quadrants/_lib/core/*.pyd
+quadrants.egg-info
+quadrants/include
+quadrants/assets
+quadrants/tests
 release

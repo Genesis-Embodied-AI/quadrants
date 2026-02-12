@@ -1,6 +1,6 @@
 import time
 
-import gstaichi as ti
+import quadrants as ti
 
 t = time.time()
 ti.init(arch=ti.cuda, print_kernel_llvm_ir_optimized=True)

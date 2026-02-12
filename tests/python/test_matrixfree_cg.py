@@ -2,8 +2,8 @@ import math
 
 import pytest
 
-import gstaichi as ti
-from gstaichi.linalg import LinearOperator, MatrixFreeCG
+import quadrants as ti
+from quadrants.linalg import LinearOperator, MatrixFreeCG
 
 from tests import test_utils
 

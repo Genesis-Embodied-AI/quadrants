@@ -3,13 +3,13 @@ import platform
 
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
 if os.name == "nt":
     pytest.skip(
-        "Skipping on windows because fflush issues, " "see https://github.com/taichi-dev/gstaichi/issues/6179",
+        "Skipping on windows because fflush issues, " "see https://github.com/taichi-dev/quadrants/issues/6179",
         allow_module_level=True,
     )
 
@@ -193,7 +193,7 @@ def test_mul_overflow(capfd, ty, num1, num2):
     if not supports_overflow(ti.lang.impl.current_cfg().arch):
         pytest.skip("current arch doesnt support overflow")
     # 64-bit Multiplication overflow detection does not function correctly on old drivers.
-    # See https://github.com/taichi-dev/gstaichi/issues/6303
+    # See https://github.com/taichi-dev/quadrants/issues/6303
     if ti.lang.impl.current_cfg().arch == ti.vulkan and id(ty) in [
         id(ti.i64),
         id(ti.u64),

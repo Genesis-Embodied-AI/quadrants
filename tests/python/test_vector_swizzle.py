@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -28,7 +28,7 @@ def test_vector_swizzle_python():
 
 
 @test_utils.test(debug=True)
-def test_vector_swizzle_gstaichi():
+def test_vector_swizzle_quadrants():
     @ti.kernel
     def foo():
         v = ti.math.vec3(0)
@@ -52,7 +52,7 @@ def test_vector_swizzle_gstaichi():
 
 
 @test_utils.test(debug=True)
-def test_vector_swizzle2_gstaichi():
+def test_vector_swizzle2_quadrants():
     @ti.kernel
     def foo():
         v = ti.math.vec3(0, 0, 0)
@@ -101,19 +101,19 @@ def test_vector_invalid_swizzle_patterns():
     a = ti.math.vec2(1, 2)
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=re.escape("vec2 only has attributes=('x', 'y'), got=('z',)"),
     ):
         a.z = 3
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=re.escape("vec2 only has attributes=('x', 'y'), got=('x', 'y', 'z')"),
     ):
         a.xyz = [1, 2, 3]
 
     with pytest.raises(
-        ti.GsTaichiRuntimeError,
+        ti.QuadrantsRuntimeError,
         match=re.escape("value len does not match the swizzle pattern=xy"),
     ):
         a.xy = [1, 2, 3]
@@ -129,20 +129,20 @@ def test_vector_invalid_swizzle_patterns():
         b.xyz = [1, 2, 3]
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=re.escape("vec2 only has attributes=('x', 'y'), got=('z',)"),
     ):
         invalid_z()
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=re.escape("vec2 only has attributes=('x', 'y'), got=('x', 'y', 'z')"),
     ):
         invalid_xyz()
 
 
 @test_utils.test()
-def test_vector_swizzle3_gstaichi():
+def test_vector_swizzle3_quadrants():
     @ti.kernel
     def foo() -> ti.types.vector(3, ti.i32):
         v = ti.Vector([1, 2, 3])

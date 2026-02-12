@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -105,7 +105,7 @@ def test_pointer2():
     assert s[None] == 5 * n
 
 
-@pytest.mark.skip(reason="https://github.com/taichi-dev/gstaichi/issues/2520")
+@pytest.mark.skip(reason="https://github.com/taichi-dev/quadrants/issues/2520")
 @test_utils.test(require=ti.extension.sparse)
 def test_pointer_direct_place():
     x, y = ti.field(ti.i32), ti.field(ti.i32)

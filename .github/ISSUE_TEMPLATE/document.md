@@ -1,6 +1,6 @@
 ---
 name: Doc
-about: Have doubts or suggestions about GsTaichi Docs
+about: Have doubts or suggestions about Quadrants Docs
 title: ''
 labels: doc
 assignees: ''

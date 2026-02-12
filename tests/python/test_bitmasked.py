@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -140,7 +140,7 @@ def test_bitmasked_listgen_bounded():
 
 @test_utils.test(require=ti.extension.sparse)
 def test_deactivate():
-    # https://github.com/taichi-dev/gstaichi/issues/778
+    # https://github.com/taichi-dev/quadrants/issues/778
     a = ti.field(ti.i32)
     a_a = ti.root.bitmasked(ti.i, 4)
     a_b = a_a.dense(ti.i, 4)

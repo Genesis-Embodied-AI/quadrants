@@ -28,7 +28,7 @@ def setup_vulkan():
             path_prepend("LD_LIBRARY_PATH", sdk / "lib")
             os.environ["VK_LAYER_PATH"] = str(sdk / "share" / "vulkan" / "explicit_layer.d")
         case ("Linux", "arm64") | ("Linux", "aarch64"):
-            url = "https://github.com/Genesis-Embodied-AI/gstaichi-sdk-builds/releases/download/vulkan-sdk-1.4.321.1-202509161414/vulkansdk-ubuntu-22.04-arm-1.4.321.1.tar.xz"
+            url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/vulkan-sdk-1.4.321.1-202509161414/vulkansdk-ubuntu-22.04-arm-1.4.321.1.tar.xz"
             prefix = get_cache_home() / f"vulkan-arm-{VULKAN_VERSION}"
 
             download_dep(url, prefix, strip=1)

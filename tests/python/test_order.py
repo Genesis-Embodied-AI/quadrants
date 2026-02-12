@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -98,28 +98,28 @@ def test_order_vector():
 @test_utils.test(arch=get_host_arch_list())
 def test_order_must_throw_scalar():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="The dimensionality of shape and order must be the same",
     ):
         a = ti.field(dtype=ti.f32, shape=3, order="ij")
-    with pytest.raises(ti.GsTaichiCompilationError, match="shape cannot be None when order is set"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when order is set"):
         b = ti.field(dtype=ti.f32, shape=None, order="i")
-    with pytest.raises(ti.GsTaichiCompilationError, match="The axes in order must be different"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="The axes in order must be different"):
         c = ti.field(dtype=ti.f32, shape=(3, 4, 3), order="iji")
-    with pytest.raises(ti.GsTaichiCompilationError, match="Invalid axis"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="Invalid axis"):
         d = ti.field(dtype=ti.f32, shape=(3, 4, 3), order="ijl")
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_order_must_throw_vector():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="The dimensionality of shape and order must be the same",
     ):
         a = ti.Vector.field(3, dtype=ti.f32, shape=3, order="ij")
-    with pytest.raises(ti.GsTaichiCompilationError, match="shape cannot be None when order is set"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when order is set"):
         b = ti.Vector.field(3, dtype=ti.f32, shape=None, order="i")
-    with pytest.raises(ti.GsTaichiCompilationError, match="The axes in order must be different"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="The axes in order must be different"):
         c = ti.Vector.field(3, dtype=ti.f32, shape=(3, 4, 3), order="iii")
-    with pytest.raises(ti.GsTaichiCompilationError, match="Invalid axis"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="Invalid axis"):
         d = ti.Vector.field(3, dtype=ti.f32, shape=(3, 4, 3), order="ihj")

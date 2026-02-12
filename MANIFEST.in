@@ -1,16 +1,16 @@
-include python/gstaichi/*.md
-recursive-include python/gstaichi/assets *
-recursive-include python/gstaichi/examples *.py
-include python/gstaichi/examples/autodiff/diff_sph/fc1_pretrained.pkl
-include python/gstaichi/examples/autodiff/diff_sph/fc2_pretrained.pkl
-include python/gstaichi/examples/algorithm/circle-packing/gstaichi_logo.png
-include python/gstaichi/_lib/core/*.so
-include python/gstaichi/_lib/core/*.pyd
-include python/gstaichi/_lib/runtime/*.bc
-include python/gstaichi/_lib/runtime/*.dylib
-include python/gstaichi/shaders/*.spv
-include python/gstaichi/shaders/*.vert
-include python/gstaichi/shaders/*.frag
+include python/quadrants/*.md
+recursive-include python/quadrants/assets *
+recursive-include python/quadrants/examples *.py
+include python/quadrants/examples/autodiff/diff_sph/fc1_pretrained.pkl
+include python/quadrants/examples/autodiff/diff_sph/fc2_pretrained.pkl
+include python/quadrants/examples/algorithm/circle-packing/quadrants_logo.png
+include python/quadrants/_lib/core/*.so
+include python/quadrants/_lib/core/*.pyd
+include python/quadrants/_lib/runtime/*.bc
+include python/quadrants/_lib/runtime/*.dylib
+include python/quadrants/shaders/*.spv
+include python/quadrants/shaders/*.vert
+include python/quadrants/shaders/*.frag
 
 global-exclude *.pyc *.pyo
 global-exclude ffmpeg

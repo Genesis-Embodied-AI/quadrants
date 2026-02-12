@@ -3,9 +3,9 @@ from typing import cast
 
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang._perf_dispatch import NUM_WARMUP, PerformanceDispatcher
-from gstaichi.lang.exception import GsTaichiSyntaxError
+import quadrants as ti
+from quadrants.lang._perf_dispatch import NUM_WARMUP, PerformanceDispatcher
+from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
 
@@ -95,7 +95,7 @@ def test_perf_dispatch_swap_annotation_order() -> None:
     @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
     def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
 
-    with pytest.raises(GsTaichiSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError):
 
         @ti.kernel
         @my_func1.register
@@ -107,13 +107,13 @@ def test_perf_dispatch_annotation_mismatch() -> None:
     @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
     def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
 
-    with pytest.raises(GsTaichiSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError):
 
         @ti.kernel
         @my_func1.register
         def my_func1_impl_impl1(c: ti.types.NDArray[ti.i32, 1]) -> None: ...
 
-    with pytest.raises(GsTaichiSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError):
 
         @ti.kernel
         @my_func1.register

@@ -46,7 +46,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac_cpptests_${{ matrix.MAC_OS_VERSION }}_${{ steps.set_cp_version.outputs.PYTHON_CP_VERSION }}
-          path: build/gstaichi_cpp_tests
+          path: build/quadrants_cpp_tests
   test:
     needs: build_mac
     name: Test on Mac

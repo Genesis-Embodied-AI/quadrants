@@ -1,12 +1,12 @@
 #include "gtest/gtest.h"
-#include "gstaichi/common/version.h"
-#include "gstaichi/util/offline_cache.h"
+#include "quadrants/common/version.h"
+#include "quadrants/util/offline_cache.h"
 
 #ifdef TI_WITH_LLVM
-#include "gstaichi/runtime/llvm/llvm_offline_cache.h"
+#include "quadrants/runtime/llvm/llvm_offline_cache.h"
 #endif  // TI_WITH_LLVM
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 namespace {
 
@@ -93,9 +93,9 @@ void load_metadata_test() {
     EXPECT_TRUE(data.kernels.count("2"));
   }
 
-  gstaichi::remove(old_file);
-  gstaichi::remove(corrupted_file);
-  gstaichi::remove(true_file);
+  quadrants::remove(old_file);
+  quadrants::remove(corrupted_file);
+  quadrants::remove(true_file);
 }
 
 }  // namespace
@@ -119,4 +119,4 @@ TEST(OfflineCache, LoadMetadata) {
   load_metadata_test<oc::Metadata<KernelMetadataBase>>();
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

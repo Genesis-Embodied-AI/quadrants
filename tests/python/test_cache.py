@@ -1,8 +1,8 @@
 import pathlib
 
-import gstaichi as ti
-from gstaichi._test_tools import ti_init_same_arch
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants._test_tools import ti_init_same_arch
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -185,7 +185,7 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
         assert compiled_kernel_data is None
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args)
 
-    monkeypatch.setattr("gstaichi.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
     @ti.kernel(fastcache=True)
     def fun(value: ti.types.ndarray(), offset: ti.template()):
@@ -211,7 +211,7 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
         assert compiled_kernel_data is not None
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args)
 
-    monkeypatch.setattr("gstaichi.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
+    monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
     value = ti.ndarray(ti.i32, shape=())
     value[None] = 1

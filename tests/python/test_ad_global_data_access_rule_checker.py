@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.types.enums import AutodiffMode
+import quadrants as ti
+from quadrants.types.enums import AutodiffMode
 
 from tests import test_utils
 
@@ -92,7 +92,7 @@ def test_break_gdar_rule_1():
     b[None] = 10
     loss.grad[None] = 1
 
-    with pytest.raises(ti.GsTaichiAssertionError):
+    with pytest.raises(ti.QuadrantsAssertionError):
         with ti.ad.Tape(loss=loss, validation=True):
             func_broke_rule_1()
 
@@ -126,7 +126,7 @@ def test_skip_grad_replaced():
     b[None] = 10
     loss.grad[None] = 1
 
-    with pytest.raises(ti.GsTaichiAssertionError):
+    with pytest.raises(ti.QuadrantsAssertionError):
         with ti.ad.Tape(loss=loss, validation=True):
             kernel_1()
 

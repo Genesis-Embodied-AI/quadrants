@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -32,7 +32,7 @@ def test_kernel_args_missing():
         assert a == 1
         assert b == 2
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Missing argument 'b'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Missing argument 'b'"):
         foo(2)
 
 
@@ -43,7 +43,7 @@ def test_kernel_keyword_args_missing():
         assert a == 1
         assert b == 2
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Missing argument 'a'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Missing argument 'a'"):
         foo(b=2)
 
 
@@ -54,7 +54,7 @@ def test_kernel_keyword_args_not_found():
         assert a == 1
         assert b == 2
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Unexpected argument 'c'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Unexpected argument 'c'"):
         foo(1, 2, c=2)
 
 
@@ -65,7 +65,7 @@ def test_kernel_too_many():
         assert a == 1
         assert b == 2
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Too many arguments"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Too many arguments"):
         foo(1, 2, 3)
 
 
@@ -115,7 +115,7 @@ def test_function_keyword_args_missing():
     def missing():
         foo(1, c=3)
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Missing argument 'b'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Missing argument 'b'"):
         missing()
 
 
@@ -131,7 +131,7 @@ def test_function_keyword_args_not_found():
     def not_found():
         foo(1, 2, 3, d=3)
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Unexpected argument 'd'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Unexpected argument 'd'"):
         not_found()
 
 
@@ -147,7 +147,7 @@ def test_function_too_many():
     def many():
         foo(1, 2, 3, 4)
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Too many arguments"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Too many arguments"):
         many()
 
 
@@ -163,7 +163,7 @@ def test_function_keyword_args_duplicate():
     def duplicate():
         foo(1, a=3, b=3)
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Multiple values for argument 'a'"):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Multiple values for argument 'a'"):
         duplicate()
 
 

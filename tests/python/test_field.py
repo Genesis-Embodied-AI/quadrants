@@ -5,10 +5,10 @@ To test our new `ti.field` API is functional (#1500)
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi._test_tools.load_kernel_string import load_kernel_from_string
-from gstaichi.lang import impl
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants._test_tools.load_kernel_string import load_kernel_from_string
+from quadrants.lang import impl
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -329,8 +329,8 @@ def test_field_copy_from_with_non_filed_object():
 @test_utils.test()
 def test_field_shape_0():
     with pytest.raises(
-        ti._lib.core.GsTaichiRuntimeError,
-        match="Every dimension of a GsTaichi field should be positive",
+        ti._lib.core.QuadrantsRuntimeError,
+        match="Every dimension of a Quadrants field should be positive",
     ):
         x = ti.field(dtype=ti.f32, shape=0)
 
@@ -377,7 +377,7 @@ def test_indexing_mat_field_with_np_int():
 @test_utils.test()
 def test_python_for_in():
     x = ti.field(int, shape=3)
-    with pytest.raises(NotImplementedError, match="Struct for is only available in GsTaichi scope"):
+    with pytest.raises(NotImplementedError, match="Struct for is only available in Quadrants scope"):
         for i in x:
             pass
 
@@ -385,7 +385,7 @@ def test_python_for_in():
 @test_utils.test()
 def test_matrix_mult_field():
     x = ti.field(int, shape=())
-    with pytest.raises(ti.GsTaichiTypeError, match="unsupported operand type"):
+    with pytest.raises(ti.QuadrantsTypeError, match="unsupported operand type"):
 
         @ti.kernel
         def foo():
@@ -397,24 +397,24 @@ def test_matrix_mult_field():
 
 @test_utils.test(exclude=[ti.x64, ti.arm64, ti.cuda])
 def test_sparse_not_supported():
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Pointer SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Pointer SNode is not supported on this backend."):
         ti.root.pointer(ti.i, 10)
 
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Pointer SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Pointer SNode is not supported on this backend."):
         a = ti.root.dense(ti.i, 10)
         a.pointer(ti.j, 10)
 
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Dynamic SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Dynamic SNode is not supported on this backend."):
         ti.root.dynamic(ti.i, 10)
 
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Dynamic SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Dynamic SNode is not supported on this backend."):
         a = ti.root.dense(ti.i, 10)
         a.dynamic(ti.j, 10)
 
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Bitmasked SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Bitmasked SNode is not supported on this backend."):
         ti.root.bitmasked(ti.i, 10)
 
-    with pytest.raises(ti.GsTaichiRuntimeError, match="Bitmasked SNode is not supported on this backend."):
+    with pytest.raises(ti.QuadrantsRuntimeError, match="Bitmasked SNode is not supported on this backend."):
         a = ti.root.dense(ti.i, 10)
         a.bitmasked(ti.j, 10)
 
@@ -447,7 +447,7 @@ def test_field_with_dynamic_index():
 def test_field_max_num_args() -> None:
     num_args = 512
     kernel_templ = """
-import gstaichi as ti
+import quadrants as ti
 @ti.kernel
 def my_kernel({args}) -> None:
 {arg_uses}

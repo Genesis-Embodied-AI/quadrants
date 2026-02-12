@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/common/core.h"
+#include "quadrants/common/core.h"
 
-namespace gstaichi {
+namespace quadrants {
 
 TEST(CoreTest, Basic) {
-  EXPECT_EQ(trim_string("hello gstaichi  "), "hello gstaichi");
+  EXPECT_EQ(trim_string("hello quadrants  "), "hello quadrants");
 }
 
-}  // namespace gstaichi
+}  // namespace quadrants

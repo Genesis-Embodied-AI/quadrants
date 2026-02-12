@@ -11,10 +11,10 @@ ti.init(offline_cache=False, ...)
 ```
 
 To clear cache:
-- the cache is located by default on linux and mac at `~/.cache/gstaichi`
+- the cache is located by default on linux and mac at `~/.cache/quadrants`
 - simply remove this entire folder:
 ```
-rm -Rf ~/.cache/gstaichi
+rm -Rf ~/.cache/quadrants
 ```
 
 If this doesn't solve the problem, then you'll likely need to log a github issue, providing

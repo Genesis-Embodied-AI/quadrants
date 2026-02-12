@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.cpu, kernel_profiler=True, print_ir=True)
 

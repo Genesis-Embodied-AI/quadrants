@@ -2,7 +2,7 @@ import autograd.numpy as np
 from autograd import grad
 from pytest import approx
 
-import gstaichi as ti
+import quadrants as ti
 
 
 @ti.test()

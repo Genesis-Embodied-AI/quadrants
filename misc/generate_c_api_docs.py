@@ -1,5 +1,5 @@
 from generate_c_api import get_declr, get_title, resolve_inline_symbols_to_names
-from gstaichi_json import BuiltInType, Module
+from quadrants_json import BuiltInType, Module
 
 
 def print_module_doc(module: Module):
@@ -28,7 +28,7 @@ def print_module_doc(module: Module):
         out += [
             f"### {get_title(declr)}",
             "",
-            f"> Stable since GsTaichi version: {declr.since}",
+            f"> Stable since Quadrants version: {declr.since}",
             "",
             "```c",
             f"// {x}",

@@ -2,7 +2,7 @@ import ctypes
 import math
 import time
 
-import gstaichi as ti
+import quadrants as ti
 
 libm = ctypes.CDLL("libm.so.6")
 

@@ -2,7 +2,7 @@ import random
 
 import numpy as np
 
-import gstaichi as ti
+import quadrants as ti
 
 
 def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchmark=0, dense=False):

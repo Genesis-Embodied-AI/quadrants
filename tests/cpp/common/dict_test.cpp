@@ -1,13 +1,13 @@
 /*******************************************************************************
-    Copyright (c) The GsTaichi Authors (2016- ). All Rights Reserved.
+    Copyright (c) The Quadrants Authors (2016- ). All Rights Reserved.
     The use of this software is governed by the LICENSE file.
 *******************************************************************************/
 #include "gtest/gtest.h"
 
-#include "gstaichi/common/dict.h"
-#include "gstaichi/util/testing.h"
+#include "quadrants/common/dict.h"
+#include "quadrants/util/testing.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(Dict, Config) {
   Dict dict;
@@ -31,4 +31,4 @@ TEST(Dict, Config) {
   EXPECT_EQ(dict.get<std::string>("str"), "Hello");
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

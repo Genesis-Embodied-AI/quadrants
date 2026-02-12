@@ -1,6 +1,6 @@
 import numpy as np
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -124,7 +124,7 @@ def test_numpy_io_example():
     n = 4
     m = 7
 
-    # GsTaichi tensors
+    # Quadrants tensors
     val = ti.field(ti.i32, shape=(n, m))
     vec = ti.Vector.field(3, dtype=ti.i32, shape=(n, m))
     mat = ti.Matrix.field(3, 4, dtype=ti.i32, shape=(n, m))

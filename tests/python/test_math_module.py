@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.math import inf, isinf, isnan, nan, pi, vdir
+import quadrants as ti
+from quadrants.math import inf, isinf, isnan, nan, pi, vdir
 
 from tests import test_utils
 

@@ -1,16 +1,16 @@
-#include "gstaichi/analysis/bls_analyzer.h"
+#include "quadrants/analysis/bls_analyzer.h"
 
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/scratch_pad.h"
-#include "gstaichi/ir/snode.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/struct/struct.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/scratch_pad.h"
+#include "quadrants/ir/snode.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/struct/struct.h"
 #include "tests/cpp/struct/fake_struct_compiler.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 constexpr int kBlockSize = 8;
@@ -143,4 +143,4 @@ TEST_F(BLSAnalyzerTest, Shl) {
 }
 
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

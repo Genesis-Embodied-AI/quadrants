@@ -4,7 +4,7 @@ import yaml
 
 
 def extract_doc(doc_filename=None):
-    statements_fn = os.path.join(os.path.dirname(__file__), "../gstaichi/ir/statements.h")
+    statements_fn = os.path.join(os.path.dirname(__file__), "../quadrants/ir/statements.h")
     with open(statements_fn, "r") as f:
         statements = f.readlines()
 
