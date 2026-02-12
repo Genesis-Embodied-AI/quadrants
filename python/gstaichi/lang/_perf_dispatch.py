@@ -111,7 +111,7 @@ class PerformanceDispatcher(Generic[P, R]):
         assert least_trials_dispatch_impl is not None
         return least_trials_dispatch_impl
 
-    def _finished_trials(self, geometry_hash: int) -> bool:
+    def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
         res = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
         return res
 
@@ -181,7 +181,7 @@ class PerformanceDispatcher(Generic[P, R]):
         trial_count_by_dispatch_impl[dispatch_impl] += 1
         if trial_count_by_dispatch_impl[dispatch_impl] > self.num_warmup:
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
-        if self._finished_trials(geometry_hash=geometry_hash):
+        if self._compute_are_trials_finished(geometry_hash=geometry_hash):
             self._compute_and_update_fastest(geometry_hash)
         return res
 
