@@ -1,0 +1,22 @@
+gstaichi.math
+=============
+
+.. py:module:: gstaichi.math
+
+.. autoapi-nested-parse::
+
+   GsTaichi math module.
+
+   The math module supports glsl-style vectors, matrices and functions.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/math/mathimpl/index
+
+

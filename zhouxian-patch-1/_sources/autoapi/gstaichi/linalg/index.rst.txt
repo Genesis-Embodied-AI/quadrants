@@ -1,0 +1,23 @@
+gstaichi.linalg
+===============
+
+.. py:module:: gstaichi.linalg
+
+.. autoapi-nested-parse::
+
+   GsTaichi support module for sparse matrix operations.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/linalg/matrixfree_cg/index
+   /autoapi/gstaichi/linalg/sparse_cg/index
+   /autoapi/gstaichi/linalg/sparse_matrix/index
+   /autoapi/gstaichi/linalg/sparse_solver/index
+
+

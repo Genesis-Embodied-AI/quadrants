@@ -1,0 +1,49 @@
+gstaichi.linalg.sparse_cg
+=========================
+
+.. py:module:: gstaichi.linalg.sparse_cg
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.linalg.sparse_cg.SparseCG
+
+
+Module Contents
+---------------
+
+.. py:class:: SparseCG(A, b, x0=None, max_iter=50, atol=1e-06)
+
+   Conjugate-gradient solver built for SparseMatrix.
+
+   Use conjugate-gradient method to solve the linear system Ax = b, where A is SparseMatrix.
+
+   :param A: The coefficient matrix A of the linear system.
+   :type A: SparseMatrix
+   :param b: The right-hand side of the linear system.
+   :type b: numpy ndarray, gstaichi Ndarray
+   :param x0: The initial guess for the solution.
+   :type x0: numpy ndarray, gstaichi Ndarray
+   :param max_iter: Maximum number of iterations.
+   :type max_iter: int
+   :param atol: Tolerance(absolute) for convergence.
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:attribute:: ti_arch
+
+
+   .. py:attribute:: matrix
+
+
+   .. py:attribute:: b
+
+
+   .. py:method:: solve()
+
+

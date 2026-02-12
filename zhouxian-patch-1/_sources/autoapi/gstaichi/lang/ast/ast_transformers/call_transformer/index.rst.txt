@@ -1,0 +1,28 @@
+gstaichi.lang.ast.ast_transformers.call_transformer
+===================================================
+
+.. py:module:: gstaichi.lang.ast.ast_transformers.call_transformer
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.ast_transformers.call_transformer.CallTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: CallTransformer
+
+   .. py:method:: build_Call(ctx: gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Call, build_stmt, build_stmts) -> Any | None
+      :staticmethod:
+
+
+      example ast:
+      Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])
+
+
+

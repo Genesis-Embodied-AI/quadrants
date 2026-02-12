@@ -1,0 +1,74 @@
+gstaichi.types.annotations
+==========================
+
+.. py:module:: gstaichi.types.annotations
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   gstaichi.types.annotations.template
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.types.annotations.Template
+   gstaichi.types.annotations.sparse_matrix_builder
+
+
+Module Contents
+---------------
+
+.. py:class:: Template(element_type: type[T] = object, ndim: int | None = None)
+
+   Bases: :py:obj:`Generic`\ [\ :py:obj:`T`\ ]
+
+
+   Type annotation for template kernel parameter.
+   Useful for passing parameters to kernels by reference.
+
+   See also https://docs.taichi-lang.org/docs/meta.
+
+   :param tensor: unused
+   :type tensor: Any
+   :param dim: unused
+   :type dim: Any
+
+   Example::
+
+       >>> a = 1
+       >>>
+       >>> @ti.kernel
+       >>> def test():
+       >>>     print(a)
+       >>>
+       >>> @ti.kernel
+       >>> def test_template(a: ti.template()):
+       >>>     print(a)
+       >>>
+       >>> test(a)  # will print 1
+       >>> test_template(a)  # will also print 1
+       >>> a = 2
+       >>> test(a)  # will still print 1
+       >>> test_template(a)  # will print 2
+
+
+   .. py:attribute:: element_type
+
+
+   .. py:attribute:: ndim
+      :value: None
+
+
+
+.. py:data:: template
+
+   Alias for :class:`~gstaichi.types.annotations.Template`.
+
+.. py:class:: sparse_matrix_builder
+

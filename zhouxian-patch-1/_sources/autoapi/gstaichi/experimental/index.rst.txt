@@ -1,0 +1,19 @@
+gstaichi.experimental
+=====================
+
+.. py:module:: gstaichi.experimental
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.experimental.real_func
+
+
+Module Contents
+---------------
+
+.. py:function:: real_func(func)
+

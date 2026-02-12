@@ -1,0 +1,71 @@
+gstaichi.linalg.matrixfree_cg
+=============================
+
+.. py:module:: gstaichi.linalg.matrixfree_cg
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.linalg.matrixfree_cg.LinearOperator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.linalg.matrixfree_cg.MatrixFreeCG
+   gstaichi.linalg.matrixfree_cg.MatrixFreeBICGSTAB
+
+
+Module Contents
+---------------
+
+.. py:class:: LinearOperator(matvec_kernel)
+
+   .. py:method:: matvec(x, Ax)
+
+
+.. py:function:: MatrixFreeCG(A, b, x, tol=1e-06, maxiter=5000, quiet=True)
+
+   Matrix-free conjugate-gradient solver.
+
+   Use conjugate-gradient method to solve the linear system Ax = b, where A is implicitly
+   represented as a LinearOperator.
+
+   :param A: The coefficient matrix A of the linear system.
+   :type A: LinearOperator
+   :param b: The right-hand side of the linear system.
+   :type b: Field
+   :param x: The initial guess for the solution.
+   :type x: Field
+   :param maxiter: Maximum number of iterations.
+   :type maxiter: int
+   :param atol: Tolerance(absolute) for convergence.
+   :param quiet: Switch to turn on/off iteration log.
+   :type quiet: bool
+
+
+.. py:function:: MatrixFreeBICGSTAB(A, b, x, tol=1e-06, maxiter=5000, quiet=True)
+
+   Matrix-free biconjugate-gradient stabilized solver (BiCGSTAB).
+
+   Use BiCGSTAB method to solve the linear system Ax = b, where A is implicitly
+   represented as a LinearOperator.
+
+   :param A: The coefficient matrix A of the linear system.
+   :type A: LinearOperator
+   :param b: The right-hand side of the linear system.
+   :type b: Field
+   :param x: The initial guess for the solution.
+   :type x: Field
+   :param maxiter: Maximum number of iterations.
+   :type maxiter: int
+   :param atol: Tolerance(absolute) for convergence.
+   :param quiet: Switch to turn on/off iteration log.
+   :type quiet: bool
+
+

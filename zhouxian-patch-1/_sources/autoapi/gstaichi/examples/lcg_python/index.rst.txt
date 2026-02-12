@@ -1,0 +1,22 @@
+gstaichi.examples.lcg_python
+============================
+
+.. py:module:: gstaichi.examples.lcg_python
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   gstaichi.examples.lcg_python.lcg_np
+   gstaichi.examples.lcg_python.main
+
+
+Module Contents
+---------------
+
+.. py:function:: lcg_np(B: int, lcg_its: int, a: numpy.typing.NDArray) -> None
+
+.. py:function:: main() -> None
+

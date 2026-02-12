@@ -1,0 +1,22 @@
+gstaichi.lang.common_ops
+========================
+
+.. py:module:: gstaichi.lang.common_ops
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.common_ops.GsTaichiOperations
+
+
+Module Contents
+---------------
+
+.. py:class:: GsTaichiOperations
+
+   The base class of gstaichi operations of expressions. Subclasses: :class:`~gstaichi.lang.expr.Expr`, :class:`~gstaichi.lang.matrix.Matrix`
+
+

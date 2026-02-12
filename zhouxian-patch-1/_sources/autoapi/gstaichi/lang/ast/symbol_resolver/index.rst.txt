@@ -1,0 +1,50 @@
+gstaichi.lang.ast.symbol_resolver
+=================================
+
+.. py:module:: gstaichi.lang.ast.symbol_resolver
+
+.. autoapi-nested-parse::
+
+   Provides helpers to resolve AST nodes.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   gstaichi.lang.ast.symbol_resolver.ASTResolver
+
+
+Module Contents
+---------------
+
+.. py:class:: ASTResolver
+
+   Provides helper methods to resolve AST nodes.
+
+
+   .. py:method:: resolve_to(node, wanted, scope)
+      :staticmethod:
+
+
+      Check if symbol ``node`` resolves to ``wanted`` object.
+
+      This is only intended to check if a given AST node resolves to a symbol
+      under some namespaces, e.g. the ``a.b.c.foo`` pattern, but not meant for
+      more complicated expressions like ``(a + b).foo``.
+
+      :param node: an AST node to be resolved.
+      :type node: Union[ast.Attribute, ast.Name]
+      :param wanted: The expected python object.
+      :type wanted: Any
+      :param scope: Maps from symbol names to objects, for
+                    example, globals()
+      :type scope: Dict[str, Any]
+
+      :returns: The checked result.
+      :rtype: bool
+
+
+

@@ -1,0 +1,1018 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>gstaichi.lang.ast.ast_transformer &#8212; GsTaichi 4.6.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/gstaichi/lang/ast/ast_transformer/index';</script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+    <link rel="next" title="gstaichi.lang.ast.ast_transformer_utils" href="../ast_transformer_utils/index.html" />
+    <link rel="prev" title="gstaichi.lang.ast" href="../index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="4.6.1" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">GsTaichi 4.6.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../../../index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../../../index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../../../index.html">gstaichi</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../../ad/index.html">gstaichi.ad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../algorithms/index.html">gstaichi.algorithms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../experimental/index.html">gstaichi.experimental</a></li>
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../../index.html">gstaichi.lang</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../../any_array/index.html">gstaichi.lang.any_array</a></li>
+<li class="toctree-l3 current active has-children"><a class="reference internal" href="../index.html">gstaichi.lang.ast</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l4 current active"><a class="current reference internal" href="#">gstaichi.lang.ast.ast_transformer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast_transformer_utils/index.html">gstaichi.lang.ast.ast_transformer_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast_transformers/index.html">gstaichi.lang.ast.ast_transformers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../checkers/index.html">gstaichi.lang.ast.checkers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../symbol_resolver/index.html">gstaichi.lang.ast.symbol_resolver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../transform/index.html">gstaichi.lang.ast.transform</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../common_ops/index.html">gstaichi.lang.common_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exception/index.html">gstaichi.lang.exception</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../expr/index.html">gstaichi.lang.expr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../field/index.html">gstaichi.lang.field</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../func/index.html">gstaichi.lang.func</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../impl/index.html">gstaichi.lang.impl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../intrinsics/index.html">gstaichi.lang.intrinsics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../kernel/index.html">gstaichi.lang.kernel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../kernel_arguments/index.html">gstaichi.lang.kernel_arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../kernel_impl/index.html">gstaichi.lang.kernel_impl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../matrix/index.html">gstaichi.lang.matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../matrix_ops/index.html">gstaichi.lang.matrix_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../matrix_ops_utils/index.html">gstaichi.lang.matrix_ops_utils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../mesh/index.html">gstaichi.lang.mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../misc/index.html">gstaichi.lang.misc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../ops/index.html">gstaichi.lang.ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../runtime_ops/index.html">gstaichi.lang.runtime_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../shell/index.html">gstaichi.lang.shell</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../simt/index.html">gstaichi.lang.simt</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../simt/block/index.html">gstaichi.lang.simt.block</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../simt/grid/index.html">gstaichi.lang.simt.grid</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../simt/subgroup/index.html">gstaichi.lang.simt.subgroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../simt/warp/index.html">gstaichi.lang.simt.warp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../snode/index.html">gstaichi.lang.snode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../source_builder/index.html">gstaichi.lang.source_builder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../struct/index.html">gstaichi.lang.struct</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../util/index.html">gstaichi.lang.util</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../linalg/index.html">gstaichi.linalg</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../linalg/matrixfree_cg/index.html">gstaichi.linalg.matrixfree_cg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../linalg/sparse_cg/index.html">gstaichi.linalg.sparse_cg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../linalg/sparse_matrix/index.html">gstaichi.linalg.sparse_matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../linalg/sparse_solver/index.html">gstaichi.linalg.sparse_solver</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../math/index.html">gstaichi.math</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../math/mathimpl/index.html">gstaichi.math.mathimpl</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../profiler/index.html">gstaichi.profiler</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../profiler/kernel_metrics/index.html">gstaichi.profiler.kernel_metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../profiler/kernel_profiler/index.html">gstaichi.profiler.kernel_profiler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../profiler/memory_profiler/index.html">gstaichi.profiler.memory_profiler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../profiler/scoped_profiler/index.html">gstaichi.profiler.scoped_profiler</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../sparse/index.html">gstaichi.sparse</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../tools/index.html">gstaichi.tools</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../tools/diagnose/index.html">gstaichi.tools.diagnose</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../tools/np2ply/index.html">gstaichi.tools.np2ply</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../tools/vtk/index.html">gstaichi.tools.vtk</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../types/index.html">gstaichi.types</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/annotations/index.html">gstaichi.types.annotations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/compound_types/index.html">gstaichi.types.compound_types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/enums/index.html">gstaichi.types.enums</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/ndarray_type/index.html">gstaichi.types.ndarray_type</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/primitive_types/index.html">gstaichi.types.primitive_types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/quant/index.html">gstaichi.types.quant</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../types/utils/index.html">gstaichi.types.utils</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">API Reference</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">gstaichi</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">gstaichi.lang</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">gstaichi.lang.ast</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">gstaichi.lang.ast.ast_transformer</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-gstaichi.lang.ast.ast_transformer">
+<span id="gstaichi-lang-ast-ast-transformer"></span><h1>gstaichi.lang.ast.ast_transformer<a class="headerlink" href="#module-gstaichi.lang.ast.ast_transformer" title="Link to this heading">#</a></h1>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.AutodiffMode" title="gstaichi.lang.ast.ast_transformer.AutodiffMode"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AutodiffMode</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.build_stmt" title="gstaichi.lang.ast.ast_transformer.build_stmt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_stmt</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer" title="gstaichi.lang.ast.ast_transformer.ASTTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ASTTransformer</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.reshape_list" title="gstaichi.lang.ast.ast_transformer.reshape_list"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reshape_list</span></code></a>(→ list[Any])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning" title="gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning"><code class="xref py py-obj docutils literal notranslate"><span class="pre">boundary_type_cast_warning</span></code></a>(→ None)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#gstaichi.lang.ast.ast_transformer.build_stmts" title="gstaichi.lang.ast.ast_transformer.build_stmts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_stmts</span></code></a>(ctx, stmts)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.AutodiffMode">
+<span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">AutodiffMode</span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#AutodiffMode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.AutodiffMode" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.reshape_list">
+<span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">reshape_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flat_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#reshape_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.reshape_list" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning">
+<span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">boundary_type_cast_warning</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expression</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">gstaichi.lang.expr.Expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#boundary_type_cast_warning"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">ASTTransformer</span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.Builder" title="gstaichi.lang.ast.ast_transformer_utils.Builder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.Builder</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Name">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AnnAssign">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_AnnAssign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.AnnAssign</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_AnnAssign"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AnnAssign" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_assign_annotated</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_static_assign</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">annotation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_assign_annotated"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated" title="Link to this definition">#</a></dt>
+<dd><p>Build an annotated assignment like this: target: annotation = value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<em>ast_builder_utils.BuilderContext</em>) – The builder context.</p></li>
+<li><p><strong>target</strong> (<em>ast.Name</em>) – A variable name. <cite>target.id</cite> holds the name as</p></li>
+<li><p><strong>string.</strong> (<em>a</em>)</p></li>
+<li><p><strong>annotation</strong> – A type we hope to assign to the target</p></li>
+<li><p><strong>value</strong> – A node representing the value.</p></li>
+<li><p><strong>is_static_assign</strong> – A boolean value indicating whether this is a static assignment</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assign">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Assign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Assign</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Assign"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assign" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_assign_unpack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ast.Tuple</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_static_assign</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_assign_unpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack" title="Link to this definition">#</a></dt>
+<dd><p>Build the unpack assignments like this: (target1, target2) = (value1, value2).
+The function should be called only if the node target is a tuple.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<em>ast_builder_utils.BuilderContext</em>) – The builder context.</p></li>
+<li><p><strong>node_target</strong> (<em>ast.Tuple</em>) – A list or tuple object. <cite>node_target.elts</cite> holds a</p></li>
+<li><p><strong>elements.</strong> (<em>list</em><em> of </em><em>nodes representing the</em>)</p></li>
+<li><p><strong>values</strong> – A node/list representing the values.</p></li>
+<li><p><strong>is_static_assign</strong> – A boolean value indicating whether this is a static assignment</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_basic">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_assign_basic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_static_assign</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_assign_basic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_basic" title="Link to this definition">#</a></dt>
+<dd><p>Build basic assignment like this: target = value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<em>ast_builder_utils.BuilderContext</em>) – The builder context.</p></li>
+<li><p><strong>target</strong> (<em>ast.Name</em>) – A variable name. <cite>target.id</cite> holds the name as</p></li>
+<li><p><strong>string.</strong> (<em>a</em>)</p></li>
+<li><p><strong>value</strong> – A node representing the value.</p></li>
+<li><p><strong>is_static_assign</strong> – A boolean value indicating whether this is a static assignment</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_NamedExpr">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_NamedExpr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.NamedExpr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_NamedExpr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_NamedExpr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.is_tuple">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_tuple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.is_tuple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.is_tuple" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Subscript">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Subscript</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Subscript</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Subscript"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Subscript" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Slice">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Slice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Slice</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Slice"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Slice" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ExtSlice">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_ExtSlice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.ExtSlice</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_ExtSlice"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ExtSlice" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Tuple">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Tuple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Tuple</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Tuple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Tuple" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_List">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_List</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.List</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_List"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_List" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Dict">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Dict" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.process_listcomp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">process_listcomp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.process_listcomp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_listcomp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.process_dictcomp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">process_dictcomp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.process_dictcomp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_dictcomp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.process_generators">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">process_generators</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.GeneratorExp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">now_comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.process_generators"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_generators" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.process_ifs">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">process_ifs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.If</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">now_comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">now_if</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.process_ifs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_ifs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ListComp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_ListComp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.ListComp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_ListComp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ListComp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_DictComp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_DictComp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.DictComp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_DictComp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_DictComp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Index">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Index"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Index" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Constant">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Constant</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Constant</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Constant"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Constant" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_keyword">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_keyword</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.keyword</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_keyword"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_keyword" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Starred">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Starred</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Starred</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Starred"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Starred" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FormattedValue">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FormattedValue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FormattedValue</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_FormattedValue"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FormattedValue" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_JoinedStr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.JoinedStr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_JoinedStr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Call</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Call" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FunctionDef">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FunctionDef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FunctionDef</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_FunctionDef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FunctionDef" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Return">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Return</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Return</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Return"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Return" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Module">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Module</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Module"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Module" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_attribute_if_is_dynamic_snode_method</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_attribute_if_is_dynamic_snode_method"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Attribute">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Attribute</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Attribute" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BinOp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_BinOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.BinOp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_BinOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BinOp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AugAssign">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_AugAssign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.AugAssign</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_AugAssign"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AugAssign" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_UnaryOp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_UnaryOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.UnaryOp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_UnaryOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_UnaryOp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_bool_op">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_bool_op</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">op</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_bool_op"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_bool_op" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_and">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_static_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">operands</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_static_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_and" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_or">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_static_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">operands</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_static_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_or" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BoolOp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_BoolOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.BoolOp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_BoolOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BoolOp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Compare">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Compare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Compare</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Compare"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Compare" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.get_for_loop_targets">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_for_loop_targets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Name</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ast.Tuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.get_for_loop_targets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.get_for_loop_targets" title="Link to this definition">#</a></dt>
+<dd><p>Returns the list of indices of the for loop <a href="#id1"><span class="problematic" id="id2">|node|</span></a>.
+See also: <a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.For">https://docs.python.org/3/library/ast.html#ast.For</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_static_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_grouped</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_static_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_range_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_range_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_range_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_range_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ndrange_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_ndrange_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_ndrange_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ndrange_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_grouped_ndrange_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_grouped_ndrange_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_grouped_ndrange_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_grouped_ndrange_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_struct_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_struct_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_grouped</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_struct_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_struct_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_mesh_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_mesh_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_mesh_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_mesh_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_nested_mesh_for">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_nested_mesh_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_nested_mesh_for"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_nested_mesh_for" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_For">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_For</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.For</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_For"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_For" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_While">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_While</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.While</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_While"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_While" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_If">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_If</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.If</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ast.If</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_If"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_If" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Expr">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Expr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Expr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Expr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_IfExp">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_IfExp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.IfExp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_IfExp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_IfExp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.ti_format_list_to_assert_msg">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ti_format_list_to_assert_msg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.ti_format_list_to_assert_msg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.ti_format_list_to_assert_msg" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assert">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Assert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Assert</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Assert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assert" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Break">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Break</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Break</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Break"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Break" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Continue">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Continue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Continue</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Continue"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Continue" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Pass">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_Pass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.Pass</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#ASTTransformer.build_Pass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Pass" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.build_stmt">
+<span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">build_stmt</span></span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#build_stmt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.build_stmt" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gstaichi.lang.ast.ast_transformer.build_stmts">
+<span class="sig-prename descclassname"><span class="pre">gstaichi.lang.ast.ast_transformer.</span></span><span class="sig-name descname"><span class="pre">build_stmts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../ast_transformer_utils/index.html#gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">gstaichi.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">stmts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ast.stmt</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/gstaichi/lang/ast/ast_transformer.html#build_stmts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gstaichi.lang.ast.ast_transformer.build_stmts" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">gstaichi.lang.ast</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../ast_transformer_utils/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">gstaichi.lang.ast.ast_transformer_utils</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.AutodiffMode"><code class="docutils literal notranslate"><span class="pre">AutodiffMode</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.reshape_list"><code class="docutils literal notranslate"><span class="pre">reshape_list()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.boundary_type_cast_warning"><code class="docutils literal notranslate"><span class="pre">boundary_type_cast_warning()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer"><code class="docutils literal notranslate"><span class="pre">ASTTransformer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Name"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Name()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AnnAssign"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_AnnAssign()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_annotated"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_assign_annotated()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assign"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Assign()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_unpack"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_assign_unpack()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_assign_basic"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_assign_basic()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_NamedExpr"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_NamedExpr()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.is_tuple"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.is_tuple()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Subscript"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Subscript()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Slice"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Slice()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ExtSlice"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_ExtSlice()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Tuple"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Tuple()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_List"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_List()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Dict"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_listcomp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.process_listcomp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_dictcomp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.process_dictcomp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_generators"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.process_generators()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.process_ifs"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.process_ifs()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ListComp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_ListComp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_DictComp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_DictComp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Index"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Index()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Constant"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Constant()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_keyword"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_keyword()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Starred"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Starred()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FormattedValue"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_FormattedValue()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_JoinedStr()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Call"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_FunctionDef"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_FunctionDef()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Return"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Return()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Module"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Module()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_attribute_if_is_dynamic_snode_method()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Attribute"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Attribute()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BinOp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_BinOp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_AugAssign"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_AugAssign()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_UnaryOp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_UnaryOp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_bool_op"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_bool_op()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_and"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_static_and()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_or"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_static_or()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_BoolOp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_BoolOp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Compare"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Compare()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.get_for_loop_targets"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.get_for_loop_targets()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_static_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_static_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_range_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_range_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_ndrange_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_ndrange_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_grouped_ndrange_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_grouped_ndrange_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_struct_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_struct_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_mesh_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_mesh_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_nested_mesh_for"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_nested_mesh_for()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_For"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_For()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_While"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_While()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_If"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_If()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Expr"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Expr()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_IfExp"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_IfExp()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.ti_format_list_to_assert_msg"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.ti_format_list_to_assert_msg()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Assert"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Assert()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Break"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Break()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Continue"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Continue()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.ASTTransformer.build_Pass"><code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Pass()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.build_stmt"><code class="docutils literal notranslate"><span class="pre">build_stmt</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gstaichi.lang.ast.ast_transformer.build_stmts"><code class="docutils literal notranslate"><span class="pre">build_stmts()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../../../../../_sources/autoapi/gstaichi/lang/ast/ast_transformer/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

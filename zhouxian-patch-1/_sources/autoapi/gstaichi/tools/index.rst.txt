@@ -1,0 +1,26 @@
+gstaichi.tools
+==============
+
+.. py:module:: gstaichi.tools
+
+.. autoapi-nested-parse::
+
+   GsTaichi utility module.
+
+   - `image` submodule for image io.
+   - `video` submodule for exporting results to video files.
+   - `diagnose` submodule for printing system environment information.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/gstaichi/tools/diagnose/index
+   /autoapi/gstaichi/tools/np2ply/index
+   /autoapi/gstaichi/tools/vtk/index
+
+
