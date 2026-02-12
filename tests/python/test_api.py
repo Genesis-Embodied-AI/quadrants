@@ -184,6 +184,7 @@ user_api[ti] = [
     "ndrange",
     "no_activate",
     "one",
+    "perf_dispatch",
     "polar_decompose",
     "pow",
     "profiler",

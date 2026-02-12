@@ -18,6 +18,8 @@ from quadrants.lang.source_builder import *
 from quadrants.lang.struct import *
 from quadrants.types.enums import DeviceCapability, Format, Layout  # noqa: F401
 
+from ._perf_dispatch import perf_dispatch  # noqa: F401
+
 __all__ = [
     s
     for s in dir()
