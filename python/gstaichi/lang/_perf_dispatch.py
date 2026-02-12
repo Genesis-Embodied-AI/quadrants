@@ -35,12 +35,12 @@ class PerformanceDispatcher(Generic[P, R]):
         for param_name, param in sig.parameters.items():
             self._param_types[param_name] = param.annotation
         self._get_geometry_hash: Callable[P, int] = get_geometry_hash
-        self._kernel_by_idx: dict[int, DispatchKernelImpl] = {}
-        self._trial_count_by_kernel_idx_by_geometry_hash: dict[int, dict[int, int]] = defaultdict(
+        self._dispatch_impl_set: set[DispatchKernelImpl] = set()
+        self._trial_count_by_dispatch_impl_by_geometry_hash: dict[int, dict[DispatchKernelImpl, int]] = defaultdict(
             lambda: defaultdict(int)
         )
-        self._fastest_by_geometry_hash: dict[int, DispatchKernelImpl] = defaultdict(None)
-        self._times_by_kernel_idx_by_geometry_hash: dict[int, dict[int, list[float]]] = defaultdict(
+        self._fastest_dispatch_impl_by_geometry_hash: dict[int, DispatchKernelImpl | None] = defaultdict(None)
+        self._times_by_dispatch_impl_by_geometry_hash: dict[int, dict[DispatchKernelImpl, list[float]]] = defaultdict(
             lambda: defaultdict(list)
         )
 
@@ -66,7 +66,7 @@ class PerformanceDispatcher(Generic[P, R]):
             - in this case, check the shape of the argument in question, and return False if out of spec for this
               kernel implementation
         """
-        kernel_by_idx = self._kernel_by_idx
+        dispatch_impl_set = self._dispatch_impl_set
 
         def decorator(func: GsTaichiCallable) -> GsTaichiCallable:
             if not type(func) in {GsTaichiCallable}:
@@ -83,41 +83,41 @@ class PerformanceDispatcher(Generic[P, R]):
                 )
 
             dispatch_impl = DispatchKernelImpl(kernel=func, is_compatible=is_compatible)
-            kernel_by_idx[dispatch_impl.kernel_impl_idx] = dispatch_impl
+            dispatch_impl_set.add(dispatch_impl)
             return func
 
         if kernel is not None:
             return decorator(kernel)
         return decorator
 
-    def _get_compatible_kernels(self, *args, **kwargs) -> dict[int, DispatchKernelImpl]:
-        compatible = {}
-        for kernel_idx, kernel in self._kernel_by_idx.items():
-            if kernel.is_compatible and not kernel.is_compatible(*args, **kwargs):
+    def _get_compatible_kernels(self, *args, **kwargs) -> set[DispatchKernelImpl]:
+        compatible_set = set()
+        for dispatch_impl in self._dispatch_impl_set:
+            if dispatch_impl.is_compatible and not dispatch_impl.is_compatible(*args, **kwargs):
                 continue
-            compatible[kernel_idx] = kernel
-        return compatible
+            compatible_set.add(dispatch_impl)
+        return compatible_set
 
-    def _get_next_kernel_idx(self, compatible: dict[int, DispatchKernelImpl], geometry_hash: int) -> int:
-        least_trials_idx = None
+    def _get_next_dispatch_impl(self, compatible_set: set[DispatchKernelImpl], geometry_hash: int) -> DispatchKernelImpl:
+        least_trials_dispatch_impl = None
         least_trials = None
-        for kernel_idx in compatible.keys():
-            trial_count = self._trial_count_by_kernel_idx_by_geometry_hash[geometry_hash].get(kernel_idx, 0)
+        for dispatch_impl in compatible_set:
+            trial_count = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].get(dispatch_impl, 0)
             if least_trials is None or trial_count < least_trials:
-                least_trials_idx = kernel_idx
+                least_trials_dispatch_impl = dispatch_impl
                 least_trials = trial_count
-        assert least_trials_idx is not None
-        return least_trials_idx
+        assert least_trials_dispatch_impl is not None
+        return least_trials_dispatch_impl
 
-    def _get_finished_trials(self, geometry_hash: int) -> bool:
-        return min(self._trial_count_by_kernel_idx_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
+    def _finished_trials(self, geometry_hash: int) -> bool:
+        return min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
 
     def _update_fastest(self, geometry_hash: int) -> None:
         speeds_l = []
-        for kernel_idx, elapsed_time in self._times_by_kernel_idx_by_geometry_hash[geometry_hash].items():
-            speeds_l.append((kernel_idx, elapsed_time))
+        for dispatch_impl, elapsed_time in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
+            speeds_l.append((dispatch_impl, elapsed_time))
         speeds_l.sort(key=lambda x: x[1], reverse=False)
-        self._fastest_by_geometry_hash[geometry_hash] = self._kernel_by_idx[speeds_l[0][0]]
+        self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = speeds_l[0][0]
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
@@ -148,38 +148,39 @@ class PerformanceDispatcher(Generic[P, R]):
         It is not possible for you to control exploration vs exploitation.
         """
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
-        fastest = self._fastest_by_geometry_hash.get(geometry_hash)
+        fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
             return fastest(*args, **kwargs)
 
         res = None
         speeds_l = []
         runtime = impl.get_runtime()
-        compatible = self._get_compatible_kernels(*args, **kwargs)
-        if len(compatible) == 0:
+        compatible_set = self._get_compatible_kernels(*args, **kwargs)
+        if len(compatible_set) == 0:
             raise GsTaichiRuntimeError("No suitable kernels were found.")
 
-        elif len(compatible) == 1:
-            self._fastest_by_geometry_hash[geometry_hash] = next(iter(compatible.values()))
-            return self._fastest_by_geometry_hash[geometry_hash](*args, **kwargs)
+        elif len(compatible_set) == 1:
+            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
+            dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
+            assert dispatch_impl_ is not None
+            return dispatch_impl_(*args, **kwargs)
 
-        kernel_idx = self._get_next_kernel_idx(compatible=compatible, geometry_hash=geometry_hash)
-        kernel = self._kernel_by_idx[kernel_idx]
+        dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
         runtime.sync()
         start = time.time()
-        res = kernel(*args, **kwargs)
+        res = dispatch_impl(*args, **kwargs)
         runtime.sync()
         end = time.time()
         elapsed = end - start
-        speeds_l.append((elapsed, kernel))
-        trial_count_by_kernel_idx = self._trial_count_by_kernel_idx_by_geometry_hash[geometry_hash]
-        trial_count_by_kernel_idx[kernel_idx] += 1
-        if trial_count_by_kernel_idx[kernel_idx] >= self.num_warmup:
-            self._times_by_kernel_idx_by_geometry_hash[geometry_hash][kernel_idx].append(elapsed)
-        if self._get_finished_trials(geometry_hash=geometry_hash):
+        speeds_l.append((elapsed, dispatch_impl))
+        trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
+        trial_count_by_dispatch_impl[dispatch_impl] += 1
+        if trial_count_by_dispatch_impl[dispatch_impl] >= self.num_warmup:
+            self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
+        if self._finished_trials(geometry_hash=geometry_hash):
             self._update_fastest(geometry_hash)
             speeds_l.sort(key=lambda x: x[0], reverse=False)
-            self._fastest_by_geometry_hash[geometry_hash] = speeds_l[0][1]
+            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = speeds_l[0][1]
         return res
 
 

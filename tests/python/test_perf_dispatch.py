@@ -21,8 +21,8 @@ def do_work(i_b, amount_work: ti.i32, state: ti.types.NDArray[ti.i32, 1]):
 @test_utils.test()
 def test_perf_dispatch_basic() -> None:
     class ImplEnum(IntEnum):
-        serial = 0
-        a_shape0_lt2 = 1
+        slow = 0
+        fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
     @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape))
@@ -38,8 +38,8 @@ def test_perf_dispatch_basic() -> None:
         B = a.shape[0]
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
-            c[ImplEnum.serial] = 1
-            do_work(i_b=i_b, amount_work=100, state=rand_state)
+            c[ImplEnum.slow] = 1
+            do_work(i_b=i_b, amount_work=10000000, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @ti.kernel
@@ -49,9 +49,10 @@ def test_perf_dispatch_basic() -> None:
         B = a.shape[0]
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
-            c[ImplEnum.a_shape0_lt2] = 1
+            c[ImplEnum.fastest_a_shape0_lt2] = 1
             do_work(i_b=i_b, amount_work=1, state=rand_state)
 
+    # a.shape is [num_threads], ie a.shape[0] is num_threads, which is more than 2
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] >= 2)
     @ti.kernel
     def my_func1_impl_a_shape0_ge_2(
@@ -61,32 +62,36 @@ def test_perf_dispatch_basic() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=20, state=rand_state)
+            do_work(i_b=i_b, amount_work=10000, state=rand_state)
 
-    num_threads = 10
+    num_threads = 10  # should be at least more than 2
     a = ti.ndarray(ti.i32, (num_threads,))
     c = ti.ndarray(ti.i32, (len(ImplEnum),))
     rand_state = ti.ndarray(ti.i32, (num_threads,))
 
     for it in range((NUM_WARMUP + 5)):
+        print("it", it)
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
+            print("inner_it", _inner_it)
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
+        for name in ImplEnum:
+            print("-", name, c[name])
         if it <= NUM_WARMUP:
-            assert c[ImplEnum.serial] == 1
-            assert c[ImplEnum.a_shape0_lt2] == 0
+            assert c[ImplEnum.slow] == 1
+            assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
         else:
+            assert c[ImplEnum.slow] == 0
+            assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
-            assert c[ImplEnum.a_shape0_lt2] == 0
-            assert c[ImplEnum.serial] == 0
     speed_checker = cast(PerformanceDispatcher, my_func1)
-    geometry = list(speed_checker._trial_count_by_kernel_idx_by_geometry_hash.keys())[0]
-    for _kernel_impl_idx, trials in speed_checker._trial_count_by_kernel_idx_by_geometry_hash[geometry].items():
+    geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
+    for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
         assert trials == NUM_WARMUP + 1
-    assert len(speed_checker._trial_count_by_kernel_idx_by_geometry_hash[geometry]) == 2
+    assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
 @test_utils.test()
