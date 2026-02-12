@@ -96,6 +96,7 @@ class PerformanceDispatcher(Generic[P, R]):
             if dispatch_impl.is_compatible and not dispatch_impl.is_compatible(*args, **kwargs):
                 continue
             compatible_set.add(dispatch_impl)
+        print("compatible", [d.__wrapped__.fn.__name__ for d in compatible_set])
         return compatible_set
 
     def _get_next_dispatch_impl(self, compatible_set: set[DispatchKernelImpl], geometry_hash: int) -> DispatchKernelImpl:
@@ -110,14 +111,22 @@ class PerformanceDispatcher(Generic[P, R]):
         return least_trials_dispatch_impl
 
     def _finished_trials(self, geometry_hash: int) -> bool:
-        return min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
+        res = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
+        print('finished trials', res)
+        return res
 
-    def _update_fastest(self, geometry_hash: int) -> None:
+    def _compute_and_update_fastest(self, geometry_hash: int) -> None:
         speeds_l = []
-        for dispatch_impl, elapsed_time in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
-            speeds_l.append((dispatch_impl, elapsed_time))
+        for dispatch_impl, elapsed_times in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
+            speeds_l.append((dispatch_impl, sum(elapsed_times) / len(elapsed_times)))
         speeds_l.sort(key=lambda x: x[1], reverse=False)
-        self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = speeds_l[0][0]
+        # print('speeds_l', speeds_l)
+        for speed in speeds_l:
+            print(speed[0].__wrapped__.fn.__name__, speed[1])
+        fastest = speeds_l[0][0]
+        print('fastest', fastest.__wrapped__.fn.__name__, "geometry_hash", geometry_hash)
+        self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest
+        print("self._fastest_dispatch_impl_by_geometry_hash", {k: v.__wrapped__.fn for k, v in self._fastest_dispatch_impl_by_geometry_hash.items()})
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
@@ -150,6 +159,9 @@ class PerformanceDispatcher(Generic[P, R]):
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
+            print("self._fastest_dispatch_impl_by_geometry_hash", {k: v.__wrapped__.fn for k, v in self._fastest_dispatch_impl_by_geometry_hash.items()})
+            # print('self._fastest_dispatch_impl_by_geometry_hash', self._fastest_dispatch_impl_by_geometry_hash)
+            print('fastests', fastest.__wrapped__.fn.__name__, "geometry_hash", geometry_hash)
             return fastest(*args, **kwargs)
 
         res = None
@@ -172,15 +184,16 @@ class PerformanceDispatcher(Generic[P, R]):
         runtime.sync()
         end = time.time()
         elapsed = end - start
+        print(dispatch_impl.__wrapped__.fn.__name__, elapsed)
         speeds_l.append((elapsed, dispatch_impl))
         trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
         trial_count_by_dispatch_impl[dispatch_impl] += 1
-        if trial_count_by_dispatch_impl[dispatch_impl] >= self.num_warmup:
+        if trial_count_by_dispatch_impl[dispatch_impl] > self.num_warmup:
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
         if self._finished_trials(geometry_hash=geometry_hash):
-            self._update_fastest(geometry_hash)
-            speeds_l.sort(key=lambda x: x[0], reverse=False)
-            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = speeds_l[0][1]
+            self._compute_and_update_fastest(geometry_hash)
+            # speeds_l.sort(key=lambda x: x[0], reverse=False)
+            # self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = speeds_l[0][1]
         return res
 
 

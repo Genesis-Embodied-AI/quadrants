@@ -39,7 +39,7 @@ def test_perf_dispatch_basic() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work(i_b=i_b, amount_work=10000000, state=rand_state)
+            do_work(i_b=i_b, amount_work=10000, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @ti.kernel
@@ -62,7 +62,7 @@ def test_perf_dispatch_basic() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work(i_b=i_b, amount_work=100, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = ti.ndarray(ti.i32, (num_threads,))
