@@ -70,15 +70,11 @@ def test_perf_dispatch_basic() -> None:
     rand_state = ti.ndarray(ti.i32, (num_threads,))
 
     for it in range((NUM_WARMUP + 5)):
-        print("it", it)
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
-            print("inner_it", _inner_it)
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        for name in ImplEnum:
-            print("-", name, c[name])
         if it <= NUM_WARMUP:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
