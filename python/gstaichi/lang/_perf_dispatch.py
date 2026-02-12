@@ -116,12 +116,9 @@ class PerformanceDispatcher(Generic[P, R]):
         return res
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
-        speeds_l = []
-        for dispatch_impl, elapsed_times in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
-            speeds_l.append((dispatch_impl, sum(elapsed_times) / len(elapsed_times)))
-        speeds_l.sort(key=lambda x: x[1], reverse=False)
-        fastest = speeds_l[0][0]
-        self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest
+        times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
+        fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
+        self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
