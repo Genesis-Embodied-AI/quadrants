@@ -1,8 +1,8 @@
 # What is Quadrants?
 
-Quadrants is a high-performance multi-platform compiler for physics simulation. The project began as a fork of the original [Taichi](https://github.com/taichi-dev/taichi) by [Genesis AI](https://genesis-ai.company/) in June 2025. As the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity.
+Quadrants is a high-performance multi-platform compiler for physics simulation being continuously developped by [Genesis AI](https://genesis-ai.company/). 
 
-Quadrants is a high-performance compiler designed for large-scale physics simulation and robotics workloads. It compiles Python code into highly optimized parallel kernels that run on:
+It is designed for large-scale physics simulation and robotics workloads. It compiles Python code into highly optimized parallel kernels that run on:
 
 * NVIDIA GPUs (CUDA)
 * Vulkan-compatible GPUs (SPIR-V)
@@ -10,11 +10,12 @@ Quadrants is a high-performance compiler designed for large-scale physics simula
 * x86 and ARM64 CPUs
 
 ## The origin
-Quadrants is an open-source project being continuously developped by [Genesis AI](https://genesis-ai.company/). The project was originally forked from the original [Taichi](https://github.com/taichi-dev/taichi) in June 2025. As the original Taichi is no longer being maintained and the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity. The name _Quadrants_ is inspired by the Chinese saying:
+
+The quadrants project was originally forked from [Taichi](https://github.com/taichi-dev/taichi) in June 2025. As the original Taichi is no longer being maintained and the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity. The name _Quadrants_ is inspired by the Chinese saying:
 
 > 太极生两仪，两仪生四象
 >
-> The Supreme Polarity (Taichi) begets the Two Modes (Ying & Yang), which in turn begets the Four Forms (_Quandrants_).
+> The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quandrants_).
 
 _Quadrants_ captures the idea of progression originated from taichi — built on the same foundation, evolving in its own direction while acknowledging its roots.
 This project is now fully independent and does not aim to maintain backward compatibility with upstream Taichi.
