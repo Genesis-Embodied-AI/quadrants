@@ -8,7 +8,7 @@ import requests
 server_addr, server_port = None, None
 
 
-class GsTaichiFormatServer(BaseHTTPRequestHandler):
+class QuadrantsFormatServer(BaseHTTPRequestHandler):
     def _set_headers(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
@@ -30,7 +30,7 @@ class GsTaichiFormatServer(BaseHTTPRequestHandler):
         return p
 
     def render_index(self):
-        pulls = requests.get(f"https://api.github.com/repos/gstaichi-dev/gstaichi/pulls?state=open").json()
+        pulls = requests.get(f"https://api.github.com/repos/quadrants-dev/quadrants/pulls?state=open").json()
         self.writeln(f"Click to auto-format PR. <b>[Please do not click if the PR is not owned/reviewed by you.]</b>")
         print(pulls)
         for pr in pulls:
@@ -53,14 +53,14 @@ class GsTaichiFormatServer(BaseHTTPRequestHandler):
             return
         pr_id = int(path)
 
-        ret = requests.get(f"https://api.github.com/repos/gstaichi-dev/gstaichi/pulls/{pr_id}")
+        ret = requests.get(f"https://api.github.com/repos/quadrants-dev/quadrants/pulls/{pr_id}")
         if ret.status_code == 404:
             self.writeln(f"Error: PR {pr_id} not found!")
             return
         ret = ret.json()
         url = ret["url"]
 
-        self.writeln(f"Processing <a href='https://github.com/taichi-dev/gstaichi/pull/{pr_id}'>PR {pr_id}</a>")
+        self.writeln(f"Processing <a href='https://github.com/taichi-dev/quadrants/pull/{pr_id}'>PR {pr_id}</a>")
         self.writeln(f"[<a href='{url}'>Metadata</a>]")
         head = ret["head"]
         repo_url = head["repo"]["html_url"]
@@ -92,13 +92,13 @@ def run(addr, port):
     global server_addr, server_port
     server_addr = addr
     server_port = port
-    httpd = HTTPServer(server_address, GsTaichiFormatServer)
-    print(f"Starting GsTaichi format server on {addr}:{port}")
+    httpd = HTTPServer(server_address, QuadrantsFormatServer)
+    print(f"Starting Quadrants format server on {addr}:{port}")
     httpd.serve_forever()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the GsTaichi format server")
+    parser = argparse.ArgumentParser(description="Run the Quadrants format server")
     parser.add_argument(
         "-l",
         "--listen",

@@ -1,12 +1,12 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/analysis.h"
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/program/program.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/program/program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class DetermineAdStackSizeTest
     : public ::testing::TestWithParam<std::tuple<int, int>> {
@@ -183,4 +183,4 @@ TEST_F(DetermineAdStackSizeTest, EmptyNodes) {
   EXPECT_EQ(stack->max_size, 2);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

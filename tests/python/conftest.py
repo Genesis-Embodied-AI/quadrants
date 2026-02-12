@@ -8,7 +8,7 @@ import pytest
 # so we need to override it
 import pytest_rerunfailures
 
-import gstaichi as ti
+import quadrants as ti
 
 pytest_rerunfailures.works_with_current_xdist = lambda: True
 

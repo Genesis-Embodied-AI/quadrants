@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.exception import GsTaichiRuntimeError
+import quadrants as ti
+from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
@@ -1057,7 +1057,7 @@ def test_ad_if_parallel_complex():
 @pytest.mark.flaky(retries=5)
 @test_utils.test(arch=archs_support_ndarray_ad)
 def test_ad_ndarray_i32():
-    with pytest.raises(GsTaichiRuntimeError, match=r"i32 is not supported for ndarray"):
+    with pytest.raises(QuadrantsRuntimeError, match=r"i32 is not supported for ndarray"):
         ti.ndarray(ti.i32, shape=3, needs_grad=True)
 
 

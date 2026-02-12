@@ -37,7 +37,7 @@ jobs:
           ls -lh dist/
           pip install dist/*.whl
           pip install --group docs
-          python -c 'import gstaichi as ti; ti.init(arch=ti.cpu); print(ti.__version__)'
+          python -c 'import quadrants as ti; ti.init(arch=ti.cpu); print(ti.__version__)'
           pip freeze | grep sphinx
       - name: Build docs
         run: |

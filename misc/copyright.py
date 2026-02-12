@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020 The GsTaichi Authors. All rights reserved.
+# Copyright (c) 2020 The Quadrants Authors. All rights reserved.
 # Use of this software is governed by the LICENSE file.
 """
 Open each source file and add a copyright notice if it is missing.
@@ -40,14 +40,14 @@ The scripts checks a file and modifies it if necessary.
         As an exception, if there is a sharp-bang (#!) line at the first line,
         the new notice is inserted after it.
     (2) If a copyright notice is present, but is in a specific wrong format, it
-        modifies the notice: https://github.com/taichi-dev/gstaichi/issues/1024
+        modifies the notice: https://github.com/taichi-dev/quadrants/issues/1024
 
 Examples:
 
 {file} .
-{file} --check gstaichi/common/core.cpp gstaichi/ir/transforms.h
-{file} benchmarks cmake docs examples misc python gstaichi tests
-{file} --exts "cpp,py" benchmarks cmake docs examples misc python gstaichi tests""".format(
+{file} --check quadrants/common/core.cpp quadrants/ir/transforms.h
+{file} benchmarks cmake docs examples misc python quadrants tests
+{file} --exts "cpp,py" benchmarks cmake docs examples misc python quadrants tests""".format(
     file=os.path.relpath(__file__)
 )
 
@@ -108,7 +108,7 @@ def make_notice(comment_style: CommentStyle, ctime_year: str) -> List[str]:
         line_start = "//"
     elif comment_style == CommentStyle.PY_STYLE:
         line_start = "#"
-    lines.append("{0} Copyright (c) {1} The GsTaichi Authors. All rights reserved.\n".format(line_start, ctime_year))
+    lines.append("{0} Copyright (c) {1} The Quadrants Authors. All rights reserved.\n".format(line_start, ctime_year))
     lines.append("{0} Use of this software is governed by the LICENSE file.\n".format(line_start))
     if comment_style == CommentStyle.C_STYLE:
         lines.append("*" * 78 + "*/\n")
@@ -117,8 +117,8 @@ def make_notice(comment_style: CommentStyle, ctime_year: str) -> List[str]:
 
 
 # Sync with DOC_STRING
-COPYRIGHT_NOTICE_REGEX = re.compile(r"copyright.+gstaichi")
-COPYRIGHT_INCORRECT_REGEX = re.compile(r"copyright.+gstaichi.+(20\d\d)- ")
+COPYRIGHT_NOTICE_REGEX = re.compile(r"copyright.+quadrants")
+COPYRIGHT_INCORRECT_REGEX = re.compile(r"copyright.+quadrants.+(20\d\d)- ")
 
 
 def check_and_modify(filepath: str, comment_style: CommentStyle, check_only: bool) -> FileActionResult:
@@ -165,7 +165,7 @@ def check_and_modify(filepath: str, comment_style: CommentStyle, check_only: boo
             # should be confident :)
             correct_line = (
                 " " * notice_match_start
-            ) + "Copyright (c) %s The GsTaichi Authors. All rights reserved.\n" % year_1st
+            ) + "Copyright (c) %s The Quadrants Authors. All rights reserved.\n" % year_1st
             body_lines[to_replace_line_index] = correct_line
         return_state = FileActionResult.MODIFIED_NOTICE
     if not check_only:

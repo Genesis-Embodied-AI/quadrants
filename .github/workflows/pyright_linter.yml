@@ -26,16 +26,16 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: install stubs, from wheel, and dev install gstaichi
+      - name: install stubs, from wheel, and dev install quadrants
         run: |
           set -x
           mkdir -p dist
           mv *.whl dist/
           ls -lh dist/
           unzip dist/*.whl -d dist
-          mkdir -p stubs/gstaichi/_lib/core
-          cp dist/gstaichi/_lib/core/gstaichi_python.pyi stubs/gstaichi/_lib/core/
-          touch stubs/gstaichi/_lib/core/py.typed
+          mkdir -p stubs/quadrants/_lib/core
+          cp dist/quadrants/_lib/core/quadrants_python.pyi stubs/quadrants/_lib/core/
+          touch stubs/quadrants/_lib/core/py.typed
           pip install setuptools_scm
           pip install -e .
       - name: install torch and pyright

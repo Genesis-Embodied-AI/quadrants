@@ -1,5 +1,5 @@
 """
-import gstaichi as ti
+import quadrants as ti
 
 ti.lang.impl.current_cfg().print_ir = True
 

@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang import impl
+import quadrants as ti
+from quadrants.lang import impl
 
 from tests import test_utils
 
@@ -21,7 +21,7 @@ def test_type_mismatch():
     def test():
         impl.call_internal("test_internal_func_args", 1, 2, 3)
 
-    with pytest.raises(ti.GsTaichiTypeError, match="expected f32 for argument #1, but got i32"):
+    with pytest.raises(ti.QuadrantsTypeError, match="expected f32 for argument #1, but got i32"):
         test()
 
 
@@ -31,7 +31,7 @@ def test_arg_length_mismatch():
     def test():
         impl.call_internal("test_internal_func_args", 1.0)
 
-    with pytest.raises(ti.GsTaichiTypeError, match="1 arguments were passed in but expected 3"):
+    with pytest.raises(ti.QuadrantsTypeError, match="1 arguments were passed in but expected 3"):
         test()
 
 

@@ -1,11 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/transforms.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/transforms.h"
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class BinaryOpSimplifyTest : public ::testing::Test {
  protected:
@@ -100,4 +100,4 @@ TEST_F(BinaryOpSimplifyTest, ModPOT) {
   EXPECT_EQ(ir_block->statements[3]->as<ReturnStmt>()->values[0], bin_op);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

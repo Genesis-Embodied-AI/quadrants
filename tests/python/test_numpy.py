@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -169,7 +169,7 @@ def test_numpy_3d_error():
 
     a = np.empty(shape=(n, m, p), dtype=np.int32)
 
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         test_numpy(a)
 
 

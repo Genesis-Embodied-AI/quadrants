@@ -1,9 +1,9 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/common/core.h"
-#include "gstaichi/codegen/compiled_kernel_data.h"
+#include "quadrants/common/core.h"
+#include "quadrants/codegen/compiled_kernel_data.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 static constexpr Arch kFakeArch = (Arch)1024;
@@ -182,4 +182,4 @@ TEST(CompiledKernelDataTest, Error) {
   }
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

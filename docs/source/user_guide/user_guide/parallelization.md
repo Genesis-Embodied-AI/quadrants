@@ -36,11 +36,11 @@ There are some additional types, but these are variations on global memory:
 - constant memory: global memory, but which can be stored easily in cache
 - local memory: storage which is private to each specific thread, but, unintuitively, is stored off-chip, and is as slow as global memory
 
-GsTaichi gives access to shared memory, using `ti.stmt.SharedArray()`, but typically GsTaichi kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
+Quadrants gives access to shared memory, using `ti.stmt.SharedArray()`, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
 
 ## Thread synchronization
 
-Typically, GsTaichi kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
+Typically, Quadrants kernels use `atomic_` operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that `atomic` operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads.
 
@@ -54,7 +54,7 @@ If there is a way of partitioning data such that no thread ever needs to read da
 
 ## Maximizing GPU core utilization
 
-A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In GsTaichi, the top level for loop is parallelized over gpu threads:
+A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:
 
 ```
 @ti.kernel

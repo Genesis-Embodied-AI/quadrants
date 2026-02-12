@@ -1,9 +1,9 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/ir.h"
-#include "gstaichi/ir/statements.h"
+#include "quadrants/ir/ir.h"
+#include "quadrants/ir/statements.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 std::unique_ptr<ConstStmt> make_const_i32(int32_t value) {
@@ -42,4 +42,4 @@ TEST(Block, EraseRange) {
 }
 
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

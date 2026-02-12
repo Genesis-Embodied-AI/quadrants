@@ -3,8 +3,8 @@ import math
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.util import has_pytorch
+import quadrants as ti
+from quadrants.lang.util import has_pytorch
 
 from tests import test_utils
 

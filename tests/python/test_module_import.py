@@ -1,13 +1,13 @@
-import gstaichi as myowngstaichi
+import quadrants as myownquadrants
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_module_import():
-    @myowngstaichi.kernel
+    @myownquadrants.kernel
     def func():
-        for _ in myowngstaichi.static(range(8)):
+        for _ in myownquadrants.static(range(8)):
             pass
 
     func()

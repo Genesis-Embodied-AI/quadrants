@@ -3,7 +3,7 @@ import os
 from suite_microbenchmarks import MicroBenchmark
 from utils import datatime_with_format, dump2json
 
-from gstaichi._lib import core as ti_python_core
+from quadrants._lib import core as ti_python_core
 
 benchmark_suites = [MicroBenchmark]
 

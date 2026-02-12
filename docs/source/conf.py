@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 __version__ = ".".join([str(v) for v in ti.__version__])
 # Configuration file for the Sphinx documentation builder.
@@ -9,13 +9,13 @@ __version__ = ".".join([str(v) for v in ti.__version__])
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "GsTaichi"
+project = "Quadrants"
 copyright = "2025 Genesis AI Inc"
 author = ""
 release = __version__
 version = __version__
 
-autoapi_dirs = ["../../python/gstaichi"]
+autoapi_dirs = ["../../python/quadrants"]
 autoapi_options = ["members", "undoc-members", "show-inheritance", "show-module-summary"]
 autoapi_python_use_implicit_namespaces = True
 

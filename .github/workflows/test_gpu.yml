@@ -76,7 +76,7 @@ jobs:
           ls -lhd /usr/local/cuda*
           ls -l /usr/local/cuda/lib64/libcusolver*
           ls -l /usr/local/cuda/lib64/libcusparse*
-      - name: install gstaichi
+      - name: install quadrants
         run: |
           set -x
           mkdir -p dist
@@ -85,10 +85,10 @@ jobs:
       - name: run tests
         run: |
           ls -lh
-          chmod +x gstaichi_cpp_tests
+          chmod +x quadrants_cpp_tests
           ls -lh
-          export TI_LIB_DIR="$(python -c 'import gstaichi as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
-          ./gstaichi_cpp_tests --gtest_filter=-AMDGPU.*
+          export TI_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+          ./quadrants_cpp_tests --gtest_filter=-AMDGPU.*
   test_linux_cuda:
     name: Test Linux CUDA
     runs-on: gpu-t4-4-core
@@ -110,7 +110,7 @@ jobs:
           ls -lhd /usr/local/cuda*
           ls -l /usr/local/cuda/lib64/libcusolver*
           ls -l /usr/local/cuda/lib64/libcusparse*
-      - name: install gstaichi
+      - name: install quadrants
         run: |
           set -x
           mkdir -p dist
@@ -142,7 +142,7 @@ jobs:
       - name: install vulkan validation layer
         run: |
           sudo apt-get install -y vulkan-validationlayers
-      - name: install gstaichi
+      - name: install quadrants
         run: |
           set -x
           mkdir -p dist
@@ -170,7 +170,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: install gstaichi
+      - name: install quadrants
         run: |
           set -x
           mkdir -p dist

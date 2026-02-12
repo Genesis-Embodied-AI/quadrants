@@ -2,9 +2,9 @@
 
 #include <memory>
 
-#include "gstaichi/program/program.h"
+#include "quadrants/program/program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class TestProgram {
  public:
@@ -18,4 +18,4 @@ class TestProgram {
   std::unique_ptr<Program> prog_{nullptr};
 };
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

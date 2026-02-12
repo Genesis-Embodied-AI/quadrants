@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -118,33 +118,33 @@ def test_offset_for_matrix():
 @test_utils.test(arch=get_host_arch_list())
 def test_offset_must_throw_scalar():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="The dimensionality of shape and offset must be the same",
     ):
         a = ti.field(dtype=ti.f32, shape=3, offset=(3, 4))
-    with pytest.raises(ti.GsTaichiCompilationError, match="shape cannot be None when offset is set"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when offset is set"):
         b = ti.field(dtype=ti.f32, shape=None, offset=(3, 4))
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_offset_must_throw_vector():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="The dimensionality of shape and offset must be the same",
     ):
         a = ti.Vector.field(3, dtype=ti.f32, shape=3, offset=(3, 4))
-    with pytest.raises(ti.GsTaichiCompilationError, match="shape cannot be None when offset is set"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when offset is set"):
         b = ti.Vector.field(3, dtype=ti.f32, shape=None, offset=(3,))
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_offset_must_throw_matrix():
     with pytest.raises(
-        ti.GsTaichiCompilationError,
+        ti.QuadrantsCompilationError,
         match="The dimensionality of shape and offset must be the same",
     ):
         a = ti.Matrix.field(3, 3, dtype=ti.i32, shape=(32, 16, 8), offset=(32, 16))
-    with pytest.raises(ti.GsTaichiCompilationError, match="shape cannot be None when offset is set"):
+    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when offset is set"):
         b = ti.Matrix.field(3, 3, dtype=ti.i32, shape=None, offset=(32, 16))
 
 

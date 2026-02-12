@@ -50,7 +50,7 @@ def setup_clang(as_compiler=True) -> None:
         clangpp = join(brew_prefix, "opt", "llvm@20", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
         out = get_cache_home() / "clang-20-1-0"
-        url = "https://github.com/Genesis-Embodied-AI/gstaichi-sdk-builds/releases/download/llvm-20.1.0-202511141226/taichi-llvm-20.1.0-windows-amd64.zip"
+        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-20.1.0-202511141226/taichi-llvm-20.1.0-windows-amd64.zip"
         download_dep(url, out, force=True)
         clang = str(out / "bin" / "clang++.exe").replace("\\", "\\\\")
         clangpp = clang
@@ -126,13 +126,13 @@ def setup_msvc() -> None:
             if not vs.exists():
                 continue
 
-            if os.environ.get("TI_CI") and not os.environ.get("GSTAICHI_USE_MSBUILD"):
+            if os.environ.get("TI_CI") and not os.environ.get("QUADRANTS_USE_MSBUILD"):
                 # Use Ninja + MSVC in CI, for better caching
                 _vs_devshell(vs)
                 cmake_args["CMAKE_C_COMPILER"] = "cl.exe"
                 cmake_args["CMAKE_CXX_COMPILER"] = "cl.exe"
             else:
-                os.environ["GSTAICHI_USE_MSBUILD"] = "1"
+                os.environ["QUADRANTS_USE_MSBUILD"] = "1"
 
             return
     else:

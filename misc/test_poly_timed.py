@@ -1,7 +1,7 @@
 from autograd import grad
 
-import gstaichi as ti
-from gstaichi._testing import approx
+import quadrants as ti
+from quadrants._testing import approx
 
 
 # Note: test happens at v = 0.2

@@ -1,7 +1,7 @@
 [project]
-name = "gstaichi"
-description = "The GsTaichi Programming Language"
-maintainers = [{name = "GsTaichi developers"}]
+name = "quadrants"
+description = "The Quadrants Programming Language"
+maintainers = [{name = "Quadrants developers"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Topic :: Software Development :: Compilers",
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [tool.setuptools_scm]
-write_to = "python/gstaichi/_version.py"
+write_to = "python/quadrants/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 
 [dependency-groups]
@@ -81,7 +81,7 @@ test = [
     "Pillow",
     "pytest",
     # 16.0 upgrade broke xfail, caused fatal errors, see
-    # https://github.com/Genesis-Embodied-AI/gstaichi/pull/162
+    # https://github.com/Genesis-Embodied-AI/quadrants/pull/162
     "pytest-rerunfailures<16.0",
     "pytest-cov",
     "pytest-retry",
@@ -100,7 +100,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Genesis-Embodied-AI/gstaichi"
+Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 
 [build-system]
 requires = [
@@ -142,5 +142,5 @@ select = ["I", "F401"]  # Enable import ordering checks, and unused import check
 
 [tool.ruff.lint.isort]
 known-local-folder = ["tests", ".github"]
-known-first-party = ["gstaichi"]
+known-first-party = ["quadrants"]
 known-third-party = ["pytest"]

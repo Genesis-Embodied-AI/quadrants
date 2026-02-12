@@ -3,10 +3,10 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "gstaichi/common/core.h"
-#include "gstaichi/ir/type_factory.h"
+#include "quadrants/common/core.h"
+#include "quadrants/ir/type_factory.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 class BinIoPair {
@@ -264,4 +264,4 @@ TEST(Serialization, JsonSerde) {
 }
 
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

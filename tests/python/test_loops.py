@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -158,7 +158,7 @@ def test_loop_arg_as_range():
 
 @test_utils.test()
 def test_assignment_in_nested_loops():
-    # https://github.com/taichi-dev/gstaichi/issues/1109
+    # https://github.com/taichi-dev/quadrants/issues/1109
     m = ti.field(ti.f32, 3)
     x = ti.field(ti.f32, ())
 

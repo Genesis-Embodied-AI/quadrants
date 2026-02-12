@@ -1,6 +1,6 @@
 import numpy as np
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -41,7 +41,7 @@ def test_vector_arg():
 
 @test_utils.test()
 def test_matrix_fancy_arg():
-    from gstaichi.math import mat3, vec3
+    from quadrants.math import mat3, vec3
 
     mat4x3 = ti.types.matrix(4, 3, float)
     mat2x6 = ti.types.matrix(2, 6, float)

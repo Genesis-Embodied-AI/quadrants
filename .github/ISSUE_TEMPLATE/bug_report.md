@@ -30,8 +30,8 @@ The developer team will put a higher priority on bugs that can be reproduced wit
 Please post the **full log** of the program (instead of just a few lines around the error message, unless the log is > 1000 lines). This will help us diagnose what's happening. For example:
 ```
 $ python my_sample_code.py
-[GsTaichi] mode=release
-[GsTaichi] version 0.6.29, llvm 10.0.0, commit b63f6663, linux, python 3.8.3
+[Quadrants] mode=release
+[Quadrants] version 0.6.29, llvm 10.0.0, commit b63f6663, linux, python 3.8.3
 ...
 ```
 -->

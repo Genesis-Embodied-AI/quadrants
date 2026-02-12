@@ -1,13 +1,13 @@
 #include "gtest/gtest.h"
 
 #ifdef TI_WITH_AMDGPU
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/rhi/amdgpu/amdgpu_driver.h"
-#include "gstaichi/rhi/amdgpu/amdgpu_context.h"
-#include "gstaichi/rhi/amdgpu/amdgpu_device.h"
-#include "gstaichi/runtime/amdgpu/jit_amdgpu.h"
-#include "gstaichi/runtime/llvm/llvm_context.h"
-#include "gstaichi/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/rhi/amdgpu/amdgpu_driver.h"
+#include "quadrants/rhi/amdgpu/amdgpu_context.h"
+#include "quadrants/rhi/amdgpu/amdgpu_device.h"
+#include "quadrants/runtime/amdgpu/jit_amdgpu.h"
+#include "quadrants/runtime/llvm/llvm_context.h"
+#include "quadrants/runtime/llvm/llvm_context_pass.h"
 
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
@@ -24,22 +24,22 @@
 
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi {
+namespace quadrants {
 namespace lang {
 
 TEST(AMDGPU, CreateDeviceAndAlloc) {
   std::unique_ptr<amdgpu::AmdgpuDevice> device =
       std::make_unique<amdgpu::AmdgpuDevice>();
   EXPECT_TRUE(device != nullptr);
-  gstaichi::lang::Device::AllocParams params;
+  quadrants::lang::Device::AllocParams params;
   params.size = 400;
   params.host_read = true;
   params.host_write = true;
-  gstaichi::lang::DeviceAllocation device_alloc;
+  quadrants::lang::DeviceAllocation device_alloc;
   EXPECT_EQ(device->allocate_memory(params, &device_alloc), RhiResult::success);
 
   // The purpose of the device_alloc_guard is to rule out double free
-  const gstaichi::lang::DeviceAllocationGuard device_alloc_guard(device_alloc);
+  const quadrants::lang::DeviceAllocationGuard device_alloc_guard(device_alloc);
   // Map to CPU, write some values, then check those values
   void *mapped;
   EXPECT_EQ(device->map(device_alloc, &mapped), RhiResult::success);
@@ -67,20 +67,20 @@ TEST(AMDGPU, ImportMemory) {
   size_t mem_size = 400;
   AMDGPUDriver::get_instance().malloc_managed((void **)&ptr, mem_size,
                                               HIP_MEM_ATTACH_GLOBAL);
-  const gstaichi::lang::DeviceAllocation device_alloc =
+  const quadrants::lang::DeviceAllocation device_alloc =
       device->import_memory(ptr, mem_size);
 
   for (int i = 0; i < mem_size / sizeof(int); i++) {
     ptr[i] = i;
   }
 
-  gstaichi::lang::Device::AllocParams params;
+  quadrants::lang::Device::AllocParams params;
   params.size = 400;
   params.host_read = true;
   params.host_write = true;
-  gstaichi::lang::DeviceAllocation device_dest;
+  quadrants::lang::DeviceAllocation device_dest;
   EXPECT_EQ(device->allocate_memory(params, &device_dest), RhiResult::success);
-  const gstaichi::lang::DeviceAllocationGuard device_dest_guard(device_dest);
+  const quadrants::lang::DeviceAllocationGuard device_dest_guard(device_dest);
 
   AMDGPUDriver::get_instance().stream_synchronize(nullptr);
   device->memcpy_internal(device_dest.get_ptr(0), device_alloc.get_ptr(0),
@@ -229,7 +229,7 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
       llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(),
       diagnostic_err, llvm_context);
 
-  // auto amdgpu_session = new JITSessionAMDGPU(new GsTaichiLLVMContext(new
+  // auto amdgpu_session = new JITSessionAMDGPU(new QuadrantsLLVMContext(new
   // CompileConfig, Arch::amdgpu), new CompileConfig(), llvm::DataLayout(""));
   LLVMInitializeAMDGPUTarget();
   LLVMInitializeAMDGPUTargetMC();
@@ -268,5 +268,5 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
 }
 
 }  // namespace lang
-}  // namespace gstaichi
+}  // namespace quadrants
 #endif

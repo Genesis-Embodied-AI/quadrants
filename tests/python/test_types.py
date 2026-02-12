@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang import impl
+import quadrants as ti
+from quadrants.lang import impl
 
 from tests import test_utils
 
@@ -149,7 +149,7 @@ def test_overflow64(dt, n):
 )
 @test_utils.test(require=ti.extension.data64)
 def test_uint_max(dt, val):
-    # https://github.com/taichi-dev/gstaichi/issues/2060
+    # https://github.com/taichi-dev/quadrants/issues/2060
     impl.get_runtime().default_ip = dt
     N = 16
     f = ti.field(dt, shape=N)

@@ -27,7 +27,7 @@ CMakeFiles/
 cmake_install.cmake
 CMakeCache.txt
 FindNumpyPath.py
-runtimes/GsTaichi.pyd
+runtimes/Quadrants.pyd
 runtimes/tmp*
 runtimes/task*
 runtimes/*.exe
@@ -36,8 +36,8 @@ runtimes/Release
 runtimes/Debug
 runtimes/RelWithDebInfo
 runtimes/*.png
-runtimes/gstaichi_python*
-runtimes/libgstaichi_python*
+runtimes/quadrants_python*
+runtimes/libquadrants_python*
 .pypirc
 dist/
 python/MANIFEST
@@ -57,11 +57,11 @@ __pycache__
 !docs/**/*.jpg
 !docs/**/*.png
 !tests/python/expected/*.png
-!python/gstaichi/examples/algorithm/circle-packing/*.png
+!python/quadrants/examples/algorithm/circle-packing/*.png
 *.egg-info
 .tlang_cache
-/gstaichi/common/version.h
-/gstaichi/common/commit_hash.h
+/quadrants/common/version.h
+/quadrants/common/commit_hash.h
 /python/test_env
 /CHANGELOG.md
 /.coverage
@@ -95,4 +95,4 @@ imgui.ini
 *.so
 stubs/
 CHANGELOG.md
-python/gstaichi/_version.py
+python/quadrants/_version.py

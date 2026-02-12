@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -159,7 +159,7 @@ def test_nested_data_class_func():
 
 @test_utils.test()
 def test_nested_data_class_func():
-    with pytest.raises(ti.GsTaichiSyntaxError, match="Default value in @dataclass is not supported."):
+    with pytest.raises(ti.QuadrantsSyntaxError, match="Default value in @dataclass is not supported."):
 
         @ti.dataclass
         class Foo:

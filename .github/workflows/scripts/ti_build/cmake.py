@@ -139,10 +139,10 @@ class CMakeArgsManager:
         return self.definitions[name]
 
 
-cmake_args = CMakeArgsManager("GSTAICHI_CMAKE_ARGS")
+cmake_args = CMakeArgsManager("QUADRANTS_CMAKE_ARGS")
 
 
-@banner("Parsing GSTAICHI_CMAKE_ARGS")
+@banner("Parsing QUADRANTS_CMAKE_ARGS")
 def _init_cmake_args():
     cmake_args.collect_options("CMakeLists.txt", *glob.glob("cmake/*.cmake"))
     cmake_args.parse_initial_args()

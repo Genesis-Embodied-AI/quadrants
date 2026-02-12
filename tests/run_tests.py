@@ -37,7 +37,7 @@ def _test_python(args, default_dir="python"):
         pytest_args += ["--reruns", args.rerun]
     try:
         if args.coverage:
-            pytest_args += ["--cov-branch", "--cov=python/gstaichi"]
+            pytest_args += ["--cov-branch", "--cov=python/quadrants"]
         if args.cov_append:
             pytest_args += ["--cov-append"]
         if args.keys:
@@ -81,7 +81,7 @@ def _test_python(args, default_dir="python"):
 
 def test():
     """Run the tests"""
-    parser = argparse.ArgumentParser(description=f"Run gstaichi python test")
+    parser = argparse.ArgumentParser(description=f"Run quadrants python test")
     parser.add_argument("files", nargs="*", help='Test name(s) to be run, e.g. "cli"')
     parser.add_argument(
         "-c",

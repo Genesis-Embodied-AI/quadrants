@@ -1,5 +1,5 @@
 {
-  "javascript"      : "GsTaichi in javascript",
+  "javascript"      : "Quadrants in javascript",
   "ci"              : "CI/CD workflow",
   "cpu"             : "CPU backends",
   "cuda"            : "CUDA backend",
@@ -26,7 +26,7 @@
   "bug"             : "Bug fixes",
   "test"            : "Tests",
   "benchmark"       : "Benchmarking",
-  "mesh"            : "MeshGsTaichi",
+  "mesh"            : "MeshQuadrants",
   "workflow"        : "GitHub Actions/Workflows",
   "linux"           : "Linux",
   "mac"             : "Mac OS X",

@@ -1,6 +1,6 @@
 # This file is not part of standard tests since it uses too much GPU memory
 
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.cuda, debug=True)
 

@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -18,7 +18,7 @@ def test_ifexpr_vector():
             cond = (I < 3) & (g_v[I] < 0) | (I > n_grids - 3) & (g_v[I] > 0)
             g_v[I] = 0 if cond else g_v[I]
 
-    with pytest.raises(ti.GsTaichiSyntaxError, match='Please use "ti.select" instead.'):
+    with pytest.raises(ti.QuadrantsSyntaxError, match='Please use "ti.select" instead.'):
         func()
 
 
