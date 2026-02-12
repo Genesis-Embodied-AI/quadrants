@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Getting started &#8212; GsTaichi 4.6.1 documentation</title>
+    <title>Getting started &#8212; Quadrants 4.6.1 documentation</title>
   
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">GsTaichi 4.6.1 documentation</p>
+    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
   
 </a></div>
     
@@ -360,20 +360,20 @@
 </section>
 <section id="procedure">
 <h2>Procedure<a class="headerlink" href="#procedure" title="Link to this heading">#</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">gstaichi</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">quadrants</span>
 </pre></div>
 </div>
 </section>
 <section id="sanity-checking-the-installation">
 <h2>Sanity checking the installation<a class="headerlink" href="#sanity-checking-the-installation" title="Link to this heading">#</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s1">&#39;import gstaichi as ti; ti.init(arch=ti.gpu)&#39;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s1">&#39;import quadrants as ti; ti.init(arch=ti.gpu)&#39;</span>
 </pre></div>
 </div>
 <p>(should not show any error messages)</p>
 </section>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="a-first-gstaichi-kernel">
-<h1>A first GsTaichi kernel<a class="headerlink" href="#a-first-gstaichi-kernel" title="Link to this heading">#</a></h1>
+<section class="tex2jax_ignore mathjax_ignore" id="a-first-quadrants-kernel">
+<h1>A first Quadrants kernel<a class="headerlink" href="#a-first-quadrants-kernel" title="Link to this heading">#</a></h1>
 <p>Let’s use a linear congruential generator - a pseudo-random number generator - since they are not easily possible for a compiler to optimize out. First, in normal python:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">lcg_np</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">npt</span><span class="o">.</span><span class="n">NDArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
@@ -406,13 +406,13 @@
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;elapsed&quot;</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>You can find the full code also at <a class="reference download internal" download="" href="../../_downloads/720a5c32924fcc0dc40fa5f642dc83f5/lcg_python.py"><span class="xref download myst">lcg_python.py</span></a></p>
+<p>You can find the full code also at <a class="reference download internal" download="" href="../../_downloads/726bb7f3e2cc231d78100cf388670fca/lcg_python.py"><span class="xref download myst">lcg_python.py</span></a></p>
 <p>On a Macbook Air M4, this gives the following output:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># elapsed 5.552601099014282</span>
 </pre></div>
 </div>
-<p>Now let’s convert it to gstaichi</p>
-<p>Here is the function, written as a GsTaichi kernel:</p>
+<p>Now let’s convert it to quadrants</p>
+<p>Here is the function, written as a Quadrants kernel:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
@@ -427,8 +427,8 @@
 <li><p>added <code class="docutils literal notranslate"><span class="pre">&#64;ti.kernel</span></code> annotation</p></li>
 <li><p>changed type from <code class="docutils literal notranslate"><span class="pre">npt.NDArray</span></code> to <code class="docutils literal notranslate"><span class="pre">ti.types.NDArray[ti.i32,</span> <span class="pre">1]</span></code></p></li>
 </ul>
-<p>Before we run this we need to import gstaichi, and initialize it:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gstaichi</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<p>Before we run this we need to import quadrants, and initialize it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
 
 <span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 </pre></div>
@@ -437,7 +437,7 @@
 <ul class="simple">
 <li><p>using <code class="docutils literal notranslate"><span class="pre">ti.gpu</span></code> will use the first GPU it finds</p></li>
 </ul>
-<p>We’ll also need to create a gstaichi ndarray:</p>
+<p>We’ll also need to create a quadrants ndarray:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
 </pre></div>
 </div>
@@ -462,7 +462,7 @@
 </pre></div>
 </div>
 <p>The full program then becomes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gstaichi</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
 
@@ -490,8 +490,8 @@
 </pre></div>
 </div>
 <p>When run on a Macbook Air M4, the output is something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># [GsTaichi] version 1.8.0, llvm 15.0.7, commit 5afed1c9, osx, python 3.10.16</span>
-<span class="c1"># [GsTaichi] Starting on arch=metal</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># [Quadrants] version 1.8.0, llvm 15.0.7, commit 5afed1c9, osx, python 3.10.16</span>
+<span class="c1"># [Quadrants] Starting on arch=metal</span>
 <span class="c1"># elapsed 0.04660296440124512</span>
 </pre></div>
 </div>
@@ -499,11 +499,11 @@
 <p>On one of our linux boxes with a 5090 GPU, the results are:</p>
 <ul class="simple">
 <li><p>numpy: 6.90 seconds</p></li>
-<li><p>gstaichi: 0.0199 seconds</p></li>
+<li><p>quadrants: 0.0199 seconds</p></li>
 <li><p>=&gt; 346 times faster</p></li>
 </ul>
-<section id="what-does-gstaichi-do-with-the-kernel-function">
-<h2>What does GsTaichi do with the kernel function?<a class="headerlink" href="#what-does-gstaichi-do-with-the-kernel-function" title="Link to this heading">#</a></h2>
+<section id="what-does-quadrants-do-with-the-kernel-function">
+<h2>What does Quadrants do with the kernel function?<a class="headerlink" href="#what-does-quadrants-do-with-the-kernel-function" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p>any top level for loops are parallelized across the GPU cores (or CPU, if you run on CPU)</p>
 <ul>
@@ -515,12 +515,12 @@
 </section>
 <section id="fields-even-faster">
 <h2>fields: even faster<a class="headerlink" href="#fields-even-faster" title="Link to this heading">#</a></h2>
-<p>GsTaichi ndarrays are easy to use, and flexible, but we can increase speed by another ~30% or so (depending on the kernel), by using fields.</p>
-<p>The kernel above doesn’t load or store data except at the start and end: it’s just exercising the GPU APU. To see the difference between Taichi ndarray and GsTaichi field runtime speed, we need a kernel that does more loads and stores.</p>
+<p>Quadrants ndarrays are easy to use, and flexible, but we can increase speed by another ~30% or so (depending on the kernel), by using fields.</p>
+<p>The kernel above doesn’t load or store data except at the start and end: it’s just exercising the GPU APU. To see the difference between Taichi ndarray and Quadrants field runtime speed, we need a kernel that does more loads and stores.</p>
 <p>We’ll do a simple kernel that copies from one tensor to another. To avoid simply measuring the latency to read and write from/to global memory, we’ll read and write the same values repeatedly.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">gstaichi</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
 
 <span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
@@ -562,13 +562,13 @@
 </div>
 <p>Here are the outputs, using a 5090 gpu, on ubuntu:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ python doc/mem_copy.py
-[GsTaichi] version 1.8.0, llvm 15.0.4, commit b4755383, linux, python 3.10.15
-[GsTaichi] Starting on arch=cuda
+[Quadrants] version 1.8.0, llvm 15.0.4, commit b4755383, linux, python 3.10.15
+[Quadrants] Starting on arch=cuda
 iteration time 29.45709228515625 us
 
 $ python doc/mem_copy.py --use-field
-[GsTaichi] version 1.8.0, llvm 15.0.4, commit b4755383, linux, python 3.10.15
-[GsTaichi] Starting on arch=cuda
+[Quadrants] version 1.8.0, llvm 15.0.4, commit b4755383, linux, python 3.10.15
+[Quadrants] Starting on arch=cuda
 iteration time 21.44002914428711 us
 </pre></div>
 </div>
@@ -631,8 +631,8 @@ iteration time 21.44002914428711 us
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sanity-checking-the-installation">Sanity checking the installation</a></li>
 </ul>
 </li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#a-first-gstaichi-kernel">A first GsTaichi kernel</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-does-gstaichi-do-with-the-kernel-function">What does GsTaichi do with the kernel function?</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#a-first-quadrants-kernel">A first Quadrants kernel</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-does-quadrants-do-with-the-kernel-function">What does Quadrants do with the kernel function?</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-even-faster">fields: even faster</a></li>
 </ul>
 </li>

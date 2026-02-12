@@ -1,0 +1,24 @@
+quadrants
+=========
+
+.. py:module:: quadrants
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/ad/index
+   /autoapi/quadrants/algorithms/index
+   /autoapi/quadrants/experimental/index
+   /autoapi/quadrants/lang/index
+   /autoapi/quadrants/linalg/index
+   /autoapi/quadrants/math/index
+   /autoapi/quadrants/profiler/index
+   /autoapi/quadrants/sparse/index
+   /autoapi/quadrants/tools/index
+   /autoapi/quadrants/types/index
+
+
