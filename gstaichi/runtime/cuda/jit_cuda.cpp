@@ -81,7 +81,9 @@ JITSessionCUDA::JITSessionCUDA(GsTaichiLLVMContext *tlctx,
       config_(config) {
   PtxCache::Config ptx_cache_config;
   ptx_cache_config.offline_cache_path = config.offline_cache_file_path;
-  ptx_cache_ = std::make_unique<PtxCache>(ptx_cache_config, config);
+  int compute_capability = CUDAContext::get_instance().get_compute_capability();
+  ptx_cache_ =
+      std::make_unique<PtxCache>(ptx_cache_config, config, compute_capability);
 
   finalizer_ = std::make_unique<Finalizer>(ptx_cache_.get());
   program_impl_->register_needs_finalizing(finalizer_.get());
