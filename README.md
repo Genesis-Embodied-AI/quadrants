@@ -16,7 +16,7 @@ The quadrants project was originally forked from [Taichi](https://github.com/tai
 
 > 太极生两仪，两仪生四象
 >
-> The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quandrants_).
+> The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quadrants_).
 
 _Quadrants_ captures the idea of progression originated from taichi — built on the same foundation, evolving in its own direction while acknowledging its roots.
 This project is now fully independent and does not aim to maintain backward compatibility with upstream Taichi.
