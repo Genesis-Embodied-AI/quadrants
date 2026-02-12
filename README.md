@@ -1,6 +1,6 @@
 # What is Quadrants?
 
-Quadrants is a high-performance multi-platform compiler for physics simulation being continuously developed by [Genesis AI](https://genesis-ai.company/). 
+Quadrants is a high-performance multi-platform compiler for physics simulation being continuously developed by [Genesis AI](https://genesis-ai.company/).
 
 It is designed for large-scale physics simulation and robotics workloads. It compiles Python code into highly optimized parallel kernels that run on:
 
