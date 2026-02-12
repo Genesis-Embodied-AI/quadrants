@@ -7,6 +7,7 @@ It is designed for large-scale physics simulation and robotics workloads. It com
 * NVIDIA GPUs (CUDA)
 * Vulkan-compatible GPUs (SPIR-V)
 * Apple Metal GPUs
+* AMD GPUs (ROCm HIP)
 * x86 and ARM64 CPUs
 
 ## The origin
