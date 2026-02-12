@@ -1,8 +1,6 @@
 # What is Quadrants?
 
-Quadrants is a high-performance multi-platform compiler for physics simulation, originally forked from [Taichi](https://github.com/taichi-dev/taichi) in June 2025.
-
-The project began as a fork of the original Taichi by [Genesis AI](https://genesis-ai.company/). As the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity.
+Quadrants is a high-performance multi-platform compiler for physics simulation. The project began as a fork of the original Taichi by [Genesis AI](https://genesis-ai.company/) in June 2025. As the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity.
 
 Quadrants is a high-performance compiler designed for large-scale physics simulation and robotics workloads. It compiles Python code into highly optimized parallel kernels that run on:
 
