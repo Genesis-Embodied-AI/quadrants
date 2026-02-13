@@ -2,50 +2,6 @@
 
 This file contains the old releases of this repo when it was called gstaichi, before we renamed it to Quadrants.
 
-## [quadrants-v0.0.1b4](https://github.com/Genesis-Embodied-AI/quadrants/releases/tag/quadrants-v0.0.1b4)  *(pre-release)*
-
-| Field  | Value |
-|--------|-------|
-| **Tag** | `quadrants-v0.0.1b4` |
-| **Date** | 2026-02-13 |
-| **Commit** | `main` |
-
-# Pre-release quadrants-v0.0.1b4
-
-This pre-release is to enable @ti.perf_dispatch, which we need for Genesis performance optimizations.
-
-## What's Changed
-### Perf
-* [cuda,amdgpu,cpu,vulkan] Add public API for kernel clock counter. by @duburcqa in https://github.com/Genesis-Embodied-AI/quadrants/pull/314
-* [Perf] dlpack with amdgpu by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/313
-* [Perf] Add ti.perf_dispatch by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/356
-### Misc
-* [Misc] Rename excluded_parameters => template_slot_locations by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/338
-* [Misc] Create ASTTransformerGlobalContext and remove Kernel from Runtime by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/340
-* [Misc] Add xfailing py dataclass tests, and test instrumentation by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/342
-* [Misc] Rename leaves => parameters by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/343
-* [Misc] Improve information in exceptions during fuse_args by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/341
-* [Misc] Add ti.clock_speed_hz() by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/346
-* [Misc] Migrate pydantic to use config dict by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/358
-* [Misc] Remove deprecated ast.Str ast.NamedConstant ast.Num ast.Bytes by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/357
-* [Misc] locale.getencoding by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/359
-* [Misc] Fix failing builds 11 feb by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/364
-* [Misc] Not dry run by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/365
-* [Misc] Fix typing for 'ti.func'. by @duburcqa in https://github.com/Genesis-Embodied-AI/quadrants/pull/363
-* [Misc] Rename gstaichi => quadrants by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/362
-### Type
-* [Type] Py dataclass arguments can be renamed by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/353
-* [Type] Cache field shape, dtype, name, for 50x faster lookup by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/355
-### Doc
-* [Doc] Upgrade README, jan 2026 by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/354
-### Bug
-* [Bug] Add SM version to ptx cache key by @hughperkins in https://github.com/Genesis-Embodied-AI/quadrants/pull/361
-
-
-**Full Changelog**: https://github.com/Genesis-Embodied-AI/quadrants/compare/v4.6.0...quadrants-v0.0.1b4
-
----
-
 ## [v4.7.0b1](https://github.com/Genesis-Embodied-AI/quadrants/releases/tag/v4.7.0b1)  *(pre-release)*
 
 | Field  | Value |
