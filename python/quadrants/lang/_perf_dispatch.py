@@ -82,8 +82,12 @@ class PerformanceDispatcher(Generic[P, R]):
             func_type = type(func)
             if func_type is {QuadrantsCallable}:
                 sig = inspect.signature(func.fn)
+                log_str = f"perf_dispatch registering {func.fn.__name__}"
+                _logging.debug(log_str)
             else:
                 sig = inspect.signature(func)
+                log_str = f"perf_dispatch registering {func.__name__}"
+                _logging.debug(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
                     raise QuadrantsSyntaxError(
@@ -180,6 +184,9 @@ class PerformanceDispatcher(Generic[P, R]):
             self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
             dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             assert dispatch_impl_ is not None
+            _logging.debug(
+                f"perf dispatch chose {dispatch_impl_.get_underlying2().__name__} out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
+            )
             return dispatch_impl_(*args, **kwargs)
 
         dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
