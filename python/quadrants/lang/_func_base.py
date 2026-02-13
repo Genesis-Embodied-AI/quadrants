@@ -41,7 +41,7 @@ from quadrants.types import (
 )
 
 from ._exceptions import raise_exception
-from ._perf_dispatch import DispatchKernelImpl
+from ._perf_dispatch import DispatchImpl
 from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 if TYPE_CHECKING:
@@ -152,7 +152,7 @@ class FuncBase:
                     pass
                 elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
-                elif self.func is DispatchKernelImpl:
+                elif self.func is DispatchImpl:
                     raise_exception(
                         QuadrantsSyntaxError,
                         msg="@ti.kernel must be above @ti.perf_dispatch",
