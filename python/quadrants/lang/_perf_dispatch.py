@@ -22,7 +22,7 @@ class DispatchKernelImpl:
         self.__wrapped__: Callable = underlying1
         self._wrapped_type = type(underlying1)
         if self._wrapped_type is QuadrantsCallable:
-            self._underlying2 = underlying1.fn
+            self._underlying2 = underlying1.fn  # type: ignore
         else:
             self._underlying2 = underlying1
 
@@ -81,12 +81,12 @@ class PerformanceDispatcher(Generic[P, R]):
         def decorator(func: Callable | QuadrantsCallable) -> Type[DispatchKernelImpl]:
             func_type = type(func)
             if func_type is {QuadrantsCallable}:
-                sig = inspect.signature(func.fn)
-                log_str = f"perf_dispatch registering {func.fn.__name__}"
+                sig = inspect.signature(func.fn)  # type: ignore
+                log_str = f"perf_dispatch registering {func.fn.__name__}"  # type: ignore
                 _logging.debug(log_str)
             else:
                 sig = inspect.signature(func)
-                log_str = f"perf_dispatch registering {func.__name__}"
+                log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
                 _logging.debug(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
