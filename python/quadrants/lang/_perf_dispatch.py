@@ -1,22 +1,31 @@
 import inspect
 import time
 from collections import defaultdict
-from typing import Any, Callable, Generic, ParamSpec, TypeVar
+from typing import Any, Callable, Generic, ParamSpec, Type, TypeVar
 
 from . import impl
 from ._quadrants_callable import QuadrantsCallable
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
+from .. import _logging
 
 NUM_WARMUP: int = 2
 
 
 class DispatchKernelImpl:
-    def __init__(self, impl: Callable, is_compatible: Callable | None) -> None:
+    def __init__(self, impl: Callable | QuadrantsCallable, is_compatible: Callable | None) -> None:
         self.is_compatible: Callable | None = is_compatible
         self.__wrapped__: Callable = impl
+        self._wrapped_type = type(impl)
+        if self._wrapped_type is QuadrantsCallable:
+            self._underlying = impl.fn
+        else:
+            self._underlying = impl
 
     def __call__(self, *args, **kwargs) -> Any:
         return self.__wrapped__(*args, **kwargs)
+    
+    def get_underlying(self) -> Callable:
+        return self._underlying
 
 
 P = ParamSpec("P")
@@ -42,7 +51,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
     def register(
         self, kernel: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
-    ) -> Callable[[Callable], Callable]:
+    ) -> Callable[[Callable], Callable] | Type[DispatchKernelImpl]:
         """
         Use register to register a @ti.kernel with a @ti.perf_dispatch meta kernel
 
@@ -64,11 +73,8 @@ class PerformanceDispatcher(Generic[P, R]):
         """
         dispatch_impl_set = self._dispatch_impl_set
 
-        def decorator(func: Callable | QuadrantsCallable) -> Callable:
+        def decorator(func: Callable | QuadrantsCallable) -> Type[DispatchKernelImpl]:
             func_type = type(func)
-            print("type func", type(func_type))
-            # if not type(func) in {Callable}:
-            #     raise QuadrantsSyntaxError("@ti.perf_dispatch should be placed before @ti.kernel")
             if func_type is {QuadrantsCallable}:
                 sig = inspect.signature(func.fn)
             else:
@@ -85,7 +91,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
             dispatch_impl = DispatchKernelImpl(impl=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
-            return func
+            return DispatchKernelImpl
 
         if kernel is not None:
             return decorator(kernel)
@@ -120,6 +126,8 @@ class PerformanceDispatcher(Generic[P, R]):
         times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
+        underlying = fastest_dispatch.get_underlying()
+        _logging.debug(f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions.")
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
