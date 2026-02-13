@@ -1,0 +1,1617 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>quadrants.lang.ops &#8212; Quadrants 4.6.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../../_static/documentation_options.js?v=68f2c66a"></script>
+    <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ops/index';</script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="quadrants.lang.runtime_ops" href="../runtime_ops/index.html" />
+    <link rel="prev" title="quadrants.lang.misc" href="../misc/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="4.6.1" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 4.6.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../../index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../../index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../../index.html">quadrants</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../ad/index.html">quadrants.ad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../algorithms/index.html">quadrants.algorithms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../experimental/index.html">quadrants.experimental</a></li>
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../index.html">quadrants.lang</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../any_array/index.html">quadrants.lang.any_array</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../ast/index.html">quadrants.lang.ast</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../ast/ast_transformer/index.html">quadrants.lang.ast.ast_transformer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast/ast_transformer_utils/index.html">quadrants.lang.ast.ast_transformer_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast/ast_transformers/index.html">quadrants.lang.ast.ast_transformers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast/checkers/index.html">quadrants.lang.ast.checkers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast/symbol_resolver/index.html">quadrants.lang.ast.symbol_resolver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ast/transform/index.html">quadrants.lang.ast.transform</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../common_ops/index.html">quadrants.lang.common_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exception/index.html">quadrants.lang.exception</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../expr/index.html">quadrants.lang.expr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../field/index.html">quadrants.lang.field</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../func/index.html">quadrants.lang.func</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../impl/index.html">quadrants.lang.impl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../intrinsics/index.html">quadrants.lang.intrinsics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../kernel/index.html">quadrants.lang.kernel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../kernel_arguments/index.html">quadrants.lang.kernel_arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../kernel_impl/index.html">quadrants.lang.kernel_impl</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../matrix/index.html">quadrants.lang.matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../matrix_ops/index.html">quadrants.lang.matrix_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../matrix_ops_utils/index.html">quadrants.lang.matrix_ops_utils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../mesh/index.html">quadrants.lang.mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../misc/index.html">quadrants.lang.misc</a></li>
+<li class="toctree-l3 current active"><a class="current reference internal" href="#">quadrants.lang.ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../runtime_ops/index.html">quadrants.lang.runtime_ops</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../shell/index.html">quadrants.lang.shell</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../simt/index.html">quadrants.lang.simt</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../simt/block/index.html">quadrants.lang.simt.block</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../simt/grid/index.html">quadrants.lang.simt.grid</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../simt/subgroup/index.html">quadrants.lang.simt.subgroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../simt/warp/index.html">quadrants.lang.simt.warp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../snode/index.html">quadrants.lang.snode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../source_builder/index.html">quadrants.lang.source_builder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../struct/index.html">quadrants.lang.struct</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../util/index.html">quadrants.lang.util</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../linalg/index.html">quadrants.linalg</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../linalg/matrixfree_cg/index.html">quadrants.linalg.matrixfree_cg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../linalg/sparse_cg/index.html">quadrants.linalg.sparse_cg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../linalg/sparse_matrix/index.html">quadrants.linalg.sparse_matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../linalg/sparse_solver/index.html">quadrants.linalg.sparse_solver</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../math/index.html">quadrants.math</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../math/mathimpl/index.html">quadrants.math.mathimpl</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../profiler/index.html">quadrants.profiler</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../profiler/kernel_metrics/index.html">quadrants.profiler.kernel_metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../profiler/kernel_profiler/index.html">quadrants.profiler.kernel_profiler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../profiler/memory_profiler/index.html">quadrants.profiler.memory_profiler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../profiler/scoped_profiler/index.html">quadrants.profiler.scoped_profiler</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sparse/index.html">quadrants.sparse</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../tools/index.html">quadrants.tools</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../tools/diagnose/index.html">quadrants.tools.diagnose</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../tools/np2ply/index.html">quadrants.tools.np2ply</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../tools/vtk/index.html">quadrants.tools.vtk</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../types/index.html">quadrants.types</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../types/annotations/index.html">quadrants.types.annotations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/compound_types/index.html">quadrants.types.compound_types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/enums/index.html">quadrants.types.enums</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/ndarray_type/index.html">quadrants.types.ndarray_type</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/primitive_types/index.html">quadrants.types.primitive_types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/quant/index.html">quadrants.types.quant</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../types/utils/index.html">quadrants.types.utils</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">API Reference</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ops</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-quadrants.lang.ops">
+<span id="quadrants-lang-ops"></span><h1>quadrants.lang.ops<a class="headerlink" href="#module-quadrants.lang.ops" title="Link to this heading">#</a></h1>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.cast" title="quadrants.lang.ops.cast"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cast</span></code></a>(obj, dtype)</p></td>
+<td><p>Copy and cast a scalar or a matrix to a specified data type.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.bit_cast" title="quadrants.lang.ops.bit_cast"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bit_cast</span></code></a>(obj, dtype)</p></td>
+<td><p>Copy and cast a scalar to a specified data type with its underlying</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.sin" title="quadrants.lang.ops.sin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sin</span></code></a>(x)</p></td>
+<td><p>Trigonometric sine, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.cos" title="quadrants.lang.ops.cos"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cos</span></code></a>(x)</p></td>
+<td><p>Trigonometric cosine, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.asin" title="quadrants.lang.ops.asin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">asin</span></code></a>(x)</p></td>
+<td><p>Trigonometric inverse sine, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.acos" title="quadrants.lang.ops.acos"><code class="xref py py-obj docutils literal notranslate"><span class="pre">acos</span></code></a>(x)</p></td>
+<td><p>Trigonometric inverse cosine, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.sqrt" title="quadrants.lang.ops.sqrt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sqrt</span></code></a>(x)</p></td>
+<td><p>Return the non-negative square-root of a scalar or a matrix,</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.rsqrt" title="quadrants.lang.ops.rsqrt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rsqrt</span></code></a>(x)</p></td>
+<td><p>The reciprocal of the square root function.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.round" title="quadrants.lang.ops.round"><code class="xref py py-obj docutils literal notranslate"><span class="pre">round</span></code></a>(x[, dtype])</p></td>
+<td><p>Round to the nearest integer, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.floor" title="quadrants.lang.ops.floor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">floor</span></code></a>(x[, dtype])</p></td>
+<td><p>Return the floor of the input, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.ceil" title="quadrants.lang.ops.ceil"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ceil</span></code></a>(x[, dtype])</p></td>
+<td><p>Return the ceiling of the input, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.frexp" title="quadrants.lang.ops.frexp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">frexp</span></code></a>(x)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.tan" title="quadrants.lang.ops.tan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tan</span></code></a>(x)</p></td>
+<td><p>Trigonometric tangent function, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.tanh" title="quadrants.lang.ops.tanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tanh</span></code></a>(x)</p></td>
+<td><p>Compute the hyperbolic tangent of <cite>x</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.exp" title="quadrants.lang.ops.exp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exp</span></code></a>(x)</p></td>
+<td><p>Compute the exponential of all elements in <cite>x</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.log" title="quadrants.lang.ops.log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log</span></code></a>(x)</p></td>
+<td><p>Compute the natural logarithm, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.abs" title="quadrants.lang.ops.abs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">abs</span></code></a>(x)</p></td>
+<td><p>Compute the absolute value <span class="math notranslate nohighlight">\(|x|\)</span> of <cite>x</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.random" title="quadrants.lang.ops.random"><code class="xref py py-obj docutils literal notranslate"><span class="pre">random</span></code></a>(→ Union[float, int])</p></td>
+<td><p>Return a single random float/integer according to the specified data type.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.pow" title="quadrants.lang.ops.pow"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pow</span></code></a>(base, exponent)</p></td>
+<td><p>First array elements raised to second array elements <span class="math notranslate nohighlight">\({base}^{exponent}\)</span>, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atan2" title="quadrants.lang.ops.atan2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atan2</span></code></a>(x1, x2)</p></td>
+<td><p>Element-wise arc tangent of <cite>x1/x2</cite>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.raw_div" title="quadrants.lang.ops.raw_div"><code class="xref py py-obj docutils literal notranslate"><span class="pre">raw_div</span></code></a>(x1, x2)</p></td>
+<td><p>Return <cite>x1 // x2</cite> if both <cite>x1</cite>, <cite>x2</cite> are integers, otherwise return <cite>x1/x2</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.raw_mod" title="quadrants.lang.ops.raw_mod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">raw_mod</span></code></a>(x1, x2)</p></td>
+<td><p>Return the remainder of <cite>x1/x2</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.bit_shr" title="quadrants.lang.ops.bit_shr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bit_shr</span></code></a>(x1, x2)</p></td>
+<td><p>Elements in <cite>x1</cite> shifted to the right by number of bits in <cite>x2</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.select" title="quadrants.lang.ops.select"><code class="xref py py-obj docutils literal notranslate"><span class="pre">select</span></code></a>(cond, x1, x2)</p></td>
+<td><p>Return an array drawn from elements in <cite>x1</cite> or <cite>x2</cite>,</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_add" title="quadrants.lang.ops.atomic_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_add</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute <cite>x + y</cite>, store the result in <cite>x</cite>,</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_mul" title="quadrants.lang.ops.atomic_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_mul</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute <cite>x * y</cite>, store the result in <cite>x</cite>,</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_sub" title="quadrants.lang.ops.atomic_sub"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_sub</span></code></a>(x, y)</p></td>
+<td><p>Atomically subtract <cite>x</cite> by <cite>y</cite>, store the result in <cite>x</cite>,</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_min" title="quadrants.lang.ops.atomic_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_min</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute the minimum of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_max" title="quadrants.lang.ops.atomic_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_max</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute the maximum of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_and" title="quadrants.lang.ops.atomic_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_and</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute the bit-wise AND of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_or" title="quadrants.lang.ops.atomic_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_or</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute the bit-wise OR of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.atomic_xor" title="quadrants.lang.ops.atomic_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomic_xor</span></code></a>(x, y)</p></td>
+<td><p>Atomically compute the bit-wise XOR of <cite>x</cite> and <cite>y</cite>, element-wise.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ops.max" title="quadrants.lang.ops.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max</span></code></a>(*args)</p></td>
+<td><p>Compute the maximum of the arguments, element-wise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ops.min" title="quadrants.lang.ops.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">min</span></code></a>(*args)</p></td>
+<td><p>Compute the minimum of the arguments, element-wise.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.cast">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">cast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#cast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.cast" title="Link to this definition">#</a></dt>
+<dd><p>Copy and cast a scalar or a matrix to a specified data type.
+Must be called in Quadrants scope.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obj</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p></li>
+<li><p><strong>dtype</strong> (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – A primitive type defined in <a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A copy of <cite>obj</cite>, casted to the specified data type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[0.0, 1.0, 2.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.bit_cast">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">bit_cast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#bit_cast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.bit_cast" title="Link to this definition">#</a></dt>
+<dd><p>Copy and cast a scalar to a specified data type with its underlying
+bits preserved. Must be called in quadrants scope.</p>
+<p>This function is equivalent to <cite>reinterpret_cast</cite> in C++.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obj</strong> (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – Input scalar.</p></li>
+<li><p><strong>dtype</strong> (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – Target data type, must have             the same precision bits as the input (hence <cite>f32</cite> -&gt; <cite>f64</cite> is not allowed).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A copy of <cite>obj</cite>, casted to the specified data type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="mf">3.14</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>  <span class="c1"># 1078523331</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># 3.14</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.sin">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">sin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#sin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.sin" title="Link to this definition">#</a></dt>
+<dd><p>Trigonometric sine, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Angle, in radians.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The sine of each element of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="n">pi</span><span class="o">/</span><span class="mf">2.</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">pi</span><span class="o">/</span><span class="mf">2.</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">[-1., 0., 1.]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.cos">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">cos</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#cos"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.cos" title="Link to this definition">#</a></dt>
+<dd><p>Trigonometric cosine, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Angle, in radians.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The cosine of each element of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="n">pi</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">pi</span><span class="o">/</span><span class="mf">2.</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">[-1., 1., 0.]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.asin">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">asin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#asin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.asin" title="Link to this definition">#</a></dt>
+<dd><p>Trigonometric inverse sine, element-wise.</p>
+<p>The inverse of <cite>sin</cite> so that, if <cite>y = sin(x)</cite>, then <cite>x = asin(y)</cite>.</p>
+<p>For input <cite>x</cite> not in the domain <cite>[-1, 1]</cite>, this function returns <cite>nan</cite> if         it’s called in quadrants scope, or raises exception if it’s called in python scope.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – A scalar or a matrix with elements in [-1, 1].</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The inverse sine of each element in <cite>x</cite>, in radians and in the closed             interval <cite>[-pi/2, pi/2]</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">asin</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]))</span> <span class="o">*</span> <span class="mi">180</span> <span class="o">/</span> <span class="n">pi</span>
+<span class="go">[-90., 0., 90.]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.acos">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">acos</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#acos"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.acos" title="Link to this definition">#</a></dt>
+<dd><p>Trigonometric inverse cosine, element-wise.</p>
+<p>The inverse of <cite>cos</cite> so that, if <cite>y = cos(x)</cite>, then <cite>x = acos(y)</cite>.</p>
+<p>For input <cite>x</cite> not in the domain <cite>[-1, 1]</cite>, this function returns <cite>nan</cite> if         it’s called in quadrants scope, or raises exception if it’s called in python scope.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – A scalar or a matrix with elements in [-1, 1].</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The inverse cosine of each element in <cite>x</cite>, in radians and in the closed             interval <cite>[0, pi]</cite>. This is a scalar if <cite>x</cite> is a scalar.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">acos</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]))</span> <span class="o">*</span> <span class="mi">180</span> <span class="o">/</span> <span class="n">pi</span>
+<span class="go">[180., 90., 0.]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.sqrt">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">sqrt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#sqrt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.sqrt" title="Link to this definition">#</a></dt>
+<dd><p>Return the non-negative square-root of a scalar or a matrix,
+element wise. If <cite>x &lt; 0</cite> an exception is raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The scalar or matrix whose square-roots are required.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The square-root <cite>y</cite> so that <cite>y &gt;= 0</cite> and <cite>y^2 = x</cite>. <cite>y</cite> has the same type as <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">,</span> <span class="mf">9.</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span>
+<span class="go">[1.0, 2.0, 3.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.rsqrt">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">rsqrt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#rsqrt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.rsqrt" title="Link to this definition">#</a></dt>
+<dd><p>The reciprocal of the square root function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – A scalar or a matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The reciprocal of <cite>sqrt(x)</cite>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.round">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">round</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#round"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.round" title="Link to this definition">#</a></dt>
+<dd><p>Round to the nearest integer, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – A scalar or a matrix.</p></li>
+<li><p><strong>dtype</strong> – (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>): the returned type, default to <cite>None</cite>. If             set to <cite>None</cite> the retuned value will have the same type with <cite>x</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The nearest integer of <cite>x</cite>, with return value type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="go">[-2., 1., 3.]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.floor">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">floor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#floor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.floor" title="Link to this definition">#</a></dt>
+<dd><p>Return the floor of the input, element-wise.
+The floor of the scalar <cite>x</cite> is the largest integer <cite>k</cite>, such that <cite>k &lt;= x</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p></li>
+<li><p><strong>dtype</strong> – (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>): the returned type, default to <cite>None</cite>. If             set to <cite>None</cite> the retuned value will have the same type with <cite>x</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The floor of each element in <cite>x</cite>, with return value type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<dl>
+<dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">3.</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>  <span class="c1"># [-2.000000000000, 2.000000000000, 3.000000000000]</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.ceil">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">ceil</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#ceil"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.ceil" title="Link to this definition">#</a></dt>
+<dd><p>Return the ceiling of the input, element-wise.</p>
+<p>The ceil of the scalar <cite>x</cite> is the smallest integer <cite>k</cite>, such that <cite>k &gt;= x</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p></li>
+<li><p><strong>dtype</strong> – (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>): the returned type, default to <cite>None</cite>. If             set to <cite>None</cite> the retuned value will have the same type with <cite>x</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The ceiling of each element in <cite>x</cite>, with return value type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mf">3.14</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.5</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>  <span class="c1"># [4.0, -1.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.frexp">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">frexp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#frexp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.frexp" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.tan">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">tan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#tan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.tan" title="Link to this definition">#</a></dt>
+<dd><p>Trigonometric tangent function, element-wise.</p>
+<p>Equivalent to <cite>ti.sin(x)/ti.cos(x)</cite> element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The tangent values of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="n">pi</span><span class="p">,</span> <span class="n">pi</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="n">pi</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[-0.0, -22877334.0, 0.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.tanh">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">tanh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#tanh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.tanh" title="Link to this definition">#</a></dt>
+<dd><p>Compute the hyperbolic tangent of <cite>x</cite>, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The corresponding hyperbolic tangent values.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[-0.761594, 0.000000, 0.761594]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.exp">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">exp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#exp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.exp" title="Link to this definition">#</a></dt>
+<dd><p>Compute the exponential of all elements in <cite>x</cite>, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Element-wise exponential of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[0.367879, 1.000000, 2.718282]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.log">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.log" title="Link to this definition">#</a></dt>
+<dd><p>Compute the natural logarithm, element-wise.</p>
+<p>The natural logarithm <cite>log</cite> is the inverse of the exponential function,
+so that <cite>log(exp(x)) = x</cite>. The natural logarithm is logarithm in base <cite>e</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The natural logarithm of <cite>x</cite>, element-wise.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[-nan, -inf, 0.000000]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.abs">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">abs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#abs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.abs" title="Link to this definition">#</a></dt>
+<dd><p>Compute the absolute value <span class="math notranslate nohighlight">\(|x|\)</span> of <cite>x</cite>, element-wise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input scalar or matrix.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The absolute value of each element in <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[1.0, 0.0, 1.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.random">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">random</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#random"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.random" title="Link to this definition">#</a></dt>
+<dd><p>Return a single random float/integer according to the specified data type.
+Must be called in quadrants scope.</p>
+<p>If the required <cite>dtype</cite> is float type, this function returns a random number
+sampled from the uniform distribution in the half-open interval [0, 1).</p>
+<p>For integer types this function returns a random integer in the
+half-open interval [0, 2^32) if a 32-bit integer is required,
+or a random integer in the half-open interval [0, 2^64) if a
+64-bit integer is required.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dtype</strong> (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – Type of the required random value.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A random value with type <cite>dtype</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># 0.090257</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>  <span class="c1"># 0.716101627301</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">i</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>  <span class="c1"># -963722261</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">j</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i64</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>  <span class="c1"># 73412986184350777</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.pow">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">pow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exponent</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#pow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.pow" title="Link to this definition">#</a></dt>
+<dd><p>First array elements raised to second array elements <span class="math notranslate nohighlight">\({base}^{exponent}\)</span>, element-wise.</p>
+<p>The result type of two scalar operands is determined as follows:
+- If the exponent is an integral value, then the result type takes the type of the base.
+- Otherwise, the result type follows</p>
+<blockquote>
+<div><p>[Implicit type casting in binary operations](<a class="reference external" href="https://docs.taichi-lang.org/docs/type#implicit-type-casting-in-binary-operations">https://docs.taichi-lang.org/docs/type#implicit-type-casting-in-binary-operations</a>).</p>
+</div></blockquote>
+<p>With the above rules, an integral value raised to a negative integral value cannot have a
+feasible type. Therefore, an exception will be raised if debug mode or optimization passes
+are on; otherwise 1 will be returned.</p>
+<p>In the following situations, the result is undefined:
+- A negative value raised to a non-integral value.
+- A zero value raised to a non-positive value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The bases.</p></li>
+<li><p><strong>exponent</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The exponents.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><cite>base</cite> raised to <cite>exponent</cite>. This is a scalar if both <cite>base</cite> and <cite>exponent</cite> are scalars.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="o">-</span><span class="mi">3</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[-0.125000, 0.125000]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atan2">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atan2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atan2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atan2" title="Link to this definition">#</a></dt>
+<dd><p>Element-wise arc tangent of <cite>x1/x2</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x1</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – y-coordinates.</p></li>
+<li><p><strong>x2</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – x-coordinates.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Angles in radians, in the range <cite>[-pi, pi]</cite>.
+This is a scalar if both <cite>x1</cite> and <cite>x2</cite> are scalars.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atan2</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="mi">180</span> <span class="o">/</span> <span class="n">pi</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">test</span><span class="p">()</span>
+<span class="go">[-135.0, -45.0, 135.0, 45.0]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.raw_div">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">raw_div</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#raw_div"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.raw_div" title="Link to this definition">#</a></dt>
+<dd><p>Return <cite>x1 // x2</cite> if both <cite>x1</cite>, <cite>x2</cite> are integers, otherwise return <cite>x1/x2</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x1</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Dividend.</p></li>
+<li><p><strong>x2</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Divisor.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Return <cite>x1 // x2</cite> if both <cite>x1</cite>, <cite>x2</cite> are integers, otherwise return <cite>x1/x2</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">raw_div</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>  <span class="c1"># 1</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="mf">4.0</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">raw_div</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">))</span>  <span class="c1"># 1.25</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.raw_mod">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">raw_mod</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#raw_mod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.raw_mod" title="Link to this definition">#</a></dt>
+<dd><p>Return the remainder of <cite>x1/x2</cite>, element-wise.
+This is the C-style <cite>mod</cite> function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x1</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The dividend.</p></li>
+<li><p><strong>x2</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The divisor.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The remainder of <cite>x1</cite> divided by <cite>x2</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>  <span class="c1"># 2</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">raw_mod</span><span class="p">(</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>  <span class="c1"># -1</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.bit_shr">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">bit_shr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#bit_shr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.bit_shr" title="Link to this definition">#</a></dt>
+<dd><p>Elements in <cite>x1</cite> shifted to the right by number of bits in <cite>x2</cite>.
+Both <cite>x1</cite>, <cite>x2</cite> must have integer type.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x1</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Input data.</p></li>
+<li><p><strong>x2</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – Number of bits to remove at the right of <cite>x1</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Return <cite>x1</cite> with bits shifted <cite>x2</cite> times to the right.
+This is a scalar if both <cite>x1</cite> and <cite>x2</cite> are scalars.</p>
+</dd>
+</dl>
+<dl>
+<dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">bit_shr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">main</span><span class="p">()</span>
+<span class="go">[3, 2]</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.select">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">select</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cond</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#select"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.select" title="Link to this definition">#</a></dt>
+<dd><p>Return an array drawn from elements in <cite>x1</cite> or <cite>x2</cite>,
+depending on the conditions in <cite>cond</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cond</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The array of conditions.</p></li>
+<li><p><strong>x1</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The arrays where the output elements are taken from.</p></li>
+<li><p><strong>x2</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The arrays where the output elements are taken from.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The output at position <cite>k</cite> is the k-th element of <cite>x1</cite> if the k-th element
+in <cite>cond</cite> is <cite>True</cite>, otherwise it’s the k-th element of <cite>x2</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">cond</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">main</span><span class="p">()</span>
+<span class="go">[-1, 2, -3, 4]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_add" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute <cite>x + y</cite>, store the result in <cite>x</cite>,
+and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [1, 2, 3]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [0, 0, 0], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_mul">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_mul" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute <cite>x * y</cite>, store the result in <cite>x</cite>,
+and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [1, 2, 3]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [4, 10, 18], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_mul</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_sub">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_sub</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_sub"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_sub" title="Link to this definition">#</a></dt>
+<dd><p>Atomically subtract <cite>x</cite> by <cite>y</cite>, store the result in <cite>x</cite>,
+and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [-1, -2, -3]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [0, 0, 0], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_sub</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_min" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute the minimum of <cite>x</cite> and <cite>y</cite>, element-wise.
+Store the result in <cite>x</cite>, and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># 1  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># 2, the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_min</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_max" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute the maximum of <cite>x</cite> and <cite>y</cite>, element-wise.
+Store the result in <cite>x</cite>, and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># 2  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># 1, the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_and">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_and" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute the bit-wise AND of <cite>x</cite> and <cite>y</cite>, element-wise.
+Store the result in <cite>x</cite>, and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_and</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [1, 0, 1]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [-1, 0, 1], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_and</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_or">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_or" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute the bit-wise OR of <cite>x</cite> and <cite>y</cite>, element-wise.
+Store the result in <cite>x</cite>, and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [-1, 2, 3]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [-1, 0, 1], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.atomic_xor">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">atomic_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#atomic_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.atomic_xor" title="Link to this definition">#</a></dt>
+<dd><p>Atomically compute the bit-wise XOR of <cite>x</cite> and <cite>y</cite>, element-wise.
+Store the result in <cite>x</cite>, and return the old value of <cite>x</cite>.</p>
+<p><cite>x</cite> must be a writable target, constant expressions or scalars
+are not allowed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+<li><p><strong>y</strong> (Union[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]) – The input. When both are matrices they must have the same shape.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The old value of <cite>x</cite>.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">atomic_xor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># [-2, 2, 2]  the new value of x</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [-1, 0, 1], the old value of x</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_xor</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># will raise QuadrantsSyntaxError</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.max" title="Link to this definition">#</a></dt>
+<dd><p>Compute the maximum of the arguments, element-wise.</p>
+<p>This function takes no effect on a single argument, even it’s array-like.
+When there are both scalar and matrix arguments in <cite>args</cite>, the matrices
+must have the same shape, and scalars will be broadcasted to the same shape as the matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>args</strong> – (List[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]):             The input.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Maximum of the inputs.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">foo</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [4, 4, 5]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ops.min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ops.</span></span><span class="sig-name descname"><span class="pre">min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/ops.html#min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ops.min" title="Link to this definition">#</a></dt>
+<dd><p>Compute the minimum of the arguments, element-wise.</p>
+<p>This function takes no effect on a single argument, even it’s array-like.
+When there are both scalar and matrix arguments in <cite>args</cite>, the matrices
+must have the same shape, and scalars will be broadcasted to the same shape as the matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>args</strong> – (List[<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>]):             The input.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Minimum of the inputs.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">foo</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>  <span class="c1"># [0, 1, 1]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../misc/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">quadrants.lang.misc</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../runtime_ops/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">quadrants.lang.runtime_ops</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.cast"><code class="docutils literal notranslate"><span class="pre">cast()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.bit_cast"><code class="docutils literal notranslate"><span class="pre">bit_cast()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.sin"><code class="docutils literal notranslate"><span class="pre">sin()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.cos"><code class="docutils literal notranslate"><span class="pre">cos()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.asin"><code class="docutils literal notranslate"><span class="pre">asin()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.acos"><code class="docutils literal notranslate"><span class="pre">acos()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.sqrt"><code class="docutils literal notranslate"><span class="pre">sqrt()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.rsqrt"><code class="docutils literal notranslate"><span class="pre">rsqrt()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.round"><code class="docutils literal notranslate"><span class="pre">round()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.floor"><code class="docutils literal notranslate"><span class="pre">floor()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.ceil"><code class="docutils literal notranslate"><span class="pre">ceil()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.frexp"><code class="docutils literal notranslate"><span class="pre">frexp()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.tan"><code class="docutils literal notranslate"><span class="pre">tan()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.tanh"><code class="docutils literal notranslate"><span class="pre">tanh()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.exp"><code class="docutils literal notranslate"><span class="pre">exp()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.log"><code class="docutils literal notranslate"><span class="pre">log()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.abs"><code class="docutils literal notranslate"><span class="pre">abs()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.random"><code class="docutils literal notranslate"><span class="pre">random()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.pow"><code class="docutils literal notranslate"><span class="pre">pow()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atan2"><code class="docutils literal notranslate"><span class="pre">atan2()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.raw_div"><code class="docutils literal notranslate"><span class="pre">raw_div()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.raw_mod"><code class="docutils literal notranslate"><span class="pre">raw_mod()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.bit_shr"><code class="docutils literal notranslate"><span class="pre">bit_shr()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.select"><code class="docutils literal notranslate"><span class="pre">select()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_add"><code class="docutils literal notranslate"><span class="pre">atomic_add()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_mul"><code class="docutils literal notranslate"><span class="pre">atomic_mul()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_sub"><code class="docutils literal notranslate"><span class="pre">atomic_sub()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_min"><code class="docutils literal notranslate"><span class="pre">atomic_min()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_max"><code class="docutils literal notranslate"><span class="pre">atomic_max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_and"><code class="docutils literal notranslate"><span class="pre">atomic_and()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_or"><code class="docutils literal notranslate"><span class="pre">atomic_or()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.atomic_xor"><code class="docutils literal notranslate"><span class="pre">atomic_xor()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.max"><code class="docutils literal notranslate"><span class="pre">max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ops.min"><code class="docutils literal notranslate"><span class="pre">min()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../../../../_sources/autoapi/quadrants/lang/ops/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
