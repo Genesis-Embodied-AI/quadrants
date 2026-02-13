@@ -11,13 +11,9 @@ NUM_WARMUP: int = 2
 
 
 class DispatchKernelImpl:
-    kernel_impl_idx: int = 1
-
-    def __init__(self, kernel: QuadrantsCallable, is_compatible: Callable | None) -> None:
+    def __init__(self, impl: Callable, is_compatible: Callable | None) -> None:
         self.is_compatible: Callable | None = is_compatible
-        self.__wrapped__: QuadrantsCallable = kernel
-        self.kernel_impl_idx = DispatchKernelImpl.kernel_impl_idx
-        DispatchKernelImpl.kernel_impl_idx += 1
+        self.__wrapped__: Callable = impl
 
     def __call__(self, *args, **kwargs) -> Any:
         return self.__wrapped__(*args, **kwargs)
@@ -45,8 +41,8 @@ class PerformanceDispatcher(Generic[P, R]):
         )
 
     def register(
-        self, kernel: QuadrantsCallable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
-    ) -> Callable[[QuadrantsCallable], QuadrantsCallable]:
+        self, kernel: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
+    ) -> Callable[[Callable], Callable]:
         """
         Use register to register a @ti.kernel with a @ti.perf_dispatch meta kernel
 
@@ -68,10 +64,15 @@ class PerformanceDispatcher(Generic[P, R]):
         """
         dispatch_impl_set = self._dispatch_impl_set
 
-        def decorator(func: QuadrantsCallable) -> QuadrantsCallable:
-            if not type(func) in {QuadrantsCallable}:
-                raise QuadrantsSyntaxError("@ti.perf_dispatch should be placed before @ti.kernel")
-            sig = inspect.signature(func.fn)
+        def decorator(func: Callable | QuadrantsCallable) -> Callable:
+            func_type = type(func)
+            print("type func", type(func_type))
+            # if not type(func) in {Callable}:
+            #     raise QuadrantsSyntaxError("@ti.perf_dispatch should be placed before @ti.kernel")
+            if func_type is {QuadrantsCallable}:
+                sig = inspect.signature(func.fn)
+            else:
+                sig = inspect.signature(func)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
                     raise QuadrantsSyntaxError(
@@ -82,7 +83,7 @@ class PerformanceDispatcher(Generic[P, R]):
                     f"Number of kernel parameters {len(sig.parameters)} doesn't match number of parameters in perf_dispatch function prototype {len(self._param_types)}"
                 )
 
-            dispatch_impl = DispatchKernelImpl(kernel=func, is_compatible=is_compatible)
+            dispatch_impl = DispatchKernelImpl(impl=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
             return func
 
@@ -247,7 +248,7 @@ def perf_dispatch(*, get_geometry_hash: Callable):
     get_geometry_hash=lambda *args, **kwargs: hash(tuple(*args, frozendict(kwargs)))
     """
 
-    def decorator(fn: QuadrantsCallable):
+    def decorator(fn: Callable | QuadrantsCallable):
         return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn)
 
     return decorator
