@@ -37,7 +37,20 @@ def get_version():
     try:
         from setuptools_scm import get_version as scm_get_version
 
-        version = scm_get_version()
+        # Read tag_regex from pyproject.toml so prefixed tags (e.g. quadrants_v1.2.3) are recognized
+        tag_regex = None
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib
+        with open("pyproject.toml", "rb") as f:
+            pyproject = tomllib.load(f)
+        tag_regex = pyproject.get("tool", {}).get("setuptools_scm", {}).get("tag_regex")
+
+        kwargs = {}
+        if tag_regex:
+            kwargs["tag_regex"] = tag_regex
+        version = scm_get_version(**kwargs)
         # Parse version string (e.g., "1.2.3" or "1.2.3.dev0+g1234567")
         version_parts = version.split("+")[0].split(".dev")[0].split("rc")[0].split("b")[0].split(".")
         major = version_parts[0] if len(version_parts) > 0 else "0"
