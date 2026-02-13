@@ -254,16 +254,14 @@ def test_perf_dispatch_annotation_mismatch() -> None:
     @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
     def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
 
-    with pytest.raises(QuadrantsSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError, match="PERFDISPATCH_ANNOTATION_SEQUENCE_MISMATCH"):
 
         @ti.kernel
         @my_func1.register
-        def my_func1_impl_impl1(c: ti.types.NDArray[ti.i32, 1]) -> None: ...
+        def my_func1_impl_impl1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]) -> None: ...
 
-    with pytest.raises(QuadrantsSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError, match="PERFDISPATCH_ANNOTATION_SEQUENCE_MISMATCH"):
 
         @ti.kernel
         @my_func1.register
-        def my_func1_impl_impl1(
-            a: ti.types.NDArray[ti.i32, 1], d: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]
-        ) -> None: ...
+        def my_func1_impl_impl1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]) -> None: ...
