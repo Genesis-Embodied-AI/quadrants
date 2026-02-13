@@ -1,0 +1,23 @@
+quadrants.linalg
+================
+
+.. py:module:: quadrants.linalg
+
+.. autoapi-nested-parse::
+
+   Quadrants support module for sparse matrix operations.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/linalg/matrixfree_cg/index
+   /autoapi/quadrants/linalg/sparse_cg/index
+   /autoapi/quadrants/linalg/sparse_matrix/index
+   /autoapi/quadrants/linalg/sparse_solver/index
+
+
