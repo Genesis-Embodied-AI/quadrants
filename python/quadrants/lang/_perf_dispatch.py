@@ -3,29 +3,34 @@ import time
 from collections import defaultdict
 from typing import Any, Callable, Generic, ParamSpec, Type, TypeVar
 
+from .. import _logging
 from . import impl
 from ._quadrants_callable import QuadrantsCallable
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
-from .. import _logging
 
 NUM_WARMUP: int = 2
 
 
 class DispatchKernelImpl:
-    def __init__(self, impl: Callable | QuadrantsCallable, is_compatible: Callable | None) -> None:
+    def __init__(self, underlying1: Callable | QuadrantsCallable, is_compatible: Callable | None) -> None:
+        """
+        - underlying1 might be the actual python function, or it might be a python fucntion wrapped in a
+        QuadrantsCallable or not.
+        - underlying2 should always be the actual python function.
+        """
         self.is_compatible: Callable | None = is_compatible
-        self.__wrapped__: Callable = impl
-        self._wrapped_type = type(impl)
+        self.__wrapped__: Callable = underlying1
+        self._wrapped_type = type(underlying1)
         if self._wrapped_type is QuadrantsCallable:
-            self._underlying = impl.fn
+            self._underlying2 = underlying1.fn
         else:
-            self._underlying = impl
+            self._underlying2 = underlying1
 
     def __call__(self, *args, **kwargs) -> Any:
         return self.__wrapped__(*args, **kwargs)
-    
-    def get_underlying(self) -> Callable:
-        return self._underlying
+
+    def get_underlying2(self) -> Callable:
+        return self._underlying2
 
 
 P = ParamSpec("P")
@@ -89,7 +94,7 @@ class PerformanceDispatcher(Generic[P, R]):
                     f"Number of kernel parameters {len(sig.parameters)} doesn't match number of parameters in perf_dispatch function prototype {len(self._param_types)}"
                 )
 
-            dispatch_impl = DispatchKernelImpl(impl=func, is_compatible=is_compatible)
+            dispatch_impl = DispatchKernelImpl(underlying1=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
             return DispatchKernelImpl
 
@@ -126,8 +131,10 @@ class PerformanceDispatcher(Generic[P, R]):
         times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
-        underlying = fastest_dispatch.get_underlying()
-        _logging.debug(f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions.")
+        underlying = fastest_dispatch.get_underlying2()
+        _logging.debug(
+            f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions."
+        )
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
