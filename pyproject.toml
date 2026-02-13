@@ -32,6 +32,7 @@ dependencies = [
 [tool.setuptools_scm]
 write_to = "python/quadrants/_version.py"
 write_to_template = "__version__ = '{version}'\n"
+tag_regex = '(?:[\w-]+[-_])?(?P<version>[vV]?\d+(?:\.\d+)*(?:[._-]?\w+)*)'
 
 [dependency-groups]
 docs = [
