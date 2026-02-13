@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 // Basic tests within a basic block
 
@@ -51,4 +51,4 @@ TEST(Simplify, SimplifyLinearizedWithTrivialInputs) {
   }
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

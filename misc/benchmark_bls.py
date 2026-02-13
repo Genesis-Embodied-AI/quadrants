@@ -1,6 +1,6 @@
 import sys
 
-import gstaichi as ti
+import quadrants as ti
 
 sys.path.append("../tests/python/")
 

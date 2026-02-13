@@ -36,4 +36,4 @@ repos:
     hooks:
       - id: pylint
         args: ['-rn', '-sn']
-        files: ^python/gstaichi/
+        files: ^python/quadrants/

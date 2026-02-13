@@ -1,6 +1,6 @@
 # This file has a kernel with 16 equal offloaded tasks.
 
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.x64)
 quality = 1  # Use a larger value for higher-res simulations

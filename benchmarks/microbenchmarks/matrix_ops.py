@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 from microbenchmarks._items import BenchmarkItem, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan

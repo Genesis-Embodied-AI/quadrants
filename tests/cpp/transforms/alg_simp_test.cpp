@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
 #include "tests/cpp/program/test_program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class AlgebraicSimplicationTest : public ::testing::Test {
  protected:
@@ -164,4 +164,4 @@ TEST_F(AlgebraicSimplicationTest, SimplifyAndMinusOne) {
   EXPECT_TRUE((*block)[0]->is<GlobalTemporaryStmt>());
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

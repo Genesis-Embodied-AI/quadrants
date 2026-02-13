@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -127,7 +127,7 @@ def test_static_grouped_static():
 
 @test_utils.test()
 def test_field_init_eye():
-    # https://github.com/taichi-dev/gstaichi/issues/1824
+    # https://github.com/taichi-dev/quadrants/issues/1824
 
     n = 32
 
@@ -145,7 +145,7 @@ def test_field_init_eye():
 
 @test_utils.test()
 def test_ndrange_index_floordiv():
-    # https://github.com/taichi-dev/gstaichi/issues/1829
+    # https://github.com/taichi-dev/quadrants/issues/1829
 
     n = 10
 
@@ -168,7 +168,7 @@ def test_ndrange_index_floordiv():
 
 @test_utils.test()
 def test_nested_ndrange():
-    # https://github.com/taichi-dev/gstaichi/issues/1829
+    # https://github.com/taichi-dev/quadrants/issues/1829
 
     n = 2
 
@@ -240,7 +240,7 @@ def test_ndrange_three_arguments():
             pass
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=r"Every argument of ndrange should be a scalar or a tuple/list like \(begin, end\)",
     ):
         foo()
@@ -269,7 +269,7 @@ def test_ndrange_non_integer_arguments():
             pass
 
     with pytest.raises(
-        ti.GsTaichiTypeError,
+        ti.QuadrantsTypeError,
         match=r"Every argument of ndrange should be an integer scalar or a tuple/list of \(int, int\)",
     ):
         example()
@@ -295,7 +295,7 @@ def test_static_ndrange_non_integer_arguments():
             pass
 
     with pytest.raises(
-        ti.GsTaichiTypeError,
+        ti.QuadrantsTypeError,
         match=r"Every argument of ndrange should be an integer scalar or a tuple/list of \(int, int\)",
     ):
         example()
@@ -328,7 +328,7 @@ def test_2d_loop_over_ndarray():
 @test_utils.test()
 def test_dimension_error():
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match="Ndrange for loop with number of the loop variables not equal to "
         "the dimension of the ndrange is not supported",
     ):

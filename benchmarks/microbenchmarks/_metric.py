@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 from microbenchmarks._items import BenchmarkItem
 from microbenchmarks._utils import End2EndTimer, get_ti_arch
 
@@ -36,7 +36,7 @@ class MetricType(BenchmarkItem):
         }
 
     @staticmethod
-    def init_gstaichi(arch: str, tag_list: list):
+    def init_quadrants(arch: str, tag_list: list):
         if set(["kernel_elapsed_time_ms"]).issubset(tag_list):
             ti.init(kernel_profiler=True, arch=get_ti_arch(arch))
         elif set(["end2end_time_ms"]).issubset(tag_list):

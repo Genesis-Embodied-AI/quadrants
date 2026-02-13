@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -13,7 +13,7 @@ def test_advanced_store_forwarding_nested_loops():
         # If we want to do store-forwarding to local loads inside loops,
         # we should pass the last local store into the loop, rather than use
         # an empty AllocaOptimize loop.
-        # See https://github.com/taichi-dev/gstaichi/pull/849.
+        # See https://github.com/taichi-dev/quadrants/pull/849.
         a = val[None]
         for i in range(1):
             for j in range(1):
@@ -51,7 +51,7 @@ def test_advanced_unused_store_elimination_if():
 
 @test_utils.test()
 def test_local_store_in_nested_for_and_if():
-    # See https://github.com/taichi-dev/gstaichi/pull/862.
+    # See https://github.com/taichi-dev/quadrants/pull/862.
     val = ti.field(ti.i32, shape=(3, 3, 3))
 
     @ti.kernel

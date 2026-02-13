@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -173,7 +173,7 @@ def test_customized_kernels_oop2():
 
 
 @test_utils.test()
-def test_decorated_primal_is_gstaichi_kernel():
+def test_decorated_primal_is_quadrants_kernel():
     x = ti.field(ti.f32)
     total = ti.field(ti.f32)
 

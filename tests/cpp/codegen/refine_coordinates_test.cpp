@@ -8,15 +8,15 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/BasicBlock.h"
 
-#include "gstaichi/rhi/arch.h"
-#include "gstaichi/ir/snode.h"
-#include "gstaichi/codegen/llvm/llvm_codegen_utils.h"
-#include "gstaichi/program/compile_config.h"
-#include "gstaichi/program/program.h"
-#include "gstaichi/runtime/program_impls/llvm/llvm_program.h"
-#include "gstaichi/codegen/llvm/struct_llvm.h"
+#include "quadrants/rhi/arch.h"
+#include "quadrants/ir/snode.h"
+#include "quadrants/codegen/llvm/llvm_codegen_utils.h"
+#include "quadrants/program/compile_config.h"
+#include "quadrants/program/program.h"
+#include "quadrants/runtime/program_impls/llvm/llvm_program.h"
+#include "quadrants/codegen/llvm/struct_llvm.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 constexpr char kFuncName[] = "run_refine_coords";
@@ -29,7 +29,7 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
   using FuncType = int (*)(int, int);
 
   static FuncType build(const SNode *snode,
-                        GsTaichiLLVMContext *tlctx,
+                        QuadrantsLLVMContext *tlctx,
                         LlvmRuntimeExecutor *executor) {
     InvokeRefineCoordinatesBuilder mb{tlctx};
     mb.run_jit(snode);
@@ -46,7 +46,7 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
   }
 
  private:
-  InvokeRefineCoordinatesBuilder(GsTaichiLLVMContext *tlctx)
+  InvokeRefineCoordinatesBuilder(QuadrantsLLVMContext *tlctx)
       : LLVMModuleBuilder(tlctx->new_module("kernel"), tlctx) {
     this->llvm_context = this->tlctx->get_this_thread_context();
     this->builder = std::make_unique<llvm::IRBuilder<>>(*llvm_context);
@@ -138,7 +138,7 @@ class RefineCoordinatesTest : public ::testing::Test {
   // places depend on the global |current_program|, so we have to.
   // ¯\_(ツ)_/¯
   std::unique_ptr<Program> prog_{nullptr};
-  GsTaichiLLVMContext *tlctx_{nullptr};
+  QuadrantsLLVMContext *tlctx_{nullptr};
   LlvmRuntimeExecutor *executor_{nullptr};
 
   std::unique_ptr<SNode> root_snode_{nullptr};
@@ -166,5 +166,5 @@ TEST_F(RefineCoordinatesTest, Basic) {
 }
 
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang
 #endif  // #ifdef TI_WITH_LLVM

@@ -1,16 +1,16 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "gstaichi/analysis/arithmetic_interpretor.h"
-#include "gstaichi/ir/ir.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/snode.h"
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/transforms/scalar_pointer_lowerer.h"
+#include "quadrants/analysis/arithmetic_interpretor.h"
+#include "quadrants/ir/ir.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/snode.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/transforms/scalar_pointer_lowerer.h"
 #include "tests/cpp/struct/fake_struct_compiler.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 constexpr int kPointerSize = 4;
@@ -131,4 +131,4 @@ TEST(ScalarPointerLowerer, EliminateModDiv) {
   }
 }
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

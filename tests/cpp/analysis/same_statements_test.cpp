@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/ir/analysis.h"
-#include "gstaichi/ir/statements.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/statements.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(SameStatements, TestSameBlock) {
   auto block = std::make_unique<Block>();
@@ -167,4 +167,4 @@ TEST(SameStatements, TestSameLoopIndex) {
   EXPECT_TRUE(irpass::analysis::same_value(loop_index_a, loop_index_b));
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

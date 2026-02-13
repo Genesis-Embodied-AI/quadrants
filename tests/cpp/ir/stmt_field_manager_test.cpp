@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/ir.h"
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/util/testing.h"
+#include "quadrants/ir/ir.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/util/testing.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 namespace {
 class TestStmt : public Stmt {
@@ -73,4 +73,4 @@ TEST(StmtFieldManager, TestStmtFieldManagerWithVector) {
   EXPECT_EQ(a->field_manager.equal(c->field_manager), false);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

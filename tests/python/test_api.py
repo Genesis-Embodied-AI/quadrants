@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -76,13 +76,13 @@ user_api[ti] = [
     "Struct",
     "StructField",
     "TRACE",
-    "GsTaichiAssertionError",
-    "GsTaichiCompilationError",
-    "GsTaichiNameError",
-    "GsTaichiRuntimeError",
-    "GsTaichiRuntimeTypeError",
-    "GsTaichiSyntaxError",
-    "GsTaichiTypeError",
+    "QuadrantsAssertionError",
+    "QuadrantsCompilationError",
+    "QuadrantsNameError",
+    "QuadrantsRuntimeError",
+    "QuadrantsRuntimeTypeError",
+    "QuadrantsSyntaxError",
+    "QuadrantsTypeError",
     "Template",
     "Vector",
     "VectorNdarray",
@@ -184,6 +184,7 @@ user_api[ti] = [
     "ndrange",
     "no_activate",
     "one",
+    "perf_dispatch",
     "polar_decompose",
     "pow",
     "profiler",

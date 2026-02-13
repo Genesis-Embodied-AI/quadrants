@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -95,7 +95,7 @@ def test_xdg_basedir(tmpdir):
         repo_dir = ti_python_core.get_repo_dir()
 
         repo_path = pathlib.Path(repo_dir).resolve()
-        expected_path = pathlib.Path(tmpdir / "gstaichi").resolve()
+        expected_path = pathlib.Path(tmpdir / "quadrants").resolve()
 
         assert repo_path == expected_path
 

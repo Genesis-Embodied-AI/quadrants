@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -77,7 +77,7 @@ def test_print(dt):
         print(ti.cast(123.4, dt))
 
     func()
-    # Discussion: https://github.com/taichi-dev/gstaichi/issues/1063#issuecomment-636421904
+    # Discussion: https://github.com/taichi-dev/quadrants/issues/1063#issuecomment-636421904
     # Synchronize to prevent cross-test failure of print:
     ti.sync()
 
@@ -183,11 +183,11 @@ def test_print_matrix_string_format_with_spec_mismatch():
 
     x[None][0, 0] = -1.0
     y[2] += 1.0
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'.2d' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'.2d' doesn't match 'f32'."):
         test_x()
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'- #0.233lli' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'- #0.233lli' doesn't match 'f32'."):
         test_y(233.3)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'.2e' doesn't match 'i32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'.2e' doesn't match 'i32'."):
         test_z()
     ti.sync()
 
@@ -253,11 +253,11 @@ def test_print_matrix_fstring_with_spec_mismatch():
 
     x[None][0, 0] = -1.0
     y[2] += 1.0
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'.2d' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'.2d' doesn't match 'f32'."):
         test_x()
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'- #0.233lli' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'- #0.233lli' doesn't match 'f32'."):
         test_y(233.3)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'.2e' doesn't match 'i32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'.2e' doesn't match 'i32'."):
         test_z()
     ti.sync()
 
@@ -353,7 +353,7 @@ def test_print_sep_end():
     def func():
         # hello 42 world!
         print("hello", 42, "world!")
-        # hello 42 GsTaichi 233 world!
+        # hello 42 Quadrants 233 world!
         print("hello", 42, "Tai", end="")
         print("chi", 233, "world!")
         # hello42world!
@@ -473,11 +473,11 @@ def test_print_string_format_with_spec_mismatch():
     def test_f(u: ti.f32):
         print("{:i}".format(foo1(u)))
 
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'u' doesn't match 'i32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'u' doesn't match 'i32'."):
         test_i(123)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'d' doesn't match 'u32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'d' doesn't match 'u32'."):
         test_u(123)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'i' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'i' doesn't match 'f32'."):
         test_f(123)
     ti.sync()
 
@@ -543,18 +543,18 @@ def test_print_string_format_with_positional_arg_mismatch():
         print("{0} {1} {2}".format(1, 2))
 
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=r"Expected 3 positional argument\(s\), but received 4 instead.",
     ):
         func_more_args()
     with pytest.raises(
-        ti.GsTaichiSyntaxError,
+        ti.QuadrantsSyntaxError,
         match=r"Expected 3 positional argument\(s\), but received 2 instead.",
     ):
         func_less_args()
-    with pytest.raises(ti.GsTaichiSyntaxError, match=r"Keyword 'k' not used."):
+    with pytest.raises(ti.QuadrantsSyntaxError, match=r"Keyword 'k' not used."):
         func_k_not_used(233.3)
-    with pytest.raises(ti.GsTaichiSyntaxError, match=r"Keyword 'k' not found."):
+    with pytest.raises(ti.QuadrantsSyntaxError, match=r"Keyword 'k' not found."):
         func_k_not_defined()
     ti.sync()
 
@@ -609,11 +609,11 @@ def test_print_fstring_with_spec_mismatch():
     def test_f(u: ti.f32):
         print(f"{foo1(u):i}")
 
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'u' doesn't match 'i32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'u' doesn't match 'i32'."):
         test_i(123)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'d' doesn't match 'u32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'d' doesn't match 'u32'."):
         test_u(123)
-    with pytest.raises(ti.GsTaichiTypeError, match=r"'i' doesn't match 'f32'."):
+    with pytest.raises(ti.QuadrantsTypeError, match=r"'i' doesn't match 'f32'."):
         test_f(123)
     ti.sync()
 

@@ -1,6 +1,6 @@
-import gstaichi as ti
-from gstaichi.lang._template_mapper import TemplateMapper
-from gstaichi.lang.kernel_arguments import ArgMetadata
+import quadrants as ti
+from quadrants.lang._template_mapper import TemplateMapper
+from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests import test_utils
 

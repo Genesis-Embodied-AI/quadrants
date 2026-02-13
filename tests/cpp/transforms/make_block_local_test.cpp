@@ -1,15 +1,15 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "gstaichi/analysis/arithmetic_interpretor.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/snode.h"
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/struct/struct.h"
+#include "quadrants/analysis/arithmetic_interpretor.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/snode.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/struct/struct.h"
 #include "tests/cpp/struct/fake_struct_compiler.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace {
 
 class MakeBlockLocalTest : public ::testing::Test {
@@ -191,4 +191,4 @@ TEST_F(MakeBlockLocalTest, Basic) {
 }
 
 }  // namespace
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

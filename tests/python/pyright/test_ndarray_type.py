@@ -1,6 +1,6 @@
 # This is a test file. It just has to exist, to check that pyright works with it.
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 

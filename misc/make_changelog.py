@@ -120,7 +120,7 @@ if __name__ == "__main__":
     res = main(args.ver, args.repo_dir)
     if res:
         if args.save:
-            with open("./python/gstaichi/CHANGELOG.md", "w", encoding="utf-8") as f:
+            with open("./python/quadrants/CHANGELOG.md", "w", encoding="utf-8") as f:
                 f.write(res)
         else:
             print(res)

@@ -1,7 +1,7 @@
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.misc import get_host_arch_list
+import quadrants as ti
+from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
@@ -233,7 +233,7 @@ def test_oop_class_must_be_data_oriented():
     ti.root.lazy_grad()
 
     # Array1D is not properly decorated, this will raise an Exception
-    with pytest.raises(ti.GsTaichiSyntaxError):
+    with pytest.raises(ti.QuadrantsSyntaxError):
         arr.reduce()
 
 

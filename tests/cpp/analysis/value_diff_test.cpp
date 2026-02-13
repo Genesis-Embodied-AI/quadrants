@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/analysis.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/statements.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/statements.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace irpass {
 namespace analysis {
 
@@ -131,4 +131,4 @@ TEST(DiffRangeTest, Shl) {
 
 }  // namespace analysis
 }  // namespace irpass
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(print_ir=True)
 

@@ -1,10 +1,10 @@
 #*********************************************************************
-# The GsTaichi Programming Language
+# The Quadrants Programming Language
 #*********************************************************************
 
 cmake_minimum_required(VERSION 3.17)
 
-project(gstaichi)
+project(quadrants)
 
 include("cmake/utils.cmake")
 
@@ -25,7 +25,7 @@ execute_process(
 string(STRIP ${TI_COMMIT_HASH} TI_COMMIT_HASH)
 string(STRIP ${TI_COMMIT_SHORT_HASH} TI_COMMIT_SHORT_HASH)
 
-message("GsTaichi Version ${TI_VERSION_MAJOR}.${TI_VERSION_MINOR}.${TI_VERSION_PATCH}")
+message("Quadrants Version ${TI_VERSION_MAJOR}.${TI_VERSION_MINOR}.${TI_VERSION_PATCH}")
 message("       Commit ${TI_COMMIT_HASH}")
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -35,7 +35,7 @@ RelWithDebInfo MinSizeRel."
             FORCE)
 endif(NOT CMAKE_BUILD_TYPE)
 
-set(GSTAICHI_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake/")
+set(QUADRANTS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake/")
 
 if (WIN32)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/")
@@ -105,7 +105,7 @@ if (WIN32)
   message("CMAKE_MSVC_RUNTIME_LIBRARY: ${CMAKE_MSVC_RUNTIME_LIBRARY}")
 endif()
 
-# No support of Python for any case gstaichi is integrated
+# No support of Python for any case quadrants is integrated
 # in another project as submodule.
 set(PYBIND11_VERSION "2.13.6" CACHE STRING "Pybind11 version to use")
 option(TI_WITH_PYTHON "Build with Python language binding" ON)
@@ -121,14 +121,14 @@ if (TI_DISTRIBUTED_COMPILE)
     include(cmake/Distributed.cmake)
 endif()
 
-include(cmake/GsTaichiCXXFlags.cmake)
-include(cmake/GsTaichiCore.cmake)
+include(cmake/QuadrantsCXXFlags.cmake)
+include(cmake/QuadrantsCore.cmake)
 
 option(TI_BUILD_TESTS "Build the CPP tests" OFF)
 
 if (TI_BUILD_TESTS)
   add_subdirectory(external/googletest EXCLUDE_FROM_ALL)
-  include(cmake/GsTaichiTests.cmake)
+  include(cmake/QuadrantsTests.cmake)
 endif()
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" _BUILD_TYPE)
@@ -173,8 +173,10 @@ if (TI_WITH_LLVM)
     endmacro()
 
     if (APPLE)
-        if(CMAKE_OSX_SYSROOT)
-          set(CLANG_OSX_FLAGS "-isysroot" "${CMAKE_OSX_SYSROOT}")
+      if(CMAKE_OSX_SYSROOT)
+        set(CLANG_OSX_FLAGS "-isysroot" "${CMAKE_OSX_SYSROOT}")
+      else()
+        set(CLANG_OSX_FLAGS "")
       endif()
     endif()
 
@@ -183,11 +185,11 @@ if (TI_WITH_LLVM)
 
     check_clang_version()
 
-    add_subdirectory(gstaichi/runtime/llvm/runtime_module)
+    add_subdirectory(quadrants/runtime/llvm/runtime_module)
 endif()
 
-configure_file(gstaichi/common/version.h.in ${CMAKE_SOURCE_DIR}/gstaichi/common/version.h)
-configure_file(gstaichi/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/gstaichi/common/commit_hash.h)
+configure_file(quadrants/common/version.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/version.h)
+configure_file(quadrants/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/commit_hash.h)
 
 option(TI_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
 if (TI_WITH_GRAPHVIZ)

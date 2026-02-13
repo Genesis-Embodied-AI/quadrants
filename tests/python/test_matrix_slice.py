@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -49,13 +49,13 @@ def test_matrix_slice_invalid():
         b = a[:i:, :i]
 
     with pytest.raises(
-        ti.GsTaichiCompilationError,
-        match="GsTaichi does not support variables in slice now",
+        ti.QuadrantsCompilationError,
+        match="Quadrants does not support variables in slice now",
     ):
         foo1(1)
     with pytest.raises(
-        ti.GsTaichiCompilationError,
-        match="GsTaichi does not support variables in slice now",
+        ti.QuadrantsCompilationError,
+        match="Quadrants does not support variables in slice now",
     ):
         foo2()
 

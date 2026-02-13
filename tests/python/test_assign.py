@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -81,7 +81,7 @@ def test_assign_ann_over():
         d: my_int = 2
         d: ti.f32 = 2.0
 
-    with pytest.raises(ti.GsTaichiCompilationError):
+    with pytest.raises(ti.QuadrantsCompilationError):
         func_ann_over()
 
 

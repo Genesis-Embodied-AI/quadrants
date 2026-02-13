@@ -88,19 +88,19 @@ On Genesis simulator (Linux + NVIDIA 5090):
 
 ## Procedure
 ```
-pip install gstaichi
+pip install quadrants
 ```
 
 (For how to build from source, see our CI build scripts, e.g. [linux build scripts](.github/workflows/scripts_new/linux_x86/) )
 
 # Documentation
 
-- [docs](https://genesis-embodied-ai.github.io/gstaichi/user_guide/index.html)
-- [API reference](https://genesis-embodied-ai.github.io/gstaichi/autoapi/index.html)
+- [docs](https://genesis-embodied-ai.github.io/quadrants/user_guide/index.html)
+- [API reference](https://genesis-embodied-ai.github.io/quadrants/autoapi/index.html)
 
 # Something is broken!
 
-- [Create an issue](https://github.com/Genesis-Embodied-AI/gstaichi/issues/new/choose)
+- [Create an issue](https://github.com/Genesis-Embodied-AI/quadrants/issues/new/choose)
 
 # Acknowledgements
 

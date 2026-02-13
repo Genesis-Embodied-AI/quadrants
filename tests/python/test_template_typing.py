@@ -1,6 +1,6 @@
 import pytest
 
-import gstaichi as ti
+import quadrants as ti
 
 from tests import test_utils
 
@@ -96,7 +96,7 @@ def test_template_raise_on_global_floats(raise_on_templated_floats: bool) -> Non
 
     k1c()
     if raise_on_templated_floats:
-        with pytest.raises(ti.GsTaichiCompilationError):
+        with pytest.raises(ti.QuadrantsCompilationError):
             k1d()
     else:
         k1d()

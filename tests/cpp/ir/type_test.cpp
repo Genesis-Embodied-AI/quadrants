@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/type_factory.h"
+#include "quadrants/ir/type_factory.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 TEST(Type, TypeToString) {
   auto f16 = TypeFactory::get_instance().get_primitive_real_type(16);
@@ -44,4 +44,4 @@ TEST(Type, TypeToString) {
   EXPECT_EQ(qa->to_string(), "qa(qi1x32)");
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

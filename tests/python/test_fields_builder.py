@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-import gstaichi as ti
-from gstaichi.lang.exception import GsTaichiRuntimeError
+import quadrants as ti
+from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
@@ -177,7 +177,7 @@ def test_fields_builder_destroy(test_1d_size, field_type):
         fb.dense(ti.i, test_1d_size).place(a)
         c = fb.finalize()
 
-        with pytest.raises(GsTaichiRuntimeError):
+        with pytest.raises(QuadrantsRuntimeError):
             c.destroy()
             c.destroy()
 

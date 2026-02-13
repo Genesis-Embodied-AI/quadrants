@@ -5,17 +5,17 @@
 #include <string>
 #include <vector>
 
-#include "gstaichi/common/core.h"
-#include "gstaichi/compilation_manager/kernel_compilation_manager.h"
-#include "gstaichi/codegen/compiled_kernel_data.h"
-#include "gstaichi/codegen/kernel_compiler.h"
-#include "gstaichi/program/kernel.h"
-#include "gstaichi/program/program.h"
-#include "gstaichi/program/compile_config.h"
-#include "gstaichi/util/offline_cache.h"
-#include "gstaichi/ir/ir.h"
+#include "quadrants/common/core.h"
+#include "quadrants/compilation_manager/kernel_compilation_manager.h"
+#include "quadrants/codegen/compiled_kernel_data.h"
+#include "quadrants/codegen/kernel_compiler.h"
+#include "quadrants/program/kernel.h"
+#include "quadrants/program/program.h"
+#include "quadrants/program/compile_config.h"
+#include "quadrants/util/offline_cache.h"
+#include "quadrants/ir/ir.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 namespace tests {
 
 static constexpr Arch kFakeArch = (Arch)1024;
@@ -175,4 +175,4 @@ TEST_F(KernelCompilationManagerTest, DumpEmptyCache) {
 }
 
 }  // namespace tests
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang

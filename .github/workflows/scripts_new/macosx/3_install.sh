@@ -3,5 +3,5 @@
 set -ex
 
 pip install dist/*.whl
-python -c "import gstaichi as ti; ti.init(arch=ti.cpu)"
-python -c "import gstaichi as ti; ti.init(arch=ti.metal)"
+python -c "import quadrants as ti; ti.init(arch=ti.cpu)"
+python -c "import quadrants as ti; ti.init(arch=ti.metal)"

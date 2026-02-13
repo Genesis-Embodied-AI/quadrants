@@ -1,4 +1,4 @@
-import gstaichi as ti
+import quadrants as ti
 
 # TODO: make this a real benchmark and set up regression
 

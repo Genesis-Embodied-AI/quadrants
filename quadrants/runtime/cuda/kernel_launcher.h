@@ -1,0 +1,31 @@
+#pragma once
+
+#include "quadrants/codegen/llvm/compiled_kernel_data.h"
+#include "quadrants/runtime/llvm/kernel_launcher.h"
+
+namespace quadrants::lang {
+namespace cuda {
+
+class KernelLauncher : public LLVM::KernelLauncher {
+  using Base = LLVM::KernelLauncher;
+
+  struct Context {
+    JITModule *jit_module{nullptr};
+    const std::vector<std::pair<int, Callable::Parameter>> *parameters;
+    std::vector<OffloadedTask> offloaded_tasks;
+  };
+
+ public:
+  using Base::Base;
+
+  void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) override;
+  Handle register_llvm_kernel(
+      const LLVM::CompiledKernelData &compiled) override;
+
+ private:
+  bool on_cuda_device(void *ptr);
+  std::vector<Context> contexts_;
+};
+
+}  // namespace cuda
+}  // namespace quadrants::lang

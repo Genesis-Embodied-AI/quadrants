@@ -1,6 +1,6 @@
 from time import perf_counter
 
-import gstaichi as ti
+import quadrants as ti
 
 
 class End2EndTimer:

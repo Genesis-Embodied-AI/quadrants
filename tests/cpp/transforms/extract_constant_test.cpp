@@ -1,12 +1,12 @@
 #include "gtest/gtest.h"
 
-#include "gstaichi/ir/analysis.h"
-#include "gstaichi/ir/ir_builder.h"
-#include "gstaichi/ir/statements.h"
-#include "gstaichi/ir/transforms.h"
-#include "gstaichi/program/program.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/ir_builder.h"
+#include "quadrants/ir/statements.h"
+#include "quadrants/ir/transforms.h"
+#include "quadrants/program/program.h"
 
-namespace gstaichi::lang {
+namespace quadrants::lang {
 
 class ExtractConstantTest : public ::testing::Test {
  protected:
@@ -58,4 +58,4 @@ TEST_F(ExtractConstantTest, ExtractConstant) {
   EXPECT_EQ(ir_block->size(), 4);
 }
 
-}  // namespace gstaichi::lang
+}  // namespace quadrants::lang
