@@ -124,8 +124,6 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
 
 
 def _kernel_impl(_func: Callable, level_of_class_stackframe: int, verbose: bool = False) -> QuadrantsCallable:
-    print("_func", _func)
-
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
     is_classkernel = _inside_class(level_of_class_stackframe + 1)
