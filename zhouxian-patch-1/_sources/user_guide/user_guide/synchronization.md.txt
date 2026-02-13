@@ -50,11 +50,11 @@ def f1(batch_size: int, a: ti.Template) -> None:
         # each thread does work independently of other threads
 ```
 
-The default behavior of GsTaichi for kernels with multiple top-level for loops is to run each top level for loop in a separate GPU kernel. And this ensures that writes to global memory from the first for loop are guaranteed to be visible to all threads in the second for loop.
+The default behavior of Quadrants for kernels with multiple top-level for loops is to run each top level for loop in a separate GPU kernel. And this ensures that writes to global memory from the first for loop are guaranteed to be visible to all threads in the second for loop.
 
 ## Use atomics
 
-Atomics tend to be the main other approach used by GsTaichi engineers for synchronization.
+Atomics tend to be the main other approach used by Quadrants engineers for synchronization.
 
 ```
 @ti.kernel
@@ -67,7 +67,7 @@ The operation is blocking, and will not return until the addition has taken plac
 
 ## Use barriers and fences
 
-Barriers and fences only work well for shared memory. Using shared memory is an advanced feature, not typically used by GsTaichi users. Can be done though. GsTaichi offers:
+Barriers and fences only work well for shared memory. Using shared memory is an advanced feature, not typically used by Quadrants users. Can be done though. Quadrants offers:
 
 ### Shared memory
 

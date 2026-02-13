@@ -1,8 +1,8 @@
-# GsTaichi
+# Quadrants
 
 
 ```{toctree}
-:caption: GsTaichi
+:caption: Quadrants
 :maxdepth: 1
 
 user_guide/index

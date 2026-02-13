@@ -12,7 +12,7 @@ Let's first give an example of using each:
 ## NDArray
 
 ```
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.gpu)
 
@@ -28,7 +28,7 @@ Note that the typing for NDArray is `ti.types.NDArray[data_type, number_dimensio
 ## Global field
 
 ```
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.gpu)
 
@@ -43,7 +43,7 @@ You can see that we access the global variable referencing the field directly fr
 ## Field args
 
 ```
-import gstaichi as ti
+import quadrants as ti
 
 ti.init(arch=ti.gpu)
 
