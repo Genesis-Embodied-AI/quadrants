@@ -15,6 +15,7 @@ interfere with them.
 import numpy as np
 
 import quadrants as ti
+
 from tests import test_utils
 
 
@@ -48,9 +49,7 @@ def test_serial_atomic_counter_with_nested_loops():
     link_jnt_end.from_numpy(np.array([1, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
     jnt_dof_start.from_numpy(np.array([0, 0, 1, 2, 3, 4, 5, 6], dtype=np.int32))
     jnt_dof_end.from_numpy(np.array([0, 1, 2, 3, 4, 5, 6, 12], dtype=np.int32))
-    frictionloss.from_numpy(
-        np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    )
+    frictionloss.from_numpy(np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32))
 
     n_constraints.fill(0)
     n_constraints_fl.fill(0)
