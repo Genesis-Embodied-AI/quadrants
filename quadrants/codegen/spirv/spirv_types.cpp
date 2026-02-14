@@ -14,7 +14,7 @@ size_t StructType::memory_size(tinyir::LayoutContext &ctx) const {
   size_t size_head = 0;
   int n = 0;
   for (const Type *elem : elements_) {
-    TI_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
+    QD_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
     const MemRefElementTypeInterface *mem_ref_type =
         elem->cast<tinyir::MemRefElementTypeInterface>();
     size_t elem_size = mem_ref_type->memory_size(ctx);
@@ -44,7 +44,7 @@ size_t StructType::memory_alignment_size(tinyir::LayoutContext &ctx) const {
 
   size_t max_align = 0;
   for (const Type *elem : elements_) {
-    TI_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
+    QD_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
     max_align = std::max(
         max_align,
         elem->cast<MemRefElementTypeInterface>()->memory_alignment_size(ctx));
@@ -68,7 +68,7 @@ size_t StructType::nth_element_offset(int n, tinyir::LayoutContext &ctx) const {
 
 SmallVectorType::SmallVectorType(const Type *element_type, int num_elements)
     : element_type_(element_type), num_elements_(num_elements) {
-  TI_ASSERT(num_elements > 1 && num_elements_ <= 4);
+  QD_ASSERT(num_elements > 1 && num_elements_ <= 4);
 }
 
 size_t SmallVectorType::memory_size(tinyir::LayoutContext &ctx) const {
@@ -206,10 +206,10 @@ const tinyir::Type *translate_ti_primitive(tinyir::Block &ir_module,
     } else if (t == PrimitiveType::f64) {
       return ir_module.emplace_back<FloatType>(/*num_bits=*/64);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -333,7 +333,7 @@ class TypeReducer : public TypeVisitor {
   void visit_physical_pointer_type(const PhysicalPointerType *type) override {
     if (!check_type(type)) {
       const tinyir::Type *pointed = check_type(type->get_pointed_type());
-      TI_ASSERT(pointed);
+      QD_ASSERT(pointed);
       oldptr2newptr[type] = copy->emplace_back<PhysicalPointerType>(pointed);
     }
   }
@@ -343,7 +343,7 @@ class TypeReducer : public TypeVisitor {
       std::vector<const tinyir::Type *> elements;
       for (int i = 0; i < type->get_num_elements(); i++) {
         const tinyir::Type *elm = check_type(type->nth_element_type(i));
-        TI_ASSERT(elm);
+        QD_ASSERT(elm);
         elements.push_back(elm);
       }
       oldptr2newptr[type] = copy->emplace_back<StructType>(elements);
@@ -353,7 +353,7 @@ class TypeReducer : public TypeVisitor {
   void visit_small_vector_type(const SmallVectorType *type) override {
     if (!check_type(type)) {
       const tinyir::Type *element = check_type(type->element_type());
-      TI_ASSERT(element);
+      QD_ASSERT(element);
       oldptr2newptr[type] = copy->emplace_back<SmallVectorType>(
           element, type->get_constant_shape()[0]);
     }
@@ -362,7 +362,7 @@ class TypeReducer : public TypeVisitor {
   void visit_array_type(const ArrayType *type) override {
     if (!check_type(type)) {
       const tinyir::Type *element = check_type(type->element_type());
-      TI_ASSERT(element);
+      QD_ASSERT(element);
       oldptr2newptr[type] =
           copy->emplace_back<ArrayType>(element, type->get_constant_shape()[0]);
     }
@@ -510,7 +510,7 @@ const tinyir::Type *translate_ti_type(tinyir::Block &ir_module,
     }
     return ir_module.emplace_back<StructType>(element_types);
   }
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 }  // namespace spirv

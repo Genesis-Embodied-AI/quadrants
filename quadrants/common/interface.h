@@ -63,12 +63,12 @@ class Unit {
   }
 
   virtual std::string get_name() const {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
     return "";
   }
 
   virtual std::string general_action(const Config &config) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
     return "";
   }
 
@@ -76,8 +76,8 @@ class Unit {
   }
 };
 
-#define TI_IMPLEMENTATION_HOLDER_NAME(T) ImplementationHolder_##T
-#define TI_IMPLEMENTATION_HOLDER_PTR(T) instance_ImplementationHolder_##T
+#define QD_IMPLEMENTATION_HOLDER_NAME(T) ImplementationHolder_##T
+#define QD_IMPLEMENTATION_HOLDER_PTR(T) instance_ImplementationHolder_##T
 
 class ImplementationHolderBase {
  public:
@@ -112,12 +112,12 @@ class InterfaceHolder {
   }
 };
 
-#define TI_INTERFACE(T)                                                       \
+#define QD_INTERFACE(T)                                                       \
   extern void *get_implementation_holder_instance_##T();                      \
-  class TI_IMPLEMENTATION_HOLDER_NAME(T) final                                \
+  class QD_IMPLEMENTATION_HOLDER_NAME(T) final                                \
       : public ImplementationHolderBase {                                     \
    public:                                                                    \
-    explicit TI_IMPLEMENTATION_HOLDER_NAME(T)(const std::string &name) {      \
+    explicit QD_IMPLEMENTATION_HOLDER_NAME(T)(const std::string &name) {      \
       this->name = name;                                                      \
     }                                                                         \
     using FactoryMethod = std::function<std::shared_ptr<T>()>;                \
@@ -175,7 +175,7 @@ class InterfaceHolder {
              implementation_factories.end();                                  \
     }                                                                         \
     void remove(const std::string &alias) override {                          \
-      TI_ASSERT_INFO(has(alias),                                              \
+      QD_ASSERT_INFO(has(alias),                                              \
                      std::string("Implementation ") + alias + " not found!"); \
       implementation_factories.erase(alias);                                  \
     }                                                                         \
@@ -194,14 +194,14 @@ class InterfaceHolder {
     }                                                                         \
     std::shared_ptr<T> create(const std::string &alias) {                     \
       auto factory = implementation_factories.find(alias);                    \
-      TI_ASSERT_INFO(                                                         \
+      QD_ASSERT_INFO(                                                         \
           factory != implementation_factories.end(),                          \
           "Implementation [" + name + "::" + alias + "] not found!");         \
       return (factory->second)();                                             \
     }                                                                         \
     std::unique_ptr<T> create_unique(const std::string &alias) {              \
       auto factory = implementation_unique_factories.find(alias);             \
-      TI_ASSERT_INFO(                                                         \
+      QD_ASSERT_INFO(                                                         \
           factory != implementation_unique_factories.end(),                   \
           "Implementation [" + name + "::" + alias + "] not found!");         \
       return (factory->second)();                                             \
@@ -209,36 +209,36 @@ class InterfaceHolder {
     std::unique_ptr<T> create_unique_ctor(const std::string &alias,           \
                                           const Dict &config) {               \
       auto factory = implementation_unique_ctor_factories.find(alias);        \
-      TI_ASSERT_INFO(                                                         \
+      QD_ASSERT_INFO(                                                         \
           factory != implementation_unique_ctor_factories.end(),              \
           "Implementation [" + name + "::" + alias + "] not found!");         \
       return (factory->second)(config);                                       \
     }                                                                         \
     T *create_raw(const std::string &alias) {                                 \
       auto factory = implementation_raw_factories.find(alias);                \
-      TI_ASSERT_INFO(                                                         \
+      QD_ASSERT_INFO(                                                         \
           factory != implementation_raw_factories.end(),                      \
           "Implementation [" + name + "::" + alias + "] not found!");         \
       return (factory->second)();                                             \
     }                                                                         \
     T *create_placement(const std::string &alias, void *place) {              \
       auto factory = implementation_placement_factories.find(alias);          \
-      TI_ASSERT_INFO(                                                         \
+      QD_ASSERT_INFO(                                                         \
           factory != implementation_placement_factories.end(),                \
           "Implementation [" + name + "::" + alias + "] not found!");         \
       return (factory->second)(place);                                        \
     }                                                                         \
-    static TI_IMPLEMENTATION_HOLDER_NAME(T) * get_instance() {                \
-      return static_cast<TI_IMPLEMENTATION_HOLDER_NAME(T) *>(                 \
+    static QD_IMPLEMENTATION_HOLDER_NAME(T) * get_instance() {                \
+      return static_cast<QD_IMPLEMENTATION_HOLDER_NAME(T) *>(                 \
           get_implementation_holder_instance_##T());                          \
     }                                                                         \
   };                                                                          \
-  extern TI_IMPLEMENTATION_HOLDER_NAME(T) * TI_IMPLEMENTATION_HOLDER_PTR(T);
+  extern QD_IMPLEMENTATION_HOLDER_NAME(T) * QD_IMPLEMENTATION_HOLDER_PTR(T);
 
-#define TI_INTERFACE_DEF(class_name, base_alias)                               \
+#define QD_INTERFACE_DEF(class_name, base_alias)                               \
   template <>                                                                  \
   std::shared_ptr<class_name> create_instance(const std::string &alias) {      \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create(  \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create(  \
         alias);                                                                \
   }                                                                            \
   template <>                                                                  \
@@ -251,7 +251,7 @@ class InterfaceHolder {
   template <>                                                                  \
   std::unique_ptr<class_name> create_instance_unique(                          \
       const std::string &alias) {                                              \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
         ->create_unique(alias);                                                \
   }                                                                            \
   template <>                                                                  \
@@ -264,18 +264,18 @@ class InterfaceHolder {
   template <>                                                                  \
   std::unique_ptr<class_name> create_instance_unique_ctor(                     \
       const std::string &alias, const Dict &config) {                          \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
         ->create_unique_ctor(alias, config);                                   \
   }                                                                            \
   template <>                                                                  \
   class_name *create_instance_raw(const std::string &alias) {                  \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
         ->create_raw(alias);                                                   \
   }                                                                            \
   template <>                                                                  \
   class_name *create_instance_placement(const std::string &alias,              \
                                         void *place) {                         \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
         ->create_placement(alias, place);                                      \
   }                                                                            \
   template <>                                                                  \
@@ -294,38 +294,38 @@ class InterfaceHolder {
   }                                                                            \
   template <>                                                                  \
   std::vector<std::string> get_implementation_names<class_name>() {            \
-    return TI_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
         ->get_implementation_names();                                          \
   }                                                                            \
-  TI_IMPLEMENTATION_HOLDER_NAME(class_name) *                                  \
-      TI_IMPLEMENTATION_HOLDER_PTR(class_name) = nullptr;                      \
+  QD_IMPLEMENTATION_HOLDER_NAME(class_name) *                                  \
+      QD_IMPLEMENTATION_HOLDER_PTR(class_name) = nullptr;                      \
   void *get_implementation_holder_instance_##class_name() {                    \
-    if (!TI_IMPLEMENTATION_HOLDER_PTR(class_name)) {                           \
-      TI_IMPLEMENTATION_HOLDER_PTR(class_name) =                               \
-          new TI_IMPLEMENTATION_HOLDER_NAME(class_name)(base_alias);           \
+    if (!QD_IMPLEMENTATION_HOLDER_PTR(class_name)) {                           \
+      QD_IMPLEMENTATION_HOLDER_PTR(class_name) =                               \
+          new QD_IMPLEMENTATION_HOLDER_NAME(class_name)(base_alias);           \
     }                                                                          \
-    return TI_IMPLEMENTATION_HOLDER_PTR(class_name);                           \
+    return QD_IMPLEMENTATION_HOLDER_PTR(class_name);                           \
   }
 
-#define TI_IMPLEMENTATION(base_class_name, class_name, alias)        \
+#define QD_IMPLEMENTATION(base_class_name, class_name, alias)        \
   class ImplementationInjector_##base_class_name##class_name {       \
    public:                                                           \
     ImplementationInjector_##base_class_name##class_name() {         \
-      TI_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
+      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
           ->insert<class_name>(alias);                               \
     }                                                                \
   } ImplementationInjector_##base_class_name##class_name##instance;
 
-#define TI_IMPLEMENTATION_NEW(base_class_name, class_name)           \
+#define QD_IMPLEMENTATION_NEW(base_class_name, class_name)           \
   class ImplementationInjector_##base_class_name##class_name {       \
    public:                                                           \
     ImplementationInjector_##base_class_name##class_name() {         \
-      TI_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
+      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
           ->insert_new<class_name>(class_name::get_name_static());   \
     }                                                                \
   } ImplementationInjector_##base_class_name##class_name##instance;
 
-#define TI_NAME(alias)                            \
+#define QD_NAME(alias)                            \
   virtual std::string get_name() const override { \
     return get_name_static();                     \
   }                                               \

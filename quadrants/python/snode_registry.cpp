@@ -7,7 +7,7 @@
 namespace quadrants::lang {
 
 SNode *SNodeRegistry::create_root(Program *prog) {
-  TI_ASSERT(prog != nullptr);
+  QD_ASSERT(prog != nullptr);
   auto n = std::make_unique<SNode>(/*depth=*/0, SNodeType::root,
                                    prog->get_snode_to_fields(),
                                    &prog->get_snode_rw_accessors_bank());

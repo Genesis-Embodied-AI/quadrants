@@ -9,7 +9,7 @@
 
 namespace quadrants::lang {
 
-#define TI_ASSERT_TYPE_CHECKED(x)                                          \
+#define QD_ASSERT_TYPE_CHECKED(x)                                          \
   do {                                                                     \
     if (x->ret_type == PrimitiveType::unknown) {                           \
       ErrorEmitter(                                                        \
@@ -34,9 +34,9 @@ FrontendSNodeOpStmt::FrontendSNodeOpStmt(SNodeOpType op_type,
       indices(indices),
       val(val) {
   if (val.expr != nullptr) {
-    TI_ASSERT(op_type == SNodeOpType::append);
+    QD_ASSERT(op_type == SNodeOpType::append);
   } else {
-    TI_ASSERT(op_type != SNodeOpType::append);
+    QD_ASSERT(op_type != SNodeOpType::append);
   }
 }
 
@@ -49,7 +49,7 @@ FrontendAssignStmt::FrontendAssignStmt(const Expr &lhs,
                                        const Expr &rhs,
                                        const DebugInfo &dbg_info)
     : Stmt(dbg_info), lhs(lhs), rhs(rhs) {
-  TI_ASSERT(lhs->is_lvalue());
+  QD_ASSERT(lhs->is_lvalue());
   if (lhs.is<IdExpression>() && lhs->ret_type == PrimitiveType::unknown) {
     lhs.expr->ret_type =
         TypeFactory::get_instance().get_pointer_type(rhs.get_rvalue_type());
@@ -129,7 +129,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   block_dim = config.block_dim;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
-    TI_ASSERT(block_dim <= quadrants_max_gpu_block_dim);
+    QD_ASSERT(block_dim <= quadrants_max_gpu_block_dim);
   } else {  // cpu
     if (config.num_cpu_threads == 0) {
       num_cpu_threads = std::thread::hardware_concurrency();
@@ -194,9 +194,9 @@ void RandExpression::flatten(FlattenContext *ctx) {
 }
 
 void UnaryOpExpression::type_check(const CompileConfig *config) {
-  TI_ASSERT_TYPE_CHECKED(operand);
+  QD_ASSERT_TYPE_CHECKED(operand);
 
-  TI_ASSERT(config != nullptr);
+  QD_ASSERT(config != nullptr);
   /*
     Dtype inference for both TensorType and PrimitiveType are essentially
     the same. Therefore we extract the primitive type to perform the type
@@ -246,7 +246,7 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
 
   if (type == UnaryOpType::frexp) {
     std::vector<AbstractDictionaryMember> elements;
-    TI_ASSERT(operand_primitive_type->is_primitive(PrimitiveTypeID::f32) ||
+    QD_ASSERT(operand_primitive_type->is_primitive(PrimitiveTypeID::f32) ||
               operand_primitive_type->is_primitive(PrimitiveTypeID::f64));
     elements.push_back({operand_primitive_type, "mantissa", 0});
     elements.push_back(
@@ -271,7 +271,7 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
     ret_type = quadrants::lang::TypeFactory::get_instance().get_tensor_type(
         operand_type.get_shape(), ret_primitive_type);
   } else {
-    TI_ASSERT(operand_type->is<PrimitiveType>());
+    QD_ASSERT(operand_type->is<PrimitiveType>());
     ret_type = ret_primitive_type;
   }
 }
@@ -336,8 +336,8 @@ std::tuple<Expr, Expr> unify_binop_operands(const Expr &e1, const Expr &e2) {
 }
 
 void BinaryOpExpression::type_check(const CompileConfig *config) {
-  TI_ASSERT_TYPE_CHECKED(lhs);
-  TI_ASSERT_TYPE_CHECKED(rhs);
+  QD_ASSERT_TYPE_CHECKED(lhs);
+  QD_ASSERT_TYPE_CHECKED(rhs);
 
   auto lhs_type = lhs.get_rvalue_type();
   auto rhs_type = rhs.get_rvalue_type();
@@ -365,8 +365,8 @@ void BinaryOpExpression::type_check(const CompileConfig *config) {
       rhs.type_check(config);
     lhs_type = lhs.get_rvalue_type();
     rhs_type = rhs.get_rvalue_type();
-    TI_ASSERT(lhs_type->is<TensorType>());
-    TI_ASSERT(rhs_type->is<TensorType>());
+    QD_ASSERT(lhs_type->is<TensorType>());
+    QD_ASSERT(rhs_type->is<TensorType>());
   }
 
   bool is_tensor_op = false;
@@ -529,9 +529,9 @@ static std::tuple<Expr, Expr, Expr> unify_ternaryop_operands(const Expr &e1,
 }
 
 void TernaryOpExpression::type_check(const CompileConfig *config) {
-  TI_ASSERT_TYPE_CHECKED(op1);
-  TI_ASSERT_TYPE_CHECKED(op2);
-  TI_ASSERT_TYPE_CHECKED(op3);
+  QD_ASSERT_TYPE_CHECKED(op1);
+  QD_ASSERT_TYPE_CHECKED(op2);
+  QD_ASSERT_TYPE_CHECKED(op3);
 
   bool is_valid = true;
   bool is_tensor = false;
@@ -617,7 +617,7 @@ void TernaryOpExpression::flatten(FlattenContext *ctx) {
 void InternalFuncCallExpression::type_check(const CompileConfig *) {
   std::vector<DataType> arg_types;
   for (auto &arg : args) {
-    TI_ASSERT_TYPE_CHECKED(arg);
+    QD_ASSERT_TYPE_CHECKED(arg);
     arg_types.push_back(arg.get_rvalue_type());
   }
   ret_type = op->type_check(arg_types);
@@ -767,10 +767,10 @@ Stmt *make_tensor_access(Expression::FlattenContext *ctx,
 
 void MatrixExpression::type_check(const CompileConfig *config) {
   auto tensor_type = dt->as<TensorType>();
-  TI_ASSERT(tensor_type->get_num_elements() == elements.size());
+  QD_ASSERT(tensor_type->get_num_elements() == elements.size());
 
   for (auto &arg : elements) {
-    TI_ASSERT_TYPE_CHECKED(arg);
+    QD_ASSERT_TYPE_CHECKED(arg);
     if (arg.get_rvalue_type()->get_type() != tensor_type->get_element_type()) {
       arg = cast(arg, tensor_type->get_element_type());
       arg->type_check(config);
@@ -780,7 +780,7 @@ void MatrixExpression::type_check(const CompileConfig *config) {
 }
 
 void MatrixExpression::flatten(FlattenContext *ctx) {
-  TI_ASSERT(dt->is<TensorType>());
+  QD_ASSERT(dt->is<TensorType>());
   std::vector<Stmt *> values;
   for (auto &elt : elements) {
     values.push_back(flatten_rvalue(elt, ctx));
@@ -843,8 +843,8 @@ bool IndexExpression::is_global() const {
 }
 
 static void field_validation(FieldExpression *field_expr, int index_dim) {
-  TI_ASSERT(field_expr != nullptr);
-  TI_ASSERT(field_expr->snode != nullptr);
+  QD_ASSERT(field_expr != nullptr);
+  QD_ASSERT(field_expr->snode != nullptr);
   int field_dim = field_expr->snode->num_active_indices;
 
   if (field_dim != index_dim) {
@@ -858,7 +858,7 @@ static void field_validation(FieldExpression *field_expr, int index_dim) {
 void IndexExpression::type_check(const CompileConfig *) {
   // TODO: Change to type-based solution
   // Currently, dimension compatibility check happens in Python
-  TI_ASSERT(indices_group.size() == std::accumulate(begin(ret_shape),
+  QD_ASSERT(indices_group.size() == std::accumulate(begin(ret_shape),
                                                     end(ret_shape), 1,
                                                     std::multiplies<>()));
   int index_dim = indices_group.empty() ? 0 : indices_group[0].size();
@@ -878,7 +878,7 @@ void IndexExpression::type_check(const CompileConfig *) {
   } else if (is_matrix_field()) {
     auto matrix_field_expr = var.cast<MatrixFieldExpression>();
 
-    TI_ASSERT(!matrix_field_expr->fields.empty());
+    QD_ASSERT(!matrix_field_expr->fields.empty());
     auto field_expr = matrix_field_expr->fields[0].cast<FieldExpression>();
     field_validation(field_expr.get(), index_dim);
 
@@ -924,7 +924,7 @@ void IndexExpression::type_check(const CompileConfig *) {
   for (auto &indices : indices_group) {
     for (int i = 0; i < indices.exprs.size(); i++) {
       auto &expr = indices.exprs[i];
-      TI_ASSERT_TYPE_CHECKED(expr);
+      QD_ASSERT_TYPE_CHECKED(expr);
       auto expr_type = expr.get_rvalue_type();
       if (!is_integral(expr_type))
         ErrorEmitter(QuadrantsTypeError(), this,
@@ -958,8 +958,8 @@ void IndexExpression::flatten(FlattenContext *ctx) {
 }
 
 void RangeAssumptionExpression::type_check(const CompileConfig *) {
-  TI_ASSERT_TYPE_CHECKED(input);
-  TI_ASSERT_TYPE_CHECKED(base);
+  QD_ASSERT_TYPE_CHECKED(input);
+  QD_ASSERT_TYPE_CHECKED(base);
   auto input_type = input.get_rvalue_type();
   auto base_type = base.get_rvalue_type();
   if (!input_type->is<PrimitiveType>() || !base_type->is<PrimitiveType>() ||
@@ -980,7 +980,7 @@ void RangeAssumptionExpression::flatten(FlattenContext *ctx) {
 }
 
 void LoopUniqueExpression::type_check(const CompileConfig *) {
-  TI_ASSERT_TYPE_CHECKED(input);
+  QD_ASSERT_TYPE_CHECKED(input);
   auto input_type = input.get_rvalue_type();
 
   if (!input_type->is<PrimitiveType>())
@@ -1005,8 +1005,8 @@ void IdExpression::flatten(FlattenContext *ctx) {
 }
 
 void AtomicOpExpression::type_check(const CompileConfig *config) {
-  TI_ASSERT_TYPE_CHECKED(dest);
-  TI_ASSERT_TYPE_CHECKED(val);
+  QD_ASSERT_TYPE_CHECKED(dest);
+  QD_ASSERT_TYPE_CHECKED(val);
   auto error = [&]() {
     ErrorEmitter(
         QuadrantsTypeError(), this,
@@ -1060,7 +1060,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
 }
 
 void AtomicOpExpression::flatten(FlattenContext *ctx) {
-  TI_ASSERT(dest.expr->is_lvalue());
+  QD_ASSERT(dest.expr->is_lvalue());
   // replace atomic sub with negative atomic add
   if (op_type == AtomicOpType::sub) {
     if (val->ret_type != ret_type) {
@@ -1102,9 +1102,9 @@ void SNodeOpExpression::type_check(const CompileConfig *config) {
     ret_type = PrimitiveType::i32;
   }
   if (op_type == SNodeOpType::append) {
-    TI_ASSERT(snode->ch.size() == values.size());
+    QD_ASSERT(snode->ch.size() == values.size());
     for (int i = 0; i < values.size(); i++) {
-      TI_ASSERT_TYPE_CHECKED(values[i]);
+      QD_ASSERT_TYPE_CHECKED(values[i]);
       auto &dst_type = snode->ch[i]->dt;
       auto value_type = values[i].get_rvalue_type();
       auto promoted = promoted_type(dst_type, value_type);
@@ -1190,14 +1190,14 @@ void ExternalTensorShapeAlongAxisExpression::type_check(const CompileConfig *) {
 
 void ExternalTensorShapeAlongAxisExpression::flatten(FlattenContext *ctx) {
   auto temp = ptr.cast<ExternalTensorExpression>();
-  TI_ASSERT(0 <= axis && axis < temp->ndim);
+  QD_ASSERT(0 <= axis && axis < temp->ndim);
   ctx->push_back<ExternalTensorShapeAlongAxisStmt>(axis, temp->arg_id,
                                                    dbg_info);
   stmt = ctx->back_stmt();
 }
 
 void ExternalTensorBasePtrExpression::type_check(const CompileConfig *) {
-  TI_ASSERT_INFO(ptr.is<ExternalTensorExpression>(),
+  QD_ASSERT_INFO(ptr.is<ExternalTensorExpression>(),
                  "Invalid ptr [{}] for ExternalTensorBasePtrExpression",
                  ExpressionHumanFriendlyPrinter::expr_to_string(ptr));
   ret_type = ptr.cast<ExternalTensorExpression>()->dt.get_element_type();
@@ -1212,7 +1212,7 @@ void ExternalTensorBasePtrExpression::flatten(FlattenContext *ctx) {
 }
 
 void GetElementExpression::type_check(const CompileConfig *config) {
-  TI_ASSERT_TYPE_CHECKED(src);
+  QD_ASSERT_TYPE_CHECKED(src);
   auto src_type = src->ret_type;
   if (!src_type->is<PointerType>()) {
     ErrorEmitter(
@@ -1299,17 +1299,17 @@ Block *ASTBuilder::current_block() {
 }
 
 Stmt *ASTBuilder::get_last_stmt() {
-  TI_ASSERT(!stack_.empty());
+  QD_ASSERT(!stack_.empty());
   return stack_.back()->back();
 }
 
 void ASTBuilder::insert(std::unique_ptr<Stmt> &&stmt, int location) {
-  TI_ASSERT(!stack_.empty());
+  QD_ASSERT(!stack_.empty());
   stack_.back()->insert(std::move(stmt), location);
 }
 
 void ASTBuilder::stop_gradient(SNode *snode) {
-  TI_ASSERT(!stack_.empty());
+  QD_ASSERT(!stack_.empty());
   stack_.back()->stop_gradients.push_back(snode);
 }
 
@@ -1358,7 +1358,7 @@ void ASTBuilder::insert_for(const Expr &s,
 
 Expr ASTBuilder::insert_thread_idx_expr() {
   auto loop = stack_.size() ? stack_.back()->parent_stmt() : nullptr;
-  TI_ERROR_IF(
+  QD_ERROR_IF(
       arch_ != Arch::cuda && !arch_is_cpu(arch_) && arch_ != Arch::amdgpu,
       "ti.thread_idx() is only available in cuda or cpu or amdgpu context.");
   if (loop != nullptr) {
@@ -1369,7 +1369,7 @@ Expr ASTBuilder::insert_thread_idx_expr() {
         break;
     }
   }
-  TI_ERROR_IF(!(loop && loop->is<FrontendForStmt>()),
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()),
               "ti.thread_idx() is only valid within loops.");
   return Expr::make<InternalFuncCallExpression>(
       Operations::get(InternalOp::linear_thread_idx), std::vector<Expr>{});
@@ -1385,7 +1385,7 @@ Expr ASTBuilder::insert_patch_idx_expr(const DebugInfo &dbg_info) {
         break;
     }
   }
-  TI_ERROR_IF(!(loop && loop->is<FrontendForStmt>() &&
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>() &&
                 loop->as<FrontendForStmt>()->mesh),
               "ti.mesh_patch_idx() is only valid within mesh-for loops.");
   return Expr::make<MeshPatchIndexExpression>(dbg_info);
@@ -1484,7 +1484,7 @@ Expr ASTBuilder::make_matrix_expr(const std::vector<int> &shape,
     we should flatten all the elements and disallow recursive TensorType in
     element Expr
   */
-  TI_ASSERT(dt->is<PrimitiveType>());
+  QD_ASSERT(dt->is<PrimitiveType>());
   auto expanded_elements = this->expand_exprs(elements);
   auto mat = Expr(std::make_shared<MatrixExpression>(expanded_elements, shape,
                                                      dt, dbg_info));
@@ -1505,7 +1505,7 @@ Expr ASTBuilder::expr_alloca_shared_array(const std::vector<int> &shape,
 void ASTBuilder::expr_assign(const Expr &lhs,
                              const Expr &rhs,
                              const DebugInfo &dbg_info) {
-  TI_ASSERT(lhs->is_lvalue());
+  QD_ASSERT(lhs->is_lvalue());
   auto stmt = std::make_unique<FrontendAssignStmt>(lhs, rhs, dbg_info);
   this->insert(std::move(stmt));
 }
@@ -1513,7 +1513,7 @@ void ASTBuilder::expr_assign(const Expr &lhs,
 Expr ASTBuilder::expr_subscript(const Expr &expr,
                                 const ExprGroup &indices,
                                 const DebugInfo &dbg_info) {
-  TI_ASSERT(expr.is<FieldExpression>() || expr.is<MatrixFieldExpression>() ||
+  QD_ASSERT(expr.is<FieldExpression>() || expr.is<MatrixFieldExpression>() ||
             expr.is<ExternalTensorExpression>() ||
             is_tensor(expr.expr->ret_type.ptr_removed()));
 
@@ -1554,7 +1554,7 @@ void ASTBuilder::begin_frontend_range_for(const Expr &i,
 void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
                                                     SNode *snode,
                                                     const DebugInfo &dbg_info) {
-  TI_WARN_IF(
+  QD_WARN_IF(
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the struct for. "
       "The execution order is not guaranteed.");
@@ -1570,7 +1570,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(
     const ExprGroup &loop_vars,
     const Expr &external_tensor,
     const DebugInfo &dbg_info) {
-  TI_WARN_IF(
+  QD_WARN_IF(
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the struct for. "
       "The execution order is not guaranteed.");
@@ -1587,7 +1587,7 @@ void ASTBuilder::begin_frontend_mesh_for(
     const mesh::MeshPtr &mesh_ptr,
     const mesh::MeshElementType &element_type,
     const DebugInfo &dbg_info) {
-  TI_WARN_IF(
+  QD_WARN_IF(
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the mesh for. "
       "The execution order is not guaranteed.");
@@ -1681,7 +1681,7 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
 
   std::vector<Expr> expanded_exprs;
   for (auto expr : exprs) {
-    TI_ASSERT_TYPE_CHECKED(expr);
+    QD_ASSERT_TYPE_CHECKED(expr);
 
     auto expand_tensor_or_scalar = [&](const Expr &expr) {
       if (!expr->ret_type.ptr_removed()->is<TensorType>()) {
@@ -1721,7 +1721,7 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
             expanded_exprs.push_back(ind);
           }
         } else {
-          TI_ASSERT(shape.size() == 2);
+          QD_ASSERT(shape.size() == 2);
           for (int i = 0; i < shape[0]; i++) {
             for (int j = 0; j < shape[1]; j++) {
               auto ind = Expr(std::make_shared<IndexExpression>(
@@ -1773,7 +1773,7 @@ Expr ASTBuilder::mesh_index_conversion(mesh::MeshPtr mesh_ptr,
     expanded_idx = idx;
   } else {
     if (idx.expr->ret_type->is<TensorType>()) {
-      TI_ASSERT(idx.expr->ret_type->cast<TensorType>()->get_num_elements() ==
+      QD_ASSERT(idx.expr->ret_type->cast<TensorType>()->get_num_elements() ==
                 1);
     }
     expanded_idx = this->expand_exprs({idx})[0];
@@ -1784,7 +1784,7 @@ Expr ASTBuilder::mesh_index_conversion(mesh::MeshPtr mesh_ptr,
 }
 
 void ASTBuilder::create_scope(std::unique_ptr<Block> &list, LoopType tp) {
-  TI_ASSERT(list == nullptr);
+  QD_ASSERT(list == nullptr);
   LoopState prev = loop_state_stack_.back();
   if (tp == NotLoop) {
     loop_state_stack_.push_back(prev);

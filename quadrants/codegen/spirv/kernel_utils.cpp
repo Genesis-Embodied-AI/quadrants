@@ -3,9 +3,9 @@
 #include <unordered_map>
 
 #include "quadrants/program/kernel.h"
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/program/context.h"
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 
 namespace quadrants::lang {
 namespace spirv {
@@ -24,7 +24,7 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::Root) {
     return std::string("Root: ") + std::to_string(b.root_id);
   }
-  TI_ERROR("unrecognized buffer type");
+  QD_ERROR("unrecognized buffer type");
 }
 
 std::string TaskAttributes::debug_string() const {
@@ -96,8 +96,8 @@ KernelContextAttributes::KernelContextAttributes(
   args_bytes_ = kernel.args_size;
   rets_bytes_ = kernel.ret_size;
 
-  TI_TRACE("sizes: args={} rets={}", args_bytes(), rets_bytes());
-  TI_ASSERT(has_rets() == (rets_bytes_ > 0));
+  QD_TRACE("sizes: args={} rets={}", args_bytes(), rets_bytes());
+  QD_ASSERT(has_rets() == (rets_bytes_ > 0));
 }
 
 }  // namespace spirv

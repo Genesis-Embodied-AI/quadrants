@@ -14,7 +14,7 @@ if has_pytorch():
 
 
 def is_v520_amdgpu():
-    return os.environ.get("TI_AMDGPU_V520", None) == "1" and ti.cfg.arch == ti.amdgpu
+    return os.environ.get("QD_AMDGPU_V520", None) == "1" and ti.cfg.arch == ti.amdgpu
 
 
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")

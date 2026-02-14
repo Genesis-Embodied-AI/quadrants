@@ -8,7 +8,7 @@ from quadrants._lib import core as _ti_core
 from quadrants._logging import info
 
 pybuf_enabled = False
-_env_enable_pybuf = os.environ.get("TI_ENABLE_PYBUF", "1")
+_env_enable_pybuf = os.environ.get("QD_ENABLE_PYBUF", "1")
 if not _env_enable_pybuf or int(_env_enable_pybuf):
     # When using in Jupyter / IDLE, the sys.stdout will be their wrapped ones.
     # While sys.__stdout__ should always be the raw console stdout.

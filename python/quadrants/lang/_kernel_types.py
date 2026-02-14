@@ -9,8 +9,8 @@ class KernelBatchedArgType(IntEnum):
     FLOAT = 0
     INT = 1
     UINT = 2
-    TI_ARRAY = 3
-    TI_ARRAY_WITH_GRAD = 4
+    QD_ARRAY = 3
+    QD_ARRAY_WITH_GRAD = 4
 
 
 @dataclass

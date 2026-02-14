@@ -76,7 +76,7 @@ class CFGBuilder : public IRVisitor {
 
   void visit(Stmt *stmt) override {
     if (stmt->is_container_statement()) {
-      TI_ERROR("Visitor for container statement undefined.");
+      QD_ERROR("Visitor for container statement undefined.");
     }
   }
 
@@ -189,7 +189,7 @@ class CFGBuilder : public IRVisitor {
       CFGNode::add_edge(before_if, graph_->nodes[false_branch_begin].get());
       false_branch_end = graph_->back();
     }
-    TI_ASSERT(prev_nodes_.empty());
+    QD_ASSERT(prev_nodes_.empty());
     if (if_stmt->true_statements)
       prev_nodes_.push_back(true_branch_end);
     if (if_stmt->false_statements)
@@ -405,8 +405,8 @@ class CFGBuilder : public IRVisitor {
     auto backup_stmt_id = current_stmt_id_;
     // |begin_location| must be -1 (indicating we are not building any CFGNode)
     // when the |current_block| changes.
-    TI_ASSERT(begin_location_ == -1);
-    TI_ASSERT(prev_nodes_.empty() || graph_->size() == 1);
+    QD_ASSERT(begin_location_ == -1);
+    QD_ASSERT(prev_nodes_.empty() || graph_->size() == 1);
     current_block_ = block;
     last_node_in_current_block_ = nullptr;
     begin_location_ = 0;

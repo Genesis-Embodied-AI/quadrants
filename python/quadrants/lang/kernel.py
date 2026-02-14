@@ -62,7 +62,7 @@ from ._quadrants_callable import QuadrantsCallable
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
-_FLOAT, _INT, _UINT, _TI_ARRAY, _TI_ARRAY_WITH_GRAD = KernelBatchedArgType
+_FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 
 
 class LaunchContextBufferCache:
@@ -126,10 +126,10 @@ class LaunchContextBufferCache:
         # with expired cache entry caused by deallocated argument.
         launch_ctx_cache_tracker_: list[ReferenceType | None] = [None]
         clear_callback = lambda ref: launch_ctx_cache_tracker_.clear()
-        if launch_ctx_args := launch_ctx_buffer.get(_TI_ARRAY):
+        if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY):
             _, arrs = zip(*launch_ctx_args)
             launch_ctx_cache_tracker_ += [ReferenceType(arr, clear_callback) for arr in arrs]
-        if launch_ctx_args := launch_ctx_buffer.get(_TI_ARRAY_WITH_GRAD):
+        if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY_WITH_GRAD):
             _, arrs, arrs_grad = zip(*launch_ctx_args)
             launch_ctx_cache_tracker_ += [ReferenceType(arr, clear_callback) for arr in arrs]
             launch_ctx_cache_tracker_ += [ReferenceType(arr_grad, clear_callback) for arr_grad in arrs_grad]
@@ -388,7 +388,7 @@ class Kernel(FuncBase):
                 current_kernel=self,
                 only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
                 tree=tree,
-                dump_ast=os.environ.get("TI_DUMP_AST", "") == "1" and _pass == 1,
+                dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
             )
             quadrants_kernel = impl.get_runtime().prog.create_kernel(
                 quadrants_ast_generator, kernel_name, self.autodiff_mode
@@ -464,9 +464,9 @@ class Kernel(FuncBase):
                 launch_ctx.set_args_int(*zip(*launch_ctx_args))  # type: ignore
             if launch_ctx_args := launch_ctx_buffer.get(_UINT):
                 launch_ctx.set_args_uint(*zip(*launch_ctx_args))  # type: ignore
-            if launch_ctx_args := launch_ctx_buffer.get(_TI_ARRAY):
+            if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY):
                 launch_ctx.set_args_ndarray(*zip(*launch_ctx_args))  # type: ignore
-            if launch_ctx_args := launch_ctx_buffer.get(_TI_ARRAY_WITH_GRAD):
+            if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY_WITH_GRAD):
                 launch_ctx.set_args_ndarray_with_grad(*zip(*launch_ctx_args))  # type: ignore
 
             if is_launch_ctx_cacheable and args_hash is not None:

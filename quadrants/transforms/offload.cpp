@@ -74,7 +74,7 @@ class Offloader {
     root_block->statements.clear();
     const auto arch = config.arch;
     Kernel *kernel = dynamic_cast<Kernel *>(root_block->parent_callable());
-    TI_ASSERT(kernel);
+    QD_ASSERT(kernel);
     auto pending_serial_statements = Stmt::make_typed<OffloadedStmt>(
         OffloadedStmt::TaskType::serial, arch, kernel);
     pending_serial_statements->grid_dim = 1;
@@ -190,13 +190,13 @@ class Offloader {
         (leaf->is_path_all_dense && config.demote_dense_struct_fors);
     const auto arch = config.arch;
     Kernel *kernel = dynamic_cast<Kernel *>(root_block->parent_callable());
-    TI_ASSERT(kernel);
+    QD_ASSERT(kernel);
     if (!demotable) {
       for (int i = 1; i < path.size(); i++) {
         auto snode_child = path[i];
         if (snode_child->type == SNodeType::quant_array &&
             for_stmt->is_bit_vectorized) {
-          TI_ASSERT(i == path.size() - 1);
+          QD_ASSERT(i == path.size() - 1);
           continue;
         }
         auto offloaded_clear_list = Stmt::make_typed<OffloadedStmt>(
@@ -235,7 +235,7 @@ class Offloader {
           std::min(snode_num_elements, (int64)config.default_gpu_block_dim);
     } else {
       if (for_stmt->block_dim > snode_num_elements) {
-        TI_WARN(
+        QD_WARN(
             "Specified block dim {} is bigger than SNode element size {}. "
             "Clipping.\n{}",
             for_stmt->block_dim, snode_num_elements, for_stmt->get_tb());
@@ -360,7 +360,7 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
       ret = global_offset_;
       global_offset_ += type_size;
     }
-    TI_ASSERT(global_offset_ < quadrants_global_tmp_buffer_size);
+    QD_ASSERT(global_offset_ < quadrants_global_tmp_buffer_size);
     return ret;
   }
 
@@ -381,7 +381,7 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
   }
 
   void visit(AllocaStmt *stmt) override {
-    TI_ASSERT(current_offloaded_);
+    QD_ASSERT(current_offloaded_);
   }
 
   void test_and_allocate(Stmt *stmt) {
@@ -503,9 +503,9 @@ class FixCrossOffloadReferences : public BasicStmtVisitor {
       stmt->body->accept(this);
     if (stmt->task_type == OffloadedStmt::TaskType::range_for) {
       if (!stmt->const_begin) {
-        TI_ASSERT(offloaded_ranges_->begin_stmts.find(stmt) !=
+        QD_ASSERT(offloaded_ranges_->begin_stmts.find(stmt) !=
                   offloaded_ranges_->begin_stmts.end())
-        TI_ASSERT_INFO(local_to_global_offset_.find(
+        QD_ASSERT_INFO(local_to_global_offset_.find(
                            offloaded_ranges_->begin_stmts.find(stmt)->second) !=
                            local_to_global_offset_.end(),
                        "Begin fails.")
@@ -517,9 +517,9 @@ class FixCrossOffloadReferences : public BasicStmtVisitor {
           stmt->end_stmt->accept(this);
           stmt->end_offset = 0;
         } else {
-          TI_ASSERT(offloaded_ranges_->end_stmts.find(stmt) !=
+          QD_ASSERT(offloaded_ranges_->end_stmts.find(stmt) !=
                     offloaded_ranges_->end_stmts.end())
-          TI_ASSERT_INFO(local_to_global_offset_.find(
+          QD_ASSERT_INFO(local_to_global_offset_.find(
                              offloaded_ranges_->end_stmts.find(stmt)->second) !=
                              local_to_global_offset_.end(),
                          "End fails.")
@@ -585,7 +585,7 @@ class FixCrossOffloadReferences : public BasicStmtVisitor {
 
   bool visit_operand(Stmt *stmt, int index) {
     // return true if modified
-    TI_ASSERT(index >= 0 && index < stmt->num_operands());
+    QD_ASSERT(index >= 0 && index < stmt->num_operands());
     auto op = stmt->operand(index);
     if (op == nullptr)
       return false;
@@ -674,9 +674,9 @@ class FixCrossOffloadReferences : public BasicStmtVisitor {
 
 void insert_gc(IRNode *root, const CompileConfig &config) {
   auto *b = dynamic_cast<Block *>(root);
-  TI_ASSERT(b);
+  QD_ASSERT(b);
   Kernel *kernel = dynamic_cast<Kernel *>(b->parent_callable());
-  TI_ASSERT(kernel);
+  QD_ASSERT(kernel);
   std::vector<std::pair<int, std::vector<SNode *>>> gc_statements;
   for (int i = 0; i < (int)b->statements.size(); i++) {
     auto snodes =
@@ -718,13 +718,13 @@ class AssociateContinueScope : public BasicStmtVisitor {
   }
 
   void visit(StructForStmt *stmt) override {
-    TI_ERROR("struct_for cannot be nested inside a kernel, stmt={}",
+    QD_ERROR("struct_for cannot be nested inside a kernel, stmt={}",
              stmt->name());
   }
 
   void visit(OffloadedStmt *stmt) override {
-    TI_ASSERT(cur_offloaded_stmt_ == nullptr);
-    TI_ASSERT(cur_internal_loop_ == nullptr);
+    QD_ASSERT(cur_offloaded_stmt_ == nullptr);
+    QD_ASSERT(cur_internal_loop_ == nullptr);
     cur_offloaded_stmt_ = stmt;
     Parent::visit(stmt);
     cur_offloaded_stmt_ = nullptr;
@@ -739,7 +739,7 @@ class AssociateContinueScope : public BasicStmtVisitor {
       }
       modified_ = true;
     }
-    TI_ASSERT(stmt->scope != nullptr);
+    QD_ASSERT(stmt->scope != nullptr);
   }
 
   static void run(IRNode *root) {
@@ -772,7 +772,7 @@ void associate_continue_scope(IRNode *root, const CompileConfig &config) {
 }
 
 void offload(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto offloaded_ranges = Offloader::run(root, config);
   type_check(root, config);
   {

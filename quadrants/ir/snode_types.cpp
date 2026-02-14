@@ -14,7 +14,7 @@ std::string snode_type_name(SNodeType t) {
 
 #undef PER_SNODE
     default:
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
   }
 }
 

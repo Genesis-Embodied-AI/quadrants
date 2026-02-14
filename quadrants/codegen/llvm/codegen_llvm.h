@@ -4,7 +4,7 @@
 #include <set>
 #include <unordered_map>
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 
 #include "quadrants/ir/ir.h"
 #include "quadrants/codegen/llvm/llvm_codegen_utils.h"
@@ -345,7 +345,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   virtual void create_offload_range_for(OffloadedStmt *stmt) = 0;
 
   virtual void create_offload_mesh_for(OffloadedStmt *stmt) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   void create_offload_struct_for(OffloadedStmt *stmt);
@@ -432,4 +432,4 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
 }  // namespace quadrants::lang
 
-#endif  // #ifdef TI_WITH_LLVM
+#endif  // #ifdef QD_WITH_LLVM

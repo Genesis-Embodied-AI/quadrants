@@ -44,7 +44,7 @@ namespace irpass {
 void compile_quadrants_functions(IRNode *ir,
                                  const CompileConfig &compile_config,
                                  Function::IRStage target_stage) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   CompileQuadrantsFunctions::run(ir, compile_config, target_stage);
 }
 

@@ -34,14 +34,14 @@
 #include "quadrants/util/file_sequence_writer.h"
 #include "quadrants/util/io.h"
 
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/program/context.h"
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 
 namespace quadrants {
 namespace lang {
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 
 class JITModuleAMDGPU : public JITModule {
  private:
@@ -59,11 +59,11 @@ class JITModuleAMDGPU : public JITModule {
         AMDGPUDriver::get_instance().module_get_function.call_with_warning(
             &func, module_, name.c_str());
     if (err) {
-      TI_ERROR("Cannot look up function {}", name);
+      QD_ERROR("Cannot look up function {}", name);
     }
     t = Time::get_time() - t;
-    TI_TRACE("AMDGPU module_get_function {} costs {} ms", name, t * 1000);
-    TI_ASSERT(func != nullptr);
+    QD_TRACE("AMDGPU module_get_function {} costs {} ms", name, t * 1000);
+    QD_ASSERT(func != nullptr);
     return func;
   }
 
@@ -99,7 +99,7 @@ class JITSessionAMDGPU : public JITSession {
                    llvm::DataLayout data_layout)
       : JITSession(tlctx, config), data_layout(data_layout) {
     random_num_ = get_random_num();
-    char *env_dir = std::getenv("TI_TMP_DIR");
+    char *env_dir = std::getenv("QD_TMP_DIR");
     tmp_dir_ = "/tmp/quadrants_hsaco/";
     if (env_dir) {
       tmp_dir_ = env_dir;
@@ -120,7 +120,7 @@ class JITSessionAMDGPU : public JITSession {
   std::string load_hsaco(const std::string &filename) {
     std::ifstream src_file(filename);
     if (!src_file.is_open()) {
-      TI_ERROR(fmt::format("Open {} Error", filename));
+      QD_ERROR(fmt::format("Open {} Error", filename));
     }
     return std::string(std::istreambuf_iterator<char>(src_file),
                        (std::istreambuf_iterator<char>()));

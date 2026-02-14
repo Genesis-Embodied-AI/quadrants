@@ -16,7 +16,7 @@ bool is_aos_matrix_of_global_ptr(MatrixOfGlobalPtrStmt *stmt) {
   bool is_continuous_addr = true;
   SNode *parent_snode = snodes[0]->parent;
   for (auto snode : snodes) {
-    TI_ASSERT(snode->type == SNodeType::place);
+    QD_ASSERT(snode->type == SNodeType::place);
     if (snode->parent != parent_snode ||
         parent_snode->type != SNodeType::dense) {
       is_continuous_addr = false;
@@ -529,7 +529,7 @@ class LowerMatrixPtr : public BasicStmtVisitor {
         modifier_.insert_before(stmt, std::move(lowered));
         modifier_.erase(stmt);
       } else {
-        TI_ASSERT_INFO(
+        QD_ASSERT_INFO(
             origin->dynamic_indexable,
             "Element of the MatrixField is not dynamic indexable.\n{}",
             stmt->get_tb());
@@ -555,7 +555,7 @@ class LowerMatrixPtr : public BasicStmtVisitor {
     }
     if (stmt->origin->is<MatrixOfMatrixPtrStmt>()) {
       auto origin = stmt->origin->as<MatrixOfMatrixPtrStmt>();
-      TI_ASSERT(stmt->offset->is<ConstStmt>());
+      QD_ASSERT(stmt->offset->is<ConstStmt>());
       auto offset = stmt->offset->as<ConstStmt>();
       stmt->replace_usages_with(origin->stmts[offset->val.val_int()]);
       modifier_.erase(stmt);
@@ -594,7 +594,7 @@ class RemoveMatrixOfPtr : public BasicStmtVisitor {
 namespace irpass {
 
 void lower_matrix_ptr(IRNode *root, bool force_scalarize) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   if (!force_scalarize) {
     GatherValidAOSGlobalPtrStmt gather_valid_aos_global_ptr_pass(root);

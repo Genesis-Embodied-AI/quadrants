@@ -20,7 +20,7 @@ bool test_threading() {
       for (int t = 0; t < 10000000; t++) {
         ret += t * 1e-20;
       }
-      TI_P(int(i + ret + 10 * *(int *)j));
+      QD_P(int(i + ret + 10 * *(int *)j));
     });
   }
   return true;
@@ -50,13 +50,13 @@ void ThreadPool::run(int splits,
     this->range_for_task_context = range_for_task_context;
     this->func = func;
     this->desired_num_threads = std::min(desired_num_threads, max_num_threads);
-    TI_ASSERT(this->desired_num_threads > 0);
-    // TI_P(this->desired_num_threads);
+    QD_ASSERT(this->desired_num_threads > 0);
+    // QD_P(this->desired_num_threads);
     started = false;
     task_head = 0;
     task_tail = splits;
     timestamp++;
-    TI_ASSERT(timestamp < (1LL << 62));  // avoid overflowing here
+    QD_ASSERT(timestamp < (1LL << 62));  // avoid overflowing here
   }
 
   // wake up all slaves
@@ -66,7 +66,7 @@ void ThreadPool::run(int splits,
     // TODO: the workers may have finished before master waiting on master_cv
     master_cv.wait(lock, [this] { return started && running_threads == 0; });
   }
-  TI_ASSERT(task_head >= task_tail);
+  QD_ASSERT(task_head >= task_tail);
 }
 
 void ThreadPool::target() {

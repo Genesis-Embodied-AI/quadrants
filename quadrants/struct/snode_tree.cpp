@@ -22,7 +22,7 @@ SNodeTree::SNodeTree(int id, std::unique_ptr<SNode> root)
 void SNodeTree::check_tree_validity(SNode &node) {
   if (node.ch.empty()) {
     if (node.type != SNodeType::place && node.type != SNodeType::root) {
-      TI_ERROR("{} node must have at least one child.",
+      QD_ERROR("{} node must have at least one child.",
                snode_type_name(node.type));
     }
   }

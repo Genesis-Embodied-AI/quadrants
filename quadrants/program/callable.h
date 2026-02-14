@@ -11,7 +11,7 @@ class Program;
 class IRNode;
 class FrontendContext;
 
-class TI_DLL_EXPORT CallableBase {
+class QD_DLL_EXPORT CallableBase {
  public:
   struct Parameter {
     std::string name;
@@ -22,7 +22,7 @@ class TI_DLL_EXPORT CallableBase {
     bool needs_grad{false};  // TODO: reorder for better alignment
     std::vector<int> element_shape{};
     ParameterType ptype{ParameterType::kUnknown};
-    TI_IO_DEF(is_array,
+    QD_IO_DEF(is_array,
               total_dim,
               format,
               dt_,
@@ -99,7 +99,7 @@ class TI_DLL_EXPORT CallableBase {
   struct Ret {
     DataType dt;
 
-    TI_IO_DEF(dt);
+    QD_IO_DEF(dt);
 
     explicit Ret(const DataType &dt = PrimitiveType::unknown) : dt(dt) {
     }
@@ -121,7 +121,7 @@ class TI_DLL_EXPORT CallableBase {
   std::string name;
 };
 
-class TI_DLL_EXPORT Callable : public CallableBase {
+class QD_DLL_EXPORT Callable : public CallableBase {
  public:
   Program *program{nullptr};
   std::unique_ptr<IRNode> ir{nullptr};

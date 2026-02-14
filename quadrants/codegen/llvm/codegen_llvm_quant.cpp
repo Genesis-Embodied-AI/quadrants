@@ -1,4 +1,4 @@
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 #include "quadrants/ir/statements.h"
 
@@ -9,7 +9,7 @@ namespace {
 inline void update_mask(uint64 &mask, uint32 num_bits, uint32 offset) {
   uint64 new_mask =
       (((~(uint64)0) << (64 - num_bits)) >> (64 - offset - num_bits));
-  TI_ASSERT((mask & new_mask) == 0);
+  QD_ASSERT((mask & new_mask) == 0);
   mask |= new_mask;
 }
 
@@ -185,7 +185,7 @@ void TaskCodeGenLLVM::visit(BitStructStoreStmt *stmt) {
       llvm::Value *digit_bits = nullptr;
       // Extract exponent and digits from compute type (assumed to be f32 for
       // now).
-      TI_ASSERT(qflt->get_compute_type()->is_primitive(PrimitiveTypeID::f32));
+      QD_ASSERT(qflt->get_compute_type()->is_primitive(PrimitiveTypeID::f32));
 
       // f32 = 1 sign bit + 8 exponent bits + 23 fraction bits
 
@@ -386,7 +386,7 @@ void TaskCodeGenLLVM::store_quant_floats_with_shared_exponents(
 }
 
 llvm::Value *TaskCodeGenLLVM::extract_exponent_from_f32(llvm::Value *f) {
-  TI_ASSERT(f->getType() == llvm::Type::getFloatTy(*llvm_context));
+  QD_ASSERT(f->getType() == llvm::Type::getFloatTy(*llvm_context));
   f = builder->CreateBitCast(f, llvm::Type::getInt32Ty(*llvm_context));
   auto exp_bits = builder->CreateLShr(f, tlctx->get_constant(23));
   return builder->CreateAnd(exp_bits, tlctx->get_constant((1 << 8) - 1));
@@ -394,7 +394,7 @@ llvm::Value *TaskCodeGenLLVM::extract_exponent_from_f32(llvm::Value *f) {
 
 llvm::Value *TaskCodeGenLLVM::extract_digits_from_f32(llvm::Value *f,
                                                       bool full) {
-  TI_ASSERT(f->getType() == llvm::Type::getFloatTy(*llvm_context));
+  QD_ASSERT(f->getType() == llvm::Type::getFloatTy(*llvm_context));
   f = builder->CreateBitCast(f, llvm::Type::getInt32Ty(*llvm_context));
   auto digits = builder->CreateAnd(f, tlctx->get_constant((1 << 23) - 1));
   if (full) {
@@ -584,10 +584,10 @@ llvm::Value *TaskCodeGenLLVM::reconstruct_quant_float(
     return builder->CreateBitCast(f32_bits,
                                   llvm::Type::getFloatTy(*llvm_context));
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
 }  // namespace quadrants::lang
 
-#endif  // #ifdef TI_WITH_LLVM
+#endif  // #ifdef QD_WITH_LLVM

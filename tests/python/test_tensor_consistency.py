@@ -5,7 +5,7 @@ import quadrants as ti
 
 from tests import test_utils
 
-_TI_DTYPE_TO_NP_DTYPE = {
+_QD_DTYPE_TO_NP_DTYPE = {
     ti.u1: np.bool_,
     ti.u8: np.uint8,
     ti.u16: np.uint16,
@@ -53,7 +53,7 @@ def test_tensor_consistency_kernel_from_numpy_to_numpy_consistency(tensor_type, 
     """
     poses = [0, 2, 5, 11]
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
 
     a_np = np.zeros(dtype=np_dtype, shape=(16,))
 
@@ -79,7 +79,7 @@ def test_tensor_consistency_np_read_write_np_consistency(tensor_type, dtype) -> 
     """
     poses = [0, 2, 5, 11]
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
 
     a_np = np.zeros(dtype=np_dtype, shape=(16,))
     a = tensor_type(dtype, (16,))
@@ -115,7 +115,7 @@ def test_tensor_consistency_from_numpy_accessor_read_consistency(tensor_type, dt
     """
     poses = [0, 2, 5, 11]
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(16,))
     a = tensor_type(dtype, (16,))
 
@@ -157,7 +157,7 @@ def test_tensor_consistency_from_numpy_kern_read(tensor_type, dtype, std_dtype) 
     poses = [0, 2, 5, 11]
     N = 16
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(N,))
     a = tensor_type(dtype, (N,))
     b = tensor_type(std_dtype, (N,))
@@ -193,7 +193,7 @@ def test_tensor_consistency_kern_write_to_numpy(tensor_type, dtype, std_dtype) -
     poses = [0, 2, 5, 11]
     N = 16
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(N,))
     a = tensor_type(std_dtype, (N,))
     b = tensor_type(dtype, (N,))
@@ -227,7 +227,7 @@ def test_tensor_consistency_ext_to_kern(dtype) -> None:
     poses_l = [0, 2, 5, 11]
     N = 16
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(N,))
     anti_poses_l = list(range(N))  # i.e positions with zeros
     for pos in poses_l:
@@ -262,7 +262,7 @@ def test_tensor_consistency_kern_to_ext(dtype) -> None:
     poses_l = [0, 2, 5, 11]
     N = 16
 
-    np_dtype = _TI_DTYPE_TO_NP_DTYPE[dtype]
+    np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(N,))
 
     @ti.kernel

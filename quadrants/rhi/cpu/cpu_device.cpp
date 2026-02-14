@@ -65,7 +65,7 @@ void CpuDevice::dealloc_memory(DeviceAllocation handle) {
     return;
   }
   if (info.ptr == nullptr) {
-    TI_ERROR("the DeviceAllocation is already deallocated");
+    QD_ERROR("the DeviceAllocation is already deallocated");
   }
   if (!info.use_cached) {
     HostMemoryPool::get_instance().release(info.size, info.ptr);

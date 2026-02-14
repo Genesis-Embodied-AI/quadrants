@@ -38,7 +38,7 @@ class ScratchPad {
       return high - low;
     }
 
-    TI_IO_DEF(low, high);
+    QD_IO_DEF(low, high);
   };
 
   SNode *snode{nullptr};
@@ -62,7 +62,7 @@ class ScratchPad {
   ScratchPad() = default;
 
   explicit ScratchPad(SNode *snode) : snode(snode) {
-    TI_ASSERT(snode != nullptr);
+    QD_ASSERT(snode != nullptr);
     dim = snode->num_active_indices;
     coefficients.resize(dim);
     bounds.resize(dim);
@@ -81,9 +81,9 @@ class ScratchPad {
   void access(const std::vector<int> &coeffs,
               const std::vector<int> &indices,
               AccessFlag flags) {
-    TI_ASSERT(!finalized);
+    QD_ASSERT(!finalized);
     empty = true;
-    TI_ASSERT((int)indices.size() == dim);
+    QD_ASSERT((int)indices.size() == dim);
     for (int i = 0; i < dim; i++) {
       coefficients[i] = coeffs[i];
       bounds[i].low = std::min(bounds[i].low, indices[i]);
@@ -104,8 +104,8 @@ class ScratchPad {
     for (int i = 0; i < dim; i++) {
       block_size[i] =
           snode->parent->extractors[snode->physical_index_position[i]].shape;
-      TI_ASSERT(bounds[i].low != std::numeric_limits<int>::max());
-      TI_ASSERT(bounds[i].high != std::numeric_limits<int>::min());
+      QD_ASSERT(bounds[i].low != std::numeric_limits<int>::max());
+      QD_ASSERT(bounds[i].high != std::numeric_limits<int>::min());
     }
 
     finalized = true;
@@ -129,7 +129,7 @@ class ScratchPad {
   }
 
   int pad_size_linear() {
-    TI_ASSERT(finalized);
+    QD_ASSERT(finalized);
     int s = 1;
     for (int i = 0; i < dim; i++) {
       s *= pad_size[i];
@@ -138,7 +138,7 @@ class ScratchPad {
   }
 
   int block_size_linear() {
-    TI_ASSERT(finalized);
+    QD_ASSERT(finalized);
     int s = 1;
     for (int i = 0; i < dim; i++) {
       s *= block_size[i];
@@ -148,7 +148,7 @@ class ScratchPad {
 
   int linearized_index(const std::vector<int> &indices) {
     int ret = 0;
-    TI_ASSERT(finalized);
+    QD_ASSERT(finalized);
     for (int i = 0; i < dim; i++) {
       ret *= (bounds[i].high - bounds[i].low);
       ret += indices[i] - bounds[i].low;
@@ -194,7 +194,7 @@ class ScratchPads {
       pads.emplace(std::piecewise_construct, std::forward_as_tuple(snode),
                    std::forward_as_tuple(snode));
     } else {
-      TI_ERROR("ScratchPad for {} already exists.", snode->node_type_name);
+      QD_ERROR("ScratchPad for {} already exists.", snode->node_type_name);
     }
   }
 
@@ -202,7 +202,7 @@ class ScratchPads {
               const std::vector<int> &coeffs,
               const std::vector<int> &indices,
               AccessFlag flags) {
-    TI_ASSERT(snode != nullptr);
+    QD_ASSERT(snode != nullptr);
     if (pads.find(snode) == pads.end())
       return;
     pads.find(snode)->second.access(coeffs, indices, flags);
@@ -237,14 +237,14 @@ class ScratchPads {
       }
     } else if (pads.find(snode->parent) != pads.end()) {
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
   void print() {
     for (auto &it : pads) {
-      TI_P(it.first->node_type_name);
-      TI_P(it.second.bounds);
+      QD_P(it.first->node_type_name);
+      QD_P(it.second.bounds);
     }
   }
 
@@ -253,7 +253,7 @@ class ScratchPads {
   }
 
   ScratchPad &get(SNode *snode) {
-    TI_ASSERT(pads.find(snode) != pads.end());
+    QD_ASSERT(pads.find(snode) != pads.end());
     return pads[snode];
   }
 };

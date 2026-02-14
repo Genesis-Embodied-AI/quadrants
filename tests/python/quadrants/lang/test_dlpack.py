@@ -19,7 +19,7 @@ def ti_to_torch(ti_tensor: ti.types.NDArray) -> torch.Tensor:
 
 
 def is_v520_amdgpu():
-    return os.environ.get("TI_AMDGPU_V520", None) == "1" and ti.cfg.arch == ti.amdgpu
+    return os.environ.get("QD_AMDGPU_V520", None) == "1" and ti.cfg.arch == ti.amdgpu
 
 
 @test_utils.test(arch=dlpack_arch)

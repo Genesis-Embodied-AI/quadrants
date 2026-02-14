@@ -18,7 +18,7 @@ class LocalStoreForwarder : public BasicStmtVisitor {
 
   explicit LocalStoreForwarder(Stmt *var)
       : var_(var), is_valid_(true), result_(nullptr) {
-    TI_ASSERT(var->is<AllocaStmt>());
+    QD_ASSERT(var->is<AllocaStmt>());
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -68,8 +68,8 @@ class LocalStoreForwarder : public BasicStmtVisitor {
       // only one branch modifies the variable
       is_valid_ = false;
     } else {
-      TI_ASSERT(true_stmt->is<LocalStoreStmt>());
-      TI_ASSERT(false_stmt->is<LocalStoreStmt>());
+      QD_ASSERT(true_stmt->is<LocalStoreStmt>());
+      QD_ASSERT(false_stmt->is<LocalStoreStmt>());
       if (true_stmt->as<LocalStoreStmt>()->val !=
           false_stmt->as<LocalStoreStmt>()->val) {
         // two branches finally store the variable differently

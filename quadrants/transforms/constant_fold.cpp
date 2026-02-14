@@ -56,7 +56,7 @@ class ConstantFold : public BasicStmtVisitor {
       if (is_integral(rhs->ret_type)) {
         auto rhs_val = rhs->val.val_int();
         if (rhs_val < 0 && is_integral(dst_type)) {
-          TI_ERROR("Negative exponent in pow(int, int) is not allowed.");
+          QD_ERROR("Negative exponent in pow(int, int) is not allowed.");
         }
       }
     }
@@ -135,7 +135,7 @@ class ConstantFold : public BasicStmtVisitor {
 #undef COMMA
 
       case BinaryOpType::truediv:
-        TI_ERROR("{} should have been lowered.",
+        QD_ERROR("{} should have been lowered.",
                  binary_op_type_name(stmt->op_type));
         break;
 
@@ -348,7 +348,7 @@ const PassID ConstantFoldPass::id = "ConstantFoldPass";
 namespace irpass {
 
 bool constant_fold(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return ConstantFold::run(root);
 }
 

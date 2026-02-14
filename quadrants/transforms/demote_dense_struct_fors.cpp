@@ -11,7 +11,7 @@ namespace {
 using TaskType = OffloadedStmt::TaskType;
 
 void convert_to_range_for(OffloadedStmt *offloaded) {
-  TI_ASSERT(offloaded->task_type == TaskType::struct_for);
+  QD_ASSERT(offloaded->task_type == TaskType::struct_for);
 
   std::vector<SNode *> snodes;
   auto *snode = offloaded->snode;
@@ -26,7 +26,7 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
     total_n *= snode->num_cells_per_container;
     snode = snode->parent;
   }
-  TI_ASSERT(total_n <= std::numeric_limits<int>::max());
+  QD_ASSERT(total_n <= std::numeric_limits<int>::max());
   std::reverse(snodes.begin(), snodes.end());
 
   offloaded->const_begin = true;
@@ -97,7 +97,7 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
       [&](Stmt *s) {
         auto index = std::find(physical_indices.begin(), physical_indices.end(),
                                s->as<LoopIndexStmt>()->index);
-        TI_ASSERT(index != physical_indices.end());
+        QD_ASSERT(index != physical_indices.end());
         return new_loop_vars[index - physical_indices.begin()];
       });
 

@@ -23,7 +23,7 @@ void SNodeTreeManager::destroy_snode_tree(SNodeTree *snode_tree) {
     }
   }
   if (root_id == -1) {
-    TI_ERROR("the tree to be destroyed cannot be found");
+    QD_ERROR("the tree to be destroyed cannot be found");
   }
   runtime_->root_buffers_[root_id].reset();
 }
@@ -31,7 +31,7 @@ void SNodeTreeManager::destroy_snode_tree(SNodeTree *snode_tree) {
 size_t SNodeTreeManager::get_field_in_tree_offset(int tree_id,
                                                   const SNode *child) {
   auto &snode_struct = compiled_snode_structs_[tree_id];
-  TI_ASSERT_INFO(
+  QD_ASSERT_INFO(
       snode_struct.snode_descriptors.find(child->id) !=
               snode_struct.snode_descriptors.end() &&
           snode_struct.snode_descriptors.at(child->id).snode == child,
@@ -48,7 +48,7 @@ size_t SNodeTreeManager::get_field_in_tree_offset(int tree_id,
 
 DevicePtr SNodeTreeManager::get_snode_tree_device_ptr(int tree_id) {
   if (tree_id >= runtime_->root_buffers_.size()) {
-    TI_ERROR("tree_id {} out of range {}", tree_id,
+    QD_ERROR("tree_id {} out of range {}", tree_id,
              runtime_->root_buffers_.size());
   }
   return runtime_->root_buffers_[tree_id]->get_ptr();

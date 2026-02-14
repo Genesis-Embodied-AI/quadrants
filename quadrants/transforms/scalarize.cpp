@@ -52,9 +52,9 @@ class Scalarize : public BasicStmtVisitor {
       auto dest_tensor_type = dest_dtype->template as<TensorType>();
       auto val_tensor_type = val_dtype->template as<TensorType>();
 
-      TI_ASSERT(dest_tensor_type->get_shape() == val_tensor_type->get_shape());
+      QD_ASSERT(dest_tensor_type->get_shape() == val_tensor_type->get_shape());
 
-      TI_ASSERT(stmt->val->template is<MatrixInitStmt>());
+      QD_ASSERT(stmt->val->template is<MatrixInitStmt>());
       auto matrix_init_stmt = stmt->val->template as<MatrixInitStmt>();
 
       int num_elements = val_tensor_type->get_num_elements();
@@ -158,7 +158,7 @@ class Scalarize : public BasicStmtVisitor {
       if (matrix_ptr_stmt->origin->template is<MatrixInitStmt>()) {
         auto matrix_init_stmt =
             matrix_ptr_stmt->origin->template as<MatrixInitStmt>();
-        TI_ASSERT(matrix_ptr_stmt->offset->template is<ConstStmt>());
+        QD_ASSERT(matrix_ptr_stmt->offset->template is<ConstStmt>());
         auto offset_stmt = matrix_ptr_stmt->offset->template as<ConstStmt>();
         int offset = offset_stmt->val.val_int32();
 
@@ -194,10 +194,10 @@ class Scalarize : public BasicStmtVisitor {
       // Needs scalarize
       auto operand_tensor_type = operand_dtype->as<TensorType>();
 
-      TI_ASSERT(stmt->operand->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->operand->is<MatrixInitStmt>());
       auto operand_matrix_init_stmt = stmt->operand->cast<MatrixInitStmt>();
 
-      TI_ASSERT(operand_matrix_init_stmt->values.size() ==
+      QD_ASSERT(operand_matrix_init_stmt->values.size() ==
                 operand_tensor_type->get_num_elements());
 
       std::vector<Stmt *> matrix_init_values;
@@ -256,15 +256,15 @@ class Scalarize : public BasicStmtVisitor {
     if (lhs_dtype->is<TensorType>() || rhs_dtype->is<TensorType>()) {
       // Make sure broadcasting has been correctly applied by
       // BinaryOpExpression::type_check().
-      TI_ASSERT(lhs_dtype->is<TensorType>() && rhs_dtype->is<TensorType>());
+      QD_ASSERT(lhs_dtype->is<TensorType>() && rhs_dtype->is<TensorType>());
       // However, since the type conversions are delayed until
       // irpass::type_check(), we only check for the shape here.
-      TI_ASSERT(lhs_dtype->cast<TensorType>()->get_shape() ==
+      QD_ASSERT(lhs_dtype->cast<TensorType>()->get_shape() ==
                 rhs_dtype->cast<TensorType>()->get_shape());
       // Scalarization for LoadStmt should have already replaced both operands
       // to MatrixInitStmt.
-      TI_ASSERT(stmt->lhs->is<MatrixInitStmt>());
-      TI_ASSERT(stmt->rhs->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->lhs->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->rhs->is<MatrixInitStmt>());
 
       auto lhs_matrix_init_stmt = stmt->lhs->cast<MatrixInitStmt>();
       std::vector<Stmt *> lhs_vals = lhs_matrix_init_stmt->values;
@@ -272,7 +272,7 @@ class Scalarize : public BasicStmtVisitor {
       auto rhs_matrix_init_stmt = stmt->rhs->cast<MatrixInitStmt>();
       std::vector<Stmt *> rhs_vals = rhs_matrix_init_stmt->values;
 
-      TI_ASSERT(rhs_vals.size() == lhs_vals.size());
+      QD_ASSERT(rhs_vals.size() == lhs_vals.size());
 
       size_t num_elements = lhs_vals.size();
       auto primitive_type = stmt_dtype.get_element_type();
@@ -310,7 +310,7 @@ class Scalarize : public BasicStmtVisitor {
       pair.second.push_back(format);
     };
     auto get_num_pairs = [](PairType const &pair) -> size_t {
-      TI_ASSERT(pair.first.size() == pair.second.size());
+      QD_ASSERT(pair.first.size() == pair.second.size());
       return pair.first.size();
     };
     auto get_pair_at = [](PairType const &pair,
@@ -376,7 +376,7 @@ class Scalarize : public BasicStmtVisitor {
       auto const &[content, format] = get_pair_at(new_pair, i);
       if (auto string_content = std::get_if<std::string>(&content)) {
         merged_string += *string_content;
-        TI_ASSERT(!format.has_value());
+        QD_ASSERT(!format.has_value());
       } else {
         if (!merged_string.empty()) {
           push_content_and_format(merged_pair, merged_string);
@@ -508,14 +508,14 @@ class Scalarize : public BasicStmtVisitor {
     } else if (is_tensor_type) {
       // Make sure broadcasting has been correctly applied by
       // AtomicOpExpression::type_check().
-      TI_ASSERT(dest_dtype->is<TensorType>() && val_dtype->is<TensorType>());
+      QD_ASSERT(dest_dtype->is<TensorType>() && val_dtype->is<TensorType>());
       // However, since the type conversions are delayed until
       // irpass::type_check(), we only check for the shape here.
-      TI_ASSERT(dest_dtype->cast<TensorType>()->get_shape() ==
+      QD_ASSERT(dest_dtype->cast<TensorType>()->get_shape() ==
                 val_dtype->cast<TensorType>()->get_shape());
       // Scalarization for LoadStmt should have already replaced val operand
       // to MatrixInitStmt.
-      TI_ASSERT(stmt->val->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->val->is<MatrixInitStmt>());
 
       auto val_matrix_init_stmt = stmt->val->cast<MatrixInitStmt>();
       std::vector<Stmt *> val_values = val_matrix_init_stmt->values;
@@ -618,17 +618,17 @@ class Scalarize : public BasicStmtVisitor {
     if (cond_dtype->is<TensorType>()) {
       // Make sure broadcasting has been correctly applied by
       // TernaryOpExpression::type_check().
-      TI_ASSERT(cond_dtype->is<TensorType>() && op2_dtype->is<TensorType>() &&
+      QD_ASSERT(cond_dtype->is<TensorType>() && op2_dtype->is<TensorType>() &&
                 op3_dtype->is<TensorType>());
       // However, since the type conversions are delayed until
       // irpass::type_check(), we only check for the shape here.
-      TI_ASSERT(cond_dtype.get_shape() == op2_dtype.get_shape());
-      TI_ASSERT(op2_dtype.get_shape() == op3_dtype.get_shape());
+      QD_ASSERT(cond_dtype.get_shape() == op2_dtype.get_shape());
+      QD_ASSERT(op2_dtype.get_shape() == op3_dtype.get_shape());
       // Scalarization for LoadStmt should have already replaced all operands
       // to MatrixInitStmt.
-      TI_ASSERT(stmt->op1->is<MatrixInitStmt>());
-      TI_ASSERT(stmt->op2->is<MatrixInitStmt>());
-      TI_ASSERT(stmt->op3->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->op1->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->op2->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->op3->is<MatrixInitStmt>());
 
       auto cond_matrix_init_stmt = stmt->op1->cast<MatrixInitStmt>();
       std::vector<Stmt *> cond_vals = cond_matrix_init_stmt->values;
@@ -639,8 +639,8 @@ class Scalarize : public BasicStmtVisitor {
       auto op3_matrix_init_stmt = stmt->op3->cast<MatrixInitStmt>();
       std::vector<Stmt *> op3_vals = op3_matrix_init_stmt->values;
 
-      TI_ASSERT(cond_vals.size() == op2_vals.size());
-      TI_ASSERT(op2_vals.size() == op3_vals.size());
+      QD_ASSERT(cond_vals.size() == op2_vals.size());
+      QD_ASSERT(op2_vals.size() == op3_vals.size());
 
       size_t num_elements = cond_vals.size();
       auto primitive_type = stmt->ret_type.get_element_type();
@@ -664,13 +664,13 @@ class Scalarize : public BasicStmtVisitor {
       delayed_modifier_.erase(stmt);
     } else if (cond_dtype->is<PrimitiveType>() &&
                (op2_dtype->is<TensorType>() || op3_dtype->is<TensorType>())) {
-      TI_ASSERT(cond_dtype->is<PrimitiveType>() &&
+      QD_ASSERT(cond_dtype->is<PrimitiveType>() &&
                 op2_dtype->is<TensorType>() && op3_dtype->is<TensorType>());
-      TI_ASSERT(op2_dtype.get_shape() == op3_dtype.get_shape());
+      QD_ASSERT(op2_dtype.get_shape() == op3_dtype.get_shape());
       // Scalarization for LoadStmt should have already replaced all operands
       // to MatrixInitStmt.
-      TI_ASSERT(stmt->op2->is<MatrixInitStmt>());
-      TI_ASSERT(stmt->op3->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->op2->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->op3->is<MatrixInitStmt>());
 
       Stmt *cond_val = stmt->op1;
 
@@ -680,7 +680,7 @@ class Scalarize : public BasicStmtVisitor {
       auto op3_matrix_init_stmt = stmt->op3->cast<MatrixInitStmt>();
       std::vector<Stmt *> op3_vals = op3_matrix_init_stmt->values;
 
-      TI_ASSERT(op2_vals.size() == op3_vals.size());
+      QD_ASSERT(op2_vals.size() == op3_vals.size());
 
       size_t num_elements = op2_vals.size();
       auto primitive_type = stmt->ret_type.get_element_type();
@@ -788,10 +788,10 @@ class Scalarize : public BasicStmtVisitor {
       auto tensor_type =
           stmt->stack->as<AdStackAllocaStmt>()->dt->as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
-      TI_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
+      QD_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
                 scalarized_ad_stack_map_.end());
       auto scalarized_ad_stack = scalarized_ad_stack_map_[stmt->stack];
-      TI_ASSERT(num_elements == scalarized_ad_stack.size());
+      QD_ASSERT(num_elements == scalarized_ad_stack.size());
       for (int i = 0; i < num_elements; i++) {
         auto scalar_ad_stack_pop =
             std::make_unique<AdStackPopStmt>(scalarized_ad_stack[i]);
@@ -803,7 +803,7 @@ class Scalarize : public BasicStmtVisitor {
 
   /*
     Before:
-      TensorType<4 x i32> val = MatrixInitStmt(...) // TI_ASSERT
+      TensorType<4 x i32> val = MatrixInitStmt(...) // QD_ASSERT
       AdStackPushStmt(TensorType<4 x i32>* stack, val)
 
     After:
@@ -817,12 +817,12 @@ class Scalarize : public BasicStmtVisitor {
       auto tensor_type =
           stmt->stack->as<AdStackAllocaStmt>()->dt->as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
-      TI_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
+      QD_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
                 scalarized_ad_stack_map_.end());
       auto scalarized_ad_stack = scalarized_ad_stack_map_[stmt->stack];
-      TI_ASSERT(num_elements == scalarized_ad_stack.size());
+      QD_ASSERT(num_elements == scalarized_ad_stack.size());
 
-      TI_ASSERT(stmt->v->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->v->is<MatrixInitStmt>());
       auto matrix_init_stmt = stmt->v->as<MatrixInitStmt>();
       for (int i = 0; i < num_elements; i++) {
         auto scalar_ad_stack_push = std::make_unique<AdStackPushStmt>(
@@ -853,10 +853,10 @@ class Scalarize : public BasicStmtVisitor {
           stmt->stack->as<AdStackAllocaStmt>()->dt->as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
       auto element_type = tensor_type->get_element_type();
-      TI_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
+      QD_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
                 scalarized_ad_stack_map_.end());
       auto scalarized_ad_stack = scalarized_ad_stack_map_[stmt->stack];
-      TI_ASSERT(num_elements == scalarized_ad_stack.size());
+      QD_ASSERT(num_elements == scalarized_ad_stack.size());
 
       std::vector<Stmt *> scalar_ad_stack_load_top;
       for (int i = 0; i < num_elements; i++) {
@@ -898,10 +898,10 @@ class Scalarize : public BasicStmtVisitor {
           stmt->stack->as<AdStackAllocaStmt>()->dt->as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
       auto element_type = tensor_type->get_element_type();
-      TI_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
+      QD_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
                 scalarized_ad_stack_map_.end());
       auto scalarized_ad_stack = scalarized_ad_stack_map_[stmt->stack];
-      TI_ASSERT(num_elements == scalarized_ad_stack.size());
+      QD_ASSERT(num_elements == scalarized_ad_stack.size());
 
       std::vector<Stmt *> scalar_ad_stack_load_top;
       for (int i = 0; i < num_elements; i++) {
@@ -925,7 +925,7 @@ class Scalarize : public BasicStmtVisitor {
 
   /*
     Before:
-      TensorType<4 x i32> val = MatrixInitStmt(...) // TI_ASSERT
+      TensorType<4 x i32> val = MatrixInitStmt(...) // QD_ASSERT
       AdStackAccAdjointStmt(TensorType<4 x i32>* stack, val)
 
     After:
@@ -939,12 +939,12 @@ class Scalarize : public BasicStmtVisitor {
       auto tensor_type =
           stmt->stack->as<AdStackAllocaStmt>()->dt->as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
-      TI_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
+      QD_ASSERT(scalarized_ad_stack_map_.find(stmt->stack) !=
                 scalarized_ad_stack_map_.end());
       auto scalarized_ad_stack = scalarized_ad_stack_map_[stmt->stack];
-      TI_ASSERT(num_elements == scalarized_ad_stack.size());
+      QD_ASSERT(num_elements == scalarized_ad_stack.size());
 
-      TI_ASSERT(stmt->v->is<MatrixInitStmt>());
+      QD_ASSERT(stmt->v->is<MatrixInitStmt>());
       auto matrix_init_stmt = stmt->v->as<MatrixInitStmt>();
       for (int i = 0; i < num_elements; i++) {
         auto scalar_ad_stack_push = std::make_unique<AdStackAccAdjointStmt>(
@@ -978,14 +978,14 @@ class GatherScalarizableLocalPointers : public BasicStmtVisitor {
  public:
   void visit(AllocaStmt *stmt) override {
     if (stmt->ret_type.ptr_removed()->is<TensorType>()) {
-      TI_ASSERT(is_alloca_scalarizable_.count(stmt) == 0);
+      QD_ASSERT(is_alloca_scalarizable_.count(stmt) == 0);
       is_alloca_scalarizable_[stmt] = !stmt->is_shared;
     }
   }
 
   void visit(MatrixPtrStmt *stmt) override {
     if (stmt->origin->is<AllocaStmt>()) {
-      TI_ASSERT(is_alloca_scalarizable_.count(stmt->origin) == 1);
+      QD_ASSERT(is_alloca_scalarizable_.count(stmt->origin) == 1);
       if (!stmt->offset->is<ConstStmt>()) {
         is_alloca_scalarizable_[stmt->origin] = false;
       }
@@ -1049,10 +1049,10 @@ class ScalarizePointers : public BasicStmtVisitor {
   void visit(AllocaStmt *stmt) override {
     if (scalarizable_allocas_.count(stmt) == 1) {
       auto tensor_type = stmt->ret_type.ptr_removed()->cast<TensorType>();
-      TI_ASSERT(tensor_type != nullptr);
+      QD_ASSERT(tensor_type != nullptr);
       auto primitive_type = tensor_type->get_element_type();
 
-      TI_ASSERT(scalarized_local_tensor_map_.count(stmt) == 0);
+      QD_ASSERT(scalarized_local_tensor_map_.count(stmt) == 0);
       scalarized_local_tensor_map_[stmt] = {};
       for (size_t i = 0; i < tensor_type->get_num_elements(); i++) {
         auto scalarized_alloca_stmt =
@@ -1085,18 +1085,18 @@ class ScalarizePointers : public BasicStmtVisitor {
       auto alloca_stmt = stmt->origin->cast<AllocaStmt>();
       auto tensor_type =
           alloca_stmt->ret_type.ptr_removed()->cast<TensorType>();
-      TI_ASSERT(tensor_type != nullptr);
+      QD_ASSERT(tensor_type != nullptr);
       int num_elements = tensor_type->get_num_elements();
-      TI_ASSERT(scalarized_local_tensor_map_.count(alloca_stmt));
+      QD_ASSERT(scalarized_local_tensor_map_.count(alloca_stmt));
 
       const auto &scalarized_alloca_stmts =
           scalarized_local_tensor_map_[alloca_stmt];
-      TI_ASSERT(scalarized_alloca_stmts.size() == num_elements);
+      QD_ASSERT(scalarized_alloca_stmts.size() == num_elements);
 
-      TI_ASSERT(stmt->offset->is<ConstStmt>());
+      QD_ASSERT(stmt->offset->is<ConstStmt>());
       int offset = stmt->offset->cast<ConstStmt>()->val.val_int32();
 
-      TI_ASSERT(offset < scalarized_alloca_stmts.size());
+      QD_ASSERT(offset < scalarized_alloca_stmts.size());
       auto new_stmt = scalarized_alloca_stmts[offset];
 
       immediate_modifier_.replace_usages_with(stmt, new_stmt);
@@ -1175,7 +1175,7 @@ ExtractLocalPointers::ExtractLocalPointers(IRNode *root)
   if (root->is<OffloadedStmt>()) {
     top_level_ = root->as<OffloadedStmt>()->body.get();
   } else {
-    TI_ASSERT(root->is<Block>());
+    QD_ASSERT(root->is<Block>());
     top_level_ = root->as<Block>();
   }
 }
@@ -1193,7 +1193,7 @@ void ExtractLocalPointers::visit(MatrixPtrStmt *stmt) {
   if (stmt->origin->is<AllocaStmt>()) {
     auto alloca_stmt = stmt->origin->cast<AllocaStmt>();
     auto tensor_type = alloca_stmt->ret_type.ptr_removed()->cast<TensorType>();
-    TI_ASSERT(tensor_type != nullptr);
+    QD_ASSERT(tensor_type != nullptr);
     if (stmt->offset->is<ConstStmt>()) {
       int offset = stmt->offset->cast<ConstStmt>()->val.val_int32();
       if (first_const_.count(offset) == 0) {
@@ -1229,7 +1229,7 @@ class FuseMatrixPtr : public BasicStmtVisitor {
   void visit(MatrixPtrStmt *stmt) override {
     if (stmt->origin->is<ExternalPtrStmt>()) {
       auto origin = stmt->origin->as<ExternalPtrStmt>();
-      TI_ASSERT(stmt->origin->ret_type.ptr_removed()->is<TensorType>());
+      QD_ASSERT(stmt->origin->ret_type.ptr_removed()->is<TensorType>());
 
       std::vector<Stmt *> indices = origin->indices;
       indices.push_back(stmt->offset);
@@ -1298,7 +1298,7 @@ class FuseMatrixPtr : public BasicStmtVisitor {
 namespace irpass {
 
 bool scalarize(IRNode *root, bool half2_optimization_enabled) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   bool modified = false;
 
   modified |= Scalarize::run(root, half2_optimization_enabled);

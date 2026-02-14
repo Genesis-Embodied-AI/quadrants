@@ -10,16 +10,16 @@
 
 namespace quadrants {
 namespace lang {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M,
                                          int max_reg) {
   auto hsaco = compile_module_to_hsaco(M);
-  TI_TRACE("hsaco size: {:.2f}KB", hsaco.size() / 1024.0);
+  QD_TRACE("hsaco size: {:.2f}KB", hsaco.size() / 1024.0);
 
   void *amdgpu_module;
   auto t = Time::get_time();
   AMDGPUDriver::get_instance().module_load_data(&amdgpu_module, hsaco.c_str());
-  TI_TRACE("AMDGPU load data from module time : {}ms",
+  QD_TRACE("AMDGPU load data from module time : {}ms",
            (Time::get_time() - t) * 1000);
   modules.push_back(std::make_unique<JITModuleAMDGPU>(amdgpu_module));
   return modules.back().get();
@@ -37,7 +37,7 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
 
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);
-    TI_WARN("Module broken");
+    QD_WARN("Module broken");
   }
   using namespace llvm;
 
@@ -183,7 +183,7 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   std::string obj_str(outstr.begin(), outstr.end());
   std::ofstream(obj_path) << obj_str;
 
-  TI_TRACE("Loading module...");
+  QD_TRACE("Loading module...");
   [[maybe_unused]] auto _ = AMDGPUContext::get_instance().get_lock_guard();
 
   // Try to find ld.lld from ROCm installation, fallback to system PATH
@@ -214,9 +214,9 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
 
   std::string lld_cmd =
       lld_executable + " -shared " + obj_path + " -o " + hsaco_path;
-  TI_TRACE("Linking with command: {}", lld_cmd);
+  QD_TRACE("Linking with command: {}", lld_cmd);
   if (std::system(lld_cmd.c_str()))
-    TI_ERROR(
+    QD_ERROR(
         fmt::format("Generate {} Error. Make sure ld.lld is available in your "
                     "ROCm installation, and add path to ROCm path to ROCM_PATH "
                     "if necessary.",
@@ -238,7 +238,7 @@ std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(
     QuadrantsLLVMContext *tlctx,
     const CompileConfig &config,
     Arch arch) {
-  TI_ASSERT(arch == Arch::amdgpu);
+  QD_ASSERT(arch == Arch::amdgpu);
   auto data_layout = QuadrantsLLVMContext::get_data_layout(arch);
   return std::make_unique<JITSessionAMDGPU>(tlctx, config, data_layout);
 }
@@ -247,7 +247,7 @@ std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(
     QuadrantsLLVMContext *tlctx,
     const CompileConfig &config,
     Arch arch) {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 #endif
 

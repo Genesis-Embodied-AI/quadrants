@@ -23,7 +23,7 @@ class OffloadedTask {
         block_dim(block_dim),
         grid_dim(grid_dim),
         dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
-  TI_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes);
+  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes);
 };
 
 struct LLVMCompiledTask {
@@ -44,7 +44,7 @@ struct LLVMCompiledTask {
         struct_for_tls_sizes(std::move(struct_for_tls_sizes)) {
   }
   LLVMCompiledTask clone() const;
-  TI_IO_DEF(tasks);
+  QD_IO_DEF(tasks);
 };
 
 struct LLVMCompiledKernel {
@@ -58,7 +58,7 @@ struct LLVMCompiledKernel {
       : tasks(std::move(tasks)), module(std::move(module)) {
   }
   LLVMCompiledKernel clone() const;
-  TI_IO_DEF(tasks);
+  QD_IO_DEF(tasks);
 };
 
 }  // namespace quadrants::lang

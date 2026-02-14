@@ -4,7 +4,7 @@
 
 #include "quadrants/common/core.h"
 
-#ifdef TI_PLATFORM_OSX
+#ifdef QD_PLATFORM_OSX
 
 #include <objc/message.h>
 #include <objc/objc.h>
@@ -73,34 +73,34 @@ nsobj_unique_ptr<O> retain_and_wrap_as_nsobj_unique_ptr(O *nsobj) {
   return wrap_as_nsobj_unique_ptr(nsobj);
 }
 
-// Prepend "TI_" to native ObjC type names, otherwise clang-format thinks this
+// Prepend "QD_" to native ObjC type names, otherwise clang-format thinks this
 // is an ObjC file and is not happy formatting it.
-struct TI_NSString;
-struct TI_NSArray;
+struct QD_NSString;
+struct QD_NSArray;
 
-struct TI_NSRange {
+struct QD_NSRange {
   size_t location{0};
   size_t length{0};
 };
 
 // |str| must exist during the entire lifetime of the returned object, as it
 // does not own the underlying memory. Think of it as std::string_view.
-nsobj_unique_ptr<TI_NSString> wrap_string_as_ns_string(const std::string &str);
+nsobj_unique_ptr<QD_NSString> wrap_string_as_ns_string(const std::string &str);
 
-std::string to_string(TI_NSString *ns);
+std::string to_string(QD_NSString *ns);
 
-int ns_array_count(TI_NSArray *na);
+int ns_array_count(QD_NSArray *na);
 
 template <typename R>
-R ns_array_object_at_index(TI_NSArray *na, int i) {
+R ns_array_object_at_index(QD_NSArray *na, int i) {
   return cast_call<R>(na, "objectAtIndex:", i);
 }
 
-struct TI_NSAutoreleasePool;
+struct QD_NSAutoreleasePool;
 
-TI_NSAutoreleasePool *create_autorelease_pool();
+QD_NSAutoreleasePool *create_autorelease_pool();
 
-void drain_autorelease_pool(TI_NSAutoreleasePool *pool);
+void drain_autorelease_pool(QD_NSAutoreleasePool *pool);
 
 class ScopedAutoreleasePool {
  public:
@@ -108,10 +108,10 @@ class ScopedAutoreleasePool {
   ~ScopedAutoreleasePool();
 
  private:
-  TI_NSAutoreleasePool *pool_;
+  QD_NSAutoreleasePool *pool_;
 };
 
 }  // namespace mac
 }  // namespace quadrants
 
-#endif  // TI_PLATFORM_OSX
+#endif  // QD_PLATFORM_OSX

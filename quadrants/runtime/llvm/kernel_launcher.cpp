@@ -9,7 +9,7 @@ KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 void KernelLauncher::launch_kernel(
     const lang::CompiledKernelData &compiled_kernel_data,
     LaunchContextBuilder &ctx) {
-  TI_ASSERT(arch_uses_llvm(compiled_kernel_data.arch()));
+  QD_ASSERT(arch_uses_llvm(compiled_kernel_data.arch()));
   const auto &llvm_ckd =
       dynamic_cast<const LLVM::CompiledKernelData &>(compiled_kernel_data);
   auto handle = register_llvm_kernel(llvm_ckd);

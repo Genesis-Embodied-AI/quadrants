@@ -45,7 +45,7 @@ struct VulkanQueueFamilyIndices {
  * This class creates a VulkanDevice instance. The underlying Vk* resources are
  * embedded directly inside the class.
  */
-class TI_DLL_EXPORT VulkanDeviceCreator {
+class QD_DLL_EXPORT VulkanDeviceCreator {
  public:
   struct Params {
     // User-provided API version. If assigned, the users MUST list all

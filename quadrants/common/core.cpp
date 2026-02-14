@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include "quadrants/common/logging.h"
 
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
 #include "quadrants/platform/windows/windows.h"
 #else
 // Mac and Linux
@@ -31,7 +31,7 @@ void set_python_package_dir(const std::string &dir) {
 }
 
 std::string get_repo_dir() {
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
   return "C:/quadrants_cache/";
 #else
   auto xdg_cache = std::getenv("XDG_CACHE_HOME");
@@ -42,7 +42,7 @@ std::string get_repo_dir() {
   } else {
     // XDG_CACHE_HOME is not defined, defaulting to ~/.cache
     auto home = std::getenv("HOME");
-    TI_ASSERT(home != nullptr);
+    QD_ASSERT(home != nullptr);
     xdg_cache_str = home;
     xdg_cache_str += "/.cache";
   }
@@ -64,23 +64,23 @@ std::string get_version_string() {
 }
 
 int get_version_major() {
-  return TI_VERSION_MAJOR;
+  return QD_VERSION_MAJOR;
 }
 
 int get_version_minor() {
-  return TI_VERSION_MINOR;
+  return QD_VERSION_MINOR;
 }
 
 int get_version_patch() {
-  return TI_VERSION_PATCH;
+  return QD_VERSION_PATCH;
 }
 
 std::string get_commit_hash() {
-  return TI_COMMIT_HASH;
+  return QD_COMMIT_HASH;
 }
 
 int PID::get_pid() {
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
   return (int)GetCurrentProcessId();
 #else
   return (int)getpid();
@@ -88,8 +88,8 @@ int PID::get_pid() {
 }
 
 int PID::get_parent_pid() {
-#if defined(TI_PLATFORM_WINDOWS)
-  TI_NOT_IMPLEMENTED
+#if defined(QD_PLATFORM_WINDOWS)
+  QD_NOT_IMPLEMENTED
   return -1;
 #else
   return (int)getppid();

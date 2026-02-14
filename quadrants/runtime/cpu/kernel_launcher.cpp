@@ -6,7 +6,7 @@ namespace cpu {
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
-  TI_ASSERT(handle.get_launch_id() < contexts_.size());
+  QD_ASSERT(handle.get_launch_id() < contexts_.size());
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
 
@@ -48,7 +48,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     const LLVM::CompiledKernelData &compiled) {
-  TI_ASSERT(arch_is_cpu(compiled.arch()));
+  QD_ASSERT(arch_is_cpu(compiled.arch()));
 
   if (!compiled.get_handle()) {
     auto handle = make_handle();
@@ -67,7 +67,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     task_funcs.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
       auto *func_ptr = jit_module->lookup_function(task.name);
-      TI_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found",
+      QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found",
                      task.name);
       task_funcs.push_back((TaskFunc)(func_ptr));
     }

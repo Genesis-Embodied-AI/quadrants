@@ -68,7 +68,7 @@ bool ParallelExecutor::flush_cv_cond() {
 }
 
 void ParallelExecutor::worker_loop() {
-  TI_DEBUG("Starting worker thread.");
+  QD_DEBUG("Starting worker thread.");
   auto thread_id = thread_counter_++;
 
   std::string thread_name = name_;
@@ -83,7 +83,7 @@ void ParallelExecutor::worker_loop() {
     }
   }
 
-  TI_DEBUG("Worker thread initialized and running.");
+  QD_DEBUG("Worker thread initialized and running.");
   bool done = false;
   while (!done) {
     bool notify_flush_cv = false;

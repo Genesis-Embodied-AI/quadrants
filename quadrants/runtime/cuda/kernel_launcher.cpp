@@ -14,7 +14,7 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
-  TI_ASSERT(handle.get_launch_id() < contexts_.size());
+  QD_ASSERT(handle.get_launch_id() < contexts_.size());
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
@@ -137,7 +137,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
 
   for (auto task : offloaded_tasks) {
-    TI_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
              task.block_dim);
     cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
                         {&ctx.get_context()}, {});
@@ -166,7 +166,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     const LLVM::CompiledKernelData &compiled) {
-  TI_ASSERT(compiled.arch() == Arch::cuda);
+  QD_ASSERT(compiled.arch() == Arch::cuda);
 
   if (!compiled.get_handle()) {
     auto handle = make_handle();

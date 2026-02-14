@@ -31,20 +31,20 @@ void DynamicLoader::load_dll(const std::string &dll_path) {
 }
 
 void *DynamicLoader::load_function(const std::string &func_name) {
-  TI_ASSERT_INFO(loaded(), "DLL not opened");
+  QD_ASSERT_INFO(loaded(), "DLL not opened");
 #ifdef WIN32
   auto func = (void *)GetProcAddress((HMODULE)dll_, func_name.c_str());
 #else
   auto func = dlsym(dll_, func_name.c_str());
   const char *dlsym_error = dlerror();
-  TI_ERROR_IF(dlsym_error, "Cannot load function: {}", dlsym_error);
+  QD_ERROR_IF(dlsym_error, "Cannot load function: {}", dlsym_error);
 #endif
-  TI_ERROR_IF(!func, "Function {} not found", func_name);
+  QD_ERROR_IF(!func, "Function {} not found", func_name);
   return func;
 }
 
 void DynamicLoader::close_dll() {
-  TI_ASSERT_INFO(loaded(), "DLL not opened");
+  QD_ASSERT_INFO(loaded(), "DLL not opened");
 #ifdef WIN32
   FreeLibrary((HMODULE)dll_);
 #else

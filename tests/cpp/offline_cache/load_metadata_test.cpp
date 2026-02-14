@@ -2,9 +2,9 @@
 #include "quadrants/common/version.h"
 #include "quadrants/util/offline_cache.h"
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM
 
 namespace quadrants::lang {
 
@@ -14,9 +14,9 @@ namespace oc = offline_cache;
 
 inline void gen_old_version(oc::Version &ver) {
   auto &[major, minor, patch] = ver;
-  major = std::max(TI_VERSION_MAJOR - 1, 0);
-  minor = std::max(TI_VERSION_MINOR - 1, 0);
-  patch = std::max(TI_VERSION_PATCH - 1, 0);
+  major = std::max(QD_VERSION_MAJOR - 1, 0);
+  minor = std::max(QD_VERSION_MINOR - 1, 0);
+  patch = std::max(QD_VERSION_PATCH - 1, 0);
 }
 
 template <typename MetadataType>
@@ -38,7 +38,7 @@ MetadataType gen_old_metadata() {
 
 template <typename MetadataType>
 MetadataType gen_correct_metadata() {
-  oc::Version ver{TI_VERSION_MAJOR, TI_VERSION_MINOR, TI_VERSION_PATCH};
+  oc::Version ver{QD_VERSION_MAJOR, QD_VERSION_MINOR, QD_VERSION_PATCH};
   return gen_metadata<MetadataType>(ver);
 }
 
@@ -85,9 +85,9 @@ void load_metadata_test() {
     error = oc::load_metadata_with_checking(data, true_file);
     auto [major, minor, patch] = data.version;
     EXPECT_EQ(error, Error::kNoError);
-    EXPECT_EQ(major, TI_VERSION_MAJOR);
-    EXPECT_EQ(minor, TI_VERSION_MINOR);
-    EXPECT_EQ(patch, TI_VERSION_PATCH);
+    EXPECT_EQ(major, QD_VERSION_MAJOR);
+    EXPECT_EQ(minor, QD_VERSION_MINOR);
+    EXPECT_EQ(patch, QD_VERSION_PATCH);
     EXPECT_EQ(data.size, 1024);
     EXPECT_TRUE(data.kernels.count("1"));
     EXPECT_TRUE(data.kernels.count("2"));
@@ -109,13 +109,13 @@ struct KernelMetadataBase {
   std::time_t created_at{0};    // sec
   std::time_t last_used_at{0};  // sec
 
-  TI_IO_DEF(kernel_key, size, created_at, last_used_at);
+  QD_IO_DEF(kernel_key, size, created_at, last_used_at);
 };
 
 TEST(OfflineCache, LoadMetadata) {
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   load_metadata_test<LlvmOfflineCache>();
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM
   load_metadata_test<oc::Metadata<KernelMetadataBase>>();
 }
 

@@ -4,7 +4,7 @@
 #include "quadrants/common/core.h"
 #include <thread>
 
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
 #include <io.h>
 #include <fcntl.h>
 #else  // POSIX
@@ -18,7 +18,7 @@ namespace quadrants {
 
 inline bool try_lock_with_file(const std::string &path) {
   int fd{-1};
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
   // See
   // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/sopen-s-wsopen-s
   ::_sopen_s(&fd, path.c_str(), _O_CREAT | _O_EXCL, _SH_DENYNO,
@@ -58,7 +58,7 @@ inline bool lock_with_file(const std::string &path,
 inline RaiiCleanup make_unlocker(const std::string &path) {
   return make_cleanup([&path]() {
     if (!unlock_with_file(path)) {
-      TI_WARN(
+      QD_WARN(
           "Unlock {} failed. You can remove this .lock file manually and try "
           "again.",
           path);

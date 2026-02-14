@@ -5,7 +5,7 @@
 
 namespace quadrants::lang {
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 
 // The init logic here is temporarily set up for test CUPTI
 // will not affect default toolkit (cuEvent)
@@ -29,7 +29,7 @@ ProfilingToolkit get_toolkit_enum(std::string toolkit_name) {
 bool KernelProfilerCUDA::set_profiler_toolkit(std::string toolkit_name) {
   sync();
   ProfilingToolkit set_toolkit = get_toolkit_enum(toolkit_name);
-  TI_TRACE("profiler toolkit enum = {} >>> {}", int(tool_), int(set_toolkit));
+  QD_TRACE("profiler toolkit enum = {} >>> {}", int(tool_), int(set_toolkit));
   if (set_toolkit == tool_)
     return true;
 
@@ -39,12 +39,12 @@ bool KernelProfilerCUDA::set_profiler_toolkit(std::string toolkit_name) {
     cupti_toolkit_->deinit_cupti();
     cupti_toolkit_->set_status(false);
     tool_ = ProfilingToolkit::event;
-    TI_TRACE("cupti >>> event ... DONE");
+    QD_TRACE("cupti >>> event ... DONE");
     return true;
   }
   // current toolkit is cuEvent: check CUPTI availability
   else if (tool_ == ProfilingToolkit::event) {
-#if defined(TI_WITH_CUDA_TOOLKIT)
+#if defined(QD_WITH_CUDA_TOOLKIT)
     if (check_cupti_availability() && check_cupti_privileges()) {
       if (cupti_toolkit_ == nullptr)
         cupti_toolkit_ = std::make_unique<CuptiToolkit>();
@@ -52,7 +52,7 @@ bool KernelProfilerCUDA::set_profiler_toolkit(std::string toolkit_name) {
       cupti_toolkit_->begin_profiling();
       tool_ = ProfilingToolkit::cupti;
       cupti_toolkit_->set_status(true);
-      TI_TRACE("event >>> cupti ... DONE");
+      QD_TRACE("event >>> cupti ... DONE");
       return true;
     }
 #endif
@@ -67,7 +67,7 @@ std::string KernelProfilerCUDA::get_device_name() {
 bool KernelProfilerCUDA::reinit_with_metrics(
     const std::vector<std::string> metrics) {
   // do not pass by reference
-  TI_TRACE("KernelProfilerCUDA::reinit_with_metrics");
+  QD_TRACE("KernelProfilerCUDA::reinit_with_metrics");
 
   if (tool_ == ProfilingToolkit::event) {
     return false;
@@ -81,18 +81,18 @@ bool KernelProfilerCUDA::reinit_with_metrics(
     metric_list_.clear();
     for (auto metric : metrics)
       metric_list_.push_back(metric);
-    TI_TRACE("size of metric list : {} >>> {}", metrics.size(),
+    QD_TRACE("size of metric list : {} >>> {}", metrics.size(),
              metric_list_.size());
     return true;
   }
 
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 // deprecated, move to trace()
 KernelProfilerBase::TaskHandle KernelProfilerCUDA::start_with_handle(
     const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void KernelProfilerCUDA::trace(KernelProfilerBase::TaskHandle &task_handle,
@@ -227,18 +227,18 @@ bool KernelProfilerCUDA::record_kernel_attributes(void *kernel,
 #else
 
 KernelProfilerCUDA::KernelProfilerCUDA(bool enable) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 std::string KernelProfilerCUDA::get_device_name() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool KernelProfilerCUDA::reinit_with_metrics(
     const std::vector<std::string> metrics) {
-  return false;  // public API for all backend, do not use TI_NOT_IMPLEMENTED;
+  return false;  // public API for all backend, do not use QD_NOT_IMPLEMENTED;
 }
 KernelProfilerBase::TaskHandle KernelProfilerCUDA::start_with_handle(
     const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void KernelProfilerCUDA::trace(KernelProfilerBase::TaskHandle &task_handle,
                                const std::string &kernel_name,
@@ -246,31 +246,31 @@ void KernelProfilerCUDA::trace(KernelProfilerBase::TaskHandle &task_handle,
                                uint32_t grid_size,
                                uint32_t block_size,
                                uint32_t dynamic_smem_size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void KernelProfilerCUDA::stop(KernelProfilerBase::TaskHandle handle) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void KernelProfilerCUDA::sync() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void KernelProfilerCUDA::update() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void KernelProfilerCUDA::clear() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool KernelProfilerCUDA::record_kernel_attributes(void *kernel,
                                                   uint32_t grid_size,
                                                   uint32_t block_size,
                                                   uint32_t dynamic_smem_size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 #endif
 
 // default profiling toolkit : cuEvent
 // for now put it together with KernelProfilerCUDA
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 KernelProfilerBase::TaskHandle EventToolkit::start_with_handle(
     const std::string &kernel_name) {
   EventRecord record;
@@ -318,7 +318,7 @@ void EventToolkit::update_record(
     std::vector<KernelProfileTracedRecord> &traced_records) {
   uint32_t events_num = event_records_.size();
   uint32_t records_num = traced_records.size();
-  TI_ERROR_IF(
+  QD_ERROR_IF(
       records_size_after_sync + events_num != records_num,
       "KernelProfilerCUDA::EventToolkitCUDA: event_records_.size({}) != "
       "traced_records_.size({})",
@@ -357,16 +357,16 @@ void EventToolkit::update_timeline(
 #else
 KernelProfilerBase::TaskHandle EventToolkit::start_with_handle(
     const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void EventToolkit::update_record(
     uint32_t records_size_after_sync,
     std::vector<KernelProfileTracedRecord> &traced_records) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void EventToolkit::update_timeline(
     std::vector<KernelProfileTracedRecord> &traced_records) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 #endif
 

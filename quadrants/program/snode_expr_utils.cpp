@@ -59,9 +59,9 @@ void place_child(Expr *expr_arg,
     auto &ds = parent->dense(std::vector<Axis>(), {});
     place_child(expr_arg, offset, id_in_bit_struct, &ds, snode_to_exprs);
   } else {
-    TI_ASSERT(expr_arg->is<FieldExpression>());
+    QD_ASSERT(expr_arg->is<FieldExpression>());
     auto field = expr_arg->cast<FieldExpression>();
-    TI_ERROR_IF(field->snode != nullptr, "This variable has been placed.");
+    QD_ERROR_IF(field->snode != nullptr, "This variable has been placed.");
     auto &child = parent->insert_children(SNodeType::place);
     field->set_snode(&child);
     if (field->name == "") {

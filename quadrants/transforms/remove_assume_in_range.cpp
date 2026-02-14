@@ -34,7 +34,7 @@ class RemoveRangeAssumption : public BasicStmtVisitor {
 namespace irpass {
 
 bool remove_range_assumption(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return RemoveRangeAssumption::run(root);
 }
 

@@ -59,7 +59,7 @@ class FakeCompiledKernelData : public CompiledKernelData {
   struct InternalData {
     struct Metadata {
       std::vector<std::string> func_names;
-      TI_IO_DEF(func_names);
+      QD_IO_DEF(func_names);
     } metadata;
     std::string so_bin;
   } compiled_data_;

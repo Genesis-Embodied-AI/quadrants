@@ -89,15 +89,15 @@ bool CompiledKernelDataFile::update_hash() {
     return false;
   }
   hash_ = std::move(hash);
-  TI_ASSERT(hash_.size() == kHashSize);
+  QD_ASSERT(hash_.size() == kHashSize);
   return true;
 }
 
-#if !defined(TI_WITH_LLVM)
+#if !defined(QD_WITH_LLVM)
 CompiledKernelData::Creator *const CompiledKernelData::llvm_creator = nullptr;
 #endif
 
-#if !defined(TI_WITH_VULKAN) && !defined(TI_WITH_METAL)
+#if !defined(QD_WITH_VULKAN) && !defined(QD_WITH_METAL)
 CompiledKernelData::Creator *const CompiledKernelData::spriv_creator = nullptr;
 #endif
 
@@ -139,7 +139,7 @@ std::unique_ptr<CompiledKernelData> CompiledKernelData::load(std::istream &is,
       result = create(file.arch(), err);
     }
     if (err == Err::kNoError) {
-      TI_ASSERT(result);
+      QD_ASSERT(result);
       err = result->load_impl(file);
     }
     if (err != Err::kNoError) {

@@ -13,7 +13,7 @@ namespace quadrants::lang {
 
 // A memory pool that runs on the host
 
-class TI_DLL_EXPORT DeviceMemoryPool {
+class QD_DLL_EXPORT DeviceMemoryPool {
  public:
   std::unique_ptr<CachingAllocator> allocator_{nullptr};
   static const size_t page_size;

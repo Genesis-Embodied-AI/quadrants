@@ -16,9 +16,9 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsNVPTX.h"
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
 #include "llvm/IR/IntrinsicsAMDGPU.h"
-#endif  // TI_WITH_AMDGPU
+#endif  // QD_WITH_AMDGPU
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
@@ -57,11 +57,11 @@
 #include <unistd.h>
 #endif
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_context.h"
 #endif
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #endif
 
@@ -74,18 +74,18 @@ using namespace llvm;
 QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config,
                                            Arch arch)
     : config_(config), arch_(arch) {
-  TI_TRACE("Creating Quadrants llvm context for arch: {}", arch_name(arch));
+  QD_TRACE("Creating Quadrants llvm context for arch: {}", arch_name(arch));
   main_thread_id_ = std::this_thread::get_id();
   main_thread_data_ = get_this_thread_data();
   llvm::remove_fatal_error_handler();
   llvm::install_fatal_error_handler(
       [](void *user_data, const char *reason, bool gen_crash_diag) {
-        TI_ERROR("LLVM Fatal Error: {}", reason);
+        QD_ERROR("LLVM Fatal Error: {}", reason);
       },
       nullptr);
 
   if (arch_is_cpu(arch)) {
-#if defined(TI_PLATFORM_OSX) and defined(TI_ARCH_ARM)
+#if defined(QD_PLATFORM_OSX) and defined(QD_ARCH_ARM)
     // Note that on Apple Silicon (M1), "native" seems to mean arm instead of
     // arm64 (aka AArch64).
     LLVMInitializeAArch64Target();
@@ -98,23 +98,23 @@ QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config,
     llvm::InitializeNativeTargetAsmParser();
 #endif
   } else if (arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     LLVMInitializeAMDGPUTarget();
     LLVMInitializeAMDGPUTargetMC();
     LLVMInitializeAMDGPUTargetInfo();
     LLVMInitializeAMDGPUAsmPrinter();
     LLVMInitializeAMDGPUAsmParser();
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     LLVMInitializeNVPTXTarget();
     LLVMInitializeNVPTXTargetMC();
     LLVMInitializeNVPTXTargetInfo();
     LLVMInitializeNVPTXAsmPrinter();
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   }
 
@@ -125,7 +125,7 @@ QuadrantsLLVMContext::QuadrantsLLVMContext(const CompileConfig &config,
   linking_context_data->runtime_module = clone_module_to_context(
       get_this_thread_runtime_module(), linking_context_data->llvm_context);
 
-  TI_TRACE("Quadrants llvm context created.");
+  QD_TRACE("Quadrants llvm context created.");
 }
 
 QuadrantsLLVMContext::~QuadrantsLLVMContext() {
@@ -173,8 +173,8 @@ llvm::Type *QuadrantsLLVMContext::get_data_type(DataType dt) {
     return llvm::PointerType::get(
         get_data_type(pointer_type->get_pointee_type()), 0);
   } else {
-    TI_INFO(data_type_name(dt));
-    TI_NOT_IMPLEMENTED;
+    QD_INFO(data_type_name(dt));
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -185,9 +185,9 @@ std::string find_existing_command(const std::vector<std::string> &commands) {
     }
   }
   for (const auto &cmd : commands) {
-    TI_WARN("Potential command {}", cmd);
+    QD_WARN("Potential command {}", cmd);
   }
-  TI_ERROR("None command found.");
+  QD_ERROR("None command found.");
 }
 
 std::string get_runtime_fn(Arch arch) {
@@ -218,7 +218,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_module_to_context(
       llvm::MemoryBufferRef(bitcode, "runtime_bitcode"), *target_context);
   if (!cloned) {
     auto error = cloned.takeError();
-    TI_ERROR("Bitcode cloned failed.");
+    QD_ERROR("Bitcode cloned failed.");
   }
   return std::move(cloned.get());
 }
@@ -226,26 +226,26 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_module_to_context(
 std::unique_ptr<llvm::Module>
 QuadrantsLLVMContext::clone_module_to_this_thread_context(
     llvm::Module *module) {
-  TI_TRACE("Cloning struct module");
-  TI_ASSERT(module);
+  QD_TRACE("Cloning struct module");
+  QD_ASSERT(module);
   auto this_context = get_this_thread_context();
   return clone_module_to_context(module, this_context);
 }
 
 std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load(
     llvm::LLVMContext *ctx) const {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   std::ifstream ifs(bitcode_path_, std::ios::binary);
-  TI_ERROR_IF(!ifs, "Bitcode file ({}) not found.", bitcode_path_);
+  QD_ERROR_IF(!ifs, "Bitcode file ({}) not found.", bitcode_path_);
   std::string bitcode(std::istreambuf_iterator<char>(ifs),
                       (std::istreambuf_iterator<char>()));
   auto runtime =
       parseBitcodeFile(llvm::MemoryBufferRef(bitcode, buffer_id_), *ctx);
   if (!runtime) {
     auto error = runtime.takeError();
-    TI_WARN("Bitcode loading error message:");
+    QD_WARN("Bitcode loading error message:");
     llvm::errs() << error << "\n";
-    TI_ERROR("Failed to load bitcode={}", bitcode_path_);
+    QD_ERROR("Failed to load bitcode={}", bitcode_path_);
     return nullptr;
   }
 
@@ -257,7 +257,7 @@ std::unique_ptr<llvm::Module> LlvmModuleBitcodeLoader::load(
 
   const bool module_broken = llvm::verifyModule(*runtime.get(), &llvm::errs());
   if (module_broken) {
-    TI_ERROR("Broken bitcode={}", bitcode_path_);
+    QD_ERROR("Broken bitcode={}", bitcode_path_);
     return nullptr;
   }
   return std::move(runtime.get());
@@ -324,16 +324,16 @@ static void remove_useless_cuda_libdevice_functions(llvm::Module *module) {
 // Note: runtime_module = init_module < struct_module
 
 std::unique_ptr<llvm::Module> QuadrantsLLVMContext::clone_runtime_module() {
-  TI_AUTO_PROF
+  QD_AUTO_PROF
   auto *mod = get_this_thread_runtime_module();
 
   std::unique_ptr<llvm::Module> cloned;
   {
-    TI_PROFILER("clone module");
+    QD_PROFILER("clone module");
     cloned = llvm::CloneModule(*mod);
   }
 
-  TI_ASSERT(cloned != nullptr);
+  QD_ASSERT(cloned != nullptr);
 
   return cloned;
 }
@@ -396,7 +396,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     if (arch_ == Arch::cuda) {
       module->setTargetTriple("nvptx64-nvidia-cuda");
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
       auto func = module->getFunction("cuda_compute_capability");
       if (func) {
         func->deleteBody();
@@ -483,7 +483,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
 
       link_module_with_cuda_libdevice(module);
 
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
       int cap = CUDAContext::get_instance().get_compute_capability();
       if (cap >= 60)
         link_module_with_custom_cuda_library(module);
@@ -501,7 +501,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       // runtime_module->print(llvm::errs(), nullptr);
     }
 
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
     auto patch_amdgpu_kernel_dim = [&](std::string name, llvm::Value *lhs) {
       std::string actual_name;
       if (name == "block_dim")
@@ -509,7 +509,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       else if (name == "grid_dim")
         actual_name = "__ockl_get_num_groups";
       else
-        TI_ERROR("Unknown patch function name");
+        QD_ERROR("Unknown patch function name");
       auto func = module->getFunction(name);
       auto actual_func = module->getFunction(actual_name);
       if (!func || !actual_func) {
@@ -529,7 +529,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
 
     if (arch_ == Arch::amdgpu) {
       module->setTargetTriple("amdgcn-amd-amdhsa");
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
       llvm::legacy::FunctionPassManager function_pass_manager(module.get());
       function_pass_manager.add(new AMDGPUConvertAllocaInstAddressSpacePass());
       function_pass_manager.doInitialization();
@@ -584,15 +584,15 @@ void QuadrantsLLVMContext::link_module_with_custom_cuda_library(
     bool failed =
         llvm::Linker::linkModules(*module, std::move(cuda_library_module));
     if (failed) {
-      TI_ERROR("cuda_runtime.bc linking failure.");
+      QD_ERROR("cuda_runtime.bc linking failure.");
     }
   }
 }
 
 void QuadrantsLLVMContext::link_module_with_cuda_libdevice(
     std::unique_ptr<llvm::Module> &module) {
-  TI_AUTO_PROF
-  TI_ASSERT(arch_ == Arch::cuda);
+  QD_AUTO_PROF
+  QD_ASSERT(arch_ == Arch::cuda);
 
   auto libdevice_module =
       module_from_bitcode_file(libdevice_path(), get_this_thread_context());
@@ -609,22 +609,22 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
   if (failed) {
-    TI_ERROR("CUDA libdevice linking failure.");
+    QD_ERROR("CUDA libdevice linking failure.");
   }
 
   // Make sure all libdevice functions are linked
   for (auto func_name : libdevice_function_names) {
     auto func = module->getFunction(func_name);
     if (!func) {
-      TI_INFO("Function {} not found", func_name);
+      QD_INFO("Function {} not found", func_name);
     }
   }
 }
 
 void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(
     std::unique_ptr<llvm::Module> &module) {
-  TI_ASSERT(arch_ == Arch::amdgpu);
-#if defined(TI_WITH_AMDGPU)
+  QD_ASSERT(arch_ == Arch::amdgpu);
+#if defined(QD_WITH_AMDGPU)
   auto mcpu = AMDGPUContext::get_instance().get_mcpu();
   auto isa_version = mcpu.substr(3, 4);
 
@@ -634,7 +634,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(
   std::ifstream test_file(lib_dir + isa_file);
 
   if (!test_file.good()) {
-    TI_ERROR(
+    QD_ERROR(
         "AMDGPU ISA version file {} not found for {} and no fallback "
         "available. Please ensure ROCm device libraries are properly "
         "installed.",
@@ -675,7 +675,7 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(
     bool failed =
         llvm::Linker::linkModules(*module, std::move(libdevice_module));
     if (failed) {
-      TI_ERROR("AMDGPU libdevice linking failure.");
+      QD_ERROR("AMDGPU libdevice linking failure.");
     }
   }
 #endif
@@ -683,13 +683,13 @@ void QuadrantsLLVMContext::link_module_with_amdgpu_libdevice(
 
 void QuadrantsLLVMContext::add_struct_module(std::unique_ptr<Module> module,
                                              int tree_id) {
-  TI_AUTO_PROF;
-  TI_ASSERT(std::this_thread::get_id() == main_thread_id_);
+  QD_AUTO_PROF;
+  QD_ASSERT(std::this_thread::get_id() == main_thread_id_);
   auto this_thread_data = get_this_thread_data();
-  TI_ASSERT(module);
+  QD_ASSERT(module);
   if (llvm::verifyModule(*module, &llvm::errs())) {
     module->print(llvm::errs(), nullptr);
-    TI_ERROR("module broken");
+    QD_ERROR("module broken");
   }
 
   linking_context_data->struct_modules[tree_id] =
@@ -726,7 +726,7 @@ llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt, T t) {
           *ctx, llvm::APInt(data_type_bits(dt), (uint64_t)t, false));
     }
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -742,7 +742,7 @@ template llvm::Value *QuadrantsLLVMContext::get_constant(DataType dt,
 template <typename T>
 llvm::Value *QuadrantsLLVMContext::get_constant(T t) {
   auto ctx = get_this_thread_context();
-  TI_ASSERT(ctx != nullptr);
+  QD_ASSERT(ctx != nullptr);
   using TargetType = T;
   if constexpr (std::is_same_v<TargetType, float32> ||
                 std::is_same_v<TargetType, float64>) {
@@ -762,7 +762,7 @@ llvm::Value *QuadrantsLLVMContext::get_constant(T t) {
     static_assert(sizeof(std::size_t) == sizeof(uint64));
     return llvm::ConstantInt::get(*ctx, llvm::APInt(64, (uint64_t)t, false));
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -814,12 +814,12 @@ void QuadrantsLLVMContext::print_huge_functions(llvm::Module *module) {
     int c = num_instructions(&f);
     if (c > 100) {
       total_big_inst += c;
-      TI_INFO("{}: {} inst.", std::string(f.getName()), c);
+      QD_INFO("{}: {} inst.", std::string(f.getName()), c);
     }
     total_inst += c;
   }
-  TI_P(total_inst);
-  TI_P(total_big_inst);
+  QD_P(total_inst);
+  QD_P(total_big_inst);
 }
 
 llvm::DataLayout QuadrantsLLVMContext::get_data_layout() {
@@ -873,14 +873,14 @@ void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(
 void QuadrantsLLVMContext::eliminate_unused_functions(
     llvm::Module *module,
     std::function<bool(const std::string &)> export_indicator) {
-  TI_AUTO_PROF
+  QD_AUTO_PROF
   using namespace llvm;
-  TI_ASSERT(module);
+  QD_ASSERT(module);
   if (false) {
     // temporary fix for now to make LLVM 8 work with CUDA
     // TODO: recover this when it's time
     if (llvm::verifyModule(*module, &llvm::errs())) {
-      TI_ERROR("Module broken\n");
+      QD_ERROR("Module broken\n");
     }
   }
   llvm::ModulePassManager manager;
@@ -901,7 +901,7 @@ QuadrantsLLVMContext::get_this_thread_data() {
   if (per_thread_data_.find(tid) == per_thread_data_.end()) {
     std::stringstream ss;
     ss << tid;
-    TI_TRACE("Creating thread local data for thread {}", ss.str());
+    QD_TRACE("Creating thread local data for thread {}", ss.str());
     per_thread_data_[tid] = std::make_unique<ThreadLocalData>(
         std::make_unique<llvm::orc::ThreadSafeContext>(
             std::make_unique<llvm::LLVMContext>()));
@@ -911,7 +911,7 @@ QuadrantsLLVMContext::get_this_thread_data() {
 
 llvm::LLVMContext *QuadrantsLLVMContext::get_this_thread_context() {
   ThreadLocalData *data = get_this_thread_data();
-  TI_ASSERT(data->llvm_context)
+  QD_ASSERT(data->llvm_context)
   return data->llvm_context;
 }
 
@@ -933,12 +933,12 @@ template llvm::Value *QuadrantsLLVMContext::get_constant(uint32 t);
 template llvm::Value *QuadrantsLLVMContext::get_constant(int64 t);
 template llvm::Value *QuadrantsLLVMContext::get_constant(uint64 t);
 
-#ifdef TI_PLATFORM_OSX
+#ifdef QD_PLATFORM_OSX
 template llvm::Value *QuadrantsLLVMContext::get_constant(unsigned long t);
 #endif
 
 auto make_slim_libdevice = [](const std::vector<std::string> &args) {
-  TI_ASSERT_INFO(args.size() == 1,
+  QD_ASSERT_INFO(args.size() == 1,
                  "Usage: ti task make_slim_libdevice [libdevice.X.bc file]");
 
   auto ctx = std::make_unique<llvm::LLVMContext>();
@@ -951,7 +951,7 @@ auto make_slim_libdevice = [](const std::vector<std::string> &args) {
   llvm::raw_fd_ostream os(output_fn, ec, llvm::sys::fs::OF_None);
   llvm::WriteBitcodeToFile(*libdevice_module, os);
   os.flush();
-  TI_INFO("Slimmed libdevice written to {}", output_fn);
+  QD_INFO("Slimmed libdevice written to {}", output_fn);
 };
 
 void QuadrantsLLVMContext::init_runtime_module(llvm::Module *runtime_module) {
@@ -973,7 +973,7 @@ void QuadrantsLLVMContext::init_runtime_module(llvm::Module *runtime_module) {
   }
 
   if (config_.arch == Arch::amdgpu) {
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
     llvm::legacy::PassManager module_pass_manager;
     module_pass_manager.add(new AMDGPUConvertFuncParamAddressSpacePass());
     module_pass_manager.run(*runtime_module);
@@ -987,9 +987,9 @@ void QuadrantsLLVMContext::init_runtime_module(llvm::Module *runtime_module) {
 }
 
 void QuadrantsLLVMContext::delete_snode_tree(int id) {
-  TI_ASSERT(linking_context_data->struct_modules.erase(id));
+  QD_ASSERT(linking_context_data->struct_modules.erase(id));
   for (auto &[thread_id, data] : per_thread_data_) {
-    TI_ASSERT(data->struct_modules.erase(id));
+    QD_ASSERT(data->struct_modules.erase(id));
   }
 }
 
@@ -1008,7 +1008,7 @@ llvm::Function *QuadrantsLLVMContext::get_runtime_function(
 }
 
 llvm::Module *QuadrantsLLVMContext::get_this_thread_runtime_module() {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto data = get_this_thread_data();
   if (!data->runtime_module) {
     data->runtime_module = module_from_file(get_runtime_fn(arch_));
@@ -1027,7 +1027,7 @@ llvm::Type *QuadrantsLLVMContext::get_runtime_type(const std::string &name) {
   auto ty = llvm::StructType::getTypeByName(
       get_this_thread_runtime_module()->getContext(), ("struct." + name));
   if (!ty) {
-    TI_ERROR("LLVMRuntime type {} not found.", name);
+    QD_ERROR("LLVMRuntime type {} not found.", name);
   }
   return ty;
 }
@@ -1107,12 +1107,12 @@ void QuadrantsLLVMContext::add_struct_for_func(llvm::Module *module,
   }
   llvm::legacy::PassManager module_pass_manager;
   if (config_.arch == Arch::amdgpu) {
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
     module_pass_manager.add(
         new AMDGPUAddStructForFuncPass(func_name, tls_size));
     module_pass_manager.run(*module);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
     module_pass_manager.add(new AddStructForFuncPass(func_name, tls_size));
@@ -1125,15 +1125,15 @@ std::string QuadrantsLLVMContext::get_struct_for_func_name(int tls_size) {
 }
 
 llvm::DataLayout QuadrantsLLVMContext::get_data_layout(Arch arch) {
-  TI_ASSERT(arch_uses_llvm(arch));
+  QD_ASSERT(arch_uses_llvm(arch));
   if (arch_is_cpu(arch)) {
     auto expected_jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
     if (!expected_jtmb)
-      TI_ERROR("LLVM TargetMachineBuilder has failed.");
+      QD_ERROR("LLVM TargetMachineBuilder has failed.");
     auto jtmb = *expected_jtmb;
     auto expected_data_layout = jtmb.getDefaultDataLayoutForTarget();
     if (!expected_data_layout) {
-      TI_ERROR(
+      QD_ERROR(
           "LLVM TargetMachineBuilder has failed when getting data layout.");
     }
     return *expected_data_layout;
@@ -1148,7 +1148,7 @@ llvm::DataLayout QuadrantsLLVMContext::get_data_layout(Arch arch) {
         "64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-"
         "v1024:1024-v2048:2048-n32:64-S32-A5-G1-ni:7");
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1162,7 +1162,7 @@ QuadrantsLLVMContext::get_struct_type_with_data_layout(
     const std::string &layout) {
   auto *llvm_struct_type = llvm::cast<llvm::StructType>(get_data_type(old_ty));
   auto data_layout = llvm::DataLayout::parse(layout);
-  TI_ASSERT(data_layout);
+  QD_ASSERT(data_layout);
   size_t struct_size = data_layout->getTypeAllocSize(llvm_struct_type);
   if (old_ty->get_layout() == layout) {
     return {old_ty, struct_size};
@@ -1184,6 +1184,6 @@ QuadrantsLLVMContext::get_struct_type_with_data_layout(
           struct_size};
 }
 
-TI_REGISTER_TASK(make_slim_libdevice);
+QD_REGISTER_TASK(make_slim_libdevice);
 
 }  // namespace quadrants::lang

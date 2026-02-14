@@ -44,8 +44,8 @@ inline std::string make_list(const std::vector<std::string> &data,
   } else if (bracket == "(") {
     ret += ")";
   } else if (bracket != "") {
-    TI_P(bracket);
-    TI_NOT_IMPLEMENTED
+    QD_P(bracket);
+    QD_NOT_IMPLEMENTED
   }
   return ret;
 }

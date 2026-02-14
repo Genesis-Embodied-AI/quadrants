@@ -1,4 +1,4 @@
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #endif
@@ -15,7 +15,7 @@ FileSequenceWriter::FileSequenceWriter(std::string filename_template,
       file_type_(file_type) {
 }
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 std::string FileSequenceWriter::write(llvm::Module *module) {
   std::string str;
   llvm::raw_string_ostream ros(str);
@@ -38,7 +38,7 @@ std::string FileSequenceWriter::write(lang::IRNode *irnode) {
 
 std::pair<std::ofstream, std::string> FileSequenceWriter::create_new_file() {
   auto fn = fmt::format(filename_template_, counter_);
-  TI_INFO("Saving {} to {}", file_type_, fn);
+  QD_INFO("Saving {} to {}", file_type_, fn);
   counter_++;
   return {std::ofstream(fn), fn};
 }

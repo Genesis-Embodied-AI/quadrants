@@ -25,7 +25,7 @@ class Axis {
     value = 0;
   }
   explicit Axis(int value) : value(value) {
-    TI_ERROR_UNLESS(0 <= value && value < quadrants_max_num_indices,
+    QD_ERROR_UNLESS(0 <= value && value < quadrants_max_num_indices,
                     "Too many dimensions. The maximum dimensionality is {}",
                     quadrants_max_num_indices);
   }
@@ -294,12 +294,12 @@ class SNode {
   }
 
   std::string get_ch_from_parent_func_name() const {
-    TI_ASSERT(parent != nullptr);
+    QD_ASSERT(parent != nullptr);
     return fmt::format("get_ch_{}_to_{}", parent->get_name(), get_name());
   }
 
   std::string refine_coordinates_func_name() const {
-    TI_ASSERT(type != SNodeType::place);
+    QD_ASSERT(type != SNodeType::place);
     return fmt::format("{}_refine_coordinates", get_name());
   }
 

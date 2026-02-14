@@ -9,7 +9,7 @@ std::string offloaded_task_type_name(OffloadedTaskType tt) {
 #include "quadrants/inc/offloaded_task_type.inc.h"
 #undef PER_TASK_TYPE
   else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 }
 
 }  // namespace quadrants::lang

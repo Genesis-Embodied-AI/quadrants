@@ -22,15 +22,15 @@ using int64 = int64_t;
 using uint64 = uint64_t;
 
 #ifdef _WIN64
-#define TI_FORCE_INLINE __forceinline
+#define QD_FORCE_INLINE __forceinline
 #else
-#define TI_FORCE_INLINE inline __attribute__((always_inline))
+#define QD_FORCE_INLINE inline __attribute__((always_inline))
 #endif
 
 using float32 = float;
 using float64 = double;
 
-#ifdef TI_USE_DOUBLE
+#ifdef QD_USE_DOUBLE
 using real = float64;
 #else
 using real = float32;

@@ -31,7 +31,7 @@ class JITSession {
   // virtual void remove_module(JITModule *module) = 0;
 
   virtual void *lookup(const std::string Name) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   virtual llvm::DataLayout get_data_layout() = 0;

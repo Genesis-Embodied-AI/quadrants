@@ -53,8 +53,8 @@ bool try_demangle_name(const std::string &mangled_name,
 
   primal_name = mangled_name.substr(0, primal_len);
   key = mangled_name.substr(primal_len, offline_cache_key_length);
-  TI_ASSERT(key.size() == offline_cache_key_length);
-  TI_ASSERT(primal_name.size() + key.size() == pos);
+  QD_ASSERT(key.size() == offline_cache_key_length);
+  QD_ASSERT(primal_name.size() + key.size() == pos);
   return true;
 }
 

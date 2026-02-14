@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -51,7 +51,7 @@
 
 namespace quadrants::lang {
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 using namespace llvm;
 using namespace llvm::orc;
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -64,11 +64,11 @@ typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 std::pair<JITTargetMachineBuilder, llvm::DataLayout> get_host_target_info() {
   auto expected_jtmb = JITTargetMachineBuilder::detectHost();
   if (!expected_jtmb)
-    TI_ERROR("LLVM TargetMachineBuilder has failed.");
+    QD_ERROR("LLVM TargetMachineBuilder has failed.");
   auto jtmb = *expected_jtmb;
   auto expected_data_layout = jtmb.getDefaultDataLayoutForTarget();
   if (!expected_data_layout) {
-    TI_ERROR("LLVM TargetMachineBuilder has failed when getting data layout.");
+    QD_ERROR("LLVM TargetMachineBuilder has failed when getting data layout.");
   }
   auto data_layout = *expected_data_layout;
   return std::make_pair(jtmb, data_layout);
@@ -160,11 +160,11 @@ class JITSessionCPU : public JITSession {
   }
 
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override {
-    TI_ASSERT(max_reg == 0);  // No need to specify max_reg on CPUs
-    TI_ASSERT(M);
+    QD_ASSERT(max_reg == 0);  // No need to specify max_reg on CPUs
+    QD_ASSERT(M);
     std::lock_guard<std::mutex> _(mut_);
     auto dylib_expect = es_.createJITDylib(fmt::format("{}", module_counter_));
-    TI_ASSERT(dylib_expect);
+    QD_ASSERT(dylib_expect);
     auto &dylib = dylib_expect.get();
     dylib.addGenerator(
         cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -190,7 +190,7 @@ class JITSessionCPU : public JITSession {
     auto symbol = es_.lookup(all_libs_, es_.intern(Name));
 #endif
     if (!symbol)
-      TI_ERROR("Function \"{}\" not found", Name);
+      QD_ERROR("Function \"{}\" not found", Name);
     return symbol->getAddress().toPtr<void *>();
   }
 
@@ -202,7 +202,7 @@ class JITSessionCPU : public JITSession {
     auto symbol = es_.lookup({lib}, es_.intern(Name));
 #endif
     if (!symbol)
-      TI_ERROR("Function \"{}\" not found", Name);
+      QD_ERROR("Function \"{}\" not found", Name);
     return symbol->getAddress().toPtr<void *>();
   }
 };
@@ -215,10 +215,10 @@ std::unique_ptr<JITSession> create_llvm_jit_session_cpu(
     QuadrantsLLVMContext *tlctx,
     const CompileConfig &config,
     Arch arch) {
-  TI_ASSERT(arch_is_cpu(arch));
+  QD_ASSERT(arch_is_cpu(arch));
   auto target_info = get_host_target_info();
   auto EPC = SelfExecutorProcessControl::Create();
-  TI_ASSERT(EPC);
+  QD_ASSERT(EPC);
   return std::make_unique<JITSessionCPU>(tlctx, std::move(*EPC), config,
                                          target_info.first, target_info.second);
 }

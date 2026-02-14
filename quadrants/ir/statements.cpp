@@ -10,15 +10,15 @@ UnaryOpStmt::UnaryOpStmt(UnaryOpType op_type,
                          Stmt *operand,
                          const DebugInfo &dbg_info)
     : Stmt(dbg_info), op_type(op_type), operand(operand) {
-  TI_ASSERT(!operand->is<AllocaStmt>());
+  QD_ASSERT(!operand->is<AllocaStmt>());
   cast_type = PrimitiveType::unknown;
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 DecorationStmt::DecorationStmt(Stmt *operand,
                                const std::vector<uint32_t> &decoration)
     : operand(operand), decoration(decoration) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 bool UnaryOpStmt::is_cast() const {
@@ -45,9 +45,9 @@ ExternalPtrStmt::ExternalPtrStmt(Stmt *base_ptr,
       is_grad(is_grad),
       boundary(boundary) {
   ndim = indices.size();
-  TI_ASSERT(base_ptr != nullptr);
-  TI_ASSERT(base_ptr->is<ArgLoadStmt>());
-  TI_STMT_REG_FIELDS;
+  QD_ASSERT(base_ptr != nullptr);
+  QD_ASSERT(base_ptr->is<ArgLoadStmt>());
+  QD_STMT_REG_FIELDS;
 }
 
 ExternalPtrStmt::ExternalPtrStmt(Stmt *base_ptr,
@@ -72,9 +72,9 @@ GlobalPtrStmt::GlobalPtrStmt(SNode *snode,
       activate(activate),
       is_cell_access(is_cell_access),
       is_bit_vectorized(false) {
-  TI_ASSERT(snode != nullptr);
+  QD_ASSERT(snode != nullptr);
   element_type() = snode->dt;
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 MatrixOfGlobalPtrStmt::MatrixOfGlobalPtrStmt(const std::vector<SNode *> &snodes,
@@ -89,7 +89,7 @@ MatrixOfGlobalPtrStmt::MatrixOfGlobalPtrStmt(const std::vector<SNode *> &snodes,
       dynamic_index_stride(dynamic_index_stride),
       activate(activate) {
   ret_type = dt;
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 MatrixOfMatrixPtrStmt::MatrixOfMatrixPtrStmt(const std::vector<Stmt *> &stmts,
@@ -97,7 +97,7 @@ MatrixOfMatrixPtrStmt::MatrixOfMatrixPtrStmt(const std::vector<Stmt *> &stmts,
     : stmts(stmts) {
   ret_type = dt;
   ret_type.set_is_pointer(true);
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 MatrixPtrStmt::MatrixPtrStmt(Stmt *origin_input,
@@ -112,28 +112,28 @@ MatrixPtrStmt::MatrixPtrStmt(Stmt *origin_input,
       origin->is<MatrixOfMatrixPtrStmt>() || origin->is<ThreadLocalPtrStmt>() ||
       origin->is<MatrixPtrStmt>()) {
     auto tensor_type = origin->ret_type.ptr_removed()->cast<TensorType>();
-    TI_ASSERT(tensor_type != nullptr);
+    QD_ASSERT(tensor_type != nullptr);
     element_type() = tensor_type->get_element_type();
     element_type().set_is_pointer(true);
   } else if (origin->is<GlobalPtrStmt>() || origin->is<GetChStmt>()) {
     element_type() = origin->ret_type.ptr_removed().get_element_type();
     element_type().set_is_pointer(true);
   } else if (origin->is<AdStackLoadTopStmt>()) {
-    TI_ASSERT(origin->as<AdStackLoadTopStmt>()->return_ptr == true);
+    QD_ASSERT(origin->as<AdStackLoadTopStmt>()->return_ptr == true);
     element_type() = origin->ret_type.get_element_type();
     element_type().set_is_pointer(true);
   } else {
-    TI_ERROR(
+    QD_ERROR(
         "MatrixPtrStmt must be used for AllocaStmt / GlobalTemporaryStmt "
         "(locally) or GlobalPtrStmt / MatrixOfGlobalPtrStmt / ExternalPtrStmt "
         "(globally).")
   }
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 bool MatrixPtrStmt::common_statement_eliminable() const {
   Callable *callable = get_callable();
-  TI_ASSERT(callable != nullptr);
+  QD_ASSERT(callable != nullptr);
   return (callable->autodiff_mode == AutodiffMode::kNone);
 }
 
@@ -144,7 +144,7 @@ SNodeOpStmt::SNodeOpStmt(SNodeOpType op_type,
                          const DebugInfo &dbg_info)
     : Stmt(dbg_info), op_type(op_type), snode(snode), ptr(ptr), val(val) {
   element_type() = PrimitiveType::i32;
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 bool SNodeOpStmt::activation_related(SNodeOpType op) {
@@ -162,7 +162,7 @@ ExternalTensorShapeAlongAxisStmt::ExternalTensorShapeAlongAxisStmt(
     const std::vector<int> &arg_id,
     const DebugInfo &dbg_info)
     : Stmt(dbg_info), axis(axis), arg_id(arg_id) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 ExternalTensorBasePtrStmt::ExternalTensorBasePtrStmt(
@@ -170,7 +170,7 @@ ExternalTensorBasePtrStmt::ExternalTensorBasePtrStmt(
     bool is_grad,
     const DebugInfo &dbg_info)
     : Stmt(dbg_info), arg_id(arg_id), is_grad(is_grad) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 LoopUniqueStmt::LoopUniqueStmt(Stmt *input,
@@ -179,7 +179,7 @@ LoopUniqueStmt::LoopUniqueStmt(Stmt *input,
     : Stmt(dbg_info), input(input) {
   for (const auto &sn : covers) {
     if (sn->is_place()) {
-      TI_INFO(
+      QD_INFO(
           "A place SNode {} appears in the 'covers' parameter "
           "of 'ti.loop_unique'. It is recommended to use its parent "
           "(x.parent()) instead.",
@@ -188,12 +188,12 @@ LoopUniqueStmt::LoopUniqueStmt(Stmt *input,
     } else
       this->covers.insert(sn->id);
   }
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 IfStmt::IfStmt(Stmt *cond, const DebugInfo &dbg_info)
     : Stmt(dbg_info), cond(cond) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 void IfStmt::set_true_statements(std::unique_ptr<Block> &&new_true_statements) {
@@ -236,7 +236,7 @@ RangeForStmt::RangeForStmt(Stmt *begin,
       range_hint(range_hint) {
   reversed = false;
   this->body->set_parent_stmt(this);
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 std::unique_ptr<Stmt> RangeForStmt::clone() const {
@@ -258,7 +258,7 @@ StructForStmt::StructForStmt(SNode *snode,
       num_cpu_threads(num_cpu_threads),
       block_dim(block_dim) {
   this->body->set_parent_stmt(this);
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 std::unique_ptr<Stmt> StructForStmt::clone() const {
@@ -281,7 +281,7 @@ MeshForStmt::MeshForStmt(mesh::Mesh *mesh,
       block_dim(block_dim),
       major_from_type(element_type) {
   this->body->set_parent_stmt(this);
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 std::unique_ptr<Stmt> MeshForStmt::clone() const {
@@ -296,7 +296,7 @@ std::unique_ptr<Stmt> MeshForStmt::clone() const {
 
 FuncCallStmt::FuncCallStmt(Function *func, const std::vector<Stmt *> &args)
     : func(func), args(args) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 stmt_refs FuncCallStmt::get_store_destination() const {
@@ -315,7 +315,7 @@ stmt_refs FuncCallStmt::get_store_destination() const {
 WhileStmt::WhileStmt(std::unique_ptr<Block> &&body)
     : mask(nullptr), body(std::move(body)) {
   this->body->set_parent_stmt(this);
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 std::unique_ptr<Stmt> WhileStmt::clone() const {
@@ -332,10 +332,10 @@ GetChStmt::GetChStmt(Stmt *input_ptr,
       input_ptr(input_ptr),
       chid(chid),
       is_bit_vectorized(is_bit_vectorized) {
-  TI_ASSERT(input_ptr->is<SNodeLookupStmt>());
+  QD_ASSERT(input_ptr->is<SNodeLookupStmt>());
   input_snode = input_ptr->as<SNodeLookupStmt>()->snode;
   output_snode = input_snode->ch[chid].get();
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 GetChStmt::GetChStmt(Stmt *input_ptr,
@@ -349,7 +349,7 @@ GetChStmt::GetChStmt(Stmt *input_ptr,
       is_bit_vectorized(is_bit_vectorized) {
   input_snode = snode;
   output_snode = input_snode->ch[chid].get();
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 OffloadedStmt::OffloadedStmt(TaskType task_type, Arch arch, Kernel *kernel)
@@ -358,7 +358,7 @@ OffloadedStmt::OffloadedStmt(TaskType task_type, Arch arch, Kernel *kernel)
     body = std::make_unique<Block>();
     body->set_parent_stmt(this);
   }
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 std::string OffloadedStmt::task_name() const {
@@ -371,13 +371,13 @@ std::string OffloadedStmt::task_name() const {
   } else if (task_type == TaskType::mesh_for) {
     return "mesh_for";
   } else if (task_type == TaskType::listgen) {
-    TI_ASSERT(snode);
+    QD_ASSERT(snode);
     return fmt::format("listgen_{}", snode->get_node_type_name_hinted());
   } else if (task_type == TaskType::gc) {
-    TI_ASSERT(snode);
+    QD_ASSERT(snode);
     return fmt::format("gc_{}", snode->name);
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -464,7 +464,7 @@ bool is_clear_list_task(const OffloadedStmt *stmt) {
 }
 
 ClearListStmt::ClearListStmt(SNode *snode) : snode(snode) {
-  TI_STMT_REG_FIELDS;
+  QD_STMT_REG_FIELDS;
 }
 
 BitStructType *BitStructStoreStmt::get_bit_struct() const {

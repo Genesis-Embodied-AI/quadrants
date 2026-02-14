@@ -15,6 +15,6 @@ class RunTests : public Task {
   }
 };
 
-TI_IMPLEMENTATION(Task, RunTests, "test");
+QD_IMPLEMENTATION(Task, RunTests, "test");
 
 }  // namespace quadrants

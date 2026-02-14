@@ -65,13 +65,13 @@ void make_block_local_offload(OffloadedStmt *offload,
     bool bls_has_write = pad.second.total_flags & AccessFlag::write;
     bool bls_has_accumulate = pad.second.total_flags & AccessFlag::accumulate;
 
-    TI_ASSERT_INFO(!bls_has_write, "BLS with write accesses is not supported.")
-    TI_ASSERT_INFO(!(bls_has_accumulate && bls_has_read),
+    QD_ASSERT_INFO(!bls_has_write, "BLS with write accesses is not supported.")
+    QD_ASSERT_INFO(!(bls_has_accumulate && bls_has_read),
                    "BLS with both read and accumulation is not supported.")
 
     // dim = Dimensionality of the BLS buffer and the block
     const auto dim = (int)pad.second.pad_size.size();
-    TI_ASSERT(dim == snode->num_active_indices);
+    QD_ASSERT(dim == snode->num_active_indices);
 
     const auto bls_num_elements = pad.second.pad_size_linear();
 
@@ -377,7 +377,7 @@ namespace irpass {
 void make_block_local(IRNode *root,
                       const CompileConfig &config,
                       const MakeBlockLocalPass::Args &args) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   if (auto root_block = root->cast<Block>()) {
     for (auto &offload : root_block->statements) {

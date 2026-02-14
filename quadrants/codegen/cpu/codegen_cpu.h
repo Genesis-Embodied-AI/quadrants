@@ -19,7 +19,7 @@ class KernelCodeGenCPU : public KernelCodeGen {
   }
 
   // TODO: Stop defining this macro guards in the headers
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   LLVMCompiledTask compile_task(
       int task_codegen_id,
       const CompileConfig &config,
@@ -28,7 +28,7 @@ class KernelCodeGenCPU : public KernelCodeGen {
 
  protected:
   void optimize_module(llvm::Module *module) override;
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM
 };
 
 }  // namespace quadrants::lang

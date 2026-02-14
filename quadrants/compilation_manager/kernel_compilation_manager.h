@@ -26,14 +26,14 @@ struct CacheData {
 
     // Dump the kernel to disk if `cache_mode` == `MemAndDiskCache`
     CacheMode cache_mode{MemCache};
-    TI_IO_DEF(kernel_key, size, created_at, last_used_at);
+    QD_IO_DEF(kernel_key, size, created_at, last_used_at);
   };
 
   struct DataWrapper {
     Metadata metadata;
     std::unique_ptr<lang::CompiledKernelData> compiled_kernel_data;
 
-    TI_IO_DEF(metadata);
+    QD_IO_DEF(metadata);
   };
 
   Version version{};
@@ -41,7 +41,7 @@ struct CacheData {
   std::unordered_map<std::string, DataWrapper> dataWrapperByCacheKey;
 
   // NOTE: The "version" must be the first field to be serialized
-  TI_IO_DEF(version, size, dataWrapperByCacheKey);
+  QD_IO_DEF(version, size, dataWrapperByCacheKey);
 };
 
 struct CompileResult {

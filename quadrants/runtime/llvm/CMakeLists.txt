@@ -24,11 +24,11 @@ if (APPLE AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
     target_link_libraries(llvm_runtime PRIVATE ${llvm_aarch64_libs})
 endif()
 
-if (TI_WITH_CUDA)
+if (QD_WITH_CUDA)
     target_link_libraries(llvm_runtime PRIVATE ${llvm_ptx_libs})
 endif()
 
-if (TI_WITH_AMDGPU)
+if (QD_WITH_AMDGPU)
     target_link_libraries(llvm_runtime PRIVATE ${llvm_amdgpu_libs})
 endif()
 

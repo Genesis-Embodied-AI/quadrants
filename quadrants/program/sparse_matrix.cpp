@@ -90,7 +90,7 @@ SparseMatrixBuilder::SparseMatrixBuilder(int rows,
       dtype_(dtype),
       storage_format_(storage_format) {
   auto element_size = data_type_size(dtype);
-  TI_ASSERT((element_size == 4 || element_size == 8));
+  QD_ASSERT((element_size == 4 || element_size == 8));
 }
 
 SparseMatrixBuilder::~SparseMatrixBuilder() = default;
@@ -129,13 +129,13 @@ void SparseMatrixBuilder::print_triplets_eigen() {
       print_triplets_template<float64, int64>();
       break;
     default:
-      TI_ERROR("Unsupported sparse matrix data type!");
+      QD_ERROR("Unsupported sparse matrix data type!");
       break;
   }
 }
 
 void SparseMatrixBuilder::print_triplets_cuda() {
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
   CUDADriver::get_instance().memcpy_device_to_host(
       &num_triplets_, (void *)get_ndarray_data_ptr(), sizeof(int));
   fmt::print("n={}, m={}, num_triplets={} (max={})\n", rows_, cols_,
@@ -175,7 +175,7 @@ void SparseMatrixBuilder::build_template(std::unique_ptr<SparseMatrix> &m) {
 }
 
 std::unique_ptr<SparseMatrix> SparseMatrixBuilder::build() {
-  TI_ASSERT(built_ == false);
+  QD_ASSERT(built_ == false);
   built_ = true;
   auto sm = make_sparse_matrix(rows_, cols_, dtype_, storage_format_);
   auto element_size = data_type_size(dtype_);
@@ -187,17 +187,17 @@ std::unique_ptr<SparseMatrix> SparseMatrixBuilder::build() {
       build_template<float64, int64>(sm);
       break;
     default:
-      TI_ERROR("Unsupported sparse matrix data type!");
+      QD_ERROR("Unsupported sparse matrix data type!");
       break;
   }
   return sm;
 }
 
 std::unique_ptr<SparseMatrix> SparseMatrixBuilder::build_cuda() {
-  TI_ASSERT(built_ == false);
+  QD_ASSERT(built_ == false);
   built_ = true;
   auto sm = make_cu_sparse_matrix(rows_, cols_, dtype_);
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
   CUDADriver::get_instance().memcpy_device_to_host(
       &num_triplets_, (void *)get_ndarray_data_ptr(), sizeof(int));
   auto len = 3 * num_triplets_ + 1;
@@ -289,7 +289,7 @@ void EigenSparseMatrix<EigenMatrix>::build_triplets(void *triplets_adr) {
   } else if (sdtype == "f64") {
     BUILD(64)
   } else {
-    TI_ERROR("Unsupported sparse matrix data type {}!", sdtype);
+    QD_ERROR("Unsupported sparse matrix data type {}!", sdtype);
   }
 }
 
@@ -309,7 +309,7 @@ void EigenSparseMatrix<EigenMatrix>::spmv(Program *prog,
         matrix_.template cast<double>() *
         Eigen::Map<Eigen::VectorXd>((double *)dX, cols_);
   } else {
-    TI_ERROR("Unsupported sparse matrix data type {}!", sdtype);
+    QD_ERROR("Unsupported sparse matrix data type {}!", sdtype);
   }
 }
 
@@ -336,7 +336,7 @@ std::unique_ptr<SparseMatrix> make_sparse_matrix(
     auto func = map.at(key);
     return func(rows, cols, dt);
   } else
-    TI_ERROR("Unsupported sparse matrix data type: {}, storage format: {}", tdt,
+    QD_ERROR("Unsupported sparse matrix data type: {}, storage format: {}", tdt,
              storage_format);
 }
 
@@ -384,7 +384,7 @@ void make_sparse_matrix_from_ndarray(Program *prog,
   } else if (sdtype == "f64") {
     build_ndarray_template<float64>(sm, data_ptr, num_triplets);
   } else {
-    TI_ERROR("Unsupported sparse matrix data type {}!", sdtype);
+    QD_ERROR("Unsupported sparse matrix data type {}!", sdtype);
   }
 }
 
@@ -392,7 +392,7 @@ void CuSparseMatrix::build_csr_from_coo(void *coo_row_ptr,
                                         void *coo_col_ptr,
                                         void *coo_values_ptr,
                                         int nnz) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Step 1: Sort coo first
   cusparseHandle_t cusparse_handle = nullptr;
   CUSPARSEDriver::get_instance().cpCreate(&cusparse_handle);
@@ -457,7 +457,7 @@ void CuSparseMatrix::build_csr_from_coo(void *coo_row_ptr,
 }
 
 CuSparseMatrix::~CuSparseMatrix() {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (matrix_)
     CUSPARSEDriver::get_instance().cpDestroySpMat(matrix_);
   if (csr_row_ptr_)
@@ -474,7 +474,7 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::addition(
     const CuSparseMatrix &other,
     const float alpha,
     const float beta) const {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Get information of this matrix: A
   size_t nrows_A = 0, ncols_A = 0, nnz_A = 0;
   void *drow_offsets_A = nullptr, *dcol_indices_A = nullptr,
@@ -482,7 +482,7 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::addition(
   cusparseIndexType_t csrRowOffsetsType_A, csrColIndType_A;
   cusparseIndexBase_t idxBase_A;
   cudaDataType valueType_A;
-  TI_ASSERT(matrix_ != nullptr);
+  QD_ASSERT(matrix_ != nullptr);
 
   CUSPARSEDriver::get_instance().cpCsrGet(
       matrix_, &nrows_A, &ncols_A, &nnz_A, &drow_offsets_A, &dcol_indices_A,
@@ -585,17 +585,17 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::addition(
                                drow_offsets_C, dcol_indices_C, dvalues_C, nnzC);
   ;
 #else
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
   return std::unique_ptr<SparseMatrix>();
 #endif
 }
 
 std::unique_ptr<SparseMatrix> CuSparseMatrix::matmul(
     const CuSparseMatrix &other) const {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   return gemm(other, 1.0f, 0.0f);
 #else
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
   return std::unique_ptr<SparseMatrix>();
 #endif
 }
@@ -605,7 +605,7 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::matmul(
 std::unique_ptr<SparseMatrix> CuSparseMatrix::gemm(const CuSparseMatrix &other,
                                                    const float alpha,
                                                    const float beta) const {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   cusparseHandle_t handle = nullptr;
   CUSPARSEDriver::get_instance().cpCreate(&handle);
   cusparseOperation_t op_A = CUSPARSE_OPERATION_NON_TRANSPOSE;
@@ -686,7 +686,7 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::gemm(const CuSparseMatrix &other,
                                d_csr_row_ptr_C, d_csr_col_ind_C, d_values_C,
                                nnz_C);
 #else
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
   return std::unique_ptr<SparseMatrix>();
 #endif
 }
@@ -696,7 +696,7 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::gemm(const CuSparseMatrix &other,
 // Reference
 // https://stackoverflow.com/questions/57368010/how-to-transpose-a-sparse-matrix-in-cusparse
 std::unique_ptr<SparseMatrix> CuSparseMatrix::transpose() const {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   cusparseHandle_t handle;
   CUSPARSEDriver::get_instance().cpCreate(&handle);
   size_t nrows_A, ncols_A, nnz;
@@ -749,13 +749,13 @@ std::unique_ptr<SparseMatrix> CuSparseMatrix::transpose() const {
                                d_csr_row_ptr_AT, d_csr_col_ptr_AT, d_csr_val_AT,
                                nnz);
 #else
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
   return std::unique_ptr<SparseMatrix>();
 #endif
 }
 
 void CuSparseMatrix::spmv(size_t dX, size_t dY) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   cusparseDnVecDescr_t vecX, vecY;
   CUSPARSEDriver::get_instance().cpCreateDnVec(&vecX, cols_, (void *)dX,
                                                CUDA_R_32F);
@@ -787,7 +787,7 @@ void CuSparseMatrix::spmv(size_t dX, size_t dY) {
 void CuSparseMatrix::nd_spmv(Program *prog,
                              const Ndarray &x,
                              const Ndarray &y) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   size_t dX = prog->get_ndarray_data_ptr_as_int(&x);
   size_t dY = prog->get_ndarray_data_ptr_as_int(&y);
   spmv(dX, dY);
@@ -796,7 +796,7 @@ void CuSparseMatrix::nd_spmv(Program *prog,
 
 const std::string CuSparseMatrix::to_string() const {
   std::ostringstream ostr;
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
   size_t rows, cols, nnz;
   float *dR;
   int *dC, *dV;
@@ -828,7 +828,7 @@ const std::string CuSparseMatrix::to_string() const {
 
 float CuSparseMatrix::get_element(int row, int col) const {
   float res = 0.0f;
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
   size_t rows, cols, nnz;
   float *dR;
   int *dC, *dV;
@@ -839,8 +839,8 @@ float CuSparseMatrix::get_element(int row, int col) const {
       matrix_, &rows, &cols, &nnz, (void **)&dR, (void **)&dC, (void **)&dV,
       &row_type, &column_type, &idx_base, &value_type);
 
-  TI_ASSERT(row < rows);
-  TI_ASSERT(col < cols);
+  QD_ASSERT(row < rows);
+  QD_ASSERT(col < cols);
 
   auto *hR = new int[rows + 1];
   auto *hC = new int[nnz];
@@ -858,12 +858,12 @@ float CuSparseMatrix::get_element(int row, int col) const {
   delete[] hR;
   delete[] hC;
   delete[] hV;
-#endif  // TI_WITH_CUDA
+#endif  // QD_WITH_CUDA
   return res;
 }
 
 void CuSparseMatrix::mmwrite(const std::string &filename) {
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
   size_t rows, cols, nnz;
   float *dR;
   int *dC, *dV;

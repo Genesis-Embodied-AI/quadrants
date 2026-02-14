@@ -9,9 +9,9 @@
 #include "quadrants/program/program_impl.h"
 #include "quadrants/program/parallel_executor.h"
 #include "quadrants/util/bit.h"
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/program/context.h"
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 
 namespace llvm {
 class Module;
@@ -54,7 +54,7 @@ class LlvmProgramImpl : public ProgramImpl {
                    const StructCompiler &struct_compiler);
 
   LlvmOfflineCache::FieldCacheData get_cached_field(int snode_tree_id) const {
-    TI_ASSERT(cache_data_->fields.find(snode_tree_id) !=
+    QD_ASSERT(cache_data_->fields.find(snode_tree_id) !=
               cache_data_->fields.end());
     return cache_data_->fields.at(snode_tree_id);
   }

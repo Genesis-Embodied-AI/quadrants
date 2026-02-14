@@ -172,9 +172,9 @@ namespace irpass {
 namespace analysis {
 
 DiffRange value_diff_loop_index(Stmt *stmt, Stmt *loop, int index_id) {
-  TI_ASSERT(loop->is<StructForStmt>() || loop->is<OffloadedStmt>());
+  QD_ASSERT(loop->is<StructForStmt>() || loop->is<OffloadedStmt>());
   if (loop->is<OffloadedStmt>()) {
-    TI_ASSERT(loop->as<OffloadedStmt>()->task_type ==
+    QD_ASSERT(loop->as<OffloadedStmt>()->task_type ==
               OffloadedStmt::TaskType::struct_for);
   }
   if (auto loop_index = stmt->cast<LoopIndexStmt>(); loop_index) {

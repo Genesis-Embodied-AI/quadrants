@@ -22,14 +22,14 @@ class GatherImmutableLocalVars : public BasicStmtVisitor {
   }
 
   void visit(AllocaStmt *stmt) override {
-    TI_ASSERT(alloca_status_.find(stmt) == alloca_status_.end());
+    QD_ASSERT(alloca_status_.find(stmt) == alloca_status_.end());
     alloca_status_[stmt] = AllocaStatus::kCreated;
   }
 
   void visit(LocalLoadStmt *stmt) override {
     if (stmt->src->is<AllocaStmt>()) {
       auto status_iter = alloca_status_.find(stmt->src);
-      TI_ASSERT(status_iter != alloca_status_.end());
+      QD_ASSERT(status_iter != alloca_status_.end());
       if (status_iter->second == AllocaStatus::kCreated) {
         status_iter->second = AllocaStatus::kInvalid;
       }
@@ -39,7 +39,7 @@ class GatherImmutableLocalVars : public BasicStmtVisitor {
   void visit(LocalStoreStmt *stmt) override {
     if (stmt->dest->is<AllocaStmt>()) {
       auto status_iter = alloca_status_.find(stmt->dest);
-      TI_ASSERT(status_iter != alloca_status_.end());
+      QD_ASSERT(status_iter != alloca_status_.end());
       if (stmt->parent != stmt->dest->parent ||
           status_iter->second == AllocaStatus::kStoredOnce ||
           stmt->val->ret_type.ptr_removed() !=
@@ -58,7 +58,7 @@ class GatherImmutableLocalVars : public BasicStmtVisitor {
     for (auto &op : stmt->get_operands()) {
       if (op != nullptr && op->is<AllocaStmt>()) {
         auto status_iter = alloca_status_.find(op);
-        TI_ASSERT(status_iter != alloca_status_.end());
+        QD_ASSERT(status_iter != alloca_status_.end());
         status_iter->second = AllocaStatus::kInvalid;
       }
     }

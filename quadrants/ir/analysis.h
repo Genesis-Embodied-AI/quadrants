@@ -24,7 +24,7 @@ class DiffRange {
   }
 
   DiffRange(bool related, int coeff) : DiffRange(related, 0, 0) {
-    TI_ASSERT(related == false);
+    QD_ASSERT(related == false);
   }
 
   DiffRange(bool related, int coeff, int low)
@@ -47,7 +47,7 @@ class DiffRange {
   }
 
   bool certain() {
-    TI_ASSERT(related_);
+    QD_ASSERT(related_);
     return high == low + 1;
   }
 };
