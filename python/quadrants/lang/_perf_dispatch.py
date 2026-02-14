@@ -199,16 +199,19 @@ class PerformanceDispatcher(Generic[P, R]):
             return dispatch_impl_(*args, **kwargs)
 
         dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
-        runtime.sync()
+        trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
+        trial_count_by_dispatch_impl[dispatch_impl] += 1
+        in_warmup = trial_count_by_dispatch_impl[dispatch_impl] <= self.num_warmup
+        if not in_warmup:
+            runtime.sync()
         start = time.time()
         res = dispatch_impl(*args, **kwargs)
-        runtime.sync()
+        if not in_warmup:
+            runtime.sync()
         end = time.time()
         elapsed = end - start
         speeds_l.append((elapsed, dispatch_impl))
-        trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
-        trial_count_by_dispatch_impl[dispatch_impl] += 1
-        if trial_count_by_dispatch_impl[dispatch_impl] > self.num_warmup:
+        if not in_warmup:
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
         if self._compute_are_trials_finished(geometry_hash=geometry_hash):
             self._compute_and_update_fastest(geometry_hash)
