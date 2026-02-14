@@ -320,7 +320,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">info</span>
 
 <span class="n">pybuf_enabled</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="n">_env_enable_pybuf</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_ENABLE_PYBUF&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span>
+<span class="n">_env_enable_pybuf</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TI_ENABLE_PYBUF&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span>
 <span class="k">if</span> <span class="ow">not</span> <span class="n">_env_enable_pybuf</span> <span class="ow">or</span> <span class="nb">int</span><span class="p">(</span><span class="n">_env_enable_pybuf</span><span class="p">):</span>
     <span class="c1"># When using in Jupyter / IDLE, the sys.stdout will be their wrapped ones.</span>
     <span class="c1"># While sys.__stdout__ should always be the raw console stdout.</span>
