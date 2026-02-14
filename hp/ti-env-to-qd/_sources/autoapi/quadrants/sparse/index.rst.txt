@@ -1,0 +1,6 @@
+quadrants.sparse
+================
+
+.. py:module:: quadrants.sparse
+
+
