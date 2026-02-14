@@ -8,7 +8,8 @@ from . import impl
 from ._quadrants_callable import QuadrantsCallable
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
-NUM_WARMUP: int = 2
+NUM_WARMUP: int = 3
+NUM_ACTIVE: int = 1
 
 
 class DispatchImpl:
@@ -38,8 +39,15 @@ R = TypeVar("R")
 
 
 class PerformanceDispatcher(Generic[P, R]):
-    def __init__(self, get_geometry_hash: Callable[P, int], fn: Callable, num_warmup: int | None = None) -> None:
-        self.num_warmup = num_warmup if num_warmup else NUM_WARMUP
+    def __init__(
+        self,
+        get_geometry_hash: Callable[P, int],
+        fn: Callable,
+        num_warmup: int | None = None,
+        num_active: int | None = None,
+    ) -> None:
+        self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
+        self.num_active = num_active if num_active is not None else NUM_ACTIVE
         sig = inspect.signature(fn)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
@@ -126,7 +134,10 @@ class PerformanceDispatcher(Generic[P, R]):
         return least_trials_dispatch_impl
 
     def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
-        res = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values()) >= self.num_warmup + 1
+        res = (
+            min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
+            >= self.num_warmup + self.num_active
+        )
         return res
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
@@ -204,7 +215,7 @@ class PerformanceDispatcher(Generic[P, R]):
         return res
 
 
-def perf_dispatch(*, get_geometry_hash: Callable):
+def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, active: int = NUM_ACTIVE):
     """
     This annotation designates a meta-function that can have one or more functions registered with it.
 
@@ -213,10 +224,18 @@ def perf_dispatch(*, get_geometry_hash: Callable):
     aimed for use where there are multiple possible functions, and no clear heuristic to
     choose between them.
 
+    Args:
+        get_geometry_hash: A function that returns a geometry hash given the arguments.
+        warmup: Number of warmup iterations to run for each implementation before measuring. Default 3.
+        active: Number of active (timed) iterations to run for each implementation. Default 1.
+
     Example usage:
 
     @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
     def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
+
+    @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=5, active=2)
+    def my_func2(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
         # note: this is intentionally empty. The function body will NEVER be called.
 
     @my_func1.register
@@ -269,7 +288,7 @@ def perf_dispatch(*, get_geometry_hash: Callable):
     """
 
     def decorator(fn: Callable | QuadrantsCallable):
-        return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn)
+        return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn, num_warmup=warmup, num_active=active)
 
     return decorator
 
