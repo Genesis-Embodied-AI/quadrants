@@ -265,3 +265,9 @@ def test_perf_dispatch_annotation_mismatch() -> None:
         @ti.kernel
         @my_func1.register
         def my_func1_impl_impl1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]) -> None: ...
+
+
+@test_utils.test()
+def test_perf_dispatch_sanity_check_register_args() -> None:
+    @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=25, active=25)
+    def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
