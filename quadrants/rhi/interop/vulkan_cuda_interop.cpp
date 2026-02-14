@@ -1,17 +1,17 @@
 #include "quadrants/rhi/interop/vulkan_cuda_interop.h"
 
-#if TI_WITH_VULKAN && TI_WITH_CUDA
+#if QD_WITH_VULKAN && QD_WITH_CUDA
 #include "quadrants/rhi/cuda/cuda_device.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/vulkan/vulkan_device.h"
-#endif  // TI_WITH_VULKAN && TI_WITH_CUDA
+#endif  // QD_WITH_VULKAN && QD_WITH_CUDA
 
 #include <unordered_map>
 
 namespace quadrants::lang {
 
-#if TI_WITH_VULKAN && TI_WITH_CUDA
+#if QD_WITH_VULKAN && QD_WITH_CUDA
 
 using namespace quadrants::lang::vulkan;
 using namespace quadrants::lang::cuda;
@@ -35,13 +35,13 @@ HANDLE get_device_mem_handle(VkDeviceMemory &mem, VkDevice device) {
           device, "vkGetMemoryWin32HandleKHR");
 
   if (fpGetMemoryWin32HandleKHR == nullptr) {
-    TI_ERROR("vkGetMemoryFdKHR is nullptr");
+    QD_ERROR("vkGetMemoryFdKHR is nullptr");
   }
 
   auto result =
       fpGetMemoryWin32HandleKHR(device, &memory_get_win32_handle_info, &handle);
   if (result != VK_SUCCESS) {
-    TI_ERROR("vkGetMemoryWin32HandleKHR failed");
+    QD_ERROR("vkGetMemoryWin32HandleKHR failed");
   }
 
   return handle;
@@ -61,7 +61,7 @@ int get_device_mem_handle(VkDeviceMemory &mem, VkDevice device) {
       (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
 
   if (fpGetMemoryFdKHR == nullptr) {
-    TI_ERROR("vkGetMemoryFdKHR is nullptr");
+    QD_ERROR("vkGetMemoryFdKHR is nullptr");
   }
   fpGetMemoryFdKHR(device, &memory_get_fd_info, &fd);
 
@@ -219,12 +219,12 @@ void memcpy_vulkan_to_cuda(DevicePtr dst, DevicePtr src, uint64_t size) {
 
 #else
 void memcpy_cuda_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void memcpy_vulkan_to_cuda(DevicePtr dst, DevicePtr src, uint64_t size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
-#endif  // TI_WITH_VULKAN && TI_WITH_CUDA
+#endif  // QD_WITH_VULKAN && QD_WITH_CUDA
 
 }  // namespace quadrants::lang

@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <map>
 #include "quadrants/common/core.h"
-#if defined(TI_PLATFORM_UNIX)
+#if defined(QD_PLATFORM_UNIX)
 #include <sys/time.h>
 #else
 #pragma warning(push)
@@ -27,11 +27,11 @@ namespace quadrants {
     quadrants::Time::Timer _(timer_name);                            \
     x;                                                               \
   }
-#define TI_TIME(x) TIME(x)
+#define QD_TIME(x) TIME(x)
 
 #include <stdint.h>
 
-class TI_DLL_EXPORT Time {
+class QD_DLL_EXPORT Time {
  public:
   static double get_time();
   static uint64 get_cycles();

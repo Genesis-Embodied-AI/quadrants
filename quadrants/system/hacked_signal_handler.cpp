@@ -37,48 +37,48 @@ void signal_handler(int signo) {
   Logger::get_instance().error(
       fmt::format("Received signal {} ({})", signo, sig_name), false);
   exit(-1);
-  TI_UNREACHABLE;
+  QD_UNREACHABLE;
 }
 
 }  // namespace
 
 HackedSignalRegister::HackedSignalRegister() {
-#define TI_REGISTER_SIGNAL_HANDLER(name, handler)                   \
+#define QD_REGISTER_SIGNAL_HANDLER(name, handler)                   \
   {                                                                 \
     if (std::signal(name, handler) == SIG_ERR)                      \
       std::printf("Cannot register signal handler for" #name "\n"); \
   }
 
-  TI_REGISTER_SIGNAL_HANDLER(SIGSEGV, signal_handler);
-  TI_REGISTER_SIGNAL_HANDLER(SIGABRT, signal_handler);
+  QD_REGISTER_SIGNAL_HANDLER(SIGSEGV, signal_handler);
+  QD_REGISTER_SIGNAL_HANDLER(SIGABRT, signal_handler);
 #if !defined(_WIN64)
-  TI_REGISTER_SIGNAL_HANDLER(SIGBUS, signal_handler);
+  QD_REGISTER_SIGNAL_HANDLER(SIGBUS, signal_handler);
 #endif
-  TI_REGISTER_SIGNAL_HANDLER(SIGFPE, signal_handler);
+  QD_REGISTER_SIGNAL_HANDLER(SIGFPE, signal_handler);
 
-#undef TI_REGISTER_SIGNAL_HANDLER
+#undef QD_REGISTER_SIGNAL_HANDLER
 
   Logger::get_instance().set_print_stacktrace_func(print_traceback);
-  TI_TRACE("Quadrants signal handlers registered. Thread ID = {}",
+  QD_TRACE("Quadrants signal handlers registered. Thread ID = {}",
            PID::get_pid());
 }
 
 HackedSignalRegister::~HackedSignalRegister() {
-#define TI_UNREGISTER_SIGNAL_HANDLER(name)                            \
+#define QD_UNREGISTER_SIGNAL_HANDLER(name)                            \
   {                                                                   \
     if (std::signal(name, SIG_DFL) == SIG_ERR)                        \
       std::printf("Cannot unregister signal handler for" #name "\n"); \
   }
 
-  TI_UNREGISTER_SIGNAL_HANDLER(SIGSEGV);
-  TI_UNREGISTER_SIGNAL_HANDLER(SIGABRT);
+  QD_UNREGISTER_SIGNAL_HANDLER(SIGSEGV);
+  QD_UNREGISTER_SIGNAL_HANDLER(SIGABRT);
 #if !defined(_WIN64)
-  TI_UNREGISTER_SIGNAL_HANDLER(SIGBUS);
+  QD_UNREGISTER_SIGNAL_HANDLER(SIGBUS);
 #endif
-  TI_UNREGISTER_SIGNAL_HANDLER(SIGFPE);
+  QD_UNREGISTER_SIGNAL_HANDLER(SIGFPE);
 
-#undef TI_UNREGISTER_SIGNAL_HANDLER
-  TI_TRACE("Quadrants signal handlers unregistered. Thread ID = {}",
+#undef QD_UNREGISTER_SIGNAL_HANDLER
+  QD_TRACE("Quadrants signal handlers unregistered. Thread ID = {}",
            PID::get_pid());
 }
 

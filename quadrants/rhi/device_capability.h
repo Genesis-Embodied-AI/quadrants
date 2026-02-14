@@ -29,7 +29,7 @@ struct DeviceCapabilityConfig {
 
   const std::map<DeviceCapability, uint32_t> &to_inner() const;
 
-  // TI_IO_DEF(devcaps);
+  // QD_IO_DEF(devcaps);
 };
 
 }  // namespace quadrants::lang

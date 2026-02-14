@@ -19,7 +19,7 @@ class DetectForsWithBreak : public BasicStmtVisitor {
   }
 
   void visit(FrontendBreakStmt *stmt) override {
-    TI_ASSERT_INFO(loop_stack.size() != 0, "break statement out of loop scope");
+    QD_ASSERT_INFO(loop_stack.size() != 0, "break statement out of loop scope");
     auto loop = loop_stack.back();
     if (loop->is<FrontendForStmt>())
       fors_with_break.insert(loop);

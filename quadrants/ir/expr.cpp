@@ -58,7 +58,7 @@ Expr &Expr::operator=(const Expr &o) {
 }
 
 SNode *Expr::snode() const {
-  TI_ASSERT_INFO(is<FieldExpression>(),
+  QD_ASSERT_INFO(is<FieldExpression>(),
                  "Cannot get snode of non-field expressions.");
   return cast<FieldExpression>()->snode;
 }
@@ -122,7 +122,7 @@ Expr loop_unique(const Expr &input,
 }
 
 Expr expr_field(Expr id_expr, DataType dt) {
-  TI_ASSERT(id_expr.is<IdExpression>());
+  QD_ASSERT(id_expr.is<IdExpression>());
   auto ret = Expr(
       std::make_shared<FieldExpression>(dt, id_expr.cast<IdExpression>()->id));
   return ret;

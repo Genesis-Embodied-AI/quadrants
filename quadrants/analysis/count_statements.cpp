@@ -36,7 +36,7 @@ class StmtCounter : public BasicStmtVisitor {
 
 namespace irpass::analysis {
 int count_statements(IRNode *root) {
-  TI_ASSERT(root);
+  QD_ASSERT(root);
   return StmtCounter::run(root);
 }
 }  // namespace irpass::analysis

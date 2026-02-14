@@ -13,7 +13,7 @@ std::string unary_op_type_name(UnaryOpType type) {
 
 #undef PER_UNARY_OP
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -27,7 +27,7 @@ std::string binary_op_type_name(BinaryOpType type) {
 
 #undef PER_BINARY_OP
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -65,7 +65,7 @@ std::string binary_op_type_symbol(BinaryOpType type) {
 
 #undef REGISTER_TYPE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -80,7 +80,7 @@ std::string ternary_type_name(TernaryOpType type) {
 
 #undef REGISTER_TYPE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -101,7 +101,7 @@ std::string atomic_op_type_name(AtomicOpType type) {
 
 #undef REGISTER_TYPE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -121,7 +121,7 @@ BinaryOpType atomic_to_binary_op_type(AtomicOpType type) {
 
 #undef REGISTER_TYPE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -143,7 +143,7 @@ std::string snode_op_type_name(SNodeOpType type) {
 
 #undef REGISTER_TYPE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 

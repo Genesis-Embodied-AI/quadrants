@@ -166,7 +166,7 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
         "atomic_bit_and", "atomic_bit_or", "atomic_bit_xor", "atomic_mul"};
     if (op_type > std::size(names_table)) {
       // min/max not supported in the LLVM backend yet.
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
     emit(names_table[op_type], '(');
     expr->dest->accept(this);
@@ -256,7 +256,7 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
  protected:
   template <typename... Args>
   void emit(Args &&...args) {
-    TI_ASSERT(this->get_ostream());
+    QD_ASSERT(this->get_ostream());
     (*this->get_ostream() << ... << std::forward<Args>(args));
   }
 

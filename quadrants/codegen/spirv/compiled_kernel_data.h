@@ -17,12 +17,12 @@ class CompiledKernelData : public lang::CompiledKernelData {
     struct Metadata {
       QuadrantsKernelAttributes kernel_attribs;
       std::size_t num_snode_trees{0};
-      TI_IO_DEF(kernel_attribs, num_snode_trees);
+      QD_IO_DEF(kernel_attribs, num_snode_trees);
     } metadata;
     // source code
     struct Source {
       TasksCode spirv_src;
-      TI_IO_DEF(spirv_src);
+      QD_IO_DEF(spirv_src);
     } src;
   };
 

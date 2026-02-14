@@ -211,10 +211,10 @@ class _EnvironmentConfigurator:
 
         self.keys.append(key)
 
-        # TI_OFFLINE_CACHE=   : no effect
-        # TI_OFFLINE_CACHE=0  : False
-        # TI_OFFLINE_CACHE=1  : True
-        name = "TI_" + key.upper()
+        # QD_OFFLINE_CACHE=   : no effect
+        # QD_OFFLINE_CACHE=0  : False
+        # QD_OFFLINE_CACHE=1  : True
+        name = "QD_" + key.upper()
         value = os.environ.get(name, "")
         if key in self.kwargs:
             self[key] = self.kwargs[key]
@@ -334,7 +334,7 @@ def init(
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
             *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
-            *``debug_dump_path`` (str): used as the base path for TI_DUMP_IR and similar
+            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar
     """
     # FIXME(https://github.com/taichi-dev/quadrants/issues/4811): save the current working directory since it may be
     # changed by the Vulkan backend initialization on OS X.
@@ -363,31 +363,31 @@ def init(
 
     # configure default_fp/ip:
     # TODO: move these stuff to _SpecialConfig too:
-    env_default_fp = os.environ.get("TI_DEFAULT_FP")
+    env_default_fp = os.environ.get("QD_DEFAULT_FP")
     if env_default_fp:
         if default_fp is not None:
             _ti_core.warn(
-                f'Environment variable TI_DEFAULT_FP={env_default_fp} overridden by ti.init argument "default_fp"'
+                f'Environment variable QD_DEFAULT_FP={env_default_fp} overridden by ti.init argument "default_fp"'
             )
         elif env_default_fp == "32":
             default_fp = f32
         elif env_default_fp == "64":
             default_fp = f64
         elif env_default_fp is not None:
-            raise ValueError(f"Invalid TI_DEFAULT_FP={env_default_fp}, should be 32 or 64")
+            raise ValueError(f"Invalid QD_DEFAULT_FP={env_default_fp}, should be 32 or 64")
 
-    env_default_ip = os.environ.get("TI_DEFAULT_IP")
+    env_default_ip = os.environ.get("QD_DEFAULT_IP")
     if env_default_ip:
         if default_ip is not None:
             _ti_core.warn(
-                f'Environment variable TI_DEFAULT_IP={env_default_ip} overridden by ti.init argument "default_ip"'
+                f'Environment variable QD_DEFAULT_IP={env_default_ip} overridden by ti.init argument "default_ip"'
             )
         elif env_default_ip == "32":
             default_ip = i32
         elif env_default_ip == "64":
             default_ip = i64
         elif env_default_ip is not None:
-            raise ValueError(f"Invalid TI_DEFAULT_IP={env_default_ip}, should be 32 or 64")
+            raise ValueError(f"Invalid QD_DEFAULT_IP={env_default_ip}, should be 32 or 64")
 
     if default_fp is not None:
         impl.get_runtime().set_default_fp(default_fp)
@@ -427,9 +427,9 @@ def init(
         _logging.set_logging_level(spec_cfg.log_level.lower())
 
     # select arch (backend):
-    env_arch = os.environ.get("TI_ARCH")
+    env_arch = os.environ.get("QD_ARCH")
     if env_arch is not None:
-        _logging.info(f"Following TI_ARCH setting up for arch={env_arch}")
+        _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
         arch = _ti_core.arch_from_name(env_arch)
     cfg.arch = adaptive_arch_select(arch, enable_fallback)
     print(f"[Quadrants] Starting on arch={_ti_core.arch_name(cfg.arch)}")
@@ -724,7 +724,7 @@ def is_arch_supported(arch):
         arch = _ti_core.arch_name(arch)
         _ti_core.warn(
             f"{e.__class__.__name__}: '{e}' occurred when detecting "
-            f"{arch}, consider adding `TI_ENABLE_{arch.upper()}=0` "
+            f"{arch}, consider adding `QD_ENABLE_{arch.upper()}=0` "
             f" to environment variables to suppress this warning message."
         )
         return False

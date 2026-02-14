@@ -153,7 +153,7 @@ struct ErrorEmitter {
     } else if constexpr (std::is_base_of_v<QuadrantsError, std::decay_t<E>>) {
       throw std::move(error);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 };

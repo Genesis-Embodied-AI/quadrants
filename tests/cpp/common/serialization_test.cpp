@@ -42,7 +42,7 @@ struct Parent {
       return a == other.a && b == other.b && c == other.c;
     }
 
-    TI_IO_DEF(a, b, c);
+    QD_IO_DEF(a, b, c);
   };
 
   std::optional<Child> b;
@@ -52,7 +52,7 @@ struct Parent {
     return b == other.b && c == other.c;
   }
 
-  TI_IO_DEF(b, c);
+  QD_IO_DEF(b, c);
 };
 
 TEST(Serialization, SplitStr) {
@@ -127,7 +127,7 @@ struct MoveOnlyObj {
   std::string bar;
   std::unique_ptr<int> ptr{nullptr};
 
-  TI_IO_DEF(foo, bar);
+  QD_IO_DEF(foo, bar);
 };
 
 TEST(Serialization, MoveOnly) {
@@ -218,7 +218,7 @@ struct Foo {
     return k == other.k && v == other.v;
   }
 
-  TI_IO_DEF(k, v);
+  QD_IO_DEF(k, v);
 };
 
 TEST(Serialization, JsonSerde) {

@@ -18,7 +18,7 @@ std::string snode_access_flag_name(SNodeAccessFlag type) {
   } else if (type == SNodeAccessFlag::mesh_local) {
     return "mesh_local";
   } else {
-    TI_ERROR("Undefined SNode AccessType (value={})", int(type));
+    QD_ERROR("Undefined SNode AccessType (value={})", int(type));
   }
 }
 
@@ -58,7 +58,7 @@ std::unique_ptr<IRNode> IRNode::clone() {
   else if (is<Stmt>())
     new_irnode = as<Stmt>()->clone();
   else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
   return new_irnode;
 }
@@ -149,24 +149,24 @@ Callable *Stmt::get_callable() const {
   }
   irpass::print((IRNode *)this);
 
-  TI_WARN("Stmt is not in a kernel.");
+  QD_WARN("Stmt is not in a kernel.");
   return nullptr;
 }
 
 Stmt *Stmt::insert_before_me(std::unique_ptr<Stmt> &&new_stmt) {
   auto ret = new_stmt.get();
-  TI_ASSERT(parent);
+  QD_ASSERT(parent);
   auto iter = parent->find(this);
-  TI_ASSERT(iter != parent->statements.end());
+  QD_ASSERT(iter != parent->statements.end());
   parent->insert_at(std::move(new_stmt), iter);
   return ret;
 }
 
 Stmt *Stmt::insert_after_me(std::unique_ptr<Stmt> &&new_stmt) {
   auto ret = new_stmt.get();
-  TI_ASSERT(parent);
+  QD_ASSERT(parent);
   auto iter = parent->find(this);
-  TI_ASSERT(iter != parent->statements.end());
+  QD_ASSERT(iter != parent->statements.end());
   parent->insert_at(std::move(new_stmt), std::next(iter));
   return ret;
 }
@@ -255,7 +255,7 @@ void Stmt::register_operand(Stmt *&stmt) {
 }
 
 void Stmt::mark_fields_registered() {
-  TI_ASSERT(!fields_registered);
+  QD_ASSERT(!fields_registered);
   fields_registered = true;
 }
 
@@ -323,7 +323,7 @@ std::unique_ptr<Stmt> Block::extract(Stmt *stmt) {
       return extract(i);
     }
   }
-  TI_ERROR("stmt not found");
+  QD_ERROR("stmt not found");
 }
 
 Stmt *Block::insert(std::unique_ptr<Stmt> &&stmt, int location) {
@@ -358,7 +358,7 @@ Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::iterator location) {
 void Block::replace_statements_in_range(int start,
                                         int end,
                                         VecStatement &&stmts) {
-  TI_ASSERT(start <= end);
+  QD_ASSERT(start <= end);
   erase_range(locate(start), locate(end));
   insert(std::move(stmts), start);
 }
@@ -403,7 +403,7 @@ void Block::replace_with(Stmt *old_statement,
                          VecStatement &&new_statements,
                          bool replace_usages) {
   auto iter = find(old_statement);
-  TI_ASSERT(iter != statements.end());
+  QD_ASSERT(iter != statements.end());
   if (replace_usages && !new_statements.stmts.empty())
     old_statement->replace_usages_with(new_statements.back().get());
   trash_bin.push_back(std::move(*iter));
@@ -485,12 +485,12 @@ std::unique_ptr<Block> Block::clone() const {
 
 DelayedIRModifier::~DelayedIRModifier() {
   // TODO: destructors should not be interrupted
-  TI_ASSERT(to_insert_before_.empty());
-  TI_ASSERT(to_insert_after_.empty());
-  TI_ASSERT(to_erase_.empty());
-  TI_ASSERT(to_replace_with_.empty());
-  TI_ASSERT(to_extract_to_block_front_.empty());
-  TI_ASSERT(to_type_check_.empty());
+  QD_ASSERT(to_insert_before_.empty());
+  QD_ASSERT(to_insert_after_.empty());
+  QD_ASSERT(to_erase_.empty());
+  QD_ASSERT(to_replace_with_.empty());
+  QD_ASSERT(to_extract_to_block_front_.empty());
+  QD_ASSERT(to_type_check_.empty());
 }
 
 void DelayedIRModifier::erase(Stmt *stmt) {

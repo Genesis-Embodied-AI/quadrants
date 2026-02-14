@@ -2,16 +2,16 @@
 
 #include <memory>
 
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #endif
 
-#ifdef TI_WITH_CUDA
+#ifdef QD_WITH_CUDA
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/rhi/cuda/cuda_device.h"
 #endif
 
-#if defined(TI_PLATFORM_UNIX)
+#if defined(QD_PLATFORM_UNIX)
 #include <sys/mman.h>
 #else
 #include "quadrants/platform/windows/windows.h"
@@ -63,7 +63,7 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
   void *ptr = nullptr;
 
   if (arch_ == Arch::cuda) {
-#if TI_WITH_CUDA
+#if QD_WITH_CUDA
     if (!managed) {
       CUDADriver::get_instance().malloc(&ptr, size);
     } else {
@@ -71,10 +71,10 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
                                                 CU_MEM_ATTACH_GLOBAL);
     }
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else if (arch_ == Arch::amdgpu) {
-#if TI_WITH_AMDGPU
+#if QD_WITH_AMDGPU
     if (!managed) {
       AMDGPUDriver::get_instance().malloc(&ptr, size);
     } else {
@@ -82,18 +82,18 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
                                                   HIP_MEM_ATTACH_GLOBAL);
     }
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   if (ptr == nullptr) {
-    TI_ERROR("Device memory allocation ({} B) failed.", size);
+    QD_ERROR("Device memory allocation ({} B) failed.", size);
   }
 
   if (raw_memory_chunks_.count(ptr)) {
-    TI_ERROR("Memory address ({:}) is already allocated", ptr);
+    QD_ERROR("Memory address ({:}) is already allocated", ptr);
   }
 
   raw_memory_chunks_[ptr] = size;
@@ -111,25 +111,25 @@ void DeviceMemoryPool::deallocate_raw_memory(void *ptr) {
     when calling this method.
   */
   if (!raw_memory_chunks_.count(ptr)) {
-    TI_ERROR("Memory address ({:}) is not allocated", ptr);
+    QD_ERROR("Memory address ({:}) is not allocated", ptr);
   }
 
   if (arch_ == Arch::cuda) {
-#if TI_WITH_CUDA
+#if QD_WITH_CUDA
     CUDADriver::get_instance().mem_free(ptr);
     raw_memory_chunks_.erase(ptr);
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else if (arch_ == Arch::amdgpu) {
-#if TI_WITH_AMDGPU
+#if QD_WITH_AMDGPU
     AMDGPUDriver::get_instance().mem_free(ptr);
     raw_memory_chunks_.erase(ptr);
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 

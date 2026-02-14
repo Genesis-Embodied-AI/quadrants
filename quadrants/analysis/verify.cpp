@@ -32,7 +32,7 @@ class IRVerifier : public BasicStmtVisitor {
   }
 
   void basic_verify(Stmt *stmt) {
-    TI_ASSERT_INFO(stmt->parent == current_block_,
+    QD_ASSERT_INFO(stmt->parent == current_block_,
                    "stmt({})->parent({}) != current_block({})", stmt->id,
                    fmt::ptr(stmt->parent), fmt::ptr(current_block_));
     for (auto &op : stmt->get_operands()) {
@@ -45,7 +45,7 @@ class IRVerifier : public BasicStmtVisitor {
           break;
         }
       }
-      TI_ASSERT_INFO(
+      QD_ASSERT_INFO(
           found,
           "IR broken: stmt {} {} cannot have operand {} {}."
           " If you are using autodiff, please check out"
@@ -68,7 +68,7 @@ class IRVerifier : public BasicStmtVisitor {
   }
 
   void visit(Block *block) override {
-    TI_ASSERT_INFO(
+    QD_ASSERT_INFO(
         block->parent_stmt() == current_container_stmt_,
         "block({})->parent({}) != current_container_stmt({})", fmt::ptr(block),
         block->parent_stmt() ? block->parent_stmt()->name() : "nullptr",
@@ -93,10 +93,10 @@ class IRVerifier : public BasicStmtVisitor {
   void visit(OffloadedStmt *stmt) override {
     basic_verify(stmt);
     if (stmt->has_body() && !stmt->body) {
-      TI_ERROR("offloaded {} ({})->body is nullptr",
+      QD_ERROR("offloaded {} ({})->body is nullptr",
                offloaded_task_type_name(stmt->task_type), stmt->name());
     } else if (!stmt->has_body() && stmt->body) {
-      TI_ERROR("offloaded {} ({})->body is {} (should be nullptr)",
+      QD_ERROR("offloaded {} ({})->body is {} (should be nullptr)",
                offloaded_task_type_name(stmt->task_type), stmt->name(),
                fmt::ptr(stmt->body));
     }
@@ -105,13 +105,13 @@ class IRVerifier : public BasicStmtVisitor {
 
   void visit(LocalLoadStmt *stmt) override {
     basic_verify(stmt);
-    TI_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
+    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
               stmt->src->is<MatrixOfMatrixPtrStmt>());
   }
 
   void visit(LocalStoreStmt *stmt) override {
     basic_verify(stmt);
-    TI_ASSERT(stmt->dest->is<AllocaStmt>() ||
+    QD_ASSERT(stmt->dest->is<AllocaStmt>() ||
               (stmt->dest->is<MatrixPtrStmt>() &&
                stmt->dest->cast<MatrixPtrStmt>()->offset_used_as_index()) ||
               (stmt->dest->is<MatrixOfMatrixPtrStmt>()));
@@ -119,16 +119,16 @@ class IRVerifier : public BasicStmtVisitor {
 
   void visit(LoopIndexStmt *stmt) override {
     basic_verify(stmt);
-    TI_ASSERT(stmt->loop);
+    QD_ASSERT(stmt->loop);
     if (stmt->loop->is<OffloadedStmt>()) {
-      TI_ASSERT(stmt->loop->as<OffloadedStmt>()->task_type ==
+      QD_ASSERT(stmt->loop->as<OffloadedStmt>()->task_type ==
                     OffloadedStmt::TaskType::struct_for ||
                 stmt->loop->as<OffloadedStmt>()->task_type ==
                     OffloadedStmt::TaskType::mesh_for ||
                 stmt->loop->as<OffloadedStmt>()->task_type ==
                     OffloadedStmt::TaskType::range_for);
     } else {
-      TI_ASSERT(stmt->loop->is<StructForStmt>() ||
+      QD_ASSERT(stmt->loop->is<StructForStmt>() ||
                 stmt->loop->is<MeshForStmt>() ||
                 stmt->loop->is<RangeForStmt>());
     }
@@ -142,9 +142,9 @@ class IRVerifier : public BasicStmtVisitor {
 
 namespace irpass::analysis {
 void verify(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   if (!root->is<Block>() && !root->is<OffloadedStmt>()) {
-    TI_WARN(
+    QD_WARN(
         "IR root is neither a Block nor an OffloadedStmt."
         " Skipping verification.");
   } else {

@@ -18,20 +18,20 @@ template <typename... Ts>
 void disabled_function([[maybe_unused]] Ts... C) {
 }
 
-#if defined(SPDLOG_H) && defined(TI_WARN)
-#define RHI_LOG_ERROR(msg) TI_WARN("RHI Error : {}", msg)
+#if defined(SPDLOG_H) && defined(QD_WARN)
+#define RHI_LOG_ERROR(msg) QD_WARN("RHI Error : {}", msg)
 #else
 #define RHI_LOG_ERROR(msg) std::cerr << "RHI Error: " << msg << std::endl;
 #endif
 
 #define RHI_DEBUG
-#define RHI_USE_TI_LOGGING
+#define RHI_USE_QD_LOGGING
 
 #ifdef RHI_DEBUG
 #define RHI_DEBUG_SNPRINTF std::snprintf
-#ifdef RHI_USE_TI_LOGGING
+#ifdef RHI_USE_QD_LOGGING
 #include "quadrants/common/logging.h"
-#define RHI_LOG_DEBUG(msg) TI_TRACE("RHI Debug : {}", msg)
+#define RHI_LOG_DEBUG(msg) QD_TRACE("RHI Debug : {}", msg)
 #else
 #define RHI_LOG_DEBUG(msg) std::cout << "RHI Debug: " << msg << std::endl;
 #endif

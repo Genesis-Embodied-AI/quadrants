@@ -448,12 +448,12 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   template <typename T>
   void emit_pod(const T &val) {
     static_assert(std::is_pod<T>::value);
-    TI_ASSERT(os_);
+    QD_ASSERT(os_);
     os_->write((const char *)&val, sizeof(T));
   }
 
   void emit_bytes(const char *bytes, std::size_t len) {
-    TI_ASSERT(os_);
+    QD_ASSERT(os_);
     if (!bytes)
       return;
     os_->write(bytes, len);
@@ -500,13 +500,13 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   }
 
   void emit(Function *func) {
-    TI_ASSERT(func);
+    QD_ASSERT(func);
     auto iter = real_funcs_.find(func);
     if (iter != real_funcs_.end()) {
       emit(iter->second);
     } else {
       auto [iter, ok] = real_funcs_.insert({func, real_funcs_.size()});
-      TI_ASSERT(ok);
+      QD_ASSERT(ok);
       emit(iter->second);
     }
   }
@@ -538,7 +538,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   }
 
   void emit(mesh::Mesh *mesh) {
-    TI_ASSERT(mesh);
+    QD_ASSERT(mesh);
     emit(mesh->num_patches);
     emit(mesh->num_elements);
     emit(mesh->patch_max_element_num);
@@ -562,7 +562,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   }
 
   void emit(IRNode *ir) {
-    TI_ASSERT(ir);
+    QD_ASSERT(ir);
     ir->accept(this);
   }
 

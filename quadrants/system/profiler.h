@@ -52,8 +52,8 @@ class Profiling {
   std::unordered_map<std::thread::id, ProfilerRecords *> profilers_;
 };
 
-#define TI_PROFILER(name) quadrants::ScopedProfiler _profiler_##__LINE__(name);
+#define QD_PROFILER(name) quadrants::ScopedProfiler _profiler_##__LINE__(name);
 
-#define TI_AUTO_PROF TI_PROFILER(__FUNCTION__)
+#define QD_AUTO_PROF QD_PROFILER(__FUNCTION__)
 
 }  // namespace quadrants

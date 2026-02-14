@@ -13,7 +13,7 @@ MeshBLSAnalyzer::MeshBLSAnalyzer(OffloadedStmt *for_stmt,
       caches_(caches),
       auto_mesh_local_(auto_mesh_local),
       config_(config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   allow_undefined_visitor = true;
   invoke_default_visitor = false;
 }
@@ -72,7 +72,7 @@ void MeshBLSAnalyzer::visit(AtomicOpStmt *stmt) {
 }
 
 void MeshBLSAnalyzer::visit(Stmt *stmt) {
-  TI_ASSERT(!stmt->is_container_statement());
+  QD_ASSERT(!stmt->is_container_statement());
 }
 
 bool MeshBLSAnalyzer::run() {
@@ -92,8 +92,8 @@ std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(
     OffloadedStmt *offload,
     bool auto_mesh_local,
     const CompileConfig &config) {
-  TI_AUTO_PROF
-  TI_ASSERT(offload->task_type == OffloadedTaskType::mesh_for);
+  QD_AUTO_PROF
+  QD_ASSERT(offload->task_type == OffloadedTaskType::mesh_for);
   std::unique_ptr<MeshBLSCaches> caches;
   caches = std::make_unique<MeshBLSCaches>();
   for (auto snode : offload->mem_access_opt.get_snodes_with_flag(
@@ -104,7 +104,7 @@ std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(
   MeshBLSAnalyzer bls_analyzer(offload, caches.get(), auto_mesh_local, config);
   bool analysis_ok = bls_analyzer.run();
   if (!analysis_ok) {
-    TI_ERROR("Mesh BLS analysis failed !");
+    QD_ERROR("Mesh BLS analysis failed !");
   }
   return caches;
 }

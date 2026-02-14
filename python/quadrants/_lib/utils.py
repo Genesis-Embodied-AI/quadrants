@@ -16,7 +16,7 @@ if sys.version_info[0] < 3 or sys.version_info[1] <= 5:
 
 
 def in_docker():
-    if os.environ.get("TI_IN_DOCKER", "") == "":
+    if os.environ.get("QD_IN_DOCKER", "") == "":
         return False
     return True
 
@@ -89,7 +89,7 @@ def locale_encode(path):
 
 
 def is_ci():
-    return os.environ.get("TI_CI", "") == "1"
+    return os.environ.get("QD_CI", "") == "1"
 
 
 package_root = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -121,7 +121,7 @@ ti_python_core = import_ti_python_core()
 
 ti_python_core.set_python_package_dir(package_root)
 
-log_level = os.environ.get("TI_LOG_LEVEL", "")
+log_level = os.environ.get("QD_LOG_LEVEL", "")
 if log_level:
     ti_python_core.set_logging_level(log_level)
 
@@ -221,7 +221,7 @@ def try_get_pip_version():
 
 
 def warn_restricted_version():
-    if os.environ.get("TI_MANYLINUX2014_OK", ""):
+    if os.environ.get("QD_MANYLINUX2014_OK", ""):
         return
 
     if get_os_name() == "linux":

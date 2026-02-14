@@ -82,7 +82,7 @@ class IRPrinter : public IRVisitor {
                   bool print_ir_dbg_info,
                   bool print_kernel_wrapper) {
     if (node == nullptr) {
-      TI_WARN("IRPrinter: Printing nullptr.");
+      QD_WARN("IRPrinter: Printing nullptr.");
       if (output) {
         *output = std::string();
       }
@@ -716,7 +716,7 @@ class IRPrinter : public IRVisitor {
         print("}}");
       }
       if (stmt->mesh_prologue) {
-        TI_ASSERT(stmt->task_type == OffloadedTaskType::mesh_for);
+        QD_ASSERT(stmt->task_type == OffloadedTaskType::mesh_for);
         print("body prologue {{");
         stmt->mesh_prologue->accept(this);
         print("}}");
@@ -726,7 +726,7 @@ class IRPrinter : public IRVisitor {
         stmt->bls_prologue->accept(this);
         print("}}");
       }
-      TI_ASSERT(stmt->body);
+      QD_ASSERT(stmt->body);
       print("body {{");
       stmt->body->accept(this);
       print("}}");
@@ -942,7 +942,7 @@ class IRPrinter : public IRVisitor {
   }
 
   std::string expr_to_string(Expression *expr) {
-    TI_ASSERT(expr_printer_);
+    QD_ASSERT(expr_printer_);
     std::ostringstream oss;
     expr_printer_->set_ostream(&oss);
     expr->accept(expr_printer_);
@@ -950,7 +950,7 @@ class IRPrinter : public IRVisitor {
   }
 
   std::string expr_group_to_string(ExprGroup &expr_group) {
-    TI_ASSERT(expr_printer_);
+    QD_ASSERT(expr_printer_);
     std::ostringstream oss;
     expr_printer_->set_ostream(&oss);
     expr_printer_->visit(expr_group);
@@ -980,7 +980,7 @@ std::function<void(const std::string &)> make_pass_printer(
     return [](const std::string &) {};
   }
   return [ir, kernel_name, print_ir_dbg_info](const std::string &pass) {
-    TI_INFO("[{}] {}:", kernel_name, pass);
+    QD_INFO("[{}] {}:", kernel_name, pass);
     std::cout << std::flush;
     irpass::re_id(ir);
     irpass::print(ir, /*output=*/nullptr, print_ir_dbg_info);

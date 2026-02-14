@@ -118,8 +118,8 @@ class CPPTestItem(pytest.Item):
                 env = os.environ.copy()
                 env.update(
                     {
-                        "TI_DEVICE_MEMORY_GB": "0.5",
-                        "TI_LIB_DIR": str(ti_lib_dir),
+                        "QD_DEVICE_MEMORY_GB": "0.5",
+                        "QD_LIB_DIR": str(ti_lib_dir),
                     }
                 )
                 if self.script:

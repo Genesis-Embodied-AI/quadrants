@@ -4,7 +4,7 @@
 #include "quadrants/inc/constants.h"
 #include <cstdint>
 
-#if defined(TI_RUNTIME_HOST)
+#if defined(QD_RUNTIME_HOST)
 namespace quadrants::lang {
 #endif
 
@@ -26,6 +26,6 @@ struct RuntimeContext {
   uint64_t *result_buffer;
 };
 
-#if defined(TI_RUNTIME_HOST)
+#if defined(QD_RUNTIME_HOST)
 }  // namespace quadrants::lang
 #endif

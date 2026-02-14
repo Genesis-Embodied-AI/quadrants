@@ -14,11 +14,11 @@ class FieldsRegisteredChecker : public BasicStmtVisitor {
   }
 
   void preprocess_container_stmt(Stmt *stmt) override {
-    TI_ASSERT(stmt->fields_registered);
+    QD_ASSERT(stmt->fields_registered);
   }
 
   void visit(Stmt *stmt) override {
-    TI_ASSERT(stmt->fields_registered);
+    QD_ASSERT(stmt->fields_registered);
   }
 
   static void run(IRNode *root) {

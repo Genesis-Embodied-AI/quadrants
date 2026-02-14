@@ -977,7 +977,7 @@ def test_print_used_parameters():
     assert u1[1] == 333
     assert u1[2] == 0
     kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert kernel_args_count_by_type[KernelBatchedArgType.INT] == 1
 
     u1[0] = 0
@@ -991,7 +991,7 @@ def test_print_used_parameters():
     assert u1[1] == 333
     assert u1[2] == 444
     kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert kernel_args_count_by_type[KernelBatchedArgType.INT] == 1
 
 
@@ -1133,7 +1133,7 @@ def test_prune_used_parameters2():
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
     print(sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])))
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 7  # +1 for envs_idx
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 7  # +1 for envs_idx
 
 
 @test_utils.test()
@@ -1216,7 +1216,7 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
         assert u1b[5] == 555
         assert n1[0] == 777
         kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
-        assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 7
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 7
         assert kernel_args_count_by_type[KernelBatchedArgType.INT] == 0
 
         u1[0] = 0
@@ -1234,7 +1234,7 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
         assert u1b[5] == 555
         assert n1[0] == 777
         kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
-        assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 7
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 7
         assert kernel_args_count_by_type[KernelBatchedArgType.INT] == 0
 
 
@@ -1305,7 +1305,7 @@ def test_prune_used_parameters_fastcache2(tmp_path: Path):
 
         kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
         # remember to add 1 for envs_idx
-        assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 7
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 7
         assert kernel_args_count_by_type[KernelBatchedArgType.INT] == 0
 
 
@@ -1377,7 +1377,7 @@ def test_pruning_with_keyword_rename() -> None:
     k1(my_struct=my_struct_outside)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 1
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
     assert my_struct_outside.used[0, 0] == 100
     assert my_struct_outside.not_used[0, 0] == 0
 
@@ -1404,14 +1404,14 @@ def test_pruning_with_arg_rename() -> None:
     k1(my_struct=my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 1
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
     assert my_struct.used[0, 0] == 100
     assert my_struct.not_used[0, 0] == 0
 
     my_struct = create_struct()
     k1(my_struct=my_struct)
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 1
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
     assert my_struct.used[0, 0] == 100
     assert my_struct.not_used[0, 0] == 0
 
@@ -1490,7 +1490,7 @@ def test_pruning_with_arg_kwargs_rename() -> None:
     k1(1, s1, 2, d=5, struct2_k1=s2, c=3, struct3_k1=s3, struct4_k1=s4)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
     assert s1.used[0, 0] == 100
     assert s2.used[0, 0] == 101
     assert s3.used[0, 0] == 102
@@ -1505,7 +1505,7 @@ def test_pruning_with_arg_kwargs_rename() -> None:
     k1(1, s1, 2, d=5, struct2_k1=s2, c=3, struct3_k1=s3, struct4_k1=s4)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
     assert s1.used[0, 0] == 100
     assert s2.used[0, 0] == 101
@@ -1557,7 +1557,7 @@ def test_pruning_with_recursive_func() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert my_struct.a[0, 0] == 100
     assert my_struct.b[0, 0] == 101
     assert my_struct.c[0, 0] == 102
@@ -1566,7 +1566,7 @@ def test_pruning_with_recursive_func() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert my_struct.a[0, 0] == 100
     assert my_struct.b[0, 0] == 101
     assert my_struct.c[0, 0] == 102
@@ -1632,7 +1632,7 @@ def test_pruning_reuse_func_diff_kernel_parameters() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 5
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 5
     assert my_struct._f1[0, 0] == 101
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f2a[0, 0] == 102
@@ -1642,7 +1642,7 @@ def test_pruning_reuse_func_diff_kernel_parameters() -> None:
     my_struct = create_struct()
     k1(my_struct)
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 5
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 5
     assert my_struct._f1[0, 0] == 101
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f2a[0, 0] == 102
@@ -1685,7 +1685,7 @@ def test_pruning_reuse_func_same_kernel_call_l1() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1a[0, 0] == 101
     assert my_struct._f1b[0, 0] == 102
@@ -1693,7 +1693,7 @@ def test_pruning_reuse_func_same_kernel_call_l1() -> None:
     my_struct = create_struct()
     k1(my_struct)
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1a[0, 0] == 101
     assert my_struct._f1b[0, 0] == 102
@@ -1741,7 +1741,7 @@ def test_pruning_reuse_func_same_kernel_call_l2() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2a[0, 0] == 102
@@ -1750,7 +1750,7 @@ def test_pruning_reuse_func_same_kernel_call_l2() -> None:
     my_struct = create_struct()
     k1(my_struct)
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2a[0, 0] == 102
@@ -1803,7 +1803,7 @@ def test_pruning_reuse_func_across_kernels() -> None:
     k1(my_struct)
     k1_primal: Kernel = k1._primal
     kernel_args_count_by_type = k1_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert my_struct._k1[0, 0] == 101
     assert my_struct._f1_with_flag[0, 0] == 0
     assert my_struct._f1_no_flag[0, 0] == 103
@@ -1812,7 +1812,7 @@ def test_pruning_reuse_func_across_kernels() -> None:
     k2(my_struct)
     k2_primal: Kernel = k2._primal
     kernel_args_count_by_type = k2_primal.launch_stats.kernel_args_count_by_type
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert my_struct._k2[0, 0] == 100
     assert my_struct._f1_with_flag[0, 0] == 102
     assert my_struct._f1_no_flag[0, 0] == 0
@@ -1861,7 +1861,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1_no_flag[0, 0] == 102
     assert my_struct._f1_with_flag[0, 0] == 0
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
         "__ti_struct_k1",
         "__ti_struct_k1__ti__f1_no_flag",
@@ -1875,7 +1875,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1_no_flag[0, 0] == 102
     assert my_struct._f1_with_flag[0, 0] == 0
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
         "__ti_struct_k1",
         "__ti_struct_k1__ti__f1_no_flag",
@@ -1889,7 +1889,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1_no_flag[0, 0] == 0
     assert my_struct._f1_with_flag[0, 0] == 101
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
         "__ti_struct_k1",
         "__ti_struct_k1__ti__f1_with_flag",
@@ -1903,7 +1903,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1_no_flag[0, 0] == 102
     assert my_struct._f1_with_flag[0, 0] == 0
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
         "__ti_struct_k1",
         "__ti_struct_k1__ti__f1_no_flag",
@@ -1917,7 +1917,7 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1_no_flag[0, 0] == 0
     assert my_struct._f1_with_flag[0, 0] == 101
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 2
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
         "__ti_struct_k1",
         "__ti_struct_k1__ti__f1_with_flag",
@@ -1979,7 +1979,7 @@ def test_pruning_kwargs_same_param_names_diff_names() -> None:
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2a[0, 0] == 6
     assert my_struct._f2b[0, 0] == 5
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @pytest.mark.xfail(reason="cannot use * when calling ti.func")
@@ -2116,7 +2116,7 @@ def test_pruning_pass_element_of_tensor_of_dataclass() -> None:
     assert my_struct._k1[0, 0][0] == 100
     assert my_struct._f1[0, 0][0] == 101
     assert my_struct._out[0, 0][0] == 5
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @test_utils.test()
@@ -2174,7 +2174,7 @@ def test_pruning_kwargs_swap_order() -> None:
     assert my_struct2._k1[0, 0] == 101
     assert my_struct1._f1[0, 0] == 102
     assert my_struct2._f1[0, 0] == 103
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @test_utils.test()
@@ -2240,7 +2240,7 @@ def test_pruning_kwargs_swap_order_bound_callable() -> None:
     assert my_struct2._k1[0, 0] == 101
     assert my_struct1._f1[0, 0] == 102
     assert my_struct2._f1[0, 0] == 103
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @test_utils.test()
@@ -2297,7 +2297,7 @@ def test_pruning_bound_callable_args() -> None:
     assert my_struct2._k1[0] == 101
     assert my_struct1._f1[0, 0] == 102
     assert my_struct2._f1[0, 0, 0] == 103
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @test_utils.test()
@@ -2354,7 +2354,7 @@ def test_pruning_bound_callable_kwargs() -> None:
     assert my_struct2._k1[0] == 101
     assert my_struct1._f1[0, 0] == 102
     assert my_struct2._f1[0, 0, 0] == 103
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 4
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
 @test_utils.test()
@@ -2467,7 +2467,7 @@ def test_pruning_iterate_function() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2[0, 0] == 102
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
 
 
 @test_utils.test()
@@ -2510,4 +2510,4 @@ def test_pruning_iterate_function_no_iterate() -> None:
     assert my_struct._k1[0, 0] == 100
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2[0, 0] == 102
-    assert kernel_args_count_by_type[KernelBatchedArgType.TI_ARRAY] == 3
+    assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3

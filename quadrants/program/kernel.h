@@ -12,7 +12,7 @@ namespace quadrants::lang {
 
 class Program;
 
-class TI_DLL_EXPORT Kernel : public Callable {
+class QD_DLL_EXPORT Kernel : public Callable {
  public:
   std::vector<SNode *> no_activate;
 

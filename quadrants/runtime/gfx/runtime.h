@@ -75,7 +75,7 @@ class CompiledQuadrantsKernel {
   std::vector<std::unique_ptr<Pipeline>> pipelines_;
 };
 
-class TI_DLL_EXPORT GfxRuntime {
+class QD_DLL_EXPORT GfxRuntime {
  public:
   struct Params {
     Device *device{nullptr};

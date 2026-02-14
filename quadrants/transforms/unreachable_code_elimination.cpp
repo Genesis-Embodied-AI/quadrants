@@ -151,7 +151,7 @@ class UnreachableCodeEliminator : public BasicStmtVisitor {
 
 namespace irpass {
 bool unreachable_code_elimination(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return UnreachableCodeEliminator::run(root);
 }
 }  // namespace irpass

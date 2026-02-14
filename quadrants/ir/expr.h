@@ -71,7 +71,7 @@ class Expr {
 
   template <typename T>
   std::shared_ptr<T> cast() const {
-    TI_ASSERT(expr != nullptr);
+    QD_ASSERT(expr != nullptr);
     return std::dynamic_pointer_cast<T>(expr);
   }
 

@@ -16,7 +16,7 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
-  TI_ASSERT(handle.get_launch_id() < contexts_.size());
+  QD_ASSERT(handle.get_launch_id() < contexts_.size());
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *amdgpu_module = launcher_ctx.jit_module;
@@ -105,12 +105,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
   for (auto &task : offloaded_tasks) {
-    TI_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
              task.block_dim);
     amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
                           {(void *)&context_pointer}, {arg_size});
   }
-  TI_TRACE("Launching kernel");
+  QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
     AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
   }
@@ -133,7 +133,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     const LLVM::CompiledKernelData &compiled) {
-  TI_ASSERT(compiled.arch() == Arch::amdgpu);
+  QD_ASSERT(compiled.arch() == Arch::amdgpu);
 
   if (!compiled.get_handle()) {
     auto handle = make_handle();

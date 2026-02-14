@@ -147,7 +147,7 @@ static void get_offline_cache_key_of_snode_impl(
 }
 
 std::string get_hashed_offline_cache_key_of_snode(const SNode *snode) {
-  TI_ASSERT(snode);
+  QD_ASSERT(snode);
 
   BinaryOutputSerializer serializer;
   serializer.initialize();

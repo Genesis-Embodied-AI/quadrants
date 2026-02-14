@@ -16,7 +16,7 @@
 #include "quadrants/ir/type_factory.h"
 #include "quadrants/util/short_name.h"
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/MapVector.h"
 #endif
@@ -104,7 +104,7 @@ class Identifier {
   }
 };
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 using stmt_vector = llvm::SmallVector<pStmt, 8>;
 using stmt_ref_vector = llvm::SmallVector<Stmt *, 2>;
 #else
@@ -171,7 +171,7 @@ class IRVisitor {
   // default visitor
   virtual void visit(Stmt *stmt) {
     if (!allow_undefined_visitor) {
-      TI_ERROR(
+      QD_ERROR(
           "missing visitor function. Is the statement class registered via "
           "DEFINE_VISIT?");
     }
@@ -183,7 +183,7 @@ class IRVisitor {
       if (invoke_default_visitor)  \
         visit((Stmt *)stmt);       \
     } else                         \
-      TI_NOT_IMPLEMENTED;          \
+      QD_NOT_IMPLEMENTED;          \
   }
 
   DEFINE_VISIT(Block);
@@ -227,7 +227,7 @@ class Load {
 class IRNode {
  public:
   virtual void accept(IRVisitor *visitor) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   // * For a Stmt, this returns its enclosing Block
@@ -246,13 +246,13 @@ class IRNode {
 
   template <typename T>
   T *as() {
-    TI_ASSERT(is<T>());
+    QD_ASSERT(is<T>());
     return dynamic_cast<T *>(this);
   }
 
   template <typename T>
   const T *as() const {
-    TI_ASSERT(is<T>());
+    QD_ASSERT(is<T>());
     return dynamic_cast<const T *>(this);
   }
 
@@ -269,12 +269,12 @@ class IRNode {
   std::unique_ptr<IRNode> clone();
 };
 
-#define TI_DEFINE_ACCEPT                     \
+#define QD_DEFINE_ACCEPT                     \
   void accept(IRVisitor *visitor) override { \
     visitor->visit(this);                    \
   }
 
-#define TI_DEFINE_CLONE                                             \
+#define QD_DEFINE_CLONE                                             \
   std::unique_ptr<Stmt> clone() const override {                    \
     auto new_stmt =                                                 \
         std::make_unique<std::decay<decltype(*this)>::type>(*this); \
@@ -283,9 +283,9 @@ class IRNode {
     return new_stmt;                                                \
   }
 
-#define TI_DEFINE_ACCEPT_AND_CLONE \
-  TI_DEFINE_ACCEPT                 \
-  TI_DEFINE_CLONE
+#define QD_DEFINE_ACCEPT_AND_CLONE \
+  QD_DEFINE_ACCEPT                 \
+  QD_DEFINE_CLONE
 
 class StmtField {
  public:
@@ -315,7 +315,7 @@ class StmtFieldNumeric final : public StmtField {
         return *(std::get<T *>(other->value_)) == *(std::get<T *>(value_));
       } else if (std::holds_alternative<T *>(other->value_) ||
                  std::holds_alternative<T *>(value_)) {
-        TI_ERROR(
+        QD_ERROR(
             "Inconsistent StmtField value types: a pointer value is compared "
             "to a non-pointer value.");
         return false;
@@ -381,12 +381,12 @@ class StmtFieldManager {
   bool equal(StmtFieldManager &other) const;
 };
 
-#define TI_STMT_DEF_FIELDS(...)  \
+#define QD_STMT_DEF_FIELDS(...)  \
   template <typename S>          \
   void io(S &serializer) const { \
-    TI_IO(__VA_ARGS__);          \
+    QD_IO(__VA_ARGS__);          \
   }
-#define TI_STMT_REG_FIELDS  \
+#define QD_STMT_REG_FIELDS  \
   mark_fields_registered(); \
   io(field_manager)
 
@@ -435,22 +435,22 @@ class Stmt : public IRNode {
     return fmt::format("tmp{}", id);
   }
 
-  TI_FORCE_INLINE int num_operands() const {
+  QD_FORCE_INLINE int num_operands() const {
     return (int)operands.size();
   }
 
-  TI_FORCE_INLINE Stmt *operand(int i) const {
-    // TI_ASSERT(0 <= i && i < (int)operands.size());
+  QD_FORCE_INLINE Stmt *operand(int i) const {
+    // QD_ASSERT(0 <= i && i < (int)operands.size());
     return *operands[i];
   }
 
   std::string get_last_tb() const;
 
-  TI_FORCE_INLINE std::string const &get_tb() const {
+  QD_FORCE_INLINE std::string const &get_tb() const {
     return dbg_info.tb;
   }
 
-  TI_FORCE_INLINE void set_tb(const std::string &tb) {
+  QD_FORCE_INLINE void set_tb(const std::string &tb) {
     dbg_info.tb = tb;
   }
 
@@ -501,7 +501,7 @@ class Stmt : public IRNode {
   std::string type();
 
   virtual std::unique_ptr<Stmt> clone() const {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   ~Stmt() override = default;
@@ -590,7 +590,7 @@ class Block : public IRNode {
 
   std::unique_ptr<Block> clone() const;
 
-  TI_DEFINE_ACCEPT
+  QD_DEFINE_ACCEPT
 };
 
 class DelayedIRModifier {

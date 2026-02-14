@@ -21,7 +21,7 @@ namespace quadrants {
 
 // Declare and then load
 // Load to `this`
-#define TI_LOAD_CONFIG(name, default_val) \
+#define QD_LOAD_CONFIG(name, default_val) \
   this->name = config.get(#name, default_val)
 
 class Dict {
@@ -29,7 +29,7 @@ class Dict {
   std::map<std::string, std::string> data_;
 
  public:
-  TI_IO_DEF(data_);
+  QD_IO_DEF(data_);
 
   Dict() = default;
 
@@ -73,7 +73,7 @@ class Dict {
 
   void check_string_integral(const std::string &str) const {
     if (!is_string_integral(str)) {
-      TI_ERROR(
+      QD_ERROR(
           "Getting integral value out of non-integral string '{}' is not "
           "allowed.",
           str);
@@ -176,7 +176,7 @@ class Dict {
     int64 ptr_ll;
     std::getline(ss, t, '\t');
     ss >> ptr_ll;
-    TI_ASSERT_INFO(t == typeid(T).name(),
+    QD_ASSERT_INFO(t == typeid(T).name(),
                    "Pointer type mismatch: " + t + " and " + typeid(T).name());
     return reinterpret_cast<T *>(ptr_ll);
   }
@@ -274,7 +274,7 @@ class Dict {
 
   std::string get_string(std::string key) const {
     if (data_.find(key) == data_.end()) {
-      TI_ERROR("No key named '{}' found.", key);
+      QD_ERROR("No key named '{}' found.", key);
     }
     return data_.find(key)->second;
   }
@@ -347,7 +347,7 @@ inline bool Dict::get<bool>(std::string key) const {
       {"true", true},   {"True", true},   {"t", true},  {"1", true},
       {"false", false}, {"False", false}, {"f", false}, {"0", false},
   };
-  TI_ASSERT_INFO(dict.find(s) != dict.end(),
+  QD_ASSERT_INFO(dict.find(s) != dict.end(),
                  "Unknown identifier for bool: " + s);
   return dict[s];
 }

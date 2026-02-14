@@ -235,8 +235,8 @@ class BasicBlockSimplify : public IRVisitor {
       auto snode = stmt->snode;
       // compute offset...
       for (int i = 0; i < (int)snode->ch.size(); i++) {
-        TI_ASSERT(snode->ch[i]->type == SNodeType::place);
-        TI_ASSERT(snode->ch[i]->dt->is_primitive(PrimitiveTypeID::i32) ||
+        QD_ASSERT(snode->ch[i]->type == SNodeType::place);
+        QD_ASSERT(snode->ch[i]->dt->is_primitive(PrimitiveTypeID::i32) ||
                   snode->ch[i]->dt->is_primitive(PrimitiveTypeID::f32));
       }
 
@@ -486,7 +486,7 @@ class Simplify : public IRVisitor {
   }
 
   void visit(StructForStmt *for_stmt) override {
-    TI_ASSERT_INFO(current_struct_for == nullptr,
+    QD_ASSERT_INFO(current_struct_for == nullptr,
                    "Nested struct-fors are not supported for now. "
                    "Please try to use range-fors for inner loops.");
     current_struct_for = for_stmt;
@@ -512,7 +512,7 @@ const PassID FullSimplifyPass::id = "FullSimplifyPass";
 namespace irpass {
 
 bool simplify(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   bool modified = false;
   while (true) {
     Simplify pass(root, config);
@@ -529,7 +529,7 @@ void full_simplify(IRNode *root,
                    const FullSimplifyPass::Args &args) {
   auto print = make_pass_printer(args.verbose, config.print_ir_dbg_info,
                                  args.kernel_name + ".simplify", root);
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   // Track which call to full_simplify this is, for debugging purposes.
   static int call_counter = 0;

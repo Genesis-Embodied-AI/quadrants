@@ -27,12 +27,12 @@ bool KernelProfileStatisticalResult::operator<(
 
 void KernelProfilerBase::profiler_start(KernelProfilerBase *profiler,
                                         const char *kernel_name) {
-  TI_ASSERT(profiler);
+  QD_ASSERT(profiler);
   profiler->start(std::string(kernel_name));
 }
 
 void KernelProfilerBase::profiler_stop(KernelProfilerBase *profiler) {
-  TI_ASSERT(profiler);
+  QD_ASSERT(profiler);
   profiler->stop();
 }
 
@@ -56,7 +56,7 @@ void KernelProfilerBase::query(const std::string &kernel_name,
         max += rec.max;
         avg += rec.total / rec.counter;
       } else {
-        TI_WARN("{}.counter({}) != {}.counter({}).", kernel_name, counter,
+        QD_WARN("{}.counter({}) != {}.counter({}).", kernel_name, counter,
                 rec.name, rec.counter);
       }
     }
@@ -141,16 +141,16 @@ std::unique_ptr<KernelProfilerBase> make_profiler(Arch arch, bool enable) {
   if (!enable)
     return nullptr;
   if (arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     return std::make_unique<KernelProfilerCUDA>(enable);
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else if (arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     return std::make_unique<KernelProfilerAMDGPU>();
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
     return std::make_unique<DefaultProfiler>();

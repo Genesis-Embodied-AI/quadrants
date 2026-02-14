@@ -1,7 +1,7 @@
 #include <quadrants/program/launch_context_builder.h>
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include <quadrants/program/context.h>
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 #include "fp16.h"
 
 namespace quadrants::lang {
@@ -32,10 +32,10 @@ LaunchContextBuilder::LaunchContextBuilder(CallableBase *kernel)
 }
 
 void LaunchContextBuilder::copy(const LaunchContextBuilder &other) {
-  TI_ASSERT(kernel_ == other.kernel_);
-  TI_ASSERT(array_runtime_sizes.empty());
-  TI_ASSERT(device_allocation_type.empty());
-  TI_ASSERT(array_ptrs.empty());
+  QD_ASSERT(kernel_ == other.kernel_);
+  QD_ASSERT(array_runtime_sizes.empty());
+  QD_ASSERT(device_allocation_type.empty());
+  QD_ASSERT(array_ptrs.empty());
   std::memcpy(arg_buffer_.get(), other.arg_buffer_.get(), kernel_->args_size);
   array_runtime_sizes = other.array_runtime_sizes;
   device_allocation_type = other.device_allocation_type;
@@ -44,7 +44,7 @@ void LaunchContextBuilder::copy(const LaunchContextBuilder &other) {
 
 void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
   auto dt = kernel_->args_type->get_element_type(std::array{arg_id});
-  TI_ASSERT_INFO(dt->is<PrimitiveType>(),
+  QD_ASSERT_INFO(dt->is<PrimitiveType>(),
                  "Assigning scalar value to external (numpy) array argument is "
                  "not allowed.");
 
@@ -63,14 +63,14 @@ void LaunchContextBuilder::set_arg_float(int arg_id, float64 d) {
       break;
     }
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
 void LaunchContextBuilder::set_args_float(const std::vector<int> &args_id,
                                           const std::vector<float64> &vec) {
   const size_t num_arrs = args_id.size();
-  TI_ASSERT(num_arrs == vec.size());
+  QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
     set_arg_float(args_id[i], vec[i]);
   }
@@ -81,7 +81,7 @@ void LaunchContextBuilder::set_struct_arg(const std::array<int, N> &arg_indices,
                                           T d) {
   auto dt = kernel_->args_type->get_element_type(arg_indices);
 
-  TI_ASSERT(dt->template is<PrimitiveType>() || dt->template is<PointerType>());
+  QD_ASSERT(dt->template is<PrimitiveType>() || dt->template is<PointerType>());
   if (dt->template is<PointerType>()) {
     set_struct_arg_impl(arg_indices, (uint64)d);
     return;
@@ -101,7 +101,7 @@ void LaunchContextBuilder::set_struct_arg(const std::array<int, N> &arg_indices,
       break;
     }
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -129,7 +129,7 @@ void LaunchContextBuilder::set_struct_arg(const std::vector<int> &arg_indices,
     CASE(7)
 #undef CASE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -172,7 +172,7 @@ template void LaunchContextBuilder::set_struct_arg(const std::vector<int> &,
 void LaunchContextBuilder::set_arg_int(int arg_id, int64 d) {
   auto dt = kernel_->args_type->get_element_type(std::array{arg_id});
 
-  TI_ASSERT_INFO(dt->is<PrimitiveType>(),
+  QD_ASSERT_INFO(dt->is<PrimitiveType>(),
                  "Assigning scalar value to external (numpy) array argument is "
                  "not allowed.");
 
@@ -195,15 +195,15 @@ void LaunchContextBuilder::set_arg_int(int arg_id, int64 d) {
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
     set_arg(arg_id, (uint64)d);
   } else {
-    TI_INFO(dt->to_string());
-    TI_NOT_IMPLEMENTED
+    QD_INFO(dt->to_string());
+    QD_NOT_IMPLEMENTED
   }
 }
 
 void LaunchContextBuilder::set_args_int(const std::vector<int> &args_id,
                                         const std::vector<int64> &vec) {
   const size_t num_arrs = args_id.size();
-  TI_ASSERT(num_arrs == vec.size());
+  QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
     set_arg_int(args_id[i], vec[i]);
   }
@@ -216,7 +216,7 @@ void LaunchContextBuilder::set_arg_uint(int arg_id, uint64 d) {
 void LaunchContextBuilder::set_args_uint(const std::vector<int> &args_id,
                                          const std::vector<uint64> &vec) {
   const size_t num_arrs = args_id.size();
-  TI_ASSERT(num_arrs == vec.size());
+  QD_ASSERT(num_arrs == vec.size());
   for (int i = 0; i < num_arrs; i++) {
     set_arg_uint(args_id[i], vec[i]);
   }
@@ -238,7 +238,7 @@ void LaunchContextBuilder::set_struct_arg_impl(
     const std::array<int, N> &arg_indices,
     T v) {
   int offset = args_type->get_element_offset(arg_indices);
-  TI_ASSERT(offset + sizeof(T) <= arg_buffer_size);
+  QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
   *(T *)(ctx_->arg_buffer + offset) = v;
 }
 
@@ -250,7 +250,7 @@ T LaunchContextBuilder::get_arg(const std::vector<int> &i) {
 template <typename T>
 T LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices) {
   int offset = args_type->get_element_offset(arg_indices);
-  TI_ASSERT(offset + sizeof(T) <= arg_buffer_size);
+  QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
   return *(T *)(ctx_->arg_buffer + offset);
 }
 
@@ -297,11 +297,11 @@ void LaunchContextBuilder::set_arg_external_array_with_shape(
     uint64 size,
     const std::vector<int64> &shape,
     uintptr_t grad_ptr) {
-  TI_ASSERT_INFO(
+  QD_ASSERT_INFO(
       kernel_->nested_parameters[arg_id].is_array,
       "Assigning external (numpy) array to scalar argument is not allowed.");
 
-  TI_ASSERT_INFO(shape.size() <= quadrants_max_num_indices,
+  QD_ASSERT_INFO(shape.size() <= quadrants_max_num_indices,
                  "External array cannot have > {max_num_indices} indices");
   array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}] = (void *)ptr;
   if (grad_ptr != 0) {
@@ -317,7 +317,7 @@ void LaunchContextBuilder::set_arg_external_array_with_shape(
 
 void LaunchContextBuilder::set_arg_ndarray(int arg_id, const Ndarray &arr) {
   intptr_t ptr = arr.get_device_allocation_ptr_as_int();
-  TI_ASSERT_INFO(arr.shape.size() <= quadrants_max_num_indices,
+  QD_ASSERT_INFO(arr.shape.size() <= quadrants_max_num_indices,
                  "External array cannot have > {max_num_indices} indices");
   set_arg_ndarray_impl(arg_id, ptr, arr.shape);
 }
@@ -331,7 +331,7 @@ void LaunchContextBuilder::set_args_ndarray(
   array_runtime_sizes.reserve(array_runtime_sizes.size() + num_arrs);
   device_allocation_type.reserve(device_allocation_type.size() + num_arrs);
 
-  TI_ASSERT(num_arrs == args_id.size());
+  QD_ASSERT(num_arrs == args_id.size());
   for (int i = 0; i < num_arrs; i++) {
     const int arg_id = args_id[i];
     const Ndarray &arr = *arrs[i];
@@ -354,7 +354,7 @@ void LaunchContextBuilder::set_arg_ndarray_with_grad(int arg_id,
                                                      const Ndarray &arr_grad) {
   intptr_t ptr = arr.get_device_allocation_ptr_as_int();
   intptr_t ptr_grad = arr_grad.get_device_allocation_ptr_as_int();
-  TI_ASSERT_INFO(arr.shape.size() <= quadrants_max_num_indices,
+  QD_ASSERT_INFO(arr.shape.size() <= quadrants_max_num_indices,
                  "External array cannot have > {max_num_indices} indices");
   set_arg_ndarray_impl(arg_id, ptr, arr.shape, ptr_grad);
 }
@@ -364,8 +364,8 @@ void LaunchContextBuilder::set_args_ndarray_with_grad(
     const std::vector<Ndarray *> &arrs,
     const std::vector<Ndarray *> &arrs_grad) {
   const size_t num_arrs = args_id.size();
-  TI_ASSERT(num_arrs == arrs.size());
-  TI_ASSERT(num_arrs == arrs_grad.size());
+  QD_ASSERT(num_arrs == arrs.size());
+  QD_ASSERT(num_arrs == arrs_grad.size());
   for (int i = 0; i < num_arrs; i++) {
     set_arg_ndarray_with_grad(args_id[i], *arrs[i], *arrs_grad[i]);
   }
@@ -384,7 +384,7 @@ void LaunchContextBuilder::set_arg_ndarray_impl(int arg_id,
   }
   // Set device allocation type and runtime size
   set_array_device_allocation_type(arg_id, DevAllocType::kNdarray);
-  TI_ASSERT(shape.size() <= quadrants_max_num_indices);
+  QD_ASSERT(shape.size() <= quadrants_max_num_indices);
   size_t total_size = 1;
   for (int i = 0; i < shape.size(); i++) {
     set_struct_arg(std::array{arg_id, 0, i}, (int32)shape[i]);
@@ -421,7 +421,7 @@ void LaunchContextBuilder::set_arg_matrix(int arg_id, const Matrix &matrix) {
                 reinterpret_cast<uint64_t *>(matrix.data())[i]));
         break;
       default:
-        TI_ERROR("Unsupported type size {}", type_size);
+        QD_ERROR("Unsupported type size {}", type_size);
     }
   }
 }
@@ -447,7 +447,7 @@ uint64 LaunchContextBuilder::get_struct_ret_uint(
 }
 
 TypedConstant LaunchContextBuilder::fetch_ret_impl(int offset, const Type *dt) {
-  TI_ASSERT(dt->is<PrimitiveType>());
+  QD_ASSERT(dt->is<PrimitiveType>());
   auto primitive_type = dt->as<PrimitiveType>();
   char *ptr = result_buffer_.get() + offset;
   switch (primitive_type->type) {
@@ -462,7 +462,7 @@ TypedConstant LaunchContextBuilder::fetch_ret_impl(int offset, const Type *dt) {
       return TypedConstant(fp16_ieee_to_fp32_value(half));
     }
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 

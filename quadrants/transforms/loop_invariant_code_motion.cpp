@@ -83,7 +83,7 @@ class LoopInvariantCodeMotion : public LoopInvariantDetector {
 
 namespace irpass {
 bool loop_invariant_code_motion(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return LoopInvariantCodeMotion::run(root, config);
 }
 }  // namespace irpass

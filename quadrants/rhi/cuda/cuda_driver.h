@@ -61,8 +61,8 @@ class CUDADriverFunction {
   }
 
   uint32 call(Args... args) {
-    TI_ASSERT(function_ != nullptr);
-    TI_ASSERT(driver_lock_ != nullptr);
+    QD_ASSERT(function_ != nullptr);
+    QD_ASSERT(driver_lock_ != nullptr);
     std::lock_guard<std::mutex> _(*driver_lock_);
     return (uint32)function_(args...);
   }
@@ -83,14 +83,14 @@ class CUDADriverFunction {
 
   uint32 call_with_warning(Args... args) {
     auto err = call(args...);
-    TI_WARN_IF(err, "{}", get_error_message(err));
+    QD_WARN_IF(err, "{}", get_error_message(err));
     return err;
   }
 
   // Note: CUDA driver API passes everything as value
   void operator()(Args... args) {
     auto err = call(args...);
-    TI_ERROR_IF(err, get_error_message(err));
+    QD_ERROR_IF(err, get_error_message(err));
   }
 
  private:

@@ -16,16 +16,16 @@ std::string get_cuda_error_message(uint32 err) {
 }
 
 CUDADriverBase::CUDADriverBase() {
-  disabled_by_env_ = (get_environ_config("TI_ENABLE_CUDA", 1) == 0);
+  disabled_by_env_ = (get_environ_config("QD_ENABLE_CUDA", 1) == 0);
   if (disabled_by_env_) {
-    TI_TRACE("CUDA driver disabled by enviroment variable \"TI_ENABLE_CUDA\".");
+    QD_TRACE("CUDA driver disabled by enviroment variable \"QD_ENABLE_CUDA\".");
   }
 }
 
 bool CUDADriverBase::load_lib(std::string lib_linux, std::string lib_windows) {
-#if defined(TI_PLATFORM_LINUX)
+#if defined(QD_PLATFORM_LINUX)
   auto lib_name = lib_linux;
-#elif defined(TI_PLATFORM_WINDOWS)
+#elif defined(QD_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
   static_assert(false,
@@ -34,19 +34,19 @@ bool CUDADriverBase::load_lib(std::string lib_linux, std::string lib_windows) {
 
   loader_ = std::make_unique<DynamicLoader>(lib_name);
   if (!loader_->loaded()) {
-    TI_WARN("{} lib not found.", lib_name);
+    QD_WARN("{} lib not found.", lib_name);
     return false;
   } else {
-    TI_TRACE("{} loaded!", lib_name);
+    QD_TRACE("{} loaded!", lib_name);
     return true;
   }
 }
 
 bool CUDADriverBase::check_lib_loaded(std::string lib_linux,
                                       std::string lib_windows) {
-#if defined(TI_PLATFORM_LINUX)
+#if defined(QD_PLATFORM_LINUX)
   auto lib_name = lib_linux;
-#elif defined(TI_PLATFORM_WINDOWS)
+#elif defined(QD_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
   static_assert(false,
@@ -128,12 +128,12 @@ CUDADriver::CUDADriver() {
 
   int version;
   driver_get_version(&version);
-  TI_TRACE("CUDA driver API (v{}.{}) loaded.", version / 1000,
+  QD_TRACE("CUDA driver API (v{}.{}) loaded.", version / 1000,
            version % 1000 / 10);
 
   // CUDA versions should >= 10.
   if (version < 10000) {
-    TI_WARN(
+    QD_WARN(
         "The Quadrants CUDA backend requires at least CUDA 10.0, got v{}.{}.",
         version / 1000, version % 1000 / 10);
     return;

@@ -195,9 +195,9 @@ def get_cmake_args():
 
     major, minor, patch = get_version()
     cmake_args += [
-        f"-DTI_VERSION_MAJOR={major}",
-        f"-DTI_VERSION_MINOR={minor}",
-        f"-DTI_VERSION_PATCH={patch}",
+        f"-DQD_VERSION_MAJOR={major}",
+        f"-DQD_VERSION_MINOR={minor}",
+        f"-DQD_VERSION_PATCH={patch}",
     ]
 
     if sys.platform == "darwin" and use_xcode:

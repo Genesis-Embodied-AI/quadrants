@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/IR/Module.h"
 #include "quadrants/common/core.h"
 #include "quadrants/common/serialization.h"
@@ -50,7 +50,7 @@ struct LlvmOfflineCache {
     KernelCacheData clone() const;
     LLVM::CompiledKernelData::InternalData convert_to_llvm_ckd_data() const;
 
-    TI_IO_DEF(kernel_key,
+    QD_IO_DEF(kernel_key,
               args,
               compiled_data,
               size,
@@ -70,7 +70,7 @@ struct LlvmOfflineCache {
       size_t cell_size_bytes{0};
       size_t chunk_size{0};
 
-      TI_IO_DEF(id, type, cell_size_bytes, chunk_size);
+      QD_IO_DEF(id, type, cell_size_bytes, chunk_size);
     };
 
     int tree_id{0};
@@ -78,7 +78,7 @@ struct LlvmOfflineCache {
     size_t root_size{0};
     std::vector<SNodeCacheData> snode_metas;
 
-    TI_IO_DEF(tree_id, root_id, root_size, snode_metas);
+    QD_IO_DEF(tree_id, root_id, root_size, snode_metas);
 
     // TODO(zhanlue): refactor llvm::Modules
     //
@@ -122,8 +122,8 @@ struct LlvmOfflineCache {
       kernels;  // key = kernel_name
 
   // NOTE: The "version" must be the first field to be serialized
-  TI_IO_DEF(version, size, fields, kernels);
+  QD_IO_DEF(version, size, fields, kernels);
 };
 
 }  // namespace quadrants::lang
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM

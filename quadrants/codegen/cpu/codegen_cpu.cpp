@@ -35,7 +35,7 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
                  const Kernel *kernel,
                  IRNode *ir)
       : TaskCodeGenLLVM(id, config, tlctx, kernel, ir, nullptr) {
-    TI_AUTO_PROF
+    QD_AUTO_PROF
   }
 
   void create_offload_range_for(OffloadedStmt *stmt) override {
@@ -165,7 +165,7 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
   }
 
   void visit(OffloadedStmt *stmt) override {
-    TI_ASSERT(current_offload == nullptr);
+    QD_ASSERT(current_offload == nullptr);
     current_offload = stmt;
     if (stmt->bls_size > 0)
       create_bls_buffer(stmt);
@@ -190,7 +190,7 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
     } else if (stmt->task_type == Type::gc) {
       emit_gc(stmt);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
     if (compile_config.kernel_profiler && arch_is_cpu(compile_config.arch)) {
       llvm::IRBuilderBase::InsertPointGuard guard(*builder);
@@ -209,7 +209,7 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
     } else if (stmt->type == ExternalFuncCallStmt::SHARED_OBJECT) {
       TaskCodeGenLLVM::visit_call_shared_object(stmt);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -224,14 +224,14 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
 static llvm::Triple get_host_target_triple() {
   auto expected_jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
   if (!expected_jtmb) {
-    TI_ERROR("LLVM TargetMachineBuilder has failed.");
+    QD_ERROR("LLVM TargetMachineBuilder has failed.");
   }
   return expected_jtmb->getTargetTriple();
 }
 
 }  // namespace
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 LLVMCompiledTask KernelCodeGenCPU::compile_task(
     int task_codegen_id,
     const CompileConfig &config,
@@ -243,14 +243,14 @@ LLVMCompiledTask KernelCodeGenCPU::compile_task(
 }
 
 void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
-  TI_AUTO_PROF
+  QD_AUTO_PROF
   const auto &compile_config = get_compile_config();
   auto triple = get_host_target_triple();
 
   std::string err_str;
   const llvm::Target *target =
       llvm::TargetRegistry::lookupTarget(triple.str(), err_str);
-  TI_ERROR_UNLESS(target, err_str);
+  QD_ERROR_UNLESS(target, err_str);
 
   llvm::TargetOptions options;
   if (compile_config.fast_math) {
@@ -274,7 +274,7 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
                                   llvm::Reloc::PIC_, llvm::CodeModel::Small,
                                   llvm::CodeGenOptLevel::Aggressive));
 
-  TI_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
+  QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
 
   module->setDataLayout(target_machine->createDataLayout());
 
@@ -303,7 +303,7 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
   legacy_pm.add(llvm::createEarlyCSEPass(true));
 
   {
-    TI_PROFILER("llvm_module_pass");
+    QD_PROFILER("llvm_module_pass");
     legacy_pm.run(*module);
   }
 
@@ -327,7 +327,7 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
 
   if (compile_config.print_kernel_llvm_ir_optimized) {
     if (false) {
-      TI_INFO("Functions with > 100 instructions in optimized LLVM IR:");
+      QD_INFO("Functions with > 100 instructions in optimized LLVM IR:");
       QuadrantsLLVMContext::print_huge_functions(module);
     }
     static FileSequenceWriter writer(
@@ -337,5 +337,5 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
   }
 }
 
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM
 }  // namespace quadrants::lang

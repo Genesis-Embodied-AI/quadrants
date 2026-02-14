@@ -30,7 +30,7 @@ class GatherMeshThreadLocal : public BasicStmtVisitor {
                   MeshElementTypeSet *owned_ptr,
                   MeshElementTypeSet *total_ptr,
                   const CompileConfig &config) {
-    TI_ASSERT(offload->task_type == OffloadedStmt::TaskType::mesh_for);
+    QD_ASSERT(offload->task_type == OffloadedStmt::TaskType::mesh_for);
     GatherMeshThreadLocal analyser(offload, owned_ptr, total_ptr,
                                    config.optimize_mesh_reordered_mapping);
     offload->accept(&analyser);

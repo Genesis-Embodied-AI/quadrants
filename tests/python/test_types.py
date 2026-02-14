@@ -5,8 +5,8 @@ from quadrants.lang import impl
 
 from tests import test_utils
 
-_TI_TYPES = [ti.i8, ti.i16, ti.i32, ti.u8, ti.u16, ti.u32, ti.f32]
-_TI_64_TYPES = [ti.i64, ti.u64, ti.f64]
+_QD_TYPES = [ti.i8, ti.i16, ti.i32, ti.u8, ti.u16, ti.u32, ti.f32]
+_QD_64_TYPES = [ti.i64, ti.u64, ti.f64]
 
 
 def _test_type_assign_argument(dt):
@@ -20,13 +20,13 @@ def _test_type_assign_argument(dt):
     assert x[None] == 3
 
 
-@pytest.mark.parametrize("dt", _TI_TYPES)
+@pytest.mark.parametrize("dt", _QD_TYPES)
 @test_utils.test(exclude=[ti.vulkan])
 def test_type_assign_argument(dt):
     _test_type_assign_argument(dt)
 
 
-@pytest.mark.parametrize("dt", _TI_64_TYPES)
+@pytest.mark.parametrize("dt", _QD_64_TYPES)
 @test_utils.test(exclude=[ti.vulkan], require=ti.extension.data64)
 def test_type_assign_argument64(dt):
     _test_type_assign_argument(dt)
@@ -52,13 +52,13 @@ def _test_type_operator(dt):
             assert mul[None] == x[None] * y[None]
 
 
-@pytest.mark.parametrize("dt", _TI_TYPES)
+@pytest.mark.parametrize("dt", _QD_TYPES)
 @test_utils.test(exclude=[ti.vulkan])
 def test_type_operator(dt):
     _test_type_operator(dt)
 
 
-@pytest.mark.parametrize("dt", _TI_64_TYPES)
+@pytest.mark.parametrize("dt", _QD_64_TYPES)
 @test_utils.test(exclude=[ti.vulkan], require=ti.extension.data64)
 def test_type_operator64(dt):
     _test_type_operator(dt)
@@ -77,13 +77,13 @@ def _test_type_field(dt):
             assert x[i, j] == 3
 
 
-@pytest.mark.parametrize("dt", _TI_TYPES)
+@pytest.mark.parametrize("dt", _QD_TYPES)
 @test_utils.test(exclude=[ti.vulkan])
 def test_type_field(dt):
     _test_type_field(dt)
 
 
-@pytest.mark.parametrize("dt", _TI_64_TYPES)
+@pytest.mark.parametrize("dt", _QD_64_TYPES)
 @test_utils.test(exclude=[ti.vulkan], require=ti.extension.data64)
 def test_type_field64(dt):
     _test_type_field(dt)

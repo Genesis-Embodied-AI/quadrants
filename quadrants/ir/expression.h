@@ -50,7 +50,7 @@ class Expression {
   virtual void accept(ExpressionVisitor *visitor) = 0;
 
   virtual void flatten(FlattenContext *ctx) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   };
 
   virtual bool is_lvalue() const {
@@ -157,7 +157,7 @@ class ExpressionVisitor {
 
   virtual void visit(Expression *expr) {
     if (!allow_undefined_visitor_) {
-      TI_ERROR("missing visitor function");
+      QD_ERROR("missing visitor function");
     }
   }
 
@@ -167,7 +167,7 @@ class ExpressionVisitor {
       if (invoke_default_visitor_)  \
         visit((Expression *)expr);  \
     } else                          \
-      TI_NOT_IMPLEMENTED;           \
+      QD_NOT_IMPLEMENTED;           \
   }
 
 #define PER_EXPRESSION(x) DEFINE_VISIT(x)
@@ -179,7 +179,7 @@ class ExpressionVisitor {
   bool invoke_default_visitor_{false};
 };
 
-#define TI_DEFINE_ACCEPT_FOR_EXPRESSION              \
+#define QD_DEFINE_ACCEPT_FOR_EXPRESSION              \
   void accept(ExpressionVisitor *visitor) override { \
     visitor->visit(this);                            \
   }

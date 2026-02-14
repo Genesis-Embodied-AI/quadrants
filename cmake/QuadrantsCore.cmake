@@ -1,10 +1,10 @@
 option(USE_STDCPP "Use -stdlib=libc++" OFF)
-option(TI_WITH_LLVM "Build with LLVM backends" ON)              # wheel-tag: llvm
-option(TI_WITH_METAL "Build with the Metal backend" ON)         # wheel-tag: mtl
-option(TI_WITH_CUDA "Build with the CUDA backend" ON)           # wheel-tag: cu
-option(TI_WITH_CUDA_TOOLKIT "Build with the CUDA toolkit" OFF)  # wheel-tag: cutk
-option(TI_WITH_AMDGPU "Build with the AMDGPU backend" OFF)      # wheel-tag: amd
-option(TI_WITH_VULKAN "Build with the Vulkan backend" OFF)      # wheel-tag: vk
+option(QD_WITH_LLVM "Build with LLVM backends" ON)              # wheel-tag: llvm
+option(QD_WITH_METAL "Build with the Metal backend" ON)         # wheel-tag: mtl
+option(QD_WITH_CUDA "Build with the CUDA backend" ON)           # wheel-tag: cu
+option(QD_WITH_CUDA_TOOLKIT "Build with the CUDA toolkit" OFF)  # wheel-tag: cutk
+option(QD_WITH_AMDGPU "Build with the AMDGPU backend" OFF)      # wheel-tag: amd
+option(QD_WITH_VULKAN "Build with the Vulkan backend" OFF)      # wheel-tag: vk
 
 # Force symbols to be 'hidden' by default so nothing is exported from the Quadrants
 # library including the third-party dependencies.
@@ -18,7 +18,7 @@ set(CMAKE_POLICY_DEFAULT_CMP0063 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib)
 
-if (TI_WITH_AMDGPU AND TI_WITH_CUDA)
+if (QD_WITH_AMDGPU AND QD_WITH_CUDA)
     message(WARNING "Compiling CUDA and AMDGPU backends simultaneously")
 endif()
 
@@ -29,35 +29,35 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if (APPLE)
-    if (TI_WITH_CUDA)
-        set(TI_WITH_CUDA OFF)
-        message(WARNING "CUDA backend not supported on OS X. Setting TI_WITH_CUDA to OFF.")
+    if (QD_WITH_CUDA)
+        set(QD_WITH_CUDA OFF)
+        message(WARNING "CUDA backend not supported on OS X. Setting QD_WITH_CUDA to OFF.")
     endif()
-    if (TI_WITH_AMDGPU)
-        set(TI_WITH_AMDGPU OFF)
-        message(WARNING "AMDGPU backend not supported on OS X. Setting TI_WITH_AMDGPU to OFF.")
+    if (QD_WITH_AMDGPU)
+        set(QD_WITH_AMDGPU OFF)
+        message(WARNING "AMDGPU backend not supported on OS X. Setting QD_WITH_AMDGPU to OFF.")
     endif()
 else()
-    if (TI_WITH_METAL)
-        set(TI_WITH_METAL OFF)
-        message(WARNING "Metal backend only supported on OS X. Setting TI_WITH_METAL to OFF.")
+    if (QD_WITH_METAL)
+        set(QD_WITH_METAL OFF)
+        message(WARNING "Metal backend only supported on OS X. Setting QD_WITH_METAL to OFF.")
     endif()
 endif()
 
 if (WIN32)
-    if (TI_WITH_AMDGPU)
-        set(TI_WITH_AMDGPU OFF)
-        message(WARNING "AMDGPU backend not supported on Windows. Setting TI_WITH_AMDGPU to OFF.")
+    if (QD_WITH_AMDGPU)
+        set(QD_WITH_AMDGPU OFF)
+        message(WARNING "AMDGPU backend not supported on Windows. Setting QD_WITH_AMDGPU to OFF.")
     endif()
 endif()
 
-if(TI_WITH_VULKAN)
-    set(TI_WITH_GGUI ON)
+if(QD_WITH_VULKAN)
+    set(QD_WITH_GGUI ON)
 endif()
 
-if(NOT TI_WITH_LLVM)
-    set(TI_WITH_CUDA OFF)
-    set(TI_WITH_CUDA_TOOLKIT OFF)
+if(NOT QD_WITH_LLVM)
+    set(QD_WITH_CUDA OFF)
+    set(QD_WITH_CUDA_TOOLKIT OFF)
 endif()
 
 file(GLOB QUADRANTS_CORE_SOURCE
@@ -75,28 +75,28 @@ file(GLOB QUADRANTS_CORE_SOURCE
     "quadrants/runtime/*.h" "quadrants/runtime/*.cpp"
 )
 
-if(TI_WITH_LLVM)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_LLVM")
+if(QD_WITH_LLVM)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_LLVM")
 endif()
 
-if (TI_WITH_CUDA)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_CUDA")
+if (QD_WITH_CUDA)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_CUDA")
   file(GLOB QUADRANTS_CUDA_RUNTIME_SOURCE "quadrants/runtime/cuda/runtime.cpp")
   list(APPEND QUADRANTS_CORE_SOURCE ${QUADRANTS_CUDA_RUNTIME_SOURCE})
 endif()
 
-if (TI_WITH_AMDGPU)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_AMDGPU")
+if (QD_WITH_AMDGPU)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_AMDGPU")
   file(GLOB QUADRANTS_AMDGPU_RUNTIME_SOURCE "quadrants/runtime/amdgpu/runtime.cpp")
   list(APPEND TAIHI_CORE_SOURCE ${QUADRANTS_AMDGPU_RUNTIME_SOURCE})
 endif()
 
-if (TI_WITH_METAL)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_METAL")
+if (QD_WITH_METAL)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_METAL")
 endif()
 
-if (TI_WITH_VULKAN)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_VULKAN")
+if (QD_WITH_VULKAN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_VULKAN")
 endif ()
 
 add_subdirectory(quadrants/rhi)
@@ -113,7 +113,7 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 
 target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC ti_device_api)
 
-if(TI_WITH_LLVM)
+if(QD_WITH_LLVM)
     if(DEFINED ENV{LLVM_DIR})
         set(LLVM_DIR $ENV{LLVM_DIR})
         message("Getting LLVM_DIR=${LLVM_DIR} from the environment variable")
@@ -163,7 +163,7 @@ if(TI_WITH_LLVM)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE cpu_codegen)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE cpu_runtime)
 
-    if (TI_WITH_CUDA)
+    if (QD_WITH_CUDA)
         llvm_map_components_to_libnames(llvm_ptx_libs NVPTX)
         add_subdirectory(quadrants/codegen/cuda)
         add_subdirectory(quadrants/runtime/cuda)
@@ -172,7 +172,7 @@ if(TI_WITH_LLVM)
         target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE cuda_runtime)
     endif()
 
-    if (TI_WITH_AMDGPU)
+    if (QD_WITH_AMDGPU)
         llvm_map_components_to_libnames(llvm_amdgpu_libs AMDGPU)
         add_subdirectory(quadrants/codegen/amdgpu)
         add_subdirectory(quadrants/runtime/amdgpu)
@@ -197,17 +197,17 @@ if(TI_WITH_LLVM)
     endif()
 endif()
 
-if (TI_WITH_METAL OR TI_WITH_VULKAN)
+if (QD_WITH_METAL OR QD_WITH_VULKAN)
     add_subdirectory(quadrants/runtime/program_impls/gfx)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE gfx_program_impl)
 endif()
 
-if (TI_WITH_METAL)
+if (QD_WITH_METAL)
     add_subdirectory(quadrants/runtime/program_impls/metal)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE metal_program_impl)
 endif()
 
-if (TI_WITH_VULKAN)
+if (QD_WITH_VULKAN)
     add_subdirectory(quadrants/runtime/program_impls/vulkan)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE vulkan_program_impl)
 endif ()
@@ -220,10 +220,10 @@ target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE compilation_manager)
 target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC quadrants_util)
 target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC quadrants_common)
 
-if (TI_WITH_CUDA AND TI_WITH_CUDA_TOOLKIT)
+if (QD_WITH_CUDA AND QD_WITH_CUDA_TOOLKIT)
     find_package(CUDAToolkit REQUIRED)
     message(STATUS "Found CUDAToolkit ${CUDAToolkit_VERSION}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_CUDA_TOOLKIT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_CUDA_TOOLKIT")
     target_include_directories(${CORE_LIBRARY_NAME} PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
     target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC CUDA::cupti)
 endif()
@@ -236,12 +236,12 @@ add_subdirectory(external/SPIRV-Tools)
 add_subdirectory(quadrants/codegen/spirv)
 add_subdirectory(quadrants/runtime/gfx)
 
-if (TI_WITH_VULKAN OR TI_WITH_METAL)
+if (QD_WITH_VULKAN OR QD_WITH_METAL)
   target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE spirv_codegen)
   target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE gfx_runtime)
 endif()
 
-if (TI_WITH_METAL)
+if (QD_WITH_METAL)
   set(SPIRV_CROSS_CLI false)
   add_subdirectory(${PROJECT_SOURCE_DIR}/external/SPIRV-Cross ${PROJECT_BINARY_DIR}/external/SPIRV-Cross)
 endif()
@@ -265,7 +265,7 @@ if (LINUX)
     target_link_libraries(${CORE_LIBRARY_NAME} PRIVATE pthread)
     if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
         # Avoid glibc dependencies
-        if (TI_WITH_VULKAN)
+        if (QD_WITH_VULKAN)
             target_link_options(${CORE_LIBRARY_NAME} PRIVATE -Wl,--wrap=log2f)
         else()
             # Enforce compatibility with manylinux2014
@@ -285,7 +285,7 @@ foreach (source IN LISTS QUADRANTS_CORE_SOURCE)
     source_group("${source_path_msvc}" FILES "${source}")
 endforeach ()
 
-if(TI_WITH_PYTHON)
+if(QD_WITH_PYTHON)
     message("PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
     set(CORE_WITH_PYBIND_LIBRARY_NAME quadrants_python)
     # NO_EXTRAS is required here to avoid llvm symbol error during build
@@ -302,7 +302,7 @@ if(TI_WITH_PYTHON)
         target_link_libraries(${CORE_WITH_PYBIND_LIBRARY_NAME} PUBLIC stdc++fs)
     endif()
 
-    if (TI_WITH_BACKTRACE)
+    if (QD_WITH_BACKTRACE)
         # Defined by external/backward-cpp:
         # This will add libraries, definitions and include directories needed by backward
         # by setting each property on the target.
@@ -349,7 +349,7 @@ if (NOT APPLE)
             DESTINATION ${INSTALL_LIB_DIR}/runtime)
 endif()
 
-if (TI_WITH_AMDGPU)
+if (QD_WITH_AMDGPU)
     # Install ROCm 7.0 libdevice files
     file(GLOB AMDGPU_BC_FILES_ROCM70 ${CMAKE_SOURCE_DIR}/external/amdgpu_libdevice_rocm70/*.bc)
     install(FILES ${AMDGPU_BC_FILES_ROCM70}

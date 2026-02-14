@@ -67,7 +67,7 @@ bool is_same_type(llvm::Type *a, llvm::Type *b) {
     len_same++;
   }
   if (len_same == a_name.size()) {
-    TI_ASSERT(len_same != b_name.size());
+    QD_ASSERT(len_same != b_name.size());
     if (b_name[len_same] == '.') {
       // a is xxx, and b is xxx.yyy, yyy is a number
       for (int i = len_same + 1; i < b_name.size(); i++) {
@@ -108,9 +108,9 @@ void check_func_call_signature(llvm::FunctionType *func_type,
                                llvm::IRBuilder<> *builder) {
   int num_params = func_type->getFunctionNumParams();
   if (func_type->isFunctionVarArg()) {
-    TI_ASSERT(num_params <= arglist.size());
+    QD_ASSERT(num_params <= arglist.size());
   } else {
-    TI_ERROR_IF(num_params != arglist.size(),
+    QD_ERROR_IF(num_params != arglist.size(),
                 "Function \"{}\" requires {} arguments but {} provided",
                 std::string(func_name), num_params, arglist.size());
   }
@@ -131,16 +131,16 @@ void check_func_call_signature(llvm::FunctionType *func_type,
         arglist[i] = builder->CreatePointerCast(arglist[i], required);
         continue;
       }
-      TI_INFO("Function : {}", std::string(func_name));
-      TI_INFO("    Type : {}", type_name(func_type));
+      QD_INFO("Function : {}", std::string(func_name));
+      QD_INFO("    Type : {}", type_name(func_type));
       if (&required->getContext() != &provided->getContext()) {
-        TI_INFO("  parameter {} types are from different contexts", i);
-        TI_INFO("    required from context {}",
+        QD_INFO("  parameter {} types are from different contexts", i);
+        QD_INFO("    required from context {}",
                 (void *)&required->getContext());
-        TI_INFO("    provided from context {}",
+        QD_INFO("    provided from context {}",
                 (void *)&provided->getContext());
       }
-      TI_ERROR("  parameter {} mismatch: required={}, provided={}", i,
+      QD_ERROR("  parameter {} mismatch: required={}, provided={}", i,
                type_name(required), type_name(provided));
     }
   }

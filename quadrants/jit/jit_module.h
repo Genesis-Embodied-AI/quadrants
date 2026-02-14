@@ -30,7 +30,7 @@ class JITModule {
   std::function<void(Args...)> get_function(const std::string &name) {
     using FuncT = typename std::function<void(Args...)>;
     auto ret = FuncT((function_pointer_type<FuncT>)lookup_function(name));
-    TI_ASSERT(ret != nullptr);
+    QD_ASSERT(ret != nullptr);
     return ret;
   }
 
@@ -64,7 +64,7 @@ class JITModule {
   virtual void call(const std::string &name,
                     const std::vector<void *> &arg_pointers,
                     const std::vector<int> &arg_sizes) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   // Note: **launch** is for parallel (GPU)_kernels
@@ -86,7 +86,7 @@ class JITModule {
                       std::size_t shared_mem_bytes,
                       const std::vector<void *> &arg_pointers,
                       const std::vector<int> &arg_sizes) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   virtual bool direct_dispatch() const = 0;

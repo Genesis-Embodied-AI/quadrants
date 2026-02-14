@@ -73,10 +73,10 @@ bool arch_uses_spirv(Arch arch) {
 }
 
 Arch host_arch() {
-#if defined(TI_ARCH_x64)
+#if defined(QD_ARCH_x64)
   return Arch::x64;
 #endif
-#if defined(TI_ARCH_ARM)
+#if defined(QD_ARCH_ARM)
   return Arch::arm64;
 #endif
   RHI_NOT_IMPLEMENTED

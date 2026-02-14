@@ -32,7 +32,7 @@ DeviceAllocation GfxProgramImpl::allocate_memory_on_device(
       {alloc_size, /*host_write=*/false, /*host_read=*/false,
        /*export_sharing=*/false},
       &alloc);
-  TI_ASSERT(res == RhiResult::success);
+  QD_ASSERT(res == RhiResult::success);
   return alloc;
 }
 
@@ -59,7 +59,7 @@ std::unique_ptr<KernelLauncher> GfxProgramImpl::make_kernel_launcher() {
 }
 
 DeviceCapabilityConfig GfxProgramImpl::get_device_caps() {
-  TI_ASSERT(runtime_);
+  QD_ASSERT(runtime_);
   return runtime_->get_ti_device()->get_caps();
 }
 

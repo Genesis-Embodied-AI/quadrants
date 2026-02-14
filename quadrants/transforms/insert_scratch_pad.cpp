@@ -14,8 +14,8 @@ namespace quadrants::lang {
 namespace irpass {
 
 std::unique_ptr<ScratchPads> initialize_scratch_pad(OffloadedStmt *offload) {
-  TI_AUTO_PROF
-  TI_ASSERT(offload->task_type == OffloadedTaskType::struct_for);
+  QD_AUTO_PROF
+  QD_ASSERT(offload->task_type == OffloadedTaskType::struct_for);
   std::unique_ptr<ScratchPads> pads;
   pads = std::make_unique<ScratchPads>();
   for (auto snode : offload->mem_access_opt.get_snodes_with_flag(
@@ -25,7 +25,7 @@ std::unique_ptr<ScratchPads> initialize_scratch_pad(OffloadedStmt *offload) {
   BLSAnalyzer bls_analyzer(offload, pads.get());
   bool analysis_ok = bls_analyzer.run();
   if (!analysis_ok) {
-    TI_ERROR("BLS analysis failed !");
+    QD_ERROR("BLS analysis failed !");
   }
   pads->finalize();
   return pads;

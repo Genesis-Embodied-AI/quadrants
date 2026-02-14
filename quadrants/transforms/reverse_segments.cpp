@@ -27,7 +27,7 @@ class GatherStmts : public BasicStmtVisitor {
 };
 
 void reverse_segments(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto block = dynamic_cast<Block *>(root);
   std::vector<std::vector<pStmt>> statement_blocks(1);
   bool has_for = false;
@@ -65,7 +65,7 @@ void reverse_segments(IRNode *root) {
   }
     */
   if (has_for && has_non_for) {
-    TI_ERROR(
+    QD_ERROR(
         "Invalid program input for autodiff: "
         "Mixed usage of for-loops and statements without looping. \n"
         "Please split them into two kernels "

@@ -102,7 +102,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
   }
 
   void visit(PrintStmt *stmt) override {
-    TI_ASSERT_INFO(stmt->contents.size() < 32,
+    QD_ASSERT_INFO(stmt->contents.size() < 32,
                    "CUDA `print()` doesn't support more than 32 entries");
 
     std::vector<llvm::Type *> types;
@@ -133,10 +133,10 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           for (int i = 0; i < dtype->get_num_elements(); ++i) {
             llvm::Value *elem_value;
             if (codegen_vector_type(compile_config)) {
-              TI_ASSERT(llvm::dyn_cast<llvm::VectorType>(value_type));
+              QD_ASSERT(llvm::dyn_cast<llvm::VectorType>(value_type));
               elem_value = builder->CreateExtractElement(value, i);
             } else {
-              TI_ASSERT(llvm::dyn_cast<llvm::ArrayType>(value_type));
+              QD_ASSERT(llvm::dyn_cast<llvm::ArrayType>(value_type));
               elem_value = builder->CreateExtractValue(value, i);
             }
             auto [casted_value, elem_value_type] =
@@ -163,7 +163,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         values.push_back(value);
         formats += "%s";
       }
-      TI_ASSERT_INFO(num_contents < 32,
+      QD_ASSERT_INFO(num_contents < 32,
                      "CUDA `print()` doesn't support more than 32 entries");
     }
 
@@ -186,7 +186,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
            *
            * TODO: remove the limits.
            */
-          TI_ERROR(
+          QD_ERROR(
               "Only one single large shared array instance is allowed in "
               "current version.")
         }
@@ -231,7 +231,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) { \
       llvm_val[stmt] = call(#x, input);                                    \
     } else {                                                               \
-      TI_NOT_IMPLEMENTED                                                   \
+      QD_NOT_IMPLEMENTED                                                   \
     }                                                                      \
   }
     if (op == UnaryOpType::abs) {
@@ -244,7 +244,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
         llvm_val[stmt] = call("__nv_llabs", input);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::sqrt) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
@@ -252,7 +252,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_sqrt", input);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::frexp) {
       auto stype = tlctx->get_data_type(stmt->ret_type.ptr_removed());
@@ -284,7 +284,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
                  input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
         llvm_val[stmt] = call("__nv_popc", input);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::clz) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -293,7 +293,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) {
         llvm_val[stmt] = call("__nv_clzll", input);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::log) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
@@ -305,7 +305,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("log", input);
       } else {
-        TI_ERROR("log() for type {} is not supported",
+        QD_ERROR("log() for type {} is not supported",
                  input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::sin) {
@@ -318,7 +318,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("sin", input);
       } else {
-        TI_ERROR("sin() for type {} is not supported",
+        QD_ERROR("sin() for type {} is not supported",
                  input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::cos) {
@@ -331,7 +331,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         llvm_val[stmt] = call("cos", input);
       } else {
-        TI_ERROR("cos() for type {} is not supported",
+        QD_ERROR("cos() for type {} is not supported",
                  input_quadrants_type.to_string());
       }
     }
@@ -342,8 +342,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     UNARY_STD(acos)
     UNARY_STD(asin)
     else {
-      TI_P(unary_op_type_name(op));
-      TI_NOT_IMPLEMENTED
+      QD_P(unary_op_type_name(op));
+      QD_NOT_IMPLEMENTED
     }
 #undef UNARY_STD
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
@@ -359,7 +359,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (!stmt->is_reduction) {
       return nullptr;
     }
-    TI_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
+    QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
     PrimitiveTypeID prim_type =
         stmt->val->ret_type->cast<PrimitiveType>()->type;
 
@@ -385,7 +385,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (fast_reductions.find(prim_type) == fast_reductions.end()) {
       return nullptr;
     }
-    TI_ASSERT(fast_reductions.at(prim_type).find(op) !=
+    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
               fast_reductions.at(prim_type).end());
     return call(fast_reductions.at(prim_type).at(op), llvm_val[stmt->dest],
                 llvm_val[stmt->val]);
@@ -645,8 +645,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
   void visit(OffloadedStmt *stmt) override {
     if (stmt->bls_size > 0)
       create_bls_buffer(stmt);
-#if defined(TI_WITH_CUDA)
-    TI_ASSERT(current_offload == nullptr);
+#if defined(QD_WITH_CUDA)
+    QD_ASSERT(current_offload == nullptr);
     current_offload = stmt;
     using Type = OffloadedStmt::TaskType;
     if (stmt->task_type == Type::gc) {
@@ -665,7 +665,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (stmt->task_type == Type::listgen) {
         emit_list_gen(stmt);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
       finalize_offloaded_task_function();
       current_task->grid_dim = stmt->grid_dim;
@@ -691,14 +691,14 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
-      TI_ASSERT(current_task->grid_dim != 0);
-      TI_ASSERT(current_task->block_dim != 0);
+      QD_ASSERT(current_task->grid_dim != 0);
+      QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
     current_offload = nullptr;
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   }
 
@@ -706,7 +706,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (stmt->type == ExternalFuncCallStmt::BITCODE) {
       TaskCodeGenLLVM::visit_call_bitcode(stmt);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -740,8 +740,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (ret_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_atan2", lhs, rhs);
       } else {
-        TI_P(data_type_name(ret_type));
-        TI_NOT_IMPLEMENTED
+        QD_P(data_type_name(ret_type));
+        QD_NOT_IMPLEMENTED
       }
     } else {
       // Note that ret_type here cannot be integral because pow with an
@@ -751,8 +751,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       } else if (ret_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_pow", lhs, rhs);
       } else {
-        TI_P(data_type_name(ret_type));
-        TI_NOT_IMPLEMENTED
+        QD_P(data_type_name(ret_type));
+        QD_NOT_IMPLEMENTED
       }
     }
 

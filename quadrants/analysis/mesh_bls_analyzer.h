@@ -57,7 +57,7 @@ class MeshBLSCache {
   }
 
   void finalize(Rec &rec) {
-    TI_ASSERT(!finalized);
+    QD_ASSERT(!finalized);
     finalized = true;
     if (initialized) {
       const auto cache_type = std::make_pair(element_type, conv_type);
@@ -85,7 +85,7 @@ class MeshBLSCaches {
       caches.emplace(std::piecewise_construct, std::forward_as_tuple(snode),
                      std::forward_as_tuple(snode));
     } else {
-      TI_ERROR("mesh::MeshBLSCaches for {} already exists.",
+      QD_ERROR("mesh::MeshBLSCaches for {} already exists.",
                snode->node_type_name);
     }
   }
@@ -114,7 +114,7 @@ class MeshBLSCaches {
   }
 
   MeshBLSCache &get(SNode *snode) {
-    TI_ASSERT(caches.find(snode) != caches.end());
+    QD_ASSERT(caches.find(snode) != caches.end());
     return caches[snode];
   }
 };

@@ -22,14 +22,14 @@ void compile_to_offloads(IRNode *ir,
                          AutodiffMode autodiff_mode,
                          bool ad_use_stack,
                          bool start_from_ast) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   auto print = make_pass_printer(verbose, config.print_ir_dbg_info,
                                  kernel->get_name(), ir);
   print("Initial IR");
 
   if (!verbose && config.print_preprocessed_ir && start_from_ast) {
-    TI_INFO("[{}] {}:", kernel->get_name(), "Preprocessed IR");
+    QD_INFO("[{}] {}:", kernel->get_name(), "Preprocessed IR");
     std::cout << std::flush;
     irpass::re_id(ir);
     irpass::print(ir);
@@ -174,7 +174,7 @@ void offload_to_executable(IRNode *ir,
                            bool lower_global_access,
                            bool make_thread_local,
                            bool make_block_local) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   auto print = make_pass_printer(verbose, config.print_ir_dbg_info,
                                  kernel->get_name(), ir);
@@ -336,7 +336,7 @@ void compile_to_executable(IRNode *ir,
                            bool make_thread_local,
                            bool make_block_local,
                            bool start_from_ast) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   compile_to_offloads(ir, config, kernel, verbose, autodiff_mode, ad_use_stack,
                       start_from_ast);
@@ -354,7 +354,7 @@ void compile_function(IRNode *ir,
                       AutodiffMode autodiff_mode,
                       bool verbose,
                       Function::IRStage target_stage) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   auto current_stage = func->ir_stage();
   auto print = make_pass_printer(verbose, config.print_ir_dbg_info,

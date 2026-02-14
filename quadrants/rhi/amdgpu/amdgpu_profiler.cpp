@@ -4,7 +4,7 @@
 #include "quadrants/rhi/amdgpu/amdgpu_types.h"
 
 namespace quadrants::lang {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 
 std::string KernelProfilerAMDGPU::get_device_name() {
   return AMDGPUContext::get_instance().get_device_name();
@@ -12,20 +12,20 @@ std::string KernelProfilerAMDGPU::get_device_name() {
 
 bool KernelProfilerAMDGPU::reinit_with_metrics(
     const std::vector<std::string> metrics) {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 bool KernelProfilerAMDGPU::set_profiler_toolkit(std::string toolkit_name) {
   if (toolkit_name.compare("default") == 0) {
     return true;
   }
-  TI_WARN("Only default(event) profiler is allowed on AMDGPU");
+  QD_WARN("Only default(event) profiler is allowed on AMDGPU");
   return false;
 }
 
 KernelProfilerBase::TaskHandle KernelProfilerAMDGPU::start_with_handle(
     const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void KernelProfilerAMDGPU::trace(KernelProfilerBase::TaskHandle &task_handle,
@@ -118,15 +118,15 @@ void KernelProfilerAMDGPU::clear() {
 
 #else
 std::string KernelProfilerAMDGPU::get_device_name() {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 bool KernelProfilerAMDGPU::reinit_with_metrics(
-    const std::vector<std::string> metrics){TI_NOT_IMPLEMENTED}
+    const std::vector<std::string> metrics){QD_NOT_IMPLEMENTED}
 
 KernelProfilerBase::TaskHandle
     KernelProfilerAMDGPU::start_with_handle(const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void KernelProfilerAMDGPU::trace(KernelProfilerBase::TaskHandle &task_handle,
@@ -135,29 +135,29 @@ void KernelProfilerAMDGPU::trace(KernelProfilerBase::TaskHandle &task_handle,
                                  uint32_t grid_size,
                                  uint32_t block_size,
                                  uint32_t dynamic_smem_size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void KernelProfilerAMDGPU::stop(KernelProfilerBase::TaskHandle handle) {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 bool KernelProfilerAMDGPU::statistics_on_traced_records() {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 void KernelProfilerAMDGPU::sync() {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 void KernelProfilerAMDGPU::update() {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
-void KernelProfilerAMDGPU::clear(){TI_NOT_IMPLEMENTED}
+void KernelProfilerAMDGPU::clear(){QD_NOT_IMPLEMENTED}
 
 #endif
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 
 KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(
     const std::string &kernel_name) {
@@ -197,7 +197,7 @@ void EventToolkitAMDGPU::update_record(
     std::vector<KernelProfileTracedRecord> &traced_records) {
   uint32_t events_num = event_records_.size();
   uint32_t records_num = traced_records.size();
-  TI_ERROR_IF(
+  QD_ERROR_IF(
       records_size_after_sync + events_num != records_num,
       "KernelProfilerAMDGPU::EventToolkitAMDGPU: event_records_.size({}) != "
       "traced_records_.size({})",
@@ -235,16 +235,16 @@ void EventToolkitAMDGPU::update_timeline(
 
 KernelProfilerBase::TaskHandle
     EventToolkitAMDGPU::start_with_handle(const std::string &kernel_name) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void EventToolkitAMDGPU::update_record(
     uint32_t records_size_after_sync,
     std::vector<KernelProfileTracedRecord> &traced_records) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void EventToolkitAMDGPU::update_timeline(
     std::vector<KernelProfileTracedRecord> &traced_records) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 #endif

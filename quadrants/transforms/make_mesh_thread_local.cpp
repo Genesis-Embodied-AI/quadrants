@@ -68,7 +68,7 @@ void make_mesh_thread_local_offload(OffloadedStmt *offload,
               TypeFactory::get_instance().get_pointer_type(data_type));
 
           const auto offset_snode = offset_.find(element_type);
-          TI_ASSERT(offset_snode != offset_.end());
+          QD_ASSERT(offset_snode != offset_.end());
           auto offset_globalptr = offload->tls_prologue->insert(
               std::make_unique<GlobalPtrStmt>(offset_snode->second,
                                               std::vector<Stmt *>{patch_idx}),
@@ -136,7 +136,7 @@ void make_mesh_thread_local_offload(OffloadedStmt *offload,
 void make_mesh_thread_local(IRNode *root,
                             const CompileConfig &config,
                             const MakeBlockLocalPass::Args &args) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   // =========================================================================================
   // This pass generates code like this:

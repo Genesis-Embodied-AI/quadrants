@@ -25,7 +25,7 @@ class AllocaStmt : public Stmt, public ir_traits::Store {
     } else {
       ret_type = TypeFactory::get_instance().get_pointer_type(type);
     }
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   AllocaStmt(const std::vector<int> &shape,
@@ -35,7 +35,7 @@ class AllocaStmt : public Stmt, public ir_traits::Store {
       : Stmt(dbg_info), is_shared(is_shared) {
     ret_type = TypeFactory::get_instance().get_pointer_type(
         TypeFactory::create_tensor_type(shape, type));
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -59,8 +59,8 @@ class AllocaStmt : public Stmt, public ir_traits::Store {
   }
 
   bool is_shared;
-  TI_STMT_DEF_FIELDS(ret_type, is_shared);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, is_shared);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -71,11 +71,11 @@ class WhileControlStmt : public Stmt {
   Stmt *mask;
   Stmt *cond;
   WhileControlStmt(Stmt *mask, Stmt *cond) : mask(mask), cond(cond) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(mask, cond);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(mask, cond);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -88,7 +88,7 @@ class ContinueStmt : public Stmt {
   Stmt *scope;
 
   ContinueStmt() : scope(nullptr) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   // For top-level loops, since they are parallelized to multiple threads (on
@@ -113,8 +113,8 @@ class ContinueStmt : public Stmt {
   // If run_foo_kernel() is directly inlined within foo_kernel(), `return`
   // could prematurely terminate the entire kernel.
 
-  TI_STMT_DEF_FIELDS(scope);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(scope);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -145,8 +145,8 @@ class DecorationStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(operand, decoration);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(operand, decoration);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -169,8 +169,8 @@ class UnaryOpStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -208,15 +208,15 @@ class ArgLoadStmt : public Stmt {
         is_ptr(is_ptr),
         create_load(create_load) {
     this->ret_type = dt;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, arg_id, is_ptr);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, arg_id, is_ptr);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -233,7 +233,7 @@ class RandStmt : public Stmt {
   explicit RandStmt(const DataType &dt, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info) {
     ret_type = dt;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -244,8 +244,8 @@ class RandStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -267,17 +267,17 @@ class BinaryOpStmt : public Stmt {
         lhs(lhs),
         rhs(rhs),
         is_bit_vectorized(is_bit_vectorized) {
-    TI_ASSERT(!lhs->is<AllocaStmt>());
-    TI_ASSERT(!rhs->is<AllocaStmt>());
-    TI_STMT_REG_FIELDS;
+    QD_ASSERT(!lhs->is<AllocaStmt>());
+    QD_ASSERT(!rhs->is<AllocaStmt>());
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -295,18 +295,18 @@ class TernaryOpStmt : public Stmt {
                 Stmt *op3,
                 const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), op_type(op_type), op1(op1), op2(op2), op3(op3) {
-    TI_ASSERT(!op1->is<AllocaStmt>());
-    TI_ASSERT(!op2->is<AllocaStmt>());
-    TI_ASSERT(!op3->is<AllocaStmt>());
-    TI_STMT_REG_FIELDS;
+    QD_ASSERT(!op1->is<AllocaStmt>());
+    QD_ASSERT(!op2->is<AllocaStmt>());
+    QD_ASSERT(!op3->is<AllocaStmt>());
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, op1, op2, op3);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, op1, op2, op3);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -329,7 +329,7 @@ class AtomicOpStmt : public Stmt,
         dest(dest),
         val(val),
         is_reduction(false) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   static std::unique_ptr<AtomicOpStmt> make_for_reduction(AtomicOpType op_type,
@@ -354,8 +354,8 @@ class AtomicOpStmt : public Stmt,
     return dest;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, op_type, dest, val);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, op_type, dest, val);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -398,8 +398,8 @@ class ExternalPtrStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, base_ptr, indices, is_grad);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, base_ptr, indices, is_grad);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -432,8 +432,8 @@ class GlobalPtrStmt : public Stmt {
     return true;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, snode, indices, activate, is_bit_vectorized);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, snode, indices, activate, is_bit_vectorized);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -467,14 +467,14 @@ class MatrixOfGlobalPtrStmt : public Stmt {
     return true;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type,
+  QD_STMT_DEF_FIELDS(ret_type,
                      snodes,
                      indices,
                      ptr_base,
                      dynamic_indexable,
                      dynamic_index_stride,
                      activate);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -491,8 +491,8 @@ class MatrixOfMatrixPtrStmt : public Stmt {
 
   MatrixOfMatrixPtrStmt(const std::vector<Stmt *> &stmts, DataType dt);
 
-  TI_STMT_DEF_FIELDS(ret_type, stmts);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stmts);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -517,7 +517,7 @@ class MatrixPtrStmt : public Stmt {
   bool offset_used_as_index() const {
     if (origin->is<AllocaStmt>() || origin->is<GlobalTemporaryStmt>() ||
         origin->is<ExternalPtrStmt>() || origin->is<MatrixPtrStmt>()) {
-      TI_ASSERT_INFO(origin->ret_type.ptr_removed()->is<TensorType>(),
+      QD_ASSERT_INFO(origin->ret_type.ptr_removed()->is<TensorType>(),
                      "MatrixPtrStmt can only be used for TensorType.");
       return true;
     }
@@ -528,7 +528,7 @@ class MatrixPtrStmt : public Stmt {
     if (offset_used_as_index()) {
       return origin->ret_type.ptr_removed()->cast<TensorType>()->get_shape();
     }
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   bool is_unlowered_global_ptr() const {
@@ -544,8 +544,8 @@ class MatrixPtrStmt : public Stmt {
 
   bool common_statement_eliminable() const override;
 
-  TI_STMT_DEF_FIELDS(ret_type, origin, offset);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, origin, offset);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -581,8 +581,8 @@ class SNodeOpStmt : public Stmt, public ir_traits::Store {
     return nullptr;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, op_type, snode, ptr, val);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, op_type, snode, ptr, val);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 // TODO: remove this
@@ -601,8 +601,8 @@ class ExternalTensorShapeAlongAxisStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, axis, arg_id);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, axis, arg_id);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 class ExternalTensorBasePtrStmt : public Stmt {
@@ -618,8 +618,8 @@ class ExternalTensorBasePtrStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, arg_id, is_grad);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, arg_id, is_grad);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -638,12 +638,12 @@ class AssertStmt : public Stmt {
              const std::vector<Stmt *> &args,
              const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), cond(cond), text(text), args(args) {
-    TI_ASSERT(cond);
-    TI_STMT_REG_FIELDS;
+    QD_ASSERT(cond);
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(cond, text, args);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(cond, text, args);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -677,7 +677,7 @@ class ExternalFuncCallStmt : public Stmt,
         bc_funcname(bc_funcname),
         arg_stmts(arg_stmts),
         output_stmts(output_stmts) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   // IR Trait: Store
@@ -698,14 +698,14 @@ class ExternalFuncCallStmt : public Stmt,
     return arg_stmts;
   }
 
-  TI_STMT_DEF_FIELDS(type,
+  QD_STMT_DEF_FIELDS(type,
                      so_func,
                      asm_source,
                      bc_filename,
                      bc_funcname,
                      arg_stmts,
                      output_stmts);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -726,15 +726,15 @@ class RangeAssumptionStmt : public Stmt {
                       int high,
                       const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), input(input), base(base), low(low), high(high) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, input, base, low, high);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, input, base, low, high);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -762,8 +762,8 @@ class LoopUniqueStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, input, covers);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, input, covers);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -776,7 +776,7 @@ class GlobalLoadStmt : public Stmt, public ir_traits::Load {
 
   explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), src(src) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -792,8 +792,8 @@ class GlobalLoadStmt : public Stmt, public ir_traits::Load {
     return src;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, src);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(ret_type, src);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -809,7 +809,7 @@ class GlobalStoreStmt : public Stmt, public ir_traits::Store {
                   Stmt *val,
                   const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), dest(dest), val(val) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool common_statement_eliminable() const override {
@@ -825,8 +825,8 @@ class GlobalStoreStmt : public Stmt, public ir_traits::Store {
     return val;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, dest, val);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(ret_type, dest, val);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -838,7 +838,7 @@ class LocalLoadStmt : public Stmt, public ir_traits::Load {
 
   explicit LocalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), src(src) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -854,8 +854,8 @@ class LocalLoadStmt : public Stmt, public ir_traits::Load {
     return src;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, src);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(ret_type, src);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -868,9 +868,9 @@ class LocalStoreStmt : public Stmt, public ir_traits::Store {
 
   LocalStoreStmt(Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
       : dest(dest), val(val) {
-    TI_ASSERT(dest->is<AllocaStmt>() || dest->is<MatrixPtrStmt>() ||
+    QD_ASSERT(dest->is<AllocaStmt>() || dest->is<MatrixPtrStmt>() ||
               dest->is<MatrixOfMatrixPtrStmt>() || dest->is<GetElementStmt>());
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -894,8 +894,8 @@ class LocalStoreStmt : public Stmt, public ir_traits::Store {
     return val;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, dest, val);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(ret_type, dest, val);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 /**
@@ -919,8 +919,8 @@ class IfStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  TI_STMT_DEF_FIELDS(cond);
-  TI_DEFINE_ACCEPT
+  QD_STMT_DEF_FIELDS(cond);
+  QD_DEFINE_ACCEPT
 };
 
 /**
@@ -938,23 +938,23 @@ class PrintStmt : public Stmt {
   PrintStmt(const std::vector<EntryType> &contents_,
             const std::vector<FormatType> &formats_)
       : contents(contents_), formats(formats_) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   template <typename... Args>
   explicit PrintStmt(Stmt *t, Args &&...args)
       : contents(make_entries(t, std::forward<Args>(args)...)) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   template <typename... Args>
   explicit PrintStmt(const std::string &str, Args &&...args)
       : contents(make_entries(str, std::forward<Args>(args)...)) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, contents);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, contents);
+  QD_DEFINE_ACCEPT_AND_CLONE
 
  private:
   static void make_entries_helper(std::vector<PrintStmt::EntryType> &entries) {
@@ -987,15 +987,15 @@ class ConstStmt : public Stmt {
                      const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), val(val) {
     ret_type = val.dt;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, val);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, val);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1036,14 +1036,14 @@ class RangeForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  TI_STMT_DEF_FIELDS(begin,
+  QD_STMT_DEF_FIELDS(begin,
                      end,
                      reversed,
                      is_bit_vectorized,
                      num_cpu_threads,
                      block_dim,
                      strictly_serialized);
-  TI_DEFINE_ACCEPT
+  QD_DEFINE_ACCEPT
 };
 
 /**
@@ -1074,13 +1074,13 @@ class StructForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  TI_STMT_DEF_FIELDS(snode,
+  QD_STMT_DEF_FIELDS(snode,
                      index_offsets,
                      is_bit_vectorized,
                      num_cpu_threads,
                      block_dim,
                      mem_access_opt);
-  TI_DEFINE_ACCEPT
+  QD_DEFINE_ACCEPT
 };
 
 /**
@@ -1111,7 +1111,7 @@ class MeshForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  TI_STMT_DEF_FIELDS(mesh,
+  QD_STMT_DEF_FIELDS(mesh,
                      is_bit_vectorized,
                      num_cpu_threads,
                      block_dim,
@@ -1119,7 +1119,7 @@ class MeshForStmt : public Stmt {
                      major_to_types,
                      minor_relation_types,
                      mem_access_opt);
-  TI_DEFINE_ACCEPT
+  QD_DEFINE_ACCEPT
 };
 
 /**
@@ -1144,8 +1144,8 @@ class FuncCallStmt : public Stmt, public ir_traits::Store {
     return nullptr;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, func, args);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, func, args);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1158,7 +1158,7 @@ class ReferenceStmt : public Stmt, public ir_traits::Load {
 
   explicit ReferenceStmt(Stmt *var, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), var(var) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -1170,8 +1170,8 @@ class ReferenceStmt : public Stmt, public ir_traits::Load {
     return var;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, var);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, var);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1185,11 +1185,11 @@ class GetElementStmt : public Stmt {
                  const std::vector<int> &index,
                  const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), src(src), index(index) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, src, index);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, src, index);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1200,11 +1200,11 @@ class ReturnStmt : public Stmt {
   std::vector<Stmt *> values;
 
   explicit ReturnStmt(const std::vector<Stmt *> &values) : values(values) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   explicit ReturnStmt(Stmt *value) : values({value}) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   std::vector<DataType> element_types() {
@@ -1225,8 +1225,8 @@ class ReturnStmt : public Stmt {
     return names;
   }
 
-  TI_STMT_DEF_FIELDS(values);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(values);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1245,8 +1245,8 @@ class WhileStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  TI_STMT_DEF_FIELDS(mask);
-  TI_DEFINE_ACCEPT
+  QD_STMT_DEF_FIELDS(mask);
+  QD_DEFINE_ACCEPT
 };
 
 // TODO: remove this (replace with input + ConstStmt(offset))
@@ -1256,15 +1256,15 @@ class IntegerOffsetStmt : public Stmt {
   int64 offset;
 
   IntegerOffsetStmt(Stmt *input, int64 offset) : input(input), offset(offset) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, input, offset);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, input, offset);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1278,16 +1278,16 @@ class LinearizeStmt : public Stmt {
   LinearizeStmt(const std::vector<Stmt *> &inputs,
                 const std::vector<int> &strides)
       : inputs(inputs), strides(strides) {
-    TI_ASSERT(inputs.size() == strides.size());
-    TI_STMT_REG_FIELDS;
+    QD_ASSERT(inputs.size() == strides.size());
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, inputs, strides);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, inputs, strides);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1301,15 +1301,15 @@ class GetRootStmt : public Stmt {
         this->root_ = this->root_->parent;
       }
     }
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, root_);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, root_);
+  QD_DEFINE_ACCEPT_AND_CLONE
 
   SNode *root() {
     return root_;
@@ -1341,7 +1341,7 @@ class SNodeLookupStmt : public Stmt {
         input_snode(input_snode),
         input_index(input_index),
         activate(activate) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -1352,8 +1352,8 @@ class SNodeLookupStmt : public Stmt {
     return true;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, snode, input_snode, input_index, activate);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, snode, input_snode, input_index, activate);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1384,13 +1384,13 @@ class GetChStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type,
+  QD_STMT_DEF_FIELDS(ret_type,
                      input_ptr,
                      input_snode,
                      output_snode,
                      chid,
                      is_bit_vectorized);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1466,7 +1466,7 @@ class OffloadedStmt : public Stmt {
 
   void all_blocks_accept(IRVisitor *visitor, bool skip_mesh_prologue = false);
 
-  TI_STMT_DEF_FIELDS(ret_type /*inherited from Stmt*/,
+  QD_STMT_DEF_FIELDS(ret_type /*inherited from Stmt*/,
                      task_type,
                      device,
                      snode,
@@ -1482,7 +1482,7 @@ class OffloadedStmt : public Stmt {
                      num_cpu_threads,
                      index_offsets,
                      mem_access_opt);
-  TI_DEFINE_ACCEPT
+  QD_DEFINE_ACCEPT
 };
 
 /**
@@ -1494,7 +1494,7 @@ class LoopIndexStmt : public Stmt {
   int index;
 
   LoopIndexStmt(Stmt *loop, int index) : loop(loop), index(index) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool is_mesh_index() const {
@@ -1508,13 +1508,13 @@ class LoopIndexStmt : public Stmt {
   }
 
   mesh::MeshElementType mesh_index_type() const {
-    TI_ASSERT(is_mesh_index());
+    QD_ASSERT(is_mesh_index());
     if (auto offload = loop->cast<OffloadedStmt>()) {
       return offload->major_from_type;
     } else if (auto mesh_for = loop->cast<MeshForStmt>()) {
       return mesh_for->major_from_type;
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 
@@ -1522,8 +1522,8 @@ class LoopIndexStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, loop, index);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, loop, index);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1535,15 +1535,15 @@ class LoopLinearIndexStmt : public Stmt {
   Stmt *loop;
 
   explicit LoopLinearIndexStmt(Stmt *loop) : loop(loop) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, loop);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, loop);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1552,15 +1552,15 @@ class LoopLinearIndexStmt : public Stmt {
 class GlobalThreadIndexStmt : public Stmt {
  public:
   explicit GlobalThreadIndexStmt() {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1573,15 +1573,15 @@ class BlockCornerIndexStmt : public Stmt {
   int index;
 
   BlockCornerIndexStmt(Stmt *loop, int index) : loop(loop), index(index) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, loop, index);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, loop, index);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1595,15 +1595,15 @@ class GlobalTemporaryStmt : public Stmt {
   GlobalTemporaryStmt(std::size_t offset, const DataType &ret_type)
       : offset(offset) {
     this->ret_type = ret_type;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, offset);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, offset);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1616,15 +1616,15 @@ class ThreadLocalPtrStmt : public Stmt {
   ThreadLocalPtrStmt(std::size_t offset, const DataType &ret_type)
       : offset(offset) {
     this->ret_type = ret_type;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, offset);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, offset);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1636,15 +1636,15 @@ class BlockLocalPtrStmt : public Stmt {
 
   BlockLocalPtrStmt(Stmt *offset, const DataType &ret_type) : offset(offset) {
     this->ret_type = ret_type;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, offset);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, offset);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1656,8 +1656,8 @@ class ClearListStmt : public Stmt {
 
   SNode *snode;
 
-  TI_STMT_DEF_FIELDS(ret_type, snode);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, snode);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 // Checks if the task represented by |stmt| contains a single ClearListStmt.
@@ -1681,11 +1681,11 @@ class InternalFuncStmt : public Stmt {
     } else {
       this->ret_type = ret_type;
     }
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, func_name, args, with_runtime_context);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, func_name, args, with_runtime_context);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1699,7 +1699,7 @@ class AdStackAllocaStmt : public Stmt {
   AdStackAllocaStmt(const DataType &dt, std::size_t max_size)
       : dt(dt), max_size(max_size) {
     ret_type = dt;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   std::size_t element_size_in_bytes() const {
@@ -1722,8 +1722,8 @@ class AdStackAllocaStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, dt, max_size);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, dt, max_size);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1738,10 +1738,10 @@ class AdStackLoadTopStmt : public Stmt, public ir_traits::Load {
   bool return_ptr = false;
 
   explicit AdStackLoadTopStmt(Stmt *stack, bool return_ptr = false) {
-    TI_ASSERT(stack->is<AdStackAllocaStmt>());
+    QD_ASSERT(stack->is<AdStackAllocaStmt>());
     this->stack = stack;
     this->return_ptr = return_ptr;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -1757,8 +1757,8 @@ class AdStackLoadTopStmt : public Stmt, public ir_traits::Load {
     return stack;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, stack);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stack);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1769,9 +1769,9 @@ class AdStackLoadTopAdjStmt : public Stmt, public ir_traits::Load {
   Stmt *stack;
 
   explicit AdStackLoadTopAdjStmt(Stmt *stack) {
-    TI_ASSERT(stack->is<AdStackAllocaStmt>());
+    QD_ASSERT(stack->is<AdStackAllocaStmt>());
     this->stack = stack;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
@@ -1787,8 +1787,8 @@ class AdStackLoadTopAdjStmt : public Stmt, public ir_traits::Load {
     return stack;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, stack);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stack);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1799,9 +1799,9 @@ class AdStackPopStmt : public Stmt, public ir_traits::Load {
   Stmt *stack;
 
   explicit AdStackPopStmt(Stmt *stack) {
-    TI_ASSERT(stack->is<AdStackAllocaStmt>());
+    QD_ASSERT(stack->is<AdStackAllocaStmt>());
     this->stack = stack;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   // IR Trait: Load
@@ -1813,8 +1813,8 @@ class AdStackPopStmt : public Stmt, public ir_traits::Load {
   // Mark has_global_side_effect == true to prevent being moved out of an if
   // clause in the simplify pass for now.
 
-  TI_STMT_DEF_FIELDS(ret_type, stack);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stack);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1827,10 +1827,10 @@ class AdStackPushStmt : public Stmt, public ir_traits::Load {
   Stmt *v;
 
   AdStackPushStmt(Stmt *stack, Stmt *v) {
-    TI_ASSERT(stack->is<AdStackAllocaStmt>());
+    QD_ASSERT(stack->is<AdStackAllocaStmt>());
     this->stack = stack;
     this->v = v;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   // IR Trait: Load
@@ -1842,8 +1842,8 @@ class AdStackPushStmt : public Stmt, public ir_traits::Load {
   // Mark has_global_side_effect == true to prevent being moved out of an if
   // clause in the simplify pass for now.
 
-  TI_STMT_DEF_FIELDS(ret_type, stack, v);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stack, v);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1856,10 +1856,10 @@ class AdStackAccAdjointStmt : public Stmt, public ir_traits::Load {
   Stmt *v;
 
   AdStackAccAdjointStmt(Stmt *stack, Stmt *v) {
-    TI_ASSERT(stack->is<AdStackAllocaStmt>());
+    QD_ASSERT(stack->is<AdStackAllocaStmt>());
     this->stack = stack;
     this->v = v;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   // IR Trait: Load
@@ -1870,8 +1870,8 @@ class AdStackAccAdjointStmt : public Stmt, public ir_traits::Load {
   // Mark has_global_side_effect == true to prevent being moved out of an if
   // clause in the simplify pass for now.
 
-  TI_STMT_DEF_FIELDS(ret_type, stack, v);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, stack, v);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1888,8 +1888,8 @@ class BitStructStoreStmt : public Stmt {
                      const std::vector<int> &ch_ids,
                      const std::vector<Stmt *> &values)
       : ptr(ptr), ch_ids(ch_ids), values(values), is_atomic(true) {
-    TI_ASSERT(ch_ids.size() == values.size());
-    TI_STMT_REG_FIELDS;
+    QD_ASSERT(ch_ids.size() == values.size());
+    QD_STMT_REG_FIELDS;
   }
 
   BitStructType *get_bit_struct() const;
@@ -1898,8 +1898,8 @@ class BitStructStoreStmt : public Stmt {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, ptr, ch_ids, values, is_atomic);
-  TI_DEFINE_ACCEPT_AND_CLONE;
+  QD_STMT_DEF_FIELDS(ret_type, ptr, ch_ids, values, is_atomic);
+  QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
 // Mesh related.
@@ -1927,7 +1927,7 @@ class MeshRelationAccessStmt : public Stmt {
         to_type(to_type),
         neighbor_idx(neighbor_idx) {
     this->ret_type = PrimitiveType::u16;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   MeshRelationAccessStmt(mesh::Mesh *mesh,
@@ -1940,7 +1940,7 @@ class MeshRelationAccessStmt : public Stmt {
         to_type(to_type),
         neighbor_idx(nullptr) {
     this->ret_type = PrimitiveType::u16;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool is_size() const {
@@ -1953,18 +1953,18 @@ class MeshRelationAccessStmt : public Stmt {
 
   mesh::MeshElementType from_type() const {
     if (auto idx = mesh_idx->cast<LoopIndexStmt>()) {
-      TI_ASSERT(idx->is_mesh_index());
+      QD_ASSERT(idx->is_mesh_index());
       return idx->mesh_index_type();
     } else if (auto idx = mesh_idx->cast<MeshRelationAccessStmt>()) {
-      TI_ASSERT(!idx->is_size());
+      QD_ASSERT(!idx->is_size());
       return idx->to_type;
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, mesh, mesh_idx, to_type, neighbor_idx);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, mesh, mesh_idx, to_type, neighbor_idx);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -1989,15 +1989,15 @@ class MeshIndexConversionStmt : public Stmt {
         idx(idx),
         conv_type(conv_type) {
     this->ret_type = PrimitiveType::i32;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type, mesh, idx_type, idx, conv_type);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, mesh, idx_type, idx, conv_type);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -2008,15 +2008,15 @@ class MeshPatchIndexStmt : public Stmt {
   explicit MeshPatchIndexStmt(const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info) {
     this->ret_type = PrimitiveType::i32;
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
 
-  TI_STMT_DEF_FIELDS(ret_type);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 /**
@@ -2027,14 +2027,14 @@ class MatrixInitStmt : public Stmt {
   std::vector<Stmt *> values;
 
   explicit MatrixInitStmt(const std::vector<Stmt *> &values) : values(values) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
   bool has_global_side_effect() const override {
     return false;
   }
-  TI_STMT_DEF_FIELDS(ret_type, values);
-  TI_DEFINE_ACCEPT_AND_CLONE
+  QD_STMT_DEF_FIELDS(ret_type, values);
+  QD_DEFINE_ACCEPT_AND_CLONE
 };
 
 template <typename T>
@@ -2063,7 +2063,7 @@ std::vector<std::unique_ptr<Stmt>> get_const_stmt_with_value(DataType dt,
     stmts.push_back(std::move(matrix_init_stmt));
     return stmts;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 

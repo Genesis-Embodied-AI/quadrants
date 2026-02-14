@@ -31,7 +31,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
 
   void visit(SNodeOpStmt *stmt) override {
     if (stmt->ptr != nullptr) {
-      TI_ASSERT(stmt->ptr->is<GlobalPtrStmt>());
+      QD_ASSERT(stmt->ptr->is<GlobalPtrStmt>());
       // We have already done the check on its ptr argument. No need to do
       // anything here.
       return;
@@ -257,7 +257,7 @@ namespace irpass {
 bool check_out_of_bound(IRNode *root,
                         const CompileConfig &config,
                         const CheckOutOfBoundPass::Args &args) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return CheckOutOfBound::run(root, config, args.kernel_name);
 }
 

@@ -57,7 +57,7 @@ KernelCompilationManager::KernelCompilationManager(Config config)
     : config_(std::move(config)),
       cache_dir_(
           join_path(config_.offline_cache_path, "kernel_compilation_manager")) {
-  TI_DEBUG("Create KernelCompilationManager with offline_cache_file_path = {}",
+  QD_DEBUG("Create KernelCompilationManager with offline_cache_file_path = {}",
            this->cache_dir_);
   auto filepath = join_path(this->cache_dir_, kMetadataFilename);
   auto lock_path = join_path(this->cache_dir_, kMetadataLockName);
@@ -66,7 +66,7 @@ KernelCompilationManager::KernelCompilationManager(Config config)
       auto _ = make_unlocker(lock_path);
       offline_cache::load_metadata_with_checking(cached_data_, filepath);
     } else {
-      TI_WARN(
+      QD_WARN(
           "Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
           lock_path, this->cache_dir_);
     }
@@ -94,14 +94,14 @@ void KernelCompilationManager::dump() {
     return;
   }
 
-  TI_DEBUG("Dumping {} cached kernels to disk", caching_kernels_.size());
+  QD_DEBUG("Dumping {} cached kernels to disk", caching_kernels_.size());
 
   quadrants::create_directories(cache_dir_);
   auto filepath = join_path(cache_dir_, kMetadataFilename);
   auto lock_path = join_path(cache_dir_, kMetadataLockName);
 
   if (!lock_with_file(lock_path)) {
-    TI_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
+    QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
             lock_path, cache_dir_);
     caching_kernels_.clear();  // Ignore the caching kernels
     return;
@@ -109,9 +109,9 @@ void KernelCompilationManager::dump() {
 
   auto _ = make_unlocker(lock_path);
   CacheData data;
-  data.version[0] = TI_VERSION_MAJOR;
-  data.version[1] = TI_VERSION_MINOR;
-  data.version[2] = TI_VERSION_PATCH;
+  data.version[0] = QD_VERSION_MAJOR;
+  data.version[1] = QD_VERSION_MINOR;
+  data.version[2] = QD_VERSION_PATCH;
   auto &dataWrapperByCacheKey = data.dataWrapperByCacheKey;
   // Load old cached data
   offline_cache::load_metadata_with_checking(data, filepath);
@@ -136,14 +136,14 @@ void KernelCompilationManager::dump() {
     if (k.compiled_kernel_data) {
       auto cache_filename = make_filename(k.metadata.kernel_key);
       std::ofstream fs{cache_filename, std::ios::out | std::ios::binary};
-      TI_ASSERT(fs.is_open());
+      QD_ASSERT(fs.is_open());
       auto err = k.compiled_kernel_data->dump(fs);
       if (err == CompiledKernelData::Err::kNoError) {
-        TI_ASSERT(!!fs);
+        QD_ASSERT(!!fs);
         k.metadata.size = fs.tellp();
         data.size += k.metadata.size;
       } else {
-        TI_DEBUG("Dump cached CompiledKernelData(kernel_key={}) failed: {}",
+        QD_DEBUG("Dump cached CompiledKernelData(kernel_key={}) failed: {}",
                  k.metadata.kernel_key, CompiledKernelData::get_err_msg(err));
       }
     }
@@ -182,7 +182,7 @@ std::unique_ptr<CompiledKernelData> KernelCompilationManager::compile_kernel(
   auto &compiler = *config_.kernel_compiler;
   auto ir = compiler.compile(compile_config, kernel_def);
   auto ckd = compiler.compile(compile_config, caps, kernel_def, *ir);
-  TI_ASSERT(ckd->check() == CompiledKernelData::Err::kNoError);
+  QD_ASSERT(ckd->check() == CompiledKernelData::Err::kNoError);
   return ckd;
 }
 
@@ -213,7 +213,7 @@ const CompiledKernelData *KernelCompilationManager::try_load_cached_kernel(
     const auto &kernels = caching_kernels_;
     auto iter = kernels.find(kernel_key);
     if (iter != kernels.end()) {
-      TI_DEBUG("Create kernel '{}' from in-memory cache (key='{}')",
+      QD_DEBUG("Create kernel '{}' from in-memory cache (key='{}')",
                kernel_name, kernel_key);
       return iter->second.compiled_kernel_data.get();
     }
@@ -225,13 +225,13 @@ const CompiledKernelData *KernelCompilationManager::try_load_cached_kernel(
     if (iter != dataWrapperByCacheKey.end()) {
       auto &k = iter->second;
       if (k.compiled_kernel_data) {
-        TI_DEBUG("Create kernel '{}' from cache (key='{}')", kernel_name,
+        QD_DEBUG("Create kernel '{}' from cache (key='{}')", kernel_name,
                  kernel_key);
         return k.compiled_kernel_data.get();
       } else if (auto loaded = load_ckd(kernel_key, arch)) {
-        TI_DEBUG("Create kernel '{}' from cache (key='{}')", kernel_name,
+        QD_DEBUG("Create kernel '{}' from cache (key='{}')", kernel_name,
                  kernel_key);
-        TI_ASSERT(loaded->arch() == arch);
+        QD_ASSERT(loaded->arch() == arch);
         k.metadata.last_used_at = std::time(nullptr);
         k.compiled_kernel_data = std::move(loaded);
         updated_data_.push_back(&k);
@@ -247,8 +247,8 @@ const CompiledKernelData &KernelCompilationManager::compile_and_cache_kernel(
     const CompileConfig &compile_config,
     const DeviceCapabilityConfig &caps,
     const Kernel &kernel_def) {
-  if (get_environ_config("TI_SHOW_COMPILING")) {
-    TI_INFO("Compiling kernel '{}'", kernel_def.get_name());
+  if (get_environ_config("QD_SHOW_COMPILING")) {
+    QD_INFO("Compiling kernel '{}'", kernel_def.get_name());
   }
   std::unique_ptr<CompiledKernelData> compiled_kernel_data =
       compile_kernel(compile_config, caps, kernel_def);
@@ -263,10 +263,10 @@ CompiledKernelData &KernelCompilationManager::cache_kernel(
     std::unique_ptr<CompiledKernelData> compiled_kernel_data,
     const Kernel &kernel_def) {
   auto cache_mode = get_cache_mode(compile_config, kernel_def.ir_is_ast());
-  TI_DEBUG_IF(cache_mode == CacheData::MemAndDiskCache,
+  QD_DEBUG_IF(cache_mode == CacheData::MemAndDiskCache,
               "Cache kernel '{}' (key='{}')", kernel_def.get_name(),
               kernel_key);
-  TI_ASSERT(caching_kernels_.find(kernel_key) == caching_kernels_.end());
+  QD_ASSERT(caching_kernels_.find(kernel_key) == caching_kernels_.end());
   KernelCacheData k;
   k.metadata.kernel_key = kernel_key;
   k.metadata.created_at = k.metadata.last_used_at = std::time(nullptr);
@@ -298,12 +298,12 @@ std::unique_ptr<CompiledKernelData> KernelCompilationManager::load_ckd(
     CompiledKernelData::Err err;
     auto ckd = CompiledKernelData::load(ifs, &err);
     if (err != CompiledKernelData::Err::kNoError) {
-      TI_DEBUG("Load cache file {} failed: {}", filename,
+      QD_DEBUG("Load cache file {} failed: {}", filename,
                CompiledKernelData::get_err_msg(err));
       return nullptr;
     }
     if (auto err = ckd->check(); err != CompiledKernelData::Err::kNoError) {
-      TI_DEBUG("Check CompiledKernelData loaded from {} failed: {}", filename,
+      QD_DEBUG("Check CompiledKernelData loaded from {} failed: {}", filename,
                CompiledKernelData::get_err_msg(err));
       return nullptr;
     }

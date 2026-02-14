@@ -44,7 +44,7 @@ std::tuple<Expr,
            Expr>
 sifakis_svd_export(ASTBuilder *ast_builder, const Expr &mat, int num_iters) {
   auto expanded_exprs = ast_builder->expand_exprs({mat});
-  TI_ASSERT(expanded_exprs.size() == 9);
+  QD_ASSERT(expanded_exprs.size() == 9);
 
   Expr a00 = expanded_exprs[0];
   Expr a01 = expanded_exprs[1];

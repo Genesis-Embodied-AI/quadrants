@@ -17,16 +17,16 @@
 #include "quadrants/system/benchmark.h"
 #include "quadrants/system/hacked_signal_handler.h"
 #include "quadrants/system/profiler.h"
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #endif
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #endif
 
-#ifdef TI_WITH_VULKAN
+#ifdef QD_WITH_VULKAN
 #include "quadrants/rhi/vulkan/vulkan_loader.h"
 #endif
 
@@ -79,19 +79,19 @@ void export_misc(py::module &m) {
       .def("test", &Benchmark::test)
       .def("initialize", &Benchmark::initialize);
 
-#define TI_EXPORT_LOGGING(X)                  \
+#define QD_EXPORT_LOGGING(X)                  \
   m.def(#X, [](const std::string &msg) {      \
     quadrants::Logger::get_instance().X(msg); \
   });
 
   m.def("flush_log", []() { quadrants::Logger::get_instance().flush(); });
 
-  TI_EXPORT_LOGGING(trace);
-  TI_EXPORT_LOGGING(debug);
-  TI_EXPORT_LOGGING(info);
-  TI_EXPORT_LOGGING(warn);
-  TI_EXPORT_LOGGING(error);
-  TI_EXPORT_LOGGING(critical);
+  QD_EXPORT_LOGGING(trace);
+  QD_EXPORT_LOGGING(debug);
+  QD_EXPORT_LOGGING(info);
+  QD_EXPORT_LOGGING(warn);
+  QD_EXPORT_LOGGING(error);
+  QD_EXPORT_LOGGING(critical);
 
   m.def("print_all_units", print_all_units);
   m.def("set_core_state_python_imported", CoreState::set_python_imported);
@@ -132,12 +132,12 @@ void export_misc(py::module &m) {
   m.def("toggle_python_print_buffer", [](bool opt) { py_cout.enabled = opt; });
   m.def("with_cuda", is_cuda_api_available);
   m.def("with_amdgpu", is_rocm_api_available);
-#ifdef TI_WITH_METAL
+#ifdef QD_WITH_METAL
   m.def("with_metal", quadrants::lang::metal::is_metal_api_available);
 #else
   m.def("with_metal", []() { return false; });
 #endif
-#ifdef TI_WITH_VULKAN
+#ifdef QD_WITH_VULKAN
   m.def("with_vulkan", quadrants::lang::vulkan::is_vulkan_api_available);
   m.def("set_vulkan_visible_device",
         quadrants::lang::vulkan::set_vulkan_visible_device);

@@ -66,7 +66,7 @@ class LowerAST : public IRVisitor {
   void visit(FrontendAllocaStmt *stmt) override {
     auto block = stmt->parent;
     auto ident = stmt->ident;
-    TI_ASSERT(block->local_var_to_stmt.find(ident) ==
+    QD_ASSERT(block->local_var_to_stmt.find(ident) ==
               block->local_var_to_stmt.end());
     auto alloca_type = stmt->ret_type.ptr_removed();
     if (auto tensor_type = alloca_type->cast<TensorType>()) {
@@ -93,7 +93,7 @@ class LowerAST : public IRVisitor {
     auto lowered = fctx.push_back<FuncCallStmt>(stmt->func, args);
     stmt->parent->replace_with(stmt, std::move(fctx.stmts));
     if (const auto &ident = stmt->ident) {
-      TI_ASSERT(block->local_var_to_stmt.find(ident.value()) ==
+      QD_ASSERT(block->local_var_to_stmt.find(ident.value()) ==
                 block->local_var_to_stmt.end());
       block->local_var_to_stmt.insert(std::make_pair(ident.value(), lowered));
     }
@@ -297,7 +297,7 @@ class LowerAST : public IRVisitor {
       new_for->fields_registered = true;
       fctx.push_back(std::move(new_for));
     } else {
-      TI_ASSERT(stmt->loop_var_ids.size() == 1);
+      QD_ASSERT(stmt->loop_var_ids.size() == 1);
       auto begin = stmt->begin;
       auto end = stmt->end;
       auto begin_stmt = flatten_rvalue(begin, &fctx);
@@ -429,7 +429,7 @@ class LowerAST : public IRVisitor {
         fctx.push_back<GlobalStoreStmt>(dest_stmt, expr_stmt);
       }
     } else {
-      TI_ASSERT(dest.is<ArgLoadExpression>() &&
+      QD_ASSERT(dest.is<ArgLoadExpression>() &&
                 dest.cast<ArgLoadExpression>()->is_ptr);
       fctx.push_back<GlobalStoreStmt>(dest_stmt, expr_stmt);
     }
@@ -459,17 +459,17 @@ class LowerAST : public IRVisitor {
                stmt->snode->type == SNodeType::hash ||
                stmt->snode->type == SNodeType::dense ||
                stmt->snode->type == SNodeType::bitmasked) {
-      TI_ASSERT(SNodeOpStmt::activation_related(stmt->op_type));
+      QD_ASSERT(SNodeOpStmt::activation_related(stmt->op_type));
       auto ptr =
           fctx.push_back<GlobalPtrStmt>(stmt->snode, indices_stmt, true, true);
       ptr->ret_type = stmt->snode->dt;
       ptr->ret_type.set_is_pointer(true);
       fctx.push_back<SNodeOpStmt>(stmt->op_type, stmt->snode, ptr, val_stmt);
     } else {
-      TI_ERROR("The {} operation is not supported on {} SNode",
+      QD_ERROR("The {} operation is not supported on {} SNode",
                snode_op_type_name(stmt->op_type),
                snode_type_name(stmt->snode->type));
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
 
     stmt->parent->replace_with(stmt, std::move(fctx.stmts));
@@ -501,7 +501,7 @@ class LowerAST : public IRVisitor {
 
   void visit(FrontendExternalFuncStmt *stmt) override {
     auto ctx = make_flatten_ctx();
-    TI_ASSERT((int)(stmt->so_func != nullptr) +
+    QD_ASSERT((int)(stmt->so_func != nullptr) +
                   (int)(!stmt->asm_source.empty()) +
                   (int)(!stmt->bc_filename.empty()) ==
               1);
@@ -543,7 +543,7 @@ class LowerAST : public IRVisitor {
 namespace irpass {
 
 void lower_ast(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   LowerAST::run(root);
 }
 

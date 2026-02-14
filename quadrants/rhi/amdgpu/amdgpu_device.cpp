@@ -57,12 +57,12 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(
   AllocInfo info;
   info.size = quadrants::iroundup(params.size, quadrants_page_size);
   if (params.host_read || params.host_write) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   } else {
     info.ptr = DeviceMemoryPool::get_instance(Arch::amdgpu,
                                               false /*merge_upon_release*/)
                    .allocate_with_cache(this, params);
-    TI_ASSERT(info.ptr != nullptr);
+    QD_ASSERT(info.ptr != nullptr);
 
     AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
   }
@@ -99,9 +99,9 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
   validate_device_alloc(handle);
   AllocInfo &info = allocations_[handle.alloc_id];
   if (info.ptr == nullptr) {
-    TI_ERROR("the DeviceAllocation is already deallocated");
+    QD_ERROR("the DeviceAllocation is already deallocated");
   }
-  TI_ASSERT(!info.is_imported);
+  QD_ASSERT(!info.is_imported);
   if (info.use_cached) {
     DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
         .release(info.size, (uint64_t *)info.ptr, false);

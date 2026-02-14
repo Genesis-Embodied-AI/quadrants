@@ -1,13 +1,13 @@
 #include "quadrants/platform/cuda/detect_cuda.h"
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #endif
 
 namespace quadrants {
 
 bool is_cuda_api_available() {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   try {
     auto &instance = lang::CUDADriver::get_instance_without_context();
     // Note that one must be careful when detecting if CUDA is available.

@@ -1,7 +1,7 @@
 // This file will only be compiled into llvm bitcode by clang.
 // The generated bitcode will likely get inlined for performance.
 
-#if !defined(TI_INCLUDED) || !defined(_WIN32)
+#if !defined(QD_INCLUDED) || !defined(_WIN32)
 // The latest MSVC(Visual Studio 2019 version 16.10.1, MSVC 14.29.30037)
 // uses llvm-11 as requirements. Check this link for details:
 // https://github.com/microsoft/STL/blob/1866b848f0175c3361a916680a4318e7f0cc5482/stl/inc/yvals_core.h#L550-L561.
@@ -48,7 +48,7 @@ using parallel_for_type = void (*)(void *thread_pool,
                                    void *context,
                                    void (*func)(void *, int thread_id, int i));
 
-#if defined(__linux__) && !ARCH_cuda && defined(TI_ARCH_x64)
+#if defined(__linux__) && !ARCH_cuda && defined(QD_ARCH_x64)
 __asm__(".symver logf,logf@GLIBC_2.2.5");
 __asm__(".symver powf,powf@GLIBC_2.2.5");
 __asm__(".symver expf,expf@GLIBC_2.2.5");
@@ -410,8 +410,8 @@ constexpr bool enable_assert = true;
 
 void quadrants_assert(RuntimeContext *context, u1 test, const char *msg);
 void quadrants_assert_runtime(LLVMRuntime *runtime, u1 test, const char *msg);
-#define TI_ASSERT_INFO(x, msg) quadrants_assert(context, (u1)(x), msg)
-#define TI_ASSERT(x) TI_ASSERT_INFO(x, #x)
+#define QD_ASSERT_INFO(x, msg) quadrants_assert(context, (u1)(x), msg)
+#define QD_ASSERT(x) QD_ASSERT_INFO(x, #x)
 
 void ___stubs___() {
 #if ARCH_cuda

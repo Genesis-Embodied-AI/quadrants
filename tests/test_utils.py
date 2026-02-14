@@ -118,7 +118,7 @@ class TestParam:
         return self._required_extensions
 
 
-if os.environ.get("TI_LITE_TEST", ""):
+if os.environ.get("QD_LITE_TEST", ""):
     _test_features = {}
 else:
     _test_features = {
@@ -128,12 +128,12 @@ else:
 
 def expected_archs():
     """
-    Reads the environment variable `TI_WANTED_ARCHS` (usually set by option `-a` in `python tests/run_tests.py`)
+    Reads the environment variable `QD_WANTED_ARCHS` (usually set by option `-a` in `python tests/run_tests.py`)
     and gets all expected archs on the machine.
-    If `TI_WANTED_ARCHS` is set and does not start with `^`, archs specified in it will be returned.
-    If `TI_WANTED_ARCHS` starts with `^` (usually when option `-n` is specified in `python tests/run_tests.py`),
+    If `QD_WANTED_ARCHS` is set and does not start with `^`, archs specified in it will be returned.
+    If `QD_WANTED_ARCHS` starts with `^` (usually when option `-n` is specified in `python tests/run_tests.py`),
     all supported archs except archs specified in it will be returned.
-    If `TI_WANTED_ARCHS` is not set, all supported archs will be returned.
+    If `QD_WANTED_ARCHS` is not set, all supported archs will be returned.
     Returns:
         List[quadrants_python.Arch]: All expected archs on the machine.
     """
@@ -144,7 +144,7 @@ def expected_archs():
         archs = set(filter(is_arch_supported, archs))
         return archs
 
-    wanted_archs = os.environ.get("TI_WANTED_ARCHS", "")
+    wanted_archs = os.environ.get("QD_WANTED_ARCHS", "")
     want_exclude = wanted_archs.startswith("^")
     if want_exclude:
         wanted_archs = wanted_archs[1:]

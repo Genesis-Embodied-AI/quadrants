@@ -53,7 +53,7 @@ class RefCountedPool {
     auto iter = counts_.find(obj);
 
     if (iter == counts_.end()) {
-      TI_ERROR("Can not find counted reference");
+      QD_ERROR("Can not find counted reference");
     } else {
       int c = iter->second.dec();
       if (c == 0) {

@@ -15,7 +15,7 @@ namespace quadrants {
 class Task : public Unit {
  public:
   virtual std::string run(const std::vector<std::string> &parameters) {
-    TI_ASSERT_INFO(parameters.size() == 0, "No parameters supported.");
+    QD_ASSERT_INFO(parameters.size() == 0, "No parameters supported.");
     return this->run();
   }
 
@@ -27,7 +27,7 @@ class Task : public Unit {
   }
 };
 
-TI_INTERFACE(Task)
+QD_INTERFACE(Task)
 
 template <typename T>
 inline std::enable_if_t<
@@ -67,12 +67,12 @@ task_invoke(const T &func, const std::vector<std::string> &params) {
   return func();
 }
 
-#define TI_REGISTER_TASK(task)                                             \
+#define QD_REGISTER_TASK(task)                                             \
   class Task_##task : public quadrants::Task {                             \
     std::string run(const std::vector<std::string> &parameters) override { \
       return quadrants::task_invoke<decltype(task)>(task, parameters);     \
     }                                                                      \
   };                                                                       \
-  TI_IMPLEMENTATION(Task, Task_##task, #task)
+  QD_IMPLEMENTATION(Task, Task_##task, #task)
 
 }  // namespace quadrants

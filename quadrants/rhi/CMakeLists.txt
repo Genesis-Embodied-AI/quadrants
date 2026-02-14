@@ -19,14 +19,14 @@ target_include_directories(${QUADRANTS_DEVICE_API} SYSTEM
       ${PROJECT_SOURCE_DIR}/external/spdlog/include
     )
 
-if (TI_WITH_METAL)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_METAL")
+if (QD_WITH_METAL)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_METAL")
     add_subdirectory(metal)
     target_link_libraries(${QUADRANTS_DEVICE_API} PRIVATE metal_rhi)
 endif()
 
-if (TI_WITH_VULKAN)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTI_WITH_VULKAN")
+if (QD_WITH_VULKAN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_VULKAN")
     if (APPLE)
         # The latest Molten-vk v1.2.0 and v1.1.11 breaks GGUI: mpm3d_ggui.py
         # So we have to manually download and install Molten-vk v1.10.0
@@ -49,16 +49,16 @@ if (TI_WITH_VULKAN)
     target_link_libraries(${QUADRANTS_DEVICE_API} PUBLIC vulkan_rhi)
 endif ()
 
-if(TI_WITH_LLVM)
+if(QD_WITH_LLVM)
     add_subdirectory(cpu)
     target_link_libraries(${QUADRANTS_DEVICE_API} PUBLIC cpu_rhi)
 
-    if (TI_WITH_CUDA)
+    if (QD_WITH_CUDA)
         add_subdirectory(cuda)
         target_link_libraries(${QUADRANTS_DEVICE_API} PUBLIC cuda_rhi)
     endif()
 
-    if (TI_WITH_AMDGPU)
+    if (QD_WITH_AMDGPU)
         add_subdirectory(amdgpu)
         target_link_libraries(${QUADRANTS_DEVICE_API} PUBLIC amdgpu_rhi)
     endif()
