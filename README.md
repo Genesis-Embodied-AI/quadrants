@@ -1,33 +1,85 @@
-# Quadrants
+# What is Quadrants?
 
-[Quadrants](https://github.com/Genesis-Embodied-AI/quadrants) was forked in June 2025. This repository (or quadrants) is now a fully independent project with no intention of maintaining backward compatibility with the original taichi. Whilst the repo largely resembles upstream for now, we have made the following changes:
-- revamped continuous integration, to run using recent python versions (up to 3.13), recent mac os x versions (up to 15), and to run reliably (at least 90% of runs with correct code succeed)
-- added dataclasses.dataclass structs:
-    - work with both ndarrays and fields (cf ti.struct (field only), ti.dataclass (field only), ti.data_oriented (field only), argpack (ndarray only))
-    - can be passed into child `ti.func`tions (cf argpack)
-    - can be nested
-    - does not affect kernel runtime speed (kernels see only the underlying arrays, no indirection is added within the kernel layer)
-- removed GUI/GGUI, C-API, AOT, DX11, DX12, IOS, Android, OpenGL, GLES, argpack, CLI
-- reduced launch latency
-    - for example, release 4.0.0 increased the speed of non-batched ndarray on CPU by 4.5x in Genesis benchmarks
-    - release 3.2.0 added many optimizations so that ndarrays run much faster, changing from 11x slower than fields before this release, to 1.8x slower than fields with this release. (on a specific Genesis test, using a 5090 GPU)
-- reduced warm cache launch latency
-    - concretely, on Genesis simulator, running on linux, with an NVidia 5090 GPU, cache load time for single_franka_envs.py changed from 7.2s to 0.3s.
-- added `to_dlpack`, which enables zero-copy memory sharing between torch and quadrants, avoiding going through kernels for data-accessors. This significantly improves performance.
-- upgraded to LLVM 20
-- enabled ARM
+Quadrants is a high-performance multi-platform compiler for physics simulation being continuously developed by [Genesis AI](https://genesis-ai.company/).
 
-# What is quadrants?
+It is designed for large-scale physics simulation and robotics workloads. It compiles Python code into highly optimized parallel kernels that run on:
 
-Quadrants is a high performance multi-platform compiler, targeted at physics simulations. It compiles Python code into parallelizable kernels that can run on:
-- NVidia GPUs, using CUDA
-- Vulkan-compatible GPUs, using SPIR-V
-- Mac Metal GPUs
-- x86 and arm64 CPUs
+* NVIDIA GPUs (CUDA)
+* Vulkan-compatible GPUs (SPIR-V)
+* Apple Metal GPUs
+* AMD GPUs (ROCm HIP)
+* x86 and ARM64 CPUs
 
-Quadrants supports automatic differentiation. Quadrants lets you build fully fused GPU kernels, using Python.
+## The origin
 
-[Genesis simulator](https://genesis-world.readthedocs.io/en/latest/)'s best-in-class performance can be largely attributed to Taichi, its underlying GPU acceleration framework for Python. Given how critical is this component, we decided to fork Taichi and build our own very framework from there, so that from now on, we are free to drive its development in the direction that best supports the continuous improvement of Genesis simulator.
+The quadrants project was originally forked from [Taichi](https://github.com/taichi-dev/taichi) in June 2025. As the original Taichi is no longer being maintained and the codebase evolved into a fully independent compiler with its own direction and long-term roadmap, we decided to give it a name that reflects both its roots and its new identity. The name _Quadrants_ is inspired by the Chinese saying:
+
+> 太极生两仪，两仪生四象
+>
+> The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quadrants_).
+
+_Quadrants_ captures the idea of progression originated from taichi — built on the same foundation, evolving in its own direction while acknowledging its roots.
+This project is now fully independent and does not aim to maintain backward compatibility with upstream Taichi.
+
+## How Quadrants differs from upstream Taichi
+
+While the repository still resembles upstream in structure, major changes include:
+
+### Modernized infrastructure
+
+* Revamped CI
+* Support for Python 3.10–3.13
+* Support for macOS up to 15
+* Significantly improved reliability (≥90% CI success on correct code)
+
+### Structural improvements
+
+* Added `dataclasses.dataclass` structs:
+
+  * Work with both ndarrays and fields
+  * Can be passed into child `ti.func` functions
+  * Can be nested
+  * No kernel runtime overhead (kernels see only underlying arrays)
+
+### Removed components
+
+To focus the compiler and reduce maintenance burden, we removed:
+
+* GUI / GGUI
+* C-API
+* AOT
+* DX11 / DX12
+* iOS / Android
+* OpenGL / GLES
+* argpack
+* CLI
+
+### Performance improvements
+
+#### Reduced launch latency
+
+* Release 4.0.0 improved non-batched ndarray CPU performance by **4.5×** in Genesis benchmarks.
+* Release 3.2.0 improved ndarray performance from **11× slower than fields** to **1.8× slower** (on a 5090 GPU, Genesis benchmark).
+
+#### Reduced warm-cache latency
+
+On Genesis simulator (Linux + NVIDIA 5090):
+
+* `single_franka_envs.py` cache load time reduced from **7.2s → 0.3s**
+
+#### Zero-copy Torch interop
+
+* Added `to_dlpack`
+* Enables zero-copy memory sharing between PyTorch and Quadrants
+* Avoids kernel-based accessors
+* Significantly improves performance
+
+### Compiler upgrades
+
+* Upgraded to LLVM 20
+* Enabled ARM support
+
+---
 
 # Installation
 ## Prerequisites
@@ -52,4 +104,7 @@ pip install quadrants
 
 # Acknowledgements
 
-- The original [Taichi](https://github.com/taichi-dev/taichi) was developed with love by many contributors over many years. For the full list of contributors and credits, see [Original taichi contributors](https://github.com/taichi-dev/taichi?tab=readme-ov-file#contributing)
+Quadrants stands on the shoulders of the original [Taichi](https://github.com/taichi-dev/taichi) project, built with care and vision by many contributors over the years.
+For the full list of contributors and credits, see the [original Taichi repository](https://github.com/taichi-dev/taichi).
+
+We are grateful for that foundation.
