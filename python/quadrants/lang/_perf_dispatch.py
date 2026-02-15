@@ -1,4 +1,5 @@
 import inspect
+import os
 import time
 from collections import defaultdict
 from typing import Any, Callable, Generic, ParamSpec, Type, TypeVar
@@ -10,6 +11,7 @@ from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
 NUM_WARMUP: int = 3
 NUM_ACTIVE: int = 1
+TI_PERFDISPATCH_PRINT_DEBUG = os.environ.get("TI_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
 
 class DispatchImpl:
@@ -92,10 +94,14 @@ class PerformanceDispatcher(Generic[P, R]):
                 sig = inspect.signature(func.fn)  # type: ignore
                 log_str = f"perf_dispatch registering {func.fn.__name__}"  # type: ignore
                 _logging.debug(log_str)
+                if TI_PERFDISPATCH_PRINT_DEBUG:
+                    print(log_str)
             else:
                 sig = inspect.signature(func)
                 log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
                 _logging.debug(log_str)
+                if TI_PERFDISPATCH_PRINT_DEBUG:
+                    print(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
                     raise QuadrantsSyntaxError(
@@ -145,9 +151,12 @@ class PerformanceDispatcher(Generic[P, R]):
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
         underlying = fastest_dispatch.get_implementation2()
-        _logging.debug(
+        log_str = (
             f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions."
         )
+        _logging.debug(log_str)
+        if TI_PERFDISPATCH_PRINT_DEBUG:
+            print(log_str)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
         """
@@ -193,9 +202,10 @@ class PerformanceDispatcher(Generic[P, R]):
             self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
             dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             assert dispatch_impl_ is not None
-            _logging.debug(
-                f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
-            )
+            log_str = f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
+            _logging.debug(log_str)
+            if TI_PERFDISPATCH_PRINT_DEBUG:
+                print(log_str)
             return dispatch_impl_(*args, **kwargs)
 
         dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
