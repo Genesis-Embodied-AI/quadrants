@@ -74,7 +74,7 @@ void start_memory_monitoring(std::string output_fn, int pid, real interval) {
   if (pid == -1) {
     pid = PID::get_pid();
   }
-  TI_P(pid);
+  QD_P(pid);
   std::thread th([=]() {
     MemoryMonitor monitor(pid, output_fn);
     while (true) {
@@ -88,10 +88,10 @@ void start_memory_monitoring(std::string output_fn, int pid, real interval) {
 class MemoryTest : public Task {
  public:
   std::string run(const std::vector<std::string> &parameters) override {
-    TI_P(get_memory_usage());
+    QD_P(get_memory_usage());
     Time::sleep(3);
     std::vector<uint8> a(1024ul * 1024 * 1024 * 10, 3);
-    TI_P(get_memory_usage());
+    QD_P(get_memory_usage());
     Time::sleep(3);
     return "";
   }
@@ -111,7 +111,7 @@ class MemoryTest2 : public Task {
   }
 };
 
-TI_IMPLEMENTATION(Task, MemoryTest, "mem_test");
-TI_IMPLEMENTATION(Task, MemoryTest2, "mem_test2");
+QD_IMPLEMENTATION(Task, MemoryTest, "mem_test");
+QD_IMPLEMENTATION(Task, MemoryTest2, "mem_test2");
 
 }  // namespace quadrants

@@ -7,7 +7,7 @@ namespace {
 class StructCompiler {
  public:
   CompiledSNodeStructs run(SNode &root) {
-    TI_ASSERT(root.type == SNodeType::root);
+    QD_ASSERT(root.type == SNodeType::root);
 
     CompiledSNodeStructs result;
     result.root = &root;
@@ -17,14 +17,14 @@ class StructCompiler {
     result.type_factory = new tinyir::Block;
     result.root_type = construct(*result.type_factory, &root);
     */
-    TI_TRACE("RootBuffer size={}", result.root_size);
+    QD_TRACE("RootBuffer size={}", result.root_size);
 
     /*
     std::unique_ptr<tinyir::Block> b = ir_reduce_types(result.type_factory);
 
-    TI_WARN("Original types:\n{}", ir_print_types(result.type_factory));
+    QD_WARN("Original types:\n{}", ir_print_types(result.type_factory));
 
-    TI_WARN("Reduced types:\n{}", ir_print_types(b.get()));
+    QD_WARN("Reduced types:\n{}", ir_print_types(b.get()));
     */
 
     return result;
@@ -122,19 +122,19 @@ class StructCompiler {
       sn_desc.total_num_cells_from_root *= e.num_elements_from_root;
     }
 
-    TI_TRACE("SNodeDescriptor");
-    TI_TRACE("* snode={}", sn_desc.snode->id);
-    TI_TRACE("* type={} (is_place={})", sn_desc.snode->node_type_name,
+    QD_TRACE("SNodeDescriptor");
+    QD_TRACE("* snode={}", sn_desc.snode->id);
+    QD_TRACE("* type={} (is_place={})", sn_desc.snode->node_type_name,
              is_place);
-    TI_TRACE("* cell_stride={}", sn_desc.cell_stride);
-    TI_TRACE("* num_cells_per_container={}",
+    QD_TRACE("* cell_stride={}", sn_desc.cell_stride);
+    QD_TRACE("* num_cells_per_container={}",
              sn_desc.snode->num_cells_per_container);
-    TI_TRACE("* container_stride={}", sn_desc.container_stride);
-    TI_TRACE("* total_num_cells_from_root={}",
+    QD_TRACE("* container_stride={}", sn_desc.container_stride);
+    QD_TRACE("* total_num_cells_from_root={}",
              sn_desc.total_num_cells_from_root);
-    TI_TRACE("");
+    QD_TRACE("");
 
-    TI_ASSERT(snode_descriptors_.find(sn->id) == snode_descriptors_.end());
+    QD_ASSERT(snode_descriptors_.find(sn->id) == snode_descriptors_.end());
     snode_descriptors_[sn->id] = sn_desc;
     return sn_desc.container_stride;
   }

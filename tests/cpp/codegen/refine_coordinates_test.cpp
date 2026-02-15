@@ -1,4 +1,4 @@
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "gtest/gtest.h"
 
 #include <memory>
@@ -167,4 +167,4 @@ TEST_F(RefineCoordinatesTest, Basic) {
 
 }  // namespace
 }  // namespace quadrants::lang
-#endif  // #ifdef TI_WITH_LLVM
+#endif  // #ifdef QD_WITH_LLVM

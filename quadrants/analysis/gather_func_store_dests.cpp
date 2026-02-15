@@ -21,7 +21,7 @@ class GatherFuncStoreDests : public BasicStmtVisitor {
 
   static std::unordered_set<Stmt *> run(Function *func,
                                         TarjanData &tarjan_data) {
-    TI_ASSERT(tarjan_data.func_dfn.count(func) == 0);
+    QD_ASSERT(tarjan_data.func_dfn.count(func) == 0);
     tarjan_data.func_dfn[func] = tarjan_data.func_low[func] =
         tarjan_data.func_dfn.size();
     tarjan_data.func_in_stack.insert(func);

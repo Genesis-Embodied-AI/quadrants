@@ -260,7 +260,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 namespace irpass {
 bool cache_loop_invariant_global_vars(IRNode *root,
                                       const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return CacheLoopInvariantGlobalVars::run(root, config);
 }
 }  // namespace irpass

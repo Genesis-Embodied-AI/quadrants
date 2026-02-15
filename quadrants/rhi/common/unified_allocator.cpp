@@ -12,7 +12,7 @@ std::size_t UnifiedAllocator::default_allocator_size =
 template <typename T>
 static void swap_erase_vector(std::vector<T> &vec, size_t idx) {
   bool is_last = idx == vec.size() - 1;
-  TI_ASSERT(idx < vec.size());
+  QD_ASSERT(idx < vec.size());
 
   if (!is_last) {
     std::swap(vec[idx], vec.back());
@@ -46,12 +46,12 @@ void *UnifiedAllocator::allocate(std::size_t size,
       auto tail = (std::size_t)chunk.tail;
       auto data = (std::size_t)chunk.data;
       auto ret = head + alignment - 1 - (head + alignment - 1) % alignment;
-      TI_TRACE("UM [data={}] allocate() request={} remain={}", (intptr_t)data,
+      QD_TRACE("UM [data={}] allocate() request={} remain={}", (intptr_t)data,
                size, (tail - head));
       head = ret + size;
       if (head <= tail) {
         // success
-        TI_ASSERT(ret % alignment == 0);
+        QD_ASSERT(ret % alignment == 0);
         chunk.head = (void *)head;
         return (void *)ret;
       }
@@ -68,7 +68,7 @@ void *UnifiedAllocator::allocate(std::size_t size,
     allocation_size = std::max(allocation_size, default_allocator_size);
   }
 
-  TI_TRACE("Allocating virtual address space of size {} MB",
+  QD_TRACE("Allocating virtual address space of size {} MB",
            allocation_size / 1024 / 1024);
 
   void *ptr =
@@ -78,8 +78,8 @@ void *UnifiedAllocator::allocate(std::size_t size,
   chunk.tail = (void *)((std::size_t)chunk.head + allocation_size);
   chunk.is_exclusive = exclusive;
 
-  TI_ASSERT(chunk.data != nullptr);
-  TI_ASSERT(uint64(chunk.data) % HostMemoryPool::page_size == 0);
+  QD_ASSERT(chunk.data != nullptr);
+  QD_ASSERT(uint64(chunk.data) % HostMemoryPool::page_size == 0);
 
   chunks_.emplace_back(std::move(chunk));
   return ptr;
@@ -94,7 +94,7 @@ bool UnifiedAllocator::release(size_t sz, void *ptr) {
     auto &chunk = chunks_[chunk_idx];
 
     if (chunk.data == ptr) {
-      TI_ASSERT(chunk.is_exclusive);
+      QD_ASSERT(chunk.is_exclusive);
       remove_idx = chunk_idx;
     }
   }

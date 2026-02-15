@@ -2,14 +2,14 @@
 
 #include "codegen.h"
 
-#if defined(TI_WITH_LLVM)
+#if defined(QD_WITH_LLVM)
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #endif
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/codegen/cuda/codegen_cuda.h"
 #endif
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/codegen/amdgpu/codegen_amdgpu.h"
 #endif
 #include "quadrants/system/timer.h"
@@ -35,38 +35,38 @@ std::unique_ptr<KernelCodeGen> KernelCodeGen::create(
     const Kernel *kernel,
     IRNode *ir,
     QuadrantsLLVMContext &tlctx) {
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   const auto arch = compile_config.arch;
   if (arch_is_cpu(arch)) {
     return std::make_unique<KernelCodeGenCPU>(compile_config, kernel, ir,
                                               tlctx);
   } else if (arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     return std::make_unique<KernelCodeGenCUDA>(compile_config, kernel, ir,
                                                tlctx);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else if (arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     return std::make_unique<KernelCodeGenAMDGPU>(compile_config, kernel, ir,
                                                  tlctx);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 #else
-  TI_ERROR("Llvm disabled");
+  QD_ERROR("Llvm disabled");
 #endif
 }
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 
 LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto block = dynamic_cast<Block *>(ir);
   auto &worker = get_llvm_program(kernel->program)->compilation_workers;
-  TI_ASSERT(block);
+  QD_ASSERT(block);
 
   auto &offloads = block->statements;
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());

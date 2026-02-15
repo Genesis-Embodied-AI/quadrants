@@ -178,23 +178,23 @@ CuSparseSolver::CuSparseSolver() {
 }
 
 void CuSparseSolver::init_solver() {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (!CUSPARSEDriver::get_instance().is_loaded()) {
     bool load_success = CUSPARSEDriver::get_instance().load_cusparse();
     if (!load_success) {
-      TI_ERROR("Failed to load cusparse library!");
+      QD_ERROR("Failed to load cusparse library!");
     }
   }
   if (!CUSOLVERDriver::get_instance().is_loaded()) {
     bool load_success = CUSOLVERDriver::get_instance().load_cusolver();
     if (!load_success) {
-      TI_ERROR("Failed to load cusolver library!");
+      QD_ERROR("Failed to load cusolver library!");
     }
   }
 #endif
 }
 void CuSparseSolver::reorder(const CuSparseMatrix &A) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   size_t rowsA = A.num_rows();
   size_t colsA = A.num_cols();
   size_t nnzA = A.get_nnz();
@@ -280,11 +280,11 @@ void CuSparseSolver::analyze_pattern(const SparseMatrix &sm) {
       analyze_pattern_lu(sm);
       break;
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 void CuSparseSolver::analyze_pattern_cholesky(const SparseMatrix &sm) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Retrive the info of the sparse matrix
   SparseMatrix &sm_no_cv = const_cast<SparseMatrix &>(sm);
   CuSparseMatrix &A = static_cast<CuSparseMatrix &>(sm_no_cv);
@@ -303,11 +303,11 @@ void CuSparseSolver::analyze_pattern_cholesky(const SparseMatrix &sm) {
       info_);
   is_analyzed_ = true;
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 void CuSparseSolver::analyze_pattern_lu(const SparseMatrix &sm) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Retrive the info of the sparse matrix
   SparseMatrix &sm_no_cv = const_cast<SparseMatrix &>(sm);
   CuSparseMatrix &A = static_cast<CuSparseMatrix &>(sm_no_cv);
@@ -327,7 +327,7 @@ void CuSparseSolver::analyze_pattern_lu(const SparseMatrix &sm) {
       lu_info_);
   is_analyzed_ = true;
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 void CuSparseSolver::factorize(const SparseMatrix &sm) {
@@ -339,11 +339,11 @@ void CuSparseSolver::factorize(const SparseMatrix &sm) {
       factorize_lu(sm);
       break;
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 void CuSparseSolver::factorize_cholesky(const SparseMatrix &sm) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Retrive the info of the sparse matrix
   SparseMatrix *sm_no_cv = const_cast<SparseMatrix *>(&sm);
   CuSparseMatrix *A = static_cast<CuSparseMatrix *>(sm_no_cv);
@@ -369,14 +369,14 @@ void CuSparseSolver::factorize_cholesky(const SparseMatrix &sm) {
   int singularity = 0;
   CUSOLVERDriver::get_instance().csSpScsrcholZeroPivot(cusolver_handle_, info_,
                                                        tol, &singularity);
-  TI_ASSERT(singularity == -1);
+  QD_ASSERT(singularity == -1);
   is_factorized_ = true;
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 void CuSparseSolver::factorize_lu(const SparseMatrix &sm) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   // Retrive the info of the sparse matrix
   SparseMatrix *sm_no_cv = const_cast<SparseMatrix *>(&sm);
   CuSparseMatrix *A = static_cast<CuSparseMatrix *>(sm_no_cv);
@@ -404,10 +404,10 @@ void CuSparseSolver::factorize_lu(const SparseMatrix &sm) {
   const float tol = 1.e-6;
   CUSOLVERDriver::get_instance().csSpScsrluZeroPivotHost(
       cusolver_handle_, lu_info_, tol, &singularity);
-  TI_ASSERT(singularity == -1);
+  QD_ASSERT(singularity == -1);
   is_factorized_ = true;
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 void CuSparseSolver::solve_rf(Program *prog,
@@ -422,7 +422,7 @@ void CuSparseSolver::solve_rf(Program *prog,
       solve_lu(prog, sm, b, x);
       break;
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -430,7 +430,7 @@ void CuSparseSolver::solve_cholesky(Program *prog,
                                     const SparseMatrix &sm,
                                     const Ndarray &b,
                                     const Ndarray &x) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (is_analyzed_ == false) {
     analyze_pattern(sm);
   }
@@ -482,7 +482,7 @@ void CuSparseSolver::solve_cholesky(Program *prog,
   CUSPARSEDriver::get_instance().cpDestroySpVec(vecX);
   CUSPARSEDriver::get_instance().cpDestroyDnVec(vecY);
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 
@@ -490,7 +490,7 @@ void CuSparseSolver::solve_lu(Program *prog,
                               const SparseMatrix &sm,
                               const Ndarray &b,
                               const Ndarray &x) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (is_analyzed_ == false) {
     analyze_pattern(sm);
   }
@@ -535,7 +535,7 @@ void CuSparseSolver::solve_lu(Program *prog,
   free(h_x);
   free(h_x_hat);
 #else
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 #endif
 }
 
@@ -554,7 +554,7 @@ std::unique_ptr<SparseSolver> make_sparse_solver(DataType dt,
       {"f32", "float32"}, {"f64", "float64"}};
   auto it = dt_map.find(quadrants::lang::data_type_name(dt));
   if (it == dt_map.end())
-    TI_ERROR("Not supported sparse solver data type: {}",
+    QD_ERROR("Not supported sparse solver data type: {}",
              quadrants::lang::data_type_name(dt));
 
   Triplets solver_key = std::make_tuple(it->second, solver_type, ordering);
@@ -571,14 +571,14 @@ std::unique_ptr<SparseSolver> make_sparse_solver(DataType dt,
       using LU = Eigen::SparseLU<EigenMatrix>;
       return std::make_unique<EigenSparseSolver<LU, EigenMatrix>>();
     } else {
-      TI_ERROR("Not supported sparse solver data type: {}", it->second);
+      QD_ERROR("Not supported sparse solver data type: {}", it->second);
     }
   } else
-    TI_ERROR("Not supported sparse solver type: {}", solver_type);
+    QD_ERROR("Not supported sparse solver type: {}", solver_type);
 }
 
 CuSparseSolver::~CuSparseSolver() {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (h_Q_ != nullptr)
     free(h_Q_);
   if (h_csr_row_ptr_B_ != nullptr)
@@ -623,7 +623,7 @@ std::unique_ptr<SparseSolver> make_cusparse_solver(
   } else if (solver_type == "LU") {
     return std::make_unique<CuSparseSolver>(CuSparseSolver::SolverType::LU);
   } else {
-    TI_ERROR("Not supported sparse solver type: {}", solver_type);
+    QD_ERROR("Not supported sparse solver type: {}", solver_type);
   }
 }
 }  // namespace quadrants::lang

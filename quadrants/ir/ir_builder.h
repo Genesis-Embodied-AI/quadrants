@@ -47,7 +47,7 @@ class IRBuilder {
   void set_insertion_point_to_loop_begin(XStmt *loop) {
     using DecayedType = typename std::decay_t<XStmt>;
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
-      TI_ERROR("The argument is not a statement.");
+      QD_ERROR("The argument is not a statement.");
     }
     if constexpr (std::is_same_v<DecayedType, RangeForStmt> ||
                   std::is_same_v<DecayedType, StructForStmt> ||
@@ -55,7 +55,7 @@ class IRBuilder {
                   std::is_same_v<DecayedType, WhileStmt>) {
       set_insertion_point({loop->body.get(), 0});
     } else {
-      TI_ERROR("Statement {} is not a loop.", loop->name());
+      QD_ERROR("Statement {} is not a loop.", loop->name());
     }
   }
 
@@ -253,26 +253,26 @@ class IRBuilder {
   GlobalLoadStmt *create_global_load(XStmt *ptr) {
     using DecayedType = typename std::decay_t<XStmt>;
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
-      TI_ERROR("The argument is not a statement.");
+      QD_ERROR("The argument is not a statement.");
     }
     if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> ||
                   std::is_same_v<DecayedType, ExternalPtrStmt>) {
       return insert(Stmt::make_typed<GlobalLoadStmt>(ptr));
     } else {
-      TI_ERROR("Statement {} is not a global pointer.", ptr->name());
+      QD_ERROR("Statement {} is not a global pointer.", ptr->name());
     }
   }
   template <typename XStmt>
   void create_global_store(XStmt *ptr, Stmt *data) {
     using DecayedType = typename std::decay_t<XStmt>;
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
-      TI_ERROR("The argument is not a statement.");
+      QD_ERROR("The argument is not a statement.");
     }
     if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> ||
                   std::is_same_v<DecayedType, ExternalPtrStmt>) {
       insert(Stmt::make_typed<GlobalStoreStmt>(ptr, data));
     } else {
-      TI_ERROR("Statement {} is not a global pointer.", ptr->name());
+      QD_ERROR("Statement {} is not a global pointer.", ptr->name());
     }
   }
 

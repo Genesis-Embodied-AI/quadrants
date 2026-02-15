@@ -186,7 +186,7 @@ class BinaryOpSimp : public BasicStmtVisitor {
 namespace irpass {
 
 bool binary_op_simplify(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return BinaryOpSimp::run(root, config.fast_math);
 }
 

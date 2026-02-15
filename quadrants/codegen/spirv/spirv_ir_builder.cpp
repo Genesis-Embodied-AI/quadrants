@@ -8,12 +8,12 @@ namespace spirv {
 using cap = DeviceCapability;
 
 void IRBuilder::init_header() {
-  TI_ASSERT(header_.size() == 0U);
+  QD_ASSERT(header_.size() == 0U);
   header_.push_back(spv::MagicNumber);
 
   header_.push_back(caps_->get(cap::spirv_version));
 
-  TI_TRACE("SPIR-V Version {}", caps_->get(cap::spirv_version));
+  QD_TRACE("SPIR-V Version {}", caps_->get(cap::spirv_version));
 
   // generator: set to 0, unknown
   header_.push_back(0U);
@@ -256,21 +256,21 @@ PhiValue IRBuilder::make_phi(const SType &out_type, uint32_t num_incoming) {
 Value IRBuilder::int_immediate_number(const SType &dtype,
                                       int64_t value,
                                       bool cache) {
-  TI_ASSERT(is_integral(dtype.dt));
+  QD_ASSERT(is_integral(dtype.dt));
   return get_const(dtype, reinterpret_cast<uint64_t *>(&value), cache);
 }
 
 Value IRBuilder::uint_immediate_number(const SType &dtype,
                                        uint64_t value,
                                        bool cache) {
-  TI_ASSERT(is_integral(dtype.dt));
+  QD_ASSERT(is_integral(dtype.dt));
   return get_const(dtype, &value, cache);
 }
 
 Value IRBuilder::float_immediate_number(const SType &dtype,
                                         double value,
                                         bool cache) {
-  TI_ASSERT(is_real(dtype.dt));
+  QD_ASSERT(is_real(dtype.dt));
   if (data_type_bits(dtype.dt) == 64) {
     return get_const(dtype, reinterpret_cast<uint64_t *>(&value), cache);
   } else if (data_type_bits(dtype.dt) == 32) {
@@ -283,7 +283,7 @@ Value IRBuilder::float_immediate_number(const SType &dtype,
     uint64_t data = fp16_ieee_from_fp32_value(fvalue);
     return get_const(dtype, &data, cache);
   } else {
-    TI_ERROR("Type {} not supported.", dtype.dt->to_string());
+    QD_ERROR("Type {} not supported.", dtype.dt->to_string());
   }
 }
 
@@ -298,44 +298,44 @@ SType IRBuilder::get_primitive_type(const DataType &dt) const {
     return t_bool_;
   } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
     if (!caps_->get(cap::spirv_has_float16))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_fp16_;
   } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
     return t_fp32_;
   } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (!caps_->get(cap::spirv_has_float64))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_fp64_;
   } else if (dt->is_primitive(PrimitiveTypeID::i8)) {
     if (!caps_->get(cap::spirv_has_int8))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_int8_;
   } else if (dt->is_primitive(PrimitiveTypeID::i16)) {
     if (!caps_->get(cap::spirv_has_int16))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_int16_;
   } else if (dt->is_primitive(PrimitiveTypeID::i32)) {
     return t_int32_;
   } else if (dt->is_primitive(PrimitiveTypeID::i64)) {
     if (!caps_->get(cap::spirv_has_int64))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_int64_;
   } else if (dt->is_primitive(PrimitiveTypeID::u8)) {
     if (!caps_->get(cap::spirv_has_int8))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_uint8_;
   } else if (dt->is_primitive(PrimitiveTypeID::u16)) {
     if (!caps_->get(cap::spirv_has_int16))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_uint16_;
   } else if (dt->is_primitive(PrimitiveTypeID::u32)) {
     return t_uint32_;
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
     if (!caps_->get(cap::spirv_has_int64))
-      TI_ERROR("Type {} not supported.", dt->to_string());
+      QD_ERROR("Type {} not supported.", dt->to_string());
     return t_uint64_;
   } else {
-    TI_ERROR("Type {} not supported.", dt->to_string());
+    QD_ERROR("Type {} not supported.", dt->to_string());
   }
 }
 
@@ -356,13 +356,13 @@ SType IRBuilder::from_quadrants_type(const DataType &dt, bool has_buffer_ptr) {
     }
     return create_struct_type(components);
   } else {
-    TI_ERROR("Type {} not supported.", dt->to_string());
+    QD_ERROR("Type {} not supported.", dt->to_string());
   }
 }
 
 size_t IRBuilder::get_primitive_type_size(const DataType &dt) const {
   if (!dt->is<PrimitiveType>()) {
-    TI_ERROR("Type {} not supported.", dt->to_string());
+    QD_ERROR("Type {} not supported.", dt->to_string());
   }
   if (dt == PrimitiveType::i64 || dt == PrimitiveType::u64 ||
       dt == PrimitiveType::f64) {
@@ -470,14 +470,14 @@ SType IRBuilder::get_array_type(const SType &_value_type, uint32_t num_elems) {
   } else if (value_type.flag == TypeKind::kSNodeStruct) {
     nbytes = value_type.snode_desc.container_stride;
   } else {
-    TI_ERROR("buffer type must be primitive or snode struct");
+    QD_ERROR("buffer type must be primitive or snode struct");
   }
 
   if (nbytes == 0) {
     if (value_type.flag == TypeKind::kPrimitive) {
-      TI_WARN("Invalid primitive bit size");
+      QD_WARN("Invalid primitive bit size");
     } else {
-      TI_WARN("Invalid container stride");
+      QD_WARN("Invalid container stride");
     }
   }
 
@@ -650,8 +650,8 @@ Value IRBuilder::buffer_argument(const SType &value_type,
 Value IRBuilder::struct_array_access(const SType &res_type,
                                      Value buffer,
                                      Value index) {
-  TI_ASSERT(buffer.flag == ValueKind::kStructArrayPtr);
-  TI_ASSERT(res_type.flag == TypeKind::kPrimitive);
+  QD_ASSERT(buffer.flag == ValueKind::kStructArrayPtr);
+  QD_ASSERT(res_type.flag == TypeKind::kPrimitive);
 
   spv::StorageClass storage_class;
   if (caps_->get(cap::spirv_version) < 0x10300) {
@@ -776,30 +776,30 @@ Value IRBuilder::get_subgroup_size() {
 }
 
 Value IRBuilder::popcnt(Value x) {
-  TI_ASSERT(is_integral(x.stype.dt));
+  QD_ASSERT(is_integral(x.stype.dt));
   return make_value(spv::OpBitCount, x.stype, x);
 }
 
 #define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)   \
   Value IRBuilder::_OpName(Value a, Value b) {         \
-    TI_ASSERT(a.stype.id == b.stype.id);               \
+    QD_ASSERT(a.stype.id == b.stype.id);               \
     if (is_integral(a.stype.dt)) {                     \
       return make_value(spv::OpI##_Op, a.stype, a, b); \
     } else {                                           \
-      TI_ASSERT(is_real(a.stype.dt));                  \
+      QD_ASSERT(is_real(a.stype.dt));                  \
       return make_value(spv::OpF##_Op, a.stype, a, b); \
     }                                                  \
   }
 
 #define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)         \
   Value IRBuilder::_OpName(Value a, Value b) {              \
-    TI_ASSERT(a.stype.id == b.stype.id);                    \
+    QD_ASSERT(a.stype.id == b.stype.id);                    \
     if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) { \
       return make_value(spv::OpS##_Op, a.stype, a, b);      \
     } else if (is_integral(a.stype.dt)) {                   \
       return make_value(spv::OpU##_Op, a.stype, a, b);      \
     } else {                                                \
-      TI_ASSERT(is_real(a.stype.dt));                       \
+      QD_ASSERT(is_real(a.stype.dt));                       \
       return make_value(spv::OpF##_Op, a.stype, a, b);      \
     }                                                       \
   }
@@ -810,28 +810,28 @@ DEFINE_BUILDER_BINARY_USIGN_OP(mul, Mul);
 DEFINE_BUILDER_BINARY_SIGN_OP(div, Div);
 
 Value IRBuilder::mod(Value a, Value b) {
-  TI_ASSERT(a.stype.id == b.stype.id);
+  QD_ASSERT(a.stype.id == b.stype.id);
   if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {
     // FIXME: figure out why OpSRem does not work
     return sub(a, mul(b, div(a, b)));
   } else if (is_integral(a.stype.dt)) {
     return make_value(spv::OpUMod, a.stype, a, b);
   } else {
-    TI_ASSERT(is_real(a.stype.dt));
+    QD_ASSERT(is_real(a.stype.dt));
     return make_value(spv::OpFRem, a.stype, a, b);
   }
 }
 
 #define DEFINE_BUILDER_CMP_OP(_OpName, _Op)                                \
   Value IRBuilder::_OpName(Value a, Value b) {                             \
-    TI_ASSERT(a.stype.id == b.stype.id);                                   \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
     const auto &bool_type = t_bool_; /* TODO: Only scalar supported now */ \
     if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {                \
       return make_value(spv::OpS##_Op, bool_type, a, b);                   \
     } else if (is_integral(a.stype.dt)) {                                  \
       return make_value(spv::OpU##_Op, bool_type, a, b);                   \
     } else {                                                               \
-      TI_ASSERT(is_real(a.stype.dt));                                      \
+      QD_ASSERT(is_real(a.stype.dt));                                      \
       return make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
     }                                                                      \
   }
@@ -843,14 +843,14 @@ DEFINE_BUILDER_CMP_OP(ge, GreaterThanEqual);
 
 #define DEFINE_BUILDER_CMP_UOP(_OpName, _Op)                               \
   Value IRBuilder::_OpName(Value a, Value b) {                             \
-    TI_ASSERT(a.stype.id == b.stype.id);                                   \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
     const auto &bool_type = t_bool_; /* TODO: Only scalar supported now */ \
     if (a.stype.id == bool_type.id) {                                      \
       return make_value(spv::OpLogical##_Op, bool_type, a, b);             \
     } else if (is_integral(a.stype.dt)) {                                  \
       return make_value(spv::OpI##_Op, bool_type, a, b);                   \
     } else {                                                               \
-      TI_ASSERT(is_real(a.stype.dt));                                      \
+      QD_ASSERT(is_real(a.stype.dt));                                      \
       return make_value(spv::OpFOrd##_Op, bool_type, a, b);                \
     }                                                                      \
   }
@@ -860,7 +860,7 @@ DEFINE_BUILDER_CMP_UOP(ne, NotEqual);
 
 #define DEFINE_BUILDER_LOGICAL_OP(_OpName, _Op)                               \
   Value IRBuilder::_OpName(Value a, Value b) {                                \
-    TI_ASSERT(a.stype.id == b.stype.id);                                      \
+    QD_ASSERT(a.stype.id == b.stype.id);                                      \
     if (a.stype.id == t_bool_.id) {                                           \
       return make_value(spv::OpLogical##_Op, t_bool_, a, b);                  \
     } else if (is_integral(a.stype.dt)) {                                     \
@@ -871,7 +871,7 @@ DEFINE_BUILDER_CMP_UOP(ne, NotEqual);
       Value val_ret = make_value(spv::OpLogical##_Op, t_bool_, val_a, val_b); \
       return cast(a.stype, val_ret);                                          \
     } else {                                                                  \
-      TI_ERROR("Logical ops on real types are not supported.");               \
+      QD_ERROR("Logical ops on real types are not supported.");               \
       return Value();                                                         \
     }                                                                         \
   }
@@ -880,20 +880,20 @@ DEFINE_BUILDER_LOGICAL_OP(logical_and, And);
 DEFINE_BUILDER_LOGICAL_OP(logical_or, Or);
 
 Value IRBuilder::bit_field_extract(Value base, Value offset, Value count) {
-  TI_ASSERT(is_integral(base.stype.dt));
-  TI_ASSERT(is_integral(offset.stype.dt));
-  TI_ASSERT(is_integral(count.stype.dt));
+  QD_ASSERT(is_integral(base.stype.dt));
+  QD_ASSERT(is_integral(offset.stype.dt));
+  QD_ASSERT(is_integral(count.stype.dt));
   return make_value(spv::OpBitFieldUExtract, base.stype, base, offset, count);
 }
 
 Value IRBuilder::select(Value cond, Value a, Value b) {
-  TI_ASSERT(a.stype.id == b.stype.id);
-  TI_ASSERT(cond.stype.id == t_bool_.id);
+  QD_ASSERT(a.stype.id == b.stype.id);
+  QD_ASSERT(cond.stype.id == t_bool_.id);
   return make_value(spv::OpSelect, a.stype, cond, a, b);
 }
 
 Value IRBuilder::cast(const SType &dst_type, Value value) {
-  TI_ASSERT(value.stype.id > 0U);
+  QD_ASSERT(value.stype.id > 0U);
   if (value.stype.id == dst_type.id)
     return value;
   const DataType &from = value.stype.dt;
@@ -910,7 +910,7 @@ Value IRBuilder::cast(const SType &dst_type, Value value) {
                         select(value, uint_immediate_number(t_uint32_, 1),
                                uint_immediate_number(t_uint32_, 0)));
     } else {
-      TI_ERROR("do not support type cast from {} to {}", from.to_string(),
+      QD_ERROR("do not support type cast from {} to {}", from.to_string(),
                to.to_string());
       return Value();
     }
@@ -920,7 +920,7 @@ Value IRBuilder::cast(const SType &dst_type, Value value) {
     } else if (is_integral(from) && is_unsigned(from)) {  // UInt -> Bool
       return ne(value, uint_immediate_number(value.stype, 0));
     } else {
-      TI_ERROR("do not support type cast from {} to {}", from.to_string(),
+      QD_ERROR("do not support type cast from {} to {}", from.to_string(),
                to.to_string());
       return Value();
     }
@@ -988,7 +988,7 @@ Value IRBuilder::cast(const SType &dst_type, Value value) {
   } else if (is_real(from) && is_real(to)) {  // Float -> Float
     return make_value(spv::OpFConvert, dst_type, value);
   } else {
-    TI_ERROR("do not support type cast from {} to {}", from.to_string(),
+    QD_ERROR("do not support type cast from {} to {}", from.to_string(),
              to.to_string());
     return Value();
   }
@@ -1013,7 +1013,7 @@ Value IRBuilder::alloca_workgroup_array(const SType &arr_type) {
 }
 
 Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
-  TI_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
+  QD_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
             pointer.flag == ValueKind::kStructArrayPtr ||
             pointer.flag == ValueKind::kPhysicalPtr);
   Value ret = new_value(res_type, ValueKind::kNormal);
@@ -1029,9 +1029,9 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
   return ret;
 }
 void IRBuilder::store_variable(Value pointer, Value value) {
-  TI_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
+  QD_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
             pointer.flag == ValueKind::kPhysicalPtr);
-  TI_ASSERT(value.stype.id == pointer.stype.element_type_id);
+  QD_ASSERT(value.stype.id == pointer.stype.element_type_id);
   if (pointer.flag == ValueKind::kPhysicalPtr) {
     uint32_t alignment = uint32_t(get_primitive_type_size(value.stype.dt));
     ib_.begin(spv::OpStore)
@@ -1045,7 +1045,7 @@ void IRBuilder::store_variable(Value pointer, Value value) {
 void IRBuilder::register_value(std::string name, Value value) {
   auto it = value_name_tbl_.find(name);
   if (it != value_name_tbl_.end() && it->second.flag != ValueKind::kConstant) {
-    TI_ERROR("{} already exists.", name);
+    QD_ERROR("{} already exists.", name);
   }
   this->debug_name(
       spv::OpName, value,
@@ -1058,7 +1058,7 @@ Value IRBuilder::query_value(std::string name) const {
   if (it != value_name_tbl_.end()) {
     return it->second;
   }
-  TI_ERROR("Value \"{}\" does not yet exist.", name);
+  QD_ERROR("Value \"{}\" does not yet exist.", name);
 }
 
 bool IRBuilder::check_value_existence(const std::string &name) const {
@@ -1096,7 +1096,7 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
         },
         dt);
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1109,7 +1109,7 @@ Value IRBuilder::integer_atomic(AtomicOpType op_type,
         addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); },
         dt);
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1241,7 +1241,7 @@ Value IRBuilder::get_const(const SType &dtype,
     }
   }
 
-  TI_WARN_IF(dtype.flag != TypeKind::kPrimitive,
+  QD_WARN_IF(dtype.flag != TypeKind::kPrimitive,
              "Trying to get const with dtype.flag={} , .dt={}", int(dtype.flag),
              dtype.dt.to_string());
   Value ret = new_value(dtype, ValueKind::kConstant);
@@ -1291,7 +1291,7 @@ SType IRBuilder::declare_primitive_type(DataType dt) {
         .add_seq(t, data_type_bits(dt), static_cast<int>(is_signed(dt)))
         .commit(&global_);
   else {
-    TI_ERROR("Type {} not supported.", dt->to_string());
+    QD_ERROR("Type {} not supported.", dt->to_string());
   }
 
   return t;
@@ -1329,7 +1329,7 @@ void IRBuilder::init_random_function(Value global_tmp_) {
   debug_name(spv::OpName, rand_gtmp_, "rand_gtmp");
 
   auto load_var = [&](Value pointer, const SType &res_type) {
-    TI_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
+    QD_ASSERT(pointer.flag == ValueKind::kVariablePtr ||
               pointer.flag == ValueKind::kStructArrayPtr);
     Value ret = new_value(res_type, ValueKind::kNormal);
     ib_.begin(spv::OpLoad)
@@ -1339,8 +1339,8 @@ void IRBuilder::init_random_function(Value global_tmp_) {
   };
 
   auto store_var = [&](Value pointer, Value value) {
-    TI_ASSERT(pointer.flag == ValueKind::kVariablePtr);
-    TI_ASSERT(value.stype.id == pointer.stype.element_type_id);
+    QD_ASSERT(pointer.flag == ValueKind::kVariablePtr);
+    QD_ASSERT(value.stype.id == pointer.stype.element_type_id);
     ib_.begin(spv::OpStore).add_seq(pointer, value).commit(&func_header_);
   };
 

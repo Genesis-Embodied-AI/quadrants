@@ -51,7 +51,7 @@ std::string format_error_message(const std::string &error_message_template,
         error_message_formatted += fmt::format(
             "{}", quadrants_union_cast_with_different_sizes<float32>(argument));
       } else {
-        TI_ERROR("Data type identifier %{} is not supported", dtype);
+        QD_ERROR("Data type identifier %{} is not supported", dtype);
       }
       argument_id += 1;
       i++;  // skip the dtype char

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "quadrants/util/lang_util.h"
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/runtime/llvm/llvm_fwd.h"
 #endif
 
@@ -15,7 +15,7 @@ class FileSequenceWriter {
  public:
   FileSequenceWriter(std::string filename_template, std::string file_type);
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   // returns filename
   std::string write(llvm::Module *module);
 #endif

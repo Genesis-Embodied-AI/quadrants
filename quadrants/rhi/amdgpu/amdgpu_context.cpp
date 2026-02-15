@@ -1,4 +1,4 @@
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "amdgpu_context.h"
 
 #include <unordered_map>
@@ -23,14 +23,14 @@ AMDGPUContext::AMDGPUContext()
   char name[128];
   driver_.device_get_name(name, 128, device_);
 
-  TI_TRACE("Using AMDGPU device [id=0]: {}", name);
+  QD_TRACE("Using AMDGPU device [id=0]: {}", name);
 
   driver_.device_primary_ctx_retain(&context_, device_);
   driver_.context_set_current(context_);
-  TI_TRACE("AMDGPU: Retained primary context: {}", context_);
+  QD_TRACE("AMDGPU: Retained primary context: {}", context_);
 
   const auto GB = std::pow(1024.0, 3.0);
-  TI_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
+  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
            get_total_memory() / GB, get_free_memory() / GB);
 
   void *hip_device_prop = std::malloc(HIP_DEVICE_PROPERTIES_STRUCT_SIZE);
@@ -68,7 +68,7 @@ AMDGPUContext::AMDGPUContext()
   if (mcpu_.empty() || mcpu_.substr(0, 3) != "gfx") {
     // ROCm 6 starts with 60000000
     if (runtime_version < 60000000) {
-      TI_ERROR(
+      QD_ERROR(
           "hipGetDevicePropertiesR0000 returned an invalid mcpu_ but HIP "
           "version {} is not ROCm 6",
           runtime_version);
@@ -84,7 +84,7 @@ AMDGPUContext::AMDGPUContext()
   mcpu_ = mcpu_.substr(0, mcpu_.find(":"));
   std::free(hip_device_prop);
 
-  TI_TRACE("Emitting AMDGPU code for {}", mcpu_);
+  QD_TRACE("Emitting AMDGPU code for {}", mcpu_);
 }
 
 std::size_t AMDGPUContext::get_total_memory() {

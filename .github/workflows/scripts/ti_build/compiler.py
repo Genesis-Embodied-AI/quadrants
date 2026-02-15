@@ -126,7 +126,7 @@ def setup_msvc() -> None:
             if not vs.exists():
                 continue
 
-            if os.environ.get("TI_CI") and not os.environ.get("QUADRANTS_USE_MSBUILD"):
+            if os.environ.get("QD_CI") and not os.environ.get("QUADRANTS_USE_MSBUILD"):
                 # Use Ninja + MSVC in CI, for better caching
                 _vs_devshell(vs)
                 cmake_args["CMAKE_C_COMPILER"] = "cl.exe"

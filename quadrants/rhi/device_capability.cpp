@@ -9,7 +9,7 @@ DeviceCapability str2devcap(const std::string_view &name) {
     return DeviceCapability::x;
 #include "quadrants/inc/rhi_constants.inc.h"
 #undef PER_DEVICE_CAPABILITY
-  TI_ERROR("unexpected device capability name {}", name);
+  QD_ERROR("unexpected device capability name {}", name);
 }
 
 const std::string to_string(DeviceCapability c) {
@@ -43,7 +43,7 @@ void DeviceCapabilityConfig::set(DeviceCapability cap, uint32_t level) {
 
 void DeviceCapabilityConfig::dbg_print_all() const {
   for (auto &pair : devcaps) {
-    TI_TRACE("DeviceCapability::{} ({}) = {}", to_string(pair.first),
+    QD_TRACE("DeviceCapability::{} ({}) = {}", to_string(pair.first),
              int(pair.first), pair.second);
   }
 }

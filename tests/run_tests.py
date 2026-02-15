@@ -65,7 +65,7 @@ def _test_python(args, default_dir="python"):
     except NotImplementedError:
         threads = 2
 
-    env_threads = os.environ.get("TI_TEST_THREADS", "")
+    env_threads = os.environ.get("QD_TEST_THREADS", "")
     threads = args.threads or env_threads or threads
     print(f"Starting {threads} testing thread(s)...")
     if args.show_output:
@@ -207,7 +207,7 @@ def test():
     parser.add_argument(
         "--with-offline-cache",
         action="store_true",
-        default=os.environ.get("TI_TEST_OFFLINE_CACHE", "0") == "1",
+        default=os.environ.get("QD_TEST_OFFLINE_CACHE", "0") == "1",
         dest="with_offline_cache",
         help="Run tests with offline_cache=True",
     )
@@ -228,16 +228,16 @@ def test():
         if args.exclusive:
             arch = "^" + arch
         print(f"Running on Arch={arch}")
-        os.environ["TI_WANTED_ARCHS"] = arch
+        os.environ["QD_WANTED_ARCHS"] = arch
 
     if args.with_offline_cache:
         run_count += args.rerun_with_offline_cache
         args.timeout *= run_count
         tmp_cache_file_path = tempfile.mkdtemp()
-        os.environ["TI_OFFLINE_CACHE"] = "1"
-        os.environ["TI_OFFLINE_CACHE_FILE_PATH"] = tmp_cache_file_path
-        if not os.environ.get("TI_OFFLINE_CACHE_CLEANING_POLICY"):
-            os.environ["TI_OFFLINE_CACHE_CLEANING_POLICY"] = "never"
+        os.environ["QD_OFFLINE_CACHE"] = "1"
+        os.environ["QD_OFFLINE_CACHE_FILE_PATH"] = tmp_cache_file_path
+        if not os.environ.get("QD_OFFLINE_CACHE_CLEANING_POLICY"):
+            os.environ["QD_OFFLINE_CACHE_CLEANING_POLICY"] = "never"
 
         def print_and_remove():
             def size_of_dir(dir):
@@ -263,7 +263,7 @@ def test():
 
         atexit.register(print_and_remove)
     else:  # Default: disable offline cache
-        os.environ["TI_OFFLINE_CACHE"] = "0"
+        os.environ["QD_OFFLINE_CACHE"] = "0"
 
     if args.cpp:
         # C++ tests are now handled by pytest too,

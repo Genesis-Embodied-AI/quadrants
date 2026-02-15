@@ -17,7 +17,7 @@ void Function::set_function_body(const std::function<void()> &func) {
   ir = context->get_root();
   ir_stage_ = IRStage::AST;
 
-  TI_ASSERT(ir->is<Block>());
+  QD_ASSERT(ir->is<Block>());
   ir->as<Block>()->set_parent_callable(this);
 
   func();
@@ -34,7 +34,7 @@ void Function::set_function_body(const std::function<void()> &func) {
 void Function::set_function_body(std::unique_ptr<IRNode> func_body) {
   ir = std::move(func_body);
 
-  TI_ASSERT(ir->is<Block>());
+  QD_ASSERT(ir->is<Block>());
   ir->as<Block>()->set_parent_callable(this);
 
   ir_stage_ = IRStage::InitialIR;

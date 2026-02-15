@@ -55,7 +55,7 @@ class KernelProfilerBase {
 
   virtual bool reinit_with_metrics(const std::vector<std::string> metrics) {
     return false;
-  };  // public API for all backend, do not use TI_NOT_IMPLEMENTED;
+  };  // public API for all backend, do not use QD_NOT_IMPLEMENTED;
 
   virtual void clear() = 0;
 
@@ -68,18 +68,18 @@ class KernelProfilerBase {
   }
 
   // TODO: remove start and always use start_with_handle
-  virtual void start(const std::string &kernel_name) { TI_NOT_IMPLEMENTED };
+  virtual void start(const std::string &kernel_name) { QD_NOT_IMPLEMENTED };
 
   virtual TaskHandle start_with_handle(const std::string &kernel_name) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
 
   static void profiler_start(KernelProfilerBase *profiler,
                              const char *kernel_name);
 
-  virtual void stop() { TI_NOT_IMPLEMENTED };
+  virtual void stop() { QD_NOT_IMPLEMENTED };
 
-  virtual void stop(TaskHandle){TI_NOT_IMPLEMENTED};
+  virtual void stop(TaskHandle){QD_NOT_IMPLEMENTED};
 
   static void profiler_stop(KernelProfilerBase *profiler);
 

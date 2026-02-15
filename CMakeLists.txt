@@ -16,17 +16,17 @@ execute_process(
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMAND git rev-parse --short HEAD
   RESULT_VARIABLE SHORT_HASH_RESULT
-  OUTPUT_VARIABLE TI_COMMIT_SHORT_HASH)
+  OUTPUT_VARIABLE QD_COMMIT_SHORT_HASH)
 execute_process(
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMAND git rev-parse HEAD
   RESULT_VARIABLE SHORT_HASH_RESULT
-  OUTPUT_VARIABLE TI_COMMIT_HASH)
-string(STRIP ${TI_COMMIT_HASH} TI_COMMIT_HASH)
-string(STRIP ${TI_COMMIT_SHORT_HASH} TI_COMMIT_SHORT_HASH)
+  OUTPUT_VARIABLE QD_COMMIT_HASH)
+string(STRIP ${QD_COMMIT_HASH} QD_COMMIT_HASH)
+string(STRIP ${QD_COMMIT_SHORT_HASH} QD_COMMIT_SHORT_HASH)
 
-message("Quadrants Version ${TI_VERSION_MAJOR}.${TI_VERSION_MINOR}.${TI_VERSION_PATCH}")
-message("       Commit ${TI_COMMIT_HASH}")
+message("Quadrants Version ${QD_VERSION_MAJOR}.${QD_VERSION_MINOR}.${QD_VERSION_PATCH}")
+message("       Commit ${QD_COMMIT_HASH}")
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING
@@ -59,9 +59,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(USE_LLD "Use lld (from llvm) linker" OFF)
 option(USE_MOLD "Use mold (A Modern Linker)" OFF)
-option(TI_WITH_BACKTRACE "Use backward-cpp to print out C++ stack trace upon failure" OFF)  # wheel-tag: bt
-option(TI_GENERATE_PDB "Generate Program Database (PDB) files (will make compilation uncacheable)" OFF)
-option(TI_WITH_LTO "Enable Link Time Optimization (LTO) (affects Windows + MSVC for now)" OFF)  # wheel-tag: lto
+option(QD_WITH_BACKTRACE "Use backward-cpp to print out C++ stack trace upon failure" OFF)  # wheel-tag: bt
+option(QD_GENERATE_PDB "Generate Program Database (PDB) files (will make compilation uncacheable)" OFF)
+option(QD_WITH_LTO "Enable Link Time Optimization (LTO) (affects Windows + MSVC for now)" OFF)  # wheel-tag: lto
 
 if((LINUX OR APPLE) AND NOT IOS)
       # (penguinliong) Not compatible with -fembed-bitcode. Not sure where it
@@ -108,25 +108,25 @@ endif()
 # No support of Python for any case quadrants is integrated
 # in another project as submodule.
 set(PYBIND11_VERSION "2.13.6" CACHE STRING "Pybind11 version to use")
-option(TI_WITH_PYTHON "Build with Python language binding" ON)
-if (TI_WITH_PYTHON)
+option(QD_WITH_PYTHON "Build with Python language binding" ON)
+if (QD_WITH_PYTHON)
     include(cmake/PythonNumpyPybind11.cmake)
 endif()
 
-if (TI_WITH_BACKTRACE)
+if (QD_WITH_BACKTRACE)
   add_subdirectory(external/backward_cpp)
 endif()
 
-if (TI_DISTRIBUTED_COMPILE)
+if (QD_DISTRIBUTED_COMPILE)
     include(cmake/Distributed.cmake)
 endif()
 
 include(cmake/QuadrantsCXXFlags.cmake)
 include(cmake/QuadrantsCore.cmake)
 
-option(TI_BUILD_TESTS "Build the CPP tests" OFF)
+option(QD_BUILD_TESTS "Build the CPP tests" OFF)
 
-if (TI_BUILD_TESTS)
+if (QD_BUILD_TESTS)
   add_subdirectory(external/googletest EXCLUDE_FROM_ALL)
   include(cmake/QuadrantsTests.cmake)
 endif()
@@ -135,19 +135,19 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" _BUILD_TYPE)
 message("C++ Flags: ${CMAKE_CXX_FLAGS_${_BUILD_TYPE}} ${CMAKE_CXX_FLAGS}")
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
-if (NOT TI_WITH_CUDA)
+if (NOT QD_WITH_CUDA)
     set(CUDA_TOOLKIT_ROOT_DIR "")
 endif()
 
-if (TI_WITH_CUDA)
+if (QD_WITH_CUDA)
     set(CUDA_ARCH "cuda")
 endif()
 
-if (TI_WITH_AMDGPU)
+if (QD_WITH_AMDGPU)
     set(AMDGPU_ARCH "amdgpu")
 endif()
 
-if (TI_WITH_LLVM)
+if (QD_WITH_LLVM)
     # Setup CLANG_EXECUTABLE
     if (CLANG_EXECUTABLE)
       message("CLANG_EXECUTABLE defined: ${CLANG_EXECUTABLE}")
@@ -191,8 +191,8 @@ endif()
 configure_file(quadrants/common/version.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/version.h)
 configure_file(quadrants/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/commit_hash.h)
 
-option(TI_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
-if (TI_WITH_GRAPHVIZ)
+option(QD_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
+if (QD_WITH_GRAPHVIZ)
   set(GRAPHVIZ_GRAPH_NAME "ti_targets")
   add_custom_target(graphviz ALL
       COMMAND cp ${CMAKE_SOURCE_DIR}/cmake/CMakeGraphVizOptions.cmake .

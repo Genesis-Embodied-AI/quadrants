@@ -4,7 +4,7 @@
 #include <string>
 #include "quadrants/ir/snode.h"
 
-#if TI_WITH_LLVM
+#if QD_WITH_LLVM
 #include "llvm/Config/llvm-config.h"
 #endif
 
@@ -33,7 +33,7 @@
 
 #include "quadrants/python/dlpack_funcs.h"
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_context.h"
 #endif
 
@@ -141,7 +141,7 @@ void export_lang(py::module &m) {
             // Note: this only works for primitive types, which is fine for now.
             auto primitive =
                 dynamic_cast<const PrimitiveType *>((const Type *)dt);
-            TI_ASSERT(primitive);
+            QD_ASSERT(primitive);
             return py::make_tuple((std::size_t)primitive->type);
           },
           [](py::tuple t) {
@@ -440,7 +440,7 @@ void export_lang(py::module &m) {
       .def("create_sparse_matrix",
            [](Program *program, int n, int m, DataType dtype,
               std::string storage_format) {
-             TI_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
+             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
                              !arch_is_cuda(program->compile_config().arch),
                          "SparseMatrix only supports CPU and CUDA for now.");
              if (arch_is_cpu(program->compile_config().arch))
@@ -450,7 +450,7 @@ void export_lang(py::module &m) {
            })
       .def("make_sparse_matrix_from_ndarray",
            [](Program *program, SparseMatrix &sm, const Ndarray &ndarray) {
-             TI_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
+             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
                              !arch_is_cuda(program->compile_config().arch),
                          "SparseMatrix only supports CPU and CUDA for now.");
              return make_sparse_matrix_from_ndarray(program, sm, ndarray);
@@ -942,7 +942,7 @@ void export_lang(py::module &m) {
                  const std::vector<int> &, const DebugInfo &>);
 
   m.def("get_external_tensor_element_dim", [](const Expr &expr) {
-    TI_ASSERT(expr.is<ExternalTensorExpression>());
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
     // FIXME: no need to make it negative since we don't support SOA
     auto dtype = expr.cast<ExternalTensorExpression>()->dt;
     return dtype->is<TensorType>()
@@ -951,18 +951,18 @@ void export_lang(py::module &m) {
   });
 
   m.def("get_external_tensor_needs_grad", [](const Expr &expr) {
-    TI_ASSERT(expr.is<ExternalTensorExpression>());
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
     return expr.cast<ExternalTensorExpression>()->needs_grad;
   });
 
   m.def("get_external_tensor_element_type", [](const Expr &expr) {
-    TI_ASSERT(expr.is<ExternalTensorExpression>());
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
     auto external_tensor_expr = expr.cast<ExternalTensorExpression>();
     return external_tensor_expr->dt;
   });
 
   m.def("get_external_tensor_element_shape", [](const Expr &expr) {
-    TI_ASSERT(expr.is<ExternalTensorExpression>());
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
     auto external_tensor_expr = expr.cast<ExternalTensorExpression>();
     return external_tensor_expr->dt.get_shape();
   });
@@ -971,7 +971,7 @@ void export_lang(py::module &m) {
     if (expr.is<ExternalTensorExpression>()) {
       return expr.cast<ExternalTensorExpression>()->ndim;
     } else {
-      TI_ASSERT(false);
+      QD_ASSERT(false);
       return 0;
     }
   });
@@ -982,7 +982,7 @@ void export_lang(py::module &m) {
 
   m.def("get_external_tensor_real_func_args",
         [](const Expr &expr, const DebugInfo &dbg_info = DebugInfo()) {
-          TI_ASSERT(expr.is<ExternalTensorExpression>());
+          QD_ASSERT(expr.is<ExternalTensorExpression>());
           auto external_tensor_expr = expr.cast<ExternalTensorExpression>();
 
           std::vector<Expr> args;
@@ -1029,13 +1029,13 @@ void export_lang(py::module &m) {
     try {
       throw IRModified();
     } catch (IRModified) {
-      TI_INFO("caught");
+      QD_INFO("caught");
     }
   });
 
   m.def("test_throw", [] { throw IRModified(); });
 
-#if TI_WITH_LLVM
+#if QD_WITH_LLVM
   m.def("libdevice_path", libdevice_path);
 #endif
 
@@ -1051,14 +1051,14 @@ void export_lang(py::module &m) {
   m.def("get_version_minor", get_version_minor);
   m.def("get_version_patch", get_version_patch);
   m.def("get_llvm_target_support", [] {
-#if defined(TI_WITH_LLVM)
+#if defined(QD_WITH_LLVM)
     return LLVM_VERSION_STRING;
 #else
     return "targets unsupported";
 #endif
   });
   m.def("test_printf", [] { printf("test_printf\n"); });
-  m.def("test_logging", [] { TI_INFO("test_logging"); });
+  m.def("test_logging", [] { QD_INFO("test_logging"); });
   m.def("trigger_crash", [] { *(int *)(1) = 0; });
   m.def("get_max_num_indices", [] { return quadrants_max_num_indices; });
   m.def("test_threading", test_threading);
@@ -1066,20 +1066,20 @@ void export_lang(py::module &m) {
 
   m.def("query_int64", [](const std::string &key) -> int64_t {
     if (key == "cuda_compute_capability") {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
       return static_cast<int64_t>(
           CUDAContext::get_instance().get_compute_capability());
 #else
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
 #endif
     } else if (key == "cuda_clock_rate_khz") {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
       return CUDAContext::get_instance().get_clock_rate_khz();
 #else
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
 #endif
     } else {
-      TI_ERROR("Key {} not supported in query_int64", key);
+      QD_ERROR("Key {} not supported in query_int64", key);
     }
   });
 

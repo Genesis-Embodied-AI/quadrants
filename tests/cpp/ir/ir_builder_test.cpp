@@ -4,7 +4,7 @@
 #include "quadrants/ir/statements.h"
 #include "tests/cpp/program/test_program.h"
 #include "tests/cpp/ir/ndarray_kernel.h"
-#ifdef TI_WITH_VULKAN
+#ifdef QD_WITH_VULKAN
 #include "quadrants/rhi/vulkan/vulkan_loader.h"
 #endif
 
@@ -128,7 +128,7 @@ TEST(IRBuilder, ExternalPtr) {
 
 TEST(IRBuilder, Ndarray) {
   TestProgram test_prog;
-#ifdef TI_WITH_VULKAN
+#ifdef QD_WITH_VULKAN
   Arch arch = quadrants::lang::vulkan::is_vulkan_api_available() ? Arch::vulkan
                                                                  : Arch::x64;
 #else

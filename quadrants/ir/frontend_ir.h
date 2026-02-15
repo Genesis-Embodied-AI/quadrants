@@ -25,7 +25,7 @@ struct ForLoopConfig {
   bool uniform{false};
 };
 
-#define TI_DEFINE_CLONE_FOR_FRONTEND_IR                \
+#define QD_DEFINE_CLONE_FOR_FRONTEND_IR                \
   std::unique_ptr<Stmt> clone() const override {       \
     std::unique_ptr<Stmt> new_stmt{                    \
         new std::decay<decltype(*this)>::type{*this}}; \
@@ -59,8 +59,8 @@ class FrontendExternalFuncStmt : public Stmt {
         outputs(outputs) {
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendExprStmt : public Stmt {
@@ -70,8 +70,8 @@ class FrontendExprStmt : public Stmt {
   explicit FrontendExprStmt(const Expr &val) : val(val) {
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendAllocaStmt : public Stmt {
@@ -97,8 +97,8 @@ class FrontendAllocaStmt : public Stmt {
 
   bool is_shared;
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendSNodeOpStmt : public Stmt {
@@ -115,8 +115,8 @@ class FrontendSNodeOpStmt : public Stmt {
       const Expr &val = Expr(std::shared_ptr<Expression>(nullptr)),
       const DebugInfo &dbg_info = DebugInfo());
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendAssertStmt : public Stmt {
@@ -141,8 +141,8 @@ class FrontendAssertStmt : public Stmt {
     }
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendAssignStmt : public Stmt {
@@ -153,8 +153,8 @@ class FrontendAssignStmt : public Stmt {
                      const Expr &rhs,
                      const DebugInfo &dbg_info = DebugInfo());
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendIfStmt : public Stmt {
@@ -170,8 +170,8 @@ class FrontendIfStmt : public Stmt {
     return true;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
  private:
   FrontendIfStmt(const FrontendIfStmt &o);
 };
@@ -189,8 +189,8 @@ class FrontendPrintStmt : public Stmt {
       : Stmt(dbg_info), contents(contents_), formats(formats_) {
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendForStmt : public Stmt {
@@ -238,8 +238,8 @@ class FrontendForStmt : public Stmt {
     return true;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 
  private:
   FrontendForStmt(const FrontendForStmt &o);
@@ -263,8 +263,8 @@ class FrontendFuncDefStmt : public Stmt {
     return true;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 
  private:
   FrontendFuncDefStmt(const FrontendFuncDefStmt &o);
@@ -280,8 +280,8 @@ class FrontendBreakStmt : public Stmt {
     return false;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendContinueStmt : public Stmt {
@@ -294,8 +294,8 @@ class FrontendContinueStmt : public Stmt {
     return false;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class FrontendWhileStmt : public Stmt {
@@ -311,8 +311,8 @@ class FrontendWhileStmt : public Stmt {
     return true;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
  private:
   FrontendWhileStmt(const FrontendWhileStmt &o);
 };
@@ -328,8 +328,8 @@ class FrontendReturnStmt : public Stmt {
     return false;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 // Expressions
@@ -366,7 +366,7 @@ class ArgLoadExpression : public Expression {
     return is_ptr;
   }
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class RandExpression : public Expression {
@@ -381,7 +381,7 @@ class RandExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class UnaryOpExpression : public Expression {
@@ -413,7 +413,7 @@ class UnaryOpExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class BinaryOpExpression : public Expression {
@@ -429,7 +429,7 @@ class BinaryOpExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class TernaryOpExpression : public Expression {
@@ -451,7 +451,7 @@ class TernaryOpExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class InternalFuncCallExpression : public Expression {
@@ -467,7 +467,7 @@ class InternalFuncCallExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 // TODO: Make this a non-expr
@@ -495,10 +495,10 @@ class ExternalTensorExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 
   const CompileConfig *get_compile_config() {
-    TI_ASSERT(config_ != nullptr);
+    QD_ASSERT(config_ != nullptr);
     return config_;
   }
 
@@ -549,7 +549,7 @@ class FieldExpression : public Expression {
     this->snode = snode;
   }
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class MatrixFieldExpression : public Expression {
@@ -563,9 +563,9 @@ class MatrixFieldExpression : public Expression {
                         const std::vector<int> &element_shape)
       : fields(fields), element_shape(element_shape) {
     for (auto &field : fields) {
-      TI_ASSERT(field.is<FieldExpression>());
+      QD_ASSERT(field.is<FieldExpression>());
     }
-    TI_ASSERT(!fields.empty());
+    QD_ASSERT(!fields.empty());
     auto compute_type =
         fields[0].cast<FieldExpression>()->dt->get_compute_type();
     for (auto &field : fields) {
@@ -580,7 +580,7 @@ class MatrixFieldExpression : public Expression {
   void type_check(const CompileConfig *config) override {
   }
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 /**
@@ -604,7 +604,7 @@ class MatrixExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class IndexExpression : public Expression {
@@ -640,7 +640,7 @@ class IndexExpression : public Expression {
   bool is_local() const;
   bool is_global() const;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 
  private:
   bool is_field() const;
@@ -666,7 +666,7 @@ class RangeAssumptionExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class LoopUniqueExpression : public Expression {
@@ -684,7 +684,7 @@ class LoopUniqueExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class IdExpression : public Expression {
@@ -707,7 +707,7 @@ class IdExpression : public Expression {
     return true;
   }
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 // ti.atomic_*() is an expression with side effect.
@@ -724,7 +724,7 @@ class AtomicOpExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class SNodeOpExpression : public Expression {
@@ -747,7 +747,7 @@ class SNodeOpExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class ConstExpression : public Expression {
@@ -767,7 +767,7 @@ class ConstExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class ExternalTensorShapeAlongAxisExpression : public Expression {
@@ -786,7 +786,7 @@ class ExternalTensorShapeAlongAxisExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class ExternalTensorBasePtrExpression : public Expression {
@@ -805,7 +805,7 @@ class ExternalTensorBasePtrExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class FrontendFuncCallStmt : public Stmt {
@@ -820,15 +820,15 @@ class FrontendFuncCallStmt : public Stmt {
       const std::optional<Identifier> &id = std::nullopt,
       const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), ident(id), func(func), args(args) {
-    TI_ASSERT(id.has_value() == !func->rets.empty());
+    QD_ASSERT(id.has_value() == !func->rets.empty());
   }
 
   bool is_container_statement() const override {
     return false;
   }
 
-  TI_DEFINE_ACCEPT
-  TI_DEFINE_CLONE_FOR_FRONTEND_IR
+  QD_DEFINE_ACCEPT
+  QD_DEFINE_CLONE_FOR_FRONTEND_IR
 };
 
 class GetElementExpression : public Expression {
@@ -846,7 +846,7 @@ class GetElementExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 // Mesh related.
@@ -861,7 +861,7 @@ class MeshPatchIndexExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class MeshRelationAccessExpression : public Expression {
@@ -894,7 +894,7 @@ class MeshRelationAccessExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class MeshIndexConversionExpression : public Expression {
@@ -914,7 +914,7 @@ class MeshIndexConversionExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class ReferenceExpression : public Expression {
@@ -929,7 +929,7 @@ class ReferenceExpression : public Expression {
 
   void flatten(FlattenContext *ctx) override;
 
-  TI_DEFINE_ACCEPT_FOR_EXPRESSION
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
 class ASTBuilder {
@@ -1092,9 +1092,9 @@ class ASTBuilder {
 
   void block_dim(int v) {
     if (arch_ == Arch::cuda || arch_ == Arch::vulkan || arch_ == Arch::amdgpu) {
-      TI_ASSERT((v % 32 == 0) || bit::is_power_of_two(v));
+      QD_ASSERT((v % 32 == 0) || bit::is_power_of_two(v));
     } else {
-      TI_ASSERT(bit::is_power_of_two(v));
+      QD_ASSERT(bit::is_power_of_two(v));
     }
     for_loop_dec_.config.block_dim = v;
   }

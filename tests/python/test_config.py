@@ -43,7 +43,7 @@ def test_config_debug_dump_path(specify_path: bool, tmp_path: pathlib.Path):
     print(cmd_line)
     env = dict(os.environ)
     env["PYTHONPATH"] = "."
-    env["TI_DUMP_IR"] = "1"
+    env["QD_DUMP_IR"] = "1"
     proc = subprocess.run(
         cmd_line,
         capture_output=True,

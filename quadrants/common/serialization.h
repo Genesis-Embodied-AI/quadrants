@@ -22,14 +22,14 @@
 #include "quadrants/common/json_serde.h"
 #include "quadrants/common/zip.h"
 
-#ifdef TI_INCLUDED
+#ifdef QD_INCLUDED
 #include "quadrants/common/logging.h"
 
 namespace quadrants {
 #else
-#define TI_TRACE
-#define TI_CRITICAL
-#define TI_ASSERT assert
+#define QD_TRACE
+#define QD_CRITICAL
+#define QD_ASSERT assert
 #endif
 
 template <typename T>
@@ -138,15 +138,15 @@ serialize_kv_impl(SER &ser,
 
 }  // namespace detail
 
-#define TI_IO_DECL      \
+#define QD_IO_DECL      \
   template <typename S> \
   void io(S &serializer) const
 
-#define TI_IO_DEF(...)             \
+#define QD_IO_DEF(...)             \
   L_JSON_SERDE_FIELDS(__VA_ARGS__) \
   template <typename S>            \
   void io(S &serializer) const {   \
-    TI_IO(__VA_ARGS__);            \
+    QD_IO(__VA_ARGS__);            \
   }
 
 // This macro serializes each field with its name by doing the following:
@@ -154,7 +154,7 @@ serialize_kv_impl(SER &ser,
 // compile time.
 // 2. Invoke serializer::operator("arg", arg) for each arg in __VA_ARGS__. This
 // is implemented inside detail::serialize_kv_impl.
-#define TI_IO(...)                                                     \
+#define QD_IO(...)                                                     \
   do {                                                                 \
     constexpr size_t kDelimN = detail::count_delim(#__VA_ARGS__, ','); \
     constexpr auto kSplitStrs =                                        \
@@ -162,11 +162,11 @@ serialize_kv_impl(SER &ser,
     detail::serialize_kv_impl(serializer, kSplitStrs, __VA_ARGS__);    \
   } while (0)
 
-#define TI_SERIALIZER_IS(T)                                                 \
+#define QD_SERIALIZER_IS(T)                                                 \
   (std::is_same<typename std::remove_reference<decltype(serializer)>::type, \
                 T>())
 
-#if !defined(TI_ARCH_x86)
+#if !defined(QD_ARCH_x86)
 static_assert(
     sizeof(std::size_t) == sizeof(uint64_t),
     "sizeof(std::size_t) should be 8. Try compiling with 64bit mode.");
@@ -244,7 +244,7 @@ inline std::vector<uint8_t> read_data_from_file(const std::string &fn) {
   std::vector<uint8_t> data;
   std::FILE *f = fopen(fn.c_str(), "rb");
   if (f == nullptr) {
-    TI_DEBUG("Cannot open file: {}", fn);
+    QD_DEBUG("Cannot open file: {}", fn);
     return std::vector<uint8_t>();
   }
   if (ends_with(fn, ".zip")) {
@@ -253,7 +253,7 @@ inline std::vector<uint8_t> read_data_from_file(const std::string &fn) {
     return zip::read(fn);
   } else {
     // Read uncompressed file, e.g. particles.tcb
-    TI_ASSERT(f != nullptr);
+    QD_ASSERT(f != nullptr);
     std::size_t length = 0;
     while (true) {
       size_t limit = 1 << 8;
@@ -276,9 +276,9 @@ inline void write_data_to_file(const std::string &fn,
                                std::size_t size) {
   std::FILE *f = fopen(fn.c_str(), "wb");
   if (f == nullptr) {
-    TI_ERROR("Cannot open file [{}] for writing. (Does the directory exist?)",
+    QD_ERROR("Cannot open file [{}] for writing. (Does the directory exist?)",
              fn);
-    TI_ASSERT(f != nullptr);
+    QD_ASSERT(f != nullptr);
   }
   if (ends_with(fn, ".tcb.zip")) {
     std::fclose(f);
@@ -287,7 +287,7 @@ inline void write_data_to_file(const std::string &fn,
     fwrite(data, sizeof(uint8_t), size, f);
     std::fclose(f);
   } else {
-    TI_ERROR("File must end with .tcb or .tcb.zip. [Filename = {}]", fn);
+    QD_ERROR("File must end with .tcb or .tcb.zip. [Filename = {}]", fn);
   }
 }
 
@@ -324,7 +324,7 @@ class BinarySerializer : public Serializer {
   void write_to_file(const std::string &fn) {
     void *ptr = c_data;
     if (!ptr) {
-      TI_ASSERT(!data.empty());
+      QD_ASSERT(!data.empty());
       ptr = &data[0];
     }
     write_data_to_file(fn, reinterpret_cast<uint8_t *>(ptr), head);
@@ -333,7 +333,7 @@ class BinarySerializer : public Serializer {
   void write_to_stream(std::ostream &os) {
     void *ptr = c_data;
     if (!ptr) {
-      TI_ASSERT(!data.empty());
+      QD_ASSERT(!data.empty());
       ptr = &data[0];
     }
     os.write(reinterpret_cast<const char *>(ptr), head);
@@ -346,10 +346,10 @@ class BinarySerializer : public Serializer {
     std::size_t n = 0;
     head = 0;
     if (preserved_ != 0) {
-      TI_TRACE("preserved = {}", preserved_);
+      QD_TRACE("preserved = {}", preserved_);
       // Preserved mode
       this->preserved = preserved_;
-      TI_ASSERT(c_data != nullptr);
+      QD_ASSERT(c_data != nullptr);
       this->c_data = (uint8_t *)c_data;
     } else {
       // otherwise use a std::vector<uint8_t>
@@ -365,11 +365,11 @@ class BinarySerializer : public Serializer {
       void *raw_data,
       std::size_t preserved_ = std::size_t(0)) {
     if (preserved_ != 0) {
-      TI_ASSERT(raw_data == nullptr);
+      QD_ASSERT(raw_data == nullptr);
       data.resize(preserved_);
       c_data = &data[0];
     } else {
-      TI_ASSERT(raw_data != nullptr);
+      QD_ASSERT(raw_data != nullptr);
       c_data = reinterpret_cast<uint8_t *>(raw_data);
     }
     head = sizeof(std::size_t);
@@ -389,7 +389,7 @@ class BinarySerializer : public Serializer {
         *reinterpret_cast<std::size_t *>(&data[0]) = head;
       }
     } else {
-      TI_ASSERT(head == retrieve_length());
+      QD_ASSERT(head == retrieve_length());
     }
   }
 
@@ -451,7 +451,7 @@ class BinarySerializer : public Serializer {
       std::size_t new_size = head + sizeof(T);
       if (c_data) {
         if (new_size > preserved) {
-          TI_CRITICAL("Preserved Buffer (size {}) Overflow.", preserved);
+          QD_CRITICAL("Preserved Buffer (size {}) Overflow.", preserved);
         }
         //*reinterpret_cast<typename type::remove_cvref_t<T> *>(&c_data[head]) =
         //    val;
@@ -540,7 +540,7 @@ class BinarySerializer : public Serializer {
     if (writing) {
       this->process(ptr_to_int(val));
       if (val != nullptr) {
-        TI_ASSERT_INFO(assets.find(ptr_to_int(val)) != assets.end(),
+        QD_ASSERT_INFO(assets.find(ptr_to_int(val)) != assets.end(),
                        "Cannot find the address with a smart pointer pointing "
                        "to. Make sure the smart pointer is serialized before "
                        "the raw pointer.");
@@ -549,7 +549,7 @@ class BinarySerializer : public Serializer {
       std::size_t val_ptr = 0;
       this->process(val_ptr);
       if (val_ptr != 0) {
-        TI_ASSERT(assets.find(val_ptr) != assets.end());
+        QD_ASSERT(assets.find(val_ptr) != assets.end());
         val = reinterpret_cast<typename std::remove_pointer<T>::type *>(
             assets[val_ptr]);
       }
@@ -1001,6 +1001,6 @@ static_assert(
         std::vector<std::unique_ptr<int>> &>(),
     "");
 
-#ifdef TI_INCLUDED
+#ifdef QD_INCLUDED
 }  // namespace quadrants
 #endif

@@ -61,13 +61,13 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
   void visit(LocalLoadStmt *stmt) override {
-    TI_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
+    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
               stmt->src->is<MatrixOfMatrixPtrStmt>());
     touched_allocas_.insert(stmt->src);
   }
 
   void visit(LocalStoreStmt *stmt) override {
-    TI_ASSERT(stmt->dest->is<AllocaStmt>() || stmt->dest->is<MatrixPtrStmt>() ||
+    QD_ASSERT(stmt->dest->is<AllocaStmt>() || stmt->dest->is<MatrixPtrStmt>() ||
               stmt->dest->is<MatrixOfMatrixPtrStmt>());
     touched_allocas_.insert(stmt->dest);
   }
@@ -97,7 +97,7 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
         qualified_glb_operations_ = true;
       }
     } else {
-      TI_ASSERT(dest->is<GlobalPtrStmt>());
+      QD_ASSERT(dest->is<GlobalPtrStmt>());
       if (dest->as<GlobalPtrStmt>()->snode->has_adjoint()) {
         qualified_glb_operations_ = true;
       }
@@ -240,15 +240,15 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
   void visit(WhileStmt *stmt) override {
-    TI_ERROR("WhileStmt is not supported in AutoDiff.");
+    QD_ERROR("WhileStmt is not supported in AutoDiff.");
   }
 
   void visit(ContinueStmt *stmt) override {
-    TI_ERROR("ContinueStmt is not supported in AutoDiff.");
+    QD_ERROR("ContinueStmt is not supported in AutoDiff.");
   }
 
   void visit(WhileControlStmt *stmt) override {
-    TI_ERROR("WhileControlStmt (break) is not supported in AutoDiff.");
+    QD_ERROR("WhileControlStmt (break) is not supported in AutoDiff.");
   }
 
   void visit_loop_body(Block *block) {
@@ -274,7 +274,7 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
       block->accept(this);
     } else {
       if (depth_ <= 1) {
-        TI_ASSERT(depth_ == 1);
+        QD_ASSERT(depth_ == 1);
         // The top level block is already not an IB, store it
         independent_blocks_.push_back({depth_ - 1, block});
       } else {
@@ -284,7 +284,7 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
   }
 
   void visit(StructForStmt *stmt) override {
-    TI_ASSERT(depth_ == 0);
+    QD_ASSERT(depth_ == 0);
     depth_++;
     current_ib_ = stmt->body.get();
     visit_loop_body(stmt->body.get());
@@ -322,7 +322,7 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
                 return a.first < b.first;
               });
 
-    TI_ASSERT(!pass.independent_blocks_.empty());
+    QD_ASSERT(!pass.independent_blocks_.empty());
     return DuplicateIndependentBlocksCleaner::run(pass.independent_blocks_);
   }
 
@@ -359,7 +359,7 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
       auto dtype = stmt->ret_type.ptr_removed();
       auto alloc = Stmt::make<AllocaStmt>(dtype);
       auto alloc_ptr = alloc.get();
-      TI_ASSERT(alloca_block_);
+      QD_ASSERT(alloca_block_);
       alloca_block_->insert(std::move(alloc), 0);
       // Replace all the usages of the old stmt with that of the new one
       irpass::replace_all_usages_with(stmt->parent, stmt, alloc_ptr);
@@ -376,7 +376,7 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
       // Create a alloc
       auto alloc = Stmt::make<AllocaStmt>(stmt->ret_type.ptr_removed());
       auto alloc_ptr = alloc.get();
-      TI_ASSERT(alloca_block_);
+      QD_ASSERT(alloca_block_);
       alloca_block_->insert(std::move(alloc), 0);
       auto load = stmt->insert_after_me(Stmt::make<LocalLoadStmt>(alloc_ptr));
       irpass::replace_all_usages_with(stmt->parent, stmt, load);
@@ -530,7 +530,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 
   template <typename Store, typename Load>
   void process_store_stmt(Store *stmt) {
-    TI_ASSERT(stmt->template is<LocalStoreStmt>() ||
+    QD_ASSERT(stmt->template is<LocalStoreStmt>() ||
               stmt->template is<GlobalStoreStmt>());
 
     if (stmt->dest->template is<MatrixPtrStmt>()) {
@@ -575,7 +575,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
         int offset =
             matrix_ptr_stmt->offset->template as<ConstStmt>()->val.val_int32();
 
-        TI_ASSERT(offset < num_elements);
+        QD_ASSERT(offset < num_elements);
 
         std::vector<Stmt *> values;
         for (int i = 0; i < num_elements; i++) {
@@ -737,7 +737,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
       auto matrix_ptr_stmt = stmt->dest->as<MatrixPtrStmt>();
       if (matrix_ptr_stmt->origin->is<AdStackLoadTopStmt>()) {
         auto stack_top_stmt = matrix_ptr_stmt->origin->as<AdStackLoadTopStmt>();
-        TI_ASSERT(stack_top_stmt->return_ptr == true);
+        QD_ASSERT(stack_top_stmt->return_ptr == true);
 
         if (!stack_top_stmt->ret_type.ptr_removed()->is<TensorType>()) {
           return;
@@ -775,7 +775,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
           int offset =
               matrix_ptr_stmt->offset->as<ConstStmt>()->val.val_int32();
 
-          TI_ASSERT(offset < num_elements);
+          QD_ASSERT(offset < num_elements);
 
           std::vector<Stmt *> values;
           for (int i = 0; i < num_elements; i++) {
@@ -1088,15 +1088,15 @@ class ADTransform : public IRVisitor {
   }
 
   void visit(WhileControlStmt *stmt) override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   void visit(ContinueStmt *stmt) override {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   void visit(WhileStmt *stmt) override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   void visit(GlobalPtrStmt *stmt) override {
@@ -1116,7 +1116,7 @@ class ADTransform : public IRVisitor {
   }
 
   Stmt *load(Stmt *alloc) {
-    TI_ASSERT(alloc != nullptr);
+    QD_ASSERT(alloc != nullptr);
     if (alloc->is<AllocaStmt>() || alloc->is<MatrixPtrStmt>()) {
       return insert<LocalLoadStmt>(alloc);
     } else {
@@ -1153,7 +1153,7 @@ class ADTransform : public IRVisitor {
   }
 
   void visit(RandStmt *stmt) override {
-    TI_ERROR("RandStmt not supported in AutoDiff for now.");
+    QD_ERROR("RandStmt not supported in AutoDiff for now.");
   }
 };
 
@@ -1216,7 +1216,7 @@ class MakeAdjoint : public ADTransform {
         insert<AdStackAccAdjointStmt>(alloca, load(value));
       }
     } else {
-      TI_ASSERT(alloca_->is<AllocaStmt>());
+      QD_ASSERT(alloca_->is<AllocaStmt>());
       auto alloca = alloca_->as<AllocaStmt>();
       auto local_load = insert<LocalLoadStmt>(alloca);
       local_load->ret_type = alloca->ret_type.ptr_removed();
@@ -1304,7 +1304,7 @@ class MakeAdjoint : public ADTransform {
       // causing NaNs. Though the NaNs are expected, it is error prone and hard
       // to debug. Therefore we currently don't support computing derivative for
       // `tan`.
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(
           stmt->operand,
@@ -1342,8 +1342,8 @@ class MakeAdjoint : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::logic_not) {
       // do nothing
     } else {
-      TI_P(unary_op_type_name(stmt->op_type));
-      TI_NOT_IMPLEMENTED;
+      QD_P(unary_op_type_name(stmt->op_type));
+      QD_NOT_IMPLEMENTED;
     }
   }
 
@@ -1389,14 +1389,14 @@ class MakeAdjoint : public ADTransform {
       // do nothing
 
     } else {
-      TI_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
+      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
               bin->get_tb());
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 
   void visit(TernaryOpStmt *stmt) override {
-    TI_ASSERT(stmt->op_type == TernaryOpType::select);
+    QD_ASSERT(stmt->op_type == TernaryOpType::select);
     auto zero = insert_const_for_grad(stmt->ret_type, stmt, 0);
     accumulate(stmt->op2,
                insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1,
@@ -1484,7 +1484,7 @@ class MakeAdjoint : public ADTransform {
 
   // Equivalent to AdStackLoadTopStmt when no stack is needed
   void visit(LocalLoadStmt *stmt) override {
-    // TI_ASSERT(!needs_grad(stmt->ret_type));
+    // QD_ASSERT(!needs_grad(stmt->ret_type));
     if (is_real(stmt->ret_type.get_element_type()))
       accumulate(stmt->src, load(adjoint(stmt)));
   }
@@ -1534,7 +1534,7 @@ class MakeAdjoint : public ADTransform {
       auto arg = src->base_ptr->as<ArgLoadStmt>();
       if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() >
           TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
-        TI_ASSERT_INFO(!src->is_grad,
+        QD_ASSERT_INFO(!src->is_grad,
                        "Cannot automatically differentiate through a grad "
                        "tensor, if you really want to do that, pass the grad "
                        "tensor into the kernel directly");
@@ -1575,7 +1575,7 @@ class MakeAdjoint : public ADTransform {
         // gradients stopped, do nothing.
         return;
       }
-      TI_ASSERT(snode->get_adjoint() != nullptr);
+      QD_ASSERT(snode->get_adjoint() != nullptr);
       snode = snode->get_adjoint();
       auto adj_ptr = insert<GlobalPtrStmt>(snode, src->indices);
       adj_ptr->ret_type = src->ret_type;
@@ -1609,7 +1609,7 @@ class MakeAdjoint : public ADTransform {
           TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
         return;
       }
-      TI_ASSERT_INFO(!dest->is_grad,
+      QD_ASSERT_INFO(!dest->is_grad,
                      "Cannot automatically differentiate through a grad "
                      "tensor, if you really want to do that, pass the grad "
                      "tensor into the kernel directly");
@@ -1645,7 +1645,7 @@ class MakeAdjoint : public ADTransform {
         // no gradient (likely integer types)
         return;
       }
-      TI_ASSERT(snode->get_adjoint() != nullptr);
+      QD_ASSERT(snode->get_adjoint() != nullptr);
       snode = snode->get_adjoint();
       adjoint_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
       adjoint_ptr->ret_type = dest->ret_type;
@@ -1680,7 +1680,7 @@ class MakeAdjoint : public ADTransform {
       auto arg = dest->base_ptr->as<ArgLoadStmt>();
       if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() >
           TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
-        TI_ASSERT_INFO(!dest->is_grad,
+        QD_ASSERT_INFO(!dest->is_grad,
                        "Cannot automatically differentiate through a grad "
                        "tensor, if you really want to do that, pass the grad "
                        "tensor into the kernel directly");
@@ -1721,7 +1721,7 @@ class MakeAdjoint : public ADTransform {
         return;
       }
 
-      TI_ASSERT(snode->get_adjoint() != nullptr);
+      QD_ASSERT(snode->get_adjoint() != nullptr);
       snode = snode->get_adjoint();
       auto adjoint_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
       adjoint_ptr->ret_type = dest->ret_type;
@@ -1909,7 +1909,7 @@ class MakeDual : public ADTransform {
     if (!alloca_ || alloca_->is<ConstStmt>())
       return;  // primal may be int variable
 
-    TI_ASSERT(alloca_->is<AllocaStmt>());
+    QD_ASSERT(alloca_->is<AllocaStmt>());
     auto alloca = alloca_->as<AllocaStmt>();
     auto local_load = insert<LocalLoadStmt>(alloca);
     insert<LocalStoreStmt>(alloca, add(local_load, value));
@@ -1950,7 +1950,7 @@ class MakeDual : public ADTransform {
       // causing NaNs. Though the NaNs are expected, it is error prone and hard
       // to debug. Therefore we currently don't support computing derivative for
       // `tan`.
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt, mul(sub(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::asin) {
@@ -1981,8 +1981,8 @@ class MakeDual : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::logic_not) {
       // do nothing
     } else {
-      TI_P(unary_op_type_name(stmt->op_type));
-      TI_NOT_IMPLEMENTED
+      QD_P(unary_op_type_name(stmt->op_type));
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -2026,14 +2026,14 @@ class MakeDual : public ADTransform {
     } else if (is_comparison(bin->op_type) || is_bit_op(bin->op_type)) {
       // do nothing
     } else {
-      TI_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
+      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
               bin->get_tb());
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
   void visit(TernaryOpStmt *stmt) override {
-    TI_ASSERT(stmt->op_type == TernaryOpType::select);
+    QD_ASSERT(stmt->op_type == TernaryOpType::select);
     auto zero = insert_const_for_grad(stmt->ret_type, stmt, 0);
     accumulate(stmt, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1,
                                            load(dual(stmt->op2)), zero));
@@ -2087,7 +2087,7 @@ class MakeDual : public ADTransform {
   }
 
   void visit(LocalLoadStmt *stmt) override {
-    // TI_ASSERT(!needs_grad(stmt->ret_type));
+    // QD_ASSERT(!needs_grad(stmt->ret_type));
     accumulate(stmt, dual(stmt->src));
   }
 
@@ -2125,7 +2125,7 @@ class MakeDual : public ADTransform {
       // gradients stopped, do nothing.
       return;
     }
-    TI_ASSERT(snode->get_dual() != nullptr);
+    QD_ASSERT(snode->get_dual() != nullptr);
     snode = snode->get_dual();
     auto dual_ptr = insert<GlobalPtrStmt>(snode, src->indices);
     dual_ptr->ret_type = src->ret_type;
@@ -2150,7 +2150,7 @@ class MakeDual : public ADTransform {
       // no gradient (likely integer types)
       return;
     }
-    TI_ASSERT(snode->get_dual() != nullptr);
+    QD_ASSERT(snode->get_dual() != nullptr);
     snode = snode->get_dual();
     auto dual_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
     dual_ptr->ret_type = dest->ret_type;
@@ -2175,7 +2175,7 @@ class MakeDual : public ADTransform {
       // no gradient (likely integer types)
       return;
     }
-    TI_ASSERT(snode->get_dual() != nullptr);
+    QD_ASSERT(snode->get_dual() != nullptr);
     snode = snode->get_dual();
     auto dual_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
     dual_ptr->ret_type = dest->ret_type;
@@ -2302,7 +2302,7 @@ class BackupSSA : public BasicStmtVisitor {
   }
 
   void visit(WhileStmt *stmt) override {
-    TI_ERROR("WhileStmt not supported in AutoDiff for now.");
+    QD_ERROR("WhileStmt not supported in AutoDiff for now.");
   }
 
   void visit(Block *block) override {
@@ -2312,7 +2312,7 @@ class BackupSSA : public BasicStmtVisitor {
       statements.push_back(stmt.get());
     }
     for (auto stmt : statements) {
-      TI_ASSERT(!stmt->erased);
+      QD_ASSERT(!stmt->erased);
       stmt->accept(this);
     }
   }
@@ -2393,7 +2393,7 @@ void auto_diff(IRNode *root,
                const CompileConfig &config,
                AutodiffMode autodiff_mode,
                bool use_stack) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   if (autodiff_mode == AutodiffMode::kReverse) {
     RegulateTensorTypedStatements::run(root);
     if (use_stack) {
@@ -2440,14 +2440,14 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     if (stmt->src->is<GlobalPtrStmt>()) {
       src = stmt->src->as<GlobalPtrStmt>();
     } else {
-      TI_ASSERT(stmt->src->is<MatrixPtrStmt>());
+      QD_ASSERT(stmt->src->is<MatrixPtrStmt>());
       src = stmt->src->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
     }
     auto snode = src->snode;
     if (!snode->has_adjoint_checkbit()) {
       return;
     }
-    TI_ASSERT(snode->get_adjoint_checkbit() != nullptr);
+    QD_ASSERT(snode->get_adjoint_checkbit() != nullptr);
     snode = snode->get_adjoint_checkbit();
     auto global_ptr =
         stmt->insert_after_me(Stmt::make<GlobalPtrStmt>(snode, src->indices));
@@ -2462,7 +2462,7 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     if (!snode->has_adjoint_checkbit()) {
       return;
     }
-    TI_ASSERT(snode->get_adjoint_checkbit() != nullptr);
+    QD_ASSERT(snode->get_adjoint_checkbit() != nullptr);
     snode = snode->get_adjoint_checkbit();
     auto global_ptr =
         stmt->insert_before_me(Stmt::make<GlobalPtrStmt>(snode, dest->indices));
@@ -2487,7 +2487,7 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     if (stmt->dest->is<GlobalPtrStmt>()) {
       dest = stmt->dest->as<GlobalPtrStmt>();
     } else {
-      TI_ASSERT(stmt->dest->is<MatrixPtrStmt>());
+      QD_ASSERT(stmt->dest->is<MatrixPtrStmt>());
       dest = stmt->dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
     }
     visit_gloabl_store_stmt_and_atomic_add(stmt, dest);
@@ -2498,7 +2498,7 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     if (stmt->dest->is<GlobalPtrStmt>()) {
       dest = stmt->dest->as<GlobalPtrStmt>();
     } else {
-      TI_ASSERT(stmt->dest->is<MatrixPtrStmt>());
+      QD_ASSERT(stmt->dest->is<MatrixPtrStmt>());
       dest = stmt->dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
     }
     visit_gloabl_store_stmt_and_atomic_add(stmt, dest);

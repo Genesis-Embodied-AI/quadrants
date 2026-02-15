@@ -27,7 +27,7 @@ DataType PrimitiveType::get(PrimitiveTypeID t) {
 #include "quadrants/inc/data_type.inc.h"
 #undef PER_TYPE
   else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -44,7 +44,7 @@ std::size_t DataType::hash() const {
   } else if (auto pointer = ptr_->cast<PointerType>()) {
     return 10007 + DataType(pointer->get_pointee_type()).hash();
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -133,12 +133,12 @@ const Type *AbstractDictionaryType::get_element_type(
   const Type *type_now = this;
   for (auto ind : indices) {
     if (auto tensor_type = type_now->cast<TensorType>()) {
-      TI_ASSERT(ind < tensor_type->get_num_elements())
+      QD_ASSERT(ind < tensor_type->get_num_elements())
       type_now = tensor_type->get_element_type();
     } else if (auto struct_type = type_now->cast<StructType>()) {
       type_now = struct_type->elements_[ind].type;
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
   return type_now;
@@ -174,7 +174,7 @@ const Type *AbstractDictionaryType::get_element_type(
     CASE(7)
 #undef CASE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -203,7 +203,7 @@ size_t StructType::get_element_offset(const std::array<int, N> &indices) const {
       type_now = struct_type->elements_[ind].type;
     } else {
       auto tensor_type = type_now->as<TensorType>();
-      TI_ASSERT(ind < tensor_type->get_num_elements());
+      QD_ASSERT(ind < tensor_type->get_num_elements());
       offset += tensor_type->get_element_offset(ind);
       type_now = tensor_type->get_element_type();
     }
@@ -234,7 +234,7 @@ size_t StructType::get_element_offset(const std::vector<int> &indices) const {
     CASE(7)
 #undef CASE
     default:
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
   }
 }
 
@@ -278,9 +278,9 @@ QuantFixedType::QuantFixedType(Type *digits_type,
       digits_type_(digits_type),
       compute_type_(compute_type),
       scale_(scale) {
-  TI_ASSERT(digits_type->is<QuantIntType>());
-  TI_ASSERT(compute_type->is<PrimitiveType>());
-  TI_ASSERT(is_real(compute_type));
+  QD_ASSERT(digits_type->is<QuantIntType>());
+  QD_ASSERT(compute_type->is<PrimitiveType>());
+  QD_ASSERT(is_real(compute_type));
 }
 
 std::string QuantFixedType::to_string() const {
@@ -304,14 +304,14 @@ QuantFloatType::QuantFloatType(Type *digits_type,
       digits_type_(digits_type),
       exponent_type_(exponent_type),
       compute_type_(compute_type) {
-  TI_ASSERT(digits_type->is<QuantIntType>());
+  QD_ASSERT(digits_type->is<QuantIntType>());
   // We only support f32 as compute type when when using exponents
-  TI_ASSERT(compute_type_->is_primitive(PrimitiveTypeID::f32));
+  QD_ASSERT(compute_type_->is_primitive(PrimitiveTypeID::f32));
   // Exponent must be unsigned quant int
-  TI_ASSERT(exponent_type->is<QuantIntType>());
-  TI_ASSERT(exponent_type->as<QuantIntType>()->get_num_bits() <= 8);
-  TI_ASSERT(exponent_type->as<QuantIntType>()->get_is_signed() == false);
-  TI_ASSERT(get_digit_bits() <= 23);
+  QD_ASSERT(exponent_type->is<QuantIntType>());
+  QD_ASSERT(exponent_type->as<QuantIntType>()->get_num_bits() <= 8);
+  QD_ASSERT(exponent_type->as<QuantIntType>()->get_is_signed() == false);
+  QD_ASSERT(get_digit_bits() <= 23);
 }
 
 const Type *QuantFloatType::get_type() const {
@@ -351,9 +351,9 @@ BitStructType::BitStructType(
       member_bit_offsets_(member_bit_offsets),
       member_exponents_(member_exponents),
       member_exponent_users_(member_exponent_users) {
-  TI_ASSERT(member_types_.size() == member_bit_offsets_.size());
-  TI_ASSERT(member_types_.size() == member_exponents_.size());
-  TI_ASSERT(member_types_.size() == member_exponent_users_.size());
+  QD_ASSERT(member_types_.size() == member_bit_offsets_.size());
+  QD_ASSERT(member_types_.size() == member_exponents_.size());
+  QD_ASSERT(member_types_.size() == member_exponent_users_.size());
   int physical_type_bits = data_type_bits(physical_type_);
   int member_total_bits = 0;
   for (auto i = 0; i < member_types_.size(); ++i) {
@@ -363,23 +363,23 @@ BitStructType::BitStructType(
     } else if (auto qfxt = member_types_[i]->cast<QuantFixedType>()) {
       component_qit = qfxt->get_digits_type()->as<QuantIntType>();
     } else {
-      TI_ASSERT(member_types_[i]->is<QuantFloatType>());
+      QD_ASSERT(member_types_[i]->is<QuantFloatType>());
       auto qflt = member_types_[i]->as<QuantFloatType>();
       component_qit = qflt->get_digits_type()->as<QuantIntType>();
     }
-    TI_ASSERT(member_bit_offsets_[i] == member_total_bits);
+    QD_ASSERT(member_bit_offsets_[i] == member_total_bits);
     member_total_bits += component_qit->get_num_bits();
   }
-  TI_ASSERT(physical_type_bits >= member_total_bits);
+  QD_ASSERT(physical_type_bits >= member_total_bits);
   for (auto i = 0; i < member_types_.size(); ++i) {
     auto exponent = member_exponents_[i];
     if (exponent != -1) {
-      TI_ASSERT(std::find(member_exponent_users_[exponent].begin(),
+      QD_ASSERT(std::find(member_exponent_users_[exponent].begin(),
                           member_exponent_users_[exponent].end(),
                           i) != member_exponent_users_[exponent].end());
     }
     for (auto user : member_exponent_users_[i]) {
-      TI_ASSERT(member_exponents_[user] == i);
+      QD_ASSERT(member_exponents_[user] == i);
     }
   }
 }
@@ -445,8 +445,8 @@ std::string TypedConstant::stringify() const {
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
     return fmt::format("{}", val_u64);
   } else {
-    TI_P(data_type_name(dt));
-    TI_NOT_IMPLEMENTED
+    QD_P(data_type_name(dt));
+    QD_NOT_IMPLEMENTED
     return "";
   }
 }
@@ -479,73 +479,73 @@ bool TypedConstant::equal_type_and_value(const TypedConstant &o) const {
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
     return val_u64 == o.val_u64;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
     return false;
   }
 }
 
 int32 &TypedConstant::val_int32() {
-  TI_ASSERT(get_data_type<int32>() == dt);
+  QD_ASSERT(get_data_type<int32>() == dt);
   return val_i32;
 }
 
 float32 &TypedConstant::val_float32() {
-  TI_ASSERT(get_data_type<float32>() == dt);
+  QD_ASSERT(get_data_type<float32>() == dt);
   return val_f32;
 }
 
 float32 &TypedConstant::val_float16() {
-  TI_ASSERT(dt == PrimitiveType::f16);
+  QD_ASSERT(dt == PrimitiveType::f16);
   return val_f32;
 }
 
 int64 &TypedConstant::val_int64() {
-  TI_ASSERT(get_data_type<int64>() == dt);
+  QD_ASSERT(get_data_type<int64>() == dt);
   return val_i64;
 }
 
 float64 &TypedConstant::val_float64() {
-  TI_ASSERT(get_data_type<float64>() == dt);
+  QD_ASSERT(get_data_type<float64>() == dt);
   return val_f64;
 }
 
 int8 &TypedConstant::val_int8() {
-  TI_ASSERT(get_data_type<int8>() == dt);
+  QD_ASSERT(get_data_type<int8>() == dt);
   return val_i8;
 }
 
 int16 &TypedConstant::val_int16() {
-  TI_ASSERT(get_data_type<int16>() == dt);
+  QD_ASSERT(get_data_type<int16>() == dt);
   return val_i16;
 }
 
 uint1 &TypedConstant::val_uint1() {
-  TI_ASSERT(get_data_type<uint1>() == dt);
+  QD_ASSERT(get_data_type<uint1>() == dt);
   return val_u1;
 }
 
 uint8 &TypedConstant::val_uint8() {
-  TI_ASSERT(get_data_type<uint8>() == dt);
+  QD_ASSERT(get_data_type<uint8>() == dt);
   return val_u8;
 }
 
 uint16 &TypedConstant::val_uint16() {
-  TI_ASSERT(get_data_type<uint16>() == dt);
+  QD_ASSERT(get_data_type<uint16>() == dt);
   return val_u16;
 }
 
 uint32 &TypedConstant::val_uint32() {
-  TI_ASSERT(get_data_type<uint32>() == dt);
+  QD_ASSERT(get_data_type<uint32>() == dt);
   return val_u32;
 }
 
 uint64 &TypedConstant::val_uint64() {
-  TI_ASSERT(get_data_type<uint64>() == dt);
+  QD_ASSERT(get_data_type<uint64>() == dt);
   return val_u64;
 }
 
 int64 TypedConstant::val_int() const {
-  TI_ASSERT(is_signed(dt));
+  QD_ASSERT(is_signed(dt));
   if (dt->is_primitive(PrimitiveTypeID::i32)) {
     return val_i32;
   } else if (dt->is_primitive(PrimitiveTypeID::i64)) {
@@ -555,12 +555,12 @@ int64 TypedConstant::val_int() const {
   } else if (dt->is_primitive(PrimitiveTypeID::i16)) {
     return val_i16;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
 uint64 TypedConstant::val_uint() const {
-  TI_ASSERT(is_unsigned(dt));
+  QD_ASSERT(is_unsigned(dt));
   if (dt->is_primitive(PrimitiveTypeID::u32)) {
     return val_u32;
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
@@ -572,12 +572,12 @@ uint64 TypedConstant::val_uint() const {
   } else if (dt->is_primitive(PrimitiveTypeID::u16)) {
     return val_u16;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
 float64 TypedConstant::val_float() const {
-  TI_ASSERT(is_real(dt));
+  QD_ASSERT(is_real(dt));
   if (dt->is_primitive(PrimitiveTypeID::f32)) {
     return val_f32;
   } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
@@ -585,19 +585,19 @@ float64 TypedConstant::val_float() const {
   } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     return val_f64;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
 int64 TypedConstant::val_as_int64() const {
   if (is_real(dt)) {
-    TI_ERROR("Cannot cast floating point type {} to int64.", dt->to_string());
+    QD_ERROR("Cannot cast floating point type {} to int64.", dt->to_string());
   } else if (is_signed(dt)) {
     return val_int();
   } else if (is_unsigned(dt)) {
     return val_uint();
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -609,7 +609,7 @@ float64 TypedConstant::val_cast_to_float64() const {
   else if (is_unsigned(dt))
     return val_uint();
   else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 

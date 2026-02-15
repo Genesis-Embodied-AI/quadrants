@@ -572,7 +572,7 @@ struct VulkanCapabilities {
   bool dynamic_rendering{false};
 };
 
-class TI_DLL_EXPORT VulkanDevice : public GraphicsDevice {
+class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {
  public:
   struct Params {
     PFN_vkGetInstanceProcAddr get_proc_addr{nullptr};

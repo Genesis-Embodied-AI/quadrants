@@ -256,8 +256,8 @@ class IRNodeComparator : public IRVisitor {
       return;
     auto other = other_node_->as<OffloadedStmt>();
     if (stmt->has_body()) {
-      TI_ASSERT(stmt->body);
-      TI_ASSERT(other->body);
+      QD_ASSERT(stmt->body);
+      QD_ASSERT(other->body);
       other_node_ = other->body.get();
       stmt->body->accept(this);
       other_node_ = other;

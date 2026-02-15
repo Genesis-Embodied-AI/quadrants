@@ -73,7 +73,7 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
 
     if (origin1->is<AllocaStmt>() || origin2->is<AllocaStmt>())
       return AliasResult::different;
-    TI_ASSERT(origin1->is<GlobalTemporaryStmt>() &&
+    QD_ASSERT(origin1->is<GlobalTemporaryStmt>() &&
               origin2->is<GlobalTemporaryStmt>());
     if (origin1->cast<GlobalTemporaryStmt>()->offset ==
         origin2->cast<GlobalTemporaryStmt>()->offset) {
@@ -136,7 +136,7 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
     } else if (ptr1->is_grad != ptr2->is_grad) {
       return AliasResult::different;
     }
-    TI_ASSERT(ptr1->indices.size() == ptr2->indices.size());
+    QD_ASSERT(ptr1->indices.size() == ptr2->indices.size());
     bool uncertain = false;
     for (int i = 0; i < (int)ptr1->indices.size(); i++) {
       auto diff = value_diff_ptr_index(ptr1->indices[i], ptr2->indices[i]);
@@ -171,8 +171,8 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
     auto ptr1 = var1->as<GlobalPtrStmt>();
     auto ptr2 = var2->as<GlobalPtrStmt>();
     auto snode = ptr1->snode;
-    TI_ASSERT(snode == ptr2->snode);
-    TI_ASSERT(ptr1->indices.size() == ptr2->indices.size());
+    QD_ASSERT(snode == ptr2->snode);
+    QD_ASSERT(ptr1->indices.size() == ptr2->indices.size());
     bool uncertain = false;
     for (int i = 0; i < (int)ptr1->indices.size(); i++) {
       auto diff = value_diff_ptr_index(ptr1->indices[i], ptr2->indices[i]);

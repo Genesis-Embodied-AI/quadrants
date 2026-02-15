@@ -107,6 +107,6 @@ struct CompileConfig {
   void fit();
 };
 
-extern TI_DLL_EXPORT CompileConfig default_compile_config;
+extern QD_DLL_EXPORT CompileConfig default_compile_config;
 
 }  // namespace quadrants::lang

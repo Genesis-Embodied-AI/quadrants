@@ -35,14 +35,14 @@ StructCompilerLLVM::StructCompilerLLVM(Arch arch,
 }
 
 void StructCompilerLLVM::generate_types(SNode &snode) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto type = snode.type;
   if (snode.is_bit_level)
     return;
   llvm::Type *node_type = nullptr;
 
   auto ctx = llvm_ctx_;
-  TI_ASSERT(ctx == tlctx_->get_this_thread_context());
+  QD_ASSERT(ctx == tlctx_->get_this_thread_context());
 
   // create children type that supports forking...
 
@@ -69,7 +69,7 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
 
   llvm::Type *body_type = nullptr, *aux_type = nullptr;
   if (type == SNodeType::dense || type == SNodeType::bitmasked) {
-    TI_ASSERT(snode._morton == false);
+    QD_ASSERT(snode._morton == false);
     body_type = llvm::ArrayType::get(ch_type, snode.max_num_elements());
     if (type == SNodeType::bitmasked) {
       aux_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(*llvm_ctx_),
@@ -81,18 +81,18 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
     body_type = tlctx_->get_data_type(snode.dt);
   } else if (type == SNodeType::bit_struct) {
     if (!arch_is_cpu(arch_)) {
-      TI_ERROR_IF(data_type_bits(snode.physical_type) < 32,
+      QD_ERROR_IF(data_type_bits(snode.physical_type) < 32,
                   "bit_struct physical type must be at least 32 bits on "
                   "non-CPU backends.");
     }
     body_type = tlctx_->get_data_type(snode.physical_type);
   } else if (type == SNodeType::quant_array) {
     // A quant array SNode should have only one child
-    TI_ASSERT(snode.ch.size() == 1);
+    QD_ASSERT(snode.ch.size() == 1);
     auto &ch = snode.ch[0];
     Type *ch_type = ch->dt;
     if (!arch_is_cpu(arch_)) {
-      TI_ERROR_IF(data_type_bits(snode.physical_type) <= 16,
+      QD_ERROR_IF(data_type_bits(snode.physical_type) <= 16,
                   "quant_array physical type must be at least 32 bits on "
                   "non-CPU backends.");
     }
@@ -114,8 +114,8 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
                                      llvm::PointerType::getInt32Ty(*ctx)});
     body_type = llvm::PointerType::getUnqual(*ctx);
   } else {
-    TI_P(snode.type_name());
-    TI_NOT_IMPLEMENTED;
+    QD_P(snode.type_name());
+    QD_NOT_IMPLEMENTED;
   }
   if (aux_type != nullptr) {
     node_type = llvm::StructType::create(*ctx, {aux_type, body_type}, "");
@@ -123,8 +123,8 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
     node_type = body_type;
   }
 
-  TI_ASSERT(node_type != nullptr);
-  TI_ASSERT(body_type != nullptr);
+  QD_ASSERT(node_type != nullptr);
+  QD_ASSERT(body_type != nullptr);
 
   // Here we create a stub holding 4 LLVM types as struct members.
   // The aim is to give a **unique** name to the stub, so that we can look up
@@ -145,7 +145,7 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
 }
 
 void StructCompilerLLVM::generate_refine_coordinates(SNode *snode) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto coord_type = get_runtime_type("PhysicalCoordinates");
   auto coord_type_ptr = llvm::PointerType::get(coord_type, 0);
 
@@ -191,7 +191,7 @@ void StructCompilerLLVM::generate_refine_coordinates(SNode *snode) {
 }
 
 void StructCompilerLLVM::generate_child_accessors(SNode &snode) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto type = snode.type;
   stack.push_back(&snode);
 
@@ -246,7 +246,7 @@ std::string StructCompilerLLVM::type_stub_name(SNode *snode) {
 }
 
 void StructCompilerLLVM::run(SNode &root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   // bottom to top
   collect_snodes(root);
 
@@ -275,7 +275,7 @@ void StructCompilerLLVM::run(SNode &root) {
     writer.write(module.get());
   }
 
-  TI_ASSERT((int)snodes.size() <= quadrants_max_num_snodes);
+  QD_ASSERT((int)snodes.size() <= quadrants_max_num_snodes);
 
   auto node_type = get_llvm_node_type(module.get(), &root);
   root_size = tlctx_->get_type_size(node_type);
@@ -286,15 +286,15 @@ void StructCompilerLLVM::run(SNode &root) {
 llvm::Type *StructCompilerLLVM::get_stub(llvm::Module *module,
                                          SNode *snode,
                                          uint32 index) {
-  TI_ASSERT(module);
-  TI_ASSERT(snode);
+  QD_ASSERT(module);
+  QD_ASSERT(snode);
   auto stub = llvm::StructType::getTypeByName(module->getContext(),
                                               type_stub_name(snode));
-  TI_ASSERT(stub);
-  TI_ASSERT(stub->getStructNumElements() == 4);
-  TI_ASSERT(0 <= index && index < 4);
+  QD_ASSERT(stub);
+  QD_ASSERT(stub->getStructNumElements() == 4);
+  QD_ASSERT(0 <= index && index < 4);
   auto type = stub->getContainedType(index);
-  TI_ASSERT(type);
+  QD_ASSERT(type);
   return type;
 }
 

@@ -8,13 +8,13 @@ namespace quadrants::lang {
 
 std::vector<int> data_type_shape(DataType t);
 
-TI_DLL_EXPORT std::string data_type_name(DataType t);
+QD_DLL_EXPORT std::string data_type_name(DataType t);
 
-TI_DLL_EXPORT int data_type_size(DataType t);
+QD_DLL_EXPORT int data_type_size(DataType t);
 
-TI_DLL_EXPORT int data_type_size_gfx(DataType t);
+QD_DLL_EXPORT int data_type_size_gfx(DataType t);
 
-TI_DLL_EXPORT std::string data_type_format(DataType dt, Arch arch = Arch::x64);
+QD_DLL_EXPORT std::string data_type_format(DataType dt, Arch arch = Arch::x64);
 
 inline int data_type_bits(DataType t) {
   return data_type_size(t) * 8;
@@ -51,7 +51,7 @@ inline DataType get_data_type() {
   } else if (std::is_same<T, uint64>()) {
     return PrimitiveType::u64;
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -80,7 +80,7 @@ inline PrimitiveTypeID get_primitive_data_type() {
   } else if (std::is_same<T, uint64>()) {
     return PrimitiveTypeID::u64;
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -114,7 +114,7 @@ inline bool is_integral(DataType dt) {
 
 inline bool is_signed(DataType dt) {
   // Shall we return false if is_integral returns false?
-  TI_ASSERT(is_integral(dt));
+  QD_ASSERT(is_integral(dt));
   if (auto t = dt->cast<QuantIntType>())
     return t->get_is_signed();
   return dt->is_primitive(PrimitiveTypeID::i8) ||
@@ -124,12 +124,12 @@ inline bool is_signed(DataType dt) {
 }
 
 inline bool is_unsigned(DataType dt) {
-  TI_ASSERT(is_integral(dt));
+  QD_ASSERT(is_integral(dt));
   return !is_signed(dt);
 }
 
 inline DataType to_unsigned(DataType dt) {
-  TI_ASSERT(is_signed(dt));
+  QD_ASSERT(is_signed(dt));
   if (dt->is_primitive(PrimitiveTypeID::i8))
     return PrimitiveType::u8;
   else if (dt->is_primitive(PrimitiveTypeID::i16))
@@ -166,7 +166,7 @@ inline TypedConstant get_max_value(DataType dt) {
   } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     return {dt, std::numeric_limits<float64>::max()};
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -194,7 +194,7 @@ inline TypedConstant get_min_value(DataType dt) {
   } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     return {dt, std::numeric_limits<float64>::lowest()};
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -211,7 +211,7 @@ class BitStructTypeBuilder {
       auto exponent_id = -1;
       if (is_placing_shared_exponent_ && current_shared_exponent_ != -1) {
         // Reuse existing exponent
-        TI_ASSERT_INFO(member_types_[current_shared_exponent_] == exponent_type,
+        QD_ASSERT_INFO(member_types_[current_shared_exponent_] == exponent_type,
                        "QuantFloatTypes with shared exponents must have "
                        "exactly the same exponent type.");
         exponent_id = current_shared_exponent_;
@@ -230,14 +230,14 @@ class BitStructTypeBuilder {
   }
 
   void begin_placing_shared_exponent() {
-    TI_ASSERT(!is_placing_shared_exponent_);
-    TI_ASSERT(current_shared_exponent_ == -1);
+    QD_ASSERT(!is_placing_shared_exponent_);
+    QD_ASSERT(current_shared_exponent_ == -1);
     is_placing_shared_exponent_ = true;
   }
 
   void end_placing_shared_exponent() {
-    TI_ASSERT(is_placing_shared_exponent_);
-    TI_ASSERT(current_shared_exponent_ != -1);
+    QD_ASSERT(is_placing_shared_exponent_);
+    QD_ASSERT(current_shared_exponent_ != -1);
     current_shared_exponent_ = -1;
     is_placing_shared_exponent_ = false;
   }
@@ -263,11 +263,11 @@ class BitStructTypeBuilder {
     } else if (auto qflt = member_type->cast<QuantFloatType>()) {
       member_qit = qflt->get_digits_type()->as<QuantIntType>();
     } else {
-      TI_ERROR("Only a QuantType can be a member of a BitStructType.");
+      QD_ERROR("Only a QuantType can be a member of a BitStructType.");
     }
     member_total_bits_ += member_qit->get_num_bits();
     auto physical_bits = data_type_bits(physical_type_);
-    TI_ERROR_IF(member_total_bits_ > physical_bits,
+    QD_ERROR_IF(member_total_bits_ > physical_bits,
                 "BitStructType overflows: {} bits used out of {}.",
                 member_total_bits_, physical_bits);
     return old_num_members;

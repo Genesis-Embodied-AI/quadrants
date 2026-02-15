@@ -3,7 +3,7 @@
 
 // move from cupti_toolkit.h
 // avoid exposing these headers
-#if defined(TI_WITH_CUDA_TOOLKIT)
+#if defined(QD_WITH_CUDA_TOOLKIT)
 #include <cupti_target.h>
 #include <cupti_result.h>
 #include <cupti_profiler_target.h>
@@ -17,14 +17,14 @@ namespace quadrants::lang {
 // Make sure these metrics can be captured in one pass (no kernel replay)
 // Metrics for calculating the kernel elapsed time are collected by default.
 enum class CuptiMetricsDefault : uint {
-  CUPTI_METRIC_KERNEL_ELAPSED_CLK_NUMS = 0,
-  CUPTI_METRIC_CORE_FREQUENCY_HZS = 1,
-  CUPTI_METRIC_DEFAULT_TOTAL = 2
+  CUPQD_METRIC_KERNEL_ELAPSED_CLK_NUMS = 0,
+  CUPQD_METRIC_CORE_FREQUENCY_HZS = 1,
+  CUPQD_METRIC_DEFAULT_TOTAL = 2
 };
 
 [[maybe_unused]] constexpr const char *MetricListDefault[] = {
-    "smsp__cycles_elapsed.avg",  // CUPTI_METRIC_KERNEL_ELAPSED_CLK_NUMS
-    "smsp__cycles_elapsed.avg.per_second",  // CUPTI_METRIC_CORE_FREQUENCY_HZS
+    "smsp__cycles_elapsed.avg",  // CUPQD_METRIC_KERNEL_ELAPSED_CLK_NUMS
+    "smsp__cycles_elapsed.avg.per_second",  // CUPQD_METRIC_CORE_FREQUENCY_HZS
 };
 
 bool check_cupti_availability() {
@@ -34,10 +34,10 @@ bool check_cupti_availability() {
   CUDADriver::get_instance().device_get_attribute(
       &cc_major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device);
   if (cc_major < 7) {
-    TI_WARN(
+    QD_WARN(
         "CUPTI profiler APIs unsupported on Device with compute capability < "
         "7.0 , fallback to default kernel profiler");
-    TI_WARN(
+    QD_WARN(
         "See also: "
         "https://docs.taichi-lang.org/docs/profiler");
     return false;
@@ -46,12 +46,12 @@ bool check_cupti_availability() {
 }
 
 bool check_cupti_privileges() {
-#if defined(TI_WITH_CUDA_TOOLKIT)
+#if defined(QD_WITH_CUDA_TOOLKIT)
 
-#define TEMP_CUPTI_API_CALL(api_func_call)                                 \
+#define TEMP_CUPQD_API_CALL(api_func_call)                                 \
   do {                                                                     \
     CUptiResult status = api_func_call;                                    \
-    if (status != CUPTI_SUCCESS) {                                         \
+    if (status != CUPQD_SUCCESS) {                                         \
       const char *errstr;                                                  \
       cuptiGetResultString(status, &errstr);                               \
       fprintf(stderr, "%s:%d: error: function %s failed with error %s.\n", \
@@ -62,25 +62,25 @@ bool check_cupti_privileges() {
 
   CUpti_Profiler_Initialize_Params profiler_initialize_params = {
       CUpti_Profiler_Initialize_Params_STRUCT_SIZE};
-  TEMP_CUPTI_API_CALL(cuptiProfilerInitialize(&profiler_initialize_params));
-  TI_TRACE("cuptiProfilerInitialized");
+  TEMP_CUPQD_API_CALL(cuptiProfilerInitialize(&profiler_initialize_params));
+  QD_TRACE("cuptiProfilerInitialized");
 
   int device_num = 0;  // TODO
   // CUDADriver::get_instance_without_context().init(0);
   CUpti_Device_GetChipName_Params get_chip_name_params = {
       CUpti_Device_GetChipName_Params_STRUCT_SIZE};
   get_chip_name_params.deviceIndex = device_num;
-  TEMP_CUPTI_API_CALL(cuptiDeviceGetChipName(&get_chip_name_params));
+  TEMP_CUPQD_API_CALL(cuptiDeviceGetChipName(&get_chip_name_params));
   std::string chip_name = get_chip_name_params.pChipName;
 
   CUpti_Profiler_GetCounterAvailability_Params get_counter_availability_params =
       {CUpti_Profiler_GetCounterAvailability_Params_STRUCT_SIZE};
   get_counter_availability_params.ctx =
       (CUcontext)(CUDAContext::get_instance().get_context());
-  TEMP_CUPTI_API_CALL(
+  TEMP_CUPQD_API_CALL(
       cuptiProfilerGetCounterAvailability(&get_counter_availability_params));
 
-#undef TEMP_CUPTI_API_CALL
+#undef TEMP_CUPQD_API_CALL
 
   std::vector<uint8_t> counter_availability_image;
   counter_availability_image.clear();
@@ -91,20 +91,20 @@ bool check_cupti_privileges() {
   CUptiResult status =
       cuptiProfilerGetCounterAvailability(&get_counter_availability_params);
 
-  if (status == CUPTI_ERROR_INSUFFICIENT_PRIVILEGES) {
-    TI_WARN(
+  if (status == CUPQD_ERROR_INSUFFICIENT_PRIVILEGES) {
+    QD_WARN(
         "function cuptiProfilerInitialize failed with error : "
-        "CUPTI_ERROR_INSUFFICIENT_PRIVILEGES");
-    TI_WARN("fallback to default kernel profiler : cuEvent");
-    TI_WARN(
+        "CUPQD_ERROR_INSUFFICIENT_PRIVILEGES");
+    QD_WARN("fallback to default kernel profiler : cuEvent");
+    QD_WARN(
         "=================================================================");
-    TI_WARN("Add `option nvidia NVreg_RestrictProfilingToAdminUsers=0`");
-    TI_WARN("to /etc/modprobe.d/nvidia-kernel-common.conf");
-    TI_WARN("run `update-initramfs -u`");
-    TI_WARN("then `reboot` should resolve the permission issue.");
-    TI_WARN(
+    QD_WARN("Add `option nvidia NVreg_RestrictProfilingToAdminUsers=0`");
+    QD_WARN("to /etc/modprobe.d/nvidia-kernel-common.conf");
+    QD_WARN("run `update-initramfs -u`");
+    QD_WARN("then `reboot` should resolve the permission issue.");
+    QD_WARN(
         "=================================================================");
-    TI_WARN(
+    QD_WARN(
         "See also: "
         "https://docs.taichi-lang.org/docs/profiler");
     return false;
@@ -116,7 +116,7 @@ bool check_cupti_privileges() {
 #endif
 }
 
-#if defined(TI_WITH_CUDA_TOOLKIT)
+#if defined(QD_WITH_CUDA_TOOLKIT)
 
 // Some of the codes are copied from CUPTI/samples/extensions/
 // and modified to match Quadrants's naming conventions
@@ -147,10 +147,10 @@ ScopeExit<T> MoveScopeExit(T t) {
   const auto NV_ANONYMOUS_VARIABLE_INDIRECT(EXIT, __LINE__) = \
       MoveScopeExit([=]() { (void)(func); })
 
-#define CUPTI_API_CALL(api_func_call)                                      \
+#define CUPQD_API_CALL(api_func_call)                                      \
   do {                                                                     \
     CUptiResult status = api_func_call;                                    \
-    if (status != CUPTI_SUCCESS) {                                         \
+    if (status != CUPQD_SUCCESS) {                                         \
       const char *errstr;                                                  \
       cuptiGetResultString(status, &errstr);                               \
       fprintf(stderr, "%s:%d: error: function %s failed with error %s.\n", \
@@ -745,7 +745,7 @@ bool create_counter_data_image(
   calculate_size_params.sizeofCounterDataImageOptions =
       CUpti_Profiler_CounterDataImageOptions_STRUCT_SIZE;
 
-  CUPTI_API_CALL(
+  CUPQD_API_CALL(
       cuptiProfilerCounterDataImageCalculateSize(&calculate_size_params));
 
   CUpti_Profiler_CounterDataImage_Initialize_Params initialize_params = {
@@ -758,7 +758,7 @@ bool create_counter_data_image(
 
   counter_data_image.resize(calculate_size_params.counterDataImageSize);
   initialize_params.pCounterDataImage = &counter_data_image[0];
-  CUPTI_API_CALL(cuptiProfilerCounterDataImageInitialize(&initialize_params));
+  CUPQD_API_CALL(cuptiProfilerCounterDataImageInitialize(&initialize_params));
 
   CUpti_Profiler_CounterDataImage_CalculateScratchBufferSize_Params
       scratch_buffer_size_params = {
@@ -767,7 +767,7 @@ bool create_counter_data_image(
       calculate_size_params.counterDataImageSize;
   scratch_buffer_size_params.pCounterDataImage =
       initialize_params.pCounterDataImage;
-  CUPTI_API_CALL(cuptiProfilerCounterDataImageCalculateScratchBufferSize(
+  CUPQD_API_CALL(cuptiProfilerCounterDataImageCalculateScratchBufferSize(
       &scratch_buffer_size_params));
 
   counter_data_scratch_buffer.resize(
@@ -786,17 +786,17 @@ bool create_counter_data_image(
   init_scratch_buffer_params.pCounterDataScratchBuffer =
       &counter_data_scratch_buffer[0];
 
-  CUPTI_API_CALL(cuptiProfilerCounterDataImageInitializeScratchBuffer(
+  CUPQD_API_CALL(cuptiProfilerCounterDataImageInitializeScratchBuffer(
       &init_scratch_buffer_params));
 
   return true;
 }
 
 CuptiToolkit::CuptiToolkit() {
-  TI_TRACE("CuptiToolkit::CuptiToolkit() ");
+  QD_TRACE("CuptiToolkit::CuptiToolkit() ");
   cupti_config_.metric_list.clear();
   uint metric_list_size =
-      static_cast<uint>(CuptiMetricsDefault::CUPTI_METRIC_DEFAULT_TOTAL);
+      static_cast<uint>(CuptiMetricsDefault::CUPQD_METRIC_DEFAULT_TOTAL);
   for (uint idx = 0; idx < metric_list_size; idx++) {
     cupti_config_.metric_list.push_back(MetricListDefault[idx]);
   }
@@ -817,7 +817,7 @@ void CuptiToolkit::set_status(bool enable) {
 void CuptiToolkit::reset_metrics(const std::vector<std::string> &metrics) {
   cupti_config_.metric_list.clear();
   uint metric_list_size =
-      static_cast<uint>(CuptiMetricsDefault::CUPTI_METRIC_DEFAULT_TOTAL);
+      static_cast<uint>(CuptiMetricsDefault::CUPQD_METRIC_DEFAULT_TOTAL);
   for (uint idx = 0; idx < metric_list_size; idx++) {
     cupti_config_.metric_list.push_back(MetricListDefault[idx]);
   }
@@ -830,26 +830,26 @@ bool CuptiToolkit::init_cupti() {
   // copy from CUPTI/samples/autorange_profiling/simplecuda.cu
   CUpti_Profiler_Initialize_Params profiler_initialize_params = {
       CUpti_Profiler_Initialize_Params_STRUCT_SIZE};
-  CUPTI_API_CALL(cuptiProfilerInitialize(&profiler_initialize_params));
-  TI_TRACE("cuptiProfilerInitialized");
+  CUPQD_API_CALL(cuptiProfilerInitialize(&profiler_initialize_params));
+  QD_TRACE("cuptiProfilerInitialized");
 
   int device_num = 0;  // TODO
   // CUDADriver::get_instance_without_context().init(0);
   CUpti_Device_GetChipName_Params get_chip_name_params = {
       CUpti_Device_GetChipName_Params_STRUCT_SIZE};
   get_chip_name_params.deviceIndex = device_num;
-  CUPTI_API_CALL(cuptiDeviceGetChipName(&get_chip_name_params));
+  CUPQD_API_CALL(cuptiDeviceGetChipName(&get_chip_name_params));
   cupti_image_.chip_name = get_chip_name_params.pChipName;
-  TI_TRACE("cuptiDeviceGetChipName : {}", cupti_image_.chip_name);
+  QD_TRACE("cuptiDeviceGetChipName : {}", cupti_image_.chip_name);
 
   CUpti_Profiler_GetCounterAvailability_Params get_counter_availability_params =
       {CUpti_Profiler_GetCounterAvailability_Params_STRUCT_SIZE};
   get_counter_availability_params.ctx =
       (CUcontext)(CUDAContext::get_instance().get_context());
-  CUPTI_API_CALL(
+  CUPQD_API_CALL(
       cuptiProfilerGetCounterAvailability(&get_counter_availability_params));
 
-  TI_TRACE(
+  QD_TRACE(
       "counterAvailabilityImageSize : {}",
       get_counter_availability_params.counterAvailabilityImageSize);  // 2192
   cupti_image_.counter_availability_image.clear();
@@ -857,7 +857,7 @@ bool CuptiToolkit::init_cupti() {
       get_counter_availability_params.counterAvailabilityImageSize);
   get_counter_availability_params.pCounterAvailabilityImage =
       cupti_image_.counter_availability_image.data();
-  CUPTI_API_CALL(
+  CUPQD_API_CALL(
       cuptiProfilerGetCounterAvailability(&get_counter_availability_params));
 
 #define NVPW_API_CALL(api_func_call)                                       \
@@ -874,7 +874,7 @@ bool CuptiToolkit::init_cupti() {
   NVPW_InitializeHost_Params initialize_host_params = {
       NVPW_InitializeHost_Params_STRUCT_SIZE};
   NVPW_API_CALL(NVPW_InitializeHost(&initialize_host_params));
-  TI_TRACE("NVPW_InitializeHost");
+  QD_TRACE("NVPW_InitializeHost");
 
 #undef NVPW_API_CALL
 
@@ -883,18 +883,18 @@ bool CuptiToolkit::init_cupti() {
                            cupti_image_.config_image,
                            cupti_image_.counter_availability_image.data());
   if (!state) {
-    TI_ERROR("Failed to create config_image");
+    QD_ERROR("Failed to create config_image");
   }
-  TI_TRACE("get_config_image");
+  QD_TRACE("get_config_image");
 
   state = get_counter_data_prefix_image(
       cupti_image_.chip_name, cupti_config_.metric_list,
       cupti_image_.counter_data_image_prefix,
       cupti_image_.counter_availability_image.data());
   if (!state) {
-    TI_ERROR("Failed to create counter_data_image_prefix");
+    QD_ERROR("Failed to create counter_data_image_prefix");
   }
-  TI_TRACE("get_counter_data_prefix_image");
+  QD_TRACE("get_counter_data_prefix_image");
 
   state = create_counter_data_image(cupti_config_.num_ranges,
                                     cupti_image_.counter_data_image,
@@ -902,9 +902,9 @@ bool CuptiToolkit::init_cupti() {
                                     cupti_image_.counter_data_image_prefix);
 
   if (!state) {
-    TI_ERROR("Failed to create counter_data_image");
+    QD_ERROR("Failed to create counter_data_image");
   }
-  TI_TRACE("create_counter_data_image");
+  QD_TRACE("create_counter_data_image");
 
   return true;
 }
@@ -927,22 +927,22 @@ bool CuptiToolkit::begin_profiling() {
       cupti_image_.counter_data_scratch_buffer.size();
   begin_session_params.pCounterDataScratchBuffer =
       &(cupti_image_.counter_data_scratch_buffer[0]);
-  begin_session_params.range = CUPTI_AutoRange;          // hardcode
-  begin_session_params.replayMode = CUPTI_KernelReplay;  // hardcode
+  begin_session_params.range = CUPQD_AutoRange;          // hardcode
+  begin_session_params.replayMode = CUPQD_KernelReplay;  // hardcode
   begin_session_params.maxRangesPerPass = cupti_config_.num_ranges;
   begin_session_params.maxLaunchesPerPass = cupti_config_.num_ranges;
 
-  CUPTI_API_CALL(cuptiProfilerBeginSession(&begin_session_params));
+  CUPQD_API_CALL(cuptiProfilerBeginSession(&begin_session_params));
 
   set_config_params.pConfig = &(cupti_image_.config_image[0]);
   set_config_params.configSize = cupti_image_.config_image.size();
 
-  if (begin_session_params.replayMode == CUPTI_KernelReplay) {
+  if (begin_session_params.replayMode == CUPQD_KernelReplay) {
     set_config_params.passIndex = 0;
-    CUPTI_API_CALL(cuptiProfilerSetConfig(&set_config_params));
-    CUPTI_API_CALL(cuptiProfilerEnableProfiling(&enable_profiling_params));
+    CUPQD_API_CALL(cuptiProfilerSetConfig(&set_config_params));
+    CUPQD_API_CALL(cuptiProfilerEnableProfiling(&enable_profiling_params));
   } else {
-    TI_ERROR("begin_session_params.replayMode != CUPTI_KernelReplay");
+    QD_ERROR("begin_session_params.replayMode != CUPQD_KernelReplay");
   }
   return true;
 }
@@ -950,20 +950,20 @@ bool CuptiToolkit::begin_profiling() {
 bool CuptiToolkit::end_profiling() {
   CUpti_Profiler_DisableProfiling_Params disable_profiling_params = {
       CUpti_Profiler_DisableProfiling_Params_STRUCT_SIZE};
-  CUPTI_API_CALL(cuptiProfilerDisableProfiling(&disable_profiling_params));
+  CUPQD_API_CALL(cuptiProfilerDisableProfiling(&disable_profiling_params));
   CUpti_Profiler_UnsetConfig_Params unset_config_params = {
       CUpti_Profiler_UnsetConfig_Params_STRUCT_SIZE};
-  CUPTI_API_CALL(cuptiProfilerUnsetConfig(&unset_config_params));
+  CUPQD_API_CALL(cuptiProfilerUnsetConfig(&unset_config_params));
   CUpti_Profiler_EndSession_Params end_session_params = {
       CUpti_Profiler_EndSession_Params_STRUCT_SIZE};
-  CUPTI_API_CALL(cuptiProfilerEndSession(&end_session_params));
+  CUPQD_API_CALL(cuptiProfilerEndSession(&end_session_params));
   return true;
 }
 
 bool CuptiToolkit::deinit_cupti() {
   CUpti_Profiler_DeInitialize_Params profiler_deinitialize_params = {
       CUpti_Profiler_DeInitialize_Params_STRUCT_SIZE};
-  CUPTI_API_CALL(cuptiProfilerDeInitialize(&profiler_deinitialize_params));
+  CUPQD_API_CALL(cuptiProfilerDeInitialize(&profiler_deinitialize_params));
   return true;
 }
 
@@ -971,7 +971,7 @@ bool CuptiToolkit::update_record(
     uint32_t records_size_after_sync,
     std::vector<KernelProfileTracedRecord> &traced_records) {
   if (!cupti_image_.counter_data_image.size()) {
-    TI_WARN("Counter Data Image is empty!");
+    QD_WARN("Counter Data Image is empty!");
     return false;
   }
 
@@ -1009,13 +1009,13 @@ bool CuptiToolkit::update_record(
         cupti_config_.metric_list[metric_index], &req_name[metric_index],
         &isolated, &keep_instances);
     if (!status) {
-      TI_ERROR("parse_metric_name_string error !");
+      QD_ERROR("parse_metric_name_string error !");
       return false;
     }
     metric_name_ptrs.push_back(req_name[metric_index].c_str());
   }
 
-  TI_TRACE("get_num_ranges_params.numRanges = {}",
+  QD_TRACE("get_num_ranges_params.numRanges = {}",
            get_num_ranges_params.numRanges);
   for (size_t range_index = 0; range_index < get_num_ranges_params.numRanges;
        ++range_index) {
@@ -1071,16 +1071,16 @@ bool CuptiToolkit::update_record(
 
     // default metric : kernel_elapsed_time_in_ms
     double kernel_elapsed_clk_nums = gpu_values[static_cast<uint>(
-        CuptiMetricsDefault::CUPTI_METRIC_KERNEL_ELAPSED_CLK_NUMS)];
+        CuptiMetricsDefault::CUPQD_METRIC_KERNEL_ELAPSED_CLK_NUMS)];
     double core_frequency_hzs = gpu_values[static_cast<uint>(
-        CuptiMetricsDefault::CUPTI_METRIC_CORE_FREQUENCY_HZS)];
+        CuptiMetricsDefault::CUPQD_METRIC_CORE_FREQUENCY_HZS)];
     traced_records[records_size_after_sync + range_index]
         .kernel_elapsed_time_in_ms =
         kernel_elapsed_clk_nums / core_frequency_hzs * 1000;  // from s to ms
 
     // user selected metrics
     uint user_metric_idx_begin =
-        static_cast<uint>(CuptiMetricsDefault::CUPTI_METRIC_DEFAULT_TOTAL);
+        static_cast<uint>(CuptiMetricsDefault::CUPQD_METRIC_DEFAULT_TOTAL);
     uint metric_num = cupti_config_.metric_list.size();
     for (uint idx = user_metric_idx_begin; idx < metric_num; idx++) {
       traced_records[records_size_after_sync + range_index]
@@ -1093,40 +1093,40 @@ bool CuptiToolkit::update_record(
 // undef macros
 #undef NV_ANONYMOUS_VARIABLE_DIRECT
 #undef NV_ANONYMOUS_VARIABLE_INDIRECT
-#undef CUPTI_API_CALL
+#undef CUPQD_API_CALL
 #undef SCOPE_EXIT
 #undef RETURN_IF_NVPW_ERROR
 
 #else
 
 CuptiToolkit::CuptiToolkit() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 CuptiToolkit::~CuptiToolkit() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void CuptiToolkit::set_status(bool enable) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void CuptiToolkit::reset_metrics(const std::vector<std::string> &metrics) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool CuptiToolkit::init_cupti() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool CuptiToolkit::begin_profiling() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool CuptiToolkit::end_profiling() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool CuptiToolkit::deinit_cupti() {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 bool CuptiToolkit::update_record(
     uint32_t records_size_after_sync,
     std::vector<KernelProfileTracedRecord> &traced_records) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 #endif
 

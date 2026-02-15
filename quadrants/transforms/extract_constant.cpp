@@ -20,7 +20,7 @@ class ExtractConstant : public BasicStmtVisitor {
   }
 
   void visit(ConstStmt *stmt) override {
-    TI_ASSERT(top_level_);
+    QD_ASSERT(top_level_);
     if (stmt->parent != top_level_) {
       modifier_.extract_to_block_front(stmt, top_level_);
     }
@@ -52,7 +52,7 @@ class ExtractConstant : public BasicStmtVisitor {
 
 namespace irpass {
 bool extract_constant(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   if (config.advanced_optimization) {
     return ExtractConstant::run(root);
   } else {

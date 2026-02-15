@@ -36,9 +36,9 @@ class IRCloner : public IRVisitor {
     if (phase == register_operand_map)
       operand_map_[stmt] = other_node->as<Stmt>();
     else {
-      TI_ASSERT(phase == replace_operand);
+      QD_ASSERT(phase == replace_operand);
       auto other_stmt = other_node->as<Stmt>();
-      TI_ASSERT(stmt->num_operands() == other_stmt->num_operands());
+      QD_ASSERT(stmt->num_operands() == other_stmt->num_operands());
       for (int i = 0; i < stmt->num_operands(); i++) {
         if (operand_map_.find(stmt->operand(i)) == operand_map_.end())
           other_stmt->set_operand(i, stmt->operand(i));
@@ -138,7 +138,7 @@ std::unique_ptr<IRNode> clone(IRNode *root) {
 std::unique_ptr<Stmt> clone(Stmt *root) {
   auto ret = IRCloner::run(root);
   Stmt *stmt_ptr = dynamic_cast<Stmt *>(ret.release());
-  TI_ASSERT(stmt_ptr != nullptr);
+  QD_ASSERT(stmt_ptr != nullptr);
 
   return std::unique_ptr<Stmt>(stmt_ptr);
 }

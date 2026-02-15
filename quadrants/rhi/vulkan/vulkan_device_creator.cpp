@@ -78,7 +78,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     if (is_ci()) {
       auto msg_name = std::string(p_callback_data->pMessageIdName);
       if (!vk_ignore_validation_warning(msg_name))
-        TI_ERROR(msg_buf);
+        QD_ERROR(msg_buf);
     } else {
       RHI_LOG_ERROR(msg_buf);
     }
@@ -446,7 +446,7 @@ void VulkanDeviceCreator::pick_physical_device(VkSurfaceKHR test_surface) {
     if (id < 0 || id >= device_count) {
       char msg_buf[128];
       snprintf(msg_buf, sizeof(msg_buf),
-               "TI_VISIBLE_DEVICE=%d is not valid, found %d devices available",
+               "QD_VISIBLE_DEVICE=%d is not valid, found %d devices available",
                id, device_count);
       RHI_LOG_ERROR(msg_buf);
     } else if (get_device_score(devices[id], test_surface)) {

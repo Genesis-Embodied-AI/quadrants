@@ -70,7 +70,7 @@ init_args = {
     #'device_memory_GB': [1.0, [0.5, 1, 1.5, 2]],
 }
 
-env_configs = ["TI_" + key.upper() for key in init_args.keys()]
+env_configs = ["QD_" + key.upper() for key in init_args.keys()]
 
 special_init_cfgs = [
     "log_level",
@@ -131,7 +131,7 @@ def test_init_arg(key, values):
             test_arg(key, value, kwargs)
 
     # test if specified in environment:
-    env_key = "TI_" + key.upper()
+    env_key = "QD_" + key.upper()
     for value in values:
         env_value = str(int(value) if isinstance(value, bool) else value)
         environ = {env_key: env_value}
@@ -141,7 +141,7 @@ def test_init_arg(key, values):
 
 @pytest.mark.parametrize("arch", test_utils.expected_archs())
 def test_init_arch(arch):
-    with patch_os_environ_helper({}, excludes=["TI_ARCH"]):
+    with patch_os_environ_helper({}, excludes=["QD_ARCH"]):
         ti.init(arch=arch)
         assert ti.lang.impl.current_cfg().arch == arch
 

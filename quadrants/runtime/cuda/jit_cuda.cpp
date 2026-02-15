@@ -9,7 +9,7 @@
 
 namespace quadrants::lang {
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 
 bool module_has_runtime_initialize(
     const llvm::Module::FunctionListType &function_list) {
@@ -41,11 +41,11 @@ void *JITModuleCUDA::lookup_function(const std::string &name) {
   auto err = CUDADriver::get_instance().module_get_function.call_with_warning(
       &func, module_, name.c_str());
   if (err) {
-    TI_ERROR("Cannot look up function {}", name);
+    QD_ERROR("Cannot look up function {}", name);
   }
   t = Time::get_time() - t;
-  TI_TRACE("CUDA module_get_function {} costs {} ms", name, t * 1000);
-  TI_ASSERT(func != nullptr);
+  QD_TRACE("CUDA module_get_function {} costs {} ms", name, t * 1000);
+  QD_ASSERT(func != nullptr);
   return func;
 }
 
@@ -105,7 +105,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
     } else {
       std::cout << "problem dumping file " << filename.string() << ": "
                 << EC.message() << std::endl;
-      TI_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
+      QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
     }
   }
 
@@ -136,7 +136,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
     std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
     std::ifstream in_file(filename);
     if (in_file.is_open()) {
-      TI_INFO("Loading PTX from file: {}", filename);
+      QD_INFO("Loading PTX from file: {}", filename);
       std::ostringstream ptx_stream;
       std::string line;
       while (std::getline(in_file, line)) {
@@ -147,7 +147,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
       ptx = ptx_stream.str();
       in_file.close();
     } else {
-      TI_WARN("Failed to open PTX file for loading: {}", filename);
+      QD_WARN("Failed to open PTX file for loading: {}", filename);
     }
   }
 
@@ -156,9 +156,9 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
   CUDAContext::get_instance().make_current();
   // Create module for object
   void *cuda_module;
-  TI_TRACE("PTX size: {:.2f}KB", ptx.size() / 1024.0);
+  QD_TRACE("PTX size: {:.2f}KB", ptx.size() / 1024.0);
   auto t = Time::get_time();
-  TI_TRACE("Loading module...");
+  QD_TRACE("Loading module...");
   [[maybe_unused]] auto _ = CUDAContext::get_instance().get_lock_guard();
 
   constexpr int max_num_options = 8;
@@ -173,11 +173,11 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
     num_options++;
   }
 
-  TI_ASSERT(num_options <= max_num_options);
+  QD_ASSERT(num_options <= max_num_options);
 
   CUDADriver::get_instance().module_load_data_ex(
       &cuda_module, ptx.c_str(), num_options, options, option_values);
-  TI_TRACE("CUDA module load time : {}ms", (Time::get_time() - t) * 1000);
+  QD_TRACE("CUDA module load time : {}ms", (Time::get_time() - t) * 1000);
   // cudaModules.push_back(cudaModule);
   modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));
   return modules.back().get();
@@ -211,17 +211,17 @@ std::string convert(std::string new_name) {
     }
   }
   if (!new_name.empty())
-    TI_ASSERT(isalpha(new_name[0]) || new_name[0] == '_' || new_name[0] == '.');
+    QD_ASSERT(isalpha(new_name[0]) || new_name[0] == '_' || new_name[0] == '.');
   return new_name;
 }
 
 std::string JITSessionCUDA::compile_module_to_ptx(
     std::unique_ptr<llvm::Module> &module) {
-  TI_AUTO_PROF
+  QD_AUTO_PROF
   // Part of this function is borrowed from Halide::CodeGen_PTX_Dev.cpp
   if (llvm::verifyModule(*module, &llvm::errs())) {
     module->print(llvm::errs(), nullptr);
-    TI_ERROR("LLVM Module broken");
+    QD_ERROR("LLVM Module broken");
   }
 
   using namespace llvm;
@@ -240,7 +240,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
       ptx_cache_->make_cache_key(llvm_ir_str, this->config_.fast_math);
   std::optional<std::string> maybe_ptx = ptx_cache_->load_ptx(ptx_cache_key);
   if (maybe_ptx.has_value()) {
-    TI_TRACE("Loaded PTX from cache for module {}", module->getName().str());
+    QD_TRACE("Loaded PTX from cache for module {}", module->getName().str());
     return maybe_ptx.value();
   }
 
@@ -256,7 +256,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   std::string err_str;
   const llvm::Target *target =
       TargetRegistry::lookupTarget(triple.str(), err_str);
-  TI_ERROR_UNLESS(target, err_str);
+  QD_ERROR_UNLESS(target, err_str);
 
   TargetOptions options;
   if (this->config_.fast_math) {
@@ -282,7 +282,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
       options, llvm::Reloc::PIC_, llvm::CodeModel::Small,
       CodeGenOptLevel::Aggressive));
 
-  TI_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
+  QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
 
   module->setDataLayout(target_machine->createDataLayout());
 
@@ -356,10 +356,10 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   bool fail = target_machine->addPassesToEmitFile(
       legacy_pm, ostream, nullptr, llvm::CodeGenFileType::AssemblyFile, true);
 
-  TI_ERROR_IF(fail, "Failed to set up passes to emit PTX source\n");
+  QD_ERROR_IF(fail, "Failed to set up passes to emit PTX source\n");
 
   {
-    TI_PROFILER("llvm_module_pass");
+    QD_PROFILER("llvm_module_pass");
     legacy_pm.run(*module);
   }
 
@@ -383,7 +383,7 @@ std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
     const CompileConfig &config,
     Arch arch,
     ProgramImpl *program_impl) {
-  TI_ASSERT(arch == Arch::cuda);
+  QD_ASSERT(arch == Arch::cuda);
   // https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#data-layout
   auto data_layout = QuadrantsLLVMContext::get_data_layout(arch);
   return std::make_unique<JITSessionCUDA>(tlctx, config, data_layout,
@@ -394,7 +394,7 @@ std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
     QuadrantsLLVMContext *tlctx,
     const CompileConfig &config,
     Arch arch const ProgramImpl *program_impl) {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 #endif
 

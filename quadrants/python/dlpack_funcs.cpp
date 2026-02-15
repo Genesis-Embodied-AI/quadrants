@@ -4,16 +4,16 @@
 
 #include "quadrants/program/ndarray.h"
 #include "quadrants/program/program.h"
-#if TI_WITH_CUDA
+#if QD_WITH_CUDA
 #include "quadrants/rhi/cuda/cuda_device.h"
-#endif  // TI_WITH_CUDA
-#if TI_WITH_AMDGPU
+#endif  // QD_WITH_CUDA
+#if QD_WITH_AMDGPU
 #include "quadrants/rhi/amdgpu/amdgpu_device.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
-#endif  // TI_WITH_AMDGPU
-#if TI_WITH_METAL
+#endif  // QD_WITH_AMDGPU
+#if QD_WITH_METAL
 #include "quadrants/rhi/metal/metal_device.h"
-#endif  // TI_WITH_METAL
+#endif  // QD_WITH_METAL
 #include "quadrants/rhi/cpu/cpu_device.h"
 
 namespace quadrants {
@@ -22,7 +22,7 @@ namespace lang {
 void validate_arch(Arch arch) {
   if (!arch_is_cpu(arch) && !arch_is_cuda(arch) && !arch_is_metal(arch) &&
       !arch_is_amdgpu(arch)) {
-    TI_ERROR(
+    QD_ERROR(
         "DLPack conversion is only supported on CPU, Metal, CUDA or AMDGPU "
         "archs");
   }
@@ -70,7 +70,7 @@ std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
         cpu_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
-#if TI_WITH_CUDA
+#if QD_WITH_CUDA
   else if (arch_is_cuda(arch)) {
     cuda::CudaDevice *cuda_device =
         static_cast<cuda::CudaDevice *>(dev_alloc.device);
@@ -79,8 +79,8 @@ std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
         cuda_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
-#endif  // TI_WITH_CUDA
-#if TI_WITH_AMDGPU
+#endif  // QD_WITH_CUDA
+#if QD_WITH_AMDGPU
   else if (arch_is_amdgpu(arch)) {
     amdgpu::AmdgpuDevice *amdgpu_device =
         static_cast<amdgpu::AmdgpuDevice *>(dev_alloc.device);
@@ -90,8 +90,8 @@ std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
         amdgpu_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
-#endif  // TI_WITH_AMDGPU
-#if TI_WITH_METAL
+#endif  // QD_WITH_AMDGPU
+#if QD_WITH_METAL
   else if (arch_is_metal(arch)) {
     metal::MetalDevice *metal_device =
         static_cast<metal::MetalDevice *>(dev_alloc.device);
@@ -105,10 +105,10 @@ std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
       raw_ptr = mtl_buffer;
     }
   }
-#endif  // TI_WITH_METAL
+#endif  // QD_WITH_METAL
 
   if (raw_ptr == nullptr) {
-    TI_ERROR("Unsupported device type for DLPack conversion");
+    QD_ERROR("Unsupported device type for DLPack conversion");
   }
   return std::make_tuple(raw_ptr, device_type);
 }
@@ -116,7 +116,7 @@ std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
 std::pair<uint8_t, uint8_t> get_type_info(Arch arch, DataType dt) {
   PrimitiveType *dt_as_primitive = dt->as<PrimitiveType>();
   if (dt_as_primitive == nullptr) {
-    TI_ERROR("unsupported non-primitive data type for dlpack");
+    QD_ERROR("unsupported non-primitive data type for dlpack");
   }
   PrimitiveTypeID type_id = dt_as_primitive->type;
   uint8_t data_type_code = kDLInt;
@@ -148,7 +148,7 @@ std::pair<uint8_t, uint8_t> get_type_info(Arch arch, DataType dt) {
       break;
     }
     default: {
-      TI_ERROR("unsupported ndarray data type for dlpack");
+      QD_ERROR("unsupported ndarray data type for dlpack");
     }
   }
   return std::make_pair(data_type_code, element_bits);
@@ -197,7 +197,7 @@ void validate_axis_ordering(SNode *snode, int ndim) {
     }
   }
   if (has_non_ijk_ordering) {
-    TI_ERROR(
+    QD_ERROR(
         "SNode must have axes in order i, j, k, ... in order to use to_dlpack")
   }
 }
@@ -220,13 +220,13 @@ pybind11::capsule field_to_dlpack(Program *program,
                                   int n,
                                   int m) {
   if (!snode->is_path_all_dense) {
-    TI_ERROR("Only dense fields are supported for dlpack conversion");
+    QD_ERROR("Only dense fields are supported for dlpack conversion");
   }
 
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
-#if TI_WITH_AMDGPU
+#if QD_WITH_AMDGPU
   std::unique_ptr<AMDGPUContext::ContextGuard> amdgpu_guard;
   if (arch_is_amdgpu(arch)) {
     amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(
@@ -238,7 +238,7 @@ pybind11::capsule field_to_dlpack(Program *program,
   DevicePtr tree_device_ptr = program->get_snode_tree_device_ptr(tree_id);
 
   if (tree_device_ptr.device == nullptr || tree_device_ptr.alloc_id == 0) {
-    TI_ERROR(
+    QD_ERROR(
         "Field memory is not allocated. Please run 'ti.sync' before "
         "'to_dlpack'.")
   }
@@ -255,7 +255,7 @@ pybind11::capsule field_to_dlpack(Program *program,
       byte_offset = field_in_tree_offset;
     } else {
       if (arch_is_metal(arch)) {
-        TI_ERROR(
+        QD_ERROR(
             "DLPack conversion with fields is not supported on Metal "
             "with PyTorch <= 2.9.1.");
       }
@@ -323,7 +323,7 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
-#if TI_WITH_AMDGPU
+#if QD_WITH_AMDGPU
   std::unique_ptr<AMDGPUContext::ContextGuard> amdgpu_guard;
   if (arch_is_amdgpu(arch)) {
     amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(

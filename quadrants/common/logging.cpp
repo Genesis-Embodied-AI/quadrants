@@ -44,7 +44,7 @@ int Logger::level_enum_from_string(const std::string &level_name) {
   } else if (level_name == "off") {
     return spdlog::level::off;
   } else {
-    TI_ERROR(
+    QD_ERROR(
         "Unknown logging level [{}]. Levels = trace, debug, info, warn, error, "
         "critical, off",
         level_name);
@@ -54,7 +54,7 @@ int Logger::level_enum_from_string(const std::string &level_name) {
 Logger::Logger() {
   console_ = spdlog::stderr_color_mt("stderr");
   console_->flush_on(spdlog::level::trace);
-  TI_LOG_SET_PATTERN("%^[%L %D %X.%e %t] %v%$");
+  QD_LOG_SET_PATTERN("%^[%L %D %X.%e %t] %v%$");
 
   set_level_default();
 }
@@ -86,7 +86,7 @@ void Logger::error(const std::string &s, bool raise_exception) {
     print_stacktrace_fn_();
   }
   if (quadrants::CoreState::get_instance().trigger_gdb_when_crash) {
-#if defined(TI_PLATFORM_LINUX)
+#if defined(QD_PLATFORM_LINUX)
     trash(system(fmt::format("sudo gdb -p {}", PID::get_pid()).c_str()));
 #endif
   }
@@ -96,7 +96,7 @@ void Logger::error(const std::string &s, bool raise_exception) {
 
 void Logger::critical(const std::string &s) {
   Logger::error(s);  // simply forward to Logger::error since we actually never
-                     // use TI_CRITICAL
+                     // use QD_CRITICAL
 }
 
 void Logger::flush() {

@@ -4,7 +4,7 @@
 #include <quadrants/runtime/llvm/llvm_runtime_executor.h>
 #include "quadrants/ir/ir.h"
 #include "quadrants/program/program.h"
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/IR/Module.h"
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 #include "quadrants/codegen/llvm/llvm_codegen_utils.h"
@@ -55,7 +55,7 @@ class KernelCodeGen {
       IRNode *ir,
       QuadrantsLLVMContext &tlctx);
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   virtual LLVMCompiledKernel compile_kernel_to_module();
 
   virtual LLVMCompiledTask compile_task(
@@ -63,7 +63,7 @@ class KernelCodeGen {
       const CompileConfig &config,
       std::unique_ptr<llvm::Module> &&module = nullptr,
       IRNode *block = nullptr) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
  protected:

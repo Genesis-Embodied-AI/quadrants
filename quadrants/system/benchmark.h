@@ -59,6 +59,6 @@ class Benchmark : public Unit {
   }
 };
 
-TI_INTERFACE(Benchmark)
+QD_INTERFACE(Benchmark)
 
 }  // namespace quadrants

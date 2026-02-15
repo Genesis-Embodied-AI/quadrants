@@ -32,7 +32,7 @@ def main():
         print(f"{lsb_release.decode()}")
 
     for k, v in os.environ.items():
-        if k.startswith("TI_"):
+        if k.startswith("QD_"):
             print(f"{k}={v}")
     print("")
 

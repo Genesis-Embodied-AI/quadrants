@@ -12,7 +12,7 @@ namespace quadrants::lang {
 std::atomic<int> SNode::counter{0};
 
 SNode &SNode::insert_children(SNodeType t) {
-  TI_ASSERT(t != SNodeType::root);
+  QD_ASSERT(t != SNodeType::root);
 
   auto new_ch = std::make_unique<SNode>(depth + 1, t, snode_to_fields_,
                                         snode_rw_accessors_bank_);
@@ -166,7 +166,7 @@ SNode *SNode::get_least_sparse_ancestor() const {
   auto *result = const_cast<SNode *>(this);
   while (!result->need_activation()) {
     result = result->parent;
-    TI_ASSERT(result);
+    QD_ASSERT(result);
   }
   return result;
 }
@@ -228,7 +228,7 @@ SNode::SNode(int depth,
 }
 
 SNode::SNode(const SNode &) {
-  TI_NOT_IMPLEMENTED;  // Copying an SNode is forbidden. However we need the
+  QD_NOT_IMPLEMENTED;  // Copying an SNode is forbidden. However we need the
                        // definition here to make pybind11 happy.
 }
 
@@ -257,10 +257,10 @@ void SNode::print() {
 }
 
 void SNode::set_index_offsets(std::vector<int> index_offsets_) {
-  TI_ASSERT(this->index_offsets.empty());
-  TI_ASSERT(!index_offsets_.empty());
-  TI_ASSERT(type == SNodeType::place);
-  TI_ASSERT(index_offsets_.size() == this->num_active_indices);
+  QD_ASSERT(this->index_offsets.empty());
+  QD_ASSERT(!index_offsets_.empty());
+  QD_ASSERT(type == SNodeType::place);
+  QD_ASSERT(index_offsets_.size() == this->num_active_indices);
   this->index_offsets = index_offsets_;
 }
 
@@ -309,7 +309,7 @@ bool SNode::is_primal() const {
 }
 
 SNodeGradType SNode::get_snode_grad_type() const {
-  TI_ASSERT(grad_info);
+  QD_ASSERT(grad_info);
   return grad_info->get_snode_grad_type();
 }
 
@@ -326,17 +326,17 @@ bool SNode::has_dual() const {
 }
 
 SNode *SNode::get_adjoint() const {
-  TI_ASSERT(has_adjoint());
+  QD_ASSERT(has_adjoint());
   return grad_info->adjoint_snode();
 }
 
 SNode *SNode::get_adjoint_checkbit() const {
-  // TI_ASSERT(has_adjoint());
+  // QD_ASSERT(has_adjoint());
   return grad_info->adjoint_checkbit_snode();
 }
 
 SNode *SNode::get_dual() const {
-  TI_ASSERT(has_dual());
+  QD_ASSERT(has_dual());
   return grad_info->dual_snode();
 }
 

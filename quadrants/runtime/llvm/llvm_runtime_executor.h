@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <memory>
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 
 #include "quadrants/rhi/llvm/llvm_device.h"
 #include "quadrants/runtime/llvm/llvm_offline_cache.h"
@@ -14,9 +14,9 @@
 
 #include "quadrants/system/threading.h"
 
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/program/context.h"
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 
 namespace quadrants::lang {
 
@@ -120,7 +120,7 @@ class LlvmRuntimeExecutor {
   T runtime_query(const std::string &key,
                   uint64 *result_buffer,
                   Args &&...args) {
-    TI_ASSERT(arch_uses_llvm(config_.arch));
+    QD_ASSERT(arch_uses_llvm(config_.arch));
 
     auto runtime = get_runtime_jit_module();
     runtime->call<void *>("runtime_" + key, llvm_runtime_,
@@ -171,4 +171,4 @@ class LlvmRuntimeExecutor {
 
 }  // namespace quadrants::lang
 
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM

@@ -11,7 +11,7 @@
 
 namespace quadrants {
 
-#define TI_CHECK_EQUAL(A, B, tolerance)              \
+#define QD_CHECK_EQUAL(A, B, tolerance)              \
   {                                                  \
     if (!quadrants::math::equal(A, B, tolerance)) {  \
       std::cout << A << std::endl << B << std::endl; \
@@ -19,17 +19,17 @@ namespace quadrants {
     CHECK(quadrants::math::equal(A, B, tolerance));  \
   }
 
-#define TI_ASSERT_EQUAL(A, B, tolerance)             \
+#define QD_ASSERT_EQUAL(A, B, tolerance)             \
   {                                                  \
     if (!quadrants::math::equal(A, B, tolerance)) {  \
       std::cout << A << std::endl << B << std::endl; \
-      TI_ERROR(#A " != " #B);                        \
+      QD_ERROR(#A " != " #B);                        \
     }                                                \
   }
 
-#define TI_TEST(x) TEST_CASE(x, ("[" x "]"))
-#define TI_CHECK(x) CHECK(x)
-#define TI_TEST_PROGRAM                     \
+#define QD_TEST(x) TEST_CASE(x, ("[" x "]"))
+#define QD_CHECK(x) CHECK(x)
+#define QD_TEST_PROGRAM                     \
   auto prog_ = std::make_unique<Program>(); \
   prog_->materialize_runtime();
 

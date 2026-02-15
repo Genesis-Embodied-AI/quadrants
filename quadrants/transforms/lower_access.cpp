@@ -93,14 +93,14 @@ class LowerAccess : public IRVisitor {
     VecStatement lowered;
     if (snode_op == SNodeOpType::is_active) {
       // For ti.is_active
-      TI_ASSERT(!activate);
+      QD_ASSERT(!activate);
     }
     PtrLowererImpl lowerer{ptr->snode, ptr->indices, snode_op,
                            ptr->is_bit_vectorized, &lowered};
     lowerer.set_pointer_needs_activation(activate);
     lowerer.set_lower_access(this);
     lowerer.run();
-    TI_ASSERT(lowered.size() > 0);
+    QD_ASSERT(lowered.size() > 0);
     auto lowered_ptr = lowered.back().get();
     if (ptr->is_bit_vectorized) {
       // if the global ptr is bit vectorized, we start from the place snode

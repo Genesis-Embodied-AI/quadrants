@@ -76,18 +76,18 @@ class AlgSimp : public BasicStmtVisitor {
         reciprocal->val.val_float32() =
             (float32)1.0 / rhs->as<ConstStmt>()->val.val_float32();
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
       Stmt *reciprocal_ptr = reciprocal.get();
       modifier.insert_before(stmt, std::move(reciprocal));
       return reciprocal_ptr;
     } else {
       auto matrix_rhs = rhs->cast<MatrixInitStmt>();
-      TI_ASSERT(matrix_rhs != nullptr);
+      QD_ASSERT(matrix_rhs != nullptr);
       std::vector<Stmt *> values;
       for (auto scalar_stmt : matrix_rhs->values) {
         auto const_stmt = scalar_stmt->cast<ConstStmt>();
-        TI_ASSERT(const_stmt != nullptr);
+        QD_ASSERT(const_stmt != nullptr);
         auto reciprocal =
             Stmt::make_typed<ConstStmt>(TypedConstant(scalar_stmt->ret_type));
         if (scalar_stmt->ret_type->is_primitive(PrimitiveTypeID::f64)) {
@@ -97,7 +97,7 @@ class AlgSimp : public BasicStmtVisitor {
           reciprocal->val.val_float32() =
               (float32)1.0 / const_stmt->val.val_float32();
         } else {
-          TI_NOT_IMPLEMENTED
+          QD_NOT_IMPLEMENTED
         }
         values.push_back(reciprocal.get());
         modifier.insert_before(stmt, std::move(reciprocal));
@@ -123,12 +123,12 @@ class AlgSimp : public BasicStmtVisitor {
       return new_rhs_ptr;
     } else {
       auto matrix_rhs = rhs->cast<MatrixInitStmt>();
-      TI_ASSERT(matrix_rhs != nullptr);
+      QD_ASSERT(matrix_rhs != nullptr);
 
       std::vector<Stmt *> values;
       for (auto scalar_stmt : matrix_rhs->values) {
         auto const_stmt = scalar_stmt->cast<ConstStmt>();
-        TI_ASSERT(const_stmt != nullptr);
+        QD_ASSERT(const_stmt != nullptr);
         int log2int = bit::log2int((uint64)const_stmt->val.val_as_int64());
         auto log2int_stmt = Stmt::make<ConstStmt>(
             TypedConstant(scalar_stmt->ret_type, log2int));
@@ -267,7 +267,7 @@ class AlgSimp : public BasicStmtVisitor {
     }
 
     if (is_integral(stmt->lhs->ret_type.get_element_type())) {
-      TI_ERROR("Negative exponent in pow(int, int) is not allowed.");
+      QD_ERROR("Negative exponent in pow(int, int) is not allowed.");
     }
 
     auto stmts = get_const_stmt_with_value(stmt->ret_type, 1);
@@ -358,7 +358,7 @@ class AlgSimp : public BasicStmtVisitor {
     // return true iff the IR is modified
     auto lhs = stmt->lhs;
     auto rhs = stmt->rhs;
-    TI_ASSERT(stmt->op_type == BinaryOpType::mul);
+    QD_ASSERT(stmt->op_type == BinaryOpType::mul);
     if (alg_is_one(lhs) || alg_is_one(rhs)) {
       // 1 * a -> a, a * 1 -> a
       stmt->replace_usages_with(alg_is_one(lhs) ? stmt->rhs : stmt->lhs);
@@ -410,7 +410,7 @@ class AlgSimp : public BasicStmtVisitor {
   bool optimize_division(BinaryOpStmt *stmt) {
     // return true iff the IR is modified
     auto rhs = stmt->rhs;
-    TI_ASSERT(stmt->op_type == BinaryOpType::div ||
+    QD_ASSERT(stmt->op_type == BinaryOpType::div ||
               stmt->op_type == BinaryOpType::floordiv);
     if (alg_is_one(rhs) && !(is_real(stmt->lhs->ret_type.get_element_type()) &&
                              stmt->op_type == BinaryOpType::floordiv)) {
@@ -429,7 +429,7 @@ class AlgSimp : public BasicStmtVisitor {
         is_real(rhs->ret_type.get_element_type()) &&
         stmt->op_type != BinaryOpType::floordiv) {
       if (alg_is_zero(rhs)) {
-        TI_WARN("Potential division by 0\n{}", stmt->get_tb());
+        QD_WARN("Potential division by 0\n{}", stmt->get_tb());
       } else {
         // a / const -> a * (1 / const)
         Stmt *new_rhs = get_inverse(stmt);
@@ -530,7 +530,7 @@ class AlgSimp : public BasicStmtVisitor {
         // a << 0 -> a
         // 0 << a -> 0
         // 0 >> a -> 0
-        TI_ASSERT(stmt->lhs->ret_type == stmt->ret_type);
+        QD_ASSERT(stmt->lhs->ret_type == stmt->ret_type);
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
       }
@@ -547,7 +547,7 @@ class AlgSimp : public BasicStmtVisitor {
                    stmt->op_type == BinaryOpType::cmp_lt) {
           replace_with_zero(stmt);
         } else {
-          TI_NOT_IMPLEMENTED
+          QD_NOT_IMPLEMENTED
         }
       }
     }
@@ -693,7 +693,7 @@ class AlgSimp : public BasicStmtVisitor {
 namespace irpass {
 
 bool alg_simp(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return AlgSimp::run(root, config.fast_math);
 }
 

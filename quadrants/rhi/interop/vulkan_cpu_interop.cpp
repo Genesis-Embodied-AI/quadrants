@@ -1,15 +1,15 @@
 #include "quadrants/rhi/interop/vulkan_cpu_interop.h"
 #include "quadrants/rhi/cpu/cpu_device.h"
 
-#if TI_WITH_VULKAN
+#if QD_WITH_VULKAN
 #include "quadrants/rhi/vulkan/vulkan_device.h"
-#endif  // TI_WITH_VULKAN
+#endif  // QD_WITH_VULKAN
 
 #include <unordered_map>
 
 namespace quadrants::lang {
 
-#if TI_WITH_VULKAN && defined(TI_WITH_LLVM)
+#if QD_WITH_VULKAN && defined(QD_WITH_LLVM)
 
 using namespace quadrants::lang::vulkan;
 using namespace quadrants::lang::cpu;
@@ -25,7 +25,7 @@ void memcpy_cpu_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
   CpuDevice::AllocInfo src_alloc_info = cpu_dev->get_alloc_info(src_alloc);
 
   void *dst_ptr{nullptr};
-  TI_ASSERT(vk_dev->map_range(dst, size, &dst_ptr) == RhiResult::success);
+  QD_ASSERT(vk_dev->map_range(dst, size, &dst_ptr) == RhiResult::success);
   void *src_ptr = (uint8_t *)src_alloc_info.ptr + src.offset;
 
   memcpy(dst_ptr, src_ptr, size);
@@ -44,7 +44,7 @@ void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
   CpuDevice::AllocInfo src_alloc_info = cpu_dev->get_alloc_info(src_alloc);
 
   void *dst_ptr{nullptr};
-  TI_ASSERT(vk_dev->map_range(staging, size, &dst_ptr) == RhiResult::success);
+  QD_ASSERT(vk_dev->map_range(staging, size, &dst_ptr) == RhiResult::success);
   void *src_ptr = (uint8_t *)src_alloc_info.ptr + src.offset;
 
   memcpy(dst_ptr, src_ptr, size);
@@ -52,21 +52,21 @@ void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
 
   auto stream = vk_dev->get_compute_stream();
   auto [cmd_list, res] = stream->new_command_list_unique();
-  TI_ASSERT(res == RhiResult::success);
+  QD_ASSERT(res == RhiResult::success);
   cmd_list->buffer_copy(dst, staging, size);
   stream->submit_synced(cmd_list.get());
 }
 
 #else
 void memcpy_cpu_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
                                       DevicePtr stagin,
                                       DevicePtr src,
                                       uint64_t size) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
-#endif  // TI_WITH_VULKAN
+#endif  // QD_WITH_VULKAN
 
 }  // namespace quadrants::lang

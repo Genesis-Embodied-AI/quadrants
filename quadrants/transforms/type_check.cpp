@@ -11,7 +11,7 @@ namespace quadrants::lang {
 
 static_assert(sizeof(real) == sizeof(float32),
               "Please build the quadrants compiler with single precision "
-              "(TI_USE_DOUBLE=0)");
+              "(QD_USE_DOUBLE=0)");
 
 // Var lookup and Type inference
 class TypeCheck : public IRVisitor {
@@ -75,7 +75,7 @@ class TypeCheck : public IRVisitor {
   }
 
   void visit(LocalLoadStmt *stmt) override {
-    TI_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
+    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
               stmt->src->is<MatrixOfMatrixPtrStmt>());
     if (auto ptr_offset_stmt = stmt->src->cast<MatrixPtrStmt>()) {
       auto lookup = DataType(ptr_offset_stmt->origin->ret_type.ptr_removed()
@@ -157,7 +157,7 @@ class TypeCheck : public IRVisitor {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    TI_ASSERT(stmt->offset->ret_type.get_element_type()->is_primitive(
+    QD_ASSERT(stmt->offset->ret_type.get_element_type()->is_primitive(
         PrimitiveTypeID::i32));
     stmt->ret_type.set_is_pointer(true);
   }
@@ -389,7 +389,7 @@ class TypeCheck : public IRVisitor {
   void visit(TernaryOpStmt *stmt) override {
     if (stmt->op_type == TernaryOpType::select) {
       auto ret_type = promoted_type(stmt->op2->ret_type, stmt->op3->ret_type);
-      TI_ASSERT(is_integral(stmt->op1->ret_type.get_element_type()));
+      QD_ASSERT(is_integral(stmt->op1->ret_type.get_element_type()));
       if (ret_type != stmt->op2->ret_type) {
         auto cast_stmt = insert_type_cast_before(stmt, stmt->op2, ret_type);
         stmt->op2 = cast_stmt;
@@ -400,7 +400,7 @@ class TypeCheck : public IRVisitor {
       }
       stmt->ret_type = ret_type;
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -414,20 +414,20 @@ class TypeCheck : public IRVisitor {
 
   void visit(FuncCallStmt *stmt) override {
     auto *func = stmt->func;
-    TI_ASSERT(func);
+    QD_ASSERT(func);
     stmt->ret_type = func->ret_type;
     stmt->ret_type.set_is_pointer(true);
   }
 
   void visit(FrontendFuncCallStmt *stmt) override {
     auto *func = stmt->func;
-    TI_ASSERT(func);
+    QD_ASSERT(func);
     stmt->ret_type = func->ret_type;
     stmt->ret_type.set_is_pointer(true);
   }
 
   void visit(GetElementStmt *stmt) override {
-    TI_ASSERT(stmt->src->ret_type->is<PointerType>());
+    QD_ASSERT(stmt->src->ret_type->is<PointerType>());
     stmt->ret_type =
         stmt->src->ret_type.ptr_removed()->as<StructType>()->get_element_type(
             stmt->index);
@@ -442,7 +442,7 @@ class TypeCheck : public IRVisitor {
   }
 
   void visit(ExternalPtrStmt *stmt) override {
-    TI_ASSERT(stmt->base_ptr->is<ArgLoadStmt>());
+    QD_ASSERT(stmt->base_ptr->is<ArgLoadStmt>());
     auto arg_load_stmt = stmt->base_ptr->cast<ArgLoadStmt>();
 
     if (stmt->overrided_dtype) {
@@ -455,7 +455,7 @@ class TypeCheck : public IRVisitor {
 
     stmt->ret_type.set_is_pointer(true);
     for (int i = 0; i < stmt->indices.size(); i++) {
-      TI_ASSERT(is_integral(stmt->indices[i]->ret_type));
+      QD_ASSERT(is_integral(stmt->indices[i]->ret_type));
       if (stmt->indices[i]->ret_type != PrimitiveType::i32) {
         stmt->indices[i] =
             insert_type_cast_before(stmt, stmt->indices[i], PrimitiveType::i32);
@@ -544,7 +544,7 @@ class TypeCheck : public IRVisitor {
   void visit(AdStackPushStmt *stmt) override {
     stmt->ret_type = stmt->stack->ret_type;
     stmt->ret_type.set_is_pointer(false);
-    TI_ASSERT(stmt->ret_type == stmt->v->ret_type);
+    QD_ASSERT(stmt->ret_type == stmt->v->ret_type);
   }
 
   void visit(AdStackPopStmt *stmt) override {
@@ -555,7 +555,7 @@ class TypeCheck : public IRVisitor {
   void visit(AdStackAccAdjointStmt *stmt) override {
     stmt->ret_type = stmt->stack->ret_type;
     stmt->ret_type.set_is_pointer(false);
-    TI_ASSERT(stmt->ret_type == stmt->v->ret_type);
+    QD_ASSERT(stmt->ret_type == stmt->v->ret_type);
   }
 
   void visit(GlobalTemporaryStmt *stmt) override {
@@ -577,7 +577,7 @@ class TypeCheck : public IRVisitor {
   }
 
   void visit(MatrixInitStmt *stmt) override {
-    TI_ASSERT_INFO(stmt->ret_type->is<TensorType>(),
+    QD_ASSERT_INFO(stmt->ret_type->is<TensorType>(),
                    "Matrix should have tensor type, got {}",
                    stmt->ret_type->to_string());
     auto tensor_type = stmt->ret_type->as<TensorType>();
@@ -593,7 +593,7 @@ class TypeCheck : public IRVisitor {
 namespace irpass {
 
 void type_check(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   analysis::check_fields_registered(root);
   TypeCheck inst(config);
   root->accept(&inst);

@@ -8,7 +8,7 @@
 #include "quadrants/program/program.h"
 #include "quadrants/ir/transforms.h"
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #endif
 
@@ -48,7 +48,7 @@ Kernel::Kernel(Program &program,
   is_accessor = false;
   ir_is_ast_ = false;  // CHI IR
 
-  TI_ASSERT(this->ir->is<Block>());
+  QD_ASSERT(this->ir->is<Block>());
   this->ir->as<Block>()->set_parent_callable(this);
 
   if (autodiff_mode == AutodiffMode::kNone) {
@@ -60,7 +60,7 @@ Kernel::Kernel(Program &program,
   } else if (autodiff_mode == AutodiffMode::kCheckAutodiffValid) {
     name = primal_name + "_validate_grad";
   } else {
-    TI_ERROR("Unsupported autodiff mode");
+    QD_ERROR("Unsupported autodiff mode");
   }
 }
 
@@ -96,7 +96,7 @@ T Kernel::fetch_ret(DataType dt, int i) {
     // use f32 to interact with python
     return (T)program->fetch_result<float32>(i);
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -116,7 +116,7 @@ void Kernel::init(Program &program,
                                               /*is_kernel_=*/true);
   ir = context->get_root();
 
-  TI_ASSERT(ir->is<Block>());
+  QD_ASSERT(ir->is<Block>());
   ir->as<Block>()->set_parent_callable(this);
 
   ir_is_ast_ = true;

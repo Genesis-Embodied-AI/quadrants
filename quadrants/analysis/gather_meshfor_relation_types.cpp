@@ -24,9 +24,9 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
   }
 
   void visit(MeshForStmt *stmt) override {
-    TI_ASSERT(mesh_for == nullptr);
-    TI_ASSERT(stmt->major_to_types.size() == 0);
-    TI_ASSERT(stmt->minor_relation_types.size() == 0);
+    QD_ASSERT(mesh_for == nullptr);
+    QD_ASSERT(stmt->major_to_types.size() == 0);
+    QD_ASSERT(stmt->minor_relation_types.size() == 0);
     mesh_for = stmt;
     stmt->body->accept(this);
 
@@ -37,7 +37,7 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
       all_elements.insert(_type);
     }
     for (auto _type : all_elements) {
-      TI_ERROR_IF(mesh_for->mesh->num_elements.find(_type) ==
+      QD_ERROR_IF(mesh_for->mesh->num_elements.find(_type) ==
                       mesh_for->mesh->num_elements.end(),
                   "Cannot load mesh element {}'s metadata",
                   mesh::element_type_name(_type));
@@ -76,7 +76,7 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
     }
 
     if (missing) {
-      TI_ERROR(
+      QD_ERROR(
           "Relation {} detected in mesh-for loop but not initialized."
           " Please add them with syntax: Patcher.load_mesh(..., "
           "relations=[..., {}])",
@@ -89,21 +89,21 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
   void visit(MeshRelationAccessStmt *stmt) override {
     if (auto from_stmt =
             stmt->mesh_idx->cast<LoopIndexStmt>()) {  // major relation
-      TI_ASSERT(from_stmt->mesh_index_type() == mesh_for->major_from_type);
+      QD_ASSERT(from_stmt->mesh_index_type() == mesh_for->major_from_type);
       mesh_for->major_to_types.insert(stmt->to_type);
     } else if (auto from_stmt =
                    stmt->mesh_idx
                        ->cast<MeshRelationAccessStmt>()) {  // minor relation
-      TI_ASSERT(!from_stmt->is_size());
+      QD_ASSERT(!from_stmt->is_size());
       auto from_order = mesh::element_order(from_stmt->to_type);
       auto to_order = mesh::element_order(stmt->to_type);
-      TI_ASSERT_INFO(from_order > to_order,
+      QD_ASSERT_INFO(from_order > to_order,
                      "Cannot access an indeterminate relation (E.g, Vert-Vert) "
                      "in a nested neighbor access");
       mesh_for->minor_relation_types.insert(
           mesh::relation_by_orders(from_order, to_order));
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 

@@ -15,19 +15,19 @@
 #include "quadrants/math/arithmetic.h"
 #include "quadrants/rhi/common/host_memory_pool.h"
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
 #endif
 
-#ifdef TI_WITH_VULKAN
+#ifdef QD_WITH_VULKAN
 #include "quadrants/runtime/program_impls/vulkan/vulkan_program.h"
 #include "quadrants/rhi/vulkan/vulkan_loader.h"
 #endif
-#ifdef TI_WITH_METAL
+#ifdef QD_WITH_METAL
 #include "quadrants/runtime/program_impls/metal/metal_program.h"
 #include "quadrants/rhi/metal/metal_api.h"
-#endif  // TI_WITH_METAL
+#endif  // QD_WITH_METAL
 
 #if defined(_M_X64) || defined(__x86_64)
 // For _MM_SET_FLUSH_ZERO_MODE
@@ -38,7 +38,7 @@ namespace quadrants::lang {
 std::atomic<int> Program::num_instances_;
 
 Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
-  TI_TRACE("Program initializing...");
+  QD_TRACE("Program initializing...");
 
   // For performance considerations and correctness of QuantFloatType
   // operations, we force floating-point operations to flush to zero on all
@@ -65,36 +65,36 @@ Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
 
   profiler = make_profiler(config.arch, config.kernel_profiler);
   if (arch_uses_llvm(config.arch)) {
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
     program_impl_ = std::make_unique<LlvmProgramImpl>(config, profiler.get());
 #else
-    TI_ERROR("This quadrants is not compiled with LLVM");
+    QD_ERROR("This quadrants is not compiled with LLVM");
 #endif
   } else if (config.arch == Arch::metal) {
-#ifdef TI_WITH_METAL
-    TI_ASSERT(metal::is_metal_api_available());
+#ifdef QD_WITH_METAL
+    QD_ASSERT(metal::is_metal_api_available());
     program_impl_ = std::make_unique<MetalProgramImpl>(config);
 #else
-    TI_ERROR("This quadrants is not compiled with Metal")
+    QD_ERROR("This quadrants is not compiled with Metal")
 #endif
   } else if (config.arch == Arch::vulkan) {
-#ifdef TI_WITH_VULKAN
-    TI_ASSERT(vulkan::is_vulkan_api_available());
+#ifdef QD_WITH_VULKAN
+    QD_ASSERT(vulkan::is_vulkan_api_available());
     program_impl_ = std::make_unique<VulkanProgramImpl>(config);
 #else
-    TI_ERROR("This quadrants is not compiled with Vulkan")
+    QD_ERROR("This quadrants is not compiled with Vulkan")
 #endif
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   // program_impl_ should be set in the if-else branch above
-  TI_ASSERT(program_impl_);
+  QD_ASSERT(program_impl_);
 
   Device *compute_device = nullptr;
   compute_device = program_impl_->get_compute_device();
   // Must have handled all the arch fallback logic by this point.
-  TI_ASSERT_INFO(num_instances_ == 0, "Only one instance at a time");
+  QD_ASSERT_INFO(num_instances_ == 0, "Only one instance at a time");
   total_compilation_time_ = 0;
   num_instances_ += 1;
   SNode::counter = 0;
@@ -104,7 +104,7 @@ Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
 
   if (!is_extension_supported(config.arch, Extension::assertion)) {
     if (config.check_out_of_bound) {
-      TI_WARN("Out-of-bound access checking is not supported on arch={}",
+      QD_WARN("Out-of-bound access checking is not supported on arch={}",
               arch_name(config.arch));
       config.check_out_of_bound = false;
     }
@@ -112,12 +112,12 @@ Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
 
   Timelines::get_instance().set_enabled(config.timeline);
 
-  TI_TRACE("Program ({}) arch={} initialized.", fmt::ptr(this),
+  QD_TRACE("Program ({}) arch={} initialized.", fmt::ptr(this),
            arch_name(config.arch));
 }
 
 TypeFactory &Program::get_type_factory() {
-  TI_WARN(
+  QD_WARN(
       "Program::get_type_factory() will be deprecated, Please use "
       "TypeFactory::get_instance()");
   return TypeFactory::get_instance();
@@ -134,9 +134,9 @@ const CompiledKernelData *Program::load_fast_cache(
 }
 
 Function *Program::create_function(const FunctionKey &func_key) {
-  TI_TRACE("Creating function {}...", func_key.get_full_name());
+  QD_TRACE("Creating function {}...", func_key.get_full_name());
   functions_.emplace_back(std::make_unique<Function>(this, func_key));
-  TI_ASSERT(function_map_.count(func_key) == 0);
+  QD_ASSERT(function_map_.count(func_key) == 0);
   function_map_[func_key] = functions_.back().get();
   return functions_.back().get();
 }
@@ -153,7 +153,7 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
                                       const DeviceCapabilityConfig &device_caps,
                                       const Kernel &kernel_def) {
   auto start_t = Time::get_time();
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto &mgr = program_impl_->get_kernel_compilation_manager();
   CompileResult compile_result =
       mgr.load_or_compile(compile_config, device_caps, kernel_def);
@@ -186,7 +186,7 @@ static void remove_rw_accessor_cache(
 }
 
 void Program::destroy_snode_tree(SNodeTree *snode_tree) {
-  TI_ASSERT(arch_uses_llvm(compile_config().arch) ||
+  QD_ASSERT(arch_uses_llvm(compile_config().arch) ||
             compile_config().arch == Arch::vulkan);
 
   // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates
@@ -220,7 +220,7 @@ SNodeTree *Program::add_snode_tree(std::unique_ptr<SNode> root,
   if (id < snode_trees_.size()) {
     snode_trees_[id] = std::move(tree);
   } else {
-    TI_ASSERT(id == snode_trees_.size());
+    QD_ASSERT(id == snode_trees_.size());
     snode_trees_.push_back(std::move(tree));
   }
   return snode_trees_[id].get();
@@ -243,7 +243,7 @@ int Program::get_snode_tree_size() {
 }
 
 Kernel &Program::get_snode_reader(SNode *snode) {
-  TI_ASSERT(snode->type == SNodeType::place);
+  QD_ASSERT(snode->type == SNodeType::place);
   auto kernel_name = fmt::format("snode_reader_{}", snode->id);
   auto &ker = create_kernel([snode, this](Kernel *kernel) {
     ExprGroup indices;
@@ -269,7 +269,7 @@ Kernel &Program::get_snode_reader(SNode *snode) {
 }
 
 Kernel &Program::get_snode_writer(SNode *snode) {
-  TI_ASSERT(snode->type == SNodeType::place);
+  QD_ASSERT(snode->type == SNodeType::place);
   auto kernel_name = fmt::format("snode_writer_{}", snode->id);
   auto &ker = create_kernel([snode, this](Kernel *kernel) {
     ExprGroup indices;
@@ -313,7 +313,7 @@ void Program::finalize() {
   }
 
   synchronize();
-  TI_TRACE("Program finalizing...");
+  QD_TRACE("Program finalizing...");
 
   synchronize();
   if (arch_uses_llvm(compile_config().arch)) {
@@ -327,7 +327,7 @@ void Program::finalize() {
   program_impl_->dump_cache_data_to_disk();
   program_impl_->run_need_finalizing();
   compile_config_ = default_compile_config;
-  TI_TRACE("Program ({}) finalized_.", fmt::ptr(this));
+  QD_TRACE("Program ({}) finalized_.", fmt::ptr(this));
 
   // Reset memory pool
   HostMemoryPool::get_instance().reset();
@@ -364,7 +364,7 @@ Ndarray *Program::create_ndarray(const DataType type,
       Stream *stream =
           program_impl_->get_compute_device()->get_compute_stream();
       auto [cmdlist, res] = stream->new_command_list_unique();
-      TI_ASSERT(res == RhiResult::success);
+      QD_ASSERT(res == RhiResult::success);
       cmdlist->buffer_fill(arr->ndarray_alloc_.get_ptr(0),
                            arr->get_element_size() * arr->get_nelement(),
                            /*data=*/0);

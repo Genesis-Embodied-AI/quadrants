@@ -11,7 +11,7 @@ namespace quadrants::lang {
 
 // A memory pool that runs on the host
 
-class TI_DLL_EXPORT HostMemoryPool {
+class QD_DLL_EXPORT HostMemoryPool {
  public:
   static const size_t page_size;
 

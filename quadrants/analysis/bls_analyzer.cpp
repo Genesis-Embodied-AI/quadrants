@@ -7,7 +7,7 @@ namespace quadrants::lang {
 
 BLSAnalyzer::BLSAnalyzer(OffloadedStmt *for_stmt, ScratchPads *pads)
     : for_stmt_(for_stmt), pads_(pads) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   allow_undefined_visitor = true;
   invoke_default_visitor = false;
   for (auto &snode : for_stmt->mem_access_opt.get_snodes_with_flag(
@@ -92,7 +92,7 @@ void BLSAnalyzer::visit(AtomicOpStmt *stmt) {
 }
 
 void BLSAnalyzer::visit(Stmt *stmt) {
-  TI_ASSERT(!stmt->is_container_statement());
+  QD_ASSERT(!stmt->is_container_statement());
 }
 
 bool BLSAnalyzer::run() {

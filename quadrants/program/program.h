@@ -8,7 +8,7 @@
 #include <stack>
 #include <shared_mutex>
 
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/ir/ir.h"
 #include "quadrants/ir/type_factory.h"
@@ -44,7 +44,7 @@ class StructCompiler;
  * LlvmProgramImpl, MetalProgramImpl..
  */
 
-class TI_DLL_EXPORT Program {
+class QD_DLL_EXPORT Program {
  public:
   using Kernel = quadrants::lang::Kernel;
 
@@ -160,7 +160,7 @@ class TI_DLL_EXPORT Program {
 
   static int get_kernel_id() {
     static int id = 0;
-    TI_ASSERT(id < 100000);
+    QD_ASSERT(id < 100000);
     return id++;
   }
 
@@ -292,7 +292,7 @@ class TI_DLL_EXPORT Program {
    * Please limit its use to LLVM backend only
    */
   ProgramImpl *get_program_impl() {
-    TI_ASSERT(arch_uses_llvm(compile_config().arch));
+    QD_ASSERT(arch_uses_llvm(compile_config().arch));
     return program_impl_.get();
   }
 

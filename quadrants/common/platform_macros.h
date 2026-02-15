@@ -12,17 +12,17 @@
 // https://gcc.gnu.org/wiki/Visibility
 #if defined _WIN32 || defined _WIN64 || defined __CYGWIN__
 #ifdef __GNUC__
-#define TI_DLL_EXPORT __attribute__((dllexport))
+#define QD_DLL_EXPORT __attribute__((dllexport))
 #else
-#define TI_DLL_EXPORT __declspec(dllexport)
+#define QD_DLL_EXPORT __declspec(dllexport)
 #endif  //  __GNUC__
 #else
-#define TI_DLL_EXPORT __attribute__((visibility("default")))
+#define QD_DLL_EXPORT __attribute__((visibility("default")))
 #endif  // defined _WIN32 || defined _WIN64 || defined __CYGWIN__
 
 // Windows
 #if defined(_WIN64)
-#define TI_PLATFORM_WINDOWS
+#define QD_PLATFORM_WINDOWS
 #endif
 
 #if defined(_WIN32) && !defined(_WIN64)
@@ -31,15 +31,15 @@ static_assert(false, "32-bit Windows systems are not supported")
 
 // Linux
 #if defined(__linux__)
-#define TI_PLATFORM_LINUX
+#define QD_PLATFORM_LINUX
 #endif
 
 // OSX
 #if defined(__APPLE__)
-#define TI_PLATFORM_OSX
+#define QD_PLATFORM_OSX
 #endif
 
-#if (defined(TI_PLATFORM_LINUX) || defined(TI_PLATFORM_OSX) || \
+#if (defined(QD_PLATFORM_LINUX) || defined(QD_PLATFORM_OSX) || \
      defined(__unix__))
-#define TI_PLATFORM_UNIX
+#define QD_PLATFORM_UNIX
 #endif

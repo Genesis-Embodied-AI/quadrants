@@ -27,7 +27,7 @@ KernelCompiler::CKDPtr KernelCompiler::compile(
     const DeviceCapabilityConfig &device_caps,
     const Kernel &kernel_def,
     IRNode &chi_ir) const {
-  TI_TRACE("VK codegen for Quadrants kernel={}", kernel_def.name);
+  QD_TRACE("VK codegen for Quadrants kernel={}", kernel_def.name);
   KernelCodegen::Params params;
   params.ti_kernel_name = kernel_def.name;
   params.kernel = &kernel_def;

@@ -56,7 +56,7 @@ from ._template_mapper import TemplateMapper
 MAX_ARG_NUM = 512
 
 # Define proxies for fast lookup
-_FLOAT, _INT, _UINT, _TI_ARRAY, _TI_ARRAY_WITH_GRAD = KernelBatchedArgType
+_FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _ti_core.Arch.cuda
 
@@ -485,9 +485,9 @@ class FuncBase:
             v_primal = v.arr
             v_grad = v.grad.arr if v.grad else None
             if v_grad is None:
-                launch_ctx_buffer[_TI_ARRAY].append((index, v_primal))
+                launch_ctx_buffer[_QD_ARRAY].append((index, v_primal))
             else:
-                launch_ctx_buffer[_TI_ARRAY_WITH_GRAD].append((index, v_primal, v_grad))
+                launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((index, v_primal, v_grad))
             return 1, True
         if needed_arg_basetype is ndarray_type.NdarrayType:
             # v is things like torch Tensor and numpy array

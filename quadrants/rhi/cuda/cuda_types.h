@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(TI_WITH_CUDA_TOOLKIT)
+#if defined(QD_WITH_CUDA_TOOLKIT)
 
 #include <cuda.h>
 #include <cusparse.h>

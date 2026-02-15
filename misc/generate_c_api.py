@@ -119,7 +119,7 @@ def get_declr(module: Module, x: EntryBase, with_docs=False):
 
     elif ty is Callback:
         return_value_type = "void" if x.return_value_type == None else get_type_name(x.return_value_type)
-        out += [f"typedef {return_value_type} (TI_API_CALL *{get_type_name(x)})("]
+        out += [f"typedef {return_value_type} (QD_API_CALL *{get_type_name(x)})("]
         if x.params:
             for i, param in enumerate(x.params):
                 if i != 0:
@@ -131,7 +131,7 @@ def get_declr(module: Module, x: EntryBase, with_docs=False):
 
     elif ty is Function:
         return_value_type = "void" if x.return_value_type == None else get_type_name(x.return_value_type)
-        out += ["TI_DLL_EXPORT " + return_value_type + " TI_API_CALL " + x.name.snake_case + "("]
+        out += ["QD_DLL_EXPORT " + return_value_type + " QD_API_CALL " + x.name.snake_case + "("]
         if x.params:
             for i, param in enumerate(x.params):
                 if i != 0:

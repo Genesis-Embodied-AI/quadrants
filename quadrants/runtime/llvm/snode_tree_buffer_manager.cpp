@@ -6,7 +6,7 @@ namespace quadrants::lang {
 SNodeTreeBufferManager::SNodeTreeBufferManager(
     LlvmRuntimeExecutor *runtime_exec)
     : runtime_exec_(runtime_exec) {
-  TI_TRACE("SNode tree buffer manager created.");
+  QD_TRACE("SNode tree buffer manager created.");
 }
 
 Ptr SNodeTreeBufferManager::allocate(std::size_t size,

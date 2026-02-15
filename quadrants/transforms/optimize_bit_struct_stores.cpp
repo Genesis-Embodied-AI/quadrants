@@ -88,7 +88,7 @@ class MergeBitStructStores : public BasicStmtVisitor {
             std::unordered_set<int> ch_ids_set(ch_ids.begin(), ch_ids.end());
             return ch_ids_set.size() != ch_ids.size();
           };
-          TI_ASSERT(!ch_ids_dup());
+          QD_ASSERT(!ch_ids_dup());
           // Now erase all (except the last) related BitSturctStoreStmts.
           // Replace the last one with a merged version.
           for (int j = 0; j < (int)stores.size() - 1; j++) {
@@ -174,7 +174,7 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
 
   void visit(BitStructStoreStmt *stmt) override {
     bool demote = false;
-    TI_ASSERT(current_offloaded);
+    QD_ASSERT(current_offloaded);
     if (current_offloaded->task_type == OffloadedTaskType::serial) {
       demote = true;
     } else if (current_offloaded->task_type == OffloadedTaskType::range_for ||
@@ -231,7 +231,7 @@ namespace irpass {
 void optimize_bit_struct_stores(IRNode *root,
                                 const CompileConfig &config,
                                 AnalysisManager *amgr) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   CreateBitStructStores::run(root);
   die(root);  // remove unused GetCh
   if (config.quant_opt_store_fusion) {
@@ -239,7 +239,7 @@ void optimize_bit_struct_stores(IRNode *root,
   }
   if (config.quant_opt_atomic_demotion) {
     auto *res = amgr->get_pass_result<GatherUniquelyAccessedBitStructsPass>();
-    TI_ASSERT_INFO(res,
+    QD_ASSERT_INFO(res,
                    "The optimize_bit_struct_stores pass must be after the "
                    "gather_uniquely_accessed_bit_structs pass when "
                    "config.quant_opt_atomic_demotion is true.");

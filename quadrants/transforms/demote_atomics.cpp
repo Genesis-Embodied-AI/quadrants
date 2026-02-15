@@ -158,7 +158,7 @@ class DemoteAtomics : public BasicStmtVisitor {
 
     if (auto dest_pointer_type = stmt->dest->ret_type->cast<PointerType>()) {
       if (dest_pointer_type->get_pointee_type()->is<QuantFloatType>()) {
-        TI_WARN(
+        QD_WARN(
             "AtomicOp on QuantFloatType is not supported. "
             "Demoting to non-atomic RMW.\n{}",
             stmt->get_tb());
@@ -246,7 +246,7 @@ class DemoteAtomics : public BasicStmtVisitor {
 namespace irpass {
 
 bool demote_atomics(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   bool modified = DemoteAtomics::run(root, config);
   type_check(root, config);
   return modified;

@@ -15,7 +15,7 @@ std::string data_type_name(DataType t) {
 #include "quadrants/inc/data_type.inc.h"
 #undef PER_TYPE
   else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 }
 
 std::vector<int> data_type_shape(DataType t) {
@@ -43,7 +43,7 @@ int data_type_size(DataType t) {
 
   if (t->is<TensorType>()) {
     auto tensor_type = t->cast<TensorType>();
-    TI_ASSERT(tensor_type->get_element_type());
+    QD_ASSERT(tensor_type->get_element_type());
     return tensor_type->get_num_elements() *
            data_type_size(tensor_type->get_element_type());
   }
@@ -65,7 +65,7 @@ int data_type_size(DataType t) {
 
 #undef REGISTER_DATA_TYPE
   else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -102,7 +102,7 @@ std::string tensor_type_format_helper(const std::vector<int> &shape,
 }
 
 std::string tensor_type_format(DataType t, Arch arch) {
-  TI_ASSERT(t->is<TensorType>());
+  QD_ASSERT(t->is<TensorType>());
   auto tensor_type = t->as<TensorType>();
   auto shape = tensor_type->get_shape();
   auto element_type = tensor_type->get_element_type();
@@ -149,7 +149,7 @@ std::string data_type_format(DataType dt, Arch arch) {
   } else if (dt->is<TensorType>()) {
     return tensor_type_format(dt, arch);
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 

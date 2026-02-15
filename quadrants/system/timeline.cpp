@@ -88,7 +88,7 @@ void Timelines::save(const std::string &filename) {
     insert_events_without_locking(timeline->fetch_events());
   }
   if (!ends_with(filename, ".json")) {
-    TI_WARN("Timeline filename {} should end with '.json'.", filename);
+    QD_WARN("Timeline filename {} should end with '.json'.", filename);
   }
   std::ofstream fout(filename);
   fout << "[";

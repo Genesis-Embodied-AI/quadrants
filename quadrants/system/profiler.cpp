@@ -40,7 +40,7 @@ struct ProfilerRecordNode {
   }
 
   float64 get_averaged_tpe() const {
-    TI_ASSERT(account_tpe);
+    QD_ASSERT(account_tpe);
     return total_time / (float64)total_elements;
   }
 
@@ -222,7 +222,7 @@ ScopedProfiler::ScopedProfiler(std::string name, uint64 elements) {
 }
 
 void ScopedProfiler::stop() {
-  TI_ASSERT_INFO(!stopped_, "Profiler already stopped.");
+  QD_ASSERT_INFO(!stopped_, "Profiler already stopped.");
   float64 elapsed = Time::get_time() - start_time_;
   if ((int64)elements_ != -1) {
     ProfilerRecords::get_this_thread_instance().insert_sample(elapsed,

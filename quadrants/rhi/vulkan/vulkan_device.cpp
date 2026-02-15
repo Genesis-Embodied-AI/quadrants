@@ -331,7 +331,7 @@ void VulkanPipeline::create_descriptor_set_layout(const Params &params) {
     //   for (SpvReflectInterfaceVariable *attrib : attribs) {
     //     uint32_t location = attrib->location;
     //     SpvReflectTypeDescription *type = attrib->type_description;
-    //     TI_WARN("attrib {}:{}", location, type->type_name);
+    //     QD_WARN("attrib {}:{}", location, type->type_name);
     //   }
     // }
 
@@ -1900,7 +1900,7 @@ void VulkanDevice::memcpy_internal(DevicePtr dst,
   // TODO: always create a queue specifically for transfer
   Stream *stream = get_compute_stream();
   auto [cmd, res] = stream->new_command_list_unique();
-  TI_ASSERT(res == RhiResult::success);
+  QD_ASSERT(res == RhiResult::success);
   cmd->buffer_copy(dst, src, size);
   stream->submit_synced(cmd.get());
 }
@@ -1997,7 +1997,7 @@ StreamSemaphore VulkanStream::submit(
 
   /*
   if (in_flight_cmdlists_.find(buffer) != in_flight_cmdlists_.end()) {
-    TI_ERROR("Can not submit command list that is still in-flight");
+    QD_ERROR("Can not submit command list that is still in-flight");
     return;
   }
   */

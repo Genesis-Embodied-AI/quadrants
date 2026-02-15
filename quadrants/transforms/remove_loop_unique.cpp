@@ -32,7 +32,7 @@ class RemoveLoopUnique : public BasicStmtVisitor {
 namespace irpass {
 
 bool remove_loop_unique(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   return RemoveLoopUnique::run(root);
 }
 

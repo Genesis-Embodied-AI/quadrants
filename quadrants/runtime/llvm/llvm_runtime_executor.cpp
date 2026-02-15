@@ -9,21 +9,21 @@
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 #include "quadrants/program/program_impl.h"
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/rhi/cuda/cuda_context.h"
 #endif
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/rhi/amdgpu/amdgpu_device.h"
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #endif
 
 namespace quadrants::lang {
 namespace {
 void assert_failed_host(const char *msg) {
-  TI_ERROR("Assertion failure: {}", msg);
+  QD_ERROR("Assertion failure: {}", msg);
 }
 
 void *host_allocate_aligned(HostMemoryPool *memory_pool,
@@ -39,38 +39,38 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
                                          ProgramImpl *program_impl)
     : config_(config), program_impl_(program_impl) {
   if (config.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     if (!is_cuda_api_available()) {
-      TI_WARN("No CUDA driver API detected.");
+      QD_WARN("No CUDA driver API detected.");
       config.arch = host_arch();
     } else if (!CUDAContext::get_instance().detected()) {
-      TI_WARN("No CUDA device detected.");
+      QD_WARN("No CUDA device detected.");
       config.arch = host_arch();
     } else {
       // CUDA runtime created successfully
       use_device_memory_pool_ = CUDAContext::get_instance().supports_mem_pool();
     }
 #else
-    TI_WARN("Quadrants is not compiled with CUDA.");
+    QD_WARN("Quadrants is not compiled with CUDA.");
     config.arch = host_arch();
 #endif
 
     if (config.arch != Arch::cuda) {
-      TI_WARN("Falling back to {}.", arch_name(host_arch()));
+      QD_WARN("Falling back to {}.", arch_name(host_arch()));
     }
   } else if (config.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     if (!is_rocm_api_available()) {
-      TI_WARN("No AMDGPU ROCm API detected.");
+      QD_WARN("No AMDGPU ROCm API detected.");
       config.arch = host_arch();
     } else if (!AMDGPUContext::get_instance().detected()) {
-      TI_WARN("No AMDGPU device detected.");
+      QD_WARN("No AMDGPU device detected.");
       config.arch = host_arch();
     } else {
       // AMDGPU runtime created successfully
     }
 #else
-    TI_WARN("Quadrants is not compiled with AMDGPU.");
+    QD_WARN("Quadrants is not compiled with AMDGPU.");
     config.arch = host_arch();
 #endif
   }
@@ -89,7 +89,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
     device_ = std::make_shared<cpu::CpuDevice>();
 
   }
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   else if (config.arch == Arch::cuda) {
     int num_SMs{1};
     CUDADriver::get_instance().device_get_attribute(
@@ -113,7 +113,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
 
     if (config.saturating_grid_dim == 0) {
       if (version >= 11000) {
-        TI_TRACE("CUDA max blocks per SM = {}", query_max_block_per_sm);
+        QD_TRACE("CUDA max blocks per SM = {}", query_max_block_per_sm);
       }
       config.saturating_grid_dim = num_SMs * query_max_block_per_sm * 2;
     }
@@ -130,7 +130,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
     device_ = std::make_shared<cuda::CudaDevice>();
   }
 #endif
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
   else if (config.arch == Arch::amdgpu) {
     int num_workgroups{1};
     AMDGPUDriver::get_instance().device_get_attribute(
@@ -158,7 +158,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
   }
 #endif
   else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
   llvm_context_ = std::make_unique<QuadrantsLLVMContext>(
       config_, arch_is_cpu(config.arch) ? host_arch() : config.arch);
@@ -205,20 +205,20 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager,
 
 void LlvmRuntimeExecutor::synchronize() {
   if (config_.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().stream_synchronize(nullptr);
 #else
-    TI_ERROR("No CUDA support");
+    QD_ERROR("No CUDA support");
 #endif
   } else if (config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     // A better way
     // use `hipFreeAsync` to free the device kernel arg mem
     // notice: rocm version
     AMDGPUContext::get_instance().free_kernel_arg_pointer();
 #else
-    TI_ERROR("No AMDGPU support");
+    QD_ERROR("No AMDGPU support");
 #endif
   }
   fflush(stdout);
@@ -230,18 +230,18 @@ uint64 LlvmRuntimeExecutor::fetch_result_uint64(int i, uint64 *result_buffer) {
   synchronize();
   uint64 ret;
   if (config_.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i,
                                                      sizeof(uint64));
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else if (config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i,
                                                        sizeof(uint64));
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else {
     ret = result_buffer[i];
@@ -252,7 +252,7 @@ uint64 LlvmRuntimeExecutor::fetch_result_uint64(int i, uint64 *result_buffer) {
 std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(
     SNode *snode,
     uint64 *result_buffer) {
-  TI_ASSERT(arch_uses_llvm(config_.arch));
+  QD_ASSERT(arch_uses_llvm(config_.arch));
 
   auto node_allocator =
       runtime_query<void *>("LLVMRuntime_get_node_allocators", result_buffer,
@@ -302,7 +302,7 @@ void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
           });
       throw QuadrantsAssertionError(error_message_formatted);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 }
@@ -310,7 +310,7 @@ void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
 void LlvmRuntimeExecutor::print_memory_profiler_info(
     std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
     uint64 *result_buffer) {
-  TI_ASSERT(arch_uses_llvm(config_.arch));
+  QD_ASSERT(arch_uses_llvm(config_.arch));
 
   fmt::print("\n[Memory Profiler]\n");
 
@@ -409,23 +409,23 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
     preallocate_runtime_memory();
   }
 
-  TI_TRACE("Allocating data structure of size {} bytes", root_size);
+  QD_TRACE("Allocating data structure of size {} bytes", root_size);
   std::size_t rounded_size =
       quadrants::iroundup(root_size, quadrants_page_size);
 
   Ptr root_buffer = snode_tree_buffer_manager_->allocate(rounded_size, tree_id,
                                                          result_buffer);
   if (config_.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().memset(root_buffer, 0, rounded_size);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else if (config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().memset(root_buffer, 0, rounded_size);
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else {
     std::memset(root_buffer, 0, rounded_size);
@@ -452,12 +452,12 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
         // dynamic. Allocators are for the chunks
         node_size = sizeof(void *) + element_size * snode_metas[i].chunk_size;
       }
-      TI_TRACE("Initializing allocator for snode {} (node size {})", snode_id,
+      QD_TRACE("Initializing allocator for snode {} (node size {})", snode_id,
                node_size);
       runtime_jit->call<void *, int, std::size_t>(
           "runtime_NodeAllocator_initialize", llvm_runtime_, snode_id,
           node_size);
-      TI_TRACE("Allocating ambient element for snode {} (node size {})",
+      QD_TRACE("Allocating ambient element for snode {} (node size {})",
                snode_id, node_size);
       runtime_jit->call<void *, int>("runtime_allocate_ambient", llvm_runtime_,
                                      snode_id, node_size);
@@ -466,7 +466,7 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
 }
 
 LlvmDevice *LlvmRuntimeExecutor::llvm_device() {
-  TI_ASSERT(dynamic_cast<LlvmDevice *>(device_.get()));
+  QD_ASSERT(dynamic_cast<LlvmDevice *>(device_.get()));
   return static_cast<LlvmDevice *>(device_.get());
 }
 
@@ -481,14 +481,14 @@ DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(
        result_buffer,
        use_device_memory_pool()});
 
-  TI_ASSERT(allocated_runtime_memory_allocs_.find(devalloc.alloc_id) ==
+  QD_ASSERT(allocated_runtime_memory_allocs_.find(devalloc.alloc_id) ==
             allocated_runtime_memory_allocs_.end());
   allocated_runtime_memory_allocs_[devalloc.alloc_id] = devalloc;
   return devalloc;
 }
 
 void LlvmRuntimeExecutor::deallocate_memory_on_device(DeviceAllocation handle) {
-  TI_ASSERT(allocated_runtime_memory_allocs_.find(handle.alloc_id) !=
+  QD_ASSERT(allocated_runtime_memory_allocs_.find(handle.alloc_id) !=
             allocated_runtime_memory_allocs_.end());
   llvm_device()->dealloc_memory(handle);
   allocated_runtime_memory_allocs_.erase(handle.alloc_id);
@@ -499,16 +499,16 @@ void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc,
                                        uint32_t data) {
   auto ptr = get_device_alloc_info_ptr(alloc);
   if (config_.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().memsetd32((void *)ptr, data, size);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else if (config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().memset((void *)ptr, data, size);
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   } else {
     std::fill((uint32_t *)ptr, (uint32_t *)ptr + size, data);
@@ -518,22 +518,22 @@ void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc,
 uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(
     const DeviceAllocation &alloc) {
   if (config_.arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     return (uint64_t *)llvm_device()
         ->as<cuda::CudaDevice>()
         ->get_alloc_info(alloc)
         .ptr;
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else if (config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     return (uint64_t *)llvm_device()
         ->as<amdgpu::AmdgpuDevice>()
         ->get_alloc_info(alloc)
         .ptr;
 #else
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
 #endif
   }
 
@@ -591,7 +591,7 @@ void *LlvmRuntimeExecutor::preallocate_memory(
   RhiResult res =
       llvm_device()->allocate_memory(preallocated_device_buffer_alloc_params,
                                      &preallocated_device_buffer_alloc);
-  TI_ERROR_IF(res != RhiResult::success,
+  QD_ERROR_IF(res != RhiResult::success,
               "Failed to pre-allocate device memory (err: {})", int(res));
 
   void *preallocated_device_buffer =
@@ -608,18 +608,18 @@ void LlvmRuntimeExecutor::preallocate_runtime_memory() {
   std::size_t total_prealloc_size = 0;
   const auto total_mem = llvm_device()->get_total_memory();
   if (config_.device_memory_fraction == 0) {
-    TI_ASSERT(config_.device_memory_GB > 0);
+    QD_ASSERT(config_.device_memory_GB > 0);
     total_prealloc_size = std::size_t(config_.device_memory_GB * (1UL << 30));
   } else {
     total_prealloc_size =
         std::size_t(config_.device_memory_fraction * total_mem);
   }
-  TI_ASSERT(total_prealloc_size <= total_mem);
+  QD_ASSERT(total_prealloc_size <= total_mem);
 
   void *runtime_memory_prealloc_buffer = preallocate_memory(
       total_prealloc_size, preallocated_runtime_memory_allocs_);
 
-  TI_TRACE("Allocating device memory {:.2f} MB",
+  QD_TRACE("Allocating device memory {:.2f} MB",
            1.0 * total_prealloc_size / (1UL << 20));
 
   auto *const runtime_jit = get_runtime_jit_module();
@@ -639,12 +639,12 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
   int num_rand_states = 0;
 
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_CUDA) || defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_CUDA) || defined(QD_WITH_AMDGPU)
     // It is important to make sure that every CUDA thread has its own random
     // state so that we do not need expensive per-state locks.
     num_rand_states = config_.saturating_grid_dim * config_.max_block_dim;
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
     num_rand_states = config_.cpu_max_num_threads;
@@ -661,10 +661,10 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
   size_t runtime_objects_prealloc_size = 0;
   void *runtime_objects_prealloc_buffer = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
-#if defined(TI_WITH_CUDA) || defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_CUDA) || defined(QD_WITH_AMDGPU)
     auto [temp_result_alloc, res] =
         llvm_device()->allocate_memory_unique({sizeof(uint64_t)});
-    TI_ERROR_IF(
+    QD_ERROR_IF(
         res != RhiResult::success,
         "Failed to allocate memory for `runtime_get_memory_requirements`");
     void *temp_result_ptr = llvm_device()->get_memory_addr(*temp_result_alloc);
@@ -678,7 +678,7 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
     size_t result_buffer_size =
         sizeof(uint64) * quadrants_result_buffer_entries;
 
-    TI_TRACE("Allocating device memory {:.2f} MB",
+    QD_TRACE("Allocating device memory {:.2f} MB",
              1.0 * (runtime_objects_prealloc_size + result_buffer_size) /
                  (1UL << 20));
 
@@ -691,14 +691,14 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
         (uint64_t *)((uint8_t *)runtime_objects_prealloc_buffer +
                      runtime_objects_prealloc_size);
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   } else {
     *result_buffer_ptr = (uint64 *)HostMemoryPool::get_instance().allocate(
         sizeof(uint64) * quadrants_result_buffer_entries, 8);
   }
 
-  TI_TRACE("Launching runtime_initialize");
+  QD_TRACE("Launching runtime_initialize");
 
   auto *host_memory_pool = &HostMemoryPool::get_instance();
   runtime_jit
@@ -708,10 +708,10 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
           num_rand_states, (void *)&host_allocate_aligned, (void *)std::printf,
           (void *)std::vsnprintf);
 
-  TI_TRACE("LLVMRuntime initialized (excluding `root`)");
+  QD_TRACE("LLVMRuntime initialized (excluding `root`)");
   llvm_runtime_ = fetch_result<void *>(quadrants_result_buffer_ret_value_id,
                                        *result_buffer_ptr);
-  TI_TRACE("LLVMRuntime pointer fetched");
+  QD_TRACE("LLVMRuntime pointer fetched");
 
   // Preallocate for runtime memory and update to LLVMRuntime
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
@@ -721,12 +721,12 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
   }
 
   if (config_.arch == Arch::cuda) {
-    TI_TRACE("Initializing {} random states using CUDA", num_rand_states);
+    QD_TRACE("Initializing {} random states using CUDA", num_rand_states);
     runtime_jit->launch<void *, int>(
         "runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
         config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);
   } else {
-    TI_TRACE("Initializing {} random states (serially)", num_rand_states);
+    QD_TRACE("Initializing {} random states (serially)", num_rand_states);
     runtime_jit->call<void *, int>("runtime_initialize_rand_states_serial",
                                    llvm_runtime_, starting_rand_state);
   }

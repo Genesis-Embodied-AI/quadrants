@@ -230,8 +230,8 @@ void MakeMeshBlockLocal::fetch_attr_to_bls(Block *body,
     bool bls_has_write = total_flags & AccessFlag::write;
     bool bls_has_accumulate = total_flags & AccessFlag::accumulate;
 
-    TI_ASSERT_INFO(!bls_has_write, "BLS with write accesses is not supported.");
-    TI_ASSERT_INFO(!(bls_has_accumulate && bls_has_read),
+    QD_ASSERT_INFO(!bls_has_write, "BLS with write accesses is not supported.");
+    QD_ASSERT_INFO(!(bls_has_accumulate && bls_has_read),
                    "BLS with both read and accumulation is not supported.");
 
     bool first_allocate = {false};
@@ -443,8 +443,8 @@ MakeMeshBlockLocal::MakeMeshBlockLocal(OffloadedStmt *offload,
         mappings_.end()) {
       available_bytes -= 4;
     }
-    TI_TRACE("available cache attributes bytes = {}", available_bytes);
-    TI_TRACE("caches size = {}", caches->caches.size());
+    QD_TRACE("available cache attributes bytes = {}", available_bytes);
+    QD_TRACE("caches size = {}", caches->caches.size());
     std::vector<MeshBLSCache> priority_caches;
     for (const auto &[snode, cache] : caches->caches) {
       priority_caches.push_back(cache);
@@ -464,7 +464,7 @@ MakeMeshBlockLocal::MakeMeshBlockLocal(OffloadedStmt *offload,
       if (available_bytes < 0) {
         break;  // not enough space to ensure occupacy
       }
-      TI_TRACE("available = {}, x = {}, loop_index = {}, unique_access = {}",
+      QD_TRACE("available = {}, x = {}, loop_index = {}, unique_access = {}",
                available_bytes, int(cache.total_flags), int(cache.loop_index),
                cache.unique_accessed);
       caches->caches.insert(std::make_pair(cache.snode, cache));
@@ -511,7 +511,7 @@ MakeMeshBlockLocal::MakeMeshBlockLocal(OffloadedStmt *offload,
   for (auto [element_type, conv_type] : mappings_) {
     this->element_type_ = element_type;
     this->conv_type_ = conv_type;
-    TI_ASSERT(conv_type != mesh::ConvType::g2r);  // g2r will not be cached.
+    QD_ASSERT(conv_type != mesh::ConvType::g2r);  // g2r will not be cached.
     // There is not corresponding mesh element attribute read/write,
     // It's useless to localize this mapping
     if (offload->total_offset_local.find(element_type) ==
@@ -595,7 +595,7 @@ MakeMeshBlockLocal::MakeMeshBlockLocal(OffloadedStmt *offload,
 
     this->element_type_ = mapping.first;
     this->conv_type_ = mapping.second;
-    TI_ASSERT(conv_type_ != mesh::ConvType::g2r);  // g2r will not be cached.
+    QD_ASSERT(conv_type_ != mesh::ConvType::g2r);  // g2r will not be cached.
 
     mapping_snode_ = (offload->mesh->index_mapping
                           .find(std::make_pair(element_type_, conv_type_))
@@ -657,7 +657,7 @@ namespace irpass {
 void make_mesh_block_local(IRNode *root,
                            const CompileConfig &config,
                            const MakeMeshBlockLocal::Args &args) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   // =========================================================================================
   // This pass generates code like this:

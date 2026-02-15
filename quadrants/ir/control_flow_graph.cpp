@@ -32,8 +32,8 @@ CFGNode::CFGNode(Block *block,
   if (!empty()) {
     // For non-empty nodes, precompute |parent_blocks| to accelerate
     // get_store_forwarding_data().
-    TI_ASSERT(begin_location >= 0);
-    TI_ASSERT(block);
+    QD_ASSERT(begin_location >= 0);
+    QD_ASSERT(block);
     auto parent_block = block;
     parent_blocks_.insert(parent_block);
     while (parent_block->parent_block()) {
@@ -60,7 +60,7 @@ std::size_t CFGNode::size() const {
 }
 
 void CFGNode::erase(int location) {
-  TI_ASSERT(location >= begin_location && location < end_location);
+  QD_ASSERT(location >= begin_location && location < end_location);
   block->erase(location);
   end_location--;
   for (auto node = next_node_in_same_block; node != nullptr;
@@ -71,7 +71,7 @@ void CFGNode::erase(int location) {
 }
 
 void CFGNode::insert(std::unique_ptr<Stmt> &&new_stmt, int location) {
-  TI_ASSERT(location >= begin_location && location <= end_location);
+  QD_ASSERT(location >= begin_location && location <= end_location);
   block->insert(std::move(new_stmt), location);
   end_location++;
   for (auto node = next_node_in_same_block; node != nullptr;
@@ -84,7 +84,7 @@ void CFGNode::insert(std::unique_ptr<Stmt> &&new_stmt, int location) {
 void CFGNode::replace_with(int location,
                            std::unique_ptr<Stmt> &&new_stmt,
                            bool replace_usages) const {
-  TI_ASSERT(location >= begin_location && location < end_location);
+  QD_ASSERT(location >= begin_location && location < end_location);
   block->replace_with(block->statements[location].get(), std::move(new_stmt),
                       replace_usages);
 }
@@ -458,9 +458,9 @@ bool CFGNode::store_to_load_forwarding(bool after_lower_access,
       } else {
         if (result->ret_type.ptr_removed()->is<TensorType>() &&
             !stmt->ret_type->is<TensorType>()) {
-          TI_ASSERT(load_src->is<MatrixPtrStmt>() &&
+          QD_ASSERT(load_src->is<MatrixPtrStmt>() &&
                     load_src->as<MatrixPtrStmt>()->offset->is<ConstStmt>());
-          TI_ASSERT(result->is<MatrixInitStmt>());
+          QD_ASSERT(result->is<MatrixInitStmt>());
 
           int offset = load_src->as<MatrixPtrStmt>()
                            ->offset->as<ConstStmt>()
@@ -910,8 +910,8 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
 
 void ControlFlowGraph::erase(int node_id) {
   // Erase an empty node.
-  TI_ASSERT(node_id >= 0 && node_id < (int)size());
-  TI_ASSERT(nodes[node_id] && nodes[node_id]->empty());
+  QD_ASSERT(node_id >= 0 && node_id < (int)size());
+  QD_ASSERT(nodes[node_id] && nodes[node_id]->empty());
   if (nodes[node_id]->prev_node_in_same_block) {
     nodes[node_id]->prev_node_in_same_block->next_node_in_same_block =
         nodes[node_id]->next_node_in_same_block;
@@ -954,7 +954,7 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
 
   std::ofstream out_file(filename.string());
   if (!out_file) {
-    TI_WARN("Failed to open file for CFG dump: {}", filename.string());
+    QD_WARN("Failed to open file for CFG dump: {}", filename.string());
     return;
   }
 
@@ -1021,7 +1021,7 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
   }
 
   out_file.close();
-  TI_INFO("CFG dumped to: {}", filename.string());
+  QD_INFO("CFG dumped to: {}", filename.string());
 }
 
 void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
@@ -1046,11 +1046,11 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
   // reach_out and reach_in is the ultimate result that helps analyze
   // cross-block use-define chain
 
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   const int num_nodes = size();
   std::queue<CFGNode *> to_visit;
   std::unordered_map<CFGNode *, bool> in_queue;
-  TI_ASSERT(nodes[start_node]->empty());
+  QD_ASSERT(nodes[start_node]->empty());
   nodes[start_node]->reach_gen.clear();
   nodes[start_node]->reach_kill.clear();
   for (int i = 0; i < num_nodes; i++) {
@@ -1140,11 +1140,11 @@ void ControlFlowGraph::live_variable_analysis(
   // live_kill: address stored in this node
   // live_in: live_gen + (live_out - live_kill)
   // live_out: collection of all the live_in of next nodes
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   const int num_nodes = size();
   std::queue<CFGNode *> to_visit;
   std::unordered_map<CFGNode *, bool> in_queue;
-  TI_ASSERT(nodes[final_node]->empty());
+  QD_ASSERT(nodes[final_node]->empty());
   nodes[final_node]->live_gen.clear();
   nodes[final_node]->live_kill.clear();
 
@@ -1254,7 +1254,7 @@ void ControlFlowGraph::simplify_graph() {
 bool ControlFlowGraph::unreachable_code_elimination() {
   // Note that container statements are not in the control-flow graph, so
   // this pass cannot eliminate container statements properly for now.
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   std::unordered_set<CFGNode *> visited;
   std::queue<CFGNode *> to_visit;
   to_visit.push(nodes[start_node].get());
@@ -1297,7 +1297,7 @@ bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access,
   // 2. analysis within a node (intra-block analysis):
   //   This is done in CFGNode::store_to_load_forwarding() of each node
 
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   reaching_definition_analysis(after_lower_access);
   const int num_nodes = size();
   bool modified = false;
@@ -1312,7 +1312,7 @@ bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access,
 bool ControlFlowGraph::dead_store_elimination(
     bool after_lower_access,
     const std::optional<LiveVarAnalysisConfig> &lva_config_opt) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   live_variable_analysis(after_lower_access, lva_config_opt);
   const int num_nodes = size();
   bool modified = false;
@@ -1324,7 +1324,7 @@ bool ControlFlowGraph::dead_store_elimination(
 }
 
 std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   reaching_definition_analysis(/*after_lower_access=*/false);
   const int num_nodes = size();
   std::unordered_set<SNode *> snodes;
@@ -1489,7 +1489,7 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
       // with maximum capacity indeed equal to 0.
-      TI_WARN_IF(max_size == 0,
+      QD_WARN_IF(max_size == 0,
                  "Unused autodiff stack {} should have been eliminated.",
                  stack->name());
       stack->max_size = max_size;
@@ -1503,7 +1503,7 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     for (auto &stack : indeterminable_stacks) {
       indeterminable_stacks_name.push_back(stack->name());
     }
-    TI_DEBUG(
+    QD_DEBUG(
         "Unable to determine the necessary size for autodiff stacks [{}]. "
         "Use "
         "configured size (CompileConfig::default_ad_stack_size) {} instead.",

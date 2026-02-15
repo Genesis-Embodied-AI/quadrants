@@ -22,14 +22,14 @@ struct PtxMetadata {
   CacheMode cache_mode{MemCache};
 
   // NOTE: The "version" must be the first field to be serialized
-  TI_IO_DEF(cache_key, size, created_at, last_used_at);
+  QD_IO_DEF(cache_key, size, created_at, last_used_at);
 };
 
 struct WrappedPtx {
   struct PtxMetadata metadata;
   std::optional<std::string> ptx;
 
-  TI_IO_DEF(metadata);
+  QD_IO_DEF(metadata);
 };
 
 struct PtxCacheAllData {
@@ -41,7 +41,7 @@ struct PtxCacheAllData {
   using DataWrapper = WrappedPtx;
 
   // NOTE: The "version" must be the first field to be serialized
-  TI_IO_DEF(version, size, dataWrapperByCacheKey);
+  QD_IO_DEF(version, size, dataWrapperByCacheKey);
 };
 
 class PtxCache final {
