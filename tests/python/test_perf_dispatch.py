@@ -32,7 +32,7 @@ def test_perf_dispatch_kernels() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape))
+    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
     def my_func1(
         a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1], rand_state: ti.types.NDArray[ti.i32, 1]
     ): ...
@@ -104,7 +104,7 @@ def test_perf_dispatch_python() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape))
+    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
     def my_func1(
         a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1], rand_state: ti.types.NDArray[ti.i32, 1]
     ): ...
@@ -173,7 +173,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape))
+    @ti.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
     def my_func1(
         a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1], rand_state: ti.types.NDArray[ti.i32, 1]
     ): ...

@@ -12,7 +12,7 @@ from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 NUM_WARMUP: int = 3
 NUM_ACTIVE: int = 1
 REPEAT_AFTER_COUNT: int = 0
-REPEAT_AFTER_SECONDS: float = 0.1
+REPEAT_AFTER_SECONDS: float = 1.0
 
 TI_PERFDISPATCH_PRINT_DEBUG = os.environ.get("TI_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
