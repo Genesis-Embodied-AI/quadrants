@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.kernel &#8212; Quadrants 0.4.0 documentation</title>
+    <title>quadrants.lang.kernel &#8212; Quadrants 0.4.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../_static/documentation_options.js?v=6c02275b"></script>
+    <script src="../../../_static/documentation_options.js?v=c87aa342"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -59,7 +59,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.4.0" />
+  <meta name="docsearch:version" content="0.4.1" />
   </head>
   
   
@@ -121,7 +121,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.4.0 documentation</p>
+    <p class="title logo__title">Quadrants 0.4.1 documentation</p>
   
 </a></div>
     
@@ -374,7 +374,7 @@
 
 <span class="c1"># Define proxies for fast lookup</span>
 <span class="n">_NONE</span><span class="p">,</span> <span class="n">_VALIDATION</span> <span class="o">=</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">VALIDATION</span>
-<span class="n">_FLOAT</span><span class="p">,</span> <span class="n">_INT</span><span class="p">,</span> <span class="n">_UINT</span><span class="p">,</span> <span class="n">_QD_ARRAY</span><span class="p">,</span> <span class="n">_QD_ARRAY_WITH_GRAD</span> <span class="o">=</span> <span class="n">KernelBatchedArgType</span>
+<span class="n">_FLOAT</span><span class="p">,</span> <span class="n">_INT</span><span class="p">,</span> <span class="n">_UINT</span><span class="p">,</span> <span class="n">_TI_ARRAY</span><span class="p">,</span> <span class="n">_TI_ARRAY_WITH_GRAD</span> <span class="o">=</span> <span class="n">KernelBatchedArgType</span>
 
 
 <div class="viewcode-block" id="LaunchContextBufferCache">
@@ -442,10 +442,10 @@
         <span class="c1"># with expired cache entry caused by deallocated argument.</span>
         <span class="n">launch_ctx_cache_tracker_</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ReferenceType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
         <span class="n">clear_callback</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">ref</span><span class="p">:</span> <span class="n">launch_ctx_cache_tracker_</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_QD_ARRAY</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_TI_ARRAY</span><span class="p">):</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">arrs</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">)</span>
             <span class="n">launch_ctx_cache_tracker_</span> <span class="o">+=</span> <span class="p">[</span><span class="n">ReferenceType</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">clear_callback</span><span class="p">)</span> <span class="k">for</span> <span class="n">arr</span> <span class="ow">in</span> <span class="n">arrs</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_QD_ARRAY_WITH_GRAD</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_TI_ARRAY_WITH_GRAD</span><span class="p">):</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">arrs</span><span class="p">,</span> <span class="n">arrs_grad</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">)</span>
             <span class="n">launch_ctx_cache_tracker_</span> <span class="o">+=</span> <span class="p">[</span><span class="n">ReferenceType</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">clear_callback</span><span class="p">)</span> <span class="k">for</span> <span class="n">arr</span> <span class="ow">in</span> <span class="n">arrs</span><span class="p">]</span>
             <span class="n">launch_ctx_cache_tracker_</span> <span class="o">+=</span> <span class="p">[</span><span class="n">ReferenceType</span><span class="p">(</span><span class="n">arr_grad</span><span class="p">,</span> <span class="n">clear_callback</span><span class="p">)</span> <span class="k">for</span> <span class="n">arr_grad</span> <span class="ow">in</span> <span class="n">arrs_grad</span><span class="p">]</span>
@@ -791,7 +791,7 @@
                 <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
                 <span class="n">only_parse_function_def</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
                 <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
-                <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DUMP_AST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TI_DUMP_AST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">quadrants_kernel</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span>
                 <span class="n">quadrants_ast_generator</span><span class="p">,</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span>
@@ -870,9 +870,9 @@
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_args_int</span><span class="p">(</span><span class="o">*</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
             <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_UINT</span><span class="p">):</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_args_uint</span><span class="p">(</span><span class="o">*</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
-            <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_QD_ARRAY</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_TI_ARRAY</span><span class="p">):</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_args_ndarray</span><span class="p">(</span><span class="o">*</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
-            <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_QD_ARRAY_WITH_GRAD</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">launch_ctx_args</span> <span class="o">:=</span> <span class="n">launch_ctx_buffer</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_TI_ARRAY_WITH_GRAD</span><span class="p">):</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_args_ndarray_with_grad</span><span class="p">(</span><span class="o">*</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">launch_ctx_args</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
 
             <span class="k">if</span> <span class="n">is_launch_ctx_cacheable</span> <span class="ow">and</span> <span class="n">args_hash</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
