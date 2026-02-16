@@ -231,6 +231,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
         elif len(compatible_set) == 1:
             self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
+            self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
             dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             assert dispatch_impl_ is not None
             log_str = f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
