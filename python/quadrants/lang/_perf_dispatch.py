@@ -151,11 +151,9 @@ class PerformanceDispatcher(Generic[P, R]):
     def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
         if len(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]) == 0:
             return False
+
         min_trials = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
-        # if self.repeat_after > 0:
-        #     min_trials = min_trials % self.repeat_after
         res = (min_trials >= self.num_warmup + self.num_active)
-        # print("min_trials", min_trials, "res", res, "self.num_warmup", self.num_warmup, "self.num_active", self.num_active)
         return res
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
@@ -204,11 +202,10 @@ class PerformanceDispatcher(Generic[P, R]):
             if self.repeat_after > 0:
                 self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
                 calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
-                # print("calls", calls)
                 if calls < self.repeat_after:
                     return fastest(*args, **kwargs)
+
                 else:
-                    # print("calls", calls, "=>redoing check")
                     self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
                     self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
                     self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
@@ -216,15 +213,8 @@ class PerformanceDispatcher(Generic[P, R]):
                     self._calls_since_last_update_by_geometry_hash[geometry_hash] = 0
             else:
                 return fastest(*args, **kwargs)
-        # if self.repeat_after > 0:
-        #     self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
-        #     calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
-        #     if calls >= self.repeat_after:
-
-        # if self.repeat_after == 0 or calls % self.repeat_after != 0:
 
         res = None
-        # speeds_l = []
         runtime = impl.get_runtime()
         compatible_set = self._get_compatible_functions(*args, **kwargs)
         if len(compatible_set) == 0:
@@ -243,11 +233,8 @@ class PerformanceDispatcher(Generic[P, R]):
         min_trial_count, dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
         trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
         trial_count_by_dispatch_impl[dispatch_impl] += 1
-        # if self.repeat_after > 0:
-        #     min_trial_count = min_trial_count % self.repeat_after
         in_warmup = min_trial_count < self.num_warmup
         start = 0
-        # print("min_trial_count", min_trial_count, "in_warmup", in_warmup)
         if not in_warmup:
             runtime.sync()
             start = time.time()
@@ -256,14 +243,7 @@ class PerformanceDispatcher(Generic[P, R]):
             runtime.sync()
             end = time.time()
             elapsed = end - start
-            # speeds_l.append((elapsed, dispatch_impl))
-        # if not in_warmup:
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
-            # print("self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]", self._times_by_dispatch_impl_by_geometry_hash[geometry_hash])
-        # print("")
-        # if trial_count_by_dispatch_impl[dispatch_impl] % 50 == 0:
-        #     print("-", trial_count_by_dispatch_impl[dispatch_impl], dispatch_impl.get_implementation2().__name__, elapsed)
-        # for impl_, times in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
             if self._compute_are_trials_finished(geometry_hash=geometry_hash):
                 self._compute_and_update_fastest(geometry_hash)
         return res
