@@ -601,10 +601,10 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
 
-        <span class="c1"># QD_OFFLINE_CACHE=   : no effect</span>
-        <span class="c1"># QD_OFFLINE_CACHE=0  : False</span>
-        <span class="c1"># QD_OFFLINE_CACHE=1  : True</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;QD_&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="c1"># TI_OFFLINE_CACHE=   : no effect</span>
+        <span class="c1"># TI_OFFLINE_CACHE=0  : False</span>
+        <span class="c1"># TI_OFFLINE_CACHE=1  : True</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;TI_&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
         <span class="n">value</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
@@ -726,7 +726,7 @@
 <span class="sd">            * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.</span>
 <span class="sd">            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.</span>
 <span class="sd">            *``random_seed`` (int): Sets the seed of the random generator. The default is 0.</span>
-<span class="sd">            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar</span>
+<span class="sd">            *``debug_dump_path`` (str): used as the base path for TI_DUMP_IR and similar</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># FIXME(https://github.com/taichi-dev/quadrants/issues/4811): save the current working directory since it may be</span>
     <span class="c1"># changed by the Vulkan backend initialization on OS X.</span>
@@ -755,31 +755,31 @@
 
     <span class="c1"># configure default_fp/ip:</span>
     <span class="c1"># TODO: move these stuff to _SpecialConfig too:</span>
-    <span class="n">env_default_fp</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DEFAULT_FP&quot;</span><span class="p">)</span>
+    <span class="n">env_default_fp</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TI_DEFAULT_FP&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_default_fp</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_fp&quot;&#39;</span>
+                <span class="sa">f</span><span class="s1">&#39;Environment variable TI_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_fp&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_fp</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
             <span class="n">default_fp</span> <span class="o">=</span> <span class="n">f32</span>
         <span class="k">elif</span> <span class="n">env_default_fp</span> <span class="o">==</span> <span class="s2">&quot;64&quot;</span><span class="p">:</span>
             <span class="n">default_fp</span> <span class="o">=</span> <span class="n">f64</span>
         <span class="k">elif</span> <span class="n">env_default_fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid QD_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s2">, should be 32 or 64&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid TI_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s2">, should be 32 or 64&quot;</span><span class="p">)</span>
 
-    <span class="n">env_default_ip</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DEFAULT_IP&quot;</span><span class="p">)</span>
+    <span class="n">env_default_ip</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TI_DEFAULT_IP&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_default_ip</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_ip</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_ip&quot;&#39;</span>
+                <span class="sa">f</span><span class="s1">&#39;Environment variable TI_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_ip&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_ip</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
             <span class="n">default_ip</span> <span class="o">=</span> <span class="n">i32</span>
         <span class="k">elif</span> <span class="n">env_default_ip</span> <span class="o">==</span> <span class="s2">&quot;64&quot;</span><span class="p">:</span>
             <span class="n">default_ip</span> <span class="o">=</span> <span class="n">i64</span>
         <span class="k">elif</span> <span class="n">env_default_ip</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid QD_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s2">, should be 32 or 64&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid TI_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s2">, should be 32 or 64&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">default_fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">set_default_fp</span><span class="p">(</span><span class="n">default_fp</span><span class="p">)</span>
@@ -819,9 +819,9 @@
         <span class="n">_logging</span><span class="o">.</span><span class="n">set_logging_level</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">log_level</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
 
     <span class="c1"># select arch (backend):</span>
-    <span class="n">env_arch</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_ARCH&quot;</span><span class="p">)</span>
+    <span class="n">env_arch</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TI_ARCH&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_arch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">_logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Following QD_ARCH setting up for arch=</span><span class="si">{</span><span class="n">env_arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">_logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Following TI_ARCH setting up for arch=</span><span class="si">{</span><span class="n">env_arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">arch</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_from_name</span><span class="p">(</span><span class="n">env_arch</span><span class="p">)</span>
     <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">=</span> <span class="n">adaptive_arch_select</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="n">enable_fallback</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Quadrants] Starting on arch=</span><span class="si">{</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -1141,7 +1141,7 @@
         <span class="n">arch</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">arch</span><span class="p">)</span>
         <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: &#39;</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&#39; occurred when detecting &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">, consider adding `QD_ENABLE_</span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">=0` &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">, consider adding `TI_ENABLE_</span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">=0` &quot;</span>
             <span class="sa">f</span><span class="s2">&quot; to environment variables to suppress this warning message.&quot;</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
