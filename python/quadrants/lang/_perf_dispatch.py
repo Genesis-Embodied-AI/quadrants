@@ -11,7 +11,8 @@ from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
 NUM_WARMUP: int = 3
 NUM_ACTIVE: int = 1
-REPEAT_AFTER: int = 25
+REPEAT_AFTER_COUNT: int = 0
+REPEAT_AFTER_SECONDS: float = 0.1
 
 TI_PERFDISPATCH_PRINT_DEBUG = os.environ.get("TI_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
@@ -49,12 +50,13 @@ class PerformanceDispatcher(Generic[P, R]):
         fn: Callable,
         num_warmup: int | None = None,
         num_active: int | None = None,
-        repeat_after: int | None = None,
+        repeat_after_count: int | None = None,
+        repeat_after_seconds: float | None = None,
     ) -> None:
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
-        self.repeat_after = repeat_after if repeat_after is not None else REPEAT_AFTER
-        self.cycle_start = 0
+        self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
+        self.repeat_after_seconds = repeat_after_seconds if repeat_after_seconds is not None else REPEAT_AFTER_SECONDS
         sig = inspect.signature(fn)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
@@ -69,6 +71,7 @@ class PerformanceDispatcher(Generic[P, R]):
             lambda: defaultdict(list)
         )
         self._calls_since_last_update_by_geometry_hash: dict[int, int] = defaultdict(int)
+        self._last_check_time_by_geometry_hash: dict[int, float] = defaultdict(float)
 
     def register(
         self, implementation: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
@@ -134,7 +137,9 @@ class PerformanceDispatcher(Generic[P, R]):
             compatible_set.add(dispatch_impl)
         return compatible_set
 
-    def _get_next_dispatch_impl(self, compatible_set: set[DispatchImpl], geometry_hash: int) -> tuple[int, DispatchImpl]:
+    def _get_next_dispatch_impl(
+        self, compatible_set: set[DispatchImpl], geometry_hash: int
+    ) -> tuple[int, DispatchImpl]:
         least_trials_dispatch_impl = None
         least_trials = None
         for dispatch_impl in compatible_set:
@@ -153,7 +158,7 @@ class PerformanceDispatcher(Generic[P, R]):
             return False
 
         min_trials = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
-        res = (min_trials >= self.num_warmup + self.num_active)
+        res = min_trials >= self.num_warmup + self.num_active
         return res
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
@@ -199,20 +204,24 @@ class PerformanceDispatcher(Generic[P, R]):
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
-            if self.repeat_after > 0:
+            restart_measurements = False
+            if self.repeat_after_count > 0:
                 self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
                 calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
-                if calls < self.repeat_after:
-                    return fastest(*args, **kwargs)
-
-                else:
-                    self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
-                    self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
-                    self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
-                    del self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
-                    self._calls_since_last_update_by_geometry_hash[geometry_hash] = 0
-            else:
+                if calls >= self.repeat_after_count:
+                    restart_measurements = True
+            if self.repeat_after_seconds > 0:
+                elapsed = time.time() - self._last_check_time_by_geometry_hash[geometry_hash]
+                if elapsed >= self.repeat_after_seconds:
+                    restart_measurements = True
+            if not restart_measurements:
                 return fastest(*args, **kwargs)
+
+            self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+            self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+            self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+            del self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
+            self._calls_since_last_update_by_geometry_hash[geometry_hash] = 0
 
         res = None
         runtime = impl.get_runtime()
@@ -230,7 +239,9 @@ class PerformanceDispatcher(Generic[P, R]):
                 print(log_str)
             return dispatch_impl_(*args, **kwargs)
 
-        min_trial_count, dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
+        min_trial_count, dispatch_impl = self._get_next_dispatch_impl(
+            compatible_set=compatible_set, geometry_hash=geometry_hash
+        )
         trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
         trial_count_by_dispatch_impl[dispatch_impl] += 1
         in_warmup = min_trial_count < self.num_warmup
@@ -246,10 +257,18 @@ class PerformanceDispatcher(Generic[P, R]):
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
             if self._compute_are_trials_finished(geometry_hash=geometry_hash):
                 self._compute_and_update_fastest(geometry_hash)
+                self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
         return res
 
 
-def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, active: int = NUM_ACTIVE, repeat_after: int = REPEAT_AFTER):
+def perf_dispatch(
+    *,
+    get_geometry_hash: Callable,
+    warmup: int = NUM_WARMUP,
+    active: int = NUM_ACTIVE,
+    repeat_after_count: int = REPEAT_AFTER_COUNT,
+    repeat_after_seconds: float = REPEAT_AFTER_SECONDS,
+):
     """
     This annotation designates a meta-function that can have one or more functions registered with it.
 
@@ -322,7 +341,14 @@ def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, acti
     """
 
     def decorator(fn: Callable | QuadrantsCallable):
-        return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn, num_warmup=warmup, num_active=active, repeat_after=repeat_after)
+        return PerformanceDispatcher(
+            get_geometry_hash=get_geometry_hash,
+            fn=fn,
+            num_warmup=warmup,
+            num_active=active,
+            repeat_after_count=repeat_after_count,
+            repeat_after_seconds=repeat_after_seconds,
+        )
 
     return decorator
 
