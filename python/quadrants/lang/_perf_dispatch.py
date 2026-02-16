@@ -11,6 +11,8 @@ from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
 NUM_WARMUP: int = 3
 NUM_ACTIVE: int = 1
+REPEAT_AFTER: int = 25
+
 TI_PERFDISPATCH_PRINT_DEBUG = os.environ.get("TI_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
 
@@ -47,9 +49,12 @@ class PerformanceDispatcher(Generic[P, R]):
         fn: Callable,
         num_warmup: int | None = None,
         num_active: int | None = None,
+        repeat_after: int | None = None,
     ) -> None:
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
+        self.repeat_after = repeat_after if repeat_after is not None else REPEAT_AFTER
+        self.cycle_start = 0
         sig = inspect.signature(fn)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
@@ -63,6 +68,7 @@ class PerformanceDispatcher(Generic[P, R]):
         self._times_by_dispatch_impl_by_geometry_hash: dict[int, dict[DispatchImpl, list[float]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        self._calls_since_last_update_by_geometry_hash: dict[int, int] = defaultdict(int)
 
     def register(
         self, implementation: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
@@ -128,7 +134,7 @@ class PerformanceDispatcher(Generic[P, R]):
             compatible_set.add(dispatch_impl)
         return compatible_set
 
-    def _get_next_dispatch_impl(self, compatible_set: set[DispatchImpl], geometry_hash: int) -> DispatchImpl:
+    def _get_next_dispatch_impl(self, compatible_set: set[DispatchImpl], geometry_hash: int) -> tuple[int, DispatchImpl]:
         least_trials_dispatch_impl = None
         least_trials = None
         for dispatch_impl in compatible_set:
@@ -136,14 +142,20 @@ class PerformanceDispatcher(Generic[P, R]):
             if least_trials is None or trial_count < least_trials:
                 least_trials_dispatch_impl = dispatch_impl
                 least_trials = trial_count
-        assert least_trials_dispatch_impl is not None
-        return least_trials_dispatch_impl
+        assert least_trials_dispatch_impl is not None and least_trials is not None
+        return least_trials, least_trials_dispatch_impl
+
+    def _get_min_trials_finished(self, geometry_hash: int) -> int:
+        return min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
 
     def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
-        res = (
-            min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
-            >= self.num_warmup + self.num_active
-        )
+        if len(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]) == 0:
+            return False
+        min_trials = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
+        # if self.repeat_after > 0:
+        #     min_trials = min_trials % self.repeat_after
+        res = (min_trials >= self.num_warmup + self.num_active)
+        # print("min_trials", min_trials, "res", res, "self.num_warmup", self.num_warmup, "self.num_active", self.num_active)
         return res
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
@@ -189,10 +201,30 @@ class PerformanceDispatcher(Generic[P, R]):
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
-            return fastest(*args, **kwargs)
+            if self.repeat_after > 0:
+                self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
+                calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
+                # print("calls", calls)
+                if calls < self.repeat_after:
+                    return fastest(*args, **kwargs)
+                else:
+                    # print("calls", calls, "=>redoing check")
+                    self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+                    self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+                    self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
+                    del self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
+                    self._calls_since_last_update_by_geometry_hash[geometry_hash] = 0
+            else:
+                return fastest(*args, **kwargs)
+        # if self.repeat_after > 0:
+        #     self._calls_since_last_update_by_geometry_hash[geometry_hash] += 1
+        #     calls = self._calls_since_last_update_by_geometry_hash[geometry_hash]
+        #     if calls >= self.repeat_after:
+
+        # if self.repeat_after == 0 or calls % self.repeat_after != 0:
 
         res = None
-        speeds_l = []
+        # speeds_l = []
         runtime = impl.get_runtime()
         compatible_set = self._get_compatible_functions(*args, **kwargs)
         if len(compatible_set) == 0:
@@ -208,27 +240,36 @@ class PerformanceDispatcher(Generic[P, R]):
                 print(log_str)
             return dispatch_impl_(*args, **kwargs)
 
-        dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
+        min_trial_count, dispatch_impl = self._get_next_dispatch_impl(compatible_set=compatible_set, geometry_hash=geometry_hash)
         trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
         trial_count_by_dispatch_impl[dispatch_impl] += 1
-        in_warmup = trial_count_by_dispatch_impl[dispatch_impl] <= self.num_warmup
+        # if self.repeat_after > 0:
+        #     min_trial_count = min_trial_count % self.repeat_after
+        in_warmup = min_trial_count < self.num_warmup
+        start = 0
+        # print("min_trial_count", min_trial_count, "in_warmup", in_warmup)
         if not in_warmup:
             runtime.sync()
-        start = time.time()
+            start = time.time()
         res = dispatch_impl(*args, **kwargs)
         if not in_warmup:
             runtime.sync()
-        end = time.time()
-        elapsed = end - start
-        speeds_l.append((elapsed, dispatch_impl))
-        if not in_warmup:
+            end = time.time()
+            elapsed = end - start
+            # speeds_l.append((elapsed, dispatch_impl))
+        # if not in_warmup:
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
-        if self._compute_are_trials_finished(geometry_hash=geometry_hash):
-            self._compute_and_update_fastest(geometry_hash)
+            # print("self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]", self._times_by_dispatch_impl_by_geometry_hash[geometry_hash])
+        # print("")
+        # if trial_count_by_dispatch_impl[dispatch_impl] % 50 == 0:
+        #     print("-", trial_count_by_dispatch_impl[dispatch_impl], dispatch_impl.get_implementation2().__name__, elapsed)
+        # for impl_, times in self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].items():
+            if self._compute_are_trials_finished(geometry_hash=geometry_hash):
+                self._compute_and_update_fastest(geometry_hash)
         return res
 
 
-def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, active: int = NUM_ACTIVE):
+def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, active: int = NUM_ACTIVE, repeat_after: int = REPEAT_AFTER):
     """
     This annotation designates a meta-function that can have one or more functions registered with it.
 
@@ -301,7 +342,7 @@ def perf_dispatch(*, get_geometry_hash: Callable, warmup: int = NUM_WARMUP, acti
     """
 
     def decorator(fn: Callable | QuadrantsCallable):
-        return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn, num_warmup=warmup, num_active=active)
+        return PerformanceDispatcher(get_geometry_hash=get_geometry_hash, fn=fn, num_warmup=warmup, num_active=active, repeat_after=repeat_after)
 
     return decorator
 
