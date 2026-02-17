@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#ifdef TI_WITH_AMDGPU
+#ifdef QD_WITH_AMDGPU
 #include "quadrants/ir/ir_builder.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"

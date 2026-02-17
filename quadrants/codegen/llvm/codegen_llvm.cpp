@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
@@ -75,7 +75,7 @@ FunctionCreationGuard::~FunctionCreationGuard() {
   mb->func = old_func;
   mb->builder->restoreIP(ip);
 
-  TI_ASSERT(!llvm::verifyFunction(*body, &llvm::errs()));
+  QD_ASSERT(!llvm::verifyFunction(*body, &llvm::errs()));
 }
 
 namespace {
@@ -187,7 +187,7 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64)) { \
       llvm_val[stmt] = call(#x "_i64", input);                             \
     } else {                                                               \
-      TI_NOT_IMPLEMENTED                                                   \
+      QD_NOT_IMPLEMENTED                                                   \
     }                                                                      \
   }
   if (false) {
@@ -217,8 +217,8 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
          llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
   }
   else {
-    TI_P(unary_op_type_name(op));
-    TI_NOT_IMPLEMENTED
+    QD_P(unary_op_type_name(op));
+    QD_NOT_IMPLEMENTED
   }
 #undef UNARY_STD
   if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
@@ -253,8 +253,8 @@ std::unique_ptr<RuntimeObject> TaskCodeGenLLVM::emit_struct_meta_object(
     meta = std::make_unique<RuntimeObject>("DenseMeta", this, builder.get());
     emit_struct_meta_base("Dense", meta->ptr, snode);
   } else {
-    TI_P(snode_type_name(snode->type));
-    TI_NOT_IMPLEMENTED;
+    QD_P(snode_type_name(snode->type));
+    QD_NOT_IMPLEMENTED;
   }
   return meta;
 }
@@ -348,7 +348,7 @@ void TaskCodeGenLLVM::create_elementwise_cast(
     std::function<llvm::Value *(llvm::Value *, llvm::Type *)> func,
     bool on_self) {
   auto from_ty = stmt->operand->ret_type->cast<TensorType>();
-  TI_ASSERT_INFO(from_ty,
+  QD_ASSERT_INFO(from_ty,
                  "Cannot perform elementwise ops on non-tensor type {}",
                  from_ty->to_string());
   llvm::Value *vec = llvm::UndefValue::get(llvm::VectorType::get(
@@ -376,7 +376,7 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
     llvm::CastInst::CastOps cast_op;
     auto from = stmt->operand->ret_type;
     auto to = stmt->ret_type;
-    TI_ASSERT_INFO(
+    QD_ASSERT_INFO(
         from->is<TensorType>() == to->is<TensorType>(),
         "Cannot cast between tensor type and non-tensor type: {} v.s. {}",
         from->to_string(), to->to_string());
@@ -398,9 +398,9 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
                       ? llvm::Instruction::CastOps::SIToFP
                       : llvm::Instruction::CastOps::UIToFP;
       } else {
-        TI_P(data_type_name(from));
-        TI_P(data_type_name(to));
-        TI_NOT_IMPLEMENTED;
+        QD_P(data_type_name(from));
+        QD_P(data_type_name(to));
+        QD_NOT_IMPLEMENTED;
       }
       bool use_f16 = to->is_primitive(PrimitiveTypeID::f16) ||
                      (to->is<TensorType>() &&
@@ -508,10 +508,10 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
           is_signed(from.get_element_type()));
     }
   } else if (stmt->op_type == UnaryOpType::cast_bits) {
-    TI_ASSERT(data_type_size(stmt->ret_type) ==
+    QD_ASSERT(data_type_size(stmt->ret_type) ==
               data_type_size(stmt->cast_type));
     if (stmt->operand->ret_type.is_pointer()) {
-      TI_ASSERT(is_integral(stmt->cast_type));
+      QD_ASSERT(is_integral(stmt->cast_type));
       llvm_val[stmt] = builder->CreatePtrToInt(
           llvm_val[stmt->operand], tlctx->get_data_type(stmt->cast_type));
     } else {
@@ -547,11 +547,11 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
 void TaskCodeGenLLVM::create_elementwise_binary(
     BinaryOpStmt *stmt,
     std::function<llvm::Value *(llvm::Value *lhs, llvm::Value *rhs)> f) {
-  TI_ASSERT(stmt->lhs->ret_type->is<TensorType>());
-  TI_ASSERT(stmt->rhs->ret_type->is<TensorType>());
+  QD_ASSERT(stmt->lhs->ret_type->is<TensorType>());
+  QD_ASSERT(stmt->rhs->ret_type->is<TensorType>());
   auto lhs_ty = stmt->lhs->ret_type->cast<TensorType>();
   auto rhs_ty = stmt->rhs->ret_type->cast<TensorType>();
-  TI_ASSERT(lhs_ty->get_num_elements() == rhs_ty->get_num_elements());
+  QD_ASSERT(lhs_ty->get_num_elements() == rhs_ty->get_num_elements());
   auto lhs_vec = llvm_val[stmt->lhs];
   auto rhs_vec = llvm_val[stmt->rhs];
   auto elt_type_name = data_type_name(lhs_ty->get_element_type());
@@ -692,7 +692,7 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
     else {
       if (auto tensor_ty = ret_type->cast<TensorType>()) {
         auto elt_ty = tensor_ty->get_element_type();
-        TI_ASSERT(elt_ty->is_primitive(PrimitiveTypeID::u16) ||
+        QD_ASSERT(elt_ty->is_primitive(PrimitiveTypeID::u16) ||
                   elt_ty->is_primitive(PrimitiveTypeID::i16) ||
                   elt_ty->is_primitive(PrimitiveTypeID::u32) ||
                   elt_ty->is_primitive(PrimitiveTypeID::i32) ||
@@ -705,8 +705,8 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
         };
         create_elementwise_binary(stmt, binary_max);
       } else {
-        TI_P(data_type_name(ret_type));
-        TI_NOT_IMPLEMENTED
+        QD_P(data_type_name(ret_type));
+        QD_NOT_IMPLEMENTED
       }
     }
   } else if (op == BinaryOpType::min) {
@@ -729,7 +729,7 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
     else {
       if (auto tensor_ty = ret_type->cast<TensorType>()) {
         auto elt_ty = tensor_ty->get_element_type();
-        TI_ASSERT(elt_ty->is_primitive(PrimitiveTypeID::u16) ||
+        QD_ASSERT(elt_ty->is_primitive(PrimitiveTypeID::u16) ||
                   elt_ty->is_primitive(PrimitiveTypeID::i16) ||
                   elt_ty->is_primitive(PrimitiveTypeID::u32) ||
                   elt_ty->is_primitive(PrimitiveTypeID::i32) ||
@@ -742,8 +742,8 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
         };
         create_elementwise_binary(stmt, binary_min);
       } else {
-        TI_P(data_type_name(ret_type));
-        TI_NOT_IMPLEMENTED
+        QD_P(data_type_name(ret_type));
+        QD_NOT_IMPLEMENTED
       }
     }
   } else if (is_comparison(op)) {
@@ -810,7 +810,7 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
         cmp = builder->CreateICmpNE(llvm_val[stmt->lhs], llvm_val[stmt->rhs]);
       }
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
     llvm_val[stmt] = cmp;
   } else {
@@ -836,11 +836,11 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
         } else if (ret_type->is_primitive(PrimitiveTypeID::f64)) {
           llvm_val[stmt] = call("atan2_f64", lhs, rhs);
         } else {
-          TI_P(data_type_name(ret_type));
-          TI_NOT_IMPLEMENTED
+          QD_P(data_type_name(ret_type));
+          QD_NOT_IMPLEMENTED
         }
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == BinaryOpType::pow) {
       if (arch_is_cpu(current_arch())) {
@@ -851,15 +851,15 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
         } else if (ret_type->is_primitive(PrimitiveTypeID::f64)) {
           llvm_val[stmt] = call("pow_f64", lhs, rhs);
         } else {
-          TI_P(data_type_name(ret_type));
-          TI_NOT_IMPLEMENTED
+          QD_P(data_type_name(ret_type));
+          QD_NOT_IMPLEMENTED
         }
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else {
-      TI_P(binary_op_type_name(op));
-      TI_NOT_IMPLEMENTED
+      QD_P(binary_op_type_name(op));
+      QD_NOT_IMPLEMENTED
     }
 
     // Convert back to f16 if applicable.
@@ -871,7 +871,7 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(TernaryOpStmt *stmt) {
-  TI_ASSERT(stmt->op_type == TernaryOpType::select);
+  QD_ASSERT(stmt->op_type == TernaryOpType::select);
   llvm_val[stmt] =
       builder->CreateSelect(builder->CreateIsNotNull(llvm_val[stmt->op1]),
                             llvm_val[stmt->op2], llvm_val[stmt->op3]);
@@ -912,7 +912,7 @@ llvm::Value *TaskCodeGenLLVM::create_print(std::string tag,
                                            DataType dt,
                                            llvm::Value *value) {
   if (!arch_is_cpu(compile_config.arch)) {
-    TI_WARN("print not supported on arch {}", arch_name(compile_config.arch));
+    QD_WARN("print not supported on arch {}", arch_name(compile_config.arch));
     return nullptr;
   }
   std::vector<llvm::Value *> args;
@@ -961,7 +961,7 @@ llvm::Value *TaskCodeGenLLVM::create_print(std::string tag,
         TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i16),
         value);
   else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 }
 
 void TaskCodeGenLLVM::visit(PrintStmt *stmt) {
@@ -996,11 +996,11 @@ void TaskCodeGenLLVM::visit(PrintStmt *stmt) {
         auto elem_type = dtype->get_element_type();
         for (int i = 0; i < dtype->get_num_elements(); ++i) {
           if (codegen_vector_type(compile_config)) {
-            TI_ASSERT(llvm::dyn_cast<llvm::VectorType>(value_type));
+            QD_ASSERT(llvm::dyn_cast<llvm::VectorType>(value_type));
             auto elem = builder->CreateExtractElement(value, i);
             args.push_back(value_for_printf(elem, elem_type));
           } else {
-            TI_ASSERT(llvm::dyn_cast<llvm::ArrayType>(value_type));
+            QD_ASSERT(llvm::dyn_cast<llvm::ArrayType>(value_type));
             auto elem = builder->CreateExtractValue(value, i);
             args.push_back(value_for_printf(elem, elem_type));
           }
@@ -1065,8 +1065,8 @@ void TaskCodeGenLLVM::visit(ConstStmt *stmt) {
     llvm_val[stmt] = llvm::ConstantInt::get(
         *llvm_context, llvm::APInt(64, val.val_uint64(), false));
   } else {
-    TI_P(data_type_name(val.dt));
-    TI_NOT_IMPLEMENTED;
+    QD_P(data_type_name(val.dt));
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -1075,7 +1075,7 @@ void TaskCodeGenLLVM::visit(WhileControlStmt *stmt) {
 
   BasicBlock *after_break =
       BasicBlock::Create(*llvm_context, "after_break", func);
-  TI_ASSERT(current_while_after_loop);
+  QD_ASSERT(current_while_after_loop);
   auto *cond = builder->CreateIsNull(llvm_val[stmt->cond]);
   builder->CreateCondBr(cond, current_while_after_loop, after_break);
   builder->SetInsertPoint(after_break);
@@ -1084,9 +1084,9 @@ void TaskCodeGenLLVM::visit(WhileControlStmt *stmt) {
 void TaskCodeGenLLVM::visit(ContinueStmt *stmt) {
   using namespace llvm;
   auto stmt_in_off_range_for = [stmt]() {
-    TI_ASSERT(stmt->scope != nullptr);
+    QD_ASSERT(stmt->scope != nullptr);
     if (auto *offl = stmt->scope->cast<OffloadedStmt>(); offl) {
-      TI_ASSERT(offl->task_type == OffloadedStmt::TaskType::range_for ||
+      QD_ASSERT(offl->task_type == OffloadedStmt::TaskType::range_for ||
                 offl->task_type == OffloadedStmt::TaskType::struct_for);
       return offl->task_type == OffloadedStmt::TaskType::range_for;
     }
@@ -1095,7 +1095,7 @@ void TaskCodeGenLLVM::visit(ContinueStmt *stmt) {
   if (stmt_in_off_range_for()) {
     builder->CreateRetVoid();
   } else {
-    TI_ASSERT(current_loop_reentry != nullptr);
+    QD_ASSERT(current_loop_reentry != nullptr);
     builder->CreateBr(current_loop_reentry);
   }
   // Stmts after continue are useless, so we switch the insertion point to
@@ -1235,7 +1235,7 @@ void TaskCodeGenLLVM::visit(RangeForStmt *for_stmt) {
 llvm::Value *TaskCodeGenLLVM::bitcast_from_u64(llvm::Value *val,
                                                DataType type) {
   llvm::Type *dest_ty = nullptr;
-  TI_ASSERT(!type->is<PointerType>());
+  QD_ASSERT(!type->is<PointerType>());
   if (auto qit = type->cast<QuantIntType>()) {
     if (qit->get_is_signed())
       dest_ty = tlctx->get_data_type(PrimitiveType::i32);
@@ -1292,9 +1292,9 @@ void TaskCodeGenLLVM::visit(ReturnStmt *stmt) {
   auto types = stmt->element_types();
   if (std::any_of(types.begin(), types.end(),
                   [](const DataType &t) { return t.is_pointer(); })) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   } else {
-    TI_ASSERT(stmt->values.size() ==
+    QD_ASSERT(stmt->values.size() ==
               current_callable->ret_type->get_flattened_num_elements());
     auto *buffer = call("RuntimeContext_get_result_buffer", get_context());
     set_struct_to_buffer(current_callable->ret_type, buffer, stmt->values);
@@ -1312,7 +1312,7 @@ void TaskCodeGenLLVM::visit(LocalLoadStmt *stmt) {
   if (!ptr_ty && stmt->src->element_type().is_pointer()) {
     ptr_ty = tlctx->get_data_type(stmt->src->element_type().ptr_removed());
   }
-  TI_ASSERT(ptr_ty);
+  QD_ASSERT(ptr_ty);
   llvm_val[stmt] = builder->CreateLoad(ptr_ty, llvm_val[stmt->src]);
 }
 
@@ -1321,7 +1321,7 @@ void TaskCodeGenLLVM::visit(LocalStoreStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
-  TI_ASSERT((int)stmt->args.size() <=
+  QD_ASSERT((int)stmt->args.size() <=
             quadrants_error_message_max_num_arguments);
   auto argument_buffer_size = llvm::ArrayType::get(
       llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
@@ -1336,7 +1336,7 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
 
   for (int i = 0; i < stmt->args.size(); i++) {
     auto arg = stmt->args[i];
-    TI_ASSERT(llvm_val[arg]);
+    QD_ASSERT(llvm_val[arg]);
 
     // First convert the argument to an integral type with the same number of
     // bits:
@@ -1366,14 +1366,14 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
   auto snode = stmt->snode;
   if (stmt->op_type == SNodeOpType::allocate) {
-    TI_ASSERT(snode->type == SNodeType::dynamic);
-    TI_ASSERT(stmt->ret_type.is_pointer() &&
+    QD_ASSERT(snode->type == SNodeType::dynamic);
+    QD_ASSERT(stmt->ret_type.is_pointer() &&
               stmt->ret_type.ptr_removed()->is_primitive(PrimitiveTypeID::gen));
     auto ptr =
         call(snode, llvm_val[stmt->ptr], "allocate", {llvm_val[stmt->val]});
     llvm_val[stmt] = ptr;
   } else if (stmt->op_type == SNodeOpType::length) {
-    TI_ASSERT(snode->type == SNodeType::dynamic);
+    QD_ASSERT(snode->type == SNodeType::dynamic);
     llvm_val[stmt] = call(snode, llvm_val[stmt->ptr], "get_num_elements", {});
   } else if (stmt->op_type == SNodeOpType::is_active) {
     llvm_val[stmt] =
@@ -1390,7 +1390,7 @@ void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
       llvm_val[stmt] = call(snode, llvm_val[stmt->ptr], "deactivate", {});
     }
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1447,7 +1447,7 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
   bin_op[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
-  TI_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
+  QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
   return builder->CreateAtomicRMW(
       bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
       llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
@@ -1541,8 +1541,8 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
   atomics[PrimitiveTypeID::f64][AtomicOpType::min] = "atomic_min_f64";
   atomics[PrimitiveTypeID::f32][AtomicOpType::max] = "atomic_max_f32";
   atomics[PrimitiveTypeID::f64][AtomicOpType::max] = "atomic_max_f64";
-  TI_ASSERT(atomics.find(prim_type) != atomics.end());
-  TI_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
+  QD_ASSERT(atomics.find(prim_type) != atomics.end());
+  QD_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
   return call(atomics.at(prim_type).at(op), llvm_val[stmt->dest],
               llvm_val[stmt->val]);
 }
@@ -1550,7 +1550,7 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
 void TaskCodeGenLLVM::visit(AtomicOpStmt *stmt) {
   bool is_local = stmt->dest->is<AllocaStmt>();
   if (is_local) {
-    TI_ERROR("Local atomics should have been demoted.");
+    QD_ERROR("Local atomics should have been demoted.");
   }
   llvm::Value *old_value;
   if (llvm::Value *result = optimized_reduction(stmt)) {
@@ -1562,24 +1562,24 @@ void TaskCodeGenLLVM::visit(AtomicOpStmt *stmt) {
   } else if (llvm::Value *result = integral_type_atomic(stmt)) {
     old_value = result;
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
   llvm_val[stmt] = old_value;
 }
 
 void TaskCodeGenLLVM::visit(GlobalPtrStmt *stmt) {
-  TI_ERROR("Global Ptrs should have been lowered.");
+  QD_ERROR("Global Ptrs should have been lowered.");
 }
 
 void TaskCodeGenLLVM::visit(GlobalStoreStmt *stmt) {
-  TI_ASSERT(llvm_val[stmt->val]);
-  TI_ASSERT(llvm_val[stmt->dest]);
+  QD_ASSERT(llvm_val[stmt->val]);
+  QD_ASSERT(llvm_val[stmt->dest]);
   auto ptr_type = stmt->dest->ret_type->as<PointerType>();
   if (ptr_type->is_bit_pointer()) {
     auto pointee_type = ptr_type->get_pointee_type();
     auto snode = stmt->dest->as<GetChStmt>()->input_snode;
     if (snode->type == SNodeType::bit_struct) {
-      TI_ERROR(
+      QD_ERROR(
           "Bit struct stores with type {} should have been handled by "
           "BitStructStoreStmt.",
           pointee_type->to_string());
@@ -1593,7 +1593,7 @@ void TaskCodeGenLLVM::visit(GlobalStoreStmt *stmt) {
                         tlctx->get_data_type(snode->physical_type), qfxt,
                         llvm_val[stmt->val], true);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   } else {
     builder->CreateStore(llvm_val[stmt->val], llvm_val[stmt->dest]);
@@ -1602,7 +1602,7 @@ void TaskCodeGenLLVM::visit(GlobalStoreStmt *stmt) {
 
 llvm::Value *TaskCodeGenLLVM::create_intrinsic_load(llvm::Value *ptr,
                                                     llvm::Type *ty) {
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt,
@@ -1625,8 +1625,8 @@ void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt,
       auto digits = extract_quant_int(physical_value, bit_offset, qit);
       llvm_val[stmt] = reconstruct_quant_fixed(digits, qfxt);
     } else {
-      TI_ASSERT(val_type->is<QuantFloatType>());
-      TI_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
+      QD_ASSERT(val_type->is<QuantFloatType>());
+      QD_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
       llvm_val[stmt] = extract_quant_float(
           physical_value, get_ch->input_snode->dt->as<BitStructType>(),
           get_ch->output_snode->id_in_bit_struct);
@@ -1665,8 +1665,8 @@ std::string TaskCodeGenLLVM::get_runtime_snode_name(SNode *snode) {
   } else if (snode->type == SNodeType::quant_array) {
     return "QuantArray";
   } else {
-    TI_P(snode_type_name(snode->type));
-    TI_NOT_IMPLEMENTED
+    QD_P(snode_type_name(snode->type));
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1696,7 +1696,7 @@ llvm::Function *TaskCodeGenLLVM::get_struct_function(const std::string &name,
   used_tree_ids.insert(tree_id);
   auto f = tlctx->get_struct_function(name, tree_id);
   if (!f) {
-    TI_ERROR("Struct function {} not found.", name);
+    QD_ERROR("Struct function {} not found.", name);
   }
   f = llvm::cast<llvm::Function>(
       module
@@ -1742,7 +1742,7 @@ void TaskCodeGenLLVM::visit(LinearizeStmt *stmt) {
   llvm_val[stmt] = val;
 }
 
-void TaskCodeGenLLVM::visit(IntegerOffsetStmt *stmt){TI_NOT_IMPLEMENTED}
+void TaskCodeGenLLVM::visit(IntegerOffsetStmt *stmt){QD_NOT_IMPLEMENTED}
 
 llvm::Value *TaskCodeGenLLVM::create_bit_ptr(llvm::Value *byte_ptr,
                                              llvm::Value *bit_offset) {
@@ -1751,7 +1751,7 @@ llvm::Value *TaskCodeGenLLVM::create_bit_ptr(llvm::Value *byte_ptr,
   //    iX* byte_ptr;
   //    i32 bit_offset;
   // };
-  TI_ASSERT(bit_offset->getType()->isIntegerTy(32));
+  QD_ASSERT(bit_offset->getType()->isIntegerTy(32));
   auto struct_type = llvm::StructType::get(
       *llvm_context, {byte_ptr->getType(), bit_offset->getType()});
   // 2. allocate the bit pointer struct
@@ -1774,7 +1774,7 @@ std::tuple<llvm::Value *, llvm::Value *> TaskCodeGenLLVM::load_bit_ptr(
   llvm::Type *ptr_ty = nullptr;
   if (auto *AI = llvm::dyn_cast<llvm::AllocaInst>(bit_ptr))
     ptr_ty = AI->getAllocatedType();
-  TI_ASSERT(ptr_ty);
+  QD_ASSERT(ptr_ty);
   auto *struct_ty = llvm::cast<llvm::StructType>(ptr_ty);
   auto byte_ptr = builder->CreateLoad(
       struct_ty->getElementType(0),
@@ -1791,7 +1791,7 @@ std::tuple<llvm::Value *, llvm::Value *> TaskCodeGenLLVM::load_bit_ptr(
 void TaskCodeGenLLVM::visit(SNodeLookupStmt *stmt) {
   llvm::Value *parent = nullptr;
   parent = llvm_val[stmt->input_snode];
-  TI_ASSERT(parent);
+  QD_ASSERT(parent);
   auto snode = stmt->snode;
   if (snode->type == SNodeType::root) {
     // FIXME: get parent_type from quadrants instead of llvm.
@@ -1799,7 +1799,7 @@ void TaskCodeGenLLVM::visit(SNodeLookupStmt *stmt) {
     if (auto bit_cast = llvm::dyn_cast<llvm::BitCastInst>(parent)) {
       parent_ty = bit_cast->getDestTy();
       if (auto ptr_ty = llvm::dyn_cast<llvm::PointerType>(parent_ty)) {
-        TI_NOT_IMPLEMENTED;
+        QD_NOT_IMPLEMENTED;
       }
     }
     llvm_val[stmt] =
@@ -1823,8 +1823,8 @@ void TaskCodeGenLLVM::visit(SNodeLookupStmt *stmt) {
     offset = builder->CreateMul(offset, llvm_val[stmt->input_index]);
     llvm_val[stmt] = create_bit_ptr(llvm_val[stmt->input_snode], offset);
   } else {
-    TI_INFO(snode_type_name(snode->type));
-    TI_NOT_IMPLEMENTED
+    QD_INFO(snode_type_name(snode->type));
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -1943,7 +1943,7 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
     }
     linear_index = builder->CreateAdd(linear_index, llvm_val[stmt->indices[i]]);
   }
-  TI_ASSERT(size_var_index == num_indices - num_element_indices);
+  QD_ASSERT(size_var_index == num_indices - num_element_indices);
 
   /*
     llvm::GEP implicitly indicates alignment when used upon llvm::VectorType.
@@ -2059,8 +2059,8 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
         "unoptimized LLVM IR (generic)");
     writer.write(module.get());
   }
-  TI_ASSERT(!llvm::verifyFunction(*func, &llvm::errs()));
-  // TI_INFO("Kernel function verified.");
+  QD_ASSERT(!llvm::verifyFunction(*func, &llvm::errs()));
+  // QD_INFO("Kernel function verified.");
 }
 
 std::tuple<llvm::Value *, llvm::Value *> TaskCodeGenLLVM::get_range_for_bounds(
@@ -2103,7 +2103,7 @@ void TaskCodeGenLLVM::create_offload_struct_for(OffloadedStmt *stmt) {
         leaf_block->parent->type == SNodeType::dense) {
       leaf_block = leaf_block->parent;
     } else {
-      TI_ERROR(
+      QD_ERROR(
           "A bit-vectorized struct-for must loop over a quant array with a "
           "dense parent");
     }
@@ -2326,7 +2326,7 @@ void TaskCodeGenLLVM::visit(LoopIndexStmt *stmt) {
     if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(current_coordinates)) {
       struct_ty = alloca->getAllocatedType();
     }
-    TI_ASSERT(struct_ty);
+    QD_ASSERT(struct_ty);
     auto *GEP =
         builder->CreateGEP(struct_ty, current_coordinates,
                            {tlctx->get_constant(0), tlctx->get_constant(0),
@@ -2350,7 +2350,7 @@ void TaskCodeGenLLVM::visit(LoopLinearIndexStmt *stmt) {
            OffloadedStmt::TaskType::mesh_for)) {
     llvm_val[stmt] = call("thread_idx");
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -2358,18 +2358,18 @@ void TaskCodeGenLLVM::visit(BlockCornerIndexStmt *stmt) {
   if (stmt->loop->is<OffloadedStmt>() &&
       stmt->loop->as<OffloadedStmt>()->task_type ==
           OffloadedStmt::TaskType::struct_for) {
-    TI_ASSERT(block_corner_coordinates);
+    QD_ASSERT(block_corner_coordinates);
     // Make sure physical_coordinate_ty matches
     // struct PhysicalCoordinates {
     //   i32 val[quadrants_max_num_indices];
     // };
-    TI_ASSERT(physical_coordinate_ty->isStructTy());
+    QD_ASSERT(physical_coordinate_ty->isStructTy());
     auto physical_coordinate_ty_as_struct =
         llvm::cast<llvm::StructType>(physical_coordinate_ty);
-    TI_ASSERT(physical_coordinate_ty_as_struct);
-    TI_ASSERT(physical_coordinate_ty_as_struct->getNumElements() == 1);
+    QD_ASSERT(physical_coordinate_ty_as_struct);
+    QD_ASSERT(physical_coordinate_ty_as_struct->getNumElements() == 1);
     auto val_ty = physical_coordinate_ty_as_struct->getElementType(0);
-    TI_ASSERT(val_ty->isArrayTy());
+    QD_ASSERT(val_ty->isArrayTy());
     auto val_ty_as_array = llvm::cast<llvm::ArrayType>(val_ty);
     llvm_val[stmt] = builder->CreateLoad(
         val_ty_as_array->getElementType(),
@@ -2377,7 +2377,7 @@ void TaskCodeGenLLVM::visit(BlockCornerIndexStmt *stmt) {
                            {tlctx->get_constant(0), tlctx->get_constant(0),
                             tlctx->get_constant(stmt->index)}));
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -2401,7 +2401,7 @@ void TaskCodeGenLLVM::visit(ThreadLocalPtrStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(BlockLocalPtrStmt *stmt) {
-  TI_ASSERT(bls_buffer);
+  QD_ASSERT(bls_buffer);
   auto base = bls_buffer;
   auto ptr =
       builder->CreateGEP(base->getValueType(), base,
@@ -2432,7 +2432,7 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
-  TI_ASSERT_INFO(stmt->max_size > 0,
+  QD_ASSERT_INFO(stmt->max_size > 0,
                  "Adaptive autodiff stack's size should have been determined.");
   auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context),
                                    stmt->size_in_bytes());
@@ -2459,7 +2459,7 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(AdStackLoadTopStmt *stmt) {
-  TI_ASSERT(stmt->return_ptr == false);
+  QD_ASSERT(stmt->return_ptr == false);
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
   auto primal_ptr = call("stack_top_primal", llvm_val[stack],
                          tlctx->get_constant(stack->element_size_in_bytes()));
@@ -2487,7 +2487,7 @@ void TaskCodeGenLLVM::visit(AdStackAccAdjointStmt *stmt) {
   adjoint_ptr = builder->CreateBitCast(adjoint_ptr,
                                        llvm::PointerType::get(adjoint_ty, 0));
   auto old_val = builder->CreateLoad(adjoint_ty, adjoint_ptr);
-  TI_ASSERT(is_real(stmt->v->ret_type));
+  QD_ASSERT(is_real(stmt->v->ret_type));
   auto new_val = builder->CreateFAdd(old_val, llvm_val[stmt->v]);
   builder->CreateStore(new_val, adjoint_ptr);
 }
@@ -2501,7 +2501,7 @@ void TaskCodeGenLLVM::visit(LoopUniqueStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit_call_bitcode(ExternalFuncCallStmt *stmt) {
-  TI_ASSERT(stmt->type == ExternalFuncCallStmt::BITCODE);
+  QD_ASSERT(stmt->type == ExternalFuncCallStmt::BITCODE);
   std::vector<llvm::Value *> arg_values;
   for (const auto &s : stmt->arg_stmts)
     arg_values.push_back(llvm_val[s]);
@@ -2511,17 +2511,17 @@ void TaskCodeGenLLVM::visit_call_bitcode(ExternalFuncCallStmt *stmt) {
     std::unique_ptr<llvm::Module> external_module =
         module_from_bitcode_file(stmt->bc_filename, llvm_context);
     auto *func_ptr = external_module->getFunction(stmt->bc_funcname);
-    TI_ASSERT_INFO(func_ptr != nullptr, "{} is not found in {}.",
+    QD_ASSERT_INFO(func_ptr != nullptr, "{} is not found in {}.",
                    stmt->bc_funcname, stmt->bc_filename);
     auto link_error =
         llvm::Linker::linkModules(*module, std::move(external_module));
-    TI_ASSERT(!link_error);
+    QD_ASSERT(!link_error);
   }
   // Retrieve function again. Do it here to detect name conflicting.
   auto *func_ptr = module->getFunction(stmt->bc_funcname);
   // Convert pointer type from a[n * m] to a[n][m]
   for (int i = 0; i < func_ptr->getFunctionType()->getNumParams(); ++i) {
-    TI_ASSERT_INFO(func_ptr->getArg(i)->getType()->getTypeID() ==
+    QD_ASSERT_INFO(func_ptr->getArg(i)->getType()->getTypeID() ==
                        arg_values[i]->getType()->getTypeID(),
                    "TypeID {} != {} with {}",
                    (int)func_ptr->getArg(i)->getType()->getTypeID(),
@@ -2534,7 +2534,7 @@ void TaskCodeGenLLVM::visit_call_bitcode(ExternalFuncCallStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit_call_shared_object(ExternalFuncCallStmt *stmt) {
-  TI_ASSERT(stmt->type == ExternalFuncCallStmt::SHARED_OBJECT);
+  QD_ASSERT(stmt->type == ExternalFuncCallStmt::SHARED_OBJECT);
   std::vector<llvm::Type *> arg_types;
   std::vector<llvm::Value *> arg_values;
 
@@ -2560,7 +2560,7 @@ void TaskCodeGenLLVM::visit_call_shared_object(ExternalFuncCallStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(ExternalFuncCallStmt *stmt) {
-  TI_NOT_IMPLEMENTED
+  QD_NOT_IMPLEMENTED
 }
 
 void TaskCodeGenLLVM::visit(MeshPatchIndexStmt *stmt) {
@@ -2573,10 +2573,10 @@ void TaskCodeGenLLVM::visit(MatrixInitStmt *stmt) {
   for (int i = 0; i < stmt->values.size(); ++i) {
     auto *elem = llvm_val[stmt->values[i]];
     if (codegen_vector_type(compile_config)) {
-      TI_ASSERT(llvm::dyn_cast<llvm::VectorType>(type));
+      QD_ASSERT(llvm::dyn_cast<llvm::VectorType>(type));
       vec = builder->CreateInsertElement(vec, elem, i);
     } else {
-      TI_ASSERT(llvm::dyn_cast<llvm::ArrayType>(type));
+      QD_ASSERT(llvm::dyn_cast<llvm::ArrayType>(type));
       vec = builder->CreateInsertValue(vec, elem, i);
     }
   }
@@ -2601,7 +2601,7 @@ FunctionCreationGuard TaskCodeGenLLVM::get_function_creation_guard(
 }
 
 void TaskCodeGenLLVM::initialize_context() {
-  TI_ASSERT(tlctx != nullptr);
+  QD_ASSERT(tlctx != nullptr);
   llvm_context = tlctx->get_this_thread_context();
   builder = std::make_unique<llvm::IRBuilder<>>(*llvm_context);
   if (compile_config.fast_math) {
@@ -2666,7 +2666,7 @@ llvm::IntegerType *TaskCodeGenLLVM::get_integer_type(int bits) {
     default:
       break;
   }
-  TI_ERROR("No compatible " + std::to_string(bits) + " bits integer type.");
+  QD_ERROR("No compatible " + std::to_string(bits) + " bits integer type.");
   return nullptr;
 }
 
@@ -2683,12 +2683,12 @@ llvm::Value *TaskCodeGenLLVM::get_runtime() {
 
 llvm::Value *TaskCodeGenLLVM::emit_struct_meta(SNode *snode) {
   auto obj = emit_struct_meta_object(snode);
-  TI_ASSERT(obj != nullptr);
+  QD_ASSERT(obj != nullptr);
   return obj->ptr;
 }
 
 void TaskCodeGenLLVM::emit_to_module() {
-  TI_AUTO_PROF
+  QD_AUTO_PROF
   ir->accept(this);
 }
 
@@ -2720,13 +2720,13 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
     // CUDA specific metadata
     for (const auto &task : offloaded_tasks) {
       llvm::Function *func = module->getFunction(task.name);
-      TI_ASSERT(func);
+      QD_ASSERT(func);
       tlctx->mark_function_as_cuda_kernel(func, task.block_dim);
     }
   } else if (compile_config.arch == Arch::amdgpu) {
     for (const auto &task : offloaded_tasks) {
       llvm::Function *func = module->getFunction(task.name);
-      TI_ASSERT(func);
+      QD_ASSERT(func);
       tlctx->mark_function_as_amdgpu_kernel(func);
     }
   }
@@ -2749,7 +2749,7 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
         llvm::parseAssemblyFile(filename.string(), err, *llvm_context);
     if (!loaded_module) {
       err.print("QUADRANTS_LOAD_IR_FILE error", llvm::errs());
-      TI_ERROR("Failed to load LLVM IR from {}", filename.string());
+      QD_ERROR("Failed to load LLVM IR from {}", filename.string());
     } else {
       module = std::move(loaded_module);
     }
@@ -2852,12 +2852,12 @@ void TaskCodeGenLLVM::set_struct_to_buffer(
     int &current_element,
     std::vector<llvm::Value *> &current_index) {
   if (auto primitive_type = current_type->cast<PrimitiveType>()) {
-    TI_ASSERT((Type *)elements[current_element]->ret_type == current_type);
+    QD_ASSERT((Type *)elements[current_element]->ret_type == current_type);
     auto *gep = builder->CreateGEP(buffer_type, buffer, current_index);
     builder->CreateStore(llvm_val[elements[current_element]], gep);
     current_element++;
   } else if (auto pointer_type = current_type->cast<PointerType>()) {
-    TI_ASSERT((Type *)elements[current_element]->ret_type == current_type);
+    QD_ASSERT((Type *)elements[current_element]->ret_type == current_type);
     auto *gep = builder->CreateGEP(buffer_type, buffer, current_index);
     builder->CreateStore(llvm_val[elements[current_element]], gep);
     current_element++;
@@ -2879,8 +2879,8 @@ void TaskCodeGenLLVM::set_struct_to_buffer(
       current_index.pop_back();
     }
   } else {
-    TI_INFO("{}", current_type->to_string());
-    TI_NOT_IMPLEMENTED
+    QD_INFO("{}", current_type->to_string());
+    QD_NOT_IMPLEMENTED
   }
 }
 
@@ -2961,4 +2961,4 @@ LLVMCompiledKernel LLVMCompiledKernel::clone() const {
 
 }  // namespace quadrants::lang
 
-#endif  // #ifdef TI_WITH_LLVM
+#endif  // #ifdef QD_WITH_LLVM

@@ -90,7 +90,7 @@ class EvalVisitor : public IRVisitor {
       auto res_opt = eval_bin_op(lhs.val_uint(), rhs.val_uint(), op);
       insert_or_failed(stmt, dt, res_opt);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
       failed_ = true;
     }
   }

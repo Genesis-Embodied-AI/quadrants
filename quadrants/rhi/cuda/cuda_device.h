@@ -22,35 +22,35 @@ class CudaCommandList : public CommandList {
   ~CudaCommandList() override {
   }
 
-  void bind_pipeline(Pipeline *p) noexcept override { TI_NOT_IMPLEMENTED };
+  void bind_pipeline(Pipeline *p) noexcept override { QD_NOT_IMPLEMENTED };
   RhiResult bind_shader_resources(ShaderResourceSet *res,
                                   int set_index = 0) noexcept final {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   RhiResult bind_raster_resources(RasterResources *res) noexcept final {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   void buffer_barrier(DevicePtr ptr, size_t size) noexcept override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   void buffer_barrier(DeviceAllocation alloc) noexcept override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
-  void memory_barrier() noexcept override { TI_NOT_IMPLEMENTED };
+  void memory_barrier() noexcept override { QD_NOT_IMPLEMENTED };
   void buffer_copy(DevicePtr dst,
                    DevicePtr src,
                    size_t size) noexcept override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   void buffer_fill(DevicePtr ptr,
                    size_t size,
                    uint32_t data) noexcept override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   RhiResult dispatch(uint32_t x,
                      uint32_t y = 1,
                      uint32_t z = 1) noexcept override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
 };
 
@@ -59,20 +59,20 @@ class CudaStream : public Stream {
   ~CudaStream() override {};
 
   RhiResult new_command_list(CommandList **out_cmdlist) noexcept final {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   StreamSemaphore submit(
       CommandList *cmdlist,
       const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
   StreamSemaphore submit_synced(
       CommandList *cmdlist,
       const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   };
 
-  void command_sync() override { TI_NOT_IMPLEMENTED };
+  void command_sync() override { QD_NOT_IMPLEMENTED };
 };
 
 class CudaDevice : public LlvmDevice {
@@ -123,21 +123,21 @@ class CudaDevice : public LlvmDevice {
       int num_alloc = 1,
       const std::vector<StreamSemaphore> &wait_sema = {}) noexcept override;
 
-  ShaderResourceSet *create_resource_set() final { TI_NOT_IMPLEMENTED };
+  ShaderResourceSet *create_resource_set() final { QD_NOT_IMPLEMENTED };
 
   RhiResult create_pipeline(Pipeline **out_pipeline,
                             const PipelineSourceDesc &src,
                             std::string name,
                             PipelineCache *cache) noexcept final {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   RhiResult map_range(DevicePtr ptr, uint64_t size, void **mapped_ptr) final {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
   RhiResult map(DeviceAllocation alloc, void **mapped_ptr) final;
 
-  void unmap(DevicePtr ptr) final { TI_NOT_IMPLEMENTED };
+  void unmap(DevicePtr ptr) final { QD_NOT_IMPLEMENTED };
   void unmap(DeviceAllocation alloc) final;
 
   void memcpy_internal(DevicePtr dst, DevicePtr src, uint64_t size) override;
@@ -152,9 +152,9 @@ class CudaDevice : public LlvmDevice {
     return CUDAContext::get_instance().get_total_memory();
   }
 
-  Stream *get_compute_stream() override { TI_NOT_IMPLEMENTED };
+  Stream *get_compute_stream() override { QD_NOT_IMPLEMENTED };
 
-  void wait_idle() override { TI_NOT_IMPLEMENTED };
+  void wait_idle() override { QD_NOT_IMPLEMENTED };
 
   void clear() override {
     allocations_.clear();
@@ -164,7 +164,7 @@ class CudaDevice : public LlvmDevice {
   std::vector<AllocInfo> allocations_;
   void validate_device_alloc(const DeviceAllocation alloc) {
     if (allocations_.size() <= alloc.alloc_id) {
-      TI_ERROR("invalid DeviceAllocation");
+      QD_ERROR("invalid DeviceAllocation");
     }
   }
 };

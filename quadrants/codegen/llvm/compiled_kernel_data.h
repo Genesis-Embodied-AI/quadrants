@@ -23,7 +23,7 @@ class CompiledKernelData : public lang::CompiledKernelData {
     const StructType *args_type = nullptr;
     size_t args_size{0};
 
-    TI_IO_DEF(args,
+    QD_IO_DEF(args,
               rets,
               compiled_data,
               ret_type,

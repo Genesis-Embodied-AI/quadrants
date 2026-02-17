@@ -20,7 +20,7 @@ std::map<std::string, std::pair<double, int>> Time::Timer::memo;
 std::map<std::string, double> Time::FPSCounter::last_refresh;
 std::map<std::string, int> Time::FPSCounter::counter;
 
-#if defined(TI_PLATFORM_UNIX)
+#if defined(QD_PLATFORM_UNIX)
 
 double Time::get_time() {
   struct timeval tv;
@@ -220,12 +220,12 @@ uint64 Time::get_cycles() {
 #else
 
 uint64 Time::get_cycles() {
-#if defined(TI_ARCH_x64) && !(defined(__arm64__) || defined(__aarch64__))
+#if defined(QD_ARCH_x64) && !(defined(__arm64__) || defined(__aarch64__))
   unsigned int lo, hi;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
   return ((uint64)hi << 32) | lo;
 #else
-  TI_WARN("get_cycles is not implemented in this platform. Returning 0.");
+  QD_WARN("get_cycles is not implemented in this platform. Returning 0.");
   return 0;
 #endif
 }

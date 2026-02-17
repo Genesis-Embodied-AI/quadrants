@@ -146,7 +146,7 @@ void demote_mesh_statements_offload(OffloadedStmt *offload,
 void demote_mesh_statements(IRNode *root,
                             const CompileConfig &config,
                             const DemoteMeshStatements::Args &args) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
 
   if (auto root_block = root->cast<Block>()) {
     for (auto &offload : root_block->statements) {

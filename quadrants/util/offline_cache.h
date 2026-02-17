@@ -56,7 +56,7 @@ struct Metadata {
   std::unordered_map<std::string, KernelMetadata> kernels;
 
   // NOTE: The "version" must be the first field to be serialized
-  TI_IO_DEF(version, size, kernels);
+  QD_IO_DEF(version, size, kernels);
 };
 
 enum class LoadMetadataError {
@@ -71,7 +71,7 @@ inline LoadMetadataError load_metadata_with_checking(
     MetadataType &result,
     const std::string &filepath) {
   if (!quadrants::path_exists(filepath)) {
-    TI_DEBUG("Offline cache metadata file {} not found", filepath);
+    QD_DEBUG("Offline cache metadata file {} not found", filepath);
     return LoadMetadataError::kFileNotFound;
   }
 
@@ -83,9 +83,9 @@ inline LoadMetadataError load_metadata_with_checking(
   if (!read_from_binary(ver, bytes.data(), bytes.size(), false)) {
     return LoadMetadataError::kCorrupted;
   }
-  if (ver[0] != TI_VERSION_MAJOR || ver[1] != TI_VERSION_MINOR ||
-      ver[2] != TI_VERSION_PATCH) {
-    TI_DEBUG("The offline cache metadata file {} is old (version={}.{}.{})",
+  if (ver[0] != QD_VERSION_MAJOR || ver[1] != QD_VERSION_MINOR ||
+      ver[2] != QD_VERSION_PATCH) {
+    QD_DEBUG("The offline cache metadata file {} is old (version={}.{}.{})",
              filepath, ver[0], ver[1], ver[2]);
     return LoadMetadataError::kVersionNotMatched;
   }
@@ -156,10 +156,10 @@ class CacheCleaner {
 
  public:
   static void run(const CacheCleanerConfig &config) {
-    TI_ASSERT(!config.path.empty());
-    TI_ASSERT(config.max_size > 0);
-    TI_ASSERT(!config.metadata_filename.empty());
-    TI_ASSERT(!config.metadata_lock_name.empty());
+    QD_ASSERT(!config.path.empty());
+    QD_ASSERT(config.max_size > 0);
+    QD_ASSERT(!config.metadata_filename.empty());
+    QD_ASSERT(!config.metadata_lock_name.empty());
     const auto policy = config.policy;
     const auto &path = config.path;
     const auto metadata_file =
@@ -183,21 +183,21 @@ class CacheCleaner {
       std::string lock_path =
           quadrants::join_path(path, config.metadata_lock_name);
       if (!lock_with_file(lock_path)) {
-        TI_WARN(
+        QD_WARN(
             "Lock {} failed. You can run 'ti cache clean -p {}' and try again.",
             lock_path, path);
         return;
       }
       auto _ = make_cleanup([&lock_path]() {
-        TI_DEBUG("Stop cleaning cache");
+        QD_DEBUG("Stop cleaning cache");
         if (!unlock_with_file(lock_path)) {
-          TI_WARN(
+          QD_WARN(
               "Unlock {} failed. You can remove this .lock file manually and "
               "try again.",
               lock_path);
         }
       });
-      TI_DEBUG("Start cleaning cache");
+      QD_DEBUG("Start cleaning cache");
 
       using Error = LoadMetadataError;
       Error error = load_metadata_with_checking(cache_data, metadata_file);
@@ -207,7 +207,7 @@ class CacheCleaner {
                  error == Error::kVersionNotMatched) {
         if (policy &
             CleanOldVersion) {  // Remove cache files and metadata files
-          TI_DEBUG("Removing all cache files");
+          QD_DEBUG("Removing all cache files");
           if (quadrants::remove(metadata_file)) {
             quadrants::remove(debugging_metadata_file);
             Utils::remove_other_files(config);
@@ -217,7 +217,7 @@ class CacheCleaner {
                     quadrants::remove(quadrants::join_path(config.path, name));
                   }
                 });
-            TI_ASSERT(success);
+            QD_ASSERT(success);
           }
         }
         return;
@@ -253,7 +253,7 @@ class CacheCleaner {
         PriQueue q(cmp);
         std::size_t cnt =
             config.cleaning_factor * cache_data.dataWrapperByCacheKey.size();
-        TI_ASSERT(cnt != 0);
+        QD_ASSERT(cnt != 0);
         for (const auto &e : cache_data.dataWrapperByCacheKey) {
           if (q.size() == cnt && cmp(&e, q.top())) {
             q.pop();
@@ -262,7 +262,7 @@ class CacheCleaner {
             q.push(&e);
           }
         }
-        TI_ASSERT(q.size() <= cnt);
+        QD_ASSERT(q.size() <= cnt);
         while (!q.empty()) {
           const auto *e = q.top();
           for (const auto &f : Utils::get_cache_files(config, e->second)) {

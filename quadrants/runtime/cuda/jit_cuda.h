@@ -30,13 +30,13 @@
 #include "quadrants/runtime/cuda/ptx_cache.h"
 #include "quadrants/program/program_impl.h"
 
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "quadrants/program/context.h"
-#undef TI_RUNTIME_HOST
+#undef QD_RUNTIME_HOST
 
 namespace quadrants::lang {
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 class JITModuleCUDA : public JITModule {
  private:
   void *module_;

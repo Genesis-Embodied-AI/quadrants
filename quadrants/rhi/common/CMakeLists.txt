@@ -13,7 +13,7 @@ target_include_directories(${COMMON_RHI}
     ${PROJECT_SOURCE_DIR}
   )
 
-if(TI_WITH_VULKAN)
+if(QD_WITH_VULKAN)
     target_link_libraries(${COMMON_RHI} PUBLIC vulkan_rhi)
 
     target_include_directories(${COMMON_RHI} SYSTEM

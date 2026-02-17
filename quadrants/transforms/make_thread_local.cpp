@@ -218,7 +218,7 @@ namespace irpass {
 
 // This pass should happen after offloading but before lower_access
 void make_thread_local(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   if (auto root_block = root->cast<Block>()) {
     for (auto &offload : root_block->statements) {
       make_thread_local_offload(offload->cast<OffloadedStmt>());

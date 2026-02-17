@@ -25,7 +25,7 @@ const real pi{acosf(-1.0_f)};
 const real eps = 1e-6_f;
 
 template <int I, typename T>
-constexpr TI_FORCE_INLINE T pow(T a) noexcept {
+constexpr QD_FORCE_INLINE T pow(T a) noexcept {
   T ret(1);
   for (int i = 0; i < I; i++) {
     ret *= a;
@@ -33,16 +33,16 @@ constexpr TI_FORCE_INLINE T pow(T a) noexcept {
   return ret;
 };
 
-TI_FORCE_INLINE float32 fract(float32 a) noexcept {
+QD_FORCE_INLINE float32 fract(float32 a) noexcept {
   return a - (int)floor(a);
 }
 
-TI_FORCE_INLINE float64 fract(float64 a) noexcept {
+QD_FORCE_INLINE float64 fract(float64 a) noexcept {
   return a - (int)floor(a);
 }
 
 template <typename T>
-TI_FORCE_INLINE T clamp(const T &a, const T &min, const T &max) noexcept {
+QD_FORCE_INLINE T clamp(const T &a, const T &min, const T &max) noexcept {
   if (a < min)
     return min;
   if (a > max)
@@ -51,7 +51,7 @@ TI_FORCE_INLINE T clamp(const T &a, const T &min, const T &max) noexcept {
 }
 
 template <typename T>
-TI_FORCE_INLINE T clamp01(const T &a) noexcept {
+QD_FORCE_INLINE T clamp01(const T &a) noexcept {
   if (a < T(0))
     return T(0);
   if (a > T(1))
@@ -60,21 +60,21 @@ TI_FORCE_INLINE T clamp01(const T &a) noexcept {
 }
 
 template <typename T>
-TI_FORCE_INLINE T clamp(const T &a) noexcept {
+QD_FORCE_INLINE T clamp(const T &a) noexcept {
   return clamp01(a);
 }
 
 template <typename T, typename V>
-TI_FORCE_INLINE V lerp(T a, V x_0, V x_1) noexcept {
+QD_FORCE_INLINE V lerp(T a, V x_0, V x_1) noexcept {
   return V((T(1) - a) * x_0 + a * x_1);
 }
 
 template <typename T>
-TI_FORCE_INLINE T sqr(const T &a) noexcept {
+QD_FORCE_INLINE T sqr(const T &a) noexcept {
   return pow<2>(a);
 }
 
-TI_FORCE_INLINE int sgn(float a) noexcept {
+QD_FORCE_INLINE int sgn(float a) noexcept {
   if (a < -eps)
     return -1;
   else if (a > eps)
@@ -82,7 +82,7 @@ TI_FORCE_INLINE int sgn(float a) noexcept {
   return 0;
 }
 
-TI_FORCE_INLINE int sgn(double a) noexcept {
+QD_FORCE_INLINE int sgn(double a) noexcept {
   if (a < -eps)
     return -1;
   else if (a > eps)
@@ -90,7 +90,7 @@ TI_FORCE_INLINE int sgn(double a) noexcept {
   return 0;
 }
 
-TI_FORCE_INLINE uint32 rand_int() noexcept {
+QD_FORCE_INLINE uint32 rand_int() noexcept {
   static unsigned int x = 123456789, y = 362436069, z = 521288629, w = 88675123;
   unsigned int t = x ^ (x << 11);
   x = y;
@@ -99,30 +99,30 @@ TI_FORCE_INLINE uint32 rand_int() noexcept {
   return (w = (w ^ (w >> 19)) ^ (t ^ (t >> 8)));
 }
 
-TI_FORCE_INLINE uint64 rand_int64() noexcept {
+QD_FORCE_INLINE uint64 rand_int64() noexcept {
   return ((uint64)rand_int() << 32) + rand_int();
 }
 
 // inline float frand() { return (float)rand() / (RAND_MAX + 1); }
-TI_FORCE_INLINE float32 rand() noexcept {
+QD_FORCE_INLINE float32 rand() noexcept {
   return rand_int() * (1.0_f / 4294967296.0f);
 }
 
 template <typename T>
-TI_FORCE_INLINE T rand() noexcept;
+QD_FORCE_INLINE T rand() noexcept;
 
 template <>
-TI_FORCE_INLINE float rand<float>() noexcept {
+QD_FORCE_INLINE float rand<float>() noexcept {
   return rand_int() * (1.0_f / 4294967296.0f);
 }
 
 template <>
-TI_FORCE_INLINE double rand<double>() noexcept {
+QD_FORCE_INLINE double rand<double>() noexcept {
   return rand_int() * (1.0 / 4294967296.0);
 }
 
 template <>
-TI_FORCE_INLINE int rand<int>() noexcept {
+QD_FORCE_INLINE int rand<int>() noexcept {
   return rand_int();
 }
 
@@ -136,30 +136,30 @@ inline int is_prime(int a) noexcept {
 }
 
 template <typename T>
-TI_FORCE_INLINE T hypot2(const T &x, const T &y) noexcept {
+QD_FORCE_INLINE T hypot2(const T &x, const T &y) noexcept {
   return x * x + y * y;
 }
 
-TI_FORCE_INLINE float32 pow(const float32 &a, const float32 &b) noexcept {
+QD_FORCE_INLINE float32 pow(const float32 &a, const float32 &b) noexcept {
   return ::pow(a, b);
 }
 
-TI_FORCE_INLINE float64 pow(const float64 &a, const float64 &b) noexcept {
+QD_FORCE_INLINE float64 pow(const float64 &a, const float64 &b) noexcept {
   return ::pow(a, b);
 }
 
 template <typename T>
-TI_FORCE_INLINE bool is_normal(T m) noexcept {
+QD_FORCE_INLINE bool is_normal(T m) noexcept {
   return std::isfinite(m);
 }
 
 template <typename T>
-TI_FORCE_INLINE bool abnormal(T m) noexcept {
+QD_FORCE_INLINE bool abnormal(T m) noexcept {
   return !is_normal(m);
 }
 
 inline int64 get_largest_pot(int64 a) noexcept {
-  TI_ASSERT_INFO(a > 0,
+  QD_ASSERT_INFO(a > 0,
                  "a should be positive, instead of " + std::to_string(a));
 
   /* This code was copied from https://stackoverflow.com/a/20207950 and edited

@@ -1,4 +1,4 @@
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 #include "cuda_context.h"
 
 #include <unordered_map>
@@ -24,7 +24,7 @@ CUDAContext::CUDAContext()
   char name[128];
   driver_.device_get_name(name, 128, device_);
 
-  TI_TRACE("Using CUDA device [id=0]: {}", name);
+  QD_TRACE("Using CUDA device [id=0]: {}", name);
 
   int cc_major, cc_minor;
   driver_.device_get_attribute(
@@ -39,7 +39,7 @@ CUDAContext::CUDAContext()
                                  CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED,
                                  device_);
   } else {
-    TI_WARN(
+    QD_WARN(
         "Please consider upgrade your nvidia driver for better device memory "
         "pool"
         "support. Current driver supports CUDA {}.{}, we recommend driver "
@@ -62,12 +62,12 @@ CUDAContext::CUDAContext()
                                    (void *)&kMemPoolReleaseThreshold);
   }
 
-  TI_TRACE("CUDA Device Compute Capability: {}.{}", cc_major, cc_minor);
+  QD_TRACE("CUDA Device Compute Capability: {}.{}", cc_major, cc_minor);
   driver_.primary_context_retain(&context_, 0);
   driver_.context_set_current(context_);
 
   const auto GB = std::pow(1024.0, 3.0);
-  TI_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
+  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
            get_total_memory() / GB, get_free_memory() / GB);
 
   compute_capability_ = cc_major * 10 + cc_minor;
@@ -85,7 +85,7 @@ CUDAContext::CUDAContext()
 
   mcpu_ = fmt::format("sm_{}", compute_capability_);
 
-  TI_TRACE("Emitting CUDA code for {}", mcpu_);
+  QD_TRACE("Emitting CUDA code for {}", mcpu_);
 }
 
 std::size_t CUDAContext::get_total_memory() {
@@ -150,15 +150,15 @@ void CUDAContext::launch(void *func,
   // the grid and block dim won't be limited by the limits set by Program. With
   // these limits, GGUI would have to use kernels with grid strided loops, which
   // is harmful to performance. A simple example of rendering a bunny can drop
-  // from 2000FPS to 1000FPS because of this. TI_ASSERT(grid_dim <=
-  // get_current_program().config.saturating_grid_dim); TI_ASSERT(block_dim <=
+  // from 2000FPS to 1000FPS because of this. QD_ASSERT(grid_dim <=
+  // get_current_program().config.saturating_grid_dim); QD_ASSERT(block_dim <=
   // get_current_program().config.max_block_dim);
 
   if (grid_dim > 0) {
     std::lock_guard<std::mutex> _(lock_);
     if (dynamic_shared_mem_bytes > 0) {
       if (dynamic_shared_mem_bytes > max_shared_memory_bytes_) {
-        TI_ERROR(
+        QD_ERROR(
             "Requested dynamic shared memory size of {} bytes, but the device "
             "supports max capacity of {} bytes.",
             dynamic_shared_mem_bytes, max_shared_memory_bytes_);

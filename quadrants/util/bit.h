@@ -9,19 +9,19 @@
 namespace quadrants {
 namespace bit {
 
-TI_FORCE_INLINE constexpr bool is_power_of_two(int32 x) {
+QD_FORCE_INLINE constexpr bool is_power_of_two(int32 x) {
   return x != 0 && (x & (x - 1)) == 0;
 }
 
-TI_FORCE_INLINE constexpr bool is_power_of_two(uint32 x) {
+QD_FORCE_INLINE constexpr bool is_power_of_two(uint32 x) {
   return x != 0 && (x & (x - 1)) == 0;
 }
 
-TI_FORCE_INLINE constexpr bool is_power_of_two(int64 x) {
+QD_FORCE_INLINE constexpr bool is_power_of_two(int64 x) {
   return x != 0 && (x & (x - 1)) == 0;
 }
 
-TI_FORCE_INLINE constexpr bool is_power_of_two(uint64 x) {
+QD_FORCE_INLINE constexpr bool is_power_of_two(uint64 x) {
   return x != 0 && (x & (x - 1)) == 0;
 }
 
@@ -47,25 +47,25 @@ struct Bits {
   }
 
   template <int start, int bits = 1>
-  TI_FORCE_INLINE T get() const {
+  QD_FORCE_INLINE T get() const {
     return (data >> start) & (((T)1 << bits) - 1);
   }
 
   template <int start, int bits = 1>
-  TI_FORCE_INLINE void set(T val) {
+  QD_FORCE_INLINE void set(T val) {
     data =
         (data & ~mask<start, bits>()) | ((val << start) & mask<start, bits>());
   }
 
-  TI_FORCE_INLINE T operator()(T) const {
+  QD_FORCE_INLINE T operator()(T) const {
     return data;
   }
 
-  TI_FORCE_INLINE T get() const {
+  QD_FORCE_INLINE T get() const {
     return data;
   }
 
-  TI_FORCE_INLINE void set(const T &data) {
+  QD_FORCE_INLINE void set(const T &data) {
     this->data = data;
   }
 };
@@ -78,7 +78,7 @@ constexpr int bit_length() {
   return std::is_same<T, bool>() ? 1 : sizeof(T) * 8;
 }
 
-#define TI_BIT_FIELD(T, name, start)                    \
+#define QD_BIT_FIELD(T, name, start)                    \
   T get_##name() const {                                \
     return (T)Base::get<start, bit::bit_length<T>()>(); \
   }                                                     \
@@ -87,7 +87,7 @@ constexpr int bit_length() {
   }
 
 template <typename T, int N>
-TI_FORCE_INLINE constexpr T product(const std::array<T, N> arr) {
+QD_FORCE_INLINE constexpr T product(const std::array<T, N> arr) {
   T ret(1);
   for (int i = 0; i < N; i++) {
     ret *= arr[i];
@@ -97,7 +97,7 @@ TI_FORCE_INLINE constexpr T product(const std::array<T, N> arr) {
 
 constexpr std::size_t least_pot_bound(std::size_t v) {
   if (v > std::numeric_limits<std::size_t>::max() / 2 + 1) {
-    TI_ERROR("v({}) too large", v)
+    QD_ERROR("v({}) too large", v)
   }
   std::size_t ret = 1;
   while (ret < v) {
@@ -106,11 +106,11 @@ constexpr std::size_t least_pot_bound(std::size_t v) {
   return ret;
 }
 
-TI_FORCE_INLINE constexpr uint32 pot_mask(int x) {
+QD_FORCE_INLINE constexpr uint32 pot_mask(int x) {
   return (1u << x) - 1;
 }
 
-TI_FORCE_INLINE constexpr uint32 log2int(uint64 value) {
+QD_FORCE_INLINE constexpr uint32 log2int(uint64 value) {
   int ret = 0;
   value >>= 1;
   while (value) {
@@ -120,28 +120,28 @@ TI_FORCE_INLINE constexpr uint32 log2int(uint64 value) {
   return ret;
 }
 
-TI_FORCE_INLINE constexpr uint32 ceil_log2int(uint64 value) {
+QD_FORCE_INLINE constexpr uint32 ceil_log2int(uint64 value) {
   // Returns ceil(log2(value)). When value == 0, it returns 0.
   return log2int(value) + ((value & (value - 1)) != 0);
 }
 
-TI_FORCE_INLINE constexpr uint64 lowbit(uint64 x) {
+QD_FORCE_INLINE constexpr uint64 lowbit(uint64 x) {
   return x & (-x);
 }
 
 template <typename G, typename T>
-constexpr TI_FORCE_INLINE copy_refcv_t<T, G> &&reinterpret_bits(T &&t) {
-  TI_STATIC_ASSERT(sizeof(G) == sizeof(T));
+constexpr QD_FORCE_INLINE copy_refcv_t<T, G> &&reinterpret_bits(T &&t) {
+  QD_STATIC_ASSERT(sizeof(G) == sizeof(T));
   return std::forward<copy_refcv_t<T, G>>(*reinterpret_cast<G *>(&t));
 };
 
-TI_FORCE_INLINE constexpr float64 compress(float32 h, float32 l) {
+QD_FORCE_INLINE constexpr float64 compress(float32 h, float32 l) {
   uint64 data =
       ((uint64)reinterpret_bits<uint32>(h) << 32) + reinterpret_bits<uint32>(l);
   return reinterpret_bits<float64>(data);
 }
 
-TI_FORCE_INLINE constexpr std::tuple<float32, float32> extract(float64 x) {
+QD_FORCE_INLINE constexpr std::tuple<float32, float32> extract(float64 x) {
   auto data = reinterpret_bits<uint64>(x);
   return std::make_tuple(reinterpret_bits<float32>((uint32)(data >> 32)),
                          reinterpret_bits<float32>((uint32)(data & (-1))));

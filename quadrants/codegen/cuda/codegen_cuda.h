@@ -17,13 +17,13 @@ class KernelCodeGenCUDA : public KernelCodeGen {
   }
 
 // TODO: Stop defining this macro guards in the headers
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
   LLVMCompiledTask compile_task(
       int task_codegen_id,
       const CompileConfig &config,
       std::unique_ptr<llvm::Module> &&module = nullptr,
       IRNode *block = nullptr) override;
-#endif  // TI_WITH_LLVM
+#endif  // QD_WITH_LLVM
 };
 
 }  // namespace quadrants::lang

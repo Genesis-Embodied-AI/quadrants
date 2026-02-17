@@ -4,7 +4,7 @@
 #include "quadrants/program/program.h"
 #include "fp16.h"
 
-#ifdef TI_WITH_LLVM
+#ifdef QD_WITH_LLVM
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #endif
@@ -114,7 +114,7 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
               shape,
               layout,
               dbg_info) {
-  TI_ASSERT(type->is<PrimitiveType>());
+  QD_ASSERT(type->is<PrimitiveType>());
 }
 
 Ndarray::~Ndarray() {
@@ -164,13 +164,13 @@ TypedConstant Ndarray::read(const std::vector<int> &I) const {
   alloc_params.usage = AllocUsage::Storage;
   auto [staging_buf_, res] =
       this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
-  TI_ASSERT(res == RhiResult::success);
+  QD_ASSERT(res == RhiResult::success);
   staging_buf_->device->memcpy_internal(
       staging_buf_->get_ptr(),
       this->ndarray_alloc_.get_ptr(/*offset=*/index * size), size);
 
   char *device_arr_ptr{nullptr};
-  TI_ASSERT(staging_buf_->device->map(
+  QD_ASSERT(staging_buf_->device->map(
                 *staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
 
   TypedConstant data(get_element_data_type());
@@ -199,13 +199,13 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
   alloc_params.usage = AllocUsage::Storage;
   auto [staging_buf_, res] =
       this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
-  TI_ASSERT(res == RhiResult::success);
+  QD_ASSERT(res == RhiResult::success);
 
   char *device_arr_ptr{nullptr};
-  TI_ASSERT(staging_buf_->device->map(
+  QD_ASSERT(staging_buf_->device->map(
                 *staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
 
-  TI_ASSERT(device_arr_ptr);
+  QD_ASSERT(device_arr_ptr);
   std::memcpy(device_arr_ptr, &val.value_bits, size_);
 
   staging_buf_->device->unmap(*staging_buf_);

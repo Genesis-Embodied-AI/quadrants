@@ -46,7 +46,7 @@ struct TaskAttributes {
       return true;
     }
 
-    TI_IO_DEF(type, root_id);
+    QD_IO_DEF(type, root_id);
   };
 
   struct BufferInfoHasher {
@@ -67,7 +67,7 @@ struct TaskAttributes {
 
     std::string debug_string() const;
 
-    TI_IO_DEF(buffer, binding);
+    QD_IO_DEF(buffer, binding);
   };
 
   std::string name;
@@ -95,7 +95,7 @@ struct TaskAttributes {
       return (const_begin && const_end);
     }
 
-    TI_IO_DEF(begin, end, const_begin, const_end);
+    QD_IO_DEF(begin, end, const_begin, const_end);
   };
   std::vector<BufferBind> buffer_binds;
   // Only valid when |task_type| is range_for.
@@ -105,7 +105,7 @@ struct TaskAttributes {
 
   std::string debug_string() const;
 
-  TI_IO_DEF(name,
+  QD_IO_DEF(name,
             advisory_total_num_threads,
             advisory_num_threads_per_group,
             task_type,
@@ -148,7 +148,7 @@ class KernelContextAttributes {
     std::size_t field_dim{0};
     ParameterType ptype{ParameterType::kUnknown};
 
-    TI_IO_DEF(name,
+    QD_IO_DEF(name,
               stride,
               offset_in_mem,
               dtype,
@@ -166,7 +166,7 @@ class KernelContextAttributes {
     // Indices of the arg value in the host `Context`.
     std::vector<int> indices;
 
-    TI_IO_DEF(name,
+    QD_IO_DEF(name,
               stride,
               offset_in_mem,
               indices,
@@ -184,7 +184,7 @@ class KernelContextAttributes {
     // Index of the return value in the host `Context`.
     int index{-1};
 
-    TI_IO_DEF(name,
+    QD_IO_DEF(name,
               stride,
               offset_in_mem,
               index,
@@ -217,7 +217,7 @@ class KernelContextAttributes {
         return element.second;
       }
     }
-    TI_ERROR(fmt::format(
+    QD_ERROR(fmt::format(
         "Unexpected error: ArgAttributes with indices ({}) not found.",
         fmt::join(indices, ", ")));
     return arg_attribs_vec_[0].second;
@@ -272,7 +272,7 @@ class KernelContextAttributes {
   std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>>
       arr_access;
 
-  TI_IO_DEF(arg_attribs_vec_,
+  QD_IO_DEF(arg_attribs_vec_,
             ret_attribs_vec_,
             args_bytes_,
             rets_bytes_,
@@ -304,7 +304,7 @@ struct QuadrantsKernelAttributes {
 
   KernelContextAttributes ctx_attribs;
 
-  TI_IO_DEF(name, is_jit_evaluator, tasks_attribs, ctx_attribs);
+  QD_IO_DEF(name, is_jit_evaluator, tasks_attribs, ctx_attribs);
 };
 
 }  // namespace spirv

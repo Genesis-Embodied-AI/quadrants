@@ -118,7 +118,7 @@ class FrontendTypeCheck : public IRVisitor {
   }
 
   void visit(FrontendPrintStmt *stmt) override {
-    TI_ASSERT(stmt->contents.size() == stmt->formats.size());
+    QD_ASSERT(stmt->contents.size() == stmt->formats.size());
     for (int i = 0; i < stmt->contents.size(); i++) {
       auto const &content = stmt->contents[i];
       auto const &format = stmt->formats[i];
@@ -127,12 +127,12 @@ class FrontendTypeCheck : public IRVisitor {
       }
 
       Expr const &expr = std::get<Expr>(content);
-      TI_ASSERT(expr.expr != nullptr);
+      QD_ASSERT(expr.expr != nullptr);
       DataType data_type = expr.get_rvalue_type();
       if (data_type->is<TensorType>()) {
         data_type = DataType(data_type->as<TensorType>()->get_element_type());
       }
-      TI_ASSERT(!format->empty());
+      QD_ASSERT(!format->empty());
       std::string const &format_spec = format.value();
       auto const &conversion = format_spec.back();
 
@@ -198,7 +198,7 @@ class FrontendTypeCheck : public IRVisitor {
 namespace irpass {
 
 void frontend_type_check(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   FrontendTypeCheck checker;
   root->accept(&checker);
 }

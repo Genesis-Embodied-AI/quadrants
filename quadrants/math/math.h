@@ -14,24 +14,24 @@ namespace quadrants {
 
 namespace math {
 template <typename T>
-TI_FORCE_INLINE T degrees(T rad) {
+QD_FORCE_INLINE T degrees(T rad) {
   return rad * (type::element<T>(180) / pi);
 }
 
 template <typename T>
-TI_FORCE_INLINE T radians(T deg) {
+QD_FORCE_INLINE T radians(T deg) {
   return deg * (pi / type::element<T>(180));
 }
 
 template <typename T>
-TI_FORCE_INLINE
+QD_FORCE_INLINE
     typename std::enable_if_t<!std::is_floating_point<T>::value, bool>
     equal(const T &A, const T &B, float64 tolerance) {
   return maximum(abs(A - B)) <= tolerance;
 }
 
 template <typename T>
-TI_FORCE_INLINE
+QD_FORCE_INLINE
     typename std::enable_if_t<std::is_floating_point<T>::value, bool>
     equal(const T &A, const T &B, float64 tolerance) {
   return std::abs(A - B) <= tolerance;

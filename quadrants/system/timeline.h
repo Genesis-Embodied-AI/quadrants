@@ -83,9 +83,9 @@ class Timelines {
   bool enabled_{false};
 };
 
-#define TI_TIMELINE(name) \
+#define QD_TIMELINE(name) \
   quadrants::Timeline::Guard _timeline_guard_##__LINE__(name);
 
-#define TI_AUTO_TIMELINE TI_TIMELINE(__FUNCTION__)
+#define QD_AUTO_TIMELINE QD_TIMELINE(__FUNCTION__)
 
 }  // namespace quadrants

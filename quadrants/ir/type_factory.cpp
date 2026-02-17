@@ -46,7 +46,7 @@ const Type *TypeFactory::get_struct_type(
 
   if (struct_types_.find(key) == struct_types_.end()) {
     for (const auto &element : elements) {
-      TI_ASSERT_INFO(
+      QD_ASSERT_INFO(
           element.type->is<PrimitiveType>() || element.type->is<TensorType>() ||
               element.type->is<StructType>() || element.type->is<PointerType>(),
           "Unsupported struct element type for element " + element.name + ": " +
@@ -142,7 +142,7 @@ PrimitiveType *TypeFactory::get_primitive_int_type(int bits, bool is_signed) {
   } else if (bits == 64) {
     int_type = get_primitive_type(PrimitiveTypeID::i64);
   } else {
-    TI_ERROR("No primitive int type has {} bits", bits);
+    QD_ERROR("No primitive int type has {} bits", bits);
   }
   if (!is_signed) {
     int_type = to_unsigned(DataType(int_type));
@@ -159,7 +159,7 @@ PrimitiveType *TypeFactory::get_primitive_real_type(int bits) {
   } else if (bits == 64) {
     real_type = get_primitive_type(PrimitiveTypeID::f64);
   } else {
-    TI_ERROR("No primitive real type has {} bits", bits);
+    QD_ERROR("No primitive real type has {} bits", bits);
   }
   return real_type->cast<PrimitiveType>();
 }
@@ -217,16 +217,16 @@ static bool compare_types(DataType x, DataType y) {
 
 static DataType to_primitive_type(DataType d) {
   if (d->is<PointerType>()) {
-    TI_ERROR("promoted_type got a pointer input.");
+    QD_ERROR("promoted_type got a pointer input.");
   }
 
   if (d->is<TensorType>()) {
     d = d->as<TensorType>()->get_element_type();
-    TI_WARN("promoted_type got a tensor input.");
+    QD_WARN("promoted_type got a tensor input.");
   }
 
   auto primitive = d->cast<PrimitiveType>();
-  TI_ASSERT_INFO(primitive, "Failed to get primitive type from {}",
+  QD_ASSERT_INFO(primitive, "Failed to get primitive type from {}",
                  d->to_string());
   return primitive;
 };
@@ -241,7 +241,7 @@ DataType promoted_primitive_type(DataType x, DataType y) {
 
 DataType promoted_type(DataType a, DataType b) {
   if (a->is<TensorType>() || b->is<TensorType>()) {
-    TI_ASSERT_INFO(a->is<TensorType>() && b->is<TensorType>(),
+    QD_ASSERT_INFO(a->is<TensorType>() && b->is<TensorType>(),
                    "a = {}, b = {}, only one of them is a tensor type",
                    a->to_string(), b->to_string());
     auto tensor_ty_a = a->cast<TensorType>();

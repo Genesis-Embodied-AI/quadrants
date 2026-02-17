@@ -13,7 +13,7 @@ namespace quadrants::lang {
 class Program;
 class NdarrayRwAccessorsBank;
 
-class TI_DLL_EXPORT Ndarray {
+class QD_DLL_EXPORT Ndarray {
  public:
   /* Constructs a Ndarray managed by Program.
    * Memory allocation and deallocation is handled by Program.

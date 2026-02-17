@@ -53,7 +53,7 @@ class DIE : public IRVisitor {
   }
 
   void visit(Stmt *stmt) override {
-    TI_ASSERT(!stmt->erased);
+    QD_ASSERT(!stmt->erased);
     if (phase == 0) {
       register_usage(stmt);
     } else {
@@ -113,7 +113,7 @@ class DIE : public IRVisitor {
 namespace irpass {
 
 bool die(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   DIE instance(root);
   return instance.modified_ir;
 }

@@ -18,7 +18,7 @@ bool cfg_optimization(
         &lva_config_opt,
     const std::string &kernel_name,
     const std::string &phase) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   auto cfg = analysis::build_cfg(root);
 
   const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());

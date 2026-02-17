@@ -28,7 +28,7 @@
 #include "quadrants/common/platform_macros.h"
 
 // Avoid dependency on glibc 2.27
-#if defined(TI_PLATFORM_LINUX) && defined(TI_ARCH_x64)
+#if defined(QD_PLATFORM_LINUX) && defined(QD_ARCH_x64)
 // objdump -T libquadrants_python.so| grep  GLIBC_2.27
 __asm__(".symver logf,logf@GLIBC_2.2.5");
 __asm__(".symver powf,powf@GLIBC_2.2.5");
@@ -39,38 +39,38 @@ __asm__(".symver expf,expf@GLIBC_2.2.5");
 
 // MSVC
 #if defined(_MSC_VER)
-#define TI_COMPILER_MSVC
+#define QD_COMPILER_MSVC
 #endif
 
 // MINGW
 #if defined(__MINGW64__)
-#define TI_COMPILER_MINGW
+#define QD_COMPILER_MINGW
 #endif
 
 // gcc
 #if defined(__GNUC__)
-#define TI_COMPILER__GCC
+#define QD_COMPILER__GCC
 #endif
 
 // clang
 #if defined(__clang__)
-#define TI_COMPILER_CLANG
+#define QD_COMPILER_CLANG
 #endif
 
-#if defined(TI_COMPILER_MSVC)
-#define TI_ALIGNED(x) __declspec(align(x))
+#if defined(QD_COMPILER_MSVC)
+#define QD_ALIGNED(x) __declspec(align(x))
 #else
-#define TI_ALIGNED(x) __attribute__((aligned(x)))
+#define QD_ALIGNED(x) __attribute__((aligned(x)))
 #endif
 
 #if __cplusplus >= 201703L
-#define TI_CPP17
+#define QD_CPP17
 #else
-#if defined(TI_COMPILER_CLANG)
+#if defined(QD_COMPILER_CLANG)
 static_assert(false, "For clang compilers, use -std=c++17");
 #endif
 static_assert(__cplusplus >= 201402L, "C++14 required.");
-#define TI_CPP14
+#define QD_CPP14
 #endif
 
 // Do not disable assert...
@@ -93,7 +93,7 @@ static_assert(__cplusplus >= 201402L, "C++14 required.");
 
 #undef assert
 #ifdef _WIN64
-#ifndef TI_PASS_EXCEPTION_TO_PYTHON
+#ifndef QD_PASS_EXCEPTION_TO_PYTHON
 // For Visual Studio debugging...
 #define DEBUG_TRIGGER __debugbreak()
 #else
@@ -103,7 +103,7 @@ static_assert(__cplusplus >= 201402L, "C++14 required.");
 #define DEBUG_TRIGGER
 #endif
 
-#define TI_STATIC_ASSERT(x) static_assert((x), #x)
+#define QD_STATIC_ASSERT(x) static_assert((x), #x)
 
 void quadrants_raise_assertion_failure_in_python(const char *msg);
 
@@ -151,15 +151,15 @@ using int64 = int64_t;
 using uint64 = uint64_t;
 
 #ifdef _WIN64
-#define TI_FORCE_INLINE __forceinline
+#define QD_FORCE_INLINE __forceinline
 #else
-#define TI_FORCE_INLINE inline __attribute__((always_inline))
+#define QD_FORCE_INLINE inline __attribute__((always_inline))
 #endif
 
 using float32 = float;
 using float64 = double;
 
-#ifdef TI_USE_DOUBLE
+#ifdef QD_USE_DOUBLE
 using real = float64;
 #else
 using real = float32;
@@ -301,7 +301,7 @@ class DeferedExecution {
   }
 };
 
-#define TI_DEFER(x) quadrants::DeferedExecution _defered([&]() { x; });
+#define QD_DEFER(x) quadrants::DeferedExecution _defered([&]() { x; });
 
 std::string get_repo_dir();
 

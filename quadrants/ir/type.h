@@ -24,7 +24,7 @@ enum class TypeKind : int {
 #include "quadrants/inc/type_kind.inc.h"
 #undef PER_TYPE_KIND
 
-class TI_DLL_EXPORT Type {
+class QD_DLL_EXPORT Type {
  public:
   explicit Type(TypeKind type_kind) : type_kind(type_kind) {
   }
@@ -94,7 +94,7 @@ class TI_DLL_EXPORT Type {
   template <typename T>
   T *as() {
     auto p = cast<T>();
-    TI_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
+    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
                    typeid(T).name());
     return p;
   }
@@ -102,7 +102,7 @@ class TI_DLL_EXPORT Type {
   template <typename T>
   const T *as() const {
     auto p = cast<T>();
-    TI_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
+    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
                    typeid(T).name());
     return p;
   }
@@ -124,7 +124,7 @@ class TI_DLL_EXPORT Type {
   bool is_primitive(PrimitiveTypeID type) const;
 
   virtual Type *get_compute_type() {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   virtual ~Type() {
@@ -132,7 +132,7 @@ class TI_DLL_EXPORT Type {
 };
 
 // A "Type" handle. This should be removed later.
-class TI_DLL_EXPORT DataType {
+class QD_DLL_EXPORT DataType {
  public:
   DataType();
 
@@ -189,7 +189,7 @@ class TI_DLL_EXPORT DataType {
 
   DataType get_element_type() const;
 
-  TI_IO_DEF(ptr_);
+  QD_IO_DEF(ptr_);
 
  private:
   Type *ptr_;
@@ -197,7 +197,7 @@ class TI_DLL_EXPORT DataType {
 
 // Note that all types are immutable once created.
 
-class TI_DLL_EXPORT PrimitiveType : public Type {
+class QD_DLL_EXPORT PrimitiveType : public Type {
  public:
 #define PER_TYPE(x) static DataType x;
 #include "quadrants/inc/data_type.inc.h"
@@ -220,10 +220,10 @@ class TI_DLL_EXPORT PrimitiveType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(type);
+  QD_IO_DEF(type);
 };
 
-class TI_DLL_EXPORT PointerType : public Type {
+class QD_DLL_EXPORT PointerType : public Type {
  public:
   PointerType() : Type(TypeKind::Pointer) {};
 
@@ -249,7 +249,7 @@ class TI_DLL_EXPORT PointerType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(pointee_, addr_space_, is_bit_pointer_);
+  QD_IO_DEF(pointee_, addr_space_, is_bit_pointer_);
 
  private:
   Type *pointee_{nullptr};
@@ -257,7 +257,7 @@ class TI_DLL_EXPORT PointerType : public Type {
   bool is_bit_pointer_{false};
 };
 
-class TI_DLL_EXPORT TensorType : public Type {
+class QD_DLL_EXPORT TensorType : public Type {
  public:
   TensorType() : Type(TypeKind::Tensor) {};
   TensorType(std::vector<int> shape, Type *element)
@@ -293,24 +293,24 @@ class TI_DLL_EXPORT TensorType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(shape_, element_);
+  QD_IO_DEF(shape_, element_);
 
  private:
   std::vector<int> shape_;
   Type *element_{nullptr};
 };
 
-struct TI_DLL_EXPORT AbstractDictionaryMember {
+struct QD_DLL_EXPORT AbstractDictionaryMember {
   const Type *type;
   std::string name;
   size_t offset{0};
   bool operator==(const AbstractDictionaryMember &other) const {
     return type == other.type && name == other.name && offset == other.offset;
   }
-  TI_IO_DEF(type, name, offset)
+  QD_IO_DEF(type, name, offset)
 };
 
-class TI_DLL_EXPORT AbstractDictionaryType : public Type {
+class QD_DLL_EXPORT AbstractDictionaryType : public Type {
  public:
   explicit AbstractDictionaryType(TypeKind type_kind) : Type(type_kind) {};
   explicit AbstractDictionaryType(
@@ -337,14 +337,14 @@ class TI_DLL_EXPORT AbstractDictionaryType : public Type {
 
   const Type *get_element_type(const std::vector<int> &indices) const;
 
-  TI_IO_DEF(elements_, layout_);
+  QD_IO_DEF(elements_, layout_);
 
  protected:
   std::vector<AbstractDictionaryMember> elements_;
   std::string layout_;
 };
 
-class TI_DLL_EXPORT StructType : public AbstractDictionaryType {
+class QD_DLL_EXPORT StructType : public AbstractDictionaryType {
  public:
   StructType() : AbstractDictionaryType(TypeKind::Struct) {};
   explicit StructType(const std::vector<AbstractDictionaryMember> &elements,
@@ -367,7 +367,7 @@ class TI_DLL_EXPORT StructType : public AbstractDictionaryType {
       } else if (auto tensor_type = element.type->cast<TensorType>()) {
         num += tensor_type->get_num_elements();
       } else {
-        TI_ASSERT(element.type->is<PrimitiveType>() ||
+        QD_ASSERT(element.type->is<PrimitiveType>() ||
                   element.type->is<PointerType>());
         num += 1;
       }
@@ -377,10 +377,10 @@ class TI_DLL_EXPORT StructType : public AbstractDictionaryType {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(elements_, layout_);
+  QD_IO_DEF(elements_, layout_);
 };
 
-class TI_DLL_EXPORT QuantIntType : public Type {
+class QD_DLL_EXPORT QuantIntType : public Type {
  public:
   QuantIntType() : Type(TypeKind::QuantInt) {};
   QuantIntType(int num_bits, bool is_signed, Type *compute_type = nullptr);
@@ -401,7 +401,7 @@ class TI_DLL_EXPORT QuantIntType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(num_bits_, is_signed_, compute_type_);
+  QD_IO_DEF(num_bits_, is_signed_, compute_type_);
 
  private:
   // TODO(type): for now we can uniformly use i32 as the "compute_type". It may
@@ -411,7 +411,7 @@ class TI_DLL_EXPORT QuantIntType : public Type {
   bool is_signed_{true};
 };
 
-class TI_DLL_EXPORT QuantFixedType : public Type {
+class QD_DLL_EXPORT QuantFixedType : public Type {
  public:
   QuantFixedType() : Type(TypeKind::QuantFixed) {};
   QuantFixedType(Type *digits_type, Type *compute_type, float64 scale);
@@ -434,7 +434,7 @@ class TI_DLL_EXPORT QuantFixedType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(digits_type_, compute_type_, scale_);
+  QD_IO_DEF(digits_type_, compute_type_, scale_);
 
  private:
   Type *digits_type_{nullptr};
@@ -442,7 +442,7 @@ class TI_DLL_EXPORT QuantFixedType : public Type {
   float64 scale_{1.0};
 };
 
-class TI_DLL_EXPORT QuantFloatType : public Type {
+class QD_DLL_EXPORT QuantFloatType : public Type {
  public:
   QuantFloatType() : Type(TypeKind::QuantFloat) {
   }
@@ -470,7 +470,7 @@ class TI_DLL_EXPORT QuantFloatType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(digits_type_, exponent_type_, compute_type_);
+  QD_IO_DEF(digits_type_, exponent_type_, compute_type_);
 
  private:
   Type *digits_type_{nullptr};
@@ -478,7 +478,7 @@ class TI_DLL_EXPORT QuantFloatType : public Type {
   Type *compute_type_{nullptr};
 };
 
-class TI_DLL_EXPORT BitStructType : public Type {
+class QD_DLL_EXPORT BitStructType : public Type {
  public:
   BitStructType() : Type(TypeKind::BitStruct) {};
   BitStructType(PrimitiveType *physical_type,
@@ -520,7 +520,7 @@ class TI_DLL_EXPORT BitStructType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(physical_type_,
+  QD_IO_DEF(physical_type_,
             member_types_,
             member_bit_offsets_,
             member_exponents_,
@@ -534,7 +534,7 @@ class TI_DLL_EXPORT BitStructType : public Type {
   std::vector<std::vector<int>> member_exponent_users_;
 };
 
-class TI_DLL_EXPORT QuantArrayType : public Type {
+class QD_DLL_EXPORT QuantArrayType : public Type {
  public:
   QuantArrayType() : Type(TypeKind::QuantArray) {
   }
@@ -551,7 +551,7 @@ class TI_DLL_EXPORT QuantArrayType : public Type {
       element_num_bits_ =
           qfxt->get_digits_type()->as<QuantIntType>()->get_num_bits();
     } else {
-      TI_ERROR("Quant array only supports quant int/fixed type for now.");
+      QD_ERROR("Quant array only supports quant int/fixed type for now.");
     }
   }
 
@@ -575,7 +575,7 @@ class TI_DLL_EXPORT QuantArrayType : public Type {
 
   const Type *get_type() const override;
 
-  TI_IO_DEF(physical_type_, element_type_, num_elements_, element_num_bits_);
+  QD_IO_DEF(physical_type_, element_type_, num_elements_, element_num_bits_);
 
  private:
   PrimitiveType *physical_type_;
@@ -611,7 +611,7 @@ class TypedConstant {
   }
 
   explicit TypedConstant(DataType dt) : dt(dt) {
-    TI_ASSERT_INFO(dt->is<PrimitiveType>(),
+    QD_ASSERT_INFO(dt->is<PrimitiveType>(),
                    "TypedConstant can only be PrimitiveType, got {}",
                    dt->to_string());
     value_bits = 0;
@@ -679,7 +679,7 @@ class TypedConstant {
     } else if (dt->is_primitive(PrimitiveTypeID::u64)) {
       val_u64 = value;
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -733,7 +733,7 @@ Type::ptr_io(const T *&ptr, S &serializer, bool writing) {
 #include "quadrants/inc/type_kind.inc.h"
 #undef PER_TYPE_KIND
       default:
-        TI_NOT_IMPLEMENTED;
+        QD_NOT_IMPLEMENTED;
     }
   } else {
     TypeKind type_kind = (TypeKind)-1;
@@ -753,7 +753,7 @@ Type::ptr_io(const T *&ptr, S &serializer, bool writing) {
 #include "quadrants/inc/type_kind.inc.h"
 #undef PER_TYPE_KIND
       default:
-        TI_NOT_IMPLEMENTED;
+        QD_NOT_IMPLEMENTED;
     }
   }
 }
@@ -782,7 +782,7 @@ Type::jsonserde_ptr_io(const T *&ptr,
 #include "quadrants/inc/type_kind.inc.h"
 #undef PER_TYPE_KIND
       default:
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
     }
 
     obj.inner["content"] = std::move(content);
@@ -798,7 +798,7 @@ Type::jsonserde_ptr_io(const T *&ptr,
   case TypeKind::x: {                                         \
     x##Type content;                                          \
     auto &content_val = value["content"];                     \
-    TI_ASSERT(content_val.is_obj());                          \
+    QD_ASSERT(content_val.is_obj());                          \
     content.json_deserialize_fields(content_val.obj, strict); \
     ptr = content.get_type()->as<T>();                        \
     break;                                                    \
@@ -806,7 +806,7 @@ Type::jsonserde_ptr_io(const T *&ptr,
 #include "quadrants/inc/type_kind.inc.h"
 #undef PER_TYPE_KIND
       default:
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
     }
   }
 }

@@ -9,7 +9,7 @@
 namespace quadrants::lang {
 namespace vulkan {
 
-class TI_DLL_EXPORT VulkanLoader {
+class QD_DLL_EXPORT VulkanLoader {
  public:
   static VulkanLoader &instance() {
     static VulkanLoader instance;
@@ -45,9 +45,9 @@ class TI_DLL_EXPORT VulkanLoader {
   VkDevice vulkan_device_{VK_NULL_HANDLE};
 };
 
-TI_DLL_EXPORT bool is_vulkan_api_available();
+QD_DLL_EXPORT bool is_vulkan_api_available();
 
-TI_DLL_EXPORT void set_vulkan_visible_device(std::string id);
+QD_DLL_EXPORT void set_vulkan_visible_device(std::string id);
 
 }  // namespace vulkan
 }  // namespace quadrants::lang

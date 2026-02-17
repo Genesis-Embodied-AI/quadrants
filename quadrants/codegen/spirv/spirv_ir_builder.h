@@ -111,7 +111,7 @@ class Instr {
   }
 
   uint32_t &operator[](uint32_t idx) {
-    TI_ASSERT(idx < word_count_);
+    QD_ASSERT(idx < word_count_);
     return (*data_)[begin_ + idx];
   }
 
@@ -128,7 +128,7 @@ struct PhiValue : public Value {
   Instr instr;
 
   void set_incoming(uint32_t index, const Value &value, const Label &parent) {
-    TI_ASSERT(this->stype.id == value.stype.id);
+    QD_ASSERT(this->stype.id == value.stype.id);
     instr[3 + index * 2] = value.id;
     instr[3 + index * 2 + 1] = parent.id;
   }
@@ -138,7 +138,7 @@ struct PhiValue : public Value {
 class InstrBuilder {
  public:
   InstrBuilder &begin(spv::Op op) {
-    TI_ASSERT(data_.size() == 0U);
+    QD_ASSERT(data_.size() == 0U);
     op_ = op;
     data_.push_back(0);
     return *this;
@@ -318,7 +318,7 @@ class IRBuilder {
 
   // Match zero type
   Value get_zero(const SType &stype) {
-    TI_ASSERT(stype.flag == TypeKind::kPrimitive);
+    QD_ASSERT(stype.flag == TypeKind::kPrimitive);
     if (is_integral(stype.dt)) {
       if (is_signed(stype.dt)) {
         return int_immediate_number(stype, 0);
@@ -328,7 +328,7 @@ class IRBuilder {
     } else if (is_real(stype.dt)) {
       return float_immediate_number(stype, 0);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
       return Value();
     }
   }

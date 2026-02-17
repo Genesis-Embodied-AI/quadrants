@@ -243,7 +243,7 @@ class DemoteOperations : public BasicStmtVisitor {
       //     shifted = ti.bit_sar(unsigned_a, b)
       //     ret = ti.cast(shifted, ti.iXX)
       //     return ret
-      TI_ASSERT(is_integral(lhs_prim_type) && is_integral(rhs_prim_type));
+      QD_ASSERT(is_integral(lhs_prim_type) && is_integral(rhs_prim_type));
       auto unsigned_cast = Stmt::make<UnaryOpStmt>(UnaryOpType::cast_bits, lhs);
       unsigned_cast->as<UnaryOpStmt>()->cast_type =
           is_signed(lhs_prim_type) ? to_unsigned(lhs_prim_type) : lhs_prim_type;
@@ -309,7 +309,7 @@ class DemoteOperations : public BasicStmtVisitor {
 namespace irpass {
 
 bool demote_operations(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   bool modified = DemoteOperations::run(root, config);
   return modified;
 }

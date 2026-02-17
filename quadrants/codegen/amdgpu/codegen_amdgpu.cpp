@@ -36,12 +36,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 
   llvm::Value *create_print(std::string tag,
                             DataType dt,
-                            llvm::Value *value) override{TI_NOT_IMPLEMENTED}
+                            llvm::Value *value) override{QD_NOT_IMPLEMENTED}
 
   std::tuple<llvm::Value *, llvm::Type *> create_value_and_type(
       llvm::Value *value,
       DataType dt) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   void visit(PrintStmt *stmt) override {
@@ -62,7 +62,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) { \
       llvm_val[stmt] = call("__ocml_" #x "_f64", input);                   \
     } else {                                                               \
-      TI_NOT_IMPLEMENTED                                                   \
+      QD_NOT_IMPLEMENTED                                                   \
     }                                                                      \
   }
     if (op == UnaryOpType::abs) {
@@ -77,7 +77,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto xor_i32 = builder->CreateXor(ashr, input);
         llvm_val[stmt] = builder->CreateSub(xor_i32, ashr, "", false, true);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     }  // TODO simplify the impl of sgn
     else if (op == UnaryOpType::sgn) {
@@ -200,8 +200,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(log)
     UNARY_STD(sqrt)
     else {
-      TI_P(unary_op_type_name(op));
-      TI_NOT_IMPLEMENTED
+      QD_P(unary_op_type_name(op));
+      QD_NOT_IMPLEMENTED
     }
 #undef UNARY_STD
   }
@@ -210,7 +210,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (!stmt->is_reduction) {
       return nullptr;
     }
-    TI_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
+    QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
     PrimitiveTypeID prim_type =
         stmt->val->ret_type->cast<PrimitiveType>()->type;
 
@@ -236,7 +236,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (fast_reductions.find(prim_type) == fast_reductions.end()) {
       return nullptr;
     }
-    TI_ASSERT(fast_reductions.at(prim_type).find(op) !=
+    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
               fast_reductions.at(prim_type).end());
     return call(fast_reductions.at(prim_type).at(op),
                 {llvm_val[stmt->dest], llvm_val[stmt->val]});
@@ -272,7 +272,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   void create_offload_mesh_for(OffloadedStmt *stmt) override {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   void emit_amdgpu_gc(OffloadedStmt *stmt) {
@@ -328,8 +328,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto digits = extract_quant_int(physical_value, bit_offset, qit);
         llvm_val[stmt] = reconstruct_quant_fixed(digits, qfxt);
       } else {
-        TI_ASSERT(val_type->is<QuantFloatType>());
-        TI_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
+        QD_ASSERT(val_type->is<QuantFloatType>());
+        QD_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
         llvm_val[stmt] = extract_quant_float(
             physical_value, get_ch->input_snode->dt->as<BitStructType>(),
             get_ch->output_snode->id_in_bit_struct);
@@ -342,14 +342,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   void create_bls_buffer(OffloadedStmt *stmt) {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   void visit(OffloadedStmt *stmt) override {
     if (stmt->bls_size > 0)
       create_bls_buffer(stmt);
-#if defined(TI_WITH_AMDGPU)
-    TI_ASSERT(current_offload == nullptr);
+#if defined(QD_WITH_AMDGPU)
+    QD_ASSERT(current_offload == nullptr);
     current_offload = stmt;
     using Type = OffloadedStmt::TaskType;
     if (stmt->task_type == Type::gc) {
@@ -367,7 +367,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else if (stmt->task_type == Type::listgen) {
         emit_list_gen(stmt);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
       finalize_offloaded_task_function();
       // TODO
@@ -396,14 +396,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
-      TI_ASSERT(current_task->grid_dim != 0);
-      TI_ASSERT(current_task->block_dim != 0);
+      QD_ASSERT(current_task->grid_dim != 0);
+      QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
     current_offload = nullptr;
 #else
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
 #endif
   }
 
@@ -411,7 +411,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (stmt->type == ExternalFuncCallStmt::BITCODE) {
       TaskCodeGenLLVM::visit_call_bitcode(stmt);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   }
 
@@ -440,7 +440,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         llvm_val[stmt] =
             builder->CreateFPToSI(ret_, llvm::Type::getInt32Ty(*llvm_context));
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (op == BinaryOpType::atan2) {
       if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {
@@ -450,7 +450,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__ocml_atan2_f64", {lhs, rhs});
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     }
   }

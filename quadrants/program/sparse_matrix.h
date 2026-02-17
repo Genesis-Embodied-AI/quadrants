@@ -70,14 +70,14 @@ class SparseMatrix {
   virtual ~SparseMatrix() = default;
 
   virtual void build_triplets(void *triplets_adr) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   };
 
   virtual void build_csr_from_coo(void *coo_row_ptr,
                                   void *coo_col_ptr,
                                   void *coo_values_ptr,
                                   int nnz) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
   inline const int num_rows() const {
     return rows_;
@@ -101,16 +101,16 @@ class SparseMatrix {
 
   template <class T>
   T get_element(int row, int col) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   template <class T>
   void set_element(int row, int col, T value) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   virtual void mmwrite(const std::string &filename) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
  protected:
@@ -224,11 +224,11 @@ class CuSparseMatrix : public SparseMatrix {
  public:
   explicit CuSparseMatrix(int rows, int cols, DataType dt)
       : SparseMatrix(rows, cols, dt) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     if (!CUSPARSEDriver::get_instance().is_loaded()) {
       bool load_success = CUSPARSEDriver::get_instance().load_cusparse();
       if (!load_success) {
-        TI_ERROR("Failed to load cusparse library!");
+        QD_ERROR("Failed to load cusparse library!");
       }
     }
 #endif

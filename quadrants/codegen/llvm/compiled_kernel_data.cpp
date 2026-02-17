@@ -64,7 +64,7 @@ CompiledKernelData::Err CompiledKernelData::load_impl(
   llvm::SMDiagnostic err;
   auto ret = llvm::parseAssemblyString(file.src_code(), err, llvm_ctx_);
   if (!ret) {  // File not found or Parse failed
-    TI_DEBUG("Fail to parse llvm::Module from string: {}",
+    QD_DEBUG("Fail to parse llvm::Module from string: {}",
              err.getMessage().str());
     return Err::kParseSrcCodeFailed;
   }

@@ -3,6 +3,7 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/visitors.h"
+#include "quadrants/rhi/arch.h"
 #include "quadrants/system/profiler.h"
 
 #include <deque>
@@ -24,8 +25,9 @@ class DemoteAtomics : public BasicStmtVisitor {
 
   OffloadedStmt *current_offloaded;
   DelayedIRModifier modifier;
+  const CompileConfig &config_;
 
-  DemoteAtomics() {
+  explicit DemoteAtomics(const CompileConfig &config) : config_(config) {
     current_offloaded = nullptr;
   }
 
@@ -37,7 +39,15 @@ class DemoteAtomics : public BasicStmtVisitor {
         demote = true;
       }
       if (current_offloaded->task_type == OffloadedTaskType::serial) {
-        demote = true;
+        // On SPIR-V backends (Metal/Vulkan), keep global atomics in serial
+        // tasks as real atomic operations instead of demoting to
+        // load-op-store.  The Metal shader compiler may misoptimize the
+        // resulting non-atomic load-op-store sequence when a later
+        // optimisation pass (cache_loop_invariant_global_vars) removes
+        // nearby device-memory writes from the loop body.
+        if (!arch_uses_spirv(config_.arch)) {
+          demote = true;
+        }
       }
       if (!demote &&
           (current_offloaded->task_type == OffloadedTaskType::range_for ||
@@ -148,7 +158,7 @@ class DemoteAtomics : public BasicStmtVisitor {
 
     if (auto dest_pointer_type = stmt->dest->ret_type->cast<PointerType>()) {
       if (dest_pointer_type->get_pointee_type()->is<QuantFloatType>()) {
-        TI_WARN(
+        QD_WARN(
             "AtomicOp on QuantFloatType is not supported. "
             "Demoting to non-atomic RMW.\n{}",
             stmt->get_tb());
@@ -218,8 +228,8 @@ class DemoteAtomics : public BasicStmtVisitor {
     current_offloaded = nullptr;
   }
 
-  static bool run(IRNode *node) {
-    DemoteAtomics demoter;
+  static bool run(IRNode *node, const CompileConfig &config) {
+    DemoteAtomics demoter(config);
     bool modified = false;
     while (true) {
       node->accept(&demoter);
@@ -236,8 +246,8 @@ class DemoteAtomics : public BasicStmtVisitor {
 namespace irpass {
 
 bool demote_atomics(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
-  bool modified = DemoteAtomics::run(root);
+  QD_AUTO_PROF;
+  bool modified = DemoteAtomics::run(root, config);
   type_check(root, config);
   return modified;
 }

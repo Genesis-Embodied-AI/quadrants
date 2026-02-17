@@ -36,7 +36,7 @@ void VulkanProgramImpl::materialize_runtime(KernelProfilerBase *profiler,
   }
 
   if (config->debug) {
-    TI_WARN("Enabling vulkan validation layer in debug mode");
+    QD_WARN("Enabling vulkan validation layer in debug mode");
     evd_params.enable_validation_layer = true;
   }
 

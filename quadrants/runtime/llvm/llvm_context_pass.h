@@ -12,7 +12,7 @@
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #endif
 
@@ -58,14 +58,14 @@ struct AddStructForFuncPass : public ModulePass {
         }
       }
     }
-    TI_ASSERT(num_found_alloca == 1 && alloca);
+    QD_ASSERT(num_found_alloca == 1 && alloca);
     auto new_type = llvm::ArrayType::get(char_type, tls_size_);
     llvm::IRBuilder<> builder(alloca);
     auto *new_alloca = builder.CreateAlloca(new_type);
     new_alloca->setAlignment(Align(8));
-    TI_ASSERT(alloca->hasOneUse());
+    QD_ASSERT(alloca->hasOneUse());
     auto *gep = llvm::cast<llvm::GetElementPtrInst>(alloca->user_back());
-    TI_ASSERT(gep->getPointerOperand() == alloca);
+    QD_ASSERT(gep->getPointerOperand() == alloca);
     std::vector<Value *> indices(gep->idx_begin(), gep->idx_end());
     builder.SetInsertPoint(gep);
     auto *new_gep = builder.CreateInBoundsGEP(new_type, new_alloca, indices);
@@ -76,7 +76,7 @@ struct AddStructForFuncPass : public ModulePass {
   }
 };
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
   static inline char ID{0};
   AMDGPUConvertAllocaInstAddressSpacePass() : FunctionPass(ID) {
@@ -152,7 +152,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
         }
       }
     }
-    TI_ASSERT(num_found_alloca == 1 && alloca);
+    QD_ASSERT(num_found_alloca == 1 && alloca);
     auto new_type = llvm::ArrayType::get(char_type, tls_size_);
     llvm::IRBuilder<> builder(alloca);
     // Find the allocInst `alloca i32, tls_size, align 8` and replace it with
@@ -167,11 +167,11 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
     auto new_ty = llvm::PointerType::get(new_type, unsigned(0));
     auto *new_cast = builder.CreateAddrSpaceCast(new_alloca, new_ty);
     new_alloca->setAlignment(Align(8));
-    TI_ASSERT(alloca->hasOneUse());
+    QD_ASSERT(alloca->hasOneUse());
     auto *cast = llvm::cast<llvm::AddrSpaceCastInst>(alloca->user_back());
-    TI_ASSERT(cast->hasOneUse());
+    QD_ASSERT(cast->hasOneUse());
     auto *gep = llvm::cast<llvm::GetElementPtrInst>(cast->user_back());
-    TI_ASSERT(gep->getPointerOperand() == cast);
+    QD_ASSERT(gep->getPointerOperand() == cast);
     std::vector<Value *> indices(gep->idx_begin(), gep->idx_end());
     builder.SetInsertPoint(gep);
     auto *new_gep = builder.CreateInBoundsGEP(new_type, new_cast, indices);

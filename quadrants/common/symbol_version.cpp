@@ -6,7 +6,7 @@
 #include "quadrants/common/platform_macros.h"
 #include <math.h>
 
-#if defined(TI_PLATFORM_WINDOWS)
+#if defined(QD_PLATFORM_WINDOWS)
 #include "quadrants/platform/windows/windows.h"
 #else
 // Mac and Linux
@@ -15,7 +15,7 @@
 
 namespace quadrants {
 extern "C" {
-#if defined(TI_PLATFORM_LINUX) && defined(TI_ARCH_x64)
+#if defined(QD_PLATFORM_LINUX) && defined(QD_ARCH_x64)
 // Avoid dependency on higher glibc versions such as 2.27 or 2.29
 // Related issue: https://github.com/taichi-dev/quadrants/issues/3174
 // log2f is used by a third party .a file, so we have to define a wrapper.

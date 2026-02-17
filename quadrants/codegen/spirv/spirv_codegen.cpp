@@ -52,7 +52,7 @@ std::string buffer_instance_name(BufferInfo b) {
     case BufferType::ExtArr:
       return std::string(kExtArrBufferName) + "_" + std::to_string(b.root_id);
     default:
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
       break;
   }
   return {};
@@ -117,7 +117,7 @@ TaskCodegen::Result TaskCodegen::run() {
   } else if (task_ir_->task_type == OffloadedTaskType::struct_for) {
     generate_struct_for_kernel(task_ir_);
   } else {
-    TI_ERROR("Unsupported offload type={} on SPIR-V codegen",
+    QD_ERROR("Unsupported offload type={} on SPIR-V codegen",
              task_ir_->task_name());
   }
   // Headers need global information, so it has to be delayed after visiting
@@ -133,7 +133,7 @@ TaskCodegen::Result TaskCodegen::run() {
 }
 
 void TaskCodegen::visit(OffloadedStmt *) {
-  TI_ERROR("This codegen is supposed to deal with one offloaded task");
+  QD_ERROR("This codegen is supposed to deal with one offloaded task");
 }
 
 void TaskCodegen::visit(Block *stmt) {
@@ -157,7 +157,7 @@ void TaskCodegen::visit(PrintStmt *stmt) {
     auto const &format = stmt->formats[i];
     if (std::holds_alternative<Stmt *>(content)) {
       auto arg_stmt = std::get<Stmt *>(content);
-      TI_ASSERT(!arg_stmt->ret_type->is<TensorType>());
+      QD_ASSERT(!arg_stmt->ret_type->is<TensorType>());
 
       auto value = ir_->query_value(arg_stmt->raw_name());
       vals.push_back(value);
@@ -170,14 +170,14 @@ void TaskCodegen::visit(PrintStmt *stmt) {
       auto &&[format_flags, format_width, format_precision, format_length,
               format_conversion] = parse_printf_specifier(merged_format);
       if (!format_flags.empty()) {
-        TI_WARN(
+        QD_WARN(
             "The printf flags '{}' are not supported in Vulkan, "
             "and will be discarded.",
             format_flags);
         format_flags.clear();
       }
       if (!format_width.empty()) {
-        TI_WARN(
+        QD_WARN(
             "The printf width modifier '{}' is not supported in Vulkan, "
             "and will be discarded.",
             format_width);
@@ -186,7 +186,7 @@ void TaskCodegen::visit(PrintStmt *stmt) {
       if (!format_length.empty() &&
           !(format_length == "l" &&
             (format_conversion == "u" || format_conversion == "x"))) {
-        TI_WARN(
+        QD_WARN(
             "The printf length modifier '{}' is not supported in Vulkan, "
             "and will be discarded.",
             format_length);
@@ -248,8 +248,8 @@ void TaskCodegen::visit(ConstStmt *const_stmt) {
       return ir_->uint_immediate_number(
           stype, static_cast<uint64_t>(const_val.val_u64), false);
     } else {
-      TI_P(data_type_name(dt));
-      TI_NOT_IMPLEMENTED
+      QD_P(data_type_name(dt));
+      QD_NOT_IMPLEMENTED
       return spirv::Value();
     }
   };
@@ -302,7 +302,7 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
       ptr_val = ir_->add(origin_val, offset_bytes);
       ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   } else {  // offset used as bytes
     ptr_val = ir_->add(origin_val, ir_->cast(origin_val.stype, offset_val));
@@ -339,7 +339,7 @@ void TaskCodegen::visit(GetChStmt *stmt) {
 
   const auto &snode_descs = compiled_structs_[root].snode_descriptors;
   auto *out_snode = stmt->output_snode;
-  TI_ASSERT(snode_descs.at(stmt->input_snode->id).get_child(stmt->chid) ==
+  QD_ASSERT(snode_descs.at(stmt->input_snode->id).get_child(stmt->chid) ==
             out_snode);
 
   const auto &desc = snode_descs.at(out_snode->id);
@@ -350,7 +350,7 @@ void TaskCodegen::visit(GetChStmt *stmt) {
   ir_->register_value(stmt->raw_name(), val);
 
   if (out_snode->is_place()) {
-    TI_ASSERT(ptr_to_buffers_.count(stmt) == 0);
+    QD_ASSERT(ptr_to_buffers_.count(stmt) == 0);
     ptr_to_buffers_[stmt] = BufferInfo(BufferType::Root, root);
   }
 }
@@ -433,10 +433,10 @@ void TaskCodegen::visit(SNodeOpStmt *stmt) {
       bitmasked_activation(ActivationOp::activate, parent_val, root_id,
                            stmt->snode, input_index_val);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -449,7 +449,7 @@ void TaskCodegen::visit(SNodeLookupStmt *stmt) {
   if (stmt->input_snode) {
     parent = stmt->input_snode->raw_name();
   } else {
-    TI_ASSERT(root_stmts_.at(root_id) != nullptr);
+    QD_ASSERT(root_stmts_.at(root_id) != nullptr);
     parent = root_stmts_.at(root_id)->raw_name();
   }
   const auto *sn = stmt->snode;
@@ -465,7 +465,7 @@ void TaskCodegen::visit(SNodeLookupStmt *stmt) {
       bitmasked_activation(ActivationOp::activate, parent_val, root_id, sn,
                            input_index_val);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   }
 
@@ -499,7 +499,7 @@ void TaskCodegen::visit(RandStmt *stmt) {
     auto highp_val = ir_->rand_f32(global_tmp);
     val = ir_->cast(ir_->f16_type(), highp_val);
   } else {
-    TI_ERROR("rand only support 32-bit type");
+    QD_ERROR("rand only support 32-bit type");
   }
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -520,20 +520,20 @@ void TaskCodegen::visit(LoopIndexStmt *stmt) {
   if (stmt->loop->is<OffloadedStmt>()) {
     const auto type = stmt->loop->as<OffloadedStmt>()->task_type;
     if (type == OffloadedTaskType::range_for) {
-      TI_ASSERT(stmt->index == 0);
+      QD_ASSERT(stmt->index == 0);
       spirv::Value loop_var = ir_->query_value("ii");
       // spirv::Value val = ir_->add(loop_var, ir_->const_i32_zero_);
       ir_->register_value(stmt_name, loop_var);
     } else {
-      TI_NOT_IMPLEMENTED;
+      QD_NOT_IMPLEMENTED;
     }
   } else if (stmt->loop->is<RangeForStmt>()) {
-    TI_ASSERT(stmt->index == 0);
+    QD_ASSERT(stmt->index == 0);
     spirv::Value loop_var = ir_->query_value(stmt->loop->raw_name());
     spirv::Value val = ir_->add(loop_var, ir_->const_i32_zero_);
     ir_->register_value(stmt_name, val);
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -603,7 +603,7 @@ void TaskCodegen::visit(GetElementStmt *stmt) {
 }
 
 void TaskCodegen::visit(ReturnStmt *stmt) {
-  TI_ASSERT(ctx_attribs_->has_rets());
+  QD_ASSERT(ctx_attribs_->has_rets());
   // The `PrimitiveType::i32` in this function call is a placeholder.
   auto buffer_value = get_buffer_value(BufferType::Rets, PrimitiveType::i32);
   // Function to store variable using indices provided by
@@ -674,7 +674,7 @@ void TaskCodegen::visit(ExternalTensorShapeAlongAxisStmt *stmt) {
   const auto axis = stmt->axis;
 
   spirv::Value var_ptr;
-  TI_ASSERT(ctx_attribs_->args_type()
+  QD_ASSERT(ctx_attribs_->args_type()
                 ->get_element_type(arg_id)
                 ->is<lang::StructType>());
   std::vector<int> indices = arg_id;
@@ -752,7 +752,7 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
   }
 
   if (ctx_attribs_->arg_at(arg_id).is_array) {
-    TI_ASSERT(arg_id.size() == 1);
+    QD_ASSERT(arg_id.size() == 1);
     ptr_to_buffers_[stmt] = {BufferType::ExtArr, arg_id[0]};
   } else {
     ptr_to_buffers_[stmt] = BufferType::Args;
@@ -797,7 +797,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     } else if (is_real(src_dt)) {
       zero = ir_->float_immediate_number(src_type, 0);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
     val = ir_->cast(dst_type, ir_->eq(operand_val, zero));
   } else if (stmt->op_type == UnaryOpType::neg) {
@@ -806,12 +806,12 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       if (is_signed(dst_dt)) {
         val = ir_->make_value(spv::OpSNegate, dst_type, operand_val);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (is_real(dst_dt)) {
       val = ir_->make_value(spv::OpFNegate, dst_type, operand_val);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::rsqrt) {
     const uint32_t InverseSqrt_id = 32;
@@ -819,7 +819,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       val = ir_->call_glsl450(src_type, InverseSqrt_id, operand_val);
       val = ir_->cast(dst_type, val);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::sgn) {
     const uint32_t FSign_id = 6;
@@ -828,12 +828,12 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
       if (is_signed(src_dt)) {
         val = ir_->call_glsl450(src_type, SSign_id, operand_val);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else if (is_real(src_dt)) {
       val = ir_->call_glsl450(src_type, FSign_id, operand_val);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
     val = ir_->cast(dst_type, val);
   } else if (stmt->op_type == UnaryOpType::bit_not) {
@@ -841,7 +841,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     if (is_integral(dst_dt)) {
       val = ir_->make_value(spv::OpNot, dst_type, operand_val);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::cast_value) {
     val = ir_->cast(dst_type, operand_val);
@@ -849,7 +849,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     if (data_type_bits(src_dt) == data_type_bits(dst_dt)) {
       val = ir_->make_value(spv::OpBitcast, dst_type, operand_val);
     } else {
-      TI_ERROR("bit_cast is only supported between data type with same size");
+      QD_ERROR("bit_cast is only supported between data type with same size");
     }
   } else if (stmt->op_type == UnaryOpType::abs) {
     const uint32_t FAbs_id = 4;
@@ -859,21 +859,21 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
         if (is_signed(src_dt)) {
           val = ir_->call_glsl450(src_type, SAbs_id, operand_val);
         } else {
-          TI_NOT_IMPLEMENTED
+          QD_NOT_IMPLEMENTED
         }
       } else if (is_real(src_dt)) {
         val = ir_->call_glsl450(src_type, FAbs_id, operand_val);
       } else {
-        TI_NOT_IMPLEMENTED
+        QD_NOT_IMPLEMENTED
       }
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
       val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
   } else if (stmt->op_type == UnaryOpType::frexp) {
     // FrexpStruct is the same type of the first member.
@@ -894,12 +894,12 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     const uint32_t instruction = instruction_id;                               \
     if (is_real(src_dt)) {                                                     \
       if (data_type_bits(src_dt) > max_bits) {                                 \
-        TI_ERROR("Instruction {}({}) does not {}bits operation", #instruction, \
+        QD_ERROR("Instruction {}({}) does not {}bits operation", #instruction, \
                  instruction_id, data_type_bits(src_dt));                      \
       }                                                                        \
       val = ir_->call_glsl450(src_type, instruction, operand_val);             \
     } else {                                                                   \
-      TI_NOT_IMPLEMENTED                                                       \
+      QD_NOT_IMPLEMENTED                                                       \
     }                                                                          \
   }
   UNARY_OP_TO_SPIRV(round, Round, 1, 64)
@@ -915,7 +915,7 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   UNARY_OP_TO_SPIRV(log, Log, 28, 32)
   UNARY_OP_TO_SPIRV(sqrt, Sqrt, 31, 64)
 #undef UNARY_OP_TO_SPIRV
-  else {TI_NOT_IMPLEMENTED} ir_->register_value(stmt->raw_name(), val);
+  else {QD_NOT_IMPLEMENTED} ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v,
@@ -1092,7 +1092,7 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   spirv::Value rhs_value = ir_->query_value(rhs_name);
   spirv::Value bin_value = spirv::Value();
 
-  TI_WARN_IF(lhs_value.stype.id != rhs_value.stype.id,
+  QD_WARN_IF(lhs_value.stype.id != rhs_value.stype.id,
              "${} type {} != ${} type {}\n{}", lhs_name,
              lhs_value.stype.dt->to_string(), rhs_name,
              rhs_value.stype.dt->to_string(), bin->get_tb());
@@ -1184,14 +1184,14 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     const uint32_t instruction = instruction_id;                               \
     if (is_real(bin->element_type())) {                                        \
       if (data_type_bits(bin->element_type()) > max_bits) {                    \
-        TI_ERROR(                                                              \
+        QD_ERROR(                                                              \
             "[glsl450] the operand type of instruction {}({}) must <= {}bits", \
             #instruction, instruction_id, max_bits);                           \
       }                                                                        \
       bin_value =                                                              \
           ir_->call_glsl450(dst_type, instruction, lhs_value, rhs_value);      \
     } else {                                                                   \
-      TI_NOT_IMPLEMENTED                                                       \
+      QD_NOT_IMPLEMENTED                                                       \
     }                                                                          \
   }
 
@@ -1215,7 +1215,7 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     } else if (is_real(dst_dt)) {                                              \
       bin_value = ir_->call_glsl450(dst_type, F_inst, lhs_value, rhs_value);   \
     } else {                                                                   \
-      TI_NOT_IMPLEMENTED                                                       \
+      QD_NOT_IMPLEMENTED                                                       \
     }                                                                          \
   }
 
@@ -1227,11 +1227,11 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     rhs_value = ir_->cast(dst_type, rhs_value);
     bin_value = ir_->div(lhs_value, rhs_value);
   }
-  else {TI_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
+  else {QD_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
 }
 
 void TaskCodegen::visit(TernaryOpStmt *tri) {
-  TI_ASSERT(tri->op_type == TernaryOpType::select);
+  QD_ASSERT(tri->op_type == TernaryOpType::select);
   spirv::Value op1 = ir_->query_value(tri->op1->raw_name());
   spirv::Value op2 = ir_->query_value(tri->op2->raw_name());
   spirv::Value op3 = ir_->query_value(tri->op3->raw_name());
@@ -1373,7 +1373,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     } else if (ends_with(stmt->func_name, "Xor")) {
       spv_op = spv::OpGroupNonUniformBitwiseXor;
     } else {
-      TI_ERROR("Unsupported operation: {}", stmt->func_name);
+      QD_ERROR("Unsupported operation: {}", stmt->func_name);
     }
 
     spv::GroupOperation group_op;
@@ -1402,7 +1402,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     } else if (ends_with(stmt->func_name, "Shuffle")) {
       spv_op = spv::OpGroupNonUniformShuffle;
     } else {
-      TI_ERROR("Unsupported operation: {}", stmt->func_name);
+      QD_ERROR("Unsupported operation: {}", stmt->func_name);
     }
 
     val = ir_->make_value(
@@ -1586,7 +1586,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       op = spv::OpAtomicXor;
       use_native_atomics = true;
     } else {
-      TI_NOT_IMPLEMENTED
+      QD_NOT_IMPLEMENTED
     }
 
     if (use_native_atomics) {
@@ -1611,7 +1611,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       }
     }
   } else {
-    TI_NOT_IMPLEMENTED
+    QD_NOT_IMPLEMENTED
   }
 
   if (use_subgroup_reduction) {
@@ -1764,9 +1764,9 @@ void TaskCodegen::visit(WhileControlStmt *stmt) {
 
 void TaskCodegen::visit(ContinueStmt *stmt) {
   auto stmt_in_off_for = [stmt]() {
-    TI_ASSERT(stmt->scope != nullptr);
+    QD_ASSERT(stmt->scope != nullptr);
     if (auto *offl = stmt->scope->cast<OffloadedStmt>(); offl) {
-      TI_ASSERT(offl->task_type == OffloadedStmt::TaskType::range_for ||
+      QD_ASSERT(offl->task_type == OffloadedStmt::TaskType::range_for ||
                 offl->task_type == OffloadedStmt::TaskType::struct_for);
       return true;
     }
@@ -1892,7 +1892,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
     spirv::Value end_expr_value;
     if (stmt->end_stmt) {
       // Range from args
-      TI_ASSERT(stmt->const_begin);
+      QD_ASSERT(stmt->const_begin);
       begin_expr_value =
           ir_->int_immediate_number(ir_->i32_type(), stmt->begin_value, false);
       gen_array_range(stmt->end_stmt);
@@ -2086,7 +2086,7 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
     return paddr_ptr;
   }
 
-  TI_ERROR_IF(
+  QD_ERROR_IF(
       !is_integral(ptr_val.stype.dt),
       "at_buffer failed, `ptr_val.stype.dt` is not integeral. Stmt = {} : {}",
       ptr->name(), ptr->type_hint());
@@ -2175,7 +2175,7 @@ spirv::Value TaskCodegen::get_buffer_value(BufferInfo buffer, DataType dt) {
   spirv::Value buffer_value =
       ir_->buffer_argument(type, 0, binding, buffer_instance_name(buffer));
   buffer_value_map_[key] = buffer_value;
-  TI_TRACE("buffer name = {}, value = {}", buffer_instance_name(buffer),
+  QD_TRACE("buffer name = {}, value = {}", buffer_instance_name(buffer),
            buffer_value.id);
 
   return buffer_value;
@@ -2346,26 +2346,26 @@ static void spriv_message_consumer(spv_message_level_t level,
                                    const char *source,
                                    const spv_position_t &position,
                                    const char *message) {
-  // TODO: Maybe we can add a macro, e.g. TI_LOG_AT_LEVEL(lv, ...)
+  // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
   if (level <= SPV_MSG_FATAL) {
-    TI_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line,
+    QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line,
              position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
-    TI_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line,
+    QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line,
             position.column, message);
   } else if (level <= SPV_MSG_INFO) {
-    TI_INFO("{}\n[{}:{}:{}] {}", source, position.index, position.line,
+    QD_INFO("{}\n[{}:{}:{}] {}", source, position.index, position.line,
             position.column, message);
   } else if (level <= SPV_MSG_INFO) {
-    TI_TRACE("{}\n[{}:{}:{}] {}", source, position.index, position.line,
+    QD_TRACE("{}\n[{}:{}:{}] {}", source, position.index, position.line,
              position.column, message);
   }
 }
 
 KernelCodegen::KernelCodegen(const Params &params)
     : params_(params), ctx_attribs_(*params.kernel, &params.caps) {
-  TI_ASSERT(params.kernel);
-  TI_ASSERT(params.ir_root);
+  QD_ASSERT(params.kernel);
+  QD_ASSERT(params.ir_root);
 
   uint32_t spirv_version = params.caps.get(DeviceCapability::spirv_version);
 
@@ -2474,7 +2474,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     bool success = true;
     {
       bool result = false;
-      TI_WARN_IF(
+      QD_WARN_IF(
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(),
                                      &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
@@ -2483,7 +2483,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       }
     }
 
-    TI_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}",
+    QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}",
              task_res.spirv_code.size(), optimized_spv.size());
 
     if (dump_ir) {
@@ -2504,7 +2504,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       std::string spirv_asm;
       spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
       auto kernel_name = tp.ti_kernel_name;
-      TI_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
+      QD_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
 
       std::ofstream fout(kernel_name + ".spv",
                          std::ios::binary | std::ios::out);

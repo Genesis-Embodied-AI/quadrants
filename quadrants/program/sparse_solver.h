@@ -110,7 +110,7 @@ class CuSparseSolver : public SparseSolver {
   }
   ~CuSparseSolver() override;
   bool compute(const SparseMatrix &sm) override {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   };
   void analyze_pattern(const SparseMatrix &sm) override;
 
@@ -121,7 +121,7 @@ class CuSparseSolver : public SparseSolver {
                 const Ndarray &x);
 
   bool info() override {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   };
 
  private:

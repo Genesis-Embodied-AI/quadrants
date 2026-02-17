@@ -3,7 +3,7 @@
 #include <functional>
 #include <cstring>
 
-// This is necessary for TI_UNREACHABLE
+// This is necessary for QD_UNREACHABLE
 #include "quadrants/common/platform_macros.h"
 
 // Must include "spdlog/common.h" to define SPDLOG_HEADER_ONLY
@@ -27,104 +27,104 @@ class logger;
       fmt::format("[{}:{}@{}] ", __FILENAME__, __FUNCTION__, __LINE__) + \
       fmt::format(__VA_ARGS__))
 
-#if defined(TI_PLATFORM_WINDOWS)
-#define TI_UNREACHABLE __assume(0);
+#if defined(QD_PLATFORM_WINDOWS)
+#define QD_UNREACHABLE __assume(0);
 #else
-#define TI_UNREACHABLE __builtin_unreachable();
+#define QD_UNREACHABLE __builtin_unreachable();
 #endif
 
-#define TI_TRACE(...) SPD_AUGMENTED_LOG(trace, __VA_ARGS__)
-#define TI_DEBUG(...) SPD_AUGMENTED_LOG(debug, __VA_ARGS__)
-#define TI_INFO(...) SPD_AUGMENTED_LOG(info, __VA_ARGS__)
-#define TI_WARN(...) SPD_AUGMENTED_LOG(warn, __VA_ARGS__)
-#define TI_ERROR(...)                      \
+#define QD_TRACE(...) SPD_AUGMENTED_LOG(trace, __VA_ARGS__)
+#define QD_DEBUG(...) SPD_AUGMENTED_LOG(debug, __VA_ARGS__)
+#define QD_INFO(...) SPD_AUGMENTED_LOG(info, __VA_ARGS__)
+#define QD_WARN(...) SPD_AUGMENTED_LOG(warn, __VA_ARGS__)
+#define QD_ERROR(...)                      \
   {                                        \
     SPD_AUGMENTED_LOG(error, __VA_ARGS__); \
-    TI_UNREACHABLE;                        \
+    QD_UNREACHABLE;                        \
   }
-#define TI_CRITICAL(...)                      \
+#define QD_CRITICAL(...)                      \
   {                                           \
     SPD_AUGMENTED_LOG(critical, __VA_ARGS__); \
-    TI_UNREACHABLE;                           \
+    QD_UNREACHABLE;                           \
   }
 
-#define TI_TRACE_IF(condition, ...) \
+#define QD_TRACE_IF(condition, ...) \
   if (condition) {                  \
-    TI_TRACE(__VA_ARGS__);          \
+    QD_TRACE(__VA_ARGS__);          \
   }
-#define TI_TRACE_UNLESS(condition, ...) \
+#define QD_TRACE_UNLESS(condition, ...) \
   if (!(condition)) {                   \
-    TI_TRACE(__VA_ARGS__);              \
+    QD_TRACE(__VA_ARGS__);              \
   }
-#define TI_DEBUG_IF(condition, ...) \
+#define QD_DEBUG_IF(condition, ...) \
   if (condition) {                  \
-    TI_DEBUG(__VA_ARGS__);          \
+    QD_DEBUG(__VA_ARGS__);          \
   }
-#define TI_DEBUG_UNLESS(condition, ...) \
+#define QD_DEBUG_UNLESS(condition, ...) \
   if (!(condition)) {                   \
-    TI_DEBUG(__VA_ARGS__);              \
+    QD_DEBUG(__VA_ARGS__);              \
   }
-#define TI_INFO_IF(condition, ...) \
+#define QD_INFO_IF(condition, ...) \
   if (condition) {                 \
-    TI_INFO(__VA_ARGS__);          \
+    QD_INFO(__VA_ARGS__);          \
   }
-#define TI_INFO_UNLESS(condition, ...) \
+#define QD_INFO_UNLESS(condition, ...) \
   if (!(condition)) {                  \
-    TI_INFO(__VA_ARGS__);              \
+    QD_INFO(__VA_ARGS__);              \
   }
-#define TI_WARN_IF(condition, ...) \
+#define QD_WARN_IF(condition, ...) \
   if (condition) {                 \
-    TI_WARN(__VA_ARGS__);          \
+    QD_WARN(__VA_ARGS__);          \
   }
-#define TI_WARN_UNLESS(condition, ...) \
+#define QD_WARN_UNLESS(condition, ...) \
   if (!(condition)) {                  \
-    TI_WARN(__VA_ARGS__);              \
+    QD_WARN(__VA_ARGS__);              \
   }
-#define TI_ERROR_IF(condition, ...) \
+#define QD_ERROR_IF(condition, ...) \
   if (condition) {                  \
-    TI_ERROR(__VA_ARGS__);          \
+    QD_ERROR(__VA_ARGS__);          \
   }
-#define TI_ERROR_UNLESS(condition, ...) \
+#define QD_ERROR_UNLESS(condition, ...) \
   if (!(condition)) {                   \
-    TI_ERROR(__VA_ARGS__);              \
+    QD_ERROR(__VA_ARGS__);              \
   }
-#define TI_CRITICAL_IF(condition, ...) \
+#define QD_CRITICAL_IF(condition, ...) \
   if (condition) {                     \
-    TI_CRITICAL(__VA_ARGS__);          \
+    QD_CRITICAL(__VA_ARGS__);          \
   }
-#define TI_CRITICAL_UNLESS(condition, ...) \
+#define QD_CRITICAL_UNLESS(condition, ...) \
   if (!(condition)) {                      \
-    TI_CRITICAL(__VA_ARGS__);              \
+    QD_CRITICAL(__VA_ARGS__);              \
   }
 
-#define TI_ASSERT(x) TI_ASSERT_INFO((x), "Assertion failure: " #x)
-#define TI_ASSERT_INFO(x, ...)             \
+#define QD_ASSERT(x) QD_ASSERT_INFO((x), "Assertion failure: " #x)
+#define QD_ASSERT_INFO(x, ...)             \
   {                                        \
     bool ___ret___ = static_cast<bool>(x); \
     if (!___ret___) {                      \
-      TI_ERROR(__VA_ARGS__);               \
+      QD_ERROR(__VA_ARGS__);               \
     }                                      \
   }
-#define TI_NOT_IMPLEMENTED TI_ERROR("Not supported.");
+#define QD_NOT_IMPLEMENTED QD_ERROR("Not supported.");
 
-#define TI_STOP TI_ERROR("Stopping here")
-#define TI_TAG TI_INFO("Tagging here")
+#define QD_STOP QD_ERROR("Stopping here")
+#define QD_TAG QD_INFO("Tagging here")
 
-#define TI_LOG_SET_PATTERN(x) spdlog::set_pattern(x);
+#define QD_LOG_SET_PATTERN(x) spdlog::set_pattern(x);
 
-#define TI_FLUSH_LOGGER                        \
+#define QD_FLUSH_LOGGER                        \
   {                                            \
     quadrants::Logger::get_instance().flush(); \
   };
 
-#define TI_P(x)                                                   \
+#define QD_P(x)                                                   \
   {                                                               \
-    TI_INFO("{}", quadrants::TextSerializer::serialize(#x, (x))); \
+    QD_INFO("{}", quadrants::TextSerializer::serialize(#x, (x))); \
   }
 
 namespace quadrants {
 
-class TI_DLL_EXPORT Logger {
+class QD_DLL_EXPORT Logger {
  private:
   std::shared_ptr<spdlog::logger> console_;
   int level_;

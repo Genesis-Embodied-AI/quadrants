@@ -52,7 +52,7 @@ Bitset::reference Bitset::operator[](int x) {
 
 Bitset &Bitset::operator&=(const Bitset &other) {
   const int len = vec_.size();
-  TI_ASSERT(len == other.vec_.size());
+  QD_ASSERT(len == other.vec_.size());
   for (int i = 0; i < len; i++) {
     vec_[i] &= other.vec_[i];
   }
@@ -67,7 +67,7 @@ Bitset Bitset::operator&(const Bitset &other) const {
 
 Bitset &Bitset::operator|=(const Bitset &other) {
   const int len = vec_.size();
-  TI_ASSERT(len == other.vec_.size());
+  QD_ASSERT(len == other.vec_.size());
   for (int i = 0; i < len; i++) {
     vec_[i] |= other.vec_[i];
   }
@@ -82,7 +82,7 @@ Bitset Bitset::operator|(const Bitset &other) const {
 
 Bitset &Bitset::operator^=(const Bitset &other) {
   const int len = vec_.size();
-  TI_ASSERT(len == other.vec_.size());
+  QD_ASSERT(len == other.vec_.size());
   for (int i = 0; i < len; i++) {
     vec_[i] ^= other.vec_[i];
   }
@@ -127,7 +127,7 @@ int Bitset::lower_bound(int x) const {
 
 std::vector<int> Bitset::or_eq_get_update_list(const Bitset &other) {
   const int len = vec_.size();
-  TI_ASSERT(len == other.vec_.size());
+  QD_ASSERT(len == other.vec_.size());
   std::vector<int> result;
   for (int i = 0; i < len; i++) {
     auto update = other.vec_[i] & ~vec_[i];
@@ -187,12 +187,12 @@ using namespace bit;
 
 struct Flags : public Bits<32> {
   using Base = Bits<32>;
-  TI_BIT_FIELD(bool, apple, 0);
-  TI_BIT_FIELD(bool, banana, 1);
-  TI_BIT_FIELD(uint8, cherry, 2);
+  QD_BIT_FIELD(bool, apple, 0);
+  QD_BIT_FIELD(bool, banana, 1);
+  QD_BIT_FIELD(uint8, cherry, 2);
 };
 
-TI_TEST("bit") {
+QD_TEST("bit") {
   Bits<32> b;
   b.set<5>(1);
   CHECK(b.get() == 32);
@@ -241,8 +241,8 @@ TI_TEST("bit") {
 
   // float64 t = 123.456789;
   // auto e = extract(t);
-  // TI_P(std::get<0>(e));
-  // TI_P(std::get<1>(e));
+  // QD_P(std::get<0>(e));
+  // QD_P(std::get<1>(e));
   // CHECK(t == compress(std::get<0>(e), std::get<1>(e)));
 }
 }  // namespace quadrants

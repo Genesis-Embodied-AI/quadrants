@@ -7,7 +7,7 @@ import quadrants as ti
 from tests import test_utils
 
 
-@pytest.mark.skipif(os.environ.get("TI_LITE_TEST") or "0", reason="Lite test")
+@pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
 @test_utils.test()
 def test_mpm88():
@@ -108,7 +108,7 @@ def _is_appveyor():
     return os.getenv("APPVEYOR", "").lower() == "true"
 
 
-@pytest.mark.skipif(os.environ.get("TI_LITE_TEST") or "0", reason="Lite test")
+@pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
 @test_utils.test(arch=[ti.cpu, ti.cuda])
 def test_mpm88_numpy_and_ndarray():

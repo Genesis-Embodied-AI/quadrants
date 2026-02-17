@@ -105,7 +105,7 @@ class HandleExternalPtrBound : public BasicStmtVisitor {
 namespace irpass {
 
 void handle_external_ptr_boundary(IRNode *root, const CompileConfig &config) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   HandleExternalPtrBound::run(root, config);
 }
 

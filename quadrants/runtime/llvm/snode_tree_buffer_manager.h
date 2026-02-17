@@ -2,7 +2,7 @@
 #include "quadrants/inc/constants.h"
 #include "quadrants/struct/snode_tree.h"
 #include "quadrants/rhi/public_device.h"
-#define TI_RUNTIME_HOST
+#define QD_RUNTIME_HOST
 
 #include <set>
 

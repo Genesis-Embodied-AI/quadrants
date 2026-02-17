@@ -17,7 +17,7 @@ class LocalStoreSearcher : public BasicStmtVisitor {
   explicit LocalStoreSearcher(const std::vector<Stmt *> &vars)
       : vars_(vars), result_(false) {
     for (auto var : vars) {
-      TI_ASSERT(var->is<AllocaStmt>());
+      QD_ASSERT(var->is<AllocaStmt>());
     }
     allow_undefined_visitor = true;
     invoke_default_visitor = true;

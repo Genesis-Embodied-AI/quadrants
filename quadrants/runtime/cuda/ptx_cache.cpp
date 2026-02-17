@@ -66,7 +66,7 @@ PtxCache::PtxCache(const Config config,
       cache_dir_(
           join_path(config_.offline_cache_path,
                     fmt::format("ptx_cache_sm_{}", compute_capability_))) {
-  TI_DEBUG("Create ptxcache with offline_cache_file_path = {}",
+  QD_DEBUG("Create ptxcache with offline_cache_file_path = {}",
            this->cache_dir_);
   auto filepath = join_path(this->cache_dir_, kMetadataFilename);
   auto lock_path = join_path(this->cache_dir_, kMetadataLockName);
@@ -75,7 +75,7 @@ PtxCache::PtxCache(const Config config,
       auto _ = make_unlocker(lock_path);
       offline_cache::load_metadata_with_checking(cached_all_data_, filepath);
     } else {
-      TI_WARN(
+      QD_WARN(
           "Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
           lock_path, this->cache_dir_);
     }
@@ -87,14 +87,14 @@ void PtxCache::dump() {
     return;
   }
 
-  TI_DEBUG("Dumping {} cached kernels to disk", wrapped_by_key_.size());
+  QD_DEBUG("Dumping {} cached kernels to disk", wrapped_by_key_.size());
 
   quadrants::create_directories(cache_dir_);
   auto filepath = join_path(cache_dir_, kMetadataFilename);
   auto lock_path = join_path(cache_dir_, kMetadataLockName);
 
   if (!lock_with_file(lock_path)) {
-    TI_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
+    QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.",
             lock_path, cache_dir_);
     wrapped_by_key_.clear();  // Ignore the caching kernels
     return;
@@ -102,9 +102,9 @@ void PtxCache::dump() {
 
   auto _ = make_unlocker(lock_path);
   PtxCacheAllData data;
-  data.version[0] = TI_VERSION_MAJOR;
-  data.version[1] = TI_VERSION_MINOR;
-  data.version[2] = TI_VERSION_PATCH;
+  data.version[0] = QD_VERSION_MAJOR;
+  data.version[1] = QD_VERSION_MINOR;
+  data.version[2] = QD_VERSION_PATCH;
   auto &dataWrapperByCacheKey = data.dataWrapperByCacheKey;
   // Load old cached data
   offline_cache::load_metadata_with_checking(data, filepath);
@@ -120,23 +120,23 @@ void PtxCache::dump() {
     if (wrapped.metadata.cache_mode == CacheMode::MemAndDiskCache) {
       auto [iter, ok] =
           dataWrapperByCacheKey.insert({kernel_key, std::move(wrapped)});
-      TI_ASSERT(!ok || iter->second.metadata.size == 0);
+      QD_ASSERT(!ok || iter->second.metadata.size == 0);
     }
   }
   wrapped_by_key_.clear();
   // Dump cached CompiledKernelData to disk
   for (auto &[_, k] : dataWrapperByCacheKey) {
     if (!k.ptx.has_value()) {
-      TI_TRACE("PTX for cache_key {} is not set, skipping dump",
+      QD_TRACE("PTX for cache_key {} is not set, skipping dump",
                k.metadata.cache_key);
       continue;
     }
-    TI_TRACE("Dumping PTX for cache_key {}", k.metadata.cache_key);
+    QD_TRACE("Dumping PTX for cache_key {}", k.metadata.cache_key);
     auto cache_filename = make_filename(k.metadata.cache_key);
     std::ofstream fs{cache_filename, std::ios::out | std::ios::binary};
-    TI_ASSERT(fs.is_open());
+    QD_ASSERT(fs.is_open());
     fs << k.ptx.value();
-    TI_ASSERT(!!fs);
+    QD_ASSERT(!!fs);
     k.metadata.size = fs.tellp();
     data.size += k.metadata.size;
   }
@@ -197,7 +197,7 @@ std::optional<std::string> PtxCache::try_load_cached(
     auto iter = dataWrapperByCacheKey.find(cache_key);
     if (iter != dataWrapperByCacheKey.end()) {
       auto &k = iter->second;
-      TI_DEBUG("Found in cache (key='{}')", cache_key);
+      QD_DEBUG("Found in cache (key='{}')", cache_key);
       if (k.ptx.has_value()) {
         return k.ptx;
       }
@@ -218,24 +218,24 @@ std::optional<std::string> PtxCache::load_data_from_disk(
     std::string ptx = std::string(std::istreambuf_iterator<char>(ifs),
                                   std::istreambuf_iterator<char>());
     if (!ifs) {
-      TI_WARN(fmt::format("Failed to read PTX from file {}: {}", filename,
+      QD_WARN(fmt::format("Failed to read PTX from file {}: {}", filename,
                           std::strerror(errno)));
       return std::nullopt;
     }
-    TI_DEBUG("Loaded PTX from file {} (size: {} bytes)", filename, ptx.size());
+    QD_DEBUG("Loaded PTX from file {} (size: {} bytes)", filename, ptx.size());
     if (ptx.empty()) {
-      TI_WARN(fmt::format("PTX file {} is empty", filename));
+      QD_WARN(fmt::format("PTX file {} is empty", filename));
       return std::nullopt;
     }
     return ptx;
   }
-  TI_WARN(fmt::format("Failed to load ptx file {}: {}", filename,
+  QD_WARN(fmt::format("Failed to load ptx file {}: {}", filename,
                       std::strerror(errno)));
   return std::nullopt;
 }
 
 void PtxCache::store_ptx(const std::string &cache_key, const std::string &ptx) {
-  TI_DEBUG("Store PTX for cache_key {}", cache_key);
+  QD_DEBUG("Store PTX for cache_key {}", cache_key);
   WrappedPtx k;
   k.ptx = ptx;
   k.metadata.cache_key = cache_key;

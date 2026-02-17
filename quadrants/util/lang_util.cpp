@@ -32,14 +32,14 @@ std::string runtime_lib_dir() {
   if (!compiled_lib_dir.empty()) {
     folder = compiled_lib_dir;
   } else {
-    auto ti_lib_dir = getenv("TI_LIB_DIR");
-    TI_ERROR_IF(
+    auto ti_lib_dir = getenv("QD_LIB_DIR");
+    QD_ERROR_IF(
         !ti_lib_dir,
-        "If you are running the quadrants_cpp_tests please set $TI_LIB_DIR "
+        "If you are running the quadrants_cpp_tests please set $QD_LIB_DIR "
         "to $QUADRANTS_INSTALL_DIR/_lib/runtime. $QUADRANTS_INSTALL_DIR can be "
         "retrieved from quadrants.__path__[0] in python. You can also use this "
-        "script to populate $TI_LIB_DIR:\n\n"
-        "export TI_LIB_DIR=$(python -c \"import os; import quadrants as ti; "
+        "script to populate $QD_LIB_DIR:\n\n"
+        "export QD_LIB_DIR=$(python -c \"import os; import quadrants as ti; "
         "p = os.path.join(ti.__path__[0], '_lib', 'runtime'); print(p)\" | "
         "tail -n 1)");
     folder = std::string(ti_lib_dir);
@@ -54,7 +54,7 @@ real get_cpu_frequency() {
     Time::sleep(1);
     uint64 elapsed_cycles = Time::get_cycles() - cycles;
     auto frequency = real(std::round(elapsed_cycles / 1e8_f64) / 10.0_f64);
-    TI_INFO("CPU frequency = {:.2f} GHz ({} cycles per second)", frequency,
+    QD_INFO("CPU frequency = {:.2f} GHz ({} cycles per second)", frequency,
             elapsed_cycles);
     cpu_frequency = frequency;
   }
@@ -99,13 +99,13 @@ real measure_cpe(std::function<void()> target,
 }
 
 bool command_exist(const std::string &command) {
-#if defined(TI_PLATFORM_LINUX)
+#if defined(QD_PLATFORM_LINUX)
   if (std::system(fmt::format("which {} > /dev/null 2>&1", command).c_str())) {
     return false;
   } else {
     return true;
   }
-#elif defined(TI_PLATFORM_WINDOWS)
+#elif defined(QD_PLATFORM_WINDOWS)
   if (std::system(fmt::format("where {} >nul 2>nul", command).c_str())) {
     return false;
   } else {
@@ -126,11 +126,11 @@ void initialize_benchmark() {
     return;
   }
   initialized = true;
-#if defined(TI_PLATFORM_LINUX)
+#if defined(QD_PLATFORM_LINUX)
   std::ifstream noturbo("/sys/devices/system/cpu/intel_pstate/no_turbo");
   char c;
   noturbo >> c;
-  TI_WARN_IF(c != '1',
+  QD_WARN_IF(c != '1',
              "You seem to be running the benchmark with Intel Turboboost.");
 #endif
 }

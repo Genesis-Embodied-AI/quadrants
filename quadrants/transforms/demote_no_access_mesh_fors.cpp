@@ -10,7 +10,7 @@ namespace quadrants::lang {
 namespace {
 
 void convert_to_range_for(OffloadedStmt *offloaded) {
-  TI_ASSERT(offloaded->task_type == OffloadedTaskType::mesh_for);
+  QD_ASSERT(offloaded->task_type == OffloadedTaskType::mesh_for);
 
   DelayedIRModifier modifier;
   auto stmts = irpass::analysis::gather_statements(

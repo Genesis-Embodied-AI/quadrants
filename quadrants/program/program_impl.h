@@ -107,7 +107,7 @@ class ProgramImpl {
 
   // TODO: Move to Runtime Object
   virtual uint64_t *get_device_alloc_info_ptr(const DeviceAllocation &alloc) {
-    TI_ERROR(
+    QD_ERROR(
         "get_device_alloc_info_ptr() not implemented on the current backend");
     return nullptr;
   }
@@ -116,24 +116,24 @@ class ProgramImpl {
   virtual void fill_ndarray(const DeviceAllocation &alloc,
                             std::size_t size,
                             uint32_t data) {
-    TI_ERROR("fill_ndarray() not implemented on the current backend");
+    QD_ERROR("fill_ndarray() not implemented on the current backend");
   }
 
   virtual void enqueue_compute_op_lambda(
       std::function<void(Device *device, CommandList *cmdlist)> op,
       const std::vector<ComputeOpImageRef> &image_refs) {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
   virtual void print_memory_profiler_info(
       std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
       uint64 *result_buffer) {
-    TI_ERROR(
+    QD_ERROR(
         "print_memory_profiler_info() not implemented on the current backend");
   }
 
   virtual void check_runtime_error(uint64 *result_buffer) {
-    TI_ERROR("check_runtime_error() not implemented on the current backend");
+    QD_ERROR("check_runtime_error() not implemented on the current backend");
   }
 
   virtual void finalize() {
@@ -169,7 +169,7 @@ class ProgramImpl {
  protected:
   virtual std::unique_ptr<KernelCompiler> make_kernel_compiler() = 0;
   virtual std::unique_ptr<KernelLauncher> make_kernel_launcher() {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 
  private:

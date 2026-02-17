@@ -128,7 +128,7 @@ class LoopUniqueStmtSearcher : public BasicStmtVisitor {
   bool is_ptr_indices_loop_unique(GlobalPtrStmt *stmt) const {
     // Check if the address is loop-unique, i.e., stmt contains
     // either a loop-unique index or all top-level loop indices.
-    TI_ASSERT(num_different_loop_indices != -1);
+    QD_ASSERT(num_different_loop_indices != -1);
     std::vector<int> loop_indices;
     loop_indices.reserve(stmt->indices.size());
     for (auto &index : stmt->indices) {
@@ -156,7 +156,7 @@ class LoopUniqueStmtSearcher : public BasicStmtVisitor {
   bool is_ptr_indices_loop_unique(ExternalPtrStmt *stmt) const {
     // Check if the address is loop-unique, i.e., stmt contains
     // either a loop-unique index or all top-level loop indices.
-    TI_ASSERT(num_different_loop_indices != -1);
+    QD_ASSERT(num_different_loop_indices != -1);
     std::vector<int> loop_indices;
     loop_indices.reserve(stmt->indices.size());
     for (auto &index : stmt->indices) {
@@ -307,7 +307,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
          */
         if (accessed_ptr->second) {
           ExternalPtrStmt *other_ptr = accessed_ptr->second;
-          TI_ASSERT(stmt->indices.size() == other_ptr->indices.size());
+          QD_ASSERT(stmt->indices.size() == other_ptr->indices.size());
           for (int axis = 0; axis < stmt->indices.size(); axis++) {
             Stmt *this_index = stmt->indices[axis];
             Stmt *other_index = other_ptr->indices[axis];
@@ -334,7 +334,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
                                        hashing::Hasher<std::vector<int>>>,
                     std::unordered_set<MatrixPtrStmt *>>
   run(IRNode *root) {
-    TI_ASSERT(root->is<OffloadedStmt>());
+    QD_ASSERT(root->is<OffloadedStmt>());
     auto offload = root->as<OffloadedStmt>();
     UniquelyAccessedSNodeSearcher searcher;
     if (offload->task_type == OffloadedTaskType::range_for ||
@@ -399,7 +399,7 @@ class UniquelyAccessedBitStructGatherer : public BasicStmtVisitor {
               continue;
             }
             auto *ptr2 = accessed_ptr->second;
-            TI_ASSERT(ptr1->indices.size() == ptr2->indices.size());
+            QD_ASSERT(ptr1->indices.size() == ptr2->indices.size());
             for (int id = 0; id < (int)ptr1->indices.size(); id++) {
               if (!irpass::analysis::same_value(ptr1->indices[id],
                                                 ptr2->indices[id])) {

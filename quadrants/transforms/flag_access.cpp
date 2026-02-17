@@ -139,7 +139,7 @@ class WeakenAccess : public BasicStmtVisitor {
         } else {
           loop_snode = current_offload_->snode;
         }
-        TI_ASSERT(loop_snode);
+        QD_ASSERT(loop_snode);
         if (!share_sparsity(stmt->snode, loop_snode)) {
           same_as_loop_snode = false;
         }
@@ -169,7 +169,7 @@ class WeakenAccess : public BasicStmtVisitor {
 namespace irpass {
 
 void flag_access(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   FlagAccess flag_access(root);
   WeakenAccess weaken_access(root);
 }

@@ -2,22 +2,22 @@
 
 namespace quadrants::lang {
 void CUCG::init_solver() {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   if (!CUBLASDriver::get_instance().is_loaded()) {
     bool load_success = CUBLASDriver::get_instance().load_cublas();
     if (!load_success) {
-      TI_ERROR("Failed to load cublas library!");
+      QD_ERROR("Failed to load cublas library!");
     }
   }
   CUBLASDriver::get_instance().cubCreate(&handle_);
   int version;
   CUBLASDriver::get_instance().cubGetVersion(handle_, &version);
-  TI_TRACE("CUBLAS version: {}\n", version);
+  QD_TRACE("CUBLAS version: {}\n", version);
 #endif
 }
 
 void CUCG::solve(Program *prog, const Ndarray &x, const Ndarray &b) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
   CuSparseMatrix &A = static_cast<CuSparseMatrix &>(A_);
   size_t dX = prog->get_ndarray_data_ptr_as_int(&x);
   size_t db = prog->get_ndarray_data_ptr_as_int(&b);

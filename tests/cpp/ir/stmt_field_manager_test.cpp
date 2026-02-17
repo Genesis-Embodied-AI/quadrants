@@ -15,10 +15,10 @@ class TestStmt : public Stmt {
 
  public:
   TestStmt(Stmt *input, int a, int b) : input(input), a(a), b(b) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(input, a, b);
+  QD_STMT_DEF_FIELDS(input, a, b);
 };
 
 class TestStmtVector : public Stmt {
@@ -30,10 +30,10 @@ class TestStmtVector : public Stmt {
   TestStmtVector(const std::vector<Stmt *> &vec1,
                  const std::vector<Stmt *> &vec2)
       : vec1(vec1), vec2(vec2) {
-    TI_STMT_REG_FIELDS;
+    QD_STMT_REG_FIELDS;
   }
 
-  TI_STMT_DEF_FIELDS(vec1, vec2);
+  QD_STMT_DEF_FIELDS(vec1, vec2);
 };
 }  // namespace
 

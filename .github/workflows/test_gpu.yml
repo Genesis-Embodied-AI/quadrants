@@ -87,7 +87,7 @@ jobs:
           ls -lh
           chmod +x quadrants_cpp_tests
           ls -lh
-          export TI_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+          export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
           ./quadrants_cpp_tests --gtest_filter=-AMDGPU.*
   test_linux_cuda:
     name: Test Linux CUDA
@@ -185,5 +185,5 @@ jobs:
           pip install -r requirements_test_xdist.txt
       - name: run tests
         run: |
-          export TI_AMDGPU_V520=1  # uses .cpu() before running asserts on dlpack torch tensors
+          export QD_AMDGPU_V520=1  # uses .cpu() before running asserts on dlpack torch tensors
           python tests/run_tests.py -t 4 -r 1 -v --arch amdgpu

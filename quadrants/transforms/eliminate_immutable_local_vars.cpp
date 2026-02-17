@@ -43,7 +43,7 @@ class EliminateImmutableLocalVars : public BasicStmtVisitor {
 
   void visit(LocalStoreStmt *stmt) override {
     if (immutable_local_vars_.find(stmt->dest) != immutable_local_vars_.end()) {
-      TI_ASSERT(immutable_local_var_to_value_.find(stmt->dest) ==
+      QD_ASSERT(immutable_local_var_to_value_.find(stmt->dest) ==
                 immutable_local_var_to_value_.end());
       immutable_local_var_to_value_[stmt->dest] = stmt->val;
       delayed_modifier_.erase(stmt);
@@ -61,7 +61,7 @@ class EliminateImmutableLocalVars : public BasicStmtVisitor {
 namespace irpass {
 
 void eliminate_immutable_local_vars(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   EliminateImmutableLocalVars::run(root);
 }
 

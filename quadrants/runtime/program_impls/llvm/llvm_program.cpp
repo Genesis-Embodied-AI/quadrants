@@ -11,12 +11,12 @@
 #include "quadrants/runtime/cpu/kernel_launcher.h"
 #include "quadrants/analysis/offline_cache_util.h"
 
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
 #include "quadrants/codegen/cuda/codegen_cuda.h"
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #endif
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "quadrants/codegen/amdgpu/codegen_amdgpu.h"
 #include "quadrants/runtime/amdgpu/kernel_launcher.h"
 #endif
@@ -62,7 +62,7 @@ void LlvmProgramImpl::materialize_snode_tree(SNodeTree *tree,
   compile_snode_tree_types(tree);
   int snode_tree_id = tree->id();
 
-  TI_ASSERT(cache_data_->fields.find(snode_tree_id) !=
+  QD_ASSERT(cache_data_->fields.find(snode_tree_id) !=
             cache_data_->fields.end());
   initialize_llvm_runtime_snodes(cache_data_->fields.at(snode_tree_id),
                                  result_buffer);
@@ -108,22 +108,22 @@ std::unique_ptr<KernelLauncher> LlvmProgramImpl::make_kernel_launcher() {
   if (arch_is_cpu(config->arch)) {
     return std::make_unique<cpu::KernelLauncher>(std::move(cfg));
   } else if (config->arch == Arch::cuda) {
-#if defined(TI_WITH_CUDA)
+#if defined(QD_WITH_CUDA)
     return std::make_unique<cuda::KernelLauncher>(std::move(cfg));
 #endif
   } else if (config->arch == Arch::amdgpu) {
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
     return std::make_unique<amdgpu::KernelLauncher>(std::move(cfg));
 #endif
   }
 
-  TI_NOT_IMPLEMENTED;
+  QD_NOT_IMPLEMENTED;
 }
 
 LlvmProgramImpl *get_llvm_program(Program *prog) {
   LlvmProgramImpl *llvm_prog =
       dynamic_cast<LlvmProgramImpl *>(prog->get_program_impl());
-  TI_ASSERT(llvm_prog != nullptr);
+  QD_ASSERT(llvm_prog != nullptr);
   return llvm_prog;
 }
 

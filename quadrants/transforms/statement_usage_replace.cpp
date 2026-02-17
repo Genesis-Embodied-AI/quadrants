@@ -70,7 +70,7 @@ class StatementUsageReplace : public IRVisitor {
     }
 
     // statements inside old_stmt->parent
-    TI_ASSERT(old_stmt->parent != nullptr);
+    QD_ASSERT(old_stmt->parent != nullptr);
     old_stmt->parent->accept(&replacer);
     auto current_block = old_stmt->parent->parent_block();
 
@@ -87,7 +87,7 @@ class StatementUsageReplace : public IRVisitor {
 namespace irpass {
 
 void replace_all_usages_with(IRNode *root, Stmt *old_stmt, Stmt *new_stmt) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   StatementUsageReplace::run(root, old_stmt, new_stmt);
 }
 

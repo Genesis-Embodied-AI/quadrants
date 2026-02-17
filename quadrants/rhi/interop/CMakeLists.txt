@@ -8,16 +8,16 @@ target_sources(${INTEROP_RHI}
     vulkan_cuda_interop.cpp
   )
 
-if (TI_WITH_CUDA)
-  target_compile_definitions(${INTEROP_RHI} PRIVATE -DTI_WITH_CUDA)
+if (QD_WITH_CUDA)
+  target_compile_definitions(${INTEROP_RHI} PRIVATE -DQD_WITH_CUDA)
 endif()
 
-if (TI_WITH_AMDGPU)
-  target_compile_definitions(${INTEROP_RHI} PRIVATE -DTI_WITH_AMDGPU)
+if (QD_WITH_AMDGPU)
+  target_compile_definitions(${INTEROP_RHI} PRIVATE -DQD_WITH_AMDGPU)
 endif()
 
-if (TI_WITH_VULKAN)
-  target_compile_definitions(${INTEROP_RHI} PRIVATE -DTI_WITH_VULKAN)
+if (QD_WITH_VULKAN)
+  target_compile_definitions(${INTEROP_RHI} PRIVATE -DQD_WITH_VULKAN)
 endif()
 
 target_include_directories(${INTEROP_RHI}
@@ -28,6 +28,6 @@ target_include_directories(${INTEROP_RHI}
     ${PROJECT_SOURCE_DIR}/external/SPIRV-Tools/include
   )
 
-if (TI_WITH_VULKAN)
+if (QD_WITH_VULKAN)
   target_link_libraries(${INTEROP_RHI} PRIVATE vulkan_rhi)
 endif()

@@ -13,7 +13,7 @@ std::string element_type_name(MeshElementType type) {
   else if (type == MeshElementType::Cell)
     return "cells";
   else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 
@@ -30,7 +30,7 @@ std::string conv_type_name(ConvType type) {
   else if (type == mesh::ConvType::g2r) {
     return "global to reordered";
   } else {
-    TI_NOT_IMPLEMENTED;
+    QD_NOT_IMPLEMENTED;
   }
 }
 

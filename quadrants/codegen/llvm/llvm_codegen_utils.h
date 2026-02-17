@@ -11,7 +11,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsNVPTX.h"
 
-#if defined(TI_WITH_AMDGPU)
+#if defined(QD_WITH_AMDGPU)
 #include "llvm/IR/IntrinsicsAMDGPU.h"
 #endif
 
@@ -65,8 +65,8 @@ class LLVMModuleBuilder {
   LLVMModuleBuilder(std::unique_ptr<llvm::Module> &&module,
                     QuadrantsLLVMContext *tlctx)
       : module(std::move(module)), tlctx(tlctx) {
-    TI_ASSERT(this->module != nullptr);
-    TI_ASSERT(&this->module->getContext() == tlctx->get_this_thread_context());
+    QD_ASSERT(this->module != nullptr);
+    QD_ASSERT(&this->module->getContext() == tlctx->get_this_thread_context());
   }
 
   llvm::Value *create_entry_block_alloca(llvm::Type *type,
@@ -93,7 +93,7 @@ class LLVMModuleBuilder {
   llvm::Function *get_runtime_function(const std::string &name) {
     auto f = tlctx->get_runtime_function(name);
     if (!f) {
-      TI_ERROR("LLVMRuntime function {} not found.", name);
+      QD_ERROR("LLVMRuntime function {} not found.", name);
     }
     f = llvm::cast<llvm::Function>(
         module

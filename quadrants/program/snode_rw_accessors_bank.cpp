@@ -32,8 +32,8 @@ SNodeRwAccessorsBank::Accessors::Accessors(const SNode *snode,
       prog_(prog),
       reader_(kernels.reader),
       writer_(kernels.writer) {
-  TI_ASSERT(reader_ != nullptr);
-  TI_ASSERT(writer_ != nullptr);
+  QD_ASSERT(reader_ != nullptr);
+  QD_ASSERT(writer_ != nullptr);
 }
 void SNodeRwAccessorsBank::Accessors::write_float(const std::vector<int> &I,
                                                   float64 val) {

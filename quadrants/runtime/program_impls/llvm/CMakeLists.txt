@@ -17,10 +17,10 @@ target_include_directories(llvm_program_impl
 target_link_libraries(llvm_program_impl PRIVATE llvm_codegen)
 
 target_link_libraries(llvm_program_impl PRIVATE cpu_runtime)
-if (TI_WITH_CUDA)
+if (QD_WITH_CUDA)
     target_link_libraries(llvm_program_impl PRIVATE cuda_runtime)
 endif()
 
-if (TI_WITH_AMDGPU)
+if (QD_WITH_AMDGPU)
     target_link_libraries(llvm_program_impl PRIVATE amdgpu_runtime)
 endif()

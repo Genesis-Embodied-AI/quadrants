@@ -180,7 +180,7 @@ class BitLoopVectorize : public IRVisitor {
             int32 rhs_val = get_constant_value(stmt->rhs);
             // TODO: we limit 1 for now, 0 should be easy to implement by a
             // bit_not on original bit pattern
-            TI_ASSERT(rhs_val == 1);
+            QD_ASSERT(rhs_val == 1);
             // cmp_eq with 1 yields the bit pattern itself
 
             // to pass CFG analysis and mark the stmt vectorized
@@ -202,7 +202,7 @@ class BitLoopVectorize : public IRVisitor {
             int32 rhs_val = get_constant_value(stmt->rhs);
             // TODO: we limit 2 and 3 for now, the other case should be
             // implement in a similar fashion
-            TI_ASSERT(rhs_val == 2 || rhs_val == 3);
+            QD_ASSERT(rhs_val == 2 || rhs_val == 3);
             // 010 and 011 respectively
             auto &buffer_vec = it->second;
             Stmt *a = buffer_vec[0], *b = buffer_vec[1], *c = buffer_vec[2];
@@ -328,7 +328,7 @@ class BitLoopVectorize : public IRVisitor {
 namespace irpass {
 
 void bit_loop_vectorize(IRNode *root) {
-  TI_AUTO_PROF;
+  QD_AUTO_PROF;
   BitLoopVectorize::run(root);
   die(root);
 }

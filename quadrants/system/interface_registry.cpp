@@ -6,7 +6,7 @@
 
 namespace quadrants {
 
-TI_INTERFACE_DEF(Benchmark, "benchmark")
-TI_INTERFACE_DEF(Task, "task")
+QD_INTERFACE_DEF(Benchmark, "benchmark")
+QD_INTERFACE_DEF(Task, "task")
 
 }  // namespace quadrants

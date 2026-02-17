@@ -26,7 +26,7 @@ inline std::array<std::string, 5> parse_printf_specifier(std::string spec) {
   std::smatch match;
   bool matched = std::regex_match(spec, match, re);
   if (matched == false) {
-    TI_ERROR("{} is not a valid printf specifier.", spec)
+    QD_ERROR("{} is not a valid printf specifier.", spec)
   }
   std::string flags = match[1];
   std::string width = match[2];
@@ -67,7 +67,7 @@ inline std::string merge_printf_specifier(
   auto &&[user_flags, user_width, user_precision, user_length,
           user_conversion] = parse_printf_specifier(user);
   if (user_width == "*" || user_precision == ".*" || user_conversion == "n") {
-    TI_ERROR("The {} printf specifier is not supported", user)
+    QD_ERROR("The {} printf specifier is not supported", user)
   }
 
   auto &&[_, __, dt_precision, dt_length, dt_conversion] =
@@ -82,7 +82,7 @@ inline std::string merge_printf_specifier(
   // Discard user_length and give warning if it doesn't match with dt_length.
   if (user_length != dt_length) {
     if (!user_length.empty()) {
-      TI_WARN("The printf length specifier '{}' is overritten by '{}'",
+      QD_WARN("The printf length specifier '{}' is overritten by '{}'",
               user_length, dt_length);
     }
     user_length = dt_length;
@@ -108,7 +108,7 @@ inline std::string merge_printf_specifier(
            float_group.find(dt_conversion.back()) != std::string::npos)) {
         dt_conversion.back() = user_conversion.back();
       } else {
-        TI_WARN("The printf conversion specifier '{}' is overritten by '{}'",
+        QD_WARN("The printf conversion specifier '{}' is overritten by '{}'",
                 user_conversion, dt_conversion);
       }
     }
@@ -117,7 +117,7 @@ inline std::string merge_printf_specifier(
 
   std::string res = "%" + user_flags + user_width + user_precision +
                     user_length + user_conversion;
-  TI_TRACE("Merge %{} and {} into {}.", user, from_data_type, res);
+  QD_TRACE("Merge %{} and {} into {}.", user, from_data_type, res);
   return res;
 }
 

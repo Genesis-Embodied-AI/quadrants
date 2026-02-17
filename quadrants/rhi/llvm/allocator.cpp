@@ -40,7 +40,7 @@ uint64_t *CachingAllocator::allocate(
   if (it_blk != mem_blocks_.end()) {
     size_t remaining_sz = it_blk->first - size_aligned;
     if (remaining_sz > 0) {
-      TI_ASSERT(remaining_sz % quadrants_page_size == 0);
+      QD_ASSERT(remaining_sz % quadrants_page_size == 0);
       auto remaining_head =
           reinterpret_cast<uint8_t *>(it_blk->second) + size_aligned;
       mem_blocks_.insert(std::make_pair(remaining_sz, remaining_head));
