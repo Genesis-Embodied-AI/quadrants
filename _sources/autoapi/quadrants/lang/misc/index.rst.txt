@@ -216,7 +216,7 @@ Module Contents
                       * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
                       *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
                       *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
-                      *``debug_dump_path`` (str): used as the base path for TI_DUMP_IR and similar
+                      *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar
 
 
 .. py:function:: no_activate(*args)
