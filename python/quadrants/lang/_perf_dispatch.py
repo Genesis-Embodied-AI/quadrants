@@ -211,7 +211,6 @@ class PerformanceDispatcher(Generic[P, R]):
 
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
             self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
-            self._times_by_dispatch_impl_by_geometry_hash[geometry_hash].clear()
             del self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             self._calls_since_last_update_by_geometry_hash[geometry_hash] = 0
 
@@ -226,7 +225,10 @@ class PerformanceDispatcher(Generic[P, R]):
             self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
             dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             assert dispatch_impl_ is not None
-            log_str = f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
+            log_str = (
+                f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} "
+                f"out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
+            )
             _logging.debug(log_str)
             if TI_PERFDISPATCH_PRINT_DEBUG:
                 print(log_str)
