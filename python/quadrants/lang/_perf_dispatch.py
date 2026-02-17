@@ -276,6 +276,10 @@ def perf_dispatch(
         get_geometry_hash: A function that returns a geometry hash given the arguments.
         warmup: Number of warmup iterations to run for each implementation before measuring. Default 3.
         active: Number of active (timed) iterations to run for each implementation. Default 1.
+        repeat_after_count: repeats the cycle of warmup and active from scratch after repeat_after_count
+        additional calls.
+        repeat_after_seconds: repeats the cycle of warmup and active from scratch after repeat_after_seconds
+        seconds elapsed.
 
     Example usage:
 
