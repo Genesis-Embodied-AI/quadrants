@@ -98,19 +98,11 @@ class PerformanceDispatcher(Generic[P, R]):
         dispatch_impl_set = self._dispatch_impl_set
 
         def decorator(func: Callable | QuadrantsCallable) -> Type[DispatchImpl]:
-            func_type = type(func)
-            if func_type is {QuadrantsCallable}:
-                sig = inspect.signature(func.fn)  # type: ignore
-                log_str = f"perf_dispatch registering {func.fn.__name__}"  # type: ignore
-                _logging.debug(log_str)
-                if TI_PERFDISPATCH_PRINT_DEBUG:
-                    print(log_str)
-            else:
-                sig = inspect.signature(func)
-                log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
-                _logging.debug(log_str)
-                if TI_PERFDISPATCH_PRINT_DEBUG:
-                    print(log_str)
+            sig = inspect.signature(func)
+            log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
+            _logging.debug(log_str)
+            if TI_PERFDISPATCH_PRINT_DEBUG:
+                print(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
                     raise QuadrantsSyntaxError(
