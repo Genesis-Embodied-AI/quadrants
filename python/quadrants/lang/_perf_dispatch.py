@@ -6,6 +6,7 @@ from typing import Any, Callable, Generic, ParamSpec, Type, TypeVar
 
 from .. import _logging
 from . import impl
+from ._exceptions import raise_exception
 from ._quadrants_callable import QuadrantsCallable
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
@@ -97,7 +98,7 @@ class PerformanceDispatcher(Generic[P, R]):
         """
         dispatch_impl_set = self._dispatch_impl_set
 
-        def decorator(func: Callable | QuadrantsCallable) -> Type[DispatchImpl]:
+        def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
             sig = inspect.signature(func)
             log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
             _logging.debug(log_str)
@@ -105,17 +106,21 @@ class PerformanceDispatcher(Generic[P, R]):
                 print(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
-                    raise QuadrantsSyntaxError(
-                        f"Signature parameter {param_name} of function not in perf_dispatch function prototype"
+                    raise_exception(
+                        QuadrantsSyntaxError,
+                        msg=f"Signature parameter {param_name} of function not in perf_dispatch function prototype",
+                        err_code="PERFDISPATCH_ANNOTATION_SEQUENCE_MISMATCH",
                     )
             if len(sig.parameters) != len(self._param_types):
-                raise QuadrantsSyntaxError(
-                    f"Number of function parameters {len(sig.parameters)} doesn't match number of parameters in perf_dispatch function prototype {len(self._param_types)}"
+                raise_exception(
+                    QuadrantsSyntaxError,
+                    msg=f"Number of function parameters {len(sig.parameters)} doesn't match number of parameters in perf_dispatch function prototype {len(self._param_types)}",
+                    err_code="PERFDISPATCH_ANNOTATION_SEQUENCE_MISMATCH",
                 )
 
             dispatch_impl = DispatchImpl(implementation1=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
-            return DispatchImpl
+            return dispatch_impl
 
         if implementation is not None:
             return decorator(implementation)
