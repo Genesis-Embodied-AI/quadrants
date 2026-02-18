@@ -1,0 +1,383 @@
+quadrants.lang.ast.ast_transformer_utils
+========================================
+
+.. py:module:: quadrants.lang.ast.ast_transformer_utils
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer_utils.AutodiffMode
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer_utils.Builder
+   quadrants.lang.ast.ast_transformer_utils.VariableScopeGuard
+   quadrants.lang.ast.ast_transformer_utils.StaticScopeStatus
+   quadrants.lang.ast.ast_transformer_utils.StaticScopeGuard
+   quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus
+   quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard
+   quadrants.lang.ast.ast_transformer_utils.LoopStatus
+   quadrants.lang.ast.ast_transformer_utils.LoopScopeAttribute
+   quadrants.lang.ast.ast_transformer_utils.LoopScopeGuard
+   quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard
+   quadrants.lang.ast.ast_transformer_utils.ReturnStatus
+   quadrants.lang.ast.ast_transformer_utils.PureViolation
+   quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext
+   quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer_utils.get_decorator
+
+
+Module Contents
+---------------
+
+.. py:data:: AutodiffMode
+
+.. py:class:: Builder
+
+.. py:class:: VariableScopeGuard(scopes: list[dict[str, Any]])
+
+   .. py:attribute:: scopes
+
+
+.. py:class:: StaticScopeStatus
+
+   .. py:attribute:: is_in_static_scope
+      :value: False
+
+
+
+.. py:class:: StaticScopeGuard(status: StaticScopeStatus)
+
+   .. py:attribute:: status
+
+
+.. py:class:: NonStaticControlFlowStatus
+
+   .. py:attribute:: is_in_non_static_control_flow
+      :value: False
+
+
+
+.. py:class:: NonStaticControlFlowGuard(status: NonStaticControlFlowStatus)
+
+   .. py:attribute:: status
+
+
+.. py:class:: LoopStatus
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Generic enumeration.
+
+   Derive from this class to define new enumerations.
+
+
+   .. py:attribute:: Normal
+      :value: 0
+
+
+
+   .. py:attribute:: Break
+      :value: 1
+
+
+
+   .. py:attribute:: Continue
+      :value: 2
+
+
+
+.. py:class:: LoopScopeAttribute(is_static: bool)
+
+   .. py:attribute:: is_static
+
+
+   .. py:attribute:: status
+      :type:  LoopStatus
+
+
+   .. py:attribute:: nearest_non_static_if
+      :type:  ast.If | None
+      :value: None
+
+
+
+.. py:class:: LoopScopeGuard(scopes: list[dict[str, Any]], non_static_guard=None)
+
+   .. py:attribute:: scopes
+
+
+   .. py:attribute:: non_static_guard
+      :value: None
+
+
+
+.. py:class:: NonStaticIfGuard(if_node: ast.If, loop_attribute: LoopScopeAttribute, non_static_status: NonStaticControlFlowStatus)
+
+   .. py:attribute:: loop_attribute
+
+
+   .. py:attribute:: if_node
+
+
+   .. py:attribute:: non_static_guard
+
+
+.. py:class:: ReturnStatus
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Generic enumeration.
+
+   Derive from this class to define new enumerations.
+
+
+   .. py:attribute:: NoReturn
+      :value: 0
+
+
+
+   .. py:attribute:: ReturnedVoid
+      :value: 1
+
+
+
+   .. py:attribute:: ReturnedValue
+      :value: 2
+
+
+
+.. py:class:: PureViolation
+
+   .. py:attribute:: var_name
+      :type:  str
+
+
+.. py:class:: ASTTransformerGlobalContext(current_kernel: Kernel, pruning: quadrants.lang._pruning.Pruning, currently_compiling_materialize_key, pass_idx: int)
+
+   .. py:attribute:: current_kernel
+      :type:  Kernel
+
+
+   .. py:attribute:: pruning
+      :type:  quadrants.lang._pruning.Pruning
+
+
+   .. py:attribute:: currently_compiling_materialize_key
+
+
+   .. py:attribute:: pass_idx
+      :type:  int
+
+
+.. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, Ellipsis]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, Ellipsis], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
+
+   .. py:attribute:: global_context
+      :type:  ASTTransformerGlobalContext
+
+
+   .. py:attribute:: func
+      :type:  quadrants.lang._func_base.FuncBase
+
+
+   .. py:attribute:: local_scopes
+      :type:  list[dict[str, Any]]
+      :value: []
+
+
+
+   .. py:attribute:: loop_scopes
+      :type:  List[LoopScopeAttribute]
+      :value: []
+
+
+
+   .. py:attribute:: template_slot_locations
+
+
+   .. py:attribute:: is_kernel
+      :type:  bool
+
+
+   .. py:attribute:: arg_features
+      :type:  list[tuple[Any, Ellipsis]]
+
+
+   .. py:attribute:: returns
+      :value: None
+
+
+
+   .. py:attribute:: global_vars
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: template_vars
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: is_pure
+      :type:  bool
+
+
+   .. py:attribute:: py_args
+      :type:  tuple[Any, Ellipsis]
+
+
+   .. py:attribute:: return_data
+      :type:  tuple[Any, Ellipsis] | Any | None
+      :value: None
+
+
+
+   .. py:attribute:: file
+      :type:  str
+
+
+   .. py:attribute:: src
+      :type:  list[str]
+
+
+   .. py:attribute:: indent
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: lineno_offset
+
+
+   .. py:attribute:: start_lineno
+
+
+   .. py:attribute:: end_lineno
+
+
+   .. py:attribute:: raised
+      :value: False
+
+
+
+   .. py:attribute:: non_static_control_flow_status
+
+
+   .. py:attribute:: static_scope_status
+
+
+   .. py:attribute:: returned
+
+
+   .. py:attribute:: ast_builder
+
+
+   .. py:attribute:: visited_funcdef
+      :value: False
+
+
+
+   .. py:attribute:: is_real_function
+
+
+   .. py:attribute:: kernel_args
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: only_parse_function_def
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: autodiff_mode
+
+
+   .. py:attribute:: loop_depth
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: raise_on_templated_floats
+
+
+   .. py:attribute:: expanding_dataclass_call_parameters
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: adstack_enabled
+      :type:  bool
+
+
+   .. py:method:: variable_scope_guard()
+
+
+   .. py:method:: loop_scope_guard(is_static=False)
+
+
+   .. py:method:: non_static_if_guard(if_node: ast.If)
+
+
+   .. py:method:: non_static_control_flow_guard() -> NonStaticControlFlowGuard
+
+
+   .. py:method:: static_scope_guard() -> StaticScopeGuard
+
+
+   .. py:method:: current_scope() -> dict[str, Any]
+
+
+   .. py:method:: current_loop_scope() -> dict[str, Any]
+
+
+   .. py:method:: loop_status() -> LoopStatus
+
+
+   .. py:method:: set_loop_status(status: LoopStatus) -> None
+
+
+   .. py:method:: is_in_static_for() -> bool
+
+
+   .. py:method:: is_in_non_static_control_flow() -> bool
+
+
+   .. py:method:: is_in_static_scope() -> bool
+
+
+   .. py:method:: is_var_declared(name: str) -> bool
+
+
+   .. py:method:: create_variable(name: str, var: Any) -> None
+
+
+   .. py:method:: check_loop_var(loop_var: str) -> None
+
+
+   .. py:method:: get_var_by_name(name: str) -> tuple[bool, Any, str | None]
+
+
+   .. py:method:: get_pos_info(node: ast.AST) -> str
+
+
+.. py:function:: get_decorator(ctx: ASTTransformerFuncContext, node) -> str
+
