@@ -40,6 +40,8 @@ from quadrants.types import (
     template,
 )
 
+from ._exceptions import raise_exception
+from ._perf_dispatch import DispatchImpl
 from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 if TYPE_CHECKING:
@@ -150,6 +152,12 @@ class FuncBase:
                     pass
                 elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
+                elif self.func is DispatchImpl:
+                    raise_exception(
+                        QuadrantsSyntaxError,
+                        msg="@ti.kernel must be above @ti.perf_dispatch",
+                        err_code="PERFDISPATCH_ANNOTATION_SEQUENCE_MISMATCH",
+                    )
                 else:
                     raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))

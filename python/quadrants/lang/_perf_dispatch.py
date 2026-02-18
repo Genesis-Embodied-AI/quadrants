@@ -98,7 +98,7 @@ class PerformanceDispatcher(Generic[P, R]):
         """
         dispatch_impl_set = self._dispatch_impl_set
 
-        def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
+        def decorator(func: Callable | QuadrantsCallable) -> Type[DispatchImpl]:
             sig = inspect.signature(func)
             log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
             _logging.debug(log_str)
@@ -120,7 +120,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
             dispatch_impl = DispatchImpl(implementation1=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
-            return dispatch_impl
+            return DispatchImpl
 
         if implementation is not None:
             return decorator(implementation)
