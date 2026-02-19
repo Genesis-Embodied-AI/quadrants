@@ -3,6 +3,7 @@ import threading
 import time
 
 import quadrants as ti
+from quadrants.lang import impl
 from quadrants.lang.ast import transform_tree as _original_transform_tree
 
 from tests import test_utils
@@ -25,6 +26,12 @@ def test_concurrent_kernel_materialization():
     triggering a spurious "nested kernels" error or an assertion failure
     on _compiling_callable.
     """
+
+    # Force the one-time runtime/LLVM struct initialization on the main thread.
+    # Some backends (LLVM on x86/Windows) assert that add_struct_module is
+    # called from the main thread; this ensures that has already happened
+    # before worker threads attempt per-kernel materialization.
+    impl.get_runtime().materialize()
 
     @ti.kernel
     def kernel_a(x: ti.types.NDArray[ti.i32, 1]) -> None:
