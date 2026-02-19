@@ -760,61 +760,65 @@
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span>
             <span class="k">return</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
-        <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_try_load_fastcache</span><span class="p">(</span><span class="n">py_args</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
-        <span class="n">kernel_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Materializing kernel </span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">compilation_lock</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span>
+                <span class="k">return</span>
 
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used_py_dataclass_parameters</span><span class="p">)</span>
-        <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
-        <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_begin</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
-            <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
-                <span class="n">pass_idx</span><span class="o">=</span><span class="n">_pass</span><span class="p">,</span>
-                <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
-                <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
-                <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
-                <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
-                <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
+            <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_try_load_fastcache</span><span class="p">(</span><span class="n">py_args</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+            <span class="n">kernel_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Materializing kernel </span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
-                <span class="n">KernelSimplicityASTChecker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
+            <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used_py_dataclass_parameters</span><span class="p">)</span>
+            <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
+            <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">_pass</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_begin</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">_pass</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">enforce</span><span class="p">()</span>
+                <span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tree_and_ctx</span><span class="p">(</span>
+                    <span class="n">pass_idx</span><span class="o">=</span><span class="n">_pass</span><span class="p">,</span>
+                    <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
+                    <span class="n">template_slot_locations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">,</span>
+                    <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">,</span>
+                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                    <span class="n">pruning</span><span class="o">=</span><span class="n">pruning</span><span class="p">,</span>
+                    <span class="n">currently_compiling_materialize_key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span>
 
-            <span class="n">quadrants_ast_generator</span> <span class="o">=</span> <span class="n">ASTGenerator</span><span class="p">(</span>
-                <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
-                <span class="n">kernel_name</span><span class="o">=</span><span class="n">kernel_name</span><span class="p">,</span>
-                <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
-                <span class="n">only_parse_function_def</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
-                <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
-                <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DUMP_AST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="n">quadrants_kernel</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span>
-                <span class="n">quadrants_ast_generator</span><span class="p">,</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-                    <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-                    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">used_parameters</span><span class="p">:</span>
-                        <span class="n">split_param</span> <span class="o">=</span> <span class="n">param</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;__ti_&quot;</span><span class="p">)</span>
-                        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">split_param</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
-                            <span class="n">joined</span> <span class="o">=</span> <span class="s2">&quot;__ti_&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">split_param</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
-                            <span class="k">if</span> <span class="n">joined</span> <span class="ow">in</span> <span class="n">new_used_parameters</span><span class="p">:</span>
-                                <span class="k">break</span>
-                            <span class="n">new_used_parameters</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">joined</span><span class="p">)</span>
-                    <span class="n">used_parameters</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-                    <span class="n">used_parameters</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">new_used_parameters</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span>
-                    <span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
-                <span class="p">]</span>
-            <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span></div>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
+                    <span class="n">KernelSimplicityASTChecker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
+
+                <span class="n">quadrants_ast_generator</span> <span class="o">=</span> <span class="n">ASTGenerator</span><span class="p">(</span>
+                    <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+                    <span class="n">kernel_name</span><span class="o">=</span><span class="n">kernel_name</span><span class="p">,</span>
+                    <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                    <span class="n">only_parse_function_def</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
+                    <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DUMP_AST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">quadrants_kernel</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span>
+                    <span class="n">quadrants_ast_generator</span><span class="p">,</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                        <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+                        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">used_parameters</span><span class="p">:</span>
+                            <span class="n">split_param</span> <span class="o">=</span> <span class="n">param</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;__ti_&quot;</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">split_param</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+                                <span class="n">joined</span> <span class="o">=</span> <span class="s2">&quot;__ti_&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">split_param</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
+                                <span class="k">if</span> <span class="n">joined</span> <span class="ow">in</span> <span class="n">new_used_parameters</span><span class="p">:</span>
+                                    <span class="k">break</span>
+                                <span class="n">new_used_parameters</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">joined</span><span class="p">)</span>
+                        <span class="n">used_parameters</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+                        <span class="n">used_parameters</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">new_used_parameters</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span>
+                        <span class="n">Pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
+                    <span class="p">]</span>
+                <span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span></div>
 
 
 <div class="viewcode-block" id="Kernel.launch_kernel">
