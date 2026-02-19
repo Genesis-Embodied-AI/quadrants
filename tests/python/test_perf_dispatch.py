@@ -237,13 +237,12 @@ def test_perf_dispatch_kernel_py_mix() -> None:
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
-@pytest.mark.xfail(reason="Broken currently. TODO: fix this.")
 @test_utils.test()
 def test_perf_dispatch_swap_annotation_order() -> None:
     @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
     def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
 
-    with pytest.raises(QuadrantsSyntaxError):
+    with pytest.raises(QuadrantsSyntaxError, match="KERNEL_ANNOTATION_ORDER"):
 
         @ti.kernel
         @my_func1.register

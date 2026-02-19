@@ -40,6 +40,7 @@ from quadrants.types import (
     template,
 )
 
+from ._exceptions import raise_exception
 from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 if TYPE_CHECKING:
@@ -91,8 +92,16 @@ class FuncBase:
         and self.orig_arguments (both are identical after this call)
         - they just contain the original parameter annotations after this call, unexpanded
         - this function mostly just does checking
+
+        Note: NOT in the hot path. Just run once, on function registration
         """
         sig = inspect.signature(self.func)
+        if hasattr(self.func, "__wrapped__"):
+            raise_exception(
+                QuadrantsSyntaxError,
+                msg="Cant put kernel in front of other annotations",
+                err_code="KERNEL_ANNOTATION_ORDER",
+            )
         if sig.return_annotation not in {inspect._empty, None}:
             self.return_type = sig.return_annotation
             if (
