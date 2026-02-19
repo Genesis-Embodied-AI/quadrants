@@ -1,4 +1,5 @@
 import numbers
+import threading
 import weakref
 from types import FunctionType, MethodType
 from typing import TYPE_CHECKING, Any, Iterable, Sequence
@@ -344,6 +345,7 @@ class PyQuadrants:
         self._prog: Program | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
+        self.compilation_lock = threading.RLock()
         self._compiling_callable: KernelCxx | Kernel | Function | None = None
         self._current_global_context: "ASTTransformerGlobalContext | None" = None
         self.global_vars = []
