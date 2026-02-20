@@ -3,7 +3,6 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/visitors.h"
-#include "quadrants/rhi/arch.h"
 #include "quadrants/system/profiler.h"
 
 #include <deque>
@@ -25,9 +24,8 @@ class DemoteAtomics : public BasicStmtVisitor {
 
   OffloadedStmt *current_offloaded;
   DelayedIRModifier modifier;
-  const CompileConfig &config_;
 
-  explicit DemoteAtomics(const CompileConfig &config) : config_(config) {
+  DemoteAtomics() {
     current_offloaded = nullptr;
   }
 
@@ -39,15 +37,7 @@ class DemoteAtomics : public BasicStmtVisitor {
         demote = true;
       }
       if (current_offloaded->task_type == OffloadedTaskType::serial) {
-        // On SPIR-V backends (Metal/Vulkan), keep global atomics in serial
-        // tasks as real atomic operations instead of demoting to
-        // load-op-store.  The Metal shader compiler may misoptimize the
-        // resulting non-atomic load-op-store sequence when a later
-        // optimisation pass (cache_loop_invariant_global_vars) removes
-        // nearby device-memory writes from the loop body.
-        if (!arch_uses_spirv(config_.arch)) {
-          demote = true;
-        }
+        demote = true;
       }
       if (!demote &&
           (current_offloaded->task_type == OffloadedTaskType::range_for ||
@@ -228,8 +218,8 @@ class DemoteAtomics : public BasicStmtVisitor {
     current_offloaded = nullptr;
   }
 
-  static bool run(IRNode *node, const CompileConfig &config) {
-    DemoteAtomics demoter(config);
+  static bool run(IRNode *node) {
+    DemoteAtomics demoter;
     bool modified = false;
     while (true) {
       node->accept(&demoter);
@@ -247,7 +237,7 @@ namespace irpass {
 
 bool demote_atomics(IRNode *root, const CompileConfig &config) {
   QD_AUTO_PROF;
-  bool modified = DemoteAtomics::run(root, config);
+  bool modified = DemoteAtomics::run(root);
   type_check(root, config);
   return modified;
 }
