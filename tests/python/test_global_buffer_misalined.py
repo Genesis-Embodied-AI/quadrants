@@ -1,14 +1,14 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_global_buffer_misalignment():
-    @ti.kernel
-    def test(x: ti.f32):
+    @qd.kernel
+    def test(x: qd.f32):
         a = x
-        b = ti.cast(0.12, ti.f64)
+        b = qd.cast(0.12, qd.f64)
         for i in range(8):
             b += a
 

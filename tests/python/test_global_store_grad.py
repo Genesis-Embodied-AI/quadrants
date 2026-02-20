@@ -1,21 +1,21 @@
 """
-import quadrants as ti
+import quadrants as qd
 
-ti.lang.impl.current_cfg().print_ir = True
+qd.lang.impl.current_cfg().print_ir = True
 
 
 def test_global_store_branching():
-    # ti.reset()
+    # qd.reset()
 
     N = 16
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, N).place(x)
-    ti.root.dense(ti.i, N).place(y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, N).place(x)
+    qd.root.dense(qd.i, N).place(y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def oldeven():
         for i in range(N):
             if i % 2 == 0:

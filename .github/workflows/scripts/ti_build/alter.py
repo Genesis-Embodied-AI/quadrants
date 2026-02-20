@@ -17,7 +17,7 @@ from .tinysh import Command
 
 
 def _write_ti_bashrc():
-    path = get_cache_home() / "ti.bashrc"
+    path = get_cache_home() / "qd.bashrc"
     envs = get_cache_home() / "ti-env.sh"
     _write_env(envs)
     with open(path, "w") as f:
@@ -50,7 +50,7 @@ def _write_ti_zshrc():
 
 
 def _write_ti_pwshrc():
-    path = get_cache_home() / "ti.ps1"
+    path = get_cache_home() / "qd.ps1"
     with open(path, "w") as f:
         f.write(
             "\n".join(

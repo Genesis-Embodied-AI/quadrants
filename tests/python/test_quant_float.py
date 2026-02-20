@@ -2,20 +2,20 @@ import numpy as np
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @pytest.mark.parametrize("max_num_bits", [32, 64])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_float_unsigned(max_num_bits):
-    qflt = ti.types.quant.float(exp=6, frac=13, signed=False)
-    x = ti.field(dtype=qflt)
+    qflt = qd.types.quant.float(exp=6, frac=13, signed=False)
+    x = qd.field(dtype=qflt)
 
-    bitpack = ti.BitpackedFields(max_num_bits=max_num_bits)
+    bitpack = qd.BitpackedFields(max_num_bits=max_num_bits)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     tests = [
         0,
@@ -44,14 +44,14 @@ def test_quant_float_unsigned(max_num_bits):
         assert x[None] == v
 
 
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_float_signed():
-    qflt = ti.types.quant.float(exp=6, frac=13, signed=True)
-    x = ti.field(dtype=qflt)
+    qflt = qd.types.quant.float(exp=6, frac=13, signed=True)
+    x = qd.field(dtype=qflt)
 
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     tests = [0, 0.125, 0.5, 2, 4, 6, 7, 8, 9]
 
@@ -74,14 +74,14 @@ def test_quant_float_signed():
 
 
 @pytest.mark.parametrize("digits_bits", [23, 24])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_float_precision(digits_bits):
-    qflt = ti.types.quant.float(exp=8, frac=digits_bits)
-    x = ti.field(dtype=qflt)
+    qflt = qd.types.quant.float(exp=8, frac=digits_bits)
+    x = qd.field(dtype=qflt)
 
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     tests = [np.float32(np.pi), np.float32(np.pi * (1 << 100))]
 
@@ -97,14 +97,14 @@ def test_quant_float_precision(digits_bits):
 
 
 @pytest.mark.parametrize("signed", [True, False])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_float_truncation(signed):
-    qflt = ti.types.quant.float(exp=5, frac=2, signed=signed)
-    x = ti.field(dtype=qflt)
+    qflt = qd.types.quant.float(exp=5, frac=2, signed=signed)
+    x = qd.field(dtype=qflt)
 
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     # Sufficient digits
     for v in [1, 1.5]:
@@ -127,16 +127,16 @@ def test_quant_float_truncation(signed):
         assert x[None] == 1.75
 
 
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_float_atomic_demotion():
-    qflt = ti.types.quant.float(exp=5, frac=2)
-    x = ti.field(dtype=qflt)
+    qflt = qd.types.quant.float(exp=5, frac=2)
+    x = qd.field(dtype=qflt)
 
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for i in range(1):
             x[None] += 1

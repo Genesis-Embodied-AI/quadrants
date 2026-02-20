@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
@@ -14,21 +14,21 @@ from tests import test_utils
 
 @dataclasses.dataclass
 class MyStructAB:
-    a: ti.types.NDArray[ti.i32, 1]
-    b: ti.types.NDArray[ti.i32, 1]
+    a: qd.types.NDArray[qd.i32, 1]
+    b: qd.types.NDArray[qd.i32, 1]
 
 
 @dataclasses.dataclass
 class MyStructCD:
-    c: ti.types.NDArray[ti.i32, 1]
-    d: ti.types.NDArray[ti.i32, 1]
+    c: qd.types.NDArray[qd.i32, 1]
+    d: qd.types.NDArray[qd.i32, 1]
     my_struct_ab: MyStructAB
 
 
 @dataclasses.dataclass
 class MyStructEF:
-    e: ti.types.NDArray[ti.i32, 1]
-    f: ti.types.NDArray[ti.i32, 1]
+    e: qd.types.NDArray[qd.i32, 1]
+    f: qd.types.NDArray[qd.i32, 1]
     my_struct_cd: MyStructCD
 
 
@@ -37,8 +37,8 @@ class NDArrayBuilder:
         self.dtype = dtype
         self.shape = shape
 
-    def build(self) -> ti.types.NDArray:
-        return ti.ndarray(self.dtype, self.shape)
+    def build(self) -> qd.types.NDArray:
+        return qd.ndarray(self.dtype, self.shape)
 
 
 @pytest.mark.parametrize(
@@ -48,30 +48,30 @@ class NDArrayBuilder:
             "my_struct_1",
             MyStructAB,
             {
-                "__ti_my_struct_1__ti_a": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_1__ti_b": ti.types.NDArray[ti.i32, 1],
+                "__ti_my_struct_1__ti_a": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_1__ti_b": qd.types.NDArray[qd.i32, 1],
             },
         ),
         (
             "my_struct_2",
             MyStructCD,
             {
-                "__ti_my_struct_2__ti_c": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_2__ti_d": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_2__ti_my_struct_ab__ti_a": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_2__ti_my_struct_ab__ti_b": ti.types.NDArray[ti.i32, 1],
+                "__ti_my_struct_2__ti_c": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_2__ti_d": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_2__ti_my_struct_ab__ti_a": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_2__ti_my_struct_ab__ti_b": qd.types.NDArray[qd.i32, 1],
             },
         ),
         (
             "my_struct_3",
             MyStructEF,
             {
-                "__ti_my_struct_3__ti_e": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_3__ti_f": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_3__ti_my_struct_cd__ti_c": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_3__ti_my_struct_cd__ti_d": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_3__ti_my_struct_cd__ti_my_struct_ab__ti_a": ti.types.NDArray[ti.i32, 1],
-                "__ti_my_struct_3__ti_my_struct_cd__ti_my_struct_ab__ti_b": ti.types.NDArray[ti.i32, 1],
+                "__ti_my_struct_3__ti_e": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_3__ti_f": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_3__ti_my_struct_cd__ti_c": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_3__ti_my_struct_cd__ti_d": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_3__ti_my_struct_cd__ti_my_struct_ab__ti_a": qd.types.NDArray[qd.i32, 1],
+                "__ti_my_struct_3__ti_my_struct_cd__ti_my_struct_ab__ti_b": qd.types.NDArray[qd.i32, 1],
             },
         ),
     ],
@@ -97,9 +97,9 @@ def test_process_func_arg(argument_name: str, argument_type: Any, expected_varia
     # since these should both be flat, we can just loop over both
     assert set(ctx.variables.keys()) == set(expected_variables.keys())
     for k, expected_obj in expected_variables.items():
-        if isinstance(expected_obj, ti.types.NDArray):
+        if isinstance(expected_obj, qd.types.NDArray):
             actual = ctx.variables[k]
-            assert isinstance(actual, (ti.ScalarNdarray,))
+            assert isinstance(actual, (qd.ScalarNdarray,))
             assert len(actual.shape) == expected_obj.ndim
             assert actual.dtype == expected_obj.dtype
         else:

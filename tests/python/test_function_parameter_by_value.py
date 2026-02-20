@@ -1,17 +1,17 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_pass_by_value():
-    @ti.func
+    @qd.func
     def set_val(x, i):
         x = i
 
-    ret = ti.field(ti.i32, shape=())
+    ret = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def task():
         set_val(ret[None], 112)
 

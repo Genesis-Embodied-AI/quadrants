@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -8,13 +8,13 @@ from tests import test_utils
 @pytest.mark.parametrize("round", range(10))
 @test_utils.test()
 def test_linear(round):
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).place(x)
-    ti.root.dense(ti.i, n).place(y)
+    qd.root.dense(qd.i, n).place(x)
+    qd.root.dense(qd.i, n).place(y)
 
     for i in range(n):
         x[i] = i
@@ -27,13 +27,13 @@ def test_linear(round):
 
 @test_utils.test()
 def test_linear_nested():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.i, n // 16).dense(ti.i, 16).place(x)
-    ti.root.dense(ti.i, n // 16).dense(ti.i, 16).place(y)
+    qd.root.dense(qd.i, n // 16).dense(qd.i, 16).place(x)
+    qd.root.dense(qd.i, n // 16).dense(qd.i, 16).place(y)
 
     for i in range(n):
         x[i] = i
@@ -46,12 +46,12 @@ def test_linear_nested():
 
 @test_utils.test()
 def test_linear_nested_aos():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.i, n // 16).dense(ti.i, 16).place(x, y)
+    qd.root.dense(qd.i, n // 16).dense(qd.i, 16).place(x, y)
 
     for i in range(n):
         x[i] = i
@@ -62,13 +62,13 @@ def test_linear_nested_aos():
         assert y[i] == i + 123
 
 
-@test_utils.test(exclude=[ti.vulkan])
+@test_utils.test(exclude=[qd.vulkan])
 def test_2d_nested():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.ij, n // 16).dense(ti.ij, (32, 16)).place(x)
+    qd.root.dense(qd.ij, n // 16).dense(qd.ij, (32, 16)).place(x)
 
     for i in range(n * 2):
         for j in range(n):
@@ -81,44 +81,44 @@ def test_2d_nested():
 
 @test_utils.test()
 def test_func_of_data_class_as_kernel_arg():
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
-        x: ti.f32
-        y: ti.f32
+        x: qd.f32
+        y: qd.f32
 
-        @ti.func
-        def add(self, other: ti.template()):
+        @qd.func
+        def add(self, other: qd.template()):
             return Foo(self.x + other.x, self.y + other.y)
 
-    @ti.kernel
-    def foo_x(x: Foo) -> ti.f32:
+    @qd.kernel
+    def foo_x(x: Foo) -> qd.f32:
         return x.add(x).x
 
     assert foo_x(Foo(1, 2)) == 2
 
-    @ti.kernel
-    def foo_y(x: Foo) -> ti.f32:
+    @qd.kernel
+    def foo_y(x: Foo) -> qd.f32:
         return x.add(x).y
 
     assert foo_y(Foo(1, 2)) == 4
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda, ti.amdgpu])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_func_of_data_class_as_kernel_return():
     # TODO: enable this test in SPIR-V based backends after SPIR-V based backends can return structs.
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
-        x: ti.f32
-        y: ti.f32
+        x: qd.f32
+        y: qd.f32
 
-        @ti.func
-        def add(self, other: ti.template()):
+        @qd.func
+        def add(self, other: qd.template()):
             return Foo(self.x + other.x, self.y + other.y)
 
         def add_python(self, other):
             return Foo(self.x + other.x, self.y + other.y)
 
-    @ti.kernel
+    @qd.kernel
     def foo(x: Foo) -> Foo:
         return x.add(x)
 
@@ -133,23 +133,23 @@ def test_func_of_data_class_as_kernel_return():
 
 @test_utils.test()
 def test_nested_data_class_func():
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
         a: int
 
-        @ti.func
+        @qd.func
         def foo(self):
             return self.a
 
-    @ti.dataclass
+    @qd.dataclass
     class Nested:
         f: Foo
 
-        @ti.func
+        @qd.func
         def testme(self) -> int:
             return self.f.foo()
 
-    @ti.kernel
+    @qd.kernel
     def k() -> int:
         x = Nested(Foo(42))
         return x.testme()
@@ -159,9 +159,9 @@ def test_nested_data_class_func():
 
 @test_utils.test()
 def test_nested_data_class_func():
-    with pytest.raises(ti.QuadrantsSyntaxError, match="Default value in @dataclass is not supported."):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="Default value in @dataclass is not supported."):
 
-        @ti.dataclass
+        @qd.dataclass
         class Foo:
             a: int
             b: float = 3.14
@@ -170,13 +170,13 @@ def test_nested_data_class_func():
         print(foo)
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda, ti.amdgpu])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_struct_field_with_bool():
-    @ti.dataclass
+    @qd.dataclass
     class S:
-        a: ti.i16
+        a: qd.i16
         b: bool
-        c: ti.i16
+        c: qd.i16
 
     sf = S.field(shape=(10, 1))
     sf[0, 0].b = False
@@ -204,14 +204,14 @@ def test_struct_field_with_bool():
 
 @test_utils.test()
 def test_struct_special_element_name():
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
         entries: int
         keys: int
         items: int
         methods: int
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> int:
         x = Foo(42, 21, 23, 11)
         return x.entries + x.keys + x.items + x.methods
@@ -221,30 +221,30 @@ def test_struct_special_element_name():
 
 @test_utils.test()
 def test_struct_with_matrix():
-    @ti.dataclass
+    @qd.dataclass
     class TestStruct:
-        p1: ti.math.vec3
-        p2: ti.math.vec3
+        p1: qd.math.vec3
+        p2: qd.math.vec3
 
-        @ti.func
+        @qd.func
         def get_vec(self, struct2, additional):
             self.p1 = (self.p1 + average(struct2)) / 2 + additional.p1
 
     global_struct = TestStruct(p1=[0, 2, 4], p2=[-2, -4, -6])
 
-    @ti.func
-    def average(struct) -> ti.math.vec3:
+    @qd.func
+    def average(struct) -> qd.math.vec3:
         return (struct.p1 + struct.p2) / 2
 
-    @ti.kernel
-    def process_struct(field1: ti.template(), field2: ti.template()):
+    @qd.kernel
+    def process_struct(field1: qd.template(), field2: qd.template()):
         for i in field1:
             field1[i].get_vec(field2[i], global_struct)
 
     field1 = TestStruct.field()
     field2 = TestStruct.field()
 
-    ti.root.dense(ti.i, 64).place(field1, field2)
+    qd.root.dense(qd.i, 64).place(field1, field2)
 
     for i in range(64):
         field1[i] = TestStruct(p1=[1, 2, 3], p2=[4, 5, 6])

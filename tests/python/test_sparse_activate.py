@@ -1,27 +1,27 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 16
 
-    ptr = ti.root.pointer(ti.i, n)
-    ptr.dense(ti.i, n).place(x)
-    ti.root.place(s)
+    ptr = qd.root.pointer(qd.i, n)
+    ptr.dense(qd.i, n).place(x)
+    qd.root.place(s)
 
     s[None] = 0
 
-    @ti.kernel
+    @qd.kernel
     def activate():
-        ti.activate(ptr, ti.rescale_index(x, ptr, [1]))
-        ti.activate(ptr, ti.rescale_index(x, ptr, [32]))
+        qd.activate(ptr, qd.rescale_index(x, ptr, [1]))
+        qd.activate(ptr, qd.rescale_index(x, ptr, [32]))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -31,14 +31,14 @@ def test_pointer():
     assert s[None] == 32
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_non_dfs_snode_order():
-    x = ti.field(dtype=ti.i32)
-    y = ti.field(dtype=ti.i32)
+    x = qd.field(dtype=qd.i32)
+    y = qd.field(dtype=qd.i32)
 
-    grid1 = ti.root.dense(ti.i, 1)
-    grid2 = ti.root.dense(ti.i, 1)
-    ptr = grid1.pointer(ti.i, 1)
+    grid1 = qd.root.dense(qd.i, 1)
+    grid2 = qd.root.dense(qd.i, 1)
+    ptr = grid1.pointer(qd.i, 1)
     ptr.place(x)
     grid2.place(y)
     """
@@ -51,9 +51,9 @@ def test_non_dfs_snode_order():
         S5place<i32>
     """
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.activate(ptr, [0])
+        qd.activate(ptr, [0])
 
     foo()  # Just make sure it doesn't crash
-    ti.sync()
+    qd.sync()

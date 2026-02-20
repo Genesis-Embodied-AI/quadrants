@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -16,27 +16,27 @@ def test_for_static_if_iter_runs(use_field: bool, is_inner: bool, static_value: 
     # Since the code itself treats either side identically (same code path except for choosing one or the other side),
     # whilst the test isn't ideal, it should give identical coverage to something more rigorous.
     # We can think about approaches to parametrizing the static range in the future (nop function, macro,
-    # parametrizablle ti.static, parametrizable ti.range, etc...).
+    # parametrizablle qd.static, parametrizable qd.range, etc...).
 
     B = 2
     N_right = 5
 
-    V = ti.field if use_field else ti.ndarray
-    V_ANNOT = ti.Template if use_field else ti.types.NDArray[ti.i32, 2]
+    V = qd.field if use_field else qd.ndarray
+    V_ANNOT = qd.Template if use_field else qd.types.NDArray[qd.i32, 2]
 
     if is_inner:
 
-        @ti.kernel
-        def k1(a: V_ANNOT, n_left: ti.i32) -> None:
+        @qd.kernel
+        def k1(a: V_ANNOT, n_left: qd.i32) -> None:
             for b in range(B):
-                for i in range(n_left) if ti.static(static_value) else ti.static(range(N_right)):
+                for i in range(n_left) if qd.static(static_value) else qd.static(range(N_right)):
                     a[b, i] = 1
 
     else:
 
-        @ti.kernel
-        def k1(a: V_ANNOT, n_left: ti.i32) -> None:
-            for i in range(n_left) if ti.static(static_value) else ti.static(range(N_right)):
+        @qd.kernel
+        def k1(a: V_ANNOT, n_left: qd.i32) -> None:
+            for i in range(n_left) if qd.static(static_value) else qd.static(range(N_right)):
                 a[0, i] = 1
 
     def create_expected(n_left: int):
@@ -46,11 +46,11 @@ def test_for_static_if_iter_runs(use_field: bool, is_inner: bool, static_value: 
                 a_expected[b, i] = 1
         return a_expected
 
-    a = V(ti.i32, (B, 6))
+    a = V(qd.i32, (B, 6))
     k1(a, n_left=2)
     assert np.all(create_expected(n_left=2) == a.to_numpy())
 
-    a = V(ti.i32, (B, 6))
+    a = V(qd.i32, (B, 6))
     k1(a, n_left=3)
     assert np.all(create_expected(n_left=3) == a.to_numpy())
 
@@ -68,15 +68,15 @@ def test_for_static_if_iter_static_ranges(is_static: bool) -> None:
     N_left = 3
     N_right = 5
 
-    @ti.kernel
-    def k1(break_threshold: ti.i32, n_right: ti.i32) -> None:
+    @qd.kernel
+    def k1(break_threshold: qd.i32, n_right: qd.i32) -> None:
         for b in range(B):
-            for i in ti.static(range(N_left)) if ti.static(is_static) else range(n_right):
+            for i in qd.static(range(N_left)) if qd.static(is_static) else range(n_right):
                 if i >= break_threshold:
                     break
 
     if is_static:
-        with pytest.raises(ti.QuadrantsCompilationError, match="You are trying to `break` a static `for` loop"):
+        with pytest.raises(qd.QuadrantsCompilationError, match="You are trying to `break` a static `for` loop"):
             k1(0, N_right)
     else:
         # Dynamic break is ok, since not static for range.
@@ -92,19 +92,19 @@ def test_for_static_if_forwards_backwards(use_field: bool) -> None:
     MAX_LINKs = 3
     BATCH_SIZE = 1
 
-    V = ti.field if use_field else ti.ndarray
-    V_ANNOT = ti.Template if use_field else ti.types.NDArray[ti.i32, 1]
-    V_ANNOT2 = ti.Template if use_field else ti.types.NDArray[ti.i32, 2]
+    V = qd.field if use_field else qd.ndarray
+    V_ANNOT = qd.Template if use_field else qd.types.NDArray[qd.i32, 1]
+    V_ANNOT2 = qd.Template if use_field else qd.types.NDArray[qd.i32, 2]
 
-    field_a = V(ti.i32, shape=(BATCH_SIZE))
+    field_a = V(qd.i32, shape=(BATCH_SIZE))
     field_a.from_numpy(np.array([1]))
 
-    field_target = V(ti.i32, (BATCH_SIZE, MAX_LINKs))
+    field_target = V(qd.i32, (BATCH_SIZE, MAX_LINKs))
 
-    @ti.kernel
-    def k1(is_backward: ti.template(), field_a: V_ANNOT, field_target: V_ANNOT2):
+    @qd.kernel
+    def k1(is_backward: qd.template(), field_a: V_ANNOT, field_target: V_ANNOT2):
         for i_b in range(BATCH_SIZE):
-            for j in ti.static(range(MAX_LINKs)) if ti.static(is_backward) else range(field_a[i_b]):
+            for j in qd.static(range(MAX_LINKs)) if qd.static(is_backward) else range(field_a[i_b]):
                 print("is_backward", is_backward, j)
                 field_target[i_b, j] = 1
 
@@ -114,7 +114,7 @@ def test_for_static_if_forwards_backwards(use_field: bool) -> None:
 
 @test_utils.test()
 def test_for_static_if_no_ad1():
-    @ti.kernel
+    @qd.kernel
     def k1():
         for b in range(2):
             for i in range(2):
@@ -122,30 +122,30 @@ def test_for_static_if_no_ad1():
 
     k1()
 
-    if ti.is_extension_enabled(ti.extension.adstack):
+    if qd.is_extension_enabled(qd.extension.adstack):
         k1.grad()
     else:
-        with pytest.raises(ti.QuadrantsCompilationError):
+        with pytest.raises(qd.QuadrantsCompilationError):
             k1.grad()
 
 
 @test_utils.test()
 def test_for_static_if_no_ad2():
     B = 10
-    x = ti.field(ti.f32, shape=(3, B), needs_grad=True)
-    y = ti.field(ti.math.vec3, shape=(3, B), needs_grad=True)
-    loss = ti.field(ti.f32, shape=(), needs_grad=True)
+    x = qd.field(qd.f32, shape=(3, B), needs_grad=True)
+    y = qd.field(qd.math.vec3, shape=(3, B), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
 
     x[0, 0] = 1.0
     y[0, 0].fill(2.0)
 
-    @ti.kernel
-    def k1(use_static: ti.template()):
-        for i_b in ti.ndrange(B):
-            z = ti.Vector.zero(ti.f32, 3)
+    @qd.kernel
+    def k1(use_static: qd.template()):
+        for i_b in qd.ndrange(B):
+            z = qd.Vector.zero(qd.f32, 3)
 
             # Non-static inner loop is not supported in backward
-            for i_3 in ti.static(range(3)) if ti.static(use_static) else range(3):
+            for i_3 in qd.static(range(3)) if qd.static(use_static) else range(3):
                 z += x[i_3, i_b] * y[i_3, i_b]
 
             loss[None] += z.x + z.y + z.z
@@ -159,8 +159,8 @@ def test_for_static_if_no_ad2():
     x.grad.fill(0.0)
     y.grad.fill(0.0)
 
-    if ti.is_extension_enabled(ti.extension.adstack):
+    if qd.is_extension_enabled(qd.extension.adstack):
         k1.grad(use_static)
     else:
-        with pytest.raises(ti.QuadrantsCompilationError):
+        with pytest.raises(qd.QuadrantsCompilationError):
             k1.grad(use_static)

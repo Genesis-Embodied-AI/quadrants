@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import BenchmarkItem, Container, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -20,32 +20,32 @@ def stencil_2d_default(arch, repeat, scatter, bls, container, dtype, dsize_2d, g
     y = container(dtype, shape=num_elements_2d)
     x = container(dtype, shape=num_elements_2d)
 
-    @ti.kernel
-    def stencil_2d_field(y: ti.template(), x: ti.template()):
-        for I in ti.grouped(x):
-            if ti.static(scatter):
-                for offset in ti.static(stencil_common):
-                    y[I + ti.Vector(offset)] += x[I]
+    @qd.kernel
+    def stencil_2d_field(y: qd.template(), x: qd.template()):
+        for I in qd.grouped(x):
+            if qd.static(scatter):
+                for offset in qd.static(stencil_common):
+                    y[I + qd.Vector(offset)] += x[I]
             else:  # gather
-                s = ti.cast(0.0, dtype)
-                for offset in ti.static(stencil_common):
-                    s = s + x[I + ti.Vector(offset)]
+                s = qd.cast(0.0, dtype)
+                for offset in qd.static(stencil_common):
+                    s = s + x[I + qd.Vector(offset)]
                 y[I] = s
 
-    @ti.kernel
-    def stencil_2d_array(y: ti.types.ndarray(), x: ti.types.ndarray()):
-        for I in ti.grouped(x):
-            if ti.static(scatter):
-                for offset in ti.static(stencil_common):
-                    y[I + ti.Vector(offset)] += x[I]
+    @qd.kernel
+    def stencil_2d_array(y: qd.types.ndarray(), x: qd.types.ndarray()):
+        for I in qd.grouped(x):
+            if qd.static(scatter):
+                for offset in qd.static(stencil_common):
+                    y[I + qd.Vector(offset)] += x[I]
             else:  # gather
-                s = ti.cast(0.0, dtype)
-                for offset in ti.static(stencil_common):
-                    s = s + x[I + ti.Vector(offset)]
+                s = qd.cast(0.0, dtype)
+                for offset in qd.static(stencil_common):
+                    s = s + x[I + qd.Vector(offset)]
                 y[I] = s
 
     fill_random(x, dtype, container)
-    func = stencil_2d_field if container == ti.field else stencil_2d_array
+    func = stencil_2d_field if container == qd.field else stencil_2d_array
     return get_metric(repeat, func, y, x)
 
 
@@ -56,36 +56,36 @@ def stencil_2d_sparse_bls(arch, repeat, scatter, bls, container, dtype, dsize_2d
     repeat = scaled_repeat_times(arch, dsize, 1)  # basic_repeat_time = 1: Sparse-specific parameters
     block_elements_2d = (dsize_2d[0] // dtype_size(dtype) // 8, dsize_2d[1] // 2 // 8)
 
-    block = ti.root.pointer(ti.ij, block_elements_2d)
-    y = ti.field(dtype)
-    x = ti.field(dtype)
-    block.dense(ti.ij, 8).place(y)
-    block.dense(ti.ij, 8).place(x)
+    block = qd.root.pointer(qd.ij, block_elements_2d)
+    y = qd.field(dtype)
+    x = qd.field(dtype)
+    block.dense(qd.ij, 8).place(y)
+    block.dense(qd.ij, 8).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def active_all():
-        for i, j in ti.ndrange(block_elements_2d[0], block_elements_2d[0]):
-            ti.activate(block, [i, j])
+        for i, j in qd.ndrange(block_elements_2d[0], block_elements_2d[0]):
+            qd.activate(block, [i, j])
 
     active_all()
 
-    @ti.kernel
-    def stencil_2d(y: ti.template(), x: ti.template()):
+    @qd.kernel
+    def stencil_2d(y: qd.template(), x: qd.template()):
         # reference: tests/python/bls_test_template.py
-        if ti.static(bls and not scatter):
-            ti.block_local(x)
-        if ti.static(bls and scatter):
-            ti.block_local(y)
-        ti.block_dim(64)  # 8*8=64
+        if qd.static(bls and not scatter):
+            qd.block_local(x)
+        if qd.static(bls and scatter):
+            qd.block_local(y)
+        qd.block_dim(64)  # 8*8=64
 
-        for I in ti.grouped(x):
-            if ti.static(scatter):
-                for offset in ti.static(stencil_common):
-                    y[I + ti.Vector(offset)] += x[I]
+        for I in qd.grouped(x):
+            if qd.static(scatter):
+                for offset in qd.static(stencil_common):
+                    y[I + qd.Vector(offset)] += x[I]
             else:  # gather
-                s = ti.cast(0.0, dtype)
-                for offset in ti.static(stencil_common):
-                    s = s + x[I + ti.Vector(offset)]
+                s = qd.cast(0.0, dtype)
+                for offset in qd.static(stencil_common):
+                    s = s + x[I + qd.Vector(offset)]
                 y[I] = s
 
     fill_random(x, dtype, container)

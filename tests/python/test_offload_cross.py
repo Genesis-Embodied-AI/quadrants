@@ -1,15 +1,15 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_offload_with_cross_block_locals():
-    ret = ti.field(ti.f32)
+    ret = qd.field(qd.f32)
 
-    ti.root.place(ret)
+    qd.root.place(ret)
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         s = 0
         for i in range(10):
@@ -23,11 +23,11 @@ def test_offload_with_cross_block_locals():
 
 @test_utils.test()
 def test_offload_with_cross_block_locals2():
-    ret = ti.field(ti.f32)
+    ret = qd.field(qd.f32)
 
-    ti.root.place(ret)
+    qd.root.place(ret)
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         s = 0
         for i in range(10):
@@ -35,7 +35,7 @@ def test_offload_with_cross_block_locals2():
         ret[None] = s
         s = ret[None] * 2
         for i in range(10):
-            ti.atomic_add(ret[None], s)
+            qd.atomic_add(ret[None], s)
 
     ker()
 
@@ -44,9 +44,9 @@ def test_offload_with_cross_block_locals2():
 
 @test_utils.test()
 def test_offload_with_cross_block_locals3():
-    ret = ti.field(ti.f32, shape=())
+    ret = qd.field(qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         s = 1
         t = s
@@ -61,9 +61,9 @@ def test_offload_with_cross_block_locals3():
 
 @test_utils.test()
 def test_offload_with_cross_block_locals4():
-    ret = ti.field(ti.f32, shape=())
+    ret = qd.field(qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         a = 1
         b = 0
@@ -78,11 +78,11 @@ def test_offload_with_cross_block_locals4():
 
 @test_utils.test()
 def test_offload_with_flexible_bounds():
-    s = ti.field(ti.i32, shape=())
-    lower = ti.field(ti.i32, shape=())
-    upper = ti.field(ti.i32, shape=())
+    s = qd.field(qd.i32, shape=())
+    lower = qd.field(qd.i32, shape=())
+    upper = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         for i in range(lower[None], upper[None]):
             s[None] += i
@@ -96,11 +96,11 @@ def test_offload_with_flexible_bounds():
 
 @test_utils.test()
 def test_offload_with_cross_block_globals():
-    ret = ti.field(ti.f32)
+    ret = qd.field(qd.f32)
 
-    ti.root.place(ret)
+    qd.root.place(ret)
 
-    @ti.kernel
+    @qd.kernel
     def ker():
         ret[None] = 0
         for i in range(10):
@@ -112,10 +112,10 @@ def test_offload_with_cross_block_globals():
     assert ret[None] == 46
 
 
-@test_utils.test(exclude=ti.amdgpu)
+@test_utils.test(exclude=qd.amdgpu)
 def test_offload_with_cross_nested_for():
-    @ti.kernel
-    def run(a: ti.i32):
+    @qd.kernel
+    def run(a: qd.i32):
         b = a + 1
         for x in range(1):
             for i in range(b):
@@ -124,10 +124,10 @@ def test_offload_with_cross_nested_for():
     run(2)
 
 
-@test_utils.test(exclude=ti.amdgpu)
+@test_utils.test(exclude=qd.amdgpu)
 def test_offload_with_cross_if_inside_for():
-    @ti.kernel
-    def run(a: ti.i32):
+    @qd.kernel
+    def run(a: qd.i32):
         b = a > 2
         for x in range(1):
             if b:
@@ -136,17 +136,17 @@ def test_offload_with_cross_if_inside_for():
     run(2)
 
 
-@test_utils.test(exclude=ti.amdgpu)
+@test_utils.test(exclude=qd.amdgpu)
 def test_offload_with_save():
-    a = ti.Vector.field(2, dtype=ti.f32, shape=1)
-    b = ti.Vector.field(2, dtype=ti.f32, shape=1)
-    c = ti.Vector.field(2, dtype=ti.f32, shape=1)
+    a = qd.Vector.field(2, dtype=qd.f32, shape=1)
+    b = qd.Vector.field(2, dtype=qd.f32, shape=1)
+    c = qd.Vector.field(2, dtype=qd.f32, shape=1)
 
-    @ti.kernel
+    @qd.kernel
     def test():
-        a[0] = ti.Vector([1, 1])
-        b[0] = ti.Vector([0, 0])
-        c[0] = ti.Vector([0, 0])
+        a[0] = qd.Vector([1, 1])
+        b[0] = qd.Vector([0, 0])
+        c[0] = qd.Vector([0, 0])
         b[0] += a[0]  # b[0] = [1, 1]
         b[0] /= 2  # b[0] = [0.5, 0.5]
         for i in c:

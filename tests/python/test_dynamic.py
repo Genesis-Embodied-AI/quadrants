@@ -1,16 +1,16 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dynamic():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
     n = 128
 
-    ti.root.dynamic(ti.i, n, 32).place(x)
+    qd.root.dynamic(qd.i, n, 32).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         pass
 
@@ -21,14 +21,14 @@ def test_dynamic():
         assert x[i] == i
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dynamic2():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
     n = 128
 
-    ti.root.dynamic(ti.i, n, 32).place(x)
+    qd.root.dynamic(qd.i, n, 32).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
             x[i] = i
@@ -39,16 +39,16 @@ def test_dynamic2():
         assert x[i] == i
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dynamic_matrix():
-    x = ti.Matrix.field(2, 1, dtype=ti.i32)
+    x = qd.Matrix.field(2, 1, dtype=qd.i32)
     n = 8192
 
-    ti.root.dynamic(ti.i, n, chunk_size=128).place(x)
+    qd.root.dynamic(qd.i, n, chunk_size=128).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(n // 4):
             x[i * 4][1, 0] = i
 
@@ -62,17 +62,17 @@ def test_dynamic_matrix():
             assert b == 0
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     n = 128
 
-    ti.root.dynamic(ti.i, n, 32).place(x)
+    qd.root.dynamic(qd.i, n, 32).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            ti.append(x.parent(), [], i)
+            qd.append(x.parent(), [], i)
 
     func()
 
@@ -84,45 +84,45 @@ def test_append():
         assert elements[i] == i
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_length():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32, shape=())
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32, shape=())
     n = 128
 
-    ti.root.dynamic(ti.i, n, 32).place(x)
+    qd.root.dynamic(qd.i, n, 32).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            ti.append(x.parent(), [], i)
+            qd.append(x.parent(), [], i)
 
     func()
 
-    @ti.kernel
+    @qd.kernel
     def get_len():
-        y[None] = ti.length(x.parent(), [])
+        y[None] = qd.length(x.parent(), [])
 
     get_len()
 
     assert y[None] == n
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_ret_value():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
-    z = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    z = qd.field(qd.i32)
     n = 128
 
-    ti.root.dynamic(ti.i, n, 32).place(x)
-    ti.root.dynamic(ti.i, n, 32).place(y)
-    ti.root.dynamic(ti.i, n, 32).place(z)
+    qd.root.dynamic(qd.i, n, 32).place(x)
+    qd.root.dynamic(qd.i, n, 32).place(y)
+    qd.root.dynamic(qd.i, n, 32).place(z)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            u = ti.append(x.parent(), [], i)
+            u = qd.append(x.parent(), [], i)
             y[u] = i + 1
             z[u] = i + 3
 
@@ -133,23 +133,23 @@ def test_append_ret_value():
         assert x[i] + 3 == z[i]
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dense_dynamic():
     n = 128
-    x = ti.field(ti.i32)
-    l = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32)
+    l = qd.field(qd.i32, shape=n)
 
-    ti.root.dense(ti.i, n).dynamic(ti.j, n, 8).place(x)
+    qd.root.dense(qd.i, n).dynamic(qd.j, n, 8).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(n):
             for j in range(n):
-                ti.append(x.parent(), j, i)
+                qd.append(x.parent(), j, i)
 
         for i in range(n):
-            l[i] = ti.length(x.parent(), i)
+            l[i] = qd.length(x.parent(), i)
 
     func()
 
@@ -157,18 +157,18 @@ def test_dense_dynamic():
         assert l[i] == n
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dense_dynamic_len():
     n = 128
-    x = ti.field(ti.i32)
-    l = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32)
+    l = qd.field(qd.i32, shape=n)
 
-    ti.root.dense(ti.i, n).dynamic(ti.j, n, 32).place(x)
+    qd.root.dense(qd.i, n).dynamic(qd.j, n, 32).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            l[i] = ti.length(x.parent(), i)
+            l[i] = qd.length(x.parent(), i)
 
     func()
 
@@ -176,25 +176,25 @@ def test_dense_dynamic_len():
         assert l[i] == 0
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dynamic_activate():
     # record the lengths
-    l = ti.field(ti.i32, 3)
-    x = ti.field(ti.i32)
-    xp = ti.root.dynamic(ti.i, 32, 32)
+    l = qd.field(qd.i32, 3)
+    x = qd.field(qd.i32)
+    xp = qd.root.dynamic(qd.i, 32, 32)
     xp.place(x)
 
     m = 5
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(m):
-            ti.append(xp, [], i)
-        l[0] = ti.length(xp, [])
+            qd.append(xp, [], i)
+        l[0] = qd.length(xp, [])
         x[20] = 42
-        l[1] = ti.length(xp, [])
+        l[1] = qd.length(xp, [])
         x[10] = 43
-        l[2] = ti.length(xp, [])
+        l[2] = qd.length(xp, [])
 
     func()
     l = l.to_numpy()
@@ -203,15 +203,15 @@ def test_dynamic_activate():
     assert l[2] == 21
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_u8():
-    x = ti.field(ti.u8)
-    pixel = ti.root.dynamic(ti.j, 20)
+    x = qd.field(qd.u8)
+    pixel = qd.root.dynamic(qd.j, 20)
     pixel.place(x)
 
-    @ti.kernel
+    @qd.kernel
     def make_list():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(20):
             x[()].append(i * i * i)
 
@@ -221,17 +221,17 @@ def test_append_u8():
         assert x[i] == i * i * i % 256
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_u64():
-    x = ti.field(ti.u64)
-    pixel = ti.root.dynamic(ti.i, 20)
+    x = qd.field(qd.u64)
+    pixel = qd.root.dynamic(qd.i, 20)
     pixel.place(x)
 
-    @ti.kernel
+    @qd.kernel
     def make_list():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(20):
-            x[()].append(i * i * i * ti.u64(10000000000))
+            x[()].append(i * i * i * qd.u64(10000000000))
 
     make_list()
 
@@ -239,14 +239,14 @@ def test_append_u64():
         assert x[i] == i * i * i * 10000000000
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_struct():
-    struct = ti.types.struct(a=ti.u8, b=ti.u16, c=ti.u32, d=ti.u64)
+    struct = qd.types.struct(a=qd.u8, b=qd.u16, c=qd.u32, d=qd.u64)
     x = struct.field()
-    pixel = ti.root.dense(ti.i, 10).dynamic(ti.j, 20, 5)
+    pixel = qd.root.dense(qd.i, 10).dynamic(qd.j, 20, 5)
     pixel.place(x)
 
-    @ti.kernel
+    @qd.kernel
     def make_list():
         for i in range(10):
             for j in range(20):
@@ -255,7 +255,7 @@ def test_append_struct():
                         i * j * 10,
                         i * j * 10000,
                         i * j * 100000000,
-                        i * j * ti.u64(10000000000),
+                        i * j * qd.u64(10000000000),
                     )
                 )
 
@@ -269,18 +269,18 @@ def test_append_struct():
             assert x[i, j].d == i * j * 10000000000
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_matrix():
-    mat = ti.types.matrix(n=2, m=2, dtype=ti.u8)
+    mat = qd.types.matrix(n=2, m=2, dtype=qd.u8)
     f = mat.field()
-    pixel = ti.root.dense(ti.i, 10).dynamic(ti.j, 20, 4)
+    pixel = qd.root.dense(qd.i, 10).dynamic(qd.j, 20, 4)
     pixel.place(f)
 
-    @ti.kernel
+    @qd.kernel
     def make_list():
         for i in range(10):
             for j in range(20):
-                f[i].append(ti.Matrix([[i * j, i * j * 2], [i * j * 3, i * j * 4]], dt=ti.u8))
+                f[i].append(qd.Matrix([[i * j, i * j * 2], [i * j * 3, i * j * 4]], dt=qd.u8))
 
     make_list()
 
@@ -290,22 +290,22 @@ def test_append_matrix():
                 assert f[i, j][k // 2, k % 2] == i * j * (k + 1) % 256
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_append_matrix_in_struct():
-    mat = ti.types.matrix(n=2, m=2, dtype=ti.u8)
-    struct = ti.types.struct(a=ti.u64, b=mat, c=ti.u16)
+    mat = qd.types.matrix(n=2, m=2, dtype=qd.u8)
+    struct = qd.types.struct(a=qd.u64, b=mat, c=qd.u16)
     f = struct.field()
-    pixel = ti.root.dense(ti.i, 10).dynamic(ti.j, 20, 4)
+    pixel = qd.root.dense(qd.i, 10).dynamic(qd.j, 20, 4)
     pixel.place(f)
 
-    @ti.kernel
+    @qd.kernel
     def make_list():
         for i in range(10):
             for j in range(20):
                 f[i].append(
                     struct(
-                        i * j * ti.u64(10**10),
-                        ti.Matrix([[i * j, i * j * 2], [i * j * 3, i * j * 4]], dt=ti.u8),
+                        i * j * qd.u64(10**10),
+                        qd.Matrix([[i * j, i * j * 2], [i * j * 3, i * j * 4]], dt=qd.u8),
                         i * j * 5000,
                     )
                 )

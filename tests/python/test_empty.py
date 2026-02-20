@@ -1,11 +1,11 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_empty():
-    @ti.kernel
+    @qd.kernel
     def func():
         pass
 
@@ -14,8 +14,8 @@ def test_empty():
 
 @test_utils.test()
 def test_empty_args():
-    @ti.kernel
-    def func(x: ti.i32, arr: ti.types.ndarray()):
+    @qd.kernel
+    def func(x: qd.i32, arr: qd.types.ndarray()):
         pass
 
     import numpy as np

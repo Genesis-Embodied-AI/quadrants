@@ -1,28 +1,28 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_basic():
-    x = ti.field(ti.i32)
-    c = ti.field(ti.i32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    c = qd.field(qd.i32)
+    s = qd.field(qd.i32)
 
-    bm = ti.root.bitmasked(ti.ij, (3, 6)).bitmasked(ti.i, 8)
+    bm = qd.root.bitmasked(qd.ij, (3, 6)).bitmasked(qd.i, 8)
     bm.place(x)
-    ti.root.place(c, s)
+    qd.root.place(c, s)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         x[5, 1] = 2
         x[9, 4] = 20
         x[0, 3] = 20
 
-    @ti.kernel
+    @qd.kernel
     def sum():
         for i, j in x:
-            c[None] += ti.is_active(bm, [i, j])
+            c[None] += qd.is_active(bm, [i, j])
             s[None] += x[i, j]
 
     run()
@@ -32,17 +32,17 @@ def test_basic():
     assert s[None] == 42
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_bitmasked_then_dense():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.bitmasked(ti.i, n).dense(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.bitmasked(qd.i, n).dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -56,17 +56,17 @@ def test_bitmasked_then_dense():
     assert s[None] == 256
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_bitmasked_bitmasked():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.bitmasked(ti.i, n).bitmasked(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.bitmasked(qd.i, n).bitmasked(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -80,24 +80,24 @@ def test_bitmasked_bitmasked():
     assert s[None] == 4
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_huge_bitmasked():
     # Mainly for testing Metal listgen's grid-stride loop implementation.
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 1024
 
-    ti.root.bitmasked(ti.i, n).bitmasked(ti.i, 2 * n).place(x)
-    ti.root.place(s)
+    qd.root.bitmasked(qd.i, n).bitmasked(qd.i, 2 * n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n * n * 2):
             if i % 32 == 0:
                 x[i] = 1.0
 
-    @ti.kernel
+    @qd.kernel
     def count():
         for i in x:
             s[None] += 1
@@ -107,28 +107,28 @@ def test_huge_bitmasked():
     assert s[None] == (n * n * 2) // 32
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_bitmasked_listgen_bounded():
     # Mainly for testing Metal's listgen is bounded by the actual number of
     # elements possible for that SNode. Note that 1) SNode's size is padded
     # to POT, and 2) Metal ListManager's data size is not padded, we need to
     # make sure listgen doesn't go beyond ListManager's capacity.
-    x = ti.field(ti.i32)
-    c = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    c = qd.field(qd.i32)
 
     # A prime that is bit higher than 65536, which is Metal's maximum number of
     # threads for listgen.
     n = 80173
 
-    ti.root.dense(ti.i, n).bitmasked(ti.i, 1).place(x)
-    ti.root.place(c)
+    qd.root.dense(qd.i, n).bitmasked(qd.i, 1).place(x)
+    qd.root.place(c)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
             x[i] = 1
 
-    @ti.kernel
+    @qd.kernel
     def count():
         for i in x:
             c[None] += 1
@@ -138,27 +138,27 @@ def test_bitmasked_listgen_bounded():
     assert c[None] == n
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_deactivate():
     # https://github.com/taichi-dev/quadrants/issues/778
-    a = ti.field(ti.i32)
-    a_a = ti.root.bitmasked(ti.i, 4)
-    a_b = a_a.dense(ti.i, 4)
+    a = qd.field(qd.i32)
+    a_a = qd.root.bitmasked(qd.i, 4)
+    a_b = a_a.dense(qd.i, 4)
     a_b.place(a)
-    c = ti.field(ti.i32)
-    ti.root.place(c)
+    c = qd.field(qd.i32)
+    qd.root.place(c)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         a[0] = 123
 
-    @ti.kernel
+    @qd.kernel
     def is_active():
-        c[None] = ti.is_active(a_a, [0])
+        c[None] = qd.is_active(a_a, [0])
 
-    @ti.kernel
+    @qd.kernel
     def deactivate():
-        ti.deactivate(a_a, [0])
+        qd.deactivate(a_a, [0])
 
     run()
     is_active()
@@ -169,17 +169,17 @@ def test_deactivate():
     assert c[None] == 0
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_sparsity_changes():
-    x = ti.field(ti.i32)
-    c = ti.field(ti.i32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    c = qd.field(qd.i32)
+    s = qd.field(qd.i32)
 
-    bm = ti.root.bitmasked(ti.i, 5).bitmasked(ti.i, 4)
+    bm = qd.root.bitmasked(qd.i, 5).bitmasked(qd.i, 4)
     bm.place(x)
-    ti.root.place(c, s)
+    qd.root.place(c, s)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         for i in x:
             s[None] += x[i]
@@ -203,29 +203,29 @@ def test_sparsity_changes():
     assert s[None] == 42
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_bitmasked_offset_child():
-    x = ti.field(ti.i32)
-    x2 = ti.field(ti.i32)
-    y = ti.field(ti.i32)
-    y2 = ti.field(ti.i32)
-    y3 = ti.field(ti.i32)
-    z = ti.field(ti.i32)
-    s = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32)
+    x2 = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    y2 = qd.field(qd.i32)
+    y3 = qd.field(qd.i32)
+    z = qd.field(qd.i32)
+    s = qd.field(qd.i32, shape=())
 
     n = 16
     # Offset children:
     # * In |bm|'s cell: |bm2| has a non-zero offset
     # * In |bm2|'s cell: |z| has a non-zero offset
     # * We iterate over |z| to test the listgen handles offsets correctly
-    bm = ti.root.bitmasked(ti.i, n)
-    bm.dense(ti.i, 16).place(x, x2)
-    bm2 = bm.bitmasked(ti.i, 4)
+    bm = qd.root.bitmasked(qd.i, n)
+    bm.dense(qd.i, 16).place(x, x2)
+    bm2 = bm.bitmasked(qd.i, 4)
 
-    bm2.dense(ti.i, 4).place(y, y2, y3)
-    bm2.bitmasked(ti.i, 4).place(z)
+    bm2.dense(qd.i, 4).place(y, y2, y3)
+    bm2.bitmasked(qd.i, 4).place(z)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for _ in z:
             s[None] += 1
@@ -242,23 +242,23 @@ def test_bitmasked_offset_child():
     assert s[None] == 7
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_bitmasked_2d_power_of_two():
-    some_val = ti.field(dtype=float)
+    some_val = qd.field(dtype=float)
     width, height = 10, 10
     total = width * height
-    ptr = ti.root.bitmasked(ti.ij, (width, height))
+    ptr = qd.root.bitmasked(qd.ij, (width, height))
     ptr.place(some_val)
-    num_active = ti.field(dtype=int, shape=())
+    num_active = qd.field(dtype=int, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def init():
         num_active[None] = 0
-        for x, y in ti.ndrange(width, height):
+        for x, y in qd.ndrange(width, height):
             some_val[x, y] = 5
             num_active[None] += 1
 
-    @ti.kernel
+    @qd.kernel
     def run():
         num_active[None] = 0
         for x, y in some_val:
@@ -270,27 +270,27 @@ def test_bitmasked_2d_power_of_two():
     assert num_active[None] == total
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_root_deactivate():
-    a = ti.field(ti.i32)
-    a_a = ti.root.bitmasked(ti.i, 4)
-    a_b = a_a.dense(ti.i, 4)
+    a = qd.field(qd.i32)
+    a_a = qd.root.bitmasked(qd.i, 4)
+    a_b = a_a.dense(qd.i, 4)
     a_b.place(a)
-    c = ti.field(ti.i32)
-    ti.root.place(c)
+    c = qd.field(qd.i32)
+    qd.root.place(c)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         a[0] = 123
 
-    @ti.kernel
+    @qd.kernel
     def is_active():
-        c[None] = ti.is_active(a_a, [0])
+        c[None] = qd.is_active(a_a, [0])
 
     run()
     is_active()
     assert c[None] == 1
 
-    ti.root.deactivate_all()
+    qd.root.deactivate_all()
     is_active()
     assert c[None] == 0

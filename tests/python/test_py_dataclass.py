@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
@@ -16,22 +16,22 @@ from tests import test_utils
 @pytest.fixture
 def ti_type(use_ndarray: bool) -> Any:
     if use_ndarray:
-        return ti.ndarray
-    return ti.field
+        return qd.ndarray
+    return qd.field
 
 
 @pytest.fixture
 def ti_annotation(use_ndarray: bool) -> Any:
     class TiTemplateBuilder:
         """
-        Allows ti_annotation[ti.i32, 2] to be legal
+        Allows ti_annotation[qd.i32, 2] to be legal
         """
 
         def __getitem__(self, _):
-            return ti.Template
+            return qd.Template
 
     if use_ndarray:
-        return ti.types.ndarray
+        return qd.types.ndarray
     return TiTemplateBuilder()
 
 
@@ -40,26 +40,26 @@ def test_ndarray_struct_kwargs():
     gc.collect()
     gc.collect()
 
-    a = ti.ndarray(ti.i32, shape=(55,))
-    b = ti.ndarray(ti.i32, shape=(57,))
-    c = ti.ndarray(ti.i32, shape=(211,))
-    d = ti.ndarray(ti.i32, shape=(223,))
-    e = ti.ndarray(ti.i32, shape=(227,))
+    a = qd.ndarray(qd.i32, shape=(55,))
+    b = qd.ndarray(qd.i32, shape=(57,))
+    c = qd.ndarray(qd.i32, shape=(211,))
+    d = qd.ndarray(qd.i32, shape=(223,))
+    e = qd.ndarray(qd.i32, shape=(227,))
 
     @dataclass
     class MyStruct:
-        a: ti.types.NDArray[ti.i32, 1]
-        b: ti.types.NDArray[ti.i32, 1]
-        c: ti.types.NDArray[ti.i32, 1]
+        a: qd.types.NDArray[qd.i32, 1]
+        b: qd.types.NDArray[qd.i32, 1]
+        c: qd.types.NDArray[qd.i32, 1]
 
-    @ti.func
-    def s4(a: ti.types.NDArray[ti.i32, 1], b: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def s4(a: qd.types.NDArray[qd.i32, 1], b: qd.types.NDArray[qd.i32, 1]) -> None:
         # note: no used py dataclass parameters
         a[1] += 888
         b[2] += 999
 
-    @ti.func
-    def s3(z3: ti.types.NDArray[ti.i32, 1], my_struct3: MyStruct, bar3: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def s3(z3: qd.types.NDArray[qd.i32, 1], my_struct3: MyStruct, bar3: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __ti_my_struct3__ti_a
         # __ti_my_struct3__ti_b
@@ -71,8 +71,8 @@ def test_ndarray_struct_kwargs():
         bar3[113] += 125
         s4(my_struct3.a, my_struct3.b)
 
-    @ti.func
-    def s2(z3: ti.types.NDArray[ti.i32, 1], my_struct3: MyStruct, bar3: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def s2(z3: qd.types.NDArray[qd.i32, 1], my_struct3: MyStruct, bar3: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __ti_my_struct3__ti_a
         # __ti_my_struct3__ti_b
@@ -84,8 +84,8 @@ def test_ndarray_struct_kwargs():
         bar3[112] += 125
         s3(z3=z3, my_struct3=my_struct3, bar3=bar3)
 
-    @ti.func
-    def s1(z2: ti.types.NDArray[ti.i32, 1], my_struct2: MyStruct, bar2: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def s1(z2: qd.types.NDArray[qd.i32, 1], my_struct2: MyStruct, bar2: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __ti_my_struct2__ti_a
         # __ti_my_struct2__ti_b
@@ -97,8 +97,8 @@ def test_ndarray_struct_kwargs():
         bar2[111] += 123
         s2(z3=z2, my_struct3=my_struct2, bar3=bar2)
 
-    @ti.kernel
-    def k1(z: ti.types.NDArray[ti.i32, 1], my_struct: MyStruct, bar: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def k1(z: qd.types.NDArray[qd.i32, 1], my_struct: MyStruct, bar: qd.types.NDArray[qd.i32, 1]) -> None:
         # used py dataclass variables:
         # __ti_my_struct__ti_a
         # __ti_my_struct__ti_b
@@ -144,20 +144,20 @@ def test_ndarray_struct_kwargs():
 def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
     gc.collect()
     gc.collect()
-    a = ti_type(ti.i32, shape=(55,))
-    b = ti_type(ti.i32, shape=(57, 23))
-    c = ti_type(ti.i32, shape=(211, 34, 25))
-    d = ti_type(ti.i32, shape=(223,))
-    e = ti_type(ti.i32, shape=(227,))
+    a = ti_type(qd.i32, shape=(55,))
+    b = ti_type(qd.i32, shape=(57, 23))
+    c = ti_type(qd.i32, shape=(211, 34, 25))
+    d = ti_type(qd.i32, shape=(223,))
+    e = ti_type(qd.i32, shape=(227,))
 
     @dataclass
     class MyStruct:
-        a: ti_annotation[ti.i32, 1]
-        b: ti_annotation[ti.i32, 2]
-        c: ti_annotation[ti.i32, 3]
+        a: ti_annotation[qd.i32, 1]
+        b: ti_annotation[qd.i32, 2]
+        c: ti_annotation[qd.i32, 3]
 
-    @ti.func
-    def s3(z3: ti_annotation[ti.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[ti.i32, 1]) -> None:
+    @qd.func
+    def s3(z3: ti_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[qd.i32, 1]) -> None:
         # stores
         z3[25] += 90
         my_struct3.a[47] += 42
@@ -172,8 +172,8 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         my_struct3.c[19, 0, 0] = my_struct3.b[18, 0]
         z3[20] = my_struct3.c[5, 0, 0]
 
-    @ti.func
-    def s2(z3: ti_annotation[ti.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[ti.i32, 1]) -> None:
+    @qd.func
+    def s2(z3: ti_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[qd.i32, 1]) -> None:
         # stores
         z3[24] += 89
         my_struct3.a[46] += 32
@@ -182,8 +182,8 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         bar3[112] += 125
         s3(z3, my_struct3, bar3)
 
-    @ti.func
-    def s1(z2: ti_annotation[ti.i32, 1], my_struct2: MyStruct, bar2: ti_annotation[ti.i32, 1]) -> None:
+    @qd.func
+    def s1(z2: ti_annotation[qd.i32, 1], my_struct2: MyStruct, bar2: ti_annotation[qd.i32, 1]) -> None:
         # stores
         z2[22] += 88
         my_struct2.a[45] += 22
@@ -192,8 +192,8 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         bar2[111] += 123
         s2(z2, my_struct2, bar2)
 
-    @ti.kernel
-    def k1(z: ti_annotation[ti.i32, 1], my_struct: MyStruct, bar: ti_annotation[ti.i32, 1]) -> None:
+    @qd.kernel
+    def k1(z: ti_annotation[qd.i32, 1], my_struct: MyStruct, bar: ti_annotation[qd.i32, 1]) -> None:
         # stores
         z[33] += 2
         my_struct.a[35] += 3
@@ -262,30 +262,30 @@ def test_ndarray_struct_diverse_params():
     gc.collect()
     gc.collect()
 
-    a = ti.ndarray(ti.i32, shape=(55,))
-    b = ti.ndarray(ti.i32, shape=(57,))
-    c = ti.ndarray(ti.i32, shape=(211,))
-    z_param = ti.ndarray(ti.i32, shape=(223,))
-    bar_param = ti.ndarray(ti.i32, shape=(227,))
+    a = qd.ndarray(qd.i32, shape=(55,))
+    b = qd.ndarray(qd.i32, shape=(57,))
+    c = qd.ndarray(qd.i32, shape=(211,))
+    z_param = qd.ndarray(qd.i32, shape=(223,))
+    bar_param = qd.ndarray(qd.i32, shape=(227,))
 
-    field1 = ti.field(ti.i32, shape=(300,))
+    field1 = qd.field(qd.i32, shape=(300,))
 
     @dataclass
     class MyStructAB:
-        a: ti.types.NDArray[ti.i32, 1]
-        b: ti.types.NDArray[ti.i32, 1]
+        a: qd.types.NDArray[qd.i32, 1]
+        b: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class MyStructC:
-        c: ti.types.NDArray[ti.i32, 1]
+        c: qd.types.NDArray[qd.i32, 1]
 
-    @ti.func
+    @qd.func
     def s2(
         my_struct_ab3: MyStructAB,
-        z3: ti.types.NDArray[ti.i32, 1],
-        fieldparam1_3: ti.Template,
+        z3: qd.types.NDArray[qd.i32, 1],
+        fieldparam1_3: qd.Template,
         my_struct_c3: MyStructC,
-        bar3: ti.types.NDArray[ti.i32, 1],
+        bar3: qd.types.NDArray[qd.i32, 1],
     ) -> None:
         # stores
         z3[24] += 89
@@ -295,13 +295,13 @@ def test_ndarray_struct_diverse_params():
         bar3[112] += 125
         fieldparam1_3[4] = 69
 
-    @ti.func
+    @qd.func
     def s1(
-        z2: ti.types.NDArray[ti.i32, 1],
+        z2: qd.types.NDArray[qd.i32, 1],
         my_struct_c2: MyStructC,
         my_struct_ab2: MyStructAB,
-        fieldparam1_2: ti.Template,
-        bar2: ti.types.NDArray[ti.i32, 1],
+        fieldparam1_2: qd.Template,
+        bar2: qd.types.NDArray[qd.i32, 1],
     ) -> None:
         # stores
         z2[22] += 88
@@ -313,13 +313,13 @@ def test_ndarray_struct_diverse_params():
 
         s2(my_struct_ab2, z2, fieldparam1_2, my_struct_c2, bar2)
 
-    @ti.kernel
+    @qd.kernel
     def k1(
-        z: ti.types.NDArray[ti.i32, 1],
+        z: qd.types.NDArray[qd.i32, 1],
         my_struct_ab: MyStructAB,
-        bar: ti.types.NDArray[ti.i32, 1],
+        bar: qd.types.NDArray[qd.i32, 1],
         my_struct_c: MyStructC,
-        fieldparam1: ti.Template,
+        fieldparam1: qd.Template,
     ) -> None:
         # stores
         z[33] += 2
@@ -388,28 +388,28 @@ def test_ndarray_struct_primitives(ti_type: Any, ti_annotation: Any) -> None:
     gc.collect()
     gc.collect()
 
-    a = ti_type(ti.i32, shape=(55,))
-    b = ti_type(ti.i32, shape=(57,))
-    c = ti_type(ti.i32, shape=(211,))
-    z_param = ti_type(ti.i32, shape=(223,))
-    bar_param = ti_type(ti.i32, shape=(227,))
+    a = ti_type(qd.i32, shape=(55,))
+    b = ti_type(qd.i32, shape=(57,))
+    c = ti_type(qd.i32, shape=(211,))
+    z_param = ti_type(qd.i32, shape=(223,))
+    bar_param = ti_type(qd.i32, shape=(227,))
 
     @dataclass
     class MyStructAB:
-        p3: ti.i32
-        a: ti_annotation[ti.i32, 1]
-        p1: ti.i32
-        p2: ti.i32
+        p3: qd.i32
+        a: ti_annotation[qd.i32, 1]
+        p1: qd.i32
+        p2: qd.i32
 
     @dataclass
     class MyStructC:
-        c: ti_annotation[ti.i32, 1]
+        c: ti_annotation[qd.i32, 1]
 
-    @ti.kernel
+    @qd.kernel
     def k1(
-        z: ti_annotation[ti.i32, 1],
+        z: ti_annotation[qd.i32, 1],
         my_struct_ab: MyStructAB,
-        bar: ti_annotation[ti.i32, 1],
+        bar: ti_annotation[qd.i32, 1],
         my_struct_c: MyStructC,
     ) -> None:
         my_struct_ab.a[36] += my_struct_ab.p1
@@ -426,31 +426,31 @@ def test_ndarray_struct_primitives(ti_type: Any, ti_annotation: Any) -> None:
 
 @test_utils.test()
 def test_ndarray_struct_nested_ndarray():
-    a = ti.ndarray(ti.i32, shape=(101,))
-    b = ti.ndarray(ti.i32, shape=(57,))
-    c = ti.ndarray(ti.i32, shape=(211,))
-    d = ti.ndarray(ti.i32, shape=(211,))
-    e = ti.ndarray(ti.i32, shape=(251,))
-    f = ti.ndarray(ti.i32, shape=(251,))
+    a = qd.ndarray(qd.i32, shape=(101,))
+    b = qd.ndarray(qd.i32, shape=(57,))
+    c = qd.ndarray(qd.i32, shape=(211,))
+    d = qd.ndarray(qd.i32, shape=(211,))
+    e = qd.ndarray(qd.i32, shape=(251,))
+    f = qd.ndarray(qd.i32, shape=(251,))
 
     @dataclass
     class MyStructEF:
-        e: ti.types.NDArray[ti.i32, 1]
-        f: ti.types.NDArray[ti.i32, 1]
+        e: qd.types.NDArray[qd.i32, 1]
+        f: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class MyStructCD:
-        c: ti.types.NDArray[ti.i32, 1]
-        d: ti.types.NDArray[ti.i32, 1]
+        c: qd.types.NDArray[qd.i32, 1]
+        d: qd.types.NDArray[qd.i32, 1]
         struct_ef: MyStructEF
 
     @dataclass
     class MyStructAB:
-        a: ti.types.NDArray[ti.i32, 1]
-        b: ti.types.NDArray[ti.i32, 1]
+        a: qd.types.NDArray[qd.i32, 1]
+        b: qd.types.NDArray[qd.i32, 1]
         struct_cd: MyStructCD
 
-    @ti.func
+    @qd.func
     def f3(
         my_struct_ab3: MyStructAB,
     ) -> None:
@@ -465,7 +465,7 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab3.a[51] = my_struct_ab3.struct_cd.c.shape[0]
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
-    @ti.func
+    @qd.func
     def f2(
         my_struct_ab2: MyStructAB,
     ) -> None:
@@ -480,7 +480,7 @@ def test_ndarray_struct_nested_ndarray():
         my_struct_ab2.a[61] = my_struct_ab2.struct_cd.c.shape[0]
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
-    @ti.kernel
+    @qd.kernel
     def k1(
         my_struct_ab: MyStructAB,
     ) -> None:
@@ -537,31 +537,31 @@ def test_ndarray_struct_nested_ndarray():
 
 @test_utils.test()
 def test_field_struct_nested_field() -> None:
-    a = ti.field(ti.i32, shape=(55,))
-    b = ti.field(ti.i32, shape=(57,))
-    c = ti.field(ti.i32, shape=(211,))
-    d = ti.field(ti.i32, shape=(211,))
-    e = ti.field(ti.i32, shape=(251,))
-    f = ti.field(ti.i32, shape=(251,))
+    a = qd.field(qd.i32, shape=(55,))
+    b = qd.field(qd.i32, shape=(57,))
+    c = qd.field(qd.i32, shape=(211,))
+    d = qd.field(qd.i32, shape=(211,))
+    e = qd.field(qd.i32, shape=(251,))
+    f = qd.field(qd.i32, shape=(251,))
 
     @dataclass
     class MyStructEF:
-        e: ti.Template
-        f: ti.Template
+        e: qd.Template
+        f: qd.Template
 
     @dataclass
     class MyStructCD:
-        c: ti.Template
-        d: ti.Template
+        c: qd.Template
+        d: qd.Template
         struct_ef: MyStructEF
 
     @dataclass
     class MyStructAB:
-        a: ti.Template
-        b: ti.Template
+        a: qd.Template
+        b: qd.Template
         struct_cd: MyStructCD
 
-    @ti.func
+    @qd.func
     def f3(
         my_struct_ab3: MyStructAB,
     ) -> None:
@@ -575,7 +575,7 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab3.a[51] = my_struct_ab3.struct_cd.c.shape[0]
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
-    @ti.func
+    @qd.func
     def f2(
         my_struct_ab2: MyStructAB,
     ) -> None:
@@ -590,7 +590,7 @@ def test_field_struct_nested_field() -> None:
         my_struct_ab2.a[61] = my_struct_ab2.struct_cd.c.shape[0]
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
-    @ti.kernel
+    @qd.kernel
     def k1(
         my_struct_ab: MyStructAB,
     ) -> None:
@@ -647,31 +647,31 @@ def test_field_struct_nested_field() -> None:
 
 @test_utils.test()
 def test_field_struct_nested_field_kwargs() -> None:
-    a = ti.field(ti.i32, shape=(55,))
-    b = ti.field(ti.i32, shape=(57,))
-    c = ti.field(ti.i32, shape=(211,))
-    d = ti.field(ti.i32, shape=(211,))
-    e = ti.field(ti.i32, shape=(251,))
-    f = ti.field(ti.i32, shape=(251,))
+    a = qd.field(qd.i32, shape=(55,))
+    b = qd.field(qd.i32, shape=(57,))
+    c = qd.field(qd.i32, shape=(211,))
+    d = qd.field(qd.i32, shape=(211,))
+    e = qd.field(qd.i32, shape=(251,))
+    f = qd.field(qd.i32, shape=(251,))
 
     @dataclass
     class MyStructEF:
-        e: ti.Template
-        f: ti.Template
+        e: qd.Template
+        f: qd.Template
 
     @dataclass
     class MyStructCD:
-        c: ti.Template
-        d: ti.Template
+        c: qd.Template
+        d: qd.Template
         struct_ef: MyStructEF
 
     @dataclass
     class MyStructAB:
-        a: ti.Template
-        b: ti.Template
+        a: qd.Template
+        b: qd.Template
         struct_cd: MyStructCD
 
-    @ti.func
+    @qd.func
     def f3(
         my_struct_ab3: MyStructAB,
     ) -> None:
@@ -685,7 +685,7 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab3.a[51] = my_struct_ab3.struct_cd.c.shape[0]
         my_struct_ab3.a[52] = my_struct_ab3.struct_cd.struct_ef.e.shape[0]
 
-    @ti.func
+    @qd.func
     def f2(
         my_struct_ab2: MyStructAB,
     ) -> None:
@@ -700,7 +700,7 @@ def test_field_struct_nested_field_kwargs() -> None:
         my_struct_ab2.a[61] = my_struct_ab2.struct_cd.c.shape[0]
         my_struct_ab2.a[62] = my_struct_ab2.struct_cd.struct_ef.e.shape[0]
 
-    @ti.kernel
+    @qd.kernel
     def k1(
         my_struct_ab: MyStructAB,
     ) -> None:
@@ -757,52 +757,52 @@ def test_field_struct_nested_field_kwargs() -> None:
 
 @test_utils.test()
 def test_ndarray_struct_multiple_child_structs_ndarray():
-    a = ti.ndarray(ti.i32, shape=(55,))
-    b = ti.ndarray(ti.i32, shape=(57,))
-    c = ti.ndarray(ti.i32, shape=(211,))
-    d = ti.ndarray(ti.i32, shape=(211,))
-    e = ti.ndarray(ti.i32, shape=(251,))
-    f = ti.ndarray(ti.i32, shape=(251,))
+    a = qd.ndarray(qd.i32, shape=(55,))
+    b = qd.ndarray(qd.i32, shape=(57,))
+    c = qd.ndarray(qd.i32, shape=(211,))
+    d = qd.ndarray(qd.i32, shape=(211,))
+    e = qd.ndarray(qd.i32, shape=(251,))
+    f = qd.ndarray(qd.i32, shape=(251,))
 
-    d11 = ti.ndarray(ti.i32, shape=(251,))
-    d12 = ti.ndarray(ti.i32, shape=(251,))
-    d21 = ti.ndarray(ti.i32, shape=(251,))
-    d22 = ti.ndarray(ti.i32, shape=(251,))
-    d31 = ti.ndarray(ti.i32, shape=(251,))
-    d32 = ti.ndarray(ti.i32, shape=(251,))
+    d11 = qd.ndarray(qd.i32, shape=(251,))
+    d12 = qd.ndarray(qd.i32, shape=(251,))
+    d21 = qd.ndarray(qd.i32, shape=(251,))
+    d22 = qd.ndarray(qd.i32, shape=(251,))
+    d31 = qd.ndarray(qd.i32, shape=(251,))
+    d32 = qd.ndarray(qd.i32, shape=(251,))
 
     @dataclass
     class D1:
-        d11: ti.types.NDArray[ti.i32, 1]
-        d12: ti.types.NDArray[ti.i32, 1]
+        d11: qd.types.NDArray[qd.i32, 1]
+        d12: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class D2:
-        d21: ti.types.NDArray[ti.i32, 1]
-        d22: ti.types.NDArray[ti.i32, 1]
+        d21: qd.types.NDArray[qd.i32, 1]
+        d22: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class D3:
-        d31: ti.types.NDArray[ti.i32, 1]
-        d32: ti.types.NDArray[ti.i32, 1]
+        d31: qd.types.NDArray[qd.i32, 1]
+        d32: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class C1:
-        a: ti.types.NDArray[ti.i32, 1]
+        a: qd.types.NDArray[qd.i32, 1]
         d1: D1
         d2: D2
         d3: D3
-        b: ti.types.NDArray[ti.i32, 1]
+        b: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class C2:
-        c: ti.types.NDArray[ti.i32, 1]
-        d: ti.types.NDArray[ti.i32, 1]
+        c: qd.types.NDArray[qd.i32, 1]
+        d: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class C3:
-        e: ti.types.NDArray[ti.i32, 1]
-        f: ti.types.NDArray[ti.i32, 1]
+        e: qd.types.NDArray[qd.i32, 1]
+        f: qd.types.NDArray[qd.i32, 1]
 
     @dataclass
     class P1:
@@ -810,7 +810,7 @@ def test_ndarray_struct_multiple_child_structs_ndarray():
         c2: C2
         c3: C3
 
-    @ti.kernel
+    @qd.kernel
     def k1(p1: P1) -> None:
         p1.c1.a[0] = 22
         p1.c1.b[0] = 33
@@ -837,27 +837,27 @@ def test_ndarray_struct_multiple_child_structs_ndarray():
 
 @test_utils.test()
 def test_ndarray_struct_multiple_child_structs_field():
-    a = ti.field(ti.i32, shape=(55,))
-    b = ti.field(ti.i32, shape=(57,))
-    c = ti.field(ti.i32, shape=(211,))
-    d = ti.field(ti.i32, shape=(211,))
-    e = ti.field(ti.i32, shape=(251,))
-    f = ti.field(ti.i32, shape=(251,))
+    a = qd.field(qd.i32, shape=(55,))
+    b = qd.field(qd.i32, shape=(57,))
+    c = qd.field(qd.i32, shape=(211,))
+    d = qd.field(qd.i32, shape=(211,))
+    e = qd.field(qd.i32, shape=(251,))
+    f = qd.field(qd.i32, shape=(251,))
 
     @dataclass
     class C1:
-        a: ti.Template
-        b: ti.Template
+        a: qd.Template
+        b: qd.Template
 
     @dataclass
     class C2:
-        c: ti.Template
-        d: ti.Template
+        c: qd.Template
+        d: qd.Template
 
     @dataclass
     class C3:
-        e: ti.Template
-        f: ti.Template
+        e: qd.Template
+        f: qd.Template
 
     @dataclass
     class P1:
@@ -865,7 +865,7 @@ def test_ndarray_struct_multiple_child_structs_field():
         c2: C2
         c3: C3
 
-    @ti.kernel
+    @qd.kernel
     def k1(p1: P1) -> None:
         p1.c1.a[0] = 22
         p1.c1.b[0] = 33
@@ -892,7 +892,7 @@ def test_ndarray_struct_multiple_child_structs_field():
 def test_template_mapper_cache(use_slots, monkeypatch):
     # Mock '_extract_arg' to track the number of (recursive) calls
     counter = 0
-    _extract_arg_orig = ti.lang._template_mapper_hotpath._extract_arg
+    _extract_arg_orig = qd.lang._template_mapper_hotpath._extract_arg
 
     def _extract_arg(*args, **kwargs):
         nonlocal counter
@@ -903,22 +903,22 @@ def test_template_mapper_cache(use_slots, monkeypatch):
 
     @dataclass(frozen=True, slots=use_slots)
     class MyStruct:
-        value: ti.types.ndarray()
-        placeholder: ti.i32
+        value: qd.types.ndarray()
+        placeholder: qd.i32
 
-    @ti.kernel
+    @qd.kernel
     def my_kernel(my_struct_1d: MyStruct, my_struct_2d: MyStruct) -> None:
-        for i in ti.ndrange(my_struct_1d.value.shape[0]):
+        for i in qd.ndrange(my_struct_1d.value.shape[0]):
             my_struct_1d.value[i] += 1
-        for i, j in ti.ndrange(my_struct_2d.value.shape[0], my_struct_2d.value.shape[1]):
+        for i, j in qd.ndrange(my_struct_2d.value.shape[0], my_struct_2d.value.shape[1]):
             my_struct_2d.value[i, j] += 1
 
     num_fields = len(fields(MyStruct))
-    value = ti.ndarray(ti.i32, shape=(1,))
+    value = qd.ndarray(qd.i32, shape=(1,))
     value.fill(0)
     placeholder = 0
     my_struct_1d = MyStruct(value=value, placeholder=placeholder)
-    value = ti.ndarray(ti.f32, shape=(1, 2))
+    value = qd.ndarray(qd.f32, shape=(1, 2))
     value.fill(0.0)
     my_struct_2d = MyStruct(value=value, placeholder=placeholder)
 
@@ -944,30 +944,30 @@ def test_template_mapper_cache(use_slots, monkeypatch):
 def test_print_used_parameters():
     @dataclasses.dataclass
     class MyDataclass:
-        used1: ti.types.NDArray[ti.i32, 1]
-        used2: ti.types.NDArray[ti.i32, 1]
-        used3: ti.types.NDArray[ti.i32, 1]
-        an_int: ti.i32
-        not_used_int: ti.i32
-        not_used: ti.types.NDArray[ti.i32, 1]
+        used1: qd.types.NDArray[qd.i32, 1]
+        used2: qd.types.NDArray[qd.i32, 1]
+        used3: qd.types.NDArray[qd.i32, 1]
+        an_int: qd.i32
+        not_used_int: qd.i32
+        not_used: qd.types.NDArray[qd.i32, 1]
 
-    @ti.func
+    @qd.func
     def f1(md: MyDataclass) -> None:
         md.used3[0] = 123
         md.used3[1] = md.an_int
 
-    @ti.kernel
-    def k1(md: MyDataclass, trigger_static: ti.Template) -> None:
+    @qd.kernel
+    def k1(md: MyDataclass, trigger_static: qd.Template) -> None:
         md.used1[0] = 222
         md.used1[1] = md.used2[0]
         f1(md)
-        if ti.static(trigger_static):
+        if qd.static(trigger_static):
             md.used1[2] = 444
 
-    u1 = ti.ndarray(ti.i32, (10,))
-    u2 = ti.ndarray(ti.i32, (10,))
-    u3 = ti.ndarray(ti.i32, (10,))
-    nu1 = ti.ndarray(ti.i32, (10,))
+    u1 = qd.ndarray(qd.i32, (10,))
+    u2 = qd.ndarray(qd.i32, (10,))
+    u3 = qd.ndarray(qd.i32, (10,))
+    nu1 = qd.ndarray(qd.i32, (10,))
     md = MyDataclass(used1=u1, used2=u2, used3=u3, not_used=nu1, an_int=555, not_used_int=888)
 
     u2[0] = 333
@@ -999,25 +999,25 @@ def test_print_used_parameters():
 def test_prune_used_parameters1():
     @dataclasses.dataclass
     class Nested1:
-        n1: ti.types.NDArray[ti.i32, 1]
-        n1u: ti.types.NDArray[ti.i32, 1]
+        n1: qd.types.NDArray[qd.i32, 1]
+        n1u: qd.types.NDArray[qd.i32, 1]
 
     @dataclasses.dataclass
     class MyDataclass1:
-        used1: ti.types.NDArray[ti.i32, 1]
-        used2: ti.types.NDArray[ti.i32, 1]
-        used3: ti.types.NDArray[ti.i32, 1]
-        not_used: ti.types.NDArray[ti.i32, 1]
+        used1: qd.types.NDArray[qd.i32, 1]
+        used2: qd.types.NDArray[qd.i32, 1]
+        used3: qd.types.NDArray[qd.i32, 1]
+        not_used: qd.types.NDArray[qd.i32, 1]
         nested1: Nested1
 
     @dataclasses.dataclass
     class MyDataclass2:
-        used1: ti.types.NDArray[ti.i32, 1]
-        used2: ti.types.NDArray[ti.i32, 1]
-        used3: ti.types.NDArray[ti.i32, 1]
-        not_used: ti.types.NDArray[ti.i32, 1]
+        used1: qd.types.NDArray[qd.i32, 1]
+        used2: qd.types.NDArray[qd.i32, 1]
+        used3: qd.types.NDArray[qd.i32, 1]
+        not_used: qd.types.NDArray[qd.i32, 1]
 
-    @ti.func
+    @qd.func
     def f1(md1: MyDataclass1, md2: MyDataclass2) -> None:
         md1.used3[0] = 123
         md2.used1[5] = 555
@@ -1025,27 +1025,27 @@ def test_prune_used_parameters1():
         md2.used3[5] = 333
         md1.nested1.n1[0] = 777
 
-    @ti.kernel
-    def k1(md1: MyDataclass1, md2: MyDataclass2, trigger_static: ti.Template) -> None:
+    @qd.kernel
+    def k1(md1: MyDataclass1, md2: MyDataclass2, trigger_static: qd.Template) -> None:
         md1.used1[0] = 222
         md1.used1[1] = md1.used2[0]
         f1(md1, md2)
-        if ti.static(trigger_static):
+        if qd.static(trigger_static):
             md1.used1[2] = 444
 
-    u1 = ti.ndarray(ti.i32, (10,))
-    u2 = ti.ndarray(ti.i32, (10,))
-    u3 = ti.ndarray(ti.i32, (10,))
-    n1 = ti.ndarray(ti.i32, (10,))
-    nu1 = ti.ndarray(ti.i32, (10,))
-    n1u = ti.ndarray(ti.i32, (10,))
+    u1 = qd.ndarray(qd.i32, (10,))
+    u2 = qd.ndarray(qd.i32, (10,))
+    u3 = qd.ndarray(qd.i32, (10,))
+    n1 = qd.ndarray(qd.i32, (10,))
+    nu1 = qd.ndarray(qd.i32, (10,))
+    n1u = qd.ndarray(qd.i32, (10,))
     nested1 = Nested1(n1=n1, n1u=n1u)
     md1 = MyDataclass1(used1=u1, used2=u2, used3=u3, not_used=nu1, nested1=nested1)
 
-    u1b = ti.ndarray(ti.i32, (10,))
-    u2b = ti.ndarray(ti.i32, (10,))
-    u3b = ti.ndarray(ti.i32, (10,))
-    nu1b = ti.ndarray(ti.i32, (10,))
+    u1b = qd.ndarray(qd.i32, (10,))
+    u2b = qd.ndarray(qd.i32, (10,))
+    u3b = qd.ndarray(qd.i32, (10,))
+    nu1b = qd.ndarray(qd.i32, (10,))
     md2 = MyDataclass2(used1=u1b, used2=u2b, used3=u3b, not_used=nu1b)
 
     u2[0] = 333
@@ -1077,19 +1077,19 @@ def test_prune_used_parameters1():
 def test_prune_used_parameters2():
     @dataclasses.dataclass
     class MyDataclass1:
-        used1: ti.types.NDArray[ti.i32, 1]
-        used2: ti.types.NDArray[ti.i32, 1]
-        used3: ti.types.NDArray[ti.i32, 1]
-        not_used: ti.types.NDArray[ti.i32, 1]
+        used1: qd.types.NDArray[qd.i32, 1]
+        used2: qd.types.NDArray[qd.i32, 1]
+        used3: qd.types.NDArray[qd.i32, 1]
+        not_used: qd.types.NDArray[qd.i32, 1]
 
     @dataclasses.dataclass
     class MyDataclass2:
-        used1: ti.types.NDArray[ti.i32, 1]
-        used2: ti.types.NDArray[ti.i32, 1]
-        used3: ti.types.NDArray[ti.i32, 1]
-        not_used: ti.types.NDArray[ti.i32, 1]
+        used1: qd.types.NDArray[qd.i32, 1]
+        used2: qd.types.NDArray[qd.i32, 1]
+        used3: qd.types.NDArray[qd.i32, 1]
+        not_used: qd.types.NDArray[qd.i32, 1]
 
-    @ti.func
+    @qd.func
     def f2(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
         md1.used1[0] = 111
         md1.used2[0] = 222
@@ -1098,28 +1098,28 @@ def test_prune_used_parameters2():
         md2.used2[0] = 444
         md2.used3[0] = 333
 
-    @ti.func
+    @qd.func
     def f1(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
         f2(i_b, md1=md1, md2=md2)
 
-    @ti.kernel
-    def k1(envs_idx: ti.types.NDArray[ti.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
+    @qd.kernel
+    def k1(envs_idx: qd.types.NDArray[qd.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
         for i_b_ in range(envs_idx.shape[0]):
             i_b = envs_idx[i_b_]
             f1(i_b, md1=md1, md2=md2)
 
-    envs_idx = ti.ndarray(ti.i32, (10,))
+    envs_idx = qd.ndarray(qd.i32, (10,))
 
-    u1 = ti.ndarray(ti.i32, (10,))
-    u2 = ti.ndarray(ti.i32, (10,))
-    u3 = ti.ndarray(ti.i32, (10,))
-    nu1 = ti.ndarray(ti.i32, (10,))
+    u1 = qd.ndarray(qd.i32, (10,))
+    u2 = qd.ndarray(qd.i32, (10,))
+    u3 = qd.ndarray(qd.i32, (10,))
+    nu1 = qd.ndarray(qd.i32, (10,))
     md1 = MyDataclass1(used1=u1, used2=u2, used3=u3, not_used=nu1)
 
-    u1b = ti.ndarray(ti.i32, (10,))
-    u2b = ti.ndarray(ti.i32, (10,))
-    u3b = ti.ndarray(ti.i32, (10,))
-    nu1b = ti.ndarray(ti.i32, (10,))
+    u1b = qd.ndarray(qd.i32, (10,))
+    u2b = qd.ndarray(qd.i32, (10,))
+    u3b = qd.ndarray(qd.i32, (10,))
+    nu1b = qd.ndarray(qd.i32, (10,))
     md2 = MyDataclass2(used1=u1b, used2=u2b, used3=u3b, not_used=nu1b)
 
     k1(envs_idx, md1=md1, md2=md2)
@@ -1138,31 +1138,31 @@ def test_prune_used_parameters2():
 
 @test_utils.test()
 def test_prune_used_parameters_fastcache1(tmp_path: Path):
-    arch_name = ti.lang.impl.current_cfg().arch.name
+    arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        ti.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class Nested1:
-            n1: ti.types.NDArray[ti.i32, 1]
-            n1u: ti.types.NDArray[ti.i32, 1]
+            n1: qd.types.NDArray[qd.i32, 1]
+            n1u: qd.types.NDArray[qd.i32, 1]
 
         @dataclasses.dataclass
         class MyDataclass1:
-            used1: ti.types.NDArray[ti.i32, 1]
-            used2: ti.types.NDArray[ti.i32, 1]
-            used3: ti.types.NDArray[ti.i32, 1]
-            not_used: ti.types.NDArray[ti.i32, 1]
+            used1: qd.types.NDArray[qd.i32, 1]
+            used2: qd.types.NDArray[qd.i32, 1]
+            used3: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
             nested1: Nested1
 
         @dataclasses.dataclass
         class MyDataclass2:
-            used1: ti.types.NDArray[ti.i32, 1]
-            used2: ti.types.NDArray[ti.i32, 1]
-            used3: ti.types.NDArray[ti.i32, 1]
-            not_used: ti.types.NDArray[ti.i32, 1]
+            used1: qd.types.NDArray[qd.i32, 1]
+            used2: qd.types.NDArray[qd.i32, 1]
+            used3: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
 
-        @ti.func
+        @qd.func
         def f1(md1: MyDataclass1, md2: MyDataclass2) -> None:
             # used:
             # __ti_md1__ti_used3
@@ -1176,8 +1176,8 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
             md2.used3[5] = 333
             md1.nested1.n1[0] = 777
 
-        @ti.kernel(fastcache=True)
-        def k1(md1: MyDataclass1, md2: MyDataclass2, trigger_static: ti.Template) -> None:
+        @qd.kernel(fastcache=True)
+        def k1(md1: MyDataclass1, md2: MyDataclass2, trigger_static: qd.Template) -> None:
             # used:
             # __ti_md1__ti_used1
             # __ti_md1__ti_used2
@@ -1189,22 +1189,22 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
             md1.used1[0] = 222
             md1.used1[1] = md1.used2[0]
             f1(md1, md2)
-            if ti.static(trigger_static):
+            if qd.static(trigger_static):
                 md1.used1[2] = 444
 
-        u1 = ti.ndarray(ti.i32, (10,))
-        u2 = ti.ndarray(ti.i32, (10,))
-        u3 = ti.ndarray(ti.i32, (10,))
-        n1 = ti.ndarray(ti.i32, (10,))
-        nu1 = ti.ndarray(ti.i32, (10,))
-        n1u = ti.ndarray(ti.i32, (10,))
+        u1 = qd.ndarray(qd.i32, (10,))
+        u2 = qd.ndarray(qd.i32, (10,))
+        u3 = qd.ndarray(qd.i32, (10,))
+        n1 = qd.ndarray(qd.i32, (10,))
+        nu1 = qd.ndarray(qd.i32, (10,))
+        n1u = qd.ndarray(qd.i32, (10,))
         nested1 = Nested1(n1=n1, n1u=n1u)
         md1 = MyDataclass1(used1=u1, used2=u2, used3=u3, not_used=nu1, nested1=nested1)
 
-        u1b = ti.ndarray(ti.i32, (10,))
-        u2b = ti.ndarray(ti.i32, (10,))
-        u3b = ti.ndarray(ti.i32, (10,))
-        nu1b = ti.ndarray(ti.i32, (10,))
+        u1b = qd.ndarray(qd.i32, (10,))
+        u2b = qd.ndarray(qd.i32, (10,))
+        u3b = qd.ndarray(qd.i32, (10,))
+        nu1b = qd.ndarray(qd.i32, (10,))
         md2 = MyDataclass2(used1=u1b, used2=u2b, used3=u3b, not_used=nu1b)
 
         u2[0] = 333
@@ -1240,27 +1240,27 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
 
 @test_utils.test()
 def test_prune_used_parameters_fastcache2(tmp_path: Path):
-    arch_name = ti.lang.impl.current_cfg().arch.name
+    arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        ti.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:
-            used1: ti.types.NDArray[ti.i32, 1]
-            used2: ti.types.NDArray[ti.i32, 1]
-            used3: ti.types.NDArray[ti.i32, 1]
-            not_used: ti.types.NDArray[ti.i32, 1]
-            not_used2: ti.types.NDArray[ti.i32, 1]
+            used1: qd.types.NDArray[qd.i32, 1]
+            used2: qd.types.NDArray[qd.i32, 1]
+            used3: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+            not_used2: qd.types.NDArray[qd.i32, 1]
 
         @dataclasses.dataclass
         class MyDataclass2:
-            used1: ti.types.NDArray[ti.i32, 1]
-            used2: ti.types.NDArray[ti.i32, 1]
-            used3: ti.types.NDArray[ti.i32, 1]
-            not_used: ti.types.NDArray[ti.i32, 1]
-            not_used2: ti.types.NDArray[ti.i32, 1]
+            used1: qd.types.NDArray[qd.i32, 1]
+            used2: qd.types.NDArray[qd.i32, 1]
+            used3: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+            not_used2: qd.types.NDArray[qd.i32, 1]
 
-        @ti.func
+        @qd.func
         def f2(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
             md1.used1[0] = 111
             md1.used2[0] = 222
@@ -1269,30 +1269,30 @@ def test_prune_used_parameters_fastcache2(tmp_path: Path):
             md2.used2[0] = 444
             md2.used3[0] = 333
 
-        @ti.func
+        @qd.func
         def f1(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
             f2(i_b, md1=md1, md2=md2)
 
-        @ti.kernel(fastcache=True)
-        def k1(envs_idx: ti.types.NDArray[ti.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
+        @qd.kernel(fastcache=True)
+        def k1(envs_idx: qd.types.NDArray[qd.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
             for i_b_ in range(envs_idx.shape[0]):
                 i_b = envs_idx[i_b_]
                 f1(i_b, md1=md1, md2=md2)
 
-        envs_idx = ti.ndarray(ti.i32, (10,))
+        envs_idx = qd.ndarray(qd.i32, (10,))
 
-        u1 = ti.ndarray(ti.i32, (10,))
-        u2 = ti.ndarray(ti.i32, (10,))
-        u3 = ti.ndarray(ti.i32, (10,))
-        nu1 = ti.ndarray(ti.i32, (10,))
-        nu2 = ti.ndarray(ti.i32, (10,))
+        u1 = qd.ndarray(qd.i32, (10,))
+        u2 = qd.ndarray(qd.i32, (10,))
+        u3 = qd.ndarray(qd.i32, (10,))
+        nu1 = qd.ndarray(qd.i32, (10,))
+        nu2 = qd.ndarray(qd.i32, (10,))
         md1 = MyDataclass1(used1=u1, used2=u2, used3=u3, not_used=nu1, not_used2=nu2)
 
-        u1b = ti.ndarray(ti.i32, (10,))
-        u2b = ti.ndarray(ti.i32, (10,))
-        u3b = ti.ndarray(ti.i32, (10,))
-        nu1b = ti.ndarray(ti.i32, (10,))
-        nu2b = ti.ndarray(ti.i32, (10,))
+        u1b = qd.ndarray(qd.i32, (10,))
+        u2b = qd.ndarray(qd.i32, (10,))
+        u3b = qd.ndarray(qd.i32, (10,))
+        nu1b = qd.ndarray(qd.i32, (10,))
+        nu2b = qd.ndarray(qd.i32, (10,))
         md2 = MyDataclass2(used1=u1b, used2=u2b, used3=u3b, not_used=nu1b, not_used2=nu2b)
 
         k1(envs_idx, md1=md1, md2=md2)
@@ -1311,42 +1311,42 @@ def test_prune_used_parameters_fastcache2(tmp_path: Path):
 
 @test_utils.test()
 def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
-    arch_name = ti.lang.impl.current_cfg().arch.name
+    arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        ti.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:
-            not_used1: ti.types.NDArray[ti.i32, 1]
-            not_used2: ti.types.NDArray[ti.i32, 1]
+            not_used1: qd.types.NDArray[qd.i32, 1]
+            not_used2: qd.types.NDArray[qd.i32, 1]
 
         @dataclasses.dataclass
         class MyDataclass2:
-            not_used1: ti.types.NDArray[ti.i32, 1]
-            not_used2: ti.types.NDArray[ti.i32, 1]
+            not_used1: qd.types.NDArray[qd.i32, 1]
+            not_used2: qd.types.NDArray[qd.i32, 1]
 
-        @ti.func
+        @qd.func
         def f2(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
             pass
 
-        @ti.func
+        @qd.func
         def f1(i_b, md1: MyDataclass1, md2: MyDataclass2) -> None:
             f2(i_b, md1, md2=md2)
 
-        @ti.kernel(fastcache=True)
-        def k1(envs_idx: ti.types.NDArray[ti.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
+        @qd.kernel(fastcache=True)
+        def k1(envs_idx: qd.types.NDArray[qd.i32, 1], md1: MyDataclass1, md2: MyDataclass2) -> None:
             for i_b_ in range(envs_idx.shape[0]):
                 i_b = envs_idx[i_b_]
                 f1(i_b, md1, md2=md2)
 
-        envs_idx = ti.ndarray(ti.i32, (10,))
+        envs_idx = qd.ndarray(qd.i32, (10,))
 
-        nu1 = ti.ndarray(ti.i32, (10,))
-        nu2 = ti.ndarray(ti.i32, (10,))
+        nu1 = qd.ndarray(qd.i32, (10,))
+        nu2 = qd.ndarray(qd.i32, (10,))
         md1 = MyDataclass1(not_used1=nu1, not_used2=nu2)
 
-        nu1b = ti.ndarray(ti.i32, (10,))
-        nu2b = ti.ndarray(ti.i32, (10,))
+        nu1b = qd.ndarray(qd.i32, (10,))
+        nu2b = qd.ndarray(qd.i32, (10,))
         md2 = MyDataclass2(not_used1=nu1b, not_used2=nu2b)
 
         k1(envs_idx, md1, md2=md2)
@@ -1356,20 +1356,20 @@ def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
 def test_pruning_with_keyword_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        used: ti.types.NDArray[ti.f32, 2]
-        not_used: ti.types.NDArray[ti.f32, 2]
+        used: qd.types.NDArray[qd.f32, 2]
+        not_used: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
         my_struct_outside = MyStruct(
-            used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1))
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         return my_struct_outside
 
-    @ti.func
+    @qd.func
     def f1(new_struct_name: MyStruct):
         new_struct_name.used[0, 0] = 100
 
-    @ti.kernel
+    @qd.kernel
     def k1(my_struct: MyStruct):
         f1(new_struct_name=my_struct)
 
@@ -1386,17 +1386,17 @@ def test_pruning_with_keyword_rename() -> None:
 def test_pruning_with_arg_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        used: ti.types.NDArray[ti.f32, 2]
-        not_used: ti.types.NDArray[ti.f32, 2]
+        used: qd.types.NDArray[qd.f32, 2]
+        not_used: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
-        return MyStruct(used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1)))
+        return MyStruct(used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1)))
 
-    @ti.func
+    @qd.func
     def f1(new_struct_name: MyStruct):
         new_struct_name.used[0, 0] = 100
 
-    @ti.kernel
+    @qd.kernel
     def k1(my_struct: MyStruct):
         f1(my_struct)
 
@@ -1420,53 +1420,53 @@ def test_pruning_with_arg_rename() -> None:
 def test_pruning_with_arg_kwargs_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        used: ti.types.NDArray[ti.f32, 2]
-        not_used: ti.types.NDArray[ti.f32, 2]
+        used: qd.types.NDArray[qd.f32, 2]
+        not_used: qd.types.NDArray[qd.f32, 2]
 
     def create_structs():
         my_struct1 = MyStruct(
-            used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1))
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct2 = MyStruct(
-            used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1))
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct3 = MyStruct(
-            used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1))
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         my_struct4 = MyStruct(
-            used=ti.ndarray(dtype=ti.f32, shape=(1, 1)), not_used=ti.ndarray(dtype=ti.f32, shape=(1, 1))
+            used=qd.ndarray(dtype=qd.f32, shape=(1, 1)), not_used=qd.ndarray(dtype=qd.f32, shape=(1, 1))
         )
         return my_struct1, my_struct2, my_struct3, my_struct4
 
-    @ti.func
+    @qd.func
     def g1(struc3_g1: MyStruct):
         # should be used:
         # struc3_g1.used
         struc3_g1.used[0, 0] = 102
 
-    @ti.func
-    def f2(a3: ti.i32, struct_f2: MyStruct, b3: ti.i32, d3: ti.i32, struct2_f2: MyStruct, c3: ti.i32):
+    @qd.func
+    def f2(a3: qd.i32, struct_f2: MyStruct, b3: qd.i32, d3: qd.i32, struct2_f2: MyStruct, c3: qd.i32):
         # should be used:
         # struct_f2.used
         # struct2_f2.useds
         struct_f2.used[0, 0] = 100
         struct2_f2.used[0, 0] = 101
 
-    @ti.func
-    def f1(a2: ti.i32, struct_f1: MyStruct, b2: ti.i32, d2: ti.i32, struct2_f1: MyStruct, c2: ti.i32):
+    @qd.func
+    def f1(a2: qd.i32, struct_f1: MyStruct, b2: qd.i32, d2: qd.i32, struct2_f1: MyStruct, c2: qd.i32):
         # should be used:
         # struct_f1.used
         # struct2_f1.used
         f2(a2, struct_f1, b2, d3=d2, struct2_f2=struct2_f1, c3=c2)
 
-    @ti.kernel
+    @qd.kernel
     def k1(
-        a: ti.i32,
+        a: qd.i32,
         struct1_k1: MyStruct,
-        b: ti.i32,
-        d: ti.i32,
+        b: qd.i32,
+        d: qd.i32,
         struct2_k1: MyStruct,
-        c: ti.i32,
+        c: qd.i32,
         struct3_k1: MyStruct,
         struct4_k1: MyStruct,
     ):
@@ -1523,33 +1523,33 @@ def test_pruning_with_arg_kwargs_rename() -> None:
 def test_pruning_with_recursive_func() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        a: ti.types.NDArray[ti.f32, 2]
-        b: ti.types.NDArray[ti.f32, 2]
-        c: ti.types.NDArray[ti.f32, 2]
-        d: ti.types.NDArray[ti.f32, 2]
+        a: qd.types.NDArray[qd.f32, 2]
+        b: qd.types.NDArray[qd.f32, 2]
+        c: qd.types.NDArray[qd.f32, 2]
+        d: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
         my_struct = MyStruct(
-            a=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            b=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            c=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            d=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            a=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            b=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            c=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            d=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
-    def f1(depth: ti.template(), struc_f1: MyStruct):
-        if ti.static(depth) == 0:
+    @qd.func
+    def f1(depth: qd.template(), struc_f1: MyStruct):
+        if qd.static(depth) == 0:
             struc_f1.a[0, 0] = 100
             f1(1, struc_f1)
-        elif ti.static(depth) == 1:
+        elif qd.static(depth) == 1:
             struc_f1.b[0, 0] = 101
             f1(2, struc_f1)
-        elif ti.static(depth) == 2:
+        elif qd.static(depth) == 2:
             struc_f1.c[0, 0] = 102
             f1(2, struc_f1)
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         f1(0, struct_k1)
 
@@ -1585,45 +1585,45 @@ def test_pruning_reuse_func_diff_kernel_parameters() -> None:
 
     @dataclasses.dataclass
     class MyStruct:
-        _f3: ti.types.NDArray[ti.f32, 2]
-        _f2b: ti.types.NDArray[ti.f32, 2]
-        _f2a: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _f3: qd.types.NDArray[qd.f32, 2]
+        _f2b: qd.types.NDArray[qd.f32, 2]
+        _f2a: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
         my_struct = MyStruct(
-            _f3=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2b=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2a=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _f3=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2b=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2a=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
+    @qd.func
     def f3(struc_f3: MyStruct):
         struc_f3._f3[0, 0] = 104
         f2b(struc_f3)
 
-    @ti.func
+    @qd.func
     def f2b(struc_f2b: MyStruct):
         struc_f2b._f2b[0, 0] = 103
 
-    @ti.func
+    @qd.func
     def f2a(struc_f2a: MyStruct):
         struc_f2a._f2a[0, 0] = 102
         f2b(struc_f2a)
 
-    @ti.func
+    @qd.func
     def f1(struc_f1: MyStruct):
         struc_f1._f1[0, 0] = 101
         f2a(struc_f1)
         f3(struc_f1)
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(struct_k1)
@@ -1654,28 +1654,28 @@ def test_pruning_reuse_func_diff_kernel_parameters() -> None:
 def test_pruning_reuse_func_same_kernel_call_l1() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        _f1b: ti.types.NDArray[ti.f32, 2]
-        _f1a: ti.types.NDArray[ti.f32, 2]
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _f1b: qd.types.NDArray[qd.f32, 2]
+        _f1a: qd.types.NDArray[qd.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
         my_struct = MyStruct(
-            _f1b=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1a=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _f1b=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1a=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
-    def f1(flag: ti.template(), struc_f1: MyStruct):
-        if ti.static(flag):
+    @qd.func
+    def f1(flag: qd.template(), struc_f1: MyStruct):
+        if qd.static(flag):
             struc_f1._f1a[0, 0] = 101
         else:
             struc_f1._f1b[0, 0] = 102
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(False, struct_k1)
@@ -1703,36 +1703,36 @@ def test_pruning_reuse_func_same_kernel_call_l1() -> None:
 def test_pruning_reuse_func_same_kernel_call_l2() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        _f2b: ti.types.NDArray[ti.f32, 2]
-        _f2a: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _f2b: qd.types.NDArray[qd.f32, 2]
+        _f2a: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def create_struct():
         my_struct = MyStruct(
-            _f2b=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2a=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _f2b=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2a=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
-    def f2(flag: ti.template(), struc_f2: MyStruct):
-        if ti.static(flag):
+    @qd.func
+    def f2(flag: qd.template(), struc_f2: MyStruct):
+        if qd.static(flag):
             struc_f2._f2a[0, 0] = 102
         else:
             struc_f2._f2b[0, 0] = 103
 
-    @ti.func
+    @qd.func
     def f1(struct_f1: MyStruct):
         struct_f1._f1[0, 0] = 101
         f2(False, struct_f1)
         f2(True, struct_f1)
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(struct_k1)
@@ -1766,35 +1766,35 @@ def test_pruning_reuse_func_across_kernels() -> None:
 
     @dataclasses.dataclass
     class MyStruct:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _k2: ti.types.NDArray[ti.f32, 2]
-        _f1_no_flag: ti.types.NDArray[ti.f32, 2]
-        _f1_with_flag: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _k2: qd.types.NDArray[qd.f32, 2]
+        _f1_no_flag: qd.types.NDArray[qd.f32, 2]
+        _f1_with_flag: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _k2=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1_no_flag=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1_with_flag=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _k2=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1_no_flag=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1_with_flag=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
-    def f1(flag: ti.template(), struct_f1: MyStruct):
-        if ti.static(flag):
+    @qd.func
+    def f1(flag: qd.template(), struct_f1: MyStruct):
+        if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 102
         else:
             struct_f1._f1_no_flag[0, 0] = 103
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 101
         f1(False, struct_k1)
 
-    @ti.kernel
+    @qd.kernel
     def k2(struct_k2: MyStruct):
         struct_k2._k2[0, 0] = 100
         f1(True, struct_k2)
@@ -1827,29 +1827,29 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
 
     @dataclasses.dataclass
     class MyStruct:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1_no_flag: ti.types.NDArray[ti.f32, 2]
-        _f1_with_flag: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1_no_flag: qd.types.NDArray[qd.f32, 2]
+        _f1_with_flag: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1_no_flag=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1_with_flag=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1_no_flag=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1_with_flag=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
-    def f1(flag: ti.template(), struct_f1: MyStruct):
-        if ti.static(flag):
+    @qd.func
+    def f1(flag: qd.template(), struct_f1: MyStruct):
+        if qd.static(flag):
             struct_f1._f1_with_flag[0, 0] = 101
         else:
             struct_f1._f1_no_flag[0, 0] = 102
 
-    @ti.kernel
-    def k1(flag: ti.Template, struct_k1: MyStruct):
+    @qd.kernel
+    def k1(flag: qd.Template, struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(flag, struct_k1)
 
@@ -1934,38 +1934,38 @@ def test_pruning_kwargs_same_param_names_diff_names() -> None:
 
     @dataclasses.dataclass
     class MyStruct:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _f2a: ti.types.NDArray[ti.f32, 2]
-        _f2b: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _f2a: qd.types.NDArray[qd.f32, 2]
+        _f2b: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2a=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2b=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2a=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2b=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
+    @qd.func
     def f2a(struct_f2a: MyStruct):
         struct_f2a._f2a[0, 0] += 3
 
-    @ti.func
+    @qd.func
     def f2b(struct_f2b: MyStruct):
         struct_f2b._f2b[0, 0] += 5
 
-    @ti.func
+    @qd.func
     def f1(struct_f1: MyStruct):
         struct_f1._f1[0, 0] = 101
         f2a(struct_f2a=struct_f1)
         f2a(struct_f2a=struct_f1)
         f2b(struct_f2b=struct_f1)
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(struct_f1=struct_k1)
@@ -1982,7 +1982,7 @@ def test_pruning_kwargs_same_param_names_diff_names() -> None:
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 4
 
 
-@pytest.mark.xfail(reason="cannot use * when calling ti.func")
+@pytest.mark.xfail(reason="cannot use * when calling qd.func")
 @test_utils.test()
 def test_pruning_func_return_star_to_another() -> None:
     """
@@ -1990,26 +1990,26 @@ def test_pruning_func_return_star_to_another() -> None:
     another
     """
 
-    @ti.func
-    def return_params(a: ti.i32):
+    @qd.func
+    def return_params(a: qd.i32):
         return a + 1, a + 5
 
-    @ti.func
-    def f2(t: ti.types.NDArray[ti.i32, 1], a: ti.i32, b: ti.i32) -> None:
+    @qd.func
+    def f2(t: qd.types.NDArray[qd.i32, 1], a: qd.i32, b: qd.i32) -> None:
         t[0] = a
         t[1] = b
 
-    @ti.kernel
-    def k1(t: ti.types.NDArray[ti.i32, 1], a: ti.i32) -> None:
+    @qd.kernel
+    def k1(t: qd.types.NDArray[qd.i32, 1], a: qd.i32) -> None:
         f2(t, *return_params(a))
 
-    t = ti.ndarray(ti.i32, (10,))
+    t = qd.ndarray(qd.i32, (10,))
     k1(t, 3)
     assert t[0] == 4
     assert t[0] == 8
 
 
-@pytest.mark.xfail(reason="cannot use * when calling ti.func")
+@pytest.mark.xfail(reason="cannot use * when calling qd.func")
 @test_utils.test()
 def test_pruning_func_return_star_to_another_two_step() -> None:
     """
@@ -2017,21 +2017,21 @@ def test_pruning_func_return_star_to_another_two_step() -> None:
     another
     """
 
-    @ti.func
-    def return_params(a: ti.i32):
+    @qd.func
+    def return_params(a: qd.i32):
         return a + 1, a + 5
 
-    @ti.func
-    def f2(t: ti.types.NDArray[ti.i32, 1], a: ti.i32, b: ti.i32) -> None:
+    @qd.func
+    def f2(t: qd.types.NDArray[qd.i32, 1], a: qd.i32, b: qd.i32) -> None:
         t[0] = a
         t[1] = b
 
-    @ti.kernel
-    def k1(t: ti.types.NDArray[ti.i32, 1], a: ti.i32) -> None:
+    @qd.kernel
+    def k1(t: qd.types.NDArray[qd.i32, 1], a: qd.i32) -> None:
         res = return_params(a)
         f2(t, *res)
 
-    t = ti.ndarray(ti.i32, (10,))
+    t = qd.ndarray(qd.i32, (10,))
     k1(t, 3)
     assert t[0] == 4
     assert t[0] == 8
@@ -2044,21 +2044,21 @@ def test_pruning_func_return_star_to_another_explicit_vars() -> None:
     another
     """
 
-    @ti.func
-    def return_params(a: ti.i32):
+    @qd.func
+    def return_params(a: qd.i32):
         return a + 1, a + 5
 
-    @ti.func
-    def f2(t: ti.types.NDArray[ti.i32, 1], a: ti.i32, b: ti.i32) -> None:
+    @qd.func
+    def f2(t: qd.types.NDArray[qd.i32, 1], a: qd.i32, b: qd.i32) -> None:
         t[0] = a
         t[1] = b
 
-    @ti.kernel
-    def k1(t: ti.types.NDArray[ti.i32, 1], a: ti.i32) -> None:
+    @qd.kernel
+    def k1(t: qd.types.NDArray[qd.i32, 1], a: qd.i32) -> None:
         b, c = return_params(a)
         f2(t, b, c)
 
-    t = ti.ndarray(ti.i32, (10,))
+    t = qd.ndarray(qd.i32, (10,))
     k1(t, 3)
     assert t[0] == 4
     assert t[1] == 8
@@ -2066,44 +2066,44 @@ def test_pruning_func_return_star_to_another_explicit_vars() -> None:
 
 @test_utils.test()
 def test_pruning_pass_element_of_tensor_of_dataclass() -> None:
-    vec3 = ti.types.vector(3, ti.f32)
+    vec3 = qd.types.vector(3, qd.f32)
 
     @dataclasses.dataclass
     class MyStruct:
-        _unused0: ti.types.NDArray[vec3, 2]
-        _k1: ti.types.NDArray[vec3, 2]
-        _unused0b: ti.types.NDArray[vec3, 2]
-        _f1: ti.types.NDArray[vec3, 2]
-        _unused1: ti.types.NDArray[vec3, 2]
-        _in: ti.types.NDArray[vec3, 2]
-        _unused2: ti.types.NDArray[vec3, 2]
-        _out: ti.types.NDArray[vec3, 2]
-        _unused3: ti.types.NDArray[vec3, 2]
+        _unused0: qd.types.NDArray[vec3, 2]
+        _k1: qd.types.NDArray[vec3, 2]
+        _unused0b: qd.types.NDArray[vec3, 2]
+        _f1: qd.types.NDArray[vec3, 2]
+        _unused1: qd.types.NDArray[vec3, 2]
+        _in: qd.types.NDArray[vec3, 2]
+        _unused2: qd.types.NDArray[vec3, 2]
+        _out: qd.types.NDArray[vec3, 2]
+        _unused3: qd.types.NDArray[vec3, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _unused0=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _k1=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _unused0b=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _unused1=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _in=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _unused2=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _out=ti.ndarray(dtype=vec3, shape=(1, 1)),
-            _unused3=ti.ndarray(dtype=vec3, shape=(1, 1)),
+            _unused0=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _unused0b=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _unused1=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _in=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _unused2=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _out=qd.ndarray(dtype=vec3, shape=(1, 1)),
+            _unused3=qd.ndarray(dtype=vec3, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
+    @qd.func
     def f2(_in: vec3) -> vec3:
         return _in + 5.0
 
-    @ti.func
+    @qd.func
     def f1(struct_f1: MyStruct):
         struct_f1._f1[0, 0] = 101
         struct_f1._out[0, 0] = f2(struct_f1._in[0, 0])
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(struct_f1=struct_k1)
@@ -2129,37 +2129,37 @@ def test_pruning_kwargs_swap_order() -> None:
 
     @dataclasses.dataclass
     class MyStruct1:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused1: ti.types.NDArray[ti.f32, 2]
-        _unused2: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused1: qd.types.NDArray[qd.f32, 2]
+        _unused2: qd.types.NDArray[qd.f32, 2]
 
     @dataclasses.dataclass
     class MyStruct2:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_structs():
         my_struct1 = MyStruct1(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused2=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused2=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         my_struct2 = MyStruct2(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct1, my_struct2
 
-    @ti.func
+    @qd.func
     def f1(struct1_f1: MyStruct1, struct2_f1: MyStruct2):
         struct1_f1._f1[0, 0] = 102
         struct2_f1._f1[0, 0] = 103
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct1_k1: MyStruct1, struct2_k1: MyStruct2):
         struct1_k1._k1[0, 0] = 100
         struct2_k1._k1[0, 0] = 101
@@ -2190,42 +2190,42 @@ def test_pruning_kwargs_swap_order_bound_callable() -> None:
 
     @dataclasses.dataclass
     class MyStruct1:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused1: ti.types.NDArray[ti.f32, 2]
-        _unused2: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused1: qd.types.NDArray[qd.f32, 2]
+        _unused2: qd.types.NDArray[qd.f32, 2]
 
     @dataclasses.dataclass
     class MyStruct2:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_structs():
         my_struct1 = MyStruct1(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused2=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused2=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         my_struct2 = MyStruct2(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct1, my_struct2
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None: ...
 
-        @ti.func
+        @qd.func
         def f1(self, struct1_f1: MyStruct1, struct2_f1: MyStruct2):
             struct1_f1._f1[0, 0] = 102
             struct2_f1._f1[0, 0] = 103
 
-    @ti.kernel
-    def k1(my_data_oriented: ti.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
+    @qd.kernel
+    def k1(my_data_oriented: qd.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
         struct1_k1._k1[0, 0] = 100
         struct2_k1._k1[0, 0] = 101
         my_data_oriented.f1(struct2_f1=struct2_k1, struct1_f1=struct1_k1)
@@ -2247,42 +2247,42 @@ def test_pruning_kwargs_swap_order_bound_callable() -> None:
 def test_pruning_bound_callable_args() -> None:
     @dataclasses.dataclass
     class MyStruct1:
-        _k1: ti.types.NDArray[ti.f32, 1]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused1: ti.types.NDArray[ti.f32, 4]
-        _unused2: ti.types.NDArray[ti.f32, 4]
+        _k1: qd.types.NDArray[qd.f32, 1]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused1: qd.types.NDArray[qd.f32, 4]
+        _unused2: qd.types.NDArray[qd.f32, 4]
 
     @dataclasses.dataclass
     class MyStruct2:
-        _k1: ti.types.NDArray[ti.f32, 1]
-        _f1: ti.types.NDArray[ti.f32, 3]
-        _unused: ti.types.NDArray[ti.f32, 4]
+        _k1: qd.types.NDArray[qd.f32, 1]
+        _f1: qd.types.NDArray[qd.f32, 3]
+        _unused: qd.types.NDArray[qd.f32, 4]
 
     def make_structs():
         my_struct1 = MyStruct1(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused1=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
-            _unused2=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused1=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
+            _unused2=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
         )
         my_struct2 = MyStruct2(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
         )
         return my_struct1, my_struct2
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None: ...
 
-        @ti.func
+        @qd.func
         def f1(self, struct1_f1: MyStruct1, struct2_f1: MyStruct2):
             struct1_f1._f1[0, 0] = 102
             struct2_f1._f1[0, 0, 0] = 103
 
-    @ti.kernel
-    def k1(my_data_oriented: ti.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
+    @qd.kernel
+    def k1(my_data_oriented: qd.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
         struct1_k1._k1[0] = 100
         struct2_k1._k1[0] = 101
         my_data_oriented.f1(struct1_k1, struct2_k1)
@@ -2304,42 +2304,42 @@ def test_pruning_bound_callable_args() -> None:
 def test_pruning_bound_callable_kwargs() -> None:
     @dataclasses.dataclass
     class MyStruct1:
-        _k1: ti.types.NDArray[ti.f32, 1]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _unused1: ti.types.NDArray[ti.f32, 4]
-        _unused2: ti.types.NDArray[ti.f32, 4]
+        _k1: qd.types.NDArray[qd.f32, 1]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _unused1: qd.types.NDArray[qd.f32, 4]
+        _unused2: qd.types.NDArray[qd.f32, 4]
 
     @dataclasses.dataclass
     class MyStruct2:
-        _k1: ti.types.NDArray[ti.f32, 1]
-        _f1: ti.types.NDArray[ti.f32, 3]
-        _unused: ti.types.NDArray[ti.f32, 4]
+        _k1: qd.types.NDArray[qd.f32, 1]
+        _f1: qd.types.NDArray[qd.f32, 3]
+        _unused: qd.types.NDArray[qd.f32, 4]
 
     def make_structs():
         my_struct1 = MyStruct1(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused1=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
-            _unused2=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused1=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
+            _unused2=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
         )
         my_struct2 = MyStruct2(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1, 1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1, 1, 1)),
         )
         return my_struct1, my_struct2
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None: ...
 
-        @ti.func
+        @qd.func
         def f1(self, struct1_f1: MyStruct1, struct2_f1: MyStruct2):
             struct1_f1._f1[0, 0] = 102
             struct2_f1._f1[0, 0, 0] = 103
 
-    @ti.kernel
-    def k1(my_data_oriented: ti.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
+    @qd.kernel
+    def k1(my_data_oriented: qd.Template, struct1_k1: MyStruct1, struct2_k1: MyStruct2):
         struct1_k1._k1[0] = 100
         struct2_k1._k1[0] = 101
         my_data_oriented.f1(struct1_f1=struct1_k1, struct2_f1=struct2_k1)
@@ -2365,18 +2365,18 @@ def test_pruning_star_args() -> None:
     scenario
     """
 
-    @ti.func
-    def f1(a: ti.types.NDArray[ti.i32, 1], b: ti.i32, c: ti.i32):
+    @qd.func
+    def f1(a: qd.types.NDArray[qd.i32, 1], b: qd.i32, c: qd.i32):
         a[0] = b
         a[1] = c
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         f1(a, *star_args)
 
     star_args = [3, 5]
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert a[0] == 3
     assert a[1] == 5
@@ -2384,18 +2384,18 @@ def test_pruning_star_args() -> None:
 
 @test_utils.test()
 def test_pruning_star_args_error_not_at_end_another_arg() -> None:
-    @ti.func
-    def f1(a: ti.types.NDArray[ti.i32, 1], b: ti.i32, c: ti.i32, d: ti.i32):
+    @qd.func
+    def f1(a: qd.types.NDArray[qd.i32, 1], b: qd.i32, c: qd.i32, d: qd.i32):
         a[0] = b
         a[1] = c
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         f1(a, *star_args, 3)
 
     star_args = [3, 5]
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     with pytest.raises(QuadrantsSyntaxError) as e:
         k1(a)
     assert "STARNOTLAST" in e.value.args[0]
@@ -2403,18 +2403,18 @@ def test_pruning_star_args_error_not_at_end_another_arg() -> None:
 
 @test_utils.test()
 def test_pruning_star_args_error_not_at_end_kwargs() -> None:
-    @ti.func
-    def f1(a: ti.types.NDArray[ti.i32, 1], b: ti.i32, c: ti.i32, d: ti.i32):
+    @qd.func
+    def f1(a: qd.types.NDArray[qd.i32, 1], b: qd.i32, c: qd.i32, d: qd.i32):
         a[0] = b
         a[1] = c
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         f1(a, *star_args, d=3)
 
     star_args = [3, 5]
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     with pytest.raises(QuadrantsSyntaxError) as e:
         k1(a)
     assert "STARNOTLAST" in e.value.args[0]
@@ -2429,34 +2429,34 @@ def test_pruning_iterate_function() -> None:
 
     @dataclasses.dataclass
     class MyStruct:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _f2: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _f2: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
+    @qd.func
     def f1(struct: MyStruct):
         struct._f1[0, 0] = 101
 
-    @ti.func
+    @qd.func
     def f2(struct: MyStruct):
         struct._f2[0, 0] = 102
 
     functions = [f1, f2]
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
-        for fn in ti.static(functions):
+        for fn in qd.static(functions):
             fn(struct=struct_k1)
 
     my_struct = make_struct()
@@ -2474,29 +2474,29 @@ def test_pruning_iterate_function() -> None:
 def test_pruning_iterate_function_no_iterate() -> None:
     @dataclasses.dataclass
     class MyStruct:
-        _k1: ti.types.NDArray[ti.f32, 2]
-        _f1: ti.types.NDArray[ti.f32, 2]
-        _f2: ti.types.NDArray[ti.f32, 2]
-        _unused: ti.types.NDArray[ti.f32, 2]
+        _k1: qd.types.NDArray[qd.f32, 2]
+        _f1: qd.types.NDArray[qd.f32, 2]
+        _f2: qd.types.NDArray[qd.f32, 2]
+        _unused: qd.types.NDArray[qd.f32, 2]
 
     def make_struct():
         my_struct = MyStruct(
-            _k1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f1=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _f2=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
-            _unused=ti.ndarray(dtype=ti.f32, shape=(1, 1)),
+            _k1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f1=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _f2=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
+            _unused=qd.ndarray(dtype=qd.f32, shape=(1, 1)),
         )
         return my_struct
 
-    @ti.func
+    @qd.func
     def f1(struct: MyStruct):
         struct._f1[0, 0] = 101
 
-    @ti.func
+    @qd.func
     def f2(struct: MyStruct):
         struct._f2[0, 0] = 102
 
-    @ti.kernel
+    @qd.kernel
     def k1(struct_k1: MyStruct):
         struct_k1._k1[0, 0] = 100
         f1(struct=struct_k1)

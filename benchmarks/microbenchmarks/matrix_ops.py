@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import BenchmarkItem, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -6,33 +6,33 @@ from microbenchmarks._plan import BenchmarkPlan
 
 def matrix_operations_default(arch, repeat, matrix_op, block_mn, element_num, dtype, get_metric):
     m, n = block_mn
-    global_matrixA = ti.Matrix.field(m, n, dtype, shape=element_num)
-    global_matrixB = ti.Matrix.field(m, n, dtype, shape=element_num)
-    global_matrixC = ti.Matrix.field(m, n, dtype, shape=element_num)
+    global_matrixA = qd.Matrix.field(m, n, dtype, shape=element_num)
+    global_matrixB = qd.Matrix.field(m, n, dtype, shape=element_num)
+    global_matrixC = qd.Matrix.field(m, n, dtype, shape=element_num)
 
-    @ti.kernel
+    @qd.kernel
     def fill_matrixA():
         for e in global_matrixA:
-            for i, j in ti.static(range(m, n)):
-                global_matrixA[e][i, j] = ti.random(dtype)
+            for i, j in qd.static(range(m, n)):
+                global_matrixA[e][i, j] = qd.random(dtype)
 
-    @ti.kernel
+    @qd.kernel
     def fill_matrixB():
         for e in global_matrixB:
-            for i, j in ti.static(range(m, n)):
-                global_matrixB[e][i, j] = ti.random(dtype)
+            for i, j in qd.static(range(m, n)):
+                global_matrixB[e][i, j] = qd.random(dtype)
 
-    @ti.kernel
+    @qd.kernel
     def op_throughput():
         for e in range(element_num):
             # prelogue
             A = global_matrixA[e]
             B = global_matrixB[e]
-            C = ti.Matrix.zero(dtype, m, n)
+            C = qd.Matrix.zero(dtype, m, n)
             C = matrix_op(C, A, B)  # C += A@B
             # loop
             for i in range(2048):
-                for j in ti.static(range(4)):  # 16*4*4=256
+                for j in qd.static(range(4)):  # 16*4*4=256
                     A = matrix_op(A, C, B)  # A += C@B
                     C = matrix_op(C, A, B)  # C += A@B
                     B = matrix_op(B, A, C)  # B += A@C
@@ -45,19 +45,19 @@ def matrix_operations_default(arch, repeat, matrix_op, block_mn, element_num, dt
     return get_metric(repeat, op_throughput)
 
 
-@ti.func
+@qd.func
 def matrix_add(C, A, B):
     C = A + B
     return C
 
 
-@ti.func
+@qd.func
 def matrix_mul(C, A, B):
     C = A @ B
     return C
 
 
-@ti.func
+@qd.func
 def matrix_mma(C, A, B):
     """matrix multiply and add"""
     C = A @ B + C

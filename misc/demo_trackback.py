@@ -1,24 +1,24 @@
-import quadrants as ti
+import quadrants as qd
 
-ti.init()
+qd.init()
 
 
-@ti.func
+@qd.func
 def func3():
-    ti.static_assert(1 + 1 == 3)
+    qd.static_assert(1 + 1 == 3)
 
 
-@ti.func
+@qd.func
 def func2():
     func3()
 
 
-@ti.func
+@qd.func
 def func1():
     func2()
 
 
-@ti.kernel
+@qd.kernel
 def func0():
     func1()
 

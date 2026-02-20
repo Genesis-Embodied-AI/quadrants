@@ -1,7 +1,7 @@
 import numpy as np
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -11,18 +11,18 @@ from tests import test_utils
 def test_struct_member_access():
     n = 32
 
-    x = ti.Struct.field({"a": ti.f32, "b": ti.f32}, shape=(n,))
-    y = ti.Struct.field({"a": ti.f32, "b": ti.f32})
+    x = qd.Struct.field({"a": qd.f32, "b": qd.f32}, shape=(n,))
+    y = qd.Struct.field({"a": qd.f32, "b": qd.f32})
 
-    ti.root.dense(ti.i, n // 4).dense(ti.i, 4).place(y)
+    qd.root.dense(qd.i, n // 4).dense(qd.i, 4).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def init():
         for i in x:
             x[i].a = i
             y[i].a = i
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         for i in x:
             x[i].b = x[i].a
@@ -45,17 +45,17 @@ def test_struct_whole_access():
     n = 32
 
     # also tests implicit cast
-    x = ti.Struct.field({"a": ti.i32, "b": ti.f32}, shape=(n,))
-    y = ti.Struct.field({"a": ti.f32, "b": ti.i32})
+    x = qd.Struct.field({"a": qd.i32, "b": qd.f32}, shape=(n,))
+    y = qd.Struct.field({"a": qd.f32, "b": qd.i32})
 
-    ti.root.dense(ti.i, n // 4).dense(ti.i, 4).place(y)
+    qd.root.dense(qd.i, n // 4).dense(qd.i, 4).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def init():
         for i in x:
-            x[i] = ti.Struct(a=2 * i, b=1.01 * i)
+            x[i] = qd.Struct(a=2 * i, b=1.01 * i)
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         for i in x:
             y[i].a = x[i].a * 2 + 1
@@ -63,7 +63,7 @@ def test_struct_whole_access():
 
     def run_python_scope():
         for i in range(n):
-            y[i] = ti.Struct(a=x[i].a, b=int(x[i].b))
+            y[i] = qd.Struct(a=x[i].a, b=int(x[i].b))
 
     init()
     for i in range(n):
@@ -84,7 +84,7 @@ def test_struct_fill():
     n = 32
 
     # also tests implicit cast
-    x = ti.Struct.field({"a": ti.f32, "b": ti.types.vector(3, ti.i32)}, shape=(n,))
+    x = qd.Struct.field({"a": qd.f32, "b": qd.types.vector(3, qd.i32)}, shape=(n,))
 
     def fill_each():
         x.a.fill(1.0)
@@ -93,7 +93,7 @@ def test_struct_fill():
     def fill_all():
         x.fill(2.5)
 
-    @ti.kernel
+    @qd.kernel
     def fill_elements():
         for i in x:
             x[i].a = i + 0.5
@@ -116,12 +116,12 @@ def test_struct_fill():
 @test_utils.test()
 def test_matrix_type():
     n = 32
-    vec2f = ti.types.vector(2, ti.f32)
-    vec3i = ti.types.vector(3, ti.i32)
+    vec2f = qd.types.vector(2, qd.f32)
+    vec3i = qd.types.vector(3, qd.i32)
     x = vec3i.field()
-    ti.root.dense(ti.i, n).place(x)
+    qd.root.dense(qd.i, n).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         for i in x:
             v = vec2f(i + 0.2)
@@ -144,12 +144,12 @@ def test_matrix_type():
 @test_utils.test()
 def test_struct_type():
     n = 32
-    vec3f = ti.types.vector(3, float)
-    line3f = ti.types.struct(linedir=vec3f, length=float)
-    mystruct = ti.types.struct(line=line3f, idx=int)
+    vec3f = qd.types.vector(3, float)
+    line3f = qd.types.struct(linedir=vec3f, length=float)
+    mystruct = qd.types.struct(line=line3f, idx=int)
     x = mystruct.field(shape=(n,))
 
-    @ti.kernel
+    @qd.kernel
     def init_quadrants_scope():
         for i in x:
             x[i] = mystruct(1)
@@ -158,7 +158,7 @@ def test_struct_type():
         for i in range(n):
             x[i] = mystruct(3)
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         for i in x:
             v = vec3f(1)
@@ -168,7 +168,7 @@ def test_struct_type():
     def run_python_scope():
         for i in range(n):
             v = vec3f(1)
-            x[i] = ti.Struct({"line": {"linedir": v, "length": i + 0.5}, "idx": i})
+            x[i] = qd.Struct({"line": {"linedir": v, "length": i + 0.5}, "idx": i})
 
     init_quadrants_scope()
     for i in range(n):
@@ -200,14 +200,14 @@ def test_struct_type():
 @test_utils.test()
 def test_dataclass():
     # example struct class type
-    vec3f = ti.types.vector(3, float)
+    vec3f = qd.types.vector(3, float)
 
-    @ti.dataclass
+    @qd.dataclass
     class Sphere:
         center: vec3f
-        radius: ti.f32
+        radius: qd.f32
 
-        @ti.func
+        @qd.func
         def area(self):
             return 4 * 3.14 * self.radius * self.radius
 
@@ -218,8 +218,8 @@ def test_dataclass():
     assert np.isclose(Sphere(center=vec3f(0.0), radius=2.0).py_scope_area(), 4.0 * 3.14 * 4.0)
 
     # test function usage from quadrants scope
-    @ti.kernel
-    def get_area() -> ti.f32:
+    @qd.kernel
+    def get_area() -> qd.f32:
         sphere = Sphere(center=vec3f(0.0), radius=2.0)
         return sphere.area()
 
@@ -229,8 +229,8 @@ def test_dataclass():
     struct_field = Sphere.field(shape=(4,))
     struct_field[3] = Sphere(center=vec3f(0.0), radius=2.0)
 
-    @ti.kernel
-    def get_area_field() -> ti.f32:
+    @qd.kernel
+    def get_area_field() -> qd.f32:
         return struct_field[3].area()
 
     assert np.isclose(get_area_field(), 4.0 * 3.14 * 4.0)
@@ -239,18 +239,18 @@ def test_dataclass():
 @test_utils.test()
 def test_struct_assign():
     n = 32
-    vec3f = ti.types.vector(3, float)
-    line3f = ti.types.struct(linedir=vec3f, length=float)
-    mystruct = ti.types.struct(line=line3f, idx=int)
+    vec3f = qd.types.vector(3, float)
+    line3f = qd.types.struct(linedir=vec3f, length=float)
+    mystruct = qd.types.struct(line=line3f, idx=int)
     x = mystruct.field(shape=(n,))
     y = line3f.field(shape=(n,))
 
-    @ti.kernel
+    @qd.kernel
     def init():
         for i in y:
             y[i] = line3f(linedir=vec3f(1), length=i + 0.5)
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         for i in x:
             x[i].idx = i
@@ -277,12 +277,12 @@ def test_struct_assign():
 
 @test_utils.test()
 def test_compound_type_implicit_cast():
-    vec2i = ti.types.vector(2, int)
-    vec2f = ti.types.vector(2, float)
-    structi = ti.types.struct(a=int, b=vec2i)
-    structf = ti.types.struct(a=float, b=vec2f)
+    vec2i = qd.types.vector(2, int)
+    vec2f = qd.types.vector(2, float)
+    structi = qd.types.struct(a=int, b=vec2i)
+    structf = qd.types.struct(a=float, b=vec2f)
 
-    @ti.kernel
+    @qd.kernel
     def f2i_quadrants_scope() -> int:
         s = structi(2.5, (2.5, 2.5))
         return s.a + s.b[0] + s.b[1]
@@ -291,7 +291,7 @@ def test_compound_type_implicit_cast():
         s = structi(2.5, (2.5, 2.5))
         return s.a + s.b[0] + s.b[1]
 
-    @ti.kernel
+    @qd.kernel
     def i2f_quadrants_scope() -> float:
         s = structf(2, (2, 2))
         return s.a + s.b[0] + s.b[1]
@@ -313,11 +313,11 @@ def test_compound_type_implicit_cast():
 @test_utils.test()
 def test_local_struct_assign():
     n = 32
-    vec3f = ti.types.vector(3, float)
-    line3f = ti.types.struct(linedir=vec3f, length=float)
-    mystruct = ti.types.struct(line=line3f, idx=int)
+    vec3f = qd.types.vector(3, float)
+    line3f = qd.types.struct(linedir=vec3f, length=float)
+    mystruct = qd.types.struct(line=line3f, idx=int)
 
-    @ti.kernel
+    @qd.kernel
     def run_quadrants_scope():
         y = line3f(0)
         x = mystruct(0)
@@ -336,14 +336,14 @@ def test_local_struct_assign():
 
 @test_utils.test(debug=True)
 def test_copy_python_scope_struct_to_quadrants_scope():
-    a = ti.Struct({"a": 2, "b": 3})
+    a = qd.Struct({"a": 2, "b": 3})
 
-    @ti.kernel
+    @qd.kernel
     def test():
         b = a
         assert b.a == 2
         assert b.b == 3
-        b = ti.Struct({"a": 3, "b": 4})
+        b = qd.Struct({"a": 3, "b": 4})
         assert b.a == 3
         assert b.b == 4
 
@@ -352,11 +352,11 @@ def test_copy_python_scope_struct_to_quadrants_scope():
 
 @test_utils.test(debug=True)
 def test_copy_struct_field_element_to_quadrants_scope():
-    a = ti.Struct.field({"a": ti.i32, "b": ti.i32}, shape=())
+    a = qd.Struct.field({"a": qd.i32, "b": qd.i32}, shape=())
     a[None].a = 2
     a[None].b = 3
 
-    @ti.kernel
+    @qd.kernel
     def test():
         b = a[None]
         assert b.a == 2
@@ -373,9 +373,9 @@ def test_copy_struct_field_element_to_quadrants_scope():
 
 @test_utils.test(debug=True)
 def test_copy_struct_in_quadrants_scope():
-    @ti.kernel
+    @qd.kernel
     def test():
-        a = ti.Struct({"a": 2, "b": 3})
+        a = qd.Struct({"a": 2, "b": 3})
         b = a
         assert b.a == 2
         assert b.b == 3
@@ -391,15 +391,15 @@ def test_copy_struct_in_quadrants_scope():
 
 @test_utils.test(debug=True)
 def test_dataclass():
-    vec3 = ti.types.vector(3, float)
+    vec3 = qd.types.vector(3, float)
 
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
         pos: vec3
         vel: vec3
         mass: float
 
-    @ti.kernel
+    @qd.kernel
     def test():
         A = Foo((1, 1, 1), mass=2)
         assert all(A.pos == [1.0, 1.0, 1.0])
@@ -412,13 +412,13 @@ def test_dataclass():
 @test_utils.test(arch=get_host_arch_list())
 def test_name_collision():
     # https://github.com/taichi-dev/quadrants/issues/6652
-    @ti.dataclass
+    @qd.dataclass
     class Foo:
-        zoo: ti.f32
+        zoo: qd.f32
 
-    @ti.dataclass
+    @qd.dataclass
     class Bar:
-        @ti.func
+        @qd.func
         def zoo(self):
             return 0
 
@@ -429,12 +429,12 @@ def test_name_collision():
 @test_utils.test(debug=True)
 def test_dataclass_as_member():
     # https://github.com/taichi-dev/quadrants/issues/6884
-    @ti.dataclass
+    @qd.dataclass
     class A:
         i: int
         j: float
 
-    @ti.dataclass
+    @qd.dataclass
     class B:
         a1: A
         a2: A

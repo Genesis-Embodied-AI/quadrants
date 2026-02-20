@@ -1,19 +1,19 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_function_without_return():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.real_func
-    def foo(val: ti.i32):
+    @qd.real_func
+    def foo(val: qd.i32):
         x[None] += val
 
-    @ti.kernel
+    @qd.kernel
     def run():
         foo(40)
         foo(2)
@@ -23,16 +23,16 @@ def test_function_without_return():
     assert x[None] == 42
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_function_with_return():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.real_func
-    def foo(val: ti.i32) -> ti.i32:
+    @qd.real_func
+    def foo(val: qd.i32) -> qd.i32:
         x[None] += val
         return val
 
-    @ti.kernel
+    @qd.kernel
     def run():
         a = foo(40)
         foo(2)
@@ -43,18 +43,18 @@ def test_function_with_return():
     assert x[None] == 42
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_call_expressions():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.real_func
-    def foo(val: ti.i32) -> ti.i32:
+    @qd.real_func
+    def foo(val: qd.i32) -> qd.i32:
         if x[None] > 10:
             x[None] += 1
         x[None] += val
         return 0
 
-    @ti.kernel
+    @qd.kernel
     def run():
         assert foo(15) == 0
         assert foo(10) == 0
@@ -64,43 +64,43 @@ def test_call_expressions():
     assert x[None] == 26
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_default_templates():
-    @ti.func
-    def func1(x: ti.template()):
+    @qd.func
+    def func1(x: qd.template()):
         x = 1
 
-    @ti.func
-    def func2(x: ti.template()):
+    @qd.func
+    def func2(x: qd.template()):
         x += 1
 
-    @ti.func
+    @qd.func
     def func3(x):
         x = 1
 
-    @ti.func
+    @qd.func
     def func4(x):
         x += 1
 
-    @ti.func
-    def func1_field(x: ti.template()):
+    @qd.func
+    def func1_field(x: qd.template()):
         x[None] = 1
 
-    @ti.func
-    def func2_field(x: ti.template()):
+    @qd.func
+    def func2_field(x: qd.template()):
         x[None] += 1
 
-    @ti.func
+    @qd.func
     def func3_field(x):
         x[None] = 1
 
-    @ti.func
+    @qd.func
     def func4_field(x):
         x[None] += 1
 
-    v = ti.field(dtype=ti.i32, shape=())
+    v = qd.field(dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def run_func():
         a = 0
         func1(a)
@@ -131,14 +131,14 @@ def test_default_templates():
     run_func()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_experimental_templates():
-    x = ti.field(ti.i32, shape=())
-    y = ti.field(ti.i32, shape=())
-    answer = ti.field(ti.i32, shape=8)
+    x = qd.field(qd.i32, shape=())
+    y = qd.field(qd.i32, shape=())
+    answer = qd.field(qd.i32, shape=8)
 
-    @ti.kernel
-    def kernel_inc(x: ti.template()):
+    @qd.kernel
+    def kernel_inc(x: qd.template()):
         x[None] += 1
 
     def run_kernel():
@@ -151,12 +151,12 @@ def test_experimental_templates():
         assert x[None] == 11
         assert y[None] == 21
 
-    @ti.real_func
-    def inc(x: ti.template()):
+    @qd.real_func
+    def inc(x: qd.template()):
         x[None] += 1
 
-    @ti.kernel
-    def run_func(a: ti.u1):
+    @qd.kernel
+    def run_func(a: qd.u1):
         x[None] = 10
         y[None] = 20
         if a:
@@ -179,86 +179,86 @@ def test_experimental_templates():
     verify()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_missing_arg_annotation():
-    with pytest.raises(ti.QuadrantsSyntaxError, match="must be type annotated"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="must be type annotated"):
 
-        @ti.real_func
-        def add(a, b: ti.i32) -> ti.i32:
+        @qd.real_func
+        def add(a, b: qd.i32) -> qd.i32:
             return a + b
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_missing_return_annotation():
-    with pytest.raises(ti.QuadrantsCompilationError, match="return value must be annotated"):
+    with pytest.raises(qd.QuadrantsCompilationError, match="return value must be annotated"):
 
-        @ti.real_func
-        def add(a: ti.i32, b: ti.i32):
+        @qd.real_func
+        def add(a: qd.i32, b: qd.i32):
             return a + b
 
-        @ti.kernel
+        @qd.kernel
         def run():
             add(30, 2)
 
         run()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_different_argument_type():
-    @ti.real_func
-    def add(a: ti.f32, b: ti.f32) -> ti.f32:
+    @qd.real_func
+    def add(a: qd.f32, b: qd.f32) -> qd.f32:
         return a + b
 
-    @ti.kernel
-    def run() -> ti.i32:
+    @qd.kernel
+    def run() -> qd.i32:
         return add(1, 2)
 
     assert run() == 3
 
 
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[ti.cpu, ti.cuda], cuda_stack_limit=8192)
+@test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=8192)
 def test_recursion():
-    @ti.real_func
-    def sum(f: ti.template(), l: ti.i32, r: ti.i32) -> ti.i32:
+    @qd.real_func
+    def sum(f: qd.template(), l: qd.i32, r: qd.i32) -> qd.i32:
         if l == r:
             return f[l]
         else:
             return sum(f, l, (l + r) // 2) + sum(f, (l + r) // 2 + 1, r)
 
-    f = ti.field(ti.i32, shape=100)
+    f = qd.field(qd.i32, shape=100)
     for i in range(100):
         f[i] = i
 
-    @ti.kernel
-    def get_sum() -> ti.i32:
+    @qd.kernel
+    def get_sum() -> qd.i32:
         return sum(f, 0, 99)
 
     assert get_sum() == 99 * 50
 
 
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[ti.cpu, ti.cuda], cuda_stack_limit=32768)
+@test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=32768)
 def test_deep_recursion():
-    @ti.real_func
-    def sum_func(n: ti.i32) -> ti.i32:
+    @qd.real_func
+    def sum_func(n: qd.i32) -> qd.i32:
         if n == 0:
             return 0
         return sum_func(n - 1) + n
 
-    @ti.kernel
-    def sum(n: ti.i32) -> ti.i32:
+    @qd.kernel
+    def sum(n: qd.i32) -> qd.i32:
         return sum_func(n)
 
     assert sum(100) == 5050
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_multiple_return():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.real_func
-    def foo(val: ti.i32) -> ti.i32:
+    @qd.real_func
+    def foo(val: qd.i32) -> qd.i32:
         if x[None] > 10:
             if x[None] > 20:
                 return 1
@@ -266,7 +266,7 @@ def test_multiple_return():
         x[None] += val
         return 0
 
-    @ti.kernel
+    @qd.kernel
     def run():
         assert foo(15) == 0
         assert foo(10) == 0
@@ -277,39 +277,39 @@ def test_multiple_return():
     assert x[None] == 26
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_return_in_for():
-    @ti.real_func
-    def foo() -> ti.i32:
+    @qd.real_func
+    def foo() -> qd.i32:
         for i in range(10):
             return 42
 
-    @ti.kernel
-    def bar() -> ti.i32:
+    @qd.kernel
+    def bar() -> qd.i32:
         return foo()
 
     assert bar() == 42
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_return_in_while():
-    @ti.real_func
-    def foo() -> ti.i32:
+    @qd.real_func
+    def foo() -> qd.i32:
         i = 1
         while i:
             return 42
 
-    @ti.kernel
-    def bar() -> ti.i32:
+    @qd.kernel
+    def bar() -> qd.i32:
         return foo()
 
     assert bar() == 42
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_return_in_if_in_for():
-    @ti.real_func
-    def foo(a: ti.i32) -> ti.i32:
+    @qd.real_func
+    def foo(a: qd.i32) -> qd.i32:
         s = 0
         for i in range(100):
             if i == a + 1:
@@ -317,21 +317,21 @@ def test_return_in_if_in_for():
             s = s + i
         return s
 
-    @ti.kernel
-    def bar(a: ti.i32) -> ti.i32:
+    @qd.kernel
+    def bar(a: qd.i32) -> qd.i32:
         return foo(a)
 
     assert bar(10) == 11 * 5
     assert bar(200) == 99 * 50
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_ref():
-    @ti.real_func
-    def foo(a: ti.ref(ti.f32)):
+    @qd.real_func
+    def foo(a: qd.ref(qd.f32)):
         a = 7
 
-    @ti.kernel
+    @qd.kernel
     def bar():
         a = 5.0
         foo(a)
@@ -340,21 +340,21 @@ def test_ref():
     bar()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_ref_atomic():
     # FIXME: failed test on Pascal (and potentially older) architecture.
     # Please remove this guardiance when you fix this issue
-    cur_arch = ti.lang.impl.get_runtime().prog.config().arch
-    if cur_arch == ti.cuda and ti.lang.impl.get_cuda_compute_capability() < 70:
+    cur_arch = qd.lang.impl.get_runtime().prog.config().arch
+    if cur_arch == qd.cuda and qd.lang.impl.get_cuda_compute_capability() < 70:
         pytest.skip(
             "Skip this test on Pascal (and potentially older) architecture, ask turbo0628/Proton for more information"
         )
 
-    @ti.real_func
-    def foo(a: ti.ref(ti.f32)):
+    @qd.real_func
+    def foo(a: qd.ref(qd.f32)):
         a += a
 
-    @ti.kernel
+    @qd.kernel
     def bar():
         a = 5.0
         foo(a)
@@ -363,47 +363,47 @@ def test_ref_atomic():
     bar()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True, print_full_traceback=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True, print_full_traceback=False)
 def test_func_ndarray_arg():
-    vec3 = ti.types.vector(3, ti.f32)
+    vec3 = qd.types.vector(3, qd.f32)
 
-    @ti.func
-    def test(a: ti.types.ndarray(ndim=1)):
+    @qd.func
+    def test(a: qd.types.ndarray(ndim=1)):
         a[0] = [100, 100, 100]
 
-    @ti.kernel
-    def test_k(x: ti.types.ndarray(ndim=1)):
+    @qd.kernel
+    def test_k(x: qd.types.ndarray(ndim=1)):
         test(x)
 
-    @ti.func
-    def test_error_func(a: ti.types.ndarray(dtype=ti.math.vec2, ndim=1)):
+    @qd.func
+    def test_error_func(a: qd.types.ndarray(dtype=qd.math.vec2, ndim=1)):
         a[0] = [100, 100]
 
-    @ti.kernel
-    def test_error(x: ti.types.ndarray(ndim=1)):
+    @qd.kernel
+    def test_error(x: qd.types.ndarray(ndim=1)):
         test_error_func(x)
 
-    arr = ti.ndarray(vec3, shape=(4))
+    arr = qd.ndarray(vec3, shape=(4))
     arr[0] = [20, 20, 20]
     test_k(arr)
 
     assert arr[0] == [20, 20, 20]
 
-    with pytest.raises(ti.QuadrantsCompilationError, match=r"Invalid value for argument a"):
+    with pytest.raises(qd.QuadrantsCompilationError, match=r"Invalid value for argument a"):
         test_error(arr)
 
 
 @test_utils.test(debug=True)
 def test_func_matrix_arg():
-    vec3 = ti.types.vector(3, ti.f32)
+    vec3 = qd.types.vector(3, qd.f32)
 
-    @ti.func
+    @qd.func
     def test(a: vec3):
         a[0] = 100
 
-    @ti.kernel
+    @qd.kernel
     def test_k():
-        x = ti.Matrix([3, 4, 5])
+        x = qd.Matrix([3, 4, 5])
         x[0] = 20
         test(x)
 
@@ -414,32 +414,32 @@ def test_func_matrix_arg():
 
 @test_utils.test()
 def test_func_matrix_arg_with_error():
-    vec3 = ti.types.vector(3, ti.f32)
+    vec3 = qd.types.vector(3, qd.f32)
 
-    @ti.func
+    @qd.func
     def test(a: vec3):
         a[0] = 100
 
-    @ti.kernel
+    @qd.kernel
     def test_error():
-        x = ti.Matrix([3, 4])
+        x = qd.Matrix([3, 4])
         test(x)
 
-    with pytest.raises(ti.QuadrantsSyntaxError, match=r"is expected to be a Matrix with n 3, but got 2"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"is expected to be a Matrix with n 3, but got 2"):
         test_error()
 
 
 @test_utils.test(debug=True)
 def test_func_struct_arg():
-    @ti.dataclass
+    @qd.dataclass
     class C:
         i: int
 
-    @ti.func
+    @qd.func
     def f(c: C):
         return c.i
 
-    @ti.kernel
+    @qd.kernel
     def k():
         c = C(i=2)
         assert f(c) == 2
@@ -447,73 +447,73 @@ def test_func_struct_arg():
     k()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_matrix_arg():
-    @ti.real_func
-    def mat_arg(a: ti.math.mat2, b: ti.math.vec2) -> float:
+    @qd.real_func
+    def mat_arg(a: qd.math.mat2, b: qd.math.vec2) -> float:
         return a[0, 0] + a[0, 1] + a[1, 0] + a[1, 1] + b[0] + b[1]
 
-    b = ti.Vector.field(n=2, dtype=float, shape=())
+    b = qd.Vector.field(n=2, dtype=float, shape=())
     b[()][0] = 5
     b[()][1] = 6
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> float:
-        a = ti.math.mat2(1, 2, 3, 4)
+        a = qd.math.mat2(1, 2, 3, 4)
         return mat_arg(a, b[()])
 
     assert foo() == pytest.approx(21)
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_matrix_return():
-    @ti.real_func
-    def mat_ret() -> ti.math.mat2:
-        return ti.math.mat2(1, 2, 3, 4)
+    @qd.real_func
+    def mat_ret() -> qd.math.mat2:
+        return qd.math.mat2(1, 2, 3, 4)
 
-    @ti.kernel
-    def foo() -> ti.math.mat2:
+    @qd.kernel
+    def foo() -> qd.math.mat2:
         return mat_ret()
 
-    assert (foo() == ti.math.mat2(1, 2, 3, 4)).all()
+    assert (foo() == qd.math.mat2(1, 2, 3, 4)).all()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_struct_ret():
-    s = ti.types.struct(a=ti.i16, b=ti.f64)
+    s = qd.types.struct(a=qd.i16, b=qd.f64)
 
-    @ti.real_func
+    @qd.real_func
     def bar() -> s:
-        return s(a=123, b=ti.f64(1.2345e300))
+        return s(a=123, b=qd.f64(1.2345e300))
 
-    @ti.kernel
-    def foo() -> ti.f64:
+    @qd.kernel
+    def foo() -> qd.f64:
         a = bar()
         return a.a * a.b
 
     assert foo() == pytest.approx(123 * 1.2345e300)
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_struct_ret_with_matrix():
-    s0 = ti.types.struct(a=ti.math.vec3, b=ti.i16)
-    s1 = ti.types.struct(a=ti.f32, b=s0)
+    s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
+    s1 = qd.types.struct(a=qd.f32, b=s0)
 
-    @ti.real_func
+    @qd.real_func
     def bar() -> s1:
-        return s1(a=1, b=s0(a=ti.Vector([100, 0.2, 3], dt=ti.f32), b=65537))
+        return s1(a=1, b=s0(a=qd.Vector([100, 0.2, 3], dt=qd.f32), b=65537))
 
-    @ti.kernel
-    def foo() -> ti.f32:
+    @qd.kernel
+    def foo() -> qd.f32:
         s = bar()
         return s.a + s.b.a[0] + s.b.a[1] + s.b.a[2] + s.b.b
 
     assert foo() == pytest.approx(105.2)
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_break_in_real_func():
-    @ti.real_func
+    @qd.real_func
     def bar() -> int:
         a = 0
         for i in range(10):
@@ -522,16 +522,16 @@ def test_break_in_real_func():
             a += 1
         return a
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> int:
         return bar()
 
     assert foo() == 5
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_continue_in_real_func():
-    @ti.real_func
+    @qd.real_func
     def bar() -> int:
         a = 0
         for i in range(10):
@@ -540,7 +540,7 @@ def test_continue_in_real_func():
             a += 1
         return a
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> int:
         return bar()
 

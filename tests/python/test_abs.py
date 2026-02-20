@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_abs():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
     N = 16
 
-    ti.root.dense(ti.i, N).place(x)
-    ti.root.dense(ti.i, N).place(y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, N).place(x)
+    qd.root.dense(qd.i, N).place(y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             x[i] = abs(y[i])
@@ -40,15 +40,15 @@ def test_abs():
 
 @test_utils.test()
 def test_abs_fwd():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
     N = 16
 
-    ti.root.dense(ti.i, N).place(x)
-    ti.root.dense(ti.i, N).place(y)
-    ti.root.lazy_dual()
+    qd.root.dense(qd.i, N).place(x)
+    qd.root.dense(qd.i, N).place(y)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             x[i] = abs(y[i])
@@ -56,7 +56,7 @@ def test_abs_fwd():
     for i in range(N):
         y[i] = i - 10
 
-    with ti.ad.FwdMode(loss=x, param=y, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=x, param=y, seed=[1.0 for _ in range(N)]):
         func()
 
     def sgn(x):
@@ -71,10 +71,10 @@ def test_abs_fwd():
         assert x.dual[i] == sgn(y[i])
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_abs_i64():
-    @ti.kernel
-    def foo(x: ti.i64) -> ti.i64:
+    @qd.kernel
+    def foo(x: qd.i64) -> qd.i64:
         return abs(x)
 
     for x in [-(2**40), 0, 2**40]:
@@ -83,8 +83,8 @@ def test_abs_i64():
 
 @test_utils.test()
 def test_abs_u32():
-    @ti.kernel
-    def foo(x: ti.u32) -> ti.u32:
+    @qd.kernel
+    def foo(x: qd.u32) -> qd.u32:
         return abs(x)
 
     for x in [0, 2**20]:

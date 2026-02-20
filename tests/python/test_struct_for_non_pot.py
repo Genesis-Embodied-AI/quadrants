@@ -1,22 +1,22 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_1d():
-    x = ti.field(ti.i32)
-    sum = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    sum = qd.field(qd.i32)
 
     n = 100
 
-    ti.root.dense(ti.k, n).place(x)
-    ti.root.place(sum)
+    qd.root.dense(qd.k, n).place(x)
+    qd.root.place(sum)
 
-    @ti.kernel
+    @qd.kernel
     def accumulate():
         for i in x:
-            ti.atomic_add(sum[None], i)
+            qd.atomic_add(sum[None], i)
 
     accumulate()
 
@@ -26,19 +26,19 @@ def test_1d():
 
 @test_utils.test()
 def test_2d():
-    x = ti.field(ti.i32)
-    sum = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    sum = qd.field(qd.i32)
 
     n = 100
     m = 19
 
-    ti.root.dense(ti.k, n).dense(ti.i, m).place(x)
-    ti.root.place(sum)
+    qd.root.dense(qd.k, n).dense(qd.i, m).place(x)
+    qd.root.place(sum)
 
-    @ti.kernel
+    @qd.kernel
     def accumulate():
         for i, k in x:
-            ti.atomic_add(sum[None], i + k * 2)
+            qd.atomic_add(sum[None], i + k * 2)
 
     gt = 0
     for k in range(n):
@@ -51,23 +51,23 @@ def test_2d():
         assert sum[None] == gt
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_2d_pointer():
     block_size, leaf_size = 3, 8
-    x = ti.field(ti.i32)
-    block = ti.root.pointer(ti.ij, (block_size, block_size))
-    block.dense(ti.ij, (leaf_size, leaf_size)).place(x)
+    x = qd.field(qd.i32)
+    block = qd.root.pointer(qd.ij, (block_size, block_size))
+    block.dense(qd.ij, (leaf_size, leaf_size)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def activate():
         x[7, 7] = 1
 
     activate()
 
-    @ti.kernel
-    def test() -> ti.i32:
+    @qd.kernel
+    def test() -> qd.i32:
         res = 0
-        for I in ti.grouped(x):
+        for I in qd.grouped(x):
             res += I[0] + I[1] * 2
         return res
 

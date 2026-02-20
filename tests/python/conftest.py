@@ -8,7 +8,7 @@ import pytest
 # so we need to override it
 import pytest_rerunfailures
 
-import quadrants as ti
+import quadrants as qd
 
 pytest_rerunfailures.works_with_current_xdist = lambda: True
 
@@ -35,7 +35,7 @@ def run_gc_after_test():
     - when pybind-py __del__ is called, it calls a c++ method, via pybind, to delete the
       underling ndarray-cpp
 
-    When ti.init() or similar is called, during tests, ndarray-cpp is no longer considered allocated
+    When qd.init() or similar is called, during tests, ndarray-cpp is no longer considered allocated
     - however ndarray-cp has not yet been garbage collected, still exists, and still has a pointer
       to where the ndarray-cpp used to be
     - on mac os x, it regularly happens, as an artifact of how memory management works, that new
@@ -54,7 +54,7 @@ def run_gc_after_test():
 @pytest.fixture(autouse=True)
 def wanted_arch(request, req_arch, req_options):
     if req_arch is not None:
-        if req_arch == ti.cuda:
+        if req_arch == qd.cuda:
             if not request.node.get_closest_marker("run_in_serial"):
                 # Optimization only apply to non-serial tests, since serial tests
                 # are picked out exactly because of extensive resource consumption.
@@ -70,10 +70,10 @@ def wanted_arch(request, req_arch, req_options):
                 req_options = {"device_memory_GB": 1, **req_options}
         if "print_full_traceback" not in req_options:
             req_options["print_full_traceback"] = True
-        ti.init(arch=req_arch, enable_fallback=False, **req_options)
+        qd.init(arch=req_arch, enable_fallback=False, **req_options)
     yield
     if req_arch is not None:
-        ti.reset()
+        qd.reset()
 
 
 def pytest_generate_tests(metafunc):

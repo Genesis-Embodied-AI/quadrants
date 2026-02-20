@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -8,8 +8,8 @@ from tests import test_utils
 
 @test_utils.test()
 def test_fibonacci():
-    @ti.kernel
-    def ti_fibonacci(n: ti.i32) -> ti.i32:
+    @qd.kernel
+    def ti_fibonacci(n: qd.i32) -> qd.i32:
         a, b = 0, 1
         # This is to make the inner for loop serial on purpose...
         for _ in range(1):
@@ -29,10 +29,10 @@ def test_fibonacci():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_assign2():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = 2, 3
 
@@ -43,36 +43,36 @@ def test_assign2():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_assign2_mismatch3():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = 2, 3, 4
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_assign2_mismatch1():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = 2
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_swap2():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = b[None], a[None]
 
@@ -85,13 +85,13 @@ def test_swap2():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_assign2_static():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        # XXX: why a, b = ti.static(b, a) doesn't work?
-        c, d = ti.static(b, a)
+        # XXX: why a, b = qd.static(b, a) doesn't work?
+        c, d = qd.static(b, a)
         c[None], d[None] = 2, 3
 
     func()
@@ -101,11 +101,11 @@ def test_assign2_static():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_swap3():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
-    c = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
+    c = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None], c[None] = b[None], c[None], a[None]
 
@@ -120,13 +120,13 @@ def test_swap3():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_from_tuple():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
-    c = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
+    c = qd.field(qd.f32, ())
 
     list = [2, 3, 4]
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None], c[None] = list
 
@@ -138,28 +138,28 @@ def test_unpack_from_tuple():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_mismatch_tuple():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
     list = [2, 3, 4]
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = list
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_from_vector():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
-    c = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
+    c = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        vector = ti.Vector([2, 3, 4])
+        vector = qd.Vector([2, 3, 4])
         a[None], b[None], c[None] = vector
 
     func()
@@ -170,57 +170,57 @@ def test_unpack_from_vector():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_mismatch_vector():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        vector = ti.Vector([2, 3, 4])
+        vector = qd.Vector([2, 3, 4])
         a[None], b[None] = vector
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_mismatch_type():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
 
     bad = 12
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None] = bad
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list(), print_full_traceback=False)
 def test_unpack_mismatch_matrix():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
-    c = ti.field(ti.f32, ())
-    d = ti.field(ti.f32, ())
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
+    c = qd.field(qd.f32, ())
+    d = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        bad = ti.Matrix([[2, 3], [4, 5]])
+        bad = qd.Matrix([[2, 3], [4, 5]])
         a[None], b[None], c[None], d[None] = bad
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_unpack_from_shape():
-    a = ti.field(ti.f32, ())
-    b = ti.field(ti.f32, ())
-    c = ti.field(ti.f32, ())
-    d = ti.field(ti.f32, (2, 3, 4))
+    a = qd.field(qd.f32, ())
+    b = qd.field(qd.f32, ())
+    c = qd.field(qd.f32, ())
+    d = qd.field(qd.f32, (2, 3, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None], b[None], c[None] = d.shape
 

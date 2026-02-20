@@ -1,21 +1,21 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_ad_if_simple_fwd():
-    x = ti.field(ti.f32, shape=())
-    y = ti.field(ti.f32, shape=())
-    ti.root.lazy_dual()
+    x = qd.field(qd.f32, shape=())
+    y = qd.field(qd.f32, shape=())
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         if x[None] > 0.0:
             y[None] = x[None]
 
     x[None] = 1
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0]):
         func()
 
     assert y.dual[None] == 1
@@ -23,12 +23,12 @@ def test_ad_if_simple_fwd():
 
 @test_utils.test()
 def test_ad_if():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
-    ti.root.lazy_dual()
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
+    qd.root.lazy_dual()
 
-    @ti.kernel
-    def func(i: ti.i32):
+    @qd.kernel
+    def func(i: qd.i32):
         if x[i] > 0:
             y[i] = x[i]
         else:
@@ -36,7 +36,7 @@ def test_ad_if():
 
     x[0] = 0
     x[1] = 1
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func(0)
         func(1)
     assert y.dual[0] == 2
@@ -46,12 +46,12 @@ def test_ad_if():
 @test_utils.test()
 def test_ad_if_nested():
     n = 20
-    x = ti.field(ti.f32, shape=n)
-    y = ti.field(ti.f32, shape=n)
-    z = ti.field(ti.f32, shape=n)
-    ti.root.lazy_dual()
+    x = qd.field(qd.f32, shape=n)
+    y = qd.field(qd.f32, shape=n)
+    z = qd.field(qd.f32, shape=n)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             if x[i] < 2:
@@ -74,7 +74,7 @@ def test_ad_if_nested():
     for i in range(n):
         assert y[i] == i % 4
 
-    with ti.ad.FwdMode(loss=y, param=z, seed=[1.0 for _ in range(n)]):
+    with qd.ad.FwdMode(loss=y, param=z, seed=[1.0 for _ in range(n)]):
         func()
 
     for i in range(n):
@@ -83,13 +83,13 @@ def test_ad_if_nested():
 
 @test_utils.test()
 def test_ad_if_mutable():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_dual()
+    qd.root.lazy_dual()
 
-    @ti.kernel
-    def func(i: ti.i32):
+    @qd.kernel
+    def func(i: qd.i32):
         t = x[i]
         if t > 0:
             y[i] = t
@@ -99,7 +99,7 @@ def test_ad_if_mutable():
     x[0] = 0
     x[1] = 1
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func(0)
         func(1)
 
@@ -109,12 +109,12 @@ def test_ad_if_mutable():
 
 @test_utils.test()
 def test_ad_if_parallel():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_dual()
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(2):
             t = x[i]
@@ -126,21 +126,21 @@ def test_ad_if_parallel():
     x[0] = 0
     x[1] = 1
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func()
 
     assert y.dual[0] == 2
     assert y.dual[1] == 1
 
 
-@test_utils.test(require=[ti.extension.data64], default_fp=ti.f64)
+@test_utils.test(require=[qd.extension.data64], default_fp=qd.f64)
 def test_ad_if_parallel_f64():
-    x = ti.field(ti.f64, shape=2)
-    y = ti.field(ti.f64, shape=2)
+    x = qd.field(qd.f64, shape=2)
+    y = qd.field(qd.f64, shape=2)
 
-    ti.root.lazy_dual()
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(2):
             t = x[i]
@@ -152,7 +152,7 @@ def test_ad_if_parallel_f64():
     x[0] = 0
     x[1] = 1
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func()
 
     assert y.dual[0] == 2
@@ -161,14 +161,14 @@ def test_ad_if_parallel_f64():
 
 @test_utils.test()
 def test_ad_if_parallel_complex():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_dual()
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(parallelize=1)
+        qd.loop_config(parallelize=1)
         for i in range(2):
             t = 0.0
             if x[i] > 0:
@@ -178,23 +178,23 @@ def test_ad_if_parallel_complex():
     x[0] = 0
     x[1] = 2
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func()
 
     assert y.dual[0] == 0
     assert y.dual[1] == -0.25
 
 
-@test_utils.test(require=[ti.extension.data64], default_fp=ti.f64)
+@test_utils.test(require=[qd.extension.data64], default_fp=qd.f64)
 def test_ad_if_parallel_complex_f64():
-    x = ti.field(ti.f64, shape=2)
-    y = ti.field(ti.f64, shape=2)
+    x = qd.field(qd.f64, shape=2)
+    y = qd.field(qd.f64, shape=2)
 
-    ti.root.lazy_dual()
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(parallelize=1)
+        qd.loop_config(parallelize=1)
         for i in range(2):
             t = 0.0
             if x[i] > 0:
@@ -204,7 +204,7 @@ def test_ad_if_parallel_complex_f64():
     x[0] = 0
     x[1] = 2
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0, 1.0]):
         func()
 
     assert y.dual[0] == 0

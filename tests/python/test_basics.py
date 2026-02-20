@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -6,9 +6,9 @@ from tests import test_utils
 @test_utils.test()
 def test_simple():
     n = 128
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         x[7] = 120
 
@@ -24,9 +24,9 @@ def test_simple():
 @test_utils.test()
 def test_range_loops():
     n = 128
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
             x[i] = i + 123
@@ -40,7 +40,7 @@ def test_range_loops():
 @test_utils.test()
 def test_python_access():
     n = 128
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
     x[3] = 123
     x[4] = 456
@@ -50,9 +50,9 @@ def test_python_access():
 
 @test_utils.test()
 def test_if():
-    x = ti.field(ti.f32, shape=16)
+    x = qd.field(qd.f32, shape=16)
 
-    @ti.kernel
+    @qd.kernel
     def if_test():
         for i in x:
             if i < 100:
@@ -65,7 +65,7 @@ def test_if():
     for i in range(16):
         assert x[i] == 100
 
-    @ti.kernel
+    @qd.kernel
     def if_test2():
         for i in x:
             if i < 100:
@@ -81,9 +81,9 @@ def test_if():
 
 @test_utils.test()
 def test_if_global_load():
-    x = ti.field(ti.i32, shape=16)
+    x = qd.field(qd.i32, shape=16)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i in x:
             if x[i]:
@@ -103,10 +103,10 @@ def test_if_global_load():
 
 @test_utils.test()
 def test_while_global_load():
-    x = ti.field(ti.i32, shape=16)
-    y = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=16)
+    y = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def run():
         while x[3]:
             x[3] -= 1
@@ -122,15 +122,15 @@ def test_while_global_load():
 
 @test_utils.test()
 def test_datatype_string():
-    for ty in [ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i16, ti.i32, ti.f32, ti.f64]:
+    for ty in [qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i16, qd.i32, qd.f32, qd.f64]:
         assert ty.to_string() == str(ty)
 
 
 @test_utils.test()
 def test_nested_for_with_atomic():
-    x = ti.field(dtype=ti.f32, shape=())
+    x = qd.field(dtype=qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def nested_loops():
         for i in range(2):
             x[None] += 1

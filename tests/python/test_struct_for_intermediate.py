@@ -1,17 +1,17 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 def _test_nested():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
 
     p, q = 3, 7
     n, m = 2, 4
 
-    ti.root.dense(ti.ij, (p, q)).dense(ti.ij, (n, m)).place(x)
+    qd.root.dense(qd.ij, (p, q)).dense(qd.ij, (n, m)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def iterate():
         for i, j in x.parent():
             x[i, j] += 1
@@ -22,7 +22,7 @@ def _test_nested():
             assert x[i * n, j * m] == 1, (i, j)
 
 
-@test_utils.test(require=ti.extension.sparse, demote_dense_struct_fors=False)
+@test_utils.test(require=qd.extension.sparse, demote_dense_struct_fors=False)
 def test_nested():
     _test_nested()
 

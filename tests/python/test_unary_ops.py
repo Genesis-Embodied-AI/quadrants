@@ -1,63 +1,63 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.exception import QuadrantsTypeError
 
 from tests import test_utils
 
 
 def _test_op(dt, quadrants_op, np_op):
-    print("arch={} default_fp={}".format(ti.lang.impl.current_cfg().arch, ti.lang.impl.current_cfg().default_fp))
+    print("arch={} default_fp={}".format(qd.lang.impl.current_cfg().arch, qd.lang.impl.current_cfg().default_fp))
     n = 4
-    val = ti.field(dt, shape=n)
+    val = qd.field(dt, shape=n)
 
     def f(i):
         return i * 0.1 + 0.4
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i in range(n):
-            val[i] = quadrants_op(ti.func(f)(ti.cast(i, dt)))
+            val[i] = quadrants_op(qd.func(f)(qd.cast(i, dt)))
 
     fill()
 
     # check that it is double precision
     for i in range(n):
-        if dt == ti.f64:
+        if dt == qd.f64:
             assert abs(np_op(float(f(i))) - val[i]) < 1e-15
         else:
-            assert abs(np_op(float(f(i))) - val[i]) < 1e-6 if ti.lang.impl.current_cfg().arch != ti.vulkan else 1e-5
+            assert abs(np_op(float(f(i))) - val[i]) < 1e-6 if qd.lang.impl.current_cfg().arch != qd.vulkan else 1e-5
 
 
 op_pairs = [
-    (ti.sin, np.sin),
-    (ti.cos, np.cos),
-    (ti.asin, np.arcsin),
-    (ti.acos, np.arccos),
-    (ti.tan, np.tan),
-    (ti.tanh, np.tanh),
-    (ti.exp, np.exp),
-    (ti.log, np.log),
+    (qd.sin, np.sin),
+    (qd.cos, np.cos),
+    (qd.asin, np.arcsin),
+    (qd.acos, np.arccos),
+    (qd.tan, np.tan),
+    (qd.tanh, np.tanh),
+    (qd.exp, np.exp),
+    (qd.log, np.log),
 ]
 
 
 @pytest.mark.parametrize("quadrants_op,np_op", op_pairs)
-@test_utils.test(default_fp=ti.f32)
+@test_utils.test(default_fp=qd.f32)
 def test_trig_f32(quadrants_op, np_op):
-    _test_op(ti.f32, quadrants_op, np_op)
+    _test_op(qd.f32, quadrants_op, np_op)
 
 
 @pytest.mark.parametrize("quadrants_op,np_op", op_pairs)
-@test_utils.test(require=ti.extension.data64, default_fp=ti.f64)
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64)
 def test_trig_f64(quadrants_op, np_op):
-    _test_op(ti.f64, quadrants_op, np_op)
+    _test_op(qd.f64, quadrants_op, np_op)
 
 
 @test_utils.test(print_full_traceback=False)
 def test_bit_not_invalid():
-    @ti.kernel
-    def test(x: ti.f32) -> ti.i32:
+    @qd.kernel
+    def test(x: qd.f32) -> qd.i32:
         return ~x
 
     with pytest.raises(QuadrantsTypeError, match=r"takes integral inputs only"):
@@ -66,48 +66,48 @@ def test_bit_not_invalid():
 
 @test_utils.test(print_full_traceback=False)
 def test_logic_not_invalid():
-    @ti.kernel
-    def test(x: ti.f32) -> ti.i32:
+    @qd.kernel
+    def test(x: qd.f32) -> qd.i32:
         return not x
 
     with pytest.raises(QuadrantsTypeError, match=r"takes integral inputs only"):
         test(1.0)
 
 
-@test_utils.test(arch=[ti.cuda, ti.vulkan, ti.metal])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
 def test_frexp():
-    @ti.kernel
-    def get_frac(x: ti.f32) -> ti.f32:
-        a, b = ti.frexp(x)
+    @qd.kernel
+    def get_frac(x: qd.f32) -> qd.f32:
+        a, b = qd.frexp(x)
         return a
 
     assert test_utils.allclose(get_frac(1.4), 0.7)
 
-    @ti.kernel
-    def get_exp(x: ti.f32) -> ti.i32:
-        a, b = ti.frexp(x)
+    @qd.kernel
+    def get_exp(x: qd.f32) -> qd.i32:
+        a, b = qd.frexp(x)
         return b
 
     assert get_exp(1.4) == 1
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda, ti.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
 def test_popcnt():
-    @ti.kernel
-    def test_i32(x: ti.int32) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_i32(x: qd.int32) -> qd.int32:
+        return qd.math.popcnt(x)
 
-    @ti.kernel
-    def test_i64(x: ti.int64) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_i64(x: qd.int64) -> qd.int32:
+        return qd.math.popcnt(x)
 
-    @ti.kernel
-    def test_u32(x: ti.uint32) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.popcnt(x)
 
-    @ti.kernel
-    def test_u64(x: ti.uint64) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_u64(x: qd.uint64) -> qd.int32:
+        return qd.math.popcnt(x)
 
     assert test_i32(100) == 3
     assert test_i32(1000) == 6
@@ -123,11 +123,11 @@ def test_popcnt():
     assert test_i64(10000) == 5
 
 
-@test_utils.test(arch=[ti.cpu, ti.metal, ti.cuda, ti.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.vulkan])
 def test_clz():
-    @ti.kernel
-    def test_i32(x: ti.int32) -> ti.int32:
-        return ti.math.clz(x)
+    @qd.kernel
+    def test_i32(x: qd.int32) -> qd.int32:
+        return qd.math.clz(x)
 
     # assert test_i32(0) == 32
     assert test_i32(1) == 31
@@ -139,15 +139,15 @@ def test_clz():
     assert test_i32(1024) == 21
 
 
-@test_utils.test(arch=[ti.metal])
+@test_utils.test(arch=[qd.metal])
 def test_popcnt():
-    @ti.kernel
-    def test_i32(x: ti.int32) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_i32(x: qd.int32) -> qd.int32:
+        return qd.math.popcnt(x)
 
-    @ti.kernel
-    def test_u32(x: ti.uint32) -> ti.int32:
-        return ti.math.popcnt(x)
+    @qd.kernel
+    def test_u32(x: qd.uint32) -> qd.int32:
+        return qd.math.popcnt(x)
 
     assert test_i32(100) == 3
     assert test_i32(1000) == 6
@@ -159,9 +159,9 @@ def test_popcnt():
 
 @test_utils.test()
 def test_sign():
-    @ti.kernel
-    def foo(val: ti.f32) -> ti.f32:
-        return ti.math.sign(val)
+    @qd.kernel
+    def foo(val: qd.f32) -> qd.f32:
+        return qd.math.sign(val)
 
     assert foo(0.5) == 1.0
     assert foo(-0.5) == -1.0

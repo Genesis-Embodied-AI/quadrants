@@ -1,7 +1,7 @@
 import quadrants
-from quadrants._lib.utils import ti_python_core as _ti_python_core
+from quadrants._lib.utils import qd_python_core as _qd_python_core
 
-_type_factory = _ti_python_core.get_type_factory_instance()
+_type_factory = _qd_python_core.get_type_factory_instance()
 
 
 class CompoundType:
@@ -23,7 +23,7 @@ def matrix(n=None, m=None, dtype=None):
 
     Example::
 
-        >>> mat2x2 = ti.types.matrix(2, 2, ti.f32)  # 2x2 matrix type
+        >>> mat2x2 = qd.types.matrix(2, 2, qd.f32)  # 2x2 matrix type
         >>> M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type
     """
     return quadrants.lang.matrix.MatrixType(n, m, 2, dtype)  # type: ignore
@@ -41,7 +41,7 @@ def vector(n=None, dtype=None):
 
     Example::
 
-        >>> vec3 = ti.types.vector(3, ti.f32)  # 3d vector type
+        >>> vec3 = qd.types.vector(3, qd.f32)  # 3d vector type
         >>> v = vec3([1., 2., 3.])  # an instance of this type
     """
     return quadrants.lang.matrix.VectorType(n, dtype)  # type: ignore
@@ -59,8 +59,8 @@ def struct(**kwargs):
 
     Example::
 
-        >>> vec3 = ti.types.vector(3, ti.f32)
-        >>> sphere = ti.types.struct(center=vec3, radius=float)
+        >>> vec3 = qd.types.vector(3, qd.f32)
+        >>> sphere = qd.types.struct(center=vec3, radius=float)
         >>> s = sphere(center=vec3([0., 0., 0.]), radius=1.0)
     """
     return quadrants.lang.struct.StructType(**kwargs)  # type: ignore

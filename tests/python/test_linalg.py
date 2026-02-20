@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -11,13 +11,13 @@ from tests import test_utils
 
 @test_utils.test()
 def test_const_init():
-    a = ti.Matrix.field(2, 3, dtype=ti.i32, shape=())
-    b = ti.Vector.field(3, dtype=ti.i32, shape=())
+    a = qd.Matrix.field(2, 3, dtype=qd.i32, shape=())
+    b = qd.Vector.field(3, dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        a[None] = ti.Matrix([[0, 1, 2], [3, 4, 5]])
-        b[None] = ti.Vector([0, 1, 2])
+        a[None] = qd.Matrix([[0, 1, 2], [3, 4, 5]])
+        b[None] = qd.Vector([0, 1, 2])
 
     init()
 
@@ -31,21 +31,21 @@ def test_const_init():
 
 @test_utils.test()
 def test_basic_utils():
-    a = ti.Vector.field(3, dtype=ti.f32)
-    b = ti.Vector.field(2, dtype=ti.f32)
-    abT = ti.Matrix.field(3, 2, dtype=ti.f32)
-    aNormalized = ti.Vector.field(3, dtype=ti.f32)
+    a = qd.Vector.field(3, dtype=qd.f32)
+    b = qd.Vector.field(2, dtype=qd.f32)
+    abT = qd.Matrix.field(3, 2, dtype=qd.f32)
+    aNormalized = qd.Vector.field(3, dtype=qd.f32)
 
-    normA = ti.field(ti.f32)
-    normSqrA = ti.field(ti.f32)
-    normInvA = ti.field(ti.f32)
+    normA = qd.field(qd.f32)
+    normSqrA = qd.field(qd.f32)
+    normInvA = qd.field(qd.f32)
 
-    ti.root.place(a, b, abT, aNormalized, normA, normSqrA, normInvA)
+    qd.root.place(a, b, abT, aNormalized, normA, normSqrA, normInvA)
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        a[None] = ti.Vector([1.0, 2.0, -3.0])
-        b[None] = ti.Vector([4.0, 5.0])
+        a[None] = qd.Vector([1.0, 2.0, -3.0])
+        b[None] = qd.Vector([4.0, 5.0])
         abT[None] = a[None].outer_product(b[None])
 
         normA[None] = a[None].norm()
@@ -72,24 +72,24 @@ def test_basic_utils():
 
 @test_utils.test()
 def test_cross():
-    a = ti.Vector.field(3, dtype=ti.f32)
-    b = ti.Vector.field(3, dtype=ti.f32)
-    c = ti.Vector.field(3, dtype=ti.f32)
+    a = qd.Vector.field(3, dtype=qd.f32)
+    b = qd.Vector.field(3, dtype=qd.f32)
+    c = qd.Vector.field(3, dtype=qd.f32)
 
-    a2 = ti.Vector.field(2, dtype=ti.f32)
-    b2 = ti.Vector.field(2, dtype=ti.f32)
-    c2 = ti.field(dtype=ti.f32)
+    a2 = qd.Vector.field(2, dtype=qd.f32)
+    b2 = qd.Vector.field(2, dtype=qd.f32)
+    c2 = qd.field(dtype=qd.f32)
 
-    ti.root.place(a, b, c, a2, b2, c2)
+    qd.root.place(a, b, c, a2, b2, c2)
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        a[None] = ti.Vector([1.0, 2.0, 3.0])
-        b[None] = ti.Vector([4.0, 5.0, 6.0])
+        a[None] = qd.Vector([1.0, 2.0, 3.0])
+        b[None] = qd.Vector([4.0, 5.0, 6.0])
         c[None] = a[None].cross(b[None])
 
-        a2[None] = ti.Vector([1.0, 2.0])
-        b2[None] = ti.Vector([4.0, 5.0])
+        a2[None] = qd.Vector([1.0, 2.0])
+        b2[None] = qd.Vector([4.0, 5.0])
         c2[None] = a2[None].cross(b2[None])
 
     init()
@@ -101,24 +101,24 @@ def test_cross():
 
 @test_utils.test()
 def test_dot():
-    a = ti.Vector.field(3, dtype=ti.f32)
-    b = ti.Vector.field(3, dtype=ti.f32)
-    c = ti.field(dtype=ti.f32)
+    a = qd.Vector.field(3, dtype=qd.f32)
+    b = qd.Vector.field(3, dtype=qd.f32)
+    c = qd.field(dtype=qd.f32)
 
-    a2 = ti.Vector.field(2, dtype=ti.f32)
-    b2 = ti.Vector.field(2, dtype=ti.f32)
-    c2 = ti.field(dtype=ti.f32)
+    a2 = qd.Vector.field(2, dtype=qd.f32)
+    b2 = qd.Vector.field(2, dtype=qd.f32)
+    c2 = qd.field(dtype=qd.f32)
 
-    ti.root.place(a, b, c, a2, b2, c2)
+    qd.root.place(a, b, c, a2, b2, c2)
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        a[None] = ti.Vector([1.0, 2.0, 3.0])
-        b[None] = ti.Vector([4.0, 5.0, 6.0])
+        a[None] = qd.Vector([1.0, 2.0, 3.0])
+        b[None] = qd.Vector([4.0, 5.0, 6.0])
         c[None] = a[None].dot(b[None])
 
-        a2[None] = ti.Vector([1.0, 2.0])
-        b2[None] = ti.Vector([4.0, 5.0])
+        a2[None] = qd.Vector([1.0, 2.0])
+        b2[None] = qd.Vector([4.0, 5.0])
         c2[None] = a2[None].dot(b2[None])
 
     init()
@@ -129,11 +129,11 @@ def test_dot():
 @test_utils.test()
 def test_transpose():
     dim = 3
-    m = ti.Matrix.field(dim, dim, ti.f32)
+    m = qd.Matrix.field(dim, dim, qd.f32)
 
-    ti.root.place(m)
+    qd.root.place(m)
 
-    @ti.kernel
+    @qd.kernel
     def transpose():
         mat = m[None].transpose()
         m[None] = mat
@@ -150,17 +150,17 @@ def test_transpose():
 
 
 def _test_polar_decomp(dim, dt):
-    m = ti.Matrix.field(dim, dim, dt)
-    r = ti.Matrix.field(dim, dim, dt)
-    s = ti.Matrix.field(dim, dim, dt)
-    I = ti.Matrix.field(dim, dim, dt)
-    D = ti.Matrix.field(dim, dim, dt)
+    m = qd.Matrix.field(dim, dim, dt)
+    r = qd.Matrix.field(dim, dim, dt)
+    s = qd.Matrix.field(dim, dim, dt)
+    I = qd.Matrix.field(dim, dim, dt)
+    D = qd.Matrix.field(dim, dim, dt)
 
-    ti.root.place(m, r, s, I, D)
+    qd.root.place(m, r, s, I, D)
 
-    @ti.kernel
+    @qd.kernel
     def polar():
-        R, S = ti.polar_decompose(m[None], dt)
+        R, S = qd.polar_decompose(m[None], dt)
         r[None] = R
         s[None] = S
         m[None] = R @ S
@@ -176,7 +176,7 @@ def _test_polar_decomp(dim, dt):
 
     polar()
 
-    tol = 5e-5 if dt == ti.f32 else 1e-12
+    tol = 5e-5 if dt == qd.f32 else 1e-12
 
     for i in range(dim):
         for j in range(dim):
@@ -186,27 +186,27 @@ def _test_polar_decomp(dim, dt):
 
 
 @pytest.mark.parametrize("dim", [2, 3])
-@test_utils.test(default_fp=ti.f32)
+@test_utils.test(default_fp=qd.f32)
 def test_polar_decomp_f32(dim):
-    _test_polar_decomp(dim, ti.f32)
+    _test_polar_decomp(dim, qd.f32)
 
 
 @pytest.mark.parametrize("dim", [2, 3])
-@test_utils.test(require=ti.extension.data64, default_fp=ti.f64)
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64)
 def test_polar_decomp_f64(dim):
-    _test_polar_decomp(dim, ti.f64)
+    _test_polar_decomp(dim, qd.f64)
 
 
 @test_utils.test()
 def test_matrix():
-    x = ti.Matrix.field(2, 2, dtype=ti.i32)
+    x = qd.Matrix.field(2, 2, dtype=qd.i32)
 
-    ti.root.dense(ti.i, 16).place(x)
+    qd.root.dense(qd.i, 16).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def inc():
         for i in x:
-            delta = ti.Matrix([[3, 0], [0, 0]])
+            delta = qd.Matrix([[3, 0], [0, 0]])
             x[i][1, 1] = x[i][0, 0] + 1
             x[i] = x[i] + delta
             x[i] += delta
@@ -224,7 +224,7 @@ def test_matrix():
 @pytest.mark.parametrize("n", range(1, 5))
 @test_utils.test()
 def test_mat_inverse_size(n):
-    m = ti.Matrix.field(n, n, dtype=ti.f32, shape=())
+    m = qd.Matrix.field(n, n, dtype=qd.f32, shape=())
     M = np.empty(shape=(n, n), dtype=np.float32)
     for i in range(n):
         for j in range(n):
@@ -233,7 +233,7 @@ def test_mat_inverse_size(n):
 
     m.from_numpy(M)
 
-    @ti.kernel
+    @qd.kernel
     def invert():
         m[None] = m[None].inverse()
 
@@ -245,18 +245,18 @@ def test_mat_inverse_size(n):
 
 @test_utils.test()
 def test_matrix_factories():
-    a = ti.Vector.field(3, dtype=ti.i32, shape=3)
-    b = ti.Matrix.field(2, 2, dtype=ti.f32, shape=2)
-    c = ti.Matrix.field(2, 3, dtype=ti.f32, shape=2)
+    a = qd.Vector.field(3, dtype=qd.i32, shape=3)
+    b = qd.Matrix.field(2, 2, dtype=qd.f32, shape=2)
+    c = qd.Matrix.field(2, 3, dtype=qd.f32, shape=2)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
-        b[0] = ti.Matrix.identity(ti.f32, 2)
-        b[1] = ti.math.rotation2d(math.pi / 3)
-        c[0] = ti.Matrix.zero(ti.f32, 2, 3)
-        c[1] = ti.Matrix.one(ti.f32, 2, 3)
-        for i in ti.static(range(3)):
-            a[i] = ti.Vector.unit(3, i)
+        b[0] = qd.Matrix.identity(qd.f32, 2)
+        b[1] = qd.math.rotation2d(math.pi / 3)
+        c[0] = qd.Matrix.zero(qd.f32, 2, 3)
+        c[1] = qd.Matrix.one(qd.f32, 2, 3)
+        for i in qd.static(range(3)):
+            a[i] = qd.Vector.unit(3, i)
 
     fill()
 
@@ -273,21 +273,21 @@ def test_matrix_factories():
 
 @test_utils.test()
 def test_init_matrix_from_vectors():
-    m1 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(3))
-    m2 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(3))
-    m3 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(3))
-    m4 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(3))
+    m1 = qd.Matrix.field(3, 3, dtype=qd.f32, shape=(3))
+    m2 = qd.Matrix.field(3, 3, dtype=qd.f32, shape=(3))
+    m3 = qd.Matrix.field(3, 3, dtype=qd.f32, shape=(3))
+    m4 = qd.Matrix.field(3, 3, dtype=qd.f32, shape=(3))
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i in range(3):
-            a = ti.Vector([1.0, 4.0, 7.0])
-            b = ti.Vector([2.0, 5.0, 8.0])
-            c = ti.Vector([3.0, 6.0, 9.0])
-            m1[i] = ti.Matrix.rows([a, b, c])
-            m2[i] = ti.Matrix.cols([a, b, c])
-            m3[i] = ti.Matrix.rows([[1.0, 4.0, 7.0], [2.0, 5.0, 8.0], [3.0, 6.0, 9.0]])
-            m4[i] = ti.Matrix.cols([[1.0, 4.0, 7.0], [2.0, 5.0, 8.0], [3.0, 6.0, 9.0]])
+            a = qd.Vector([1.0, 4.0, 7.0])
+            b = qd.Vector([2.0, 5.0, 8.0])
+            c = qd.Vector([3.0, 6.0, 9.0])
+            m1[i] = qd.Matrix.rows([a, b, c])
+            m2[i] = qd.Matrix.cols([a, b, c])
+            m3[i] = qd.Matrix.rows([[1.0, 4.0, 7.0], [2.0, 5.0, 8.0], [3.0, 6.0, 9.0]])
+            m4[i] = qd.Matrix.cols([[1.0, 4.0, 7.0], [2.0, 5.0, 8.0], [3.0, 6.0, 9.0]])
 
     fill()
 
@@ -301,11 +301,11 @@ def test_init_matrix_from_vectors():
 
 @test_utils.test()
 def test_any_all():
-    a = ti.Matrix.field(2, 2, dtype=ti.i32, shape=())
-    b = ti.field(dtype=ti.i32, shape=())
-    c = ti.field(dtype=ti.i32, shape=())
+    a = qd.Matrix.field(2, 2, dtype=qd.i32, shape=())
+    b = qd.field(dtype=qd.i32, shape=())
+    c = qd.field(dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         b[None] = any(a[None])
         c[None] = all(a[None])
@@ -331,11 +331,11 @@ def test_any_all():
 
 @test_utils.test()
 def test_min_max():
-    a = ti.Matrix.field(2, 2, dtype=ti.i32, shape=())
-    b = ti.field(dtype=ti.i32, shape=())
-    c = ti.field(dtype=ti.i32, shape=())
+    a = qd.Matrix.field(2, 2, dtype=qd.i32, shape=())
+    b = qd.field(dtype=qd.i32, shape=())
+    c = qd.field(dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         b[None] = a[None].max()
         c[None] = a[None].min()
@@ -355,8 +355,8 @@ def test_min_max():
 # must not throw any error:
 @test_utils.test()
 def test_matrix_list_assign():
-    m = ti.Matrix.field(2, 2, dtype=ti.i32, shape=(2, 2, 1))
-    v = ti.Vector.field(2, dtype=ti.i32, shape=(2, 2, 1))
+    m = qd.Matrix.field(2, 2, dtype=qd.i32, shape=(2, 2, 1))
+    v = qd.Vector.field(2, dtype=qd.i32, shape=(2, 2, 1))
 
     m[1, 0, 0] = [[4, 3], [6, 7]]
     v[1, 0, 0] = [8, 4]
@@ -364,7 +364,7 @@ def test_matrix_list_assign():
     assert np.allclose(m.to_numpy()[1, 0, 0, :, :], np.array([[4, 3], [6, 7]]))
     assert np.allclose(v.to_numpy()[1, 0, 0, :], np.array([8, 4]))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         m[1, 0, 0] = [[1, 2], [3, 4]]
         v[1, 0, 0] = [5, 6]
@@ -378,14 +378,14 @@ def test_matrix_list_assign():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_vector_xyzw_accessor():
-    u = ti.Vector.field(2, dtype=ti.i32, shape=(2, 2, 1))
-    v = ti.Vector.field(4, dtype=ti.i32, shape=(2, 2, 1))
+    u = qd.Vector.field(2, dtype=qd.i32, shape=(2, 2, 1))
+    v = qd.Vector.field(4, dtype=qd.i32, shape=(2, 2, 1))
 
     u[1, 0, 0].y = 3
     v[1, 0, 0].z = 0
     v[1, 0, 0].w = 4
 
-    @ti.kernel
+    @qd.kernel
     def func():
         u[1, 0, 0].x = 8 * u[1, 0, 0].y
         v[1, 0, 0].z = 1 - v[1, 0, 0].w
@@ -401,11 +401,11 @@ def test_vector_xyzw_accessor():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_diag():
-    m1 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
+    m1 = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def fill():
-        m1[None] = ti.Matrix.diag(dim=3, val=1.4)
+        m1[None] = qd.Matrix.diag(dim=3, val=1.4)
 
     fill()
 

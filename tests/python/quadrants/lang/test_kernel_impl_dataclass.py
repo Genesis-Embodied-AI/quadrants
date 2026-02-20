@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 import quadrants._test_tools.dataclass_test_tools as dataclass_test_tools
 import quadrants.lang._kernel_impl_dataclass as _kernel_impl_dataclass
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -26,41 +26,41 @@ __all__ = [
 
 @dataclasses.dataclass
 class MyStructAB:
-    a: ti.types.NDArray[ti.i32, 1]
-    b: ti.types.NDArray[ti.i32, 1]
+    a: qd.types.NDArray[qd.i32, 1]
+    b: qd.types.NDArray[qd.i32, 1]
 
 
 @dataclasses.dataclass
 class MyStructCD:
-    c: ti.types.NDArray[ti.i32, 1]
-    d: ti.types.NDArray[ti.i32, 1]
+    c: qd.types.NDArray[qd.i32, 1]
+    d: qd.types.NDArray[qd.i32, 1]
     my_struct_ab: MyStructAB
 
 
 @dataclasses.dataclass
 class MyStructEF:
-    e: ti.types.NDArray[ti.i32, 1]
-    f: ti.types.NDArray[ti.i32, 1]
+    e: qd.types.NDArray[qd.i32, 1]
+    f: qd.types.NDArray[qd.i32, 1]
     my_struct_cd: MyStructCD
 
 
 @dataclasses.dataclass
 class MyStructFieldAB:
-    a: ti.Template
-    b: ti.template()
+    a: qd.Template
+    b: qd.template()
 
 
 @dataclasses.dataclass
 class MyStructFieldCD:
-    c: ti.Template
-    d: ti.template()
+    c: qd.Template
+    d: qd.template()
     my_struct_ab: MyStructFieldAB
 
 
 @dataclasses.dataclass
 class MyStructFieldEF:
-    e: ti.Template
-    f: ti.template()
+    e: qd.Template
+    f: qd.template()
     my_struct_cd: MyStructFieldCD
 
 
@@ -141,28 +141,28 @@ def test_unpack_ast_struct_expressions(ast_in: str, struct_locals: set[str], exp
         (
             [ArgMetadata(MyStructAB, "my_struct_ab")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ab__ti_b"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ab__ti_a"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ab__ti_b"),
             ],
         ),
         (
             [ArgMetadata(MyStructCD, "my_struct_cd")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_c"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_d"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_cd__ti_c"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_cd__ti_d"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
             ],
         ),
         (
             [ArgMetadata(MyStructEF, "my_struct_ef")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_e"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_f"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_c"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_d"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_e"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_f"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_c"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_d"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
+                ArgMetadata(qd.types.NDArray[qd.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
             ],
         ),
     ],
@@ -188,30 +188,30 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
             "my_struct_ab",
             MyStructFieldAB,
             {
-                "__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_ab__ti_b": ti.template,
+                "__ti_my_struct_ab__ti_a": qd.template,
+                "__ti_my_struct_ab__ti_b": qd.template,
             },
         ),
         (
             "my_struct_cd",
             MyStructFieldCD,
             {
-                "__ti_my_struct_cd__ti_c": ti.template,
-                "__ti_my_struct_cd__ti_d": ti.template,
-                "__ti_my_struct_cd__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_cd__ti_my_struct_ab__ti_b": ti.template,
+                "__ti_my_struct_cd__ti_c": qd.template,
+                "__ti_my_struct_cd__ti_d": qd.template,
+                "__ti_my_struct_cd__ti_my_struct_ab__ti_a": qd.template,
+                "__ti_my_struct_cd__ti_my_struct_ab__ti_b": qd.template,
             },
         ),
         (
             "my_struct_ef",
             MyStructFieldEF,
             {
-                "__ti_my_struct_ef__ti_e": ti.template,
-                "__ti_my_struct_ef__ti_f": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_c": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_d": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b": ti.template,
+                "__ti_my_struct_ef__ti_e": qd.template,
+                "__ti_my_struct_ef__ti_f": qd.template,
+                "__ti_my_struct_ef__ti_my_struct_cd__ti_c": qd.template,
+                "__ti_my_struct_ef__ti_my_struct_cd__ti_d": qd.template,
+                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a": qd.template,
+                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b": qd.template,
             },
         ),
     ],
@@ -229,13 +229,13 @@ def test_populate_global_vars_from_dataclasses(
     for name in expected_names:
         expected_type = expected_global_args[name]
         actual_obj = global_vars[name]
-        if isinstance(expected_type, ti.types.ndarray):
-            assert isinstance(actual_obj, ti.ScalarNdarray)
+        if isinstance(expected_type, qd.types.ndarray):
+            assert isinstance(actual_obj, qd.ScalarNdarray)
             assert actual_obj.dtype == expected_type.dtype
             assert len(actual_obj.shape) == expected_type.ndim
-        elif isinstance(expected_type, ti.Template) or expected_type == ti.Template:
-            assert isinstance(actual_obj, ti.Field)
+        elif isinstance(expected_type, qd.Template) or expected_type == qd.Template:
+            assert isinstance(actual_obj, qd.Field)
             assert len(actual_obj.shape) == 1
-            assert actual_obj.dtype == ti.i32
+            assert actual_obj.dtype == qd.i32
         else:
             raise Exception("Unexpected expected type", expected_type)

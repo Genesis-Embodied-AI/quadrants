@@ -3,7 +3,7 @@ import math
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -17,38 +17,38 @@ from tests import test_utils
         (True, True, True),
     ],
 )
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_quant_time_integration(use_quant, use_exponent, use_shared_exp):
     if use_quant:
         if use_exponent:
-            qflt = ti.types.quant.float(exp=6, frac=13)
-            x = ti.Vector.field(2, dtype=qflt)
+            qflt = qd.types.quant.float(exp=6, frac=13)
+            x = qd.Vector.field(2, dtype=qflt)
             if use_shared_exp:
-                bitpack = ti.BitpackedFields(max_num_bits=32)
+                bitpack = qd.BitpackedFields(max_num_bits=32)
                 bitpack.place(x, shared_exponent=True)
-                ti.root.place(bitpack)
+                qd.root.place(bitpack)
             else:
-                bitpack = ti.BitpackedFields(max_num_bits=32)
+                bitpack = qd.BitpackedFields(max_num_bits=32)
                 bitpack.place(x.get_scalar_field(0))
-                ti.root.place(bitpack)
-                bitpack = ti.BitpackedFields(max_num_bits=32)
+                qd.root.place(bitpack)
+                bitpack = qd.BitpackedFields(max_num_bits=32)
                 bitpack.place(x.get_scalar_field(1))
-                ti.root.place(bitpack)
+                qd.root.place(bitpack)
         else:
-            qfxt = ti.types.quant.fixed(bits=16, max_value=2)
-            x = ti.Vector.field(2, dtype=qfxt)
-            bitpack = ti.BitpackedFields(max_num_bits=32)
+            qfxt = qd.types.quant.fixed(bits=16, max_value=2)
+            x = qd.Vector.field(2, dtype=qfxt)
+            bitpack = qd.BitpackedFields(max_num_bits=32)
             bitpack.place(x)
-            ti.root.place(bitpack)
+            qd.root.place(bitpack)
     else:
-        x = ti.Vector.field(2, dtype=ti.f32, shape=())
+        x = qd.Vector.field(2, dtype=qd.f32, shape=())
 
-    @ti.func
+    @qd.func
     def v_at(p):
-        return ti.Vector([-p[1], p[0]])
+        return qd.Vector([-p[1], p[0]])
 
-    @ti.kernel
-    def advance(dt: ti.f32):
+    @qd.kernel
+    def advance(dt: qd.f32):
         v_mid = v_at(x[None] + 0.5 * dt * v_at(x[None]))
         x[None] = x[None] + v_mid * dt
 

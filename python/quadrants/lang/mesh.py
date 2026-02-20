@@ -122,13 +122,13 @@ class MeshElementField:
             names and types for element attributes.
         reorder: True if reorders the internal memory for coalesced data access within mesh-for loop.
         needs_grad: True if needs to record grad.
-        layout: ti.Layout.AoS/ti.Layout.SoA
+        layout: qd.Layout.AoS/qd.Layout.SoA
 
         Example::
         >>> import meshquadrants_patcher as Patcher
-        >>> vec3 = ti.types.vector(3, ti.f32)
+        >>> vec3 = qd.types.vector(3, qd.f32)
         >>> mesh = Patcher.load_mesh("bunny.obj", relations=['FV'])
-        >>> mesh.faces.place({'area' : ti.f32}) # declares a mesh attribute `area` for each face element.
+        >>> mesh.faces.place({'area' : qd.f32}) # declares a mesh attribute `area` for each face element.
         >>> mesh.verts.place({'pos' : vec3}, reorder=True) # declares a mesh attribute `pos` for each vertex element, and reorder it in memory.
         """
 
@@ -268,9 +268,9 @@ class MeshElement:
         needs_grad: True if needs to record grad.
 
         Example::
-        >>> vec3 = ti.types.vector(3, ti.f32)
-        >>> mesh = ti.TriMesh()
-        >>> mesh.faces.place({'area' : ti.f32}) # declares a mesh attribute `area` for each face element.
+        >>> vec3 = qd.types.vector(3, qd.f32)
+        >>> mesh = qd.TriMesh()
+        >>> mesh.faces.place({'area' : qd.f32}) # declares a mesh attribute `area` for each face element.
         >>> mesh.verts.place({'pos' : vec3}, reorder=True) # declares a mesh attribute `pos` for each vertex element, and reorder it in memory.
         """
         for key, dtype in members.items():
@@ -509,7 +509,7 @@ class Mesh:
 
     MeshQuadrants offers first-class support for triangular/tetrahedral meshes
     and allows efficient computation on these irregular data structures,
-    only available for backends supporting `ti.extension.mesh`.
+    only available for backends supporting `qd.extension.mesh`.
 
     See more details in https://github.com/taichi-dev/meshquadrants
     """

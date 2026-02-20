@@ -1,17 +1,17 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_if():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x)
+    qd.root.dense(qd.i, 1).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         if True:
             a = 0
@@ -25,11 +25,11 @@ def test_if():
 
 @test_utils.test()
 def test_for():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x)
+    qd.root.dense(qd.i, 1).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(10):
             a = i
@@ -41,11 +41,11 @@ def test_for():
 
 @test_utils.test()
 def test_while():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x)
+    qd.root.dense(qd.i, 1).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         while True:
             a = 0

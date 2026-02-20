@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -6,11 +6,11 @@ from tests import test_utils
 @test_utils.test()
 def test_offload_order():
     n = 128
-    x = ti.field(ti.f32, shape=n, needs_grad=True)
-    y = ti.field(ti.f32, shape=n, needs_grad=True)
-    z = ti.field(ti.f32, shape=(), needs_grad=True)
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=n, needs_grad=True)
+    z = qd.field(qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def forward():
         for i in x:
             y[i] = x[i]
@@ -18,7 +18,7 @@ def test_offload_order():
         # for i in x:
         #     z[None] += y[i]
 
-    with ti.ad.Tape(z):
+    with qd.ad.Tape(z):
         forward()
 
     # for i in range(n):

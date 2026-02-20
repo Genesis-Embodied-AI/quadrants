@@ -1,6 +1,6 @@
 import itertools
 
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import AtomicOps, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._utils import tags2name
@@ -51,7 +51,7 @@ class BenchmarkPlan:
             _ms = self.funcs.get_func(tag_list)(self.arch, self.basic_repeat_times, **self._get_kwargs(tag_list))
             plan["result"] = _ms
             print(f"{tag_list}={_ms}")
-            ti.reset()
+            qd.reset()
         rdict = {"results": self.plan, "info": self.info}
         return rdict
 

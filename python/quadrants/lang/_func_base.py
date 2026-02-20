@@ -143,7 +143,7 @@ class FuncBase:
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
                 elif annotation is ndarray_type.NdarrayType:
-                    # convert from ti.types.NDArray into ti.types.NDArray()
+                    # convert from qd.types.NDArray into qd.types.NDArray()
                     annotation = annotation()
                 elif id(annotation) in primitive_types.type_ids:
                     pass
@@ -622,7 +622,7 @@ class FuncBase:
         if needed_arg_type is template or needed_arg_basetype is template:
             return 0, True
         if needed_arg_basetype is sparse_matrix_builder:
-            # Pass only the base pointer of the ti.types.sparse_matrix_builder() argument
+            # Pass only the base pointer of the qd.types.sparse_matrix_builder() argument
             launch_ctx_buffer[_UINT].append((index, v._get_ndarray_addr()))
             return 1, True
         raise ValueError(f"Argument type mismatch. Expecting {needed_arg_type}, got {type(v)}.")

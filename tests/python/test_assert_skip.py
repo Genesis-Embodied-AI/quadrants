@@ -2,7 +2,7 @@ import platform
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -20,14 +20,14 @@ def test_assert_ignored():
     - assert doesn't cause a crash
     - that the test expression is still executed
     """
-    a = ti.field(ti.i32, shape=())
+    a = qd.field(qd.i32, shape=())
 
-    @ti.func
+    @qd.func
     def f1() -> bool:
         a[()] = 5
         return False
 
-    @ti.kernel
+    @qd.kernel
     def k1() -> None:
         assert f1()
         assert False

@@ -1,15 +1,15 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test(debug=True)
 def test_bool_type_anno():
-    @ti.func
+    @qd.func
     def f(x: bool) -> bool:
         return not x
 
-    @ti.kernel
+    @qd.kernel
     def test():
         assert f(True) == False
         assert f(False) == True
@@ -19,13 +19,13 @@ def test_bool_type_anno():
 
 @test_utils.test(debug=True)
 def test_bool_type_conv():
-    @ti.func
-    def f(x: ti.u32) -> bool:
+    @qd.func
+    def f(x: qd.u32) -> bool:
         return bool(x)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         assert f(1000) == True
-        assert f(ti.u32(4_294_967_295)) == True
+        assert f(qd.u32(4_294_967_295)) == True
 
     test()

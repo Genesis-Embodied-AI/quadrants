@@ -2,7 +2,7 @@ import platform
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -12,13 +12,13 @@ if u.system == "linux" and u.machine in ("arm64", "aarch64"):
     pytest.skip("assert not currently supported on linux arm64 or aarch64", allow_module_level=True)
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_minimal():
-    @ti.kernel
+    @qd.kernel
     def func():
         assert 0
 
-    @ti.kernel
+    @qd.kernel
     def func2():
         assert False
 
@@ -28,9 +28,9 @@ def test_assert_minimal():
         func2()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_basic():
-    @ti.kernel
+    @qd.kernel
     def func():
         x = 20
         assert 10 <= x < 20
@@ -39,9 +39,9 @@ def test_assert_basic():
         func()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_message():
-    @ti.kernel
+    @qd.kernel
     def func():
         x = 20
         assert 10 <= x < 20, "Foo bar"
@@ -50,17 +50,17 @@ def test_assert_message():
         func()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_message_formatted():
-    x = ti.field(dtype=int, shape=16)
+    x = qd.field(dtype=int, shape=16)
     x[10] = 42
 
-    @ti.kernel
+    @qd.kernel
     def assert_formatted():
         for i in x:
             assert x[i] == 0, "x[%d] expect=%d got=%d" % (i, 0, x[i])
 
-    @ti.kernel
+    @qd.kernel
     def assert_float():
         y = 0.5
         assert y < 0, "y = %f" % y
@@ -77,17 +77,17 @@ def test_assert_message_formatted():
     assert_formatted()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_message_formatted_fstring():
-    x = ti.field(dtype=int, shape=16)
+    x = qd.field(dtype=int, shape=16)
     x[10] = 42
 
-    @ti.kernel
+    @qd.kernel
     def assert_formatted():
         for i in x:
             assert x[i] == 0, f"x[{i}] expect={0} got={x[i]}"
 
-    @ti.kernel
+    @qd.kernel
     def assert_float():
         y = 0.5
         assert y < 0, f"y = {y}"
@@ -104,9 +104,9 @@ def test_assert_message_formatted_fstring():
     assert_formatted()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
 def test_assert_ok():
-    @ti.kernel
+    @qd.kernel
     def func():
         x = 20
         assert 10 <= x <= 20
@@ -115,13 +115,13 @@ def test_assert_ok():
 
 
 @test_utils.test(
-    require=ti.extension.assertion,
+    require=qd.extension.assertion,
     debug=True,
     check_out_of_bound=True,
     gdb_trigger=False,
 )
 def test_assert_with_check_oob():
-    @ti.kernel
+    @qd.kernel
     def func():
         n = 15
         assert n >= 0
@@ -133,42 +133,42 @@ def test_assert_with_check_oob():
 def test_static_assert_message():
     x = 3
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.static_assert(x == 4, "Oh, no!")
+        qd.static_assert(x == 4, "Oh, no!")
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_static_assert_vector_n_ok():
-    x = ti.Vector.field(4, ti.f32, ())
+    x = qd.Vector.field(4, qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.static_assert(x.n == 4)
+        qd.static_assert(x.n == 4)
 
     func()
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_static_assert_data_type_ok():
-    x = ti.field(ti.f32, ())
+    x = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.static_assert(x.dtype == ti.f32)
+        qd.static_assert(x.dtype == qd.f32)
 
     func()
 
 
 @test_utils.test()
 def test_static_assert_nonstatic_condition():
-    @ti.kernel
+    @qd.kernel
     def foo():
         value = False
-        ti.static_assert(value, "Oh, no!")
+        qd.static_assert(value, "Oh, no!")
 
-    with pytest.raises(ti.QuadrantsTypeError, match="Static assert with non-static condition"):
+    with pytest.raises(qd.QuadrantsTypeError, match="Static assert with non-static condition"):
         foo()

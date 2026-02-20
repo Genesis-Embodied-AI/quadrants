@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -8,10 +8,10 @@ from tests import test_utils
 
 @test_utils.test(arch=get_host_arch_list())
 def test_indices():
-    a = ti.field(ti.f32, shape=(128, 32, 8))
+    a = qd.field(qd.f32, shape=(128, 32, 8))
 
-    b = ti.field(ti.f32)
-    ti.root.dense(ti.j, 32).dense(ti.i, 16).place(b)
+    b = qd.field(qd.f32)
+    qd.root.dense(qd.j, 32).dense(qd.i, 16).place(b)
 
     mapping_a = a.snode._physical_index_position()
 
@@ -23,14 +23,14 @@ def test_indices():
     # Note that b is column-major:
     # the virtual first index exposed to the user comes second in memory layout.
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i, j in b:
             b[i, j] = i * 10 + j
 
-    @ti.kernel
-    def get_field_addr(i: ti.i32, j: ti.i32) -> ti.u64:
-        return ti.get_addr(b, [i, j])
+    @qd.kernel
+    def get_field_addr(i: qd.i32, j: qd.i32) -> qd.u64:
+        return qd.get_addr(b, [i, j])
 
     fill()
     for i in range(16):
@@ -39,15 +39,15 @@ def test_indices():
     assert get_field_addr(0, 1) + 4 == get_field_addr(1, 1)
 
 
-@test_utils.test(arch=get_host_arch_list(), default_ip=ti.i64)
+@test_utils.test(arch=get_host_arch_list(), default_ip=qd.i64)
 def test_indices_i64():
     n = 1024
-    val = ti.field(dtype=ti.i64, shape=n)
+    val = qd.field(dtype=qd.i64, shape=n)
     val.fill(1)
 
-    @ti.kernel
+    @qd.kernel
     def prefix_sum():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(1, 1024):
             val[i] += val[i - 1]
 
@@ -58,14 +58,14 @@ def test_indices_i64():
 
 @test_utils.test()
 def test_indices_with_matrix():
-    grid_m = ti.field(dtype=ti.i32, shape=(10, 10))
+    grid_m = qd.field(dtype=qd.i32, shape=(10, 10))
 
-    @ti.kernel
+    @qd.kernel
     def build_grid():
-        base = int(ti.Vector([2, 4]))
+        base = int(qd.Vector([2, 4]))
         grid_m[base] = 100
 
-        grid_m[int(ti.Vector([1, 1]))] = 10
+        grid_m[int(qd.Vector([1, 1]))] = 10
 
     build_grid()
 
@@ -75,13 +75,13 @@ def test_indices_with_matrix():
 
 @test_utils.test()
 def test_negative_valued_indices():
-    @ti.kernel
+    @qd.kernel
     def foo(i: int):
-        x = ti.Vector([i, i + 1, i + 2])
+        x = qd.Vector([i, i + 1, i + 2])
         print(x[:-1])
 
     with pytest.raises(
-        ti.QuadrantsSyntaxError,
+        qd.QuadrantsSyntaxError,
         match="Negative indices are not supported in Quadrants kernels.",
     ):
         foo(0)

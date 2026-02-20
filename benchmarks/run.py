@@ -3,7 +3,7 @@ import os
 from suite_microbenchmarks import MicroBenchmark
 from utils import datatime_with_format, dump2json
 
-from quadrants._lib import core as ti_python_core
+from quadrants._lib import core as qd_python_core
 
 benchmark_suites = [MicroBenchmark]
 
@@ -11,7 +11,7 @@ benchmark_suites = [MicroBenchmark]
 class BenchmarkInfo:
     def __init__(self):
         """init with commit info"""
-        self.commit_hash = ti_python_core.get_commit_hash()
+        self.commit_hash = qd_python_core.get_commit_hash()
         self.datetime = datatime_with_format()
         self.suites = {}
         print(f"commit_hash = {self.commit_hash}")

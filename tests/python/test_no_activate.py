@@ -1,25 +1,25 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=ti.metal)
+@test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_no_activate():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     n = 1024
 
-    d = ti.root.dynamic(ti.i, n, chunk_size=32)
+    d = qd.root.dynamic(qd.i, n, chunk_size=32)
     d.place(x)
 
-    @ti.kernel
+    @qd.kernel
     def initialize():
         for i in range(n):
             x[i] = 1
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.no_activate(d)
+        qd.no_activate(d)
         for i in range(n // 2):
             x[i * 2 + 1] += 1
 

@@ -1,16 +1,16 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_bit_shl():
-    @ti.kernel
-    def shl(a: ti.i32, b: ti.i32) -> ti.i32:
+    @qd.kernel
+    def shl(a: qd.i32, b: qd.i32) -> qd.i32:
         return a << b
 
-    @ti.kernel
-    def shl_assign(a: ti.i32, b: ti.i32) -> ti.i32:
+    @qd.kernel
+    def shl_assign(a: qd.i32, b: qd.i32) -> qd.i32:
         c = a
         c <<= b
         return c
@@ -21,12 +21,12 @@ def test_bit_shl():
 
 @test_utils.test()
 def test_bit_sar():
-    @ti.kernel
-    def sar(a: ti.i32, b: ti.i32) -> ti.i32:
+    @qd.kernel
+    def sar(a: qd.i32, b: qd.i32) -> qd.i32:
         return a >> b
 
-    @ti.kernel
-    def sar_assign(a: ti.i32, b: ti.i32) -> ti.i32:
+    @qd.kernel
+    def sar_assign(a: qd.i32, b: qd.i32) -> qd.i32:
         c = a
         c >>= b
         return c
@@ -43,9 +43,9 @@ def test_bit_sar():
 
 @test_utils.test()
 def test_bit_shr():
-    @ti.kernel
-    def shr(a: ti.i32, b: ti.i32) -> ti.i32:
-        return ti.bit_shr(a, b)
+    @qd.kernel
+    def shr(a: qd.i32, b: qd.i32) -> qd.i32:
+        return qd.bit_shr(a, b)
 
     n = 8
     test_num = 2**n
@@ -59,8 +59,8 @@ def test_bit_shr():
 
 @test_utils.test()
 def test_bit_shr_uint():
-    @ti.kernel
-    def func(x: ti.u32, y: ti.i32) -> ti.u32:
-        return ti.bit_shr(x, y)
+    @qd.kernel
+    def func(x: qd.u32, y: qd.i32) -> qd.u32:
+        return qd.bit_shr(x, y)
 
     assert func(5, 2) == 1

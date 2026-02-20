@@ -1,19 +1,19 @@
 from random import randrange
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_listgen():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     n = 1024
 
-    ti.root.dense(ti.ij, 4).dense(ti.ij, 4).dense(ti.ij, 4).dense(ti.ij, 4).dense(ti.ij, 4).place(x)
+    qd.root.dense(qd.ij, 4).dense(qd.ij, 4).dense(qd.ij, 4).dense(qd.ij, 4).dense(qd.ij, 4).place(x)
 
-    @ti.kernel
-    def fill(c: ti.i32):
+    @qd.kernel
+    def fill(c: qd.i32):
         for i, j in x:
             x[i, j] = i * 10 + j + c
 
@@ -34,12 +34,12 @@ def test_listgen():
 
 @test_utils.test()
 def test_nested_3d():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     n = 128
 
-    ti.root.dense(ti.ijk, 4).dense(ti.ijk, 4).dense(ti.ijk, 4).dense(ti.ijk, 2).place(x)
+    qd.root.dense(qd.ijk, 4).dense(qd.ijk, 4).dense(qd.ijk, 4).dense(qd.ijk, 2).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i, j, k in x:
             x[i, j, k] = (i * n + j) * n + k

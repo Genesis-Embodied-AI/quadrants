@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import AtomicOps, Container, DataSize, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -13,18 +13,18 @@ def reduction_default(arch, repeat, atomic_op, container, dtype, dsize, get_metr
     y = container(dtype, shape=())
     y[None] = 0
 
-    @ti.kernel
-    def reduction_field(y: ti.template(), x: ti.template()):
+    @qd.kernel
+    def reduction_field(y: qd.template(), x: qd.template()):
         for i in x:
             atomic_op(y[None], x[i])
 
-    @ti.kernel
-    def reduction_array(y: ti.types.ndarray(), x: ti.types.ndarray()):
+    @qd.kernel
+    def reduction_array(y: qd.types.ndarray(), x: qd.types.ndarray()):
         for i in x:
             atomic_op(y[None], x[i])
 
     fill_random(x, dtype, container)
-    func = reduction_field if container == ti.field else reduction_array
+    func = reduction_field if container == qd.field else reduction_array
     return get_metric(repeat, func, y, x)
 
 

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
 from quadrants.lang.kernel_arguments import ArgMetadata
 
@@ -30,9 +30,9 @@ def test_args_hasher_numeric() -> None:
     "annotation,cache_value",
     [
         (None, False),
-        (ti.i32, False),
-        (ti.template(), True),
-        (ti.Template, True),
+        (qd.i32, False),
+        (qd.template(), True),
+        (qd.Template, True),
     ],
 )
 @test_utils.test()
@@ -73,9 +73,9 @@ def test_args_hasher_bool() -> None:
     "annotation,cache_value",
     [
         (None, False),
-        (ti.i32, False),
-        (ti.template(), True),
-        (ti.Template, True),
+        (qd.i32, False),
+        (qd.template(), True),
+        (qd.Template, True),
     ],
 )
 @test_utils.test()
@@ -96,7 +96,7 @@ def test_args_hasher_bool_maybe_template(annotation: object, cache_value: bool) 
 
 @test_utils.test()
 def test_args_hasher_data_oriented() -> None:
-    @ti.data_oriented
+    @qd.data_oriented
     class Foo: ...
 
     foo = Foo()
@@ -106,9 +106,9 @@ def test_args_hasher_data_oriented() -> None:
 @test_utils.test()
 def test_args_hasher_ndarray() -> None:
     seen = set()
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for ndim in [0, 1, 2]:
-            arg = ti.ndarray(dtype, [1] * ndim)
+            arg = qd.ndarray(dtype, [1] * ndim)
             for it in [0, 1]:
                 hash = args_hasher.hash_args(False, [arg], [None])
                 assert hash is not None
@@ -122,10 +122,10 @@ def test_args_hasher_ndarray() -> None:
 @test_utils.test()
 def test_args_hasher_ndarray_vector() -> None:
     seen = set()
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for vector_size in [2, 3]:
             for ndim in [0, 1, 2]:
-                arg = ti.Vector.ndarray(vector_size, dtype, [1] * ndim)
+                arg = qd.Vector.ndarray(vector_size, dtype, [1] * ndim)
                 for it in [0, 1]:
                     hash = args_hasher.hash_args(False, [arg], [None])
                     assert hash is not None
@@ -139,11 +139,11 @@ def test_args_hasher_ndarray_vector() -> None:
 @test_utils.test()
 def test_args_hasher_ndarray_matrix() -> None:
     seen = set()
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for m in [2, 3]:
             for n in [2, 3]:
                 for ndim in [0, 1, 2]:
-                    arg = ti.Matrix.ndarray(m, n, dtype, [1] * ndim)
+                    arg = qd.Matrix.ndarray(m, n, dtype, [1] * ndim)
                     for it in [0, 1]:
                         hash = args_hasher.hash_args(False, [arg], [None])
                         assert hash is not None
@@ -155,8 +155,8 @@ def test_args_hasher_ndarray_matrix() -> None:
 
 
 def _ti_init_same_arch() -> None:
-    assert ti.cfg is not None
-    ti.init(arch=getattr(ti, ti.cfg.arch.name))
+    assert qd.cfg is not None
+    qd.init(arch=getattr(qd, qd.cfg.arch.name))
 
 
 @test_utils.test()
@@ -166,10 +166,10 @@ def test_args_hasher_field() -> None:
 
     More context: https://github.com/Genesis-Embodied-AI/quadrants/pull/163
     """
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for shape in [(2,), (5,), (2, 5)]:
             _ti_init_same_arch()
-            arg = ti.field(dtype, shape)
+            arg = qd.field(dtype, shape)
             hash = args_hasher.hash_args(False, [arg], [None])
             assert hash is None
 
@@ -177,11 +177,11 @@ def test_args_hasher_field() -> None:
 @test_utils.test()
 def test_args_hasher_field_vector() -> None:
     seen = set()
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for n in [2, 3]:
             for shape in [(2,), (5,), (2, 5)]:
                 _ti_init_same_arch()
-                arg = ti.Vector.field(n, dtype, shape)
+                arg = qd.Vector.field(n, dtype, shape)
                 hash = args_hasher.hash_args(False, [arg], [None])
                 assert hash is None
 
@@ -189,20 +189,20 @@ def test_args_hasher_field_vector() -> None:
 @test_utils.test()
 def test_args_hasher_field_matrix() -> None:
     seen = set()
-    for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
+    for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
         for m in [2, 3]:
             for n in [2, 3]:
                 for shape in [(2,), (5,), (2, 5)]:
                     _ti_init_same_arch()
-                    arg = ti.Matrix.field(m, n, dtype, shape)
+                    arg = qd.Matrix.field(m, n, dtype, shape)
                     hash = args_hasher.hash_args(False, [arg], [None])
                     assert hash is None
 
 
 @test_utils.test()
 def test_args_hasher_field_vs_ndarray() -> None:
-    a_ndarray = ti.ndarray(ti.i32, 1)
-    a_field = ti.field(ti.i32, 1)
+    a_ndarray = qd.ndarray(qd.i32, 1)
+    a_field = qd.field(qd.i32, 1)
     ndarray_hash = args_hasher.hash_args(False, [a_ndarray], [None])
     field_hash = args_hasher.hash_args(False, [a_field], [None])
     assert ndarray_hash is not None
@@ -289,16 +289,16 @@ def test_args_hasher_custom_torch_tensor() -> None:
 
 @test_utils.test()
 def test_args_hasher_named_tuple() -> None:
-    @ti.data_oriented
+    @qd.data_oriented
     class Geom(NamedTuple):
-        pos: ti.Template
+        pos: qd.Template
 
-    @ti.kernel(fastcache=True)
-    def set_pos(geom: ti.Template, value: ti.types.NDArray):
-        for I in ti.grouped(ti.ndrange(*geom.pos.shape)):
-            for j in ti.static(range(3)):
+    @qd.kernel(fastcache=True)
+    def set_pos(geom: qd.Template, value: qd.types.NDArray):
+        for I in qd.grouped(qd.ndrange(*geom.pos.shape)):
+            for j in qd.static(range(3)):
                 geom.pos[I][j] = value[(*I, j)]
 
-    geom = Geom(pos=ti.field(dtype=ti.types.vector(3, ti.f32), shape=(1,)))
+    geom = Geom(pos=qd.field(dtype=qd.types.vector(3, qd.f32), shape=(1,)))
     set_pos(geom, np.ones((1, 3), dtype=np.float32))
     assert np.all(geom.pos.to_numpy() == np.ones((1, 3), dtype=np.float32))

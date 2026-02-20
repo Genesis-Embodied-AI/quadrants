@@ -1,6 +1,6 @@
 from time import perf_counter
 
-import quadrants as ti
+import quadrants as qd
 
 
 class End2EndTimer:
@@ -9,12 +9,12 @@ class End2EndTimer:
         self._ts2 = 0
 
     def tick(self):
-        ti.sync()
+        qd.sync()
         self._ts1 = perf_counter()
         return self._ts1
 
     def tock(self):
-        ti.sync()
+        qd.sync()
         self._ts2 = perf_counter()
         return self._ts2 - self._ts1
 
@@ -37,21 +37,21 @@ def tags2name(tag_list):
 
 
 def dtype_size(ti_dtype):
-    dtype_size_dict = {ti.i32: 4, ti.i64: 8, ti.f32: 4, ti.f64: 8}
+    dtype_size_dict = {qd.i32: 4, qd.i64: 8, qd.f32: 4, qd.f64: 8}
     if ti_dtype not in dtype_size_dict:
-        raise RuntimeError("Unsupported ti.dtype: " + str(type(ti_dtype)))
+        raise RuntimeError("Unsupported qd.dtype: " + str(type(ti_dtype)))
     else:
         return dtype_size_dict[ti_dtype]
 
 
 def get_ti_arch(arch: str):
     arch_dict = {
-        "cuda": ti.cuda,
-        "vulkan": ti.vulkan,
-        "opengl": ti.opengl,
-        "metal": ti.metal,
-        "x64": ti.x64,
-        "cc": ti.cc,
+        "cuda": qd.cuda,
+        "vulkan": qd.vulkan,
+        "opengl": qd.opengl,
+        "metal": qd.metal,
+        "x64": qd.x64,
+        "cc": qd.cc,
     }
     return arch_dict[arch]
 
@@ -65,22 +65,22 @@ def scaled_repeat_times(arch: str, datasize, repeat=1):
 
 
 def fill_random(dst, dtype, container):
-    @ti.kernel
-    def fill_template(dst: ti.template()):
-        for I in ti.grouped(dst):
-            dst[I] = ti.random(dtype)
+    @qd.kernel
+    def fill_template(dst: qd.template()):
+        for I in qd.grouped(dst):
+            dst[I] = qd.random(dtype)
 
-    @ti.kernel
-    def fill_1d_array(dst: ti.types.ndarray()):
+    @qd.kernel
+    def fill_1d_array(dst: qd.types.ndarray()):
         for i in dst:
-            dst[i] = ti.random(dtype)
+            dst[i] = qd.random(dtype)
 
-    @ti.kernel
-    def fill_2d_array(dst: ti.types.ndarray()):
+    @qd.kernel
+    def fill_2d_array(dst: qd.types.ndarray()):
         for i, j in dst:
-            dst[i, j] = ti.random(dtype)
+            dst[i, j] = qd.random(dtype)
 
-    if container == ti.ndarray:
+    if container == qd.ndarray:
         if len(dst.shape) == 1:
             fill_1d_array(dst)
         elif len(dst.shape) == 2:

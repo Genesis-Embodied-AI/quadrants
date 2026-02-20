@@ -17,12 +17,12 @@ class Template(Generic[T]):
 
         >>> a = 1
         >>>
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
         >>>     print(a)
         >>>
-        >>> @ti.kernel
-        >>> def test_template(a: ti.template()):
+        >>> @qd.kernel
+        >>> def test_template(a: qd.template()):
         >>>     print(a)
         >>>
         >>> test(a)  # will print 1

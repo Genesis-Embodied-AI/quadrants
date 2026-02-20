@@ -48,14 +48,14 @@ class Ndarray:
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling ti.sync() between modifying the ndarray, and
+        Note: caller is responsible for calling qd.sync() between modifying the ndarray, and
         reading it.
         """
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
     def _reset(self):
         """
-        Called by runtime, when we call ti.reset()
+        Called by runtime, when we call qd.reset()
         """
         self.arr = None
         self.grad = None
@@ -244,7 +244,7 @@ class Ndarray:
         raise NotImplementedError()
 
     def _fill_by_kernel(self, val):
-        """Fills ndarray with a specific scalar value using a ti.kernel.
+        """Fills ndarray with a specific scalar value using a qd.kernel.
 
         Args:
             val (Union[int, float]): Value to fill.
@@ -319,7 +319,7 @@ class ScalarNdarray(Ndarray):
         fill_ndarray(self, val)
 
     def __repr__(self):
-        return "<ti.ndarray>"
+        return "<qd.ndarray>"
 
 
 class NdarrayHostAccessor:

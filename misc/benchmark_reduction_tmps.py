@@ -2,12 +2,12 @@ import time
 
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 # TODO: make this a real benchmark and set up regression
 # TODO: merge this file into benchmark_reduction.py
-ti.init(
-    arch=ti.gpu,
+qd.init(
+    arch=qd.gpu,
     print_ir=True,
     print_kernel_llvm_ir=True,
     kernel_profiler=True,
@@ -16,20 +16,20 @@ ti.init(
 
 N = 1024 * 1024 * 128
 
-a = ti.field(ti.f32, shape=N)
+a = qd.field(qd.f32, shape=N)
 
 
-@ti.kernel
+@qd.kernel
 def fill():
-    ti.block_dim(128)
+    qd.block_dim(128)
     for i in a:
         a[i] = 1.0
 
 
-@ti.kernel
-def reduce() -> ti.f32:
+@qd.kernel
+def reduce() -> qd.f32:
     s = 0.0
-    ti.block_dim(1024)
+    qd.block_dim(1024)
     for i in a:
         s += a[i]
     return s

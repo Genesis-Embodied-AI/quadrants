@@ -1,64 +1,64 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_complex_dense():
-    a = ti.field(ti.i32, shape=(4, 4))
-    b = ti.field(ti.i32, shape=(16, 16))
-    c = ti.field(ti.i32, shape=(16, 4))
-    d = ti.field(ti.i32, shape=(4, 4, 4))
+    a = qd.field(qd.i32, shape=(4, 4))
+    b = qd.field(qd.i32, shape=(16, 16))
+    c = qd.field(qd.i32, shape=(16, 4))
+    d = qd.field(qd.i32, shape=(4, 4, 4))
 
-    w = ti.field(ti.i32)
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
-    z = ti.field(ti.i32)
+    w = qd.field(qd.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    z = qd.field(qd.i32)
 
-    blk = ti.root.dense(ti.ij, 4)
+    blk = qd.root.dense(qd.ij, 4)
     blk.place(w)
-    blk.dense(ti.ij, 2).dense(ti.ij, 2).place(x)
-    blk.dense(ti.i, 4).place(y)
-    blk.dense(ti.k, 4).place(z)
+    blk.dense(qd.ij, 2).dense(qd.ij, 2).place(x)
+    blk.dense(qd.i, 4).place(y)
+    blk.dense(qd.k, 4).place(z)
 
-    @ti.kernel
+    @qd.kernel
     def set_w():
-        for I in ti.grouped(ti.ndrange(4, 4)):
+        for I in qd.grouped(qd.ndrange(4, 4)):
             w[I] = 1
 
-    @ti.kernel
+    @qd.kernel
     def set_x():
-        for I in ti.grouped(ti.ndrange(16, 16)):
+        for I in qd.grouped(qd.ndrange(16, 16)):
             x[I] = 2
 
-    @ti.kernel
+    @qd.kernel
     def set_y():
-        for I in ti.grouped(ti.ndrange(16, 4)):
+        for I in qd.grouped(qd.ndrange(16, 4)):
             y[I] = 3
 
-    @ti.kernel
+    @qd.kernel
     def set_z():
-        for I in ti.grouped(ti.ndrange(4, 4, 4)):
+        for I in qd.grouped(qd.ndrange(4, 4, 4)):
             z[I] = 4
 
-    @ti.kernel
+    @qd.kernel
     def set_a():
-        for I in ti.grouped(w):
+        for I in qd.grouped(w):
             a[I] = w[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_b():
-        for I in ti.grouped(x):
+        for I in qd.grouped(x):
             b[I] = x[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_c():
-        for I in ti.grouped(y):
+        for I in qd.grouped(y):
             c[I] = y[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_d():
-        for I in ti.grouped(z):
+        for I in qd.grouped(z):
             d[I] = z[I]
 
     set_w()
@@ -89,62 +89,62 @@ def test_complex_dense():
                 assert d[i, j, k] == 4
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_complex_pointer():
-    a = ti.field(ti.i32, shape=(4, 4))
-    b = ti.field(ti.i32, shape=(16, 16))
-    c = ti.field(ti.i32, shape=(16, 4))
-    d = ti.field(ti.i32, shape=(4, 4, 4))
+    a = qd.field(qd.i32, shape=(4, 4))
+    b = qd.field(qd.i32, shape=(16, 16))
+    c = qd.field(qd.i32, shape=(16, 4))
+    d = qd.field(qd.i32, shape=(4, 4, 4))
 
-    w = ti.field(ti.i32)
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
-    z = ti.field(ti.i32)
+    w = qd.field(qd.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
+    z = qd.field(qd.i32)
 
-    blk = ti.root.pointer(ti.ij, 4)
+    blk = qd.root.pointer(qd.ij, 4)
     blk.place(w)
-    blk.pointer(ti.ij, 2).dense(ti.ij, 2).place(x)
-    blk.dense(ti.i, 4).place(y)
-    blk.dense(ti.k, 4).place(z)
+    blk.pointer(qd.ij, 2).dense(qd.ij, 2).place(x)
+    blk.dense(qd.i, 4).place(y)
+    blk.dense(qd.k, 4).place(z)
 
-    @ti.kernel
+    @qd.kernel
     def set_w():
-        for I in ti.grouped(ti.ndrange(4, 4)):
+        for I in qd.grouped(qd.ndrange(4, 4)):
             w[I] = 1
 
-    @ti.kernel
+    @qd.kernel
     def set_x():
-        for I in ti.grouped(ti.ndrange(16, 16)):
+        for I in qd.grouped(qd.ndrange(16, 16)):
             x[I] = 2
 
-    @ti.kernel
+    @qd.kernel
     def set_y():
-        for I in ti.grouped(ti.ndrange(16, 4)):
+        for I in qd.grouped(qd.ndrange(16, 4)):
             y[I] = 3
 
-    @ti.kernel
+    @qd.kernel
     def set_z():
-        for I in ti.grouped(ti.ndrange(4, 4, 4)):
+        for I in qd.grouped(qd.ndrange(4, 4, 4)):
             z[I] = 4
 
-    @ti.kernel
+    @qd.kernel
     def set_a():
-        for I in ti.grouped(w):
+        for I in qd.grouped(w):
             a[I] = w[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_b():
-        for I in ti.grouped(x):
+        for I in qd.grouped(x):
             b[I] = x[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_c():
-        for I in ti.grouped(y):
+        for I in qd.grouped(y):
             c[I] = y[I]
 
-    @ti.kernel
+    @qd.kernel
     def set_d():
-        for I in ti.grouped(z):
+        for I in qd.grouped(z):
             d[I] = z[I]
 
     set_w()

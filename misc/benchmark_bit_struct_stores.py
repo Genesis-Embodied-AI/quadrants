@@ -1,26 +1,26 @@
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.cpu, kernel_profiler=True, print_ir=True)
+qd.init(arch=qd.cpu, kernel_profiler=True, print_ir=True)
 
 quant = True
 
 n = 1024 * 1024 * 256
 
 if quant:
-    qi16 = ti.types.quant.int(16, True)
+    qi16 = qd.types.quant.int(16, True)
 
-    x = ti.field(dtype=qi16)
-    y = ti.field(dtype=qi16)
+    x = qd.field(dtype=qi16)
+    y = qd.field(dtype=qi16)
 
-    ti.root.dense(ti.i, n).bit_struct(num_bits=32).place(x, y)
+    qd.root.dense(qd.i, n).bit_struct(num_bits=32).place(x, y)
 else:
-    x = ti.field(dtype=ti.i16)
-    y = ti.field(dtype=ti.i16)
+    x = qd.field(dtype=qd.i16)
+    y = qd.field(dtype=qd.i16)
 
-    ti.root.dense(ti.i, n).place(x, y)
+    qd.root.dense(qd.i, n).place(x, y)
 
 
-@ti.kernel
+@qd.kernel
 def foo():
     for i in range(n):
         x[i] = i & 1023
@@ -30,4 +30,4 @@ def foo():
 for i in range(10):
     foo()
 
-ti.print_kernel_profile_info()
+qd.print_kernel_profile_info()

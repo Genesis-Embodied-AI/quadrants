@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_normal_grad():
-    x = ti.field(ti.f32)
-    loss = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    loss = qd.field(qd.f32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).place(x)
-    ti.root.place(loss)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, n).place(x)
+    qd.root.place(loss)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
             loss[None] += x[i] ** 2
@@ -22,7 +22,7 @@ def test_normal_grad():
     for i in range(n):
         x[i] = i
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         func()
 
     for i in range(n):
@@ -31,25 +31,25 @@ def test_normal_grad():
 
 @test_utils.test()
 def test_stop_grad():
-    x = ti.field(ti.f32)
-    loss = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    loss = qd.field(qd.f32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).place(x)
-    ti.root.place(loss)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, n).place(x)
+    qd.root.place(loss)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            ti.stop_grad(x)
+            qd.stop_grad(x)
             loss[None] += x[i] ** 2
 
     for i in range(n):
         x[i] = i
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         func()
 
     for i in range(n):
@@ -58,20 +58,20 @@ def test_stop_grad():
 
 @test_utils.test()
 def test_stop_grad2():
-    x = ti.field(ti.f32)
-    loss = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    loss = qd.field(qd.f32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).place(x)
-    ti.root.place(loss)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, n).place(x)
+    qd.root.place(loss)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         # Two loops, one with stop grad on without
         for i in range(n):
-            ti.stop_grad(x)
+            qd.stop_grad(x)
             loss[None] += x[i] ** 2
         for i in range(n):
             loss[None] += x[i] ** 2
@@ -79,7 +79,7 @@ def test_stop_grad2():
     for i in range(n):
         x[i] = i
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         func()
 
     # If without stop, grad x.grad[i] = i * 4

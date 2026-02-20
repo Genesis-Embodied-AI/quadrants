@@ -1,7 +1,7 @@
 import inspect
 import os
 
-from quadrants._lib import core as ti_python_core
+from quadrants._lib import core as qd_python_core
 
 
 def _get_logging(name):
@@ -17,9 +17,9 @@ def _get_logging(name):
 
     def logger(msg, *args, **kwargs):
         # Python inspection takes time (~0.1ms) so avoid it as much as possible
-        if ti_python_core.logging_effective(name):
+        if qd_python_core.logging_effective(name):
             msg_formatted = msg.format(*args, **kwargs)
-            func = getattr(ti_python_core, name)
+            func = getattr(qd_python_core, name)
             frame = inspect.currentframe().f_back  # type: ignore
             file_name, lineno, func_name, _, _ = inspect.getframeinfo(frame)  # type: ignore
             file_name = os.path.basename(file_name)
@@ -46,7 +46,7 @@ def set_logging_level(level):
 
         >>> set_logging_level('debug')
     """
-    ti_python_core.set_logging_level(level)
+    qd_python_core.set_logging_level(level)
 
 
 def is_logging_effective(level):
@@ -66,14 +66,14 @@ def is_logging_effective(level):
     Example::
 
         >>> # assume current level is 'info'
-        >>> print(ti.is_logging_effective("trace"))     # False
-        >>> print(ti.is_logging_effective("debug"))     # False
-        >>> print(ti.is_logging_effective("info"))      # True
-        >>> print(ti.is_logging_effective("warn"))      # True
-        >>> print(ti.is_logging_effective("error"))     # True
-        >>> print(ti.is_logging_effective("critical"))  # True
+        >>> print(qd.is_logging_effective("trace"))     # False
+        >>> print(qd.is_logging_effective("debug"))     # False
+        >>> print(qd.is_logging_effective("info"))      # True
+        >>> print(qd.is_logging_effective("warn"))      # True
+        >>> print(qd.is_logging_effective("error"))     # True
+        >>> print(qd.is_logging_effective("critical"))  # True
     """
-    return ti_python_core.logging_effective(level)
+    return qd_python_core.logging_effective(level)
 
 
 # ------------------------

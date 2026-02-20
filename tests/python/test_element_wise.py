@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -11,17 +11,17 @@ def _c_mod(a, b):
 
 
 @pytest.mark.parametrize("lhs_is_mat,rhs_is_mat", [(True, True), (True, False), (False, True)])
-@test_utils.test(fast_math=False, exclude=[ti.vulkan])
+@test_utils.test(fast_math=False, exclude=[qd.vulkan])
 def test_binary_f(lhs_is_mat, rhs_is_mat):
-    x = ti.Matrix.field(3, 2, ti.f32, 16)
+    x = qd.Matrix.field(3, 2, qd.f32, 16)
     if lhs_is_mat:
-        y = ti.Matrix.field(3, 2, ti.f32, ())
+        y = qd.Matrix.field(3, 2, qd.f32, ())
     else:
-        y = ti.field(ti.f32, ())
+        y = qd.field(qd.f32, ())
     if rhs_is_mat:
-        z = ti.Matrix.field(3, 2, ti.f32, ())
+        z = qd.Matrix.field(3, 2, qd.f32, ())
     else:
-        z = ti.field(ti.f32, ())
+        z = qd.field(qd.f32, ())
 
     if lhs_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 3.1], [7, 4]], np.float32))
@@ -32,7 +32,7 @@ def test_binary_f(lhs_is_mat, rhs_is_mat):
     else:
         z[None] = 5
 
-    @ti.kernel
+    @qd.kernel
     def func():
         x[0] = y[None] + z[None]
         x[1] = y[None] - z[None]
@@ -47,9 +47,9 @@ def test_binary_f(lhs_is_mat, rhs_is_mat):
         x[10] = y[None] >= z[None]
         x[11] = y[None] < z[None]
         x[12] = y[None] <= z[None]
-        x[13] = ti.atan2(y[None], z[None])
-        x[14] = ti.min(y[None], z[None])
-        x[15] = ti.max(y[None], z[None])
+        x[13] = qd.atan2(y[None], z[None])
+        x[14] = qd.min(y[None], z[None])
+        x[15] = qd.max(y[None], z[None])
 
     func()
     x = x.to_numpy()
@@ -78,15 +78,15 @@ def test_binary_f(lhs_is_mat, rhs_is_mat):
 def test_binary_i(is_mat):
     lhs_is_mat, rhs_is_mat = is_mat
 
-    x = ti.Matrix.field(3, 2, ti.i32, 20)
+    x = qd.Matrix.field(3, 2, qd.i32, 20)
     if lhs_is_mat:
-        y = ti.Matrix.field(3, 2, ti.i32, ())
+        y = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        y = ti.field(ti.i32, ())
+        y = qd.field(qd.i32, ())
     if rhs_is_mat:
-        z = ti.Matrix.field(3, 2, ti.i32, ())
+        z = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        z = ti.field(ti.i32, ())
+        z = qd.field(qd.i32, ())
 
     if lhs_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 3], [7, 4]], np.int32))
@@ -97,15 +97,15 @@ def test_binary_i(is_mat):
     else:
         z[None] = 5
 
-    @ti.kernel
+    @qd.kernel
     def func():
         x[0] = y[None] + z[None]
         x[1] = y[None] - z[None]
         x[2] = y[None] * z[None]
         x[3] = y[None] // z[None]
-        x[4] = ti.raw_div(y[None], z[None])
+        x[4] = qd.raw_div(y[None], z[None])
         x[5] = y[None] % z[None]
-        x[6] = ti.raw_mod(y[None], z[None])
+        x[6] = qd.raw_mod(y[None], z[None])
         x[7] = y[None] ** z[None]
         x[8] = y[None] == z[None]
         x[9] = y[None] != z[None]
@@ -116,8 +116,8 @@ def test_binary_i(is_mat):
         x[14] = y[None] & z[None]
         x[15] = y[None] ^ z[None]
         x[16] = y[None] | z[None]
-        x[17] = ti.min(y[None], z[None])
-        x[18] = ti.max(y[None], z[None])
+        x[17] = qd.min(y[None], z[None])
+        x[18] = qd.max(y[None], z[None])
         x[19] = y[None] << z[None]
 
     func()
@@ -149,12 +149,12 @@ def test_binary_i(is_mat):
 @pytest.mark.parametrize("rhs_is_mat", [True, False])
 @test_utils.test(fast_math=False)
 def test_writeback_binary_f(rhs_is_mat):
-    x = ti.Matrix.field(3, 2, ti.f32, 9)
-    y = ti.Matrix.field(3, 2, ti.f32, ())
+    x = qd.Matrix.field(3, 2, qd.f32, 9)
+    y = qd.Matrix.field(3, 2, qd.f32, ())
     if rhs_is_mat:
-        z = ti.Matrix.field(3, 2, ti.f32, ())
+        z = qd.Matrix.field(3, 2, qd.f32, ())
     else:
-        z = ti.field(ti.f32, ())
+        z = qd.field(qd.f32, ())
 
     y.from_numpy(np.array([[0, 2], [9, 3.1], [7, 4]], np.float32))
     if rhs_is_mat:
@@ -162,11 +162,11 @@ def test_writeback_binary_f(rhs_is_mat):
     else:
         z[None] = 5
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             x[i] = y[None]
-        if ti.static(rhs_is_mat):
+        if qd.static(rhs_is_mat):
             x[0] = z[None]
         else:
             x[0].fill(z[None])
@@ -176,8 +176,8 @@ def test_writeback_binary_f(rhs_is_mat):
         x[4] /= z[None]
         x[5] //= z[None]
         x[6] %= z[None]
-        ti.atomic_min(x[7], z[None])
-        ti.atomic_max(x[8], z[None])
+        qd.atomic_min(x[7], z[None])
+        qd.atomic_max(x[8], z[None])
 
     func()
     x = x.to_numpy()
@@ -196,12 +196,12 @@ def test_writeback_binary_f(rhs_is_mat):
 @pytest.mark.parametrize("rhs_is_mat", [(True, True), (True, False)])
 @test_utils.test()
 def test_writeback_binary_i(rhs_is_mat):
-    x = ti.Matrix.field(3, 2, ti.i32, 12)
-    y = ti.Matrix.field(3, 2, ti.i32, ())
+    x = qd.Matrix.field(3, 2, qd.i32, 12)
+    y = qd.Matrix.field(3, 2, qd.i32, ())
     if rhs_is_mat:
-        z = ti.Matrix.field(3, 2, ti.i32, ())
+        z = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        z = ti.field(ti.i32, ())
+        z = qd.field(qd.i32, ())
 
     y.from_numpy(np.array([[0, 2], [9, 3], [7, 4]], np.int32))
     if rhs_is_mat:
@@ -209,7 +209,7 @@ def test_writeback_binary_i(rhs_is_mat):
     else:
         z[None] = 5
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             x[i] = y[None]
@@ -222,8 +222,8 @@ def test_writeback_binary_i(rhs_is_mat):
         x[6] &= z[None]
         x[7] |= z[None]
         x[8] ^= z[None]
-        ti.atomic_min(x[10], z[None])
-        ti.atomic_max(x[11], z[None])
+        qd.atomic_min(x[10], z[None])
+        qd.atomic_max(x[11], z[None])
 
     func()
     x = x.to_numpy()
@@ -243,15 +243,15 @@ def test_writeback_binary_i(rhs_is_mat):
 
 @test_utils.test()
 def test_unary():
-    xi = ti.Matrix.field(3, 2, ti.i32, 4)
-    yi = ti.Matrix.field(3, 2, ti.i32, ())
-    xf = ti.Matrix.field(3, 2, ti.f32, 15)
-    yf = ti.Matrix.field(3, 2, ti.f32, ())
+    xi = qd.Matrix.field(3, 2, qd.i32, 4)
+    yi = qd.Matrix.field(3, 2, qd.i32, ())
+    xf = qd.Matrix.field(3, 2, qd.f32, 15)
+    yf = qd.Matrix.field(3, 2, qd.f32, ())
 
     yi.from_numpy(np.array([[3, 2], [9, 0], [7, 4]], np.int32))
     yf.from_numpy(np.array([[0.3, 0.2], [0.9, 0.1], [0.7, 0.4]], np.float32))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         xi[0] = -yi[None]
         xi[1] = ~yi[None]
@@ -259,19 +259,19 @@ def test_unary():
         xi[3] = abs(yi[None])
         xf[0] = -yf[None]
         xf[1] = abs(yf[None])
-        xf[2] = ti.sqrt(yf[None])
-        xf[3] = ti.sin(yf[None])
-        xf[4] = ti.cos(yf[None])
-        xf[5] = ti.tan(yf[None])
-        xf[6] = ti.asin(yf[None])
-        xf[7] = ti.acos(yf[None])
-        xf[8] = ti.tanh(yf[None])
-        xf[9] = ti.floor(yf[None])
-        xf[10] = ti.ceil(yf[None])
-        xf[11] = ti.exp(yf[None])
-        xf[12] = ti.log(yf[None])
-        xf[13] = ti.rsqrt(yf[None])
-        xf[14] = ti.round(yf[None])
+        xf[2] = qd.sqrt(yf[None])
+        xf[3] = qd.sin(yf[None])
+        xf[4] = qd.cos(yf[None])
+        xf[5] = qd.tan(yf[None])
+        xf[6] = qd.asin(yf[None])
+        xf[7] = qd.acos(yf[None])
+        xf[8] = qd.tanh(yf[None])
+        xf[9] = qd.floor(yf[None])
+        xf[10] = qd.ceil(yf[None])
+        xf[11] = qd.exp(yf[None])
+        xf[12] = qd.log(yf[None])
+        xf[13] = qd.rsqrt(yf[None])
+        xf[14] = qd.round(yf[None])
 
     func()
     xi = xi.to_numpy()
@@ -312,19 +312,19 @@ def test_unary():
 @test_utils.test()
 def test_ternary_i(is_mat):
     cond_is_mat, lhs_is_mat, rhs_is_mat = is_mat
-    x = ti.Matrix.field(3, 2, ti.i32, 1)
+    x = qd.Matrix.field(3, 2, qd.i32, 1)
     if cond_is_mat:
-        y = ti.Matrix.field(3, 2, ti.i32, ())
+        y = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        y = ti.field(ti.i32, ())
+        y = qd.field(qd.i32, ())
     if lhs_is_mat:
-        z = ti.Matrix.field(3, 2, ti.i32, ())
+        z = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        z = ti.field(ti.i32, ())
+        z = qd.field(qd.i32, ())
     if rhs_is_mat:
-        w = ti.Matrix.field(3, 2, ti.i32, ())
+        w = qd.Matrix.field(3, 2, qd.i32, ())
     else:
-        w = ti.field(ti.i32, ())
+        w = qd.field(qd.i32, ())
 
     if cond_is_mat:
         y.from_numpy(np.array([[0, 2], [9, 0], [7, 4]], np.int32))
@@ -339,9 +339,9 @@ def test_ternary_i(is_mat):
     else:
         w[None] = 4
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        x[0] = ti.select(y[None], z[None], w[None])
+        x[0] = qd.select(y[None], z[None], w[None])
 
     func()
     x = x.to_numpy()

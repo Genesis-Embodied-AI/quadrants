@@ -4,14 +4,14 @@ import tempfile
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.util import has_clangpp
 
 from tests import test_utils
 
 
 @pytest.mark.skipif(not has_clangpp(), reason="Clang not installed.")
-@test_utils.test(arch=[ti.x64, ti.cuda])
+@test_utils.test(arch=[qd.x64, qd.cuda])
 def test_source_builder_from_source():
     source_bc = """
     extern "C" {
@@ -28,10 +28,10 @@ def test_source_builder_from_source():
         }
     }
     """
-    sb_bc = ti.lang.source_builder.SourceBuilder.from_source(source_bc)
+    sb_bc = qd.lang.source_builder.SourceBuilder.from_source(source_bc)
 
-    @ti.kernel
-    def func_bc() -> ti.i32:
+    @qd.kernel
+    def func_bc() -> qd.i32:
         a = 2.0
         b = 3.0
         c = 0.0
@@ -47,7 +47,7 @@ def test_source_builder_from_source():
 
 
 @pytest.mark.skipif(not has_clangpp(), reason="Clang not installed.")
-@test_utils.test(arch=[ti.x64, ti.cuda])
+@test_utils.test(arch=[qd.x64, qd.cuda])
 def test_source_builder_from_file():
     source_code = """
     extern "C" {
@@ -69,10 +69,10 @@ def test_source_builder_from_file():
     fn = os.path.join(td, "source.cpp")
     with open(fn, "w") as f:
         f.write(source_code)
-    sb_bc = ti.lang.source_builder.SourceBuilder.from_file(fn)
+    sb_bc = qd.lang.source_builder.SourceBuilder.from_file(fn)
 
-    @ti.kernel
-    def func_bc() -> ti.i32:
+    @qd.kernel
+    def func_bc() -> qd.i32:
         a = 2.0
         b = 3.0
         c = 0.0

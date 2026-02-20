@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_func_closure():
     def my_test():
         a = 32
 
-        @ti.func
+        @qd.func
         def foo():
-            ti.static_assert(a == 32)
+            qd.static_assert(a == 32)
 
-        @ti.kernel
+        @qd.kernel
         def func():
-            ti.static_assert(a == 32)
+            qd.static_assert(a == 32)
             foo()
 
         def dummy():

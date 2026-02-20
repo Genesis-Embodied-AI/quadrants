@@ -1,20 +1,20 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 def with_data_type(dt):
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
 
-    ti.root.dense(ti.i, n).place(val)
+    qd.root.dense(qd.i, n).place(val)
 
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
         for i in range(n):
             arr[i] = arr[i] ** 2
 
@@ -34,15 +34,15 @@ def test_numpy_f32():
     with_data_type(np.float32)
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_numpy_f64():
     with_data_type(np.float64)
 
 
-@test_utils.test(arch=ti.metal)
+@test_utils.test(arch=qd.metal)
 def test_np_i64_metal():
-    @ti.kernel
-    def arange(x: ti.types.ndarray(ti.i64, ndim=1)):
+    @qd.kernel
+    def arange(x: qd.types.ndarray(qd.i64, ndim=1)):
         for i in x:
             x[i] = i
 
@@ -55,22 +55,22 @@ def test_numpy_i32():
     with_data_type(np.int32)
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_numpy_i64():
     with_data_type(np.int64)
 
 
 @test_utils.test()
 def test_numpy_2d():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
     m = 7
 
-    ti.root.dense(ti.i, n).dense(ti.j, m).place(val)
+    qd.root.dense(qd.i, n).dense(qd.j, m).place(val)
 
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
         for i in range(n):
             for j in range(m):
                 arr[i, j] += i + j
@@ -90,16 +90,16 @@ def test_numpy_2d():
 
 @test_utils.test()
 def test_numpy_2d_transpose():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 8
     m = 8
 
-    ti.root.dense(ti.ij, (n, m)).place(val)
+    qd.root.dense(qd.ij, (n, m)).place(val)
 
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
-        for i in ti.grouped(val):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
+        for i in qd.grouped(val):
             val[i] = arr[i]
             arr[i] = 1
 
@@ -120,16 +120,16 @@ def test_numpy_2d_transpose():
 
 @test_utils.test()
 def test_numpy_3d():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
     m = 7
     p = 11
 
-    ti.root.dense(ti.i, n).dense(ti.j, m).dense(ti.k, p).place(val)
+    qd.root.dense(qd.i, n).dense(qd.j, m).dense(qd.k, p).place(val)
 
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
         for i in range(n):
             for j in range(m):
                 for k in range(p):
@@ -152,16 +152,16 @@ def test_numpy_3d():
 
 @test_utils.test(print_full_traceback=False)
 def test_numpy_3d_error():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
     m = 7
     p = 11
 
-    ti.root.dense(ti.i, n).dense(ti.j, m).dense(ti.k, p).place(val)
+    qd.root.dense(qd.i, n).dense(qd.j, m).dense(qd.k, p).place(val)
 
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
         for i in range(n):
             for j in range(m):
                 for k in range(p):
@@ -169,7 +169,7 @@ def test_numpy_3d_error():
 
     a = np.empty(shape=(n, m, p), dtype=np.int32)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         test_numpy(a)
 
 
@@ -177,8 +177,8 @@ def test_numpy_3d_error():
 def test_numpy_multiple_external_arrays():
     n = 4
 
-    @ti.kernel
-    def test_numpy(a: ti.types.ndarray(), b: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(a: qd.types.ndarray(), b: qd.types.ndarray()):
         for i in range(n):
             a[i] = a[i] * b[i]
             b[i] = a[i] + b[i]
@@ -196,8 +196,8 @@ def test_numpy_multiple_external_arrays():
 
 @test_utils.test()
 def test_numpy_zero():
-    @ti.kernel
-    def test_numpy(arr: ti.types.ndarray()):
+    @qd.kernel
+    def test_numpy(arr: qd.types.ndarray()):
         pass
 
     test_numpy(np.empty(shape=(0), dtype=np.int32))
@@ -207,8 +207,8 @@ def test_numpy_zero():
 
 @test_utils.test()
 def test_numpy_struct_for():
-    @ti.kernel
-    def func1(a: ti.types.ndarray()):
+    @qd.kernel
+    def func1(a: qd.types.ndarray()):
         for i, j in a:
             a[i, j] = i + j
 
@@ -218,24 +218,24 @@ def test_numpy_struct_for():
         for j in range(456):
             assert m[i, j] == i + j
 
-    @ti.kernel
-    def func2(a: ti.types.ndarray()):
-        for I in ti.grouped(a):
+    @qd.kernel
+    def func2(a: qd.types.ndarray()):
+        for I in qd.grouped(a):
             a[I] = I.sum()
 
     n = np.zeros((98, 76, 54), dtype=np.int32)
     func2(n)
-    for i, j, k in ti.ndrange(98, 76, 54):
+    for i, j, k in qd.ndrange(98, 76, 54):
         assert n[i, j, k] == i + j + k
 
 
 @test_utils.test(debug=True)
 def test_numpy_op_with_matrix():
     scalar = np.cos(0)
-    vec = ti.Vector([1, 2])
-    assert isinstance(scalar + vec, ti.Matrix) and isinstance(vec + scalar, ti.Matrix)
+    vec = qd.Vector([1, 2])
+    assert isinstance(scalar + vec, qd.Matrix) and isinstance(vec + scalar, qd.Matrix)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         x = scalar + vec
         assert all(x == [2.0, 3.0])
@@ -251,17 +251,17 @@ def test_numpy_op_with_matrix():
 
 @test_utils.test(debug=True)
 def test_numpy_with_matrix():
-    x = ti.Vector.field(3, dtype=ti.f32, shape=())
+    x = qd.Vector.field(3, dtype=qd.f32, shape=())
     a = np.array([1, 2, 3], dtype=np.float32)
-    b = ti.Vector([0, a[2], 0], dt=ti.f32)
+    b = qd.Vector([0, a[2], 0], dt=qd.f32)
 
-    @ti.kernel
+    @qd.kernel
     def bar():
         foo()
 
-    @ti.func
+    @qd.func
     def foo():
-        x[None] = ti.max(x[None], b)
+        x[None] = qd.max(x[None], b)
 
     bar()
     assert (x.to_numpy() == [0.0, 3.0, 0.0]).all()
@@ -269,8 +269,8 @@ def test_numpy_with_matrix():
 
 @test_utils.test()
 def test_numpy_view():
-    @ti.kernel
-    def fill(img: ti.types.ndarray()):
+    @qd.kernel
+    def fill(img: qd.types.ndarray()):
         img[0] = 1
 
     a = np.zeros(shape=(2, 2))[:, 0]
@@ -280,14 +280,14 @@ def test_numpy_view():
 
 @test_utils.test()
 def test_numpy_ndarray_dim_check():
-    @ti.kernel
-    def add_one_mat(arr: ti.types.ndarray(dtype=ti.math.mat3, ndim=2)):
-        for i in ti.grouped(arr):
+    @qd.kernel
+    def add_one_mat(arr: qd.types.ndarray(dtype=qd.math.mat3, ndim=2)):
+        for i in qd.grouped(arr):
             arr[i] = arr[i] + 1.0
 
-    @ti.kernel
-    def add_one_scalar(arr: ti.types.ndarray(dtype=ti.f32, ndim=2)):
-        for i in ti.grouped(arr):
+    @qd.kernel
+    def add_one_scalar(arr: qd.types.ndarray(dtype=qd.f32, ndim=2)):
+        for i in qd.grouped(arr):
             arr[i] = arr[i] + 1.0
 
     a = np.zeros(shape=(2, 2, 3, 3), dtype=np.float32)
@@ -317,8 +317,8 @@ def test_numpy_ndarray_dim_check():
 
 @test_utils.test()
 def test_numpy_dtype_mismatch():
-    @ti.kernel
-    def arange(x: ti.types.ndarray(ti.i32, ndim=1)):
+    @qd.kernel
+    def arange(x: qd.types.ndarray(qd.i32, ndim=1)):
         for i in x:
             x[i] = i
 

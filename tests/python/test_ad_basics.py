@@ -3,7 +3,7 @@ import functools
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -32,13 +32,13 @@ def if_has_autograd(func):
 def grad_test(tifunc, npfunc=None):
     npfunc = npfunc or tifunc
 
-    print(f"arch={ti.lang.impl.current_cfg().arch} default_fp={ti.lang.impl.current_cfg().default_fp}")
-    x = ti.field(ti.lang.impl.current_cfg().default_fp)
-    y = ti.field(ti.lang.impl.current_cfg().default_fp)
+    print(f"arch={qd.lang.impl.current_cfg().arch} default_fp={qd.lang.impl.current_cfg().default_fp}")
+    x = qd.field(qd.lang.impl.current_cfg().default_fp)
+    y = qd.field(qd.lang.impl.current_cfg().default_fp)
 
-    ti.root.dense(ti.i, 1).place(x, x.grad, y, y.grad)
+    qd.root.dense(qd.i, 1).place(x, x.grad, y, y.grad)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             y[i] = tifunc(x[i])
@@ -57,13 +57,13 @@ def grad_test(tifunc, npfunc=None):
 def grad_test_fwd(tifunc, npfunc=None):
     npfunc = npfunc or tifunc
 
-    print(f"arch={ti.lang.impl.current_cfg().arch} default_fp={ti.lang.impl.current_cfg().default_fp}")
-    x = ti.field(ti.lang.impl.current_cfg().default_fp)
-    y = ti.field(ti.lang.impl.current_cfg().default_fp)
+    print(f"arch={qd.lang.impl.current_cfg().arch} default_fp={qd.lang.impl.current_cfg().default_fp}")
+    x = qd.field(qd.lang.impl.current_cfg().default_fp)
+    y = qd.field(qd.lang.impl.current_cfg().default_fp)
 
-    ti.root.dense(ti.i, 1).place(x, x.dual, y, y.dual)
+    qd.root.dense(qd.i, 1).place(x, x.dual, y, y.dual)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             y[i] = tifunc(x[i])
@@ -71,7 +71,7 @@ def grad_test_fwd(tifunc, npfunc=None):
     v = 0.234
 
     x[0] = v
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0]):
         func()
 
     assert y[0] == test_utils.approx(npfunc(v), rel=1e-4)
@@ -81,9 +81,9 @@ def grad_test_fwd(tifunc, npfunc=None):
 @if_has_autograd
 @test_utils.test()
 def test_size1():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
 
-    ti.root.dense(ti.i, 1).place(x)
+    qd.root.dense(qd.i, 1).place(x)
 
     x[0] = 1
     assert x[0] == 1
@@ -93,7 +93,7 @@ def test_size1():
     "tifunc",
     [
         lambda x: x,
-        lambda x: ti.abs(-x),
+        lambda x: qd.abs(-x),
         lambda x: -x,
         lambda x: x * x,
         lambda x: x**2,
@@ -114,11 +114,11 @@ def test_poly(tifunc):
 @pytest.mark.parametrize(
     "tifunc,npfunc",
     [
-        (lambda x: ti.tanh(x), lambda x: np.tanh(x)),
-        (lambda x: ti.sin(x), lambda x: np.sin(x)),
-        (lambda x: ti.cos(x), lambda x: np.cos(x)),
-        (lambda x: ti.acos(x), lambda x: np.arccos(x)),
-        (lambda x: ti.asin(x), lambda x: np.arcsin(x)),
+        (lambda x: qd.tanh(x), lambda x: np.tanh(x)),
+        (lambda x: qd.sin(x), lambda x: np.sin(x)),
+        (lambda x: qd.cos(x), lambda x: np.cos(x)),
+        (lambda x: qd.acos(x), lambda x: np.arccos(x)),
+        (lambda x: qd.asin(x), lambda x: np.arcsin(x)),
     ],
 )
 @if_has_autograd
@@ -146,10 +146,10 @@ def test_frac(tifunc):
 @pytest.mark.parametrize(
     "tifunc,npfunc",
     [
-        (lambda x: ti.sqrt(x), lambda x: np.sqrt(x)),
-        (lambda x: ti.rsqrt(x), lambda x: 1 / np.sqrt(x)),
-        (lambda x: ti.exp(x), lambda x: np.exp(x)),
-        (lambda x: ti.log(x), lambda x: np.log(x)),
+        (lambda x: qd.sqrt(x), lambda x: np.sqrt(x)),
+        (lambda x: qd.rsqrt(x), lambda x: 1 / np.sqrt(x)),
+        (lambda x: qd.exp(x), lambda x: np.exp(x)),
+        (lambda x: qd.log(x), lambda x: np.log(x)),
     ],
 )
 @if_has_autograd
@@ -162,14 +162,14 @@ def test_unary(tifunc, npfunc):
 @pytest.mark.parametrize(
     "tifunc,npfunc",
     [
-        (lambda x: ti.min(x, 0), lambda x: np.minimum(x, 0)),
-        (lambda x: ti.min(x, 1), lambda x: np.minimum(x, 1)),
-        (lambda x: ti.min(0, x), lambda x: np.minimum(0, x)),
-        (lambda x: ti.min(1, x), lambda x: np.minimum(1, x)),
-        (lambda x: ti.max(x, 0), lambda x: np.maximum(x, 0)),
-        (lambda x: ti.max(x, 1), lambda x: np.maximum(x, 1)),
-        (lambda x: ti.max(0, x), lambda x: np.maximum(0, x)),
-        (lambda x: ti.max(1, x), lambda x: np.maximum(1, x)),
+        (lambda x: qd.min(x, 0), lambda x: np.minimum(x, 0)),
+        (lambda x: qd.min(x, 1), lambda x: np.minimum(x, 1)),
+        (lambda x: qd.min(0, x), lambda x: np.minimum(0, x)),
+        (lambda x: qd.min(1, x), lambda x: np.minimum(1, x)),
+        (lambda x: qd.max(x, 0), lambda x: np.maximum(x, 0)),
+        (lambda x: qd.max(x, 1), lambda x: np.maximum(x, 1)),
+        (lambda x: qd.max(0, x), lambda x: np.maximum(0, x)),
+        (lambda x: qd.max(1, x), lambda x: np.maximum(1, x)),
     ],
 )
 @if_has_autograd
@@ -182,19 +182,19 @@ def test_minmax(tifunc, npfunc):
 @if_has_autograd
 @test_utils.test()
 def test_mod():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
-    ti.root.dense(ti.i, 1).place(x, y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, 1).place(x, y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         y[0] = x[0] % 3
 
-    @ti.kernel
+    @qd.kernel
     def func2():
-        ti.atomic_add(y[0], x[0] % 3)
+        qd.atomic_add(y[0], x[0] % 3)
 
     func()
     func.grad()
@@ -206,21 +206,21 @@ def test_mod():
 @if_has_autograd
 @test_utils.test()
 def test_mod_fwd():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x, y)
-    ti.root.lazy_dual()
+    qd.root.dense(qd.i, 1).place(x, y)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         y[0] = x[0] % 3
 
-    @ti.kernel
+    @qd.kernel
     def func2():
-        ti.atomic_add(y[0], x[0] % 3)
+        qd.atomic_add(y[0], x[0] % 3)
 
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0]):
         func()
         func2()
 
@@ -228,8 +228,8 @@ def test_mod_fwd():
 @pytest.mark.parametrize(
     "tifunc,npfunc",
     [
-        (lambda x: ti.atan2(0.4, x), lambda x: np.arctan2(0.4, x)),
-        (lambda y: ti.atan2(y, 0.4), lambda y: np.arctan2(y, 0.4)),
+        (lambda x: qd.atan2(0.4, x), lambda x: np.arctan2(0.4, x)),
+        (lambda y: qd.atan2(y, 0.4), lambda y: np.arctan2(y, 0.4)),
     ],
 )
 @if_has_autograd
@@ -242,12 +242,12 @@ def test_atan2(tifunc, npfunc):
 @pytest.mark.parametrize(
     "tifunc,npfunc",
     [
-        (lambda x: ti.atan2(0.4, x), lambda x: np.arctan2(0.4, x)),
-        (lambda y: ti.atan2(y, 0.4), lambda y: np.arctan2(y, 0.4)),
+        (lambda x: qd.atan2(0.4, x), lambda x: np.arctan2(0.4, x)),
+        (lambda y: qd.atan2(y, 0.4), lambda y: np.arctan2(y, 0.4)),
     ],
 )
 @if_has_autograd
-@test_utils.test(require=ti.extension.data64, default_fp=ti.f64)
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64)
 def test_atan2_f64(tifunc, npfunc):
     grad_test(tifunc, npfunc)
     grad_test_fwd(tifunc, npfunc)
@@ -275,7 +275,7 @@ def test_pow(tifunc, npfunc):
     ],
 )
 @if_has_autograd
-@test_utils.test(require=ti.extension.data64, default_fp=ti.f64)
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64)
 def test_pow_f64(tifunc, npfunc):
     grad_test(tifunc, npfunc)
     grad_test_fwd(tifunc, npfunc)
@@ -284,20 +284,20 @@ def test_pow_f64(tifunc, npfunc):
 @test_utils.test()
 def test_select():
     N = 5
-    loss = ti.field(ti.f32, shape=N)
-    x = ti.field(ti.f32, shape=N)
-    y = ti.field(ti.f32, shape=N)
-    ti.root.lazy_grad()
+    loss = qd.field(qd.f32, shape=N)
+    x = qd.field(qd.f32, shape=N)
+    y = qd.field(qd.f32, shape=N)
+    qd.root.lazy_grad()
 
     for i in range(N):
         x[i] = i
         y[i] = -i
         loss.grad[i] = 1.0
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
-            loss[i] += ti.select(i % 2, x[i], y[i])
+            loss[i] += qd.select(i % 2, x[i], y[i])
 
     func()
     func.grad()
@@ -313,21 +313,21 @@ def test_select():
 @test_utils.test()
 def test_select_fwd():
     N = 5
-    loss = ti.field(ti.f32, shape=N)
-    x = ti.field(ti.f32, shape=N)
-    y = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    loss = qd.field(qd.f32, shape=N)
+    x = qd.field(qd.f32, shape=N)
+    y = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
     for i in range(N):
         x[i] = i
         y[i] = -i
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
-            loss[i] = ti.select(i % 2, x[i], y[i])
+            loss[i] = qd.select(i % 2, x[i], y[i])
 
-    with ti.ad.FwdMode(loss=loss, param=x, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=loss, param=x, seed=[1.0 for _ in range(N)]):
         func()
 
     for i in range(N):
@@ -337,7 +337,7 @@ def test_select_fwd():
             assert loss[i] == -i
         assert loss.dual[i] == i % 2 * 1.0
 
-    with ti.ad.FwdMode(loss=loss, param=y, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=loss, param=y, seed=[1.0 for _ in range(N)]):
         func()
 
     for i in range(N):
@@ -350,17 +350,17 @@ def test_select_fwd():
 
 @test_utils.test()
 def test_obey_kernel_simplicity():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x, y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, 1).place(x, y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             # OK: nested for loop
-            for j in ti.static(range(3)):
+            for j in qd.static(range(3)):
                 # OK: a series of non-for-loop statements
                 y[i] += x[i] * 42
                 y[i] -= x[i] * 5
@@ -375,17 +375,17 @@ def test_obey_kernel_simplicity():
 
 @test_utils.test()
 def test_violate_kernel_simplicity1():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x, y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, 1).place(x, y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             y[i] = x[i] * 42
-            for j in ti.static(range(3)):
+            for j in qd.static(range(3)):
                 y[i] += x[i]
 
     func()
@@ -394,16 +394,16 @@ def test_violate_kernel_simplicity1():
 
 @test_utils.test()
 def test_violate_kernel_simplicity2():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x, y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, 1).place(x, y)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
-            for j in ti.static(range(3)):
+            for j in qd.static(range(3)):
                 y[i] += x[i]
             y[i] += x[i] * 42
 
@@ -411,23 +411,23 @@ def test_violate_kernel_simplicity2():
     func.grad()
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_cast():
-    @ti.kernel
+    @qd.kernel
     def func():
-        print(ti.cast(ti.cast(ti.cast(1.0, ti.f64), ti.f32), ti.f64))
+        print(qd.cast(qd.cast(qd.cast(1.0, qd.f64), qd.f32), qd.f64))
 
     func()
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_ad_precision_1():
-    loss = ti.field(ti.f32, shape=())
-    x = ti.field(ti.f64, shape=())
+    loss = qd.field(qd.f32, shape=())
+    x = qd.field(qd.f64, shape=())
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         loss[None] = x[None]
 
@@ -437,18 +437,18 @@ def test_ad_precision_1():
     assert x.grad[None] == 1
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_ad_precision_2():
-    loss = ti.field(ti.f64, shape=())
-    x = ti.field(ti.f32, shape=())
+    loss = qd.field(qd.f64, shape=())
+    x = qd.field(qd.f32, shape=())
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         loss[None] = x[None]
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         func()
 
     assert x.grad[None] == 1
@@ -456,45 +456,45 @@ def test_ad_precision_2():
 
 @test_utils.test()
 def test_ad_rand():
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    x = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def work():
-        loss[None] = x[None] * ti.random()
+        loss[None] = x[None] * qd.random()
 
     x[None] = 10
     with pytest.raises(RuntimeError) as e:
-        with ti.ad.Tape(loss):
+        with qd.ad.Tape(loss):
             work()
     assert "RandStmt not supported" in e.value.args[0]
 
 
-@test_utils.test(exclude=[ti.vulkan])
+@test_utils.test(exclude=[qd.vulkan])
 def test_ad_frac():
-    @ti.func
+    @qd.func
     def frac(x):
-        fractional = x - ti.floor(x) if x > 0.0 else x - ti.ceil(x)
+        fractional = x - qd.floor(x) if x > 0.0 else x - qd.ceil(x)
         return fractional
 
-    @ti.kernel
-    def ti_frac(input_field: ti.template(), output_field: ti.template()):
+    @qd.kernel
+    def ti_frac(input_field: qd.template(), output_field: qd.template()):
         for i in input_field:
             output_field[i] = frac(input_field[i]) ** 2
 
-    @ti.kernel
-    def calc_loss(input_field: ti.template(), loss: ti.template()):
+    @qd.kernel
+    def calc_loss(input_field: qd.template(), loss: qd.template()):
         for i in input_field:
             loss[None] += input_field[i]
 
     n = 10
-    field0 = ti.field(dtype=ti.f32, shape=(n,), needs_grad=True)
+    field0 = qd.field(dtype=qd.f32, shape=(n,), needs_grad=True)
     randoms = np.random.randn(10).astype(np.float32)
     field0.from_numpy(randoms)
-    field1 = ti.field(dtype=ti.f32, shape=(n,), needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    field1 = qd.field(dtype=qd.f32, shape=(n,), needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         ti_frac(field0, field1)
         calc_loss(field1, loss)
 
@@ -506,14 +506,14 @@ def test_ad_frac():
 
 @test_utils.test()
 def test_ad_global_store_forwarding():
-    x = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    a = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    b = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    c = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    d = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    e = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    a = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    b = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    c = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    d = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    e = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None] = x[None]
         b[None] = a[None] * 2
@@ -523,7 +523,7 @@ def test_ad_global_store_forwarding():
 
     x[None] = 1
 
-    with ti.ad.Tape(loss=e):
+    with qd.ad.Tape(loss=e):
         func()
     assert x.grad[None] == 120.0
     assert a.grad[None] == 0.0
@@ -534,27 +534,27 @@ def test_ad_global_store_forwarding():
 
 @test_utils.test()
 def test_ad_set_loss_grad():
-    x = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
-    def eval_x(x: ti.template()):
+    @qd.kernel
+    def eval_x(x: qd.template()):
         x[None] = 1.0
 
-    @ti.kernel
-    def compute_1(x: ti.template(), loss: ti.template()):
+    @qd.kernel
+    def compute_1(x: qd.template(), loss: qd.template()):
         loss[None] = x[None]
 
-    @ti.kernel
-    def compute_2(x: ti.template(), loss: ti.template()):
+    @qd.kernel
+    def compute_2(x: qd.template(), loss: qd.template()):
         loss[None] = 2 * x[None]
 
-    @ti.kernel
-    def compute_3(x: ti.template(), loss: ti.template()):
+    @qd.kernel
+    def compute_3(x: qd.template(), loss: qd.template()):
         loss[None] = 4 * x[None]
 
     eval_x(x)
-    with ti.ad.Tape(loss=loss):
+    with qd.ad.Tape(loss=loss):
         compute_1(x, loss)
         compute_2(x, loss)
         compute_3(x, loss)

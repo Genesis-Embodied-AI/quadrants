@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_matrix_non_constant_index():
-    m = ti.Matrix.field(2, 2, ti.f32, 5, needs_grad=True)
-    n = ti.Matrix.field(2, 2, ti.f32, 5, needs_grad=True)
-    loss = ti.field(ti.f32, (), needs_grad=True)
+    m = qd.Matrix.field(2, 2, qd.f32, 5, needs_grad=True)
+    n = qd.Matrix.field(2, 2, qd.f32, 5, needs_grad=True)
+    loss = qd.field(qd.f32, (), needs_grad=True)
 
     n.fill(0)
 
-    @ti.kernel
+    @qd.kernel
     def func1():
         for i in range(5):
-            for j, k in ti.ndrange(2, 2):
+            for j, k in qd.ndrange(2, 2):
                 m[i][j, k] = (j + 1) * (k + 1) * n[i][j, k]
                 loss[None] += m[i][j, k]
 

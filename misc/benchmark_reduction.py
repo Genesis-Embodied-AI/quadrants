@@ -1,25 +1,25 @@
-import quadrants as ti
+import quadrants as qd
 
 # TODO: make this a real benchmark and set up regression
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
 N = 1024 * 1024 * 1024
 
-a = ti.field(ti.i32, shape=N)
-tot = ti.field(ti.i32, shape=())
+a = qd.field(qd.i32, shape=N)
+tot = qd.field(qd.i32, shape=())
 
 
-@ti.kernel
+@qd.kernel
 def fill():
-    ti.block_dim(128)
+    qd.block_dim(128)
     for i in a:
         a[i] = i
 
 
-@ti.kernel
+@qd.kernel
 def reduce():
-    ti.block_dim(1024)
+    qd.block_dim(1024)
     for i in a:
         tot[None] += a[i]
 
@@ -32,4 +32,4 @@ for i in range(10):
 
 ground_truth = 10 * N * (N - 1) / 2 % 2**32
 assert tot[None] % 2**32 == ground_truth
-ti.print_kernel_profile_info()
+qd.print_kernel_profile_info()

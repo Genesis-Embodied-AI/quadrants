@@ -19,11 +19,11 @@ def cmul(z1, z2):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z1 = ti.math.vec2(1, 1)
-        >>>     z2 = ti.math.vec2(0, 1)
-        >>>     ti.math.cmul(z1, z2)  # [-1, 1]
+        >>>     z1 = qd.math.vec2(1, 1)
+        >>>     z2 = qd.math.vec2(0, 1)
+        >>>     qd.math.cmul(z1, z2)  # [-1, 1]
 
     Returns:
         :class:`~quadrants.math.vec2`: the complex multiplication `z1 * z2`.
@@ -61,11 +61,11 @@ def cdiv(z1, z2):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z1 = ti.math.vec2(1, 1)
-        >>>     z2 = ti.math.vec2(0, 1)
-        >>>     ti.math.cdiv(z1, z2)  # [1, -1]
+        >>>     z1 = qd.math.vec2(1, 1)
+        >>>     z2 = qd.math.vec2(0, 1)
+        >>>     qd.math.cdiv(z1, z2)  # [1, -1]
 
     Returns:
         :class:`~quadrants.math.vec2`: the complex division of `z1 / z2`.
@@ -89,10 +89,10 @@ def csqrt(z):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z = ti.math.vec2(-1, 0)
-        >>>     w = ti.math.csqrt(z)  # [0, 1]
+        >>>     z = qd.math.vec2(-1, 0)
+        >>>     w = qd.math.csqrt(z)  # [0, 1]
 
     Returns:
         :class:`~quadrants.math.vec2`: The complex square root.
@@ -115,10 +115,10 @@ def cinv(z):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z = ti.math.vec2(1, 1)
-        >>>     w = ti.math.cinv(z)  # [0.5, -0.5]
+        >>>     z = qd.math.vec2(1, 1)
+        >>>     w = qd.math.cinv(z)  # [0.5, -0.5]
 
     Returns:
         :class:`~quadrants.math.vec2`: The reciprocal of `z`.
@@ -136,10 +136,10 @@ def cpow(z, n):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z = ti.math.vec2(1, 1)
-        >>>     w = ti.math.cpow(z)  # [-2, 2]
+        >>>     z = qd.math.vec2(1, 1)
+        >>>     w = qd.math.cpow(z)  # [-2, 2]
 
     Returns:
         :class:`~quadrants.math.vec2`: The power :math:`z^a`.
@@ -164,10 +164,10 @@ def cexp(z):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z = ti.math.vec2(1, 1)
-        >>>     w = ti.math.cexp(z)  # [1.468694, 2.287355]
+        >>>     z = qd.math.vec2(1, 1)
+        >>>     w = qd.math.cexp(z)  # [1.468694, 2.287355]
 
     Returns:
         :class:`~quadrants.math.vec2`: The power :math:`exp(z)`
@@ -189,10 +189,10 @@ def clog(z):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     z = ti.math.vec2(1, 1)
-        >>>     w = ti.math.clog(z)  # [0.346574, 0.785398]
+        >>>     z = qd.math.vec2(1, 1)
+        >>>     w = qd.math.clog(z)  # [0.346574, 0.785398]
 
     Returns:
         :class:`~quadrants.math.vec2`: The logarithm of `z`.

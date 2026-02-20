@@ -1,6 +1,6 @@
 import time
 
-import quadrants as ti
+import quadrants as qd
 
 
 def template_fuse_dense_x2y2z(
@@ -8,17 +8,17 @@ def template_fuse_dense_x2y2z(
     repeat=10,
     first_n=100,
 ):
-    x = ti.field(ti.i32, shape=(size,))
-    y = ti.field(ti.i32, shape=(size,))
-    z = ti.field(ti.i32, shape=(size,))
+    x = qd.field(qd.i32, shape=(size,))
+    y = qd.field(qd.i32, shape=(size,))
+    z = qd.field(qd.i32, shape=(size,))
     first_n = min(first_n, size)
 
-    @ti.kernel
+    @qd.kernel
     def x_to_y():
         for i in x:
             y[i] = x[i] + 1
 
-    @ti.kernel
+    @qd.kernel
     def y_to_z():
         for i in x:
             z[i] = y[i] + 4
@@ -34,19 +34,19 @@ def template_fuse_dense_x2y2z(
     for _ in range(repeat):
         t = time.time()
         x_to_y()
-        ti.sync()
+        qd.sync()
         print("x_to_y", time.time() - t)
 
     for _ in range(repeat):
         t = time.time()
         y_to_z()
-        ti.sync()
+        qd.sync()
         print("y_to_z", time.time() - t)
 
     for _ in range(repeat):
         t = time.time()
         x_to_y_to_z()
-        ti.sync()
+        qd.sync()
         print("fused x->y->z", time.time() - t)
 
     for i in range(first_n):
@@ -56,34 +56,34 @@ def template_fuse_dense_x2y2z(
 
 
 def template_fuse_reduction(size=1024**3, repeat=10, first_n=100):
-    x = ti.field(ti.i32, shape=(size,))
+    x = qd.field(qd.i32, shape=(size,))
     first_n = min(first_n, size)
 
-    @ti.kernel
+    @qd.kernel
     def reset():
         for i in range(first_n):
             x[i] = i * 10
 
-    @ti.kernel
+    @qd.kernel
     def inc():
         for i in x:
             x[i] = x[i] + 1
 
     # Simply test
     reset()
-    ti.sync()
+    qd.sync()
     for _ in range(repeat):
         t = time.time()
         inc()
-        ti.sync()
+        qd.sync()
         print("single inc", time.time() - t)
 
     reset()
-    ti.sync()
+    qd.sync()
     t = time.time()
     for _ in range(repeat):
         inc()
-    ti.sync()
+    qd.sync()
     duration = time.time() - t
     print(f"fused {repeat} inc: total={duration} average={duration / repeat}")
 

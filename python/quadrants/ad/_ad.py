@@ -159,12 +159,12 @@ class Tape:
 
         Example::
 
-            >>> @ti.kernel
-            >>> def sum(a: ti.float32):
-            >>>     for I in ti.grouped(x):
+            >>> @qd.kernel
+            >>> def sum(a: qd.float32):
+            >>>     for I in qd.grouped(x):
             >>>         y[None] += x[I] ** a
             >>>
-            >>> with ti.ad.Tape(loss = y):
+            >>> with qd.ad.Tape(loss = y):
             >>>     sum(2)
         """
         self.calls = []
@@ -176,7 +176,7 @@ class Tape:
         self.runtime = impl.get_runtime()
         if not self.runtime.prog.config().debug and self.validation:
             warnings.warn(
-                "Debug mode is disabled, autodiff valid check will not work. Please specify `ti.init(debug=True)` to enable the check.",
+                "Debug mode is disabled, autodiff valid check will not work. Please specify `qd.init(debug=True)` to enable the check.",
                 Warning,
             )
         self.eval_on_exit = loss is not None
@@ -196,7 +196,7 @@ class Tape:
                 raise RuntimeError("The loss of `Tape` must be a 0-D field, i.e. scalar")
             if not self.loss.snode.ptr.has_adjoint():
                 raise RuntimeError(
-                    "Gradients of loss are not allocated, please use ti.field(..., needs_grad=True)"
+                    "Gradients of loss are not allocated, please use qd.field(..., needs_grad=True)"
                     " for all fields that are required by autodiff."
                 )
             if self.clear_gradients:
@@ -303,7 +303,7 @@ def clear_all_gradients(gradient_type=SNodeGradType.ADJOINT):
 
 def grad_replaced(func):
     """A decorator for python function to customize gradient with Quadrants's autodiff
-    system, e.g. `ti.ad.Tape()` and `kernel.grad()`.
+    system, e.g. `qd.ad.Tape()` and `kernel.grad()`.
 
     This decorator forces Quadrants's autodiff system to use a user-defined gradient
     function for the decorated function. Its customized gradient must be decorated
@@ -317,21 +317,21 @@ def grad_replaced(func):
 
     Example::
 
-        >>> @ti.kernel
-        >>> def multiply(a: ti.float32):
-        >>>     for I in ti.grouped(x):
+        >>> @qd.kernel
+        >>> def multiply(a: qd.float32):
+        >>>     for I in qd.grouped(x):
         >>>         y[I] = x[I] * a
         >>>
-        >>> @ti.kernel
-        >>> def multiply_grad(a: ti.float32):
-        >>>     for I in ti.grouped(x):
+        >>> @qd.kernel
+        >>> def multiply_grad(a: qd.float32):
+        >>>     for I in qd.grouped(x):
         >>>         x.grad[I] = y.grad[I] / a
         >>>
-        >>> @ti.ad.grad_replaced
+        >>> @qd.ad.grad_replaced
         >>> def foo(a):
         >>>     multiply(a)
         >>>
-        >>> @ti.ad.grad_for(foo)
+        >>> @qd.ad.grad_for(foo)
         >>> def foo_grad(a):
         >>>     multiply_grad(a)"""
 
@@ -366,10 +366,10 @@ def grad_for(primal):
             func(*args, **kwargs)
 
         if not hasattr(primal, "grad"):
-            raise RuntimeError(f"Primal function `{primal.__name__}` must be decorated by ti.ad.grad_replaced")
+            raise RuntimeError(f"Primal function `{primal.__name__}` must be decorated by qd.ad.grad_replaced")
         if primal.grad is not None:
             raise RuntimeError(
-                "Primal function must be a **python** function instead of a quadrants kernel. Please wrap the quadrants kernel in a @ti.ad.grad_replaced decorated python function instead."
+                "Primal function must be a **python** function instead of a quadrants kernel. Please wrap the quadrants kernel in a @qd.ad.grad_replaced decorated python function instead."
             )
         primal.grad = decorated
         return decorated
@@ -379,7 +379,7 @@ def grad_for(primal):
 
 def no_grad(func):
     """A decorator for python function to skip gradient calculation within Quadrants's
-    autodiff system, e.g. `ti.ad.Tape()` and `kernel.grad()`.
+    autodiff system, e.g. `qd.ad.Tape()` and `kernel.grad()`.
     This decorator forces Quadrants's autodiff system to use an empty gradient function
     for the decorated function.
 
@@ -391,12 +391,12 @@ def no_grad(func):
 
     Example::
 
-        >>> @ti.kernel
-        >>> def multiply(a: ti.float32):
-        >>>     for I in ti.grouped(x):
+        >>> @qd.kernel
+        >>> def multiply(a: qd.float32):
+        >>>     for I in qd.grouped(x):
         >>>         y[I] = x[I] * a
         >>>
-        >>> @ti.no_grad
+        >>> @qd.no_grad
         >>> def foo(a):
         >>>     multiply(a)"""
 
@@ -463,7 +463,7 @@ class FwdMode:
                 raise RuntimeError(
                     "`seed` is not set for non 0-D field, please specify."
                     " `seed` is a list to specify which parameters the computed derivatives respect to. The length of the `seed` should be same to that of the `parameters`"
-                    " E.g. Given a loss `loss = ti.field(float, shape=3)`, parameter `x = ti.field(float, shape=3)`"
+                    " E.g. Given a loss `loss = qd.field(float, shape=3)`, parameter `x = qd.field(float, shape=3)`"
                     "      seed = [0, 0, 1] indicates compute derivative respect to the third element of `x`."
                     "      seed = [1, 1, 1] indicates compute the sum of derivatives respect to all three element of `x`, i.e., Jacobian-vector product(Jvp) for each element in `loss`"
                 )
@@ -477,10 +477,10 @@ class FwdMode:
         # Set seed for each variable
         if len(self.seed) == 1:
             if len(self.param.shape) == 0:
-                # e.g., x= ti.field(float, shape = ())
+                # e.g., x= qd.field(float, shape = ())
                 self.param.dual[None] = 1.0 * self.seed[0]
             else:
-                # e.g., ti.root.dense(ti.i, 1).place(x.dual)
+                # e.g., qd.root.dense(qd.i, 1).place(x.dual)
                 self.param.dual[0] = 1.0 * self.seed[0]
         else:
             self.param.dual.from_numpy(np.array(self.seed, dtype=np.float32))
@@ -511,10 +511,10 @@ class FwdMode:
         # clear seed values
         if len(self.seed) == 1:
             if len(self.param.shape) == 0:
-                # e.g., x= ti.field(float, shape = ())
+                # e.g., x= qd.field(float, shape = ())
                 self.param.dual[None] = 0.0
             else:
-                # e.g., ti.root.dense(ti.i, 1).place(x.dual)
+                # e.g., qd.root.dense(qd.i, 1).place(x.dual)
                 self.param.dual[0] = 0.0
         else:
             self.param.dual.fill(0)

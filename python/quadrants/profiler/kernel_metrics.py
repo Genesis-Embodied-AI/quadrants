@@ -7,7 +7,7 @@ class CuptiMetric:
     """A class to add CUPTI metric for :class:`~quadrants.profiler.kernel_profiler.KernelProfiler`.
 
     This class is designed to add user selected CUPTI metrics.
-    Only available for the CUDA backend now, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.
+    Only available for the CUDA backend now, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.
     For usage of this class, see examples in func :func:`~quadrants.profiler.set_kernel_profiler_metrics` and :func:`~quadrants.profiler.collect_kernel_profiler_metrics`.
 
     Args:
@@ -18,32 +18,32 @@ class CuptiMetric:
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(kernel_profiler=True, arch=ti.cuda)
+        >>> qd.init(kernel_profiler=True, arch=qd.cuda)
         >>> num_elements = 128*1024*1024
 
-        >>> x = ti.field(ti.f32, shape=num_elements)
-        >>> y = ti.field(ti.f32, shape=())
+        >>> x = qd.field(qd.f32, shape=num_elements)
+        >>> y = qd.field(qd.f32, shape=())
         >>> y[None] = 0
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
         >>>         y[None] += x[i]
 
-        >>> global_op_atom = ti.profiler.CuptiMetric(
+        >>> global_op_atom = qd.profiler.CuptiMetric(
         >>>     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',
         >>>     header=' global.atom ',
         >>>     val_format='    {:8.0f} ')
 
         >>> # add and set user defined metrics
-        >>> profiling_metrics = ti.profiler.get_predefined_cupti_metrics('global_access') + [global_op_atom]
-        >>> ti.profiler.set_kernel_profile_metrics(profiling_metrics)
+        >>> profiling_metrics = qd.profiler.get_predefined_cupti_metrics('global_access') + [global_op_atom]
+        >>> qd.profiler.set_kernel_profile_metrics(profiling_metrics)
 
         >>> for i in range(16):
         >>>     reduction()
-        >>> ti.profiler.print_kernel_profiler_info('trace')
+        >>> qd.profiler.print_kernel_profiler_info('trace')
 
     Note:
         For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.
@@ -108,7 +108,7 @@ dram_write_throughput = CuptiMetric(
 # Shared Memory Metrics
 shared_utilization = CuptiMetric(
     name="l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed",
-    header=" uti.shared ",
+    header=" uqd.shared ",
     val_format="   {:6.2f} % ",
 )
 

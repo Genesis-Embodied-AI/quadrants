@@ -15,7 +15,7 @@ class QuadrantsCallable:
       like normal function pointer
     - expose attributes of the wrapped class Func, such as `_if_real_function`, `_primal`, etc
     - allow for (now limited) strong typing, and enable type checkers, such as pyright/mypy
-        - currently QuadrantsCallable is a shared type used for all functions marked with @ti.func, @ti.kernel,
+        - currently QuadrantsCallable is a shared type used for all functions marked with @qd.func, @qd.kernel,
           python functions (?)
         - note: current type-checking implementation does not distinguish between different type flavors of
           QuadrantsCallable, with different values of `_if_real_function`, `_primal`, etc
@@ -25,42 +25,42 @@ class QuadrantsCallable:
     Let's take the following example:
 
     def test_ptr_class_func():
-    @ti.data_oriented
+    @qd.data_oriented
     class MyClass:
         def __init__(self):
-            self.a = ti.field(dtype=ti.f32, shape=(3))
+            self.a = qd.field(dtype=qd.f32, shape=(3))
 
         def add2numbers_py(self, x, y):
             return x + y
 
-        @ti.func
+        @qd.func
         def add2numbers_func(self, x, y):
             return x + y
 
-        @ti.kernel
+        @qd.kernel
         def func(self):
-            a, add_py, add_func = ti.static(self.a, self.add2numbers_py, self.add2numbers_func)
+            a, add_py, add_func = qd.static(self.a, self.add2numbers_py, self.add2numbers_func)
             a[0] = add_py(2, 3)
             a[1] = add_func(3, 7)
 
     (taken from test_ptr_assign.py).
 
-    When the @ti.func decorator is parsed, the function `add2numbers_func` exists, but there is not yet any `self`
+    When the @qd.func decorator is parsed, the function `add2numbers_func` exists, but there is not yet any `self`
     - it is not possible for the method to be bound, to a `self` instance
-    - however, the @ti.func annotation, runs the kernel_imp.py::func function --- it is at this point
+    - however, the @qd.func annotation, runs the kernel_imp.py::func function --- it is at this point
       that Quadrants's original code creates a class Func instance (that wraps the add2numbers_func)
       and immediately we create a QuadrantsCallable instance that wraps the Func instance.
     - effectively, we have two layers of wrapping QuadrantsCallable->Func->function pointer
       (actual function definition)
     - later on, when we call self.add2numbers_py, here:
 
-            a, add_py, add_func = ti.static(self.a, self.add2numbers_py, self.add2numbers_func)
+            a, add_py, add_func = qd.static(self.a, self.add2numbers_py, self.add2numbers_func)
 
       ... we want to call the bound method, `self.add2numbers_py`.
     - an actual python function reference, created by doing somevar = MyClass.add2numbers, can automatically
       binds to self, when called from self in this way (however, add2numbers_py is actually a class
       Func instance, wrapping python function reference -- now also all wrapped by a QuadrantsCallable
-      instance -- returned by the kernel_impl.py::func function, run by @ti.func)
+      instance -- returned by the kernel_impl.py::func function, run by @qd.func)
     - however, in order to be able to add strongly typed attributes to the wrapped python function, we need
       to wrap the wrapped python function in a class
     - the wrapped python function, wrapped in a QuadrantsCallable class (which is callable, and will

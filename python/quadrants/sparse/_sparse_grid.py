@@ -16,19 +16,19 @@ def grid(field_dict, shape):
         field_dict (dict): a dict, each item is like `name: type`.
         shape (Tuple[int]): shape of the field.
     Returns:
-        x: the created sparse grid, which is a bitmasked `ti.Struct.field`.
+        x: the created sparse grid, which is a bitmasked `qd.Struct.field`.
 
     Examples::
         # create a 2D sparse grid
-        >>> grid = ti.sparse.grid({'pos': ti.math.vec2, 'mass': ti.f32, 'grid2particles': ti.types.vector(20, ti.i32)}, shape=(10, 10))
+        >>> grid = qd.sparse.grid({'pos': qd.math.vec2, 'mass': qd.f32, 'grid2particles': qd.types.vector(20, qd.i32)}, shape=(10, 10))
 
         # access
-        >>> grid[0, 0].pos = ti.math.vec2(1.0, 2.0)
+        >>> grid[0, 0].pos = qd.math.vec2(1.0, 2.0)
         >>> grid[0, 0].mass = 1.0
         >>> grid[0, 0].grid2particles[2] = 123
 
         # print the usage of the sparse grid, which is in [0,1]
-        >>> print(ti.sparse.usage(grid))
+        >>> print(qd.sparse.usage(grid))
         # 0.009999999776482582
     """
     x = Struct.field(field_dict)
@@ -54,9 +54,9 @@ def usage(x: template()) -> f32:
         usage(f32): the usage of the sparse grid, which is in [0,1]
 
     Examples::
-        >>> grid = ti.sparse.grid({'pos': ti.math.vec2, 'mass': ti.f32, 'grid2particles': ti.types.vector(20, ti.i32)}, shape=(10, 10))
+        >>> grid = qd.sparse.grid({'pos': qd.math.vec2, 'mass': qd.f32, 'grid2particles': qd.types.vector(20, qd.i32)}, shape=(10, 10))
         >>> grid[0, 0].mass = 1.0
-        >>> print(ti.sparse.usage(grid))
+        >>> print(qd.sparse.usage(grid))
         # 0.009999999776482582
     """
     cnt = 0

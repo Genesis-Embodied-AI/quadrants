@@ -6,22 +6,22 @@ SSA violation edge-case regression test.
 
 import math
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_matrix_self_assign():
-    a = ti.Vector.field(2, ti.f32, ())
-    b = ti.Matrix.field(2, 2, ti.f32, ())
-    c = ti.Vector.field(2, ti.f32, ())
+    a = qd.Vector.field(2, qd.f32, ())
+    b = qd.Matrix.field(2, 2, qd.f32, ())
+    c = qd.Vector.field(2, qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None] = a[None].normalized()
         b[None] = b[None].transpose()
-        c[None] = ti.Vector([c[None][1], c[None][0]])
+        c[None] = qd.Vector([c[None][1], c[None][0]])
 
     inv_sqrt2 = 1 / math.sqrt(2)
 
@@ -29,18 +29,18 @@ def test_matrix_self_assign():
     b[None] = [[1, 2], [3, 4]]
     c[None] = [2, 3]
     func()
-    assert a[None] == ti.Vector([inv_sqrt2, inv_sqrt2])
-    assert b[None] == ti.Matrix([[1, 3], [2, 4]])
-    assert c[None] == ti.Vector([3, 2])
+    assert a[None] == qd.Vector([inv_sqrt2, inv_sqrt2])
+    assert b[None] == qd.Matrix([[1, 3], [2, 4]])
+    assert c[None] == qd.Vector([3, 2])
 
 
 @test_utils.test()
 def test_random_vector_dup_eval():
-    a = ti.Vector.field(2, ti.f32, ())
+    a = qd.Vector.field(2, qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        a[None] = ti.Vector([ti.random(), 1]).normalized()
+        a[None] = qd.Vector([qd.random(), 1]).normalized()
 
     for i in range(4):
         func()
@@ -49,13 +49,13 @@ def test_random_vector_dup_eval():
 
 @test_utils.test()
 def test_func_argument_dup_eval():
-    @ti.func
+    @qd.func
     def func(a, t):
         return a * t - a
 
-    @ti.kernel
-    def kern(t: ti.f32) -> ti.f32:
-        return func(ti.random(), t)
+    @qd.kernel
+    def kern(t: qd.f32) -> qd.f32:
+        return func(qd.random(), t)
 
     for i in range(4):
         assert kern(1.0) == 0.0
@@ -63,13 +63,13 @@ def test_func_argument_dup_eval():
 
 @test_utils.test()
 def test_func_random_argument_dup_eval():
-    @ti.func
+    @qd.func
     def func(a):
-        return ti.Vector([ti.cos(a), ti.sin(a)])
+        return qd.Vector([qd.cos(a), qd.sin(a)])
 
-    @ti.kernel
-    def kern() -> ti.f32:
-        return func(ti.random()).norm_sqr()
+    @qd.kernel
+    def kern() -> qd.f32:
+        return func(qd.random()).norm_sqr()
 
     for i in range(4):
         assert kern() == test_utils.approx(1.0, rel=5e-5)

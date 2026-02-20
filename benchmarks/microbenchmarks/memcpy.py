@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import Container, DataSize, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -6,14 +6,14 @@ from microbenchmarks._utils import dtype_size, fill_random, scaled_repeat_times
 
 
 def memcpy_default(arch, repeat, container, dtype, dsize, get_metric):
-    @ti.kernel
-    def memcpy_field(dst: ti.template(), src: ti.template()):
-        for I in ti.grouped(dst):
+    @qd.kernel
+    def memcpy_field(dst: qd.template(), src: qd.template()):
+        for I in qd.grouped(dst):
             dst[I] = src[I]
 
-    @ti.kernel
-    def memcpy_array(dst: ti.types.ndarray(), src: ti.types.ndarray()):
-        for I in ti.grouped(dst):
+    @qd.kernel
+    def memcpy_array(dst: qd.types.ndarray(), src: qd.types.ndarray()):
+        for I in qd.grouped(dst):
             dst[I] = src[I]
 
     repeat = scaled_repeat_times(arch, dsize, repeat)
@@ -22,7 +22,7 @@ def memcpy_default(arch, repeat, container, dtype, dsize, get_metric):
     x = container(dtype, num_elements)
     y = container(dtype, num_elements)
 
-    func = memcpy_field if container == ti.field else memcpy_array
+    func = memcpy_field if container == qd.field else memcpy_array
     fill_random(x, dtype, container)
     return get_metric(repeat, func, y, x)
 

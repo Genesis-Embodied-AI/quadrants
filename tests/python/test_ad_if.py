@@ -1,18 +1,18 @@
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if_simple():
-    x = ti.field(ti.f32, shape=())
-    y = ti.field(ti.f32, shape=())
+    x = qd.field(qd.f32, shape=())
+    y = qd.field(qd.f32, shape=())
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         if x[None] > 0.0:
             y[None] = x[None]
@@ -26,15 +26,15 @@ def test_ad_if_simple():
     assert x.grad[None] == 1
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
-    def func(i: ti.i32):
+    @qd.kernel
+    def func(i: qd.i32):
         if x[i] > 0:
             y[i] = x[i]
         else:
@@ -54,16 +54,16 @@ def test_ad_if():
     assert x.grad[1] == 1
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if_nested():
     n = 20
-    x = ti.field(ti.f32, shape=n)
-    y = ti.field(ti.f32, shape=n)
-    z = ti.field(ti.f32, shape=n)
+    x = qd.field(qd.f32, shape=n)
+    y = qd.field(qd.f32, shape=n)
+    z = qd.field(qd.f32, shape=n)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             if x[i] < 2:
@@ -92,15 +92,15 @@ def test_ad_if_nested():
         assert z.grad[i] == i % 4
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if_mutable():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
-    def func(i: ti.i32):
+    @qd.kernel
+    def func(i: qd.i32):
         t = x[i]
         if t > 0:
             y[i] = t
@@ -121,14 +121,14 @@ def test_ad_if_mutable():
     assert x.grad[1] == 1
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if_parallel():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(2):
             t = x[i]
@@ -149,14 +149,14 @@ def test_ad_if_parallel():
     assert x.grad[1] == 1
 
 
-@test_utils.test(require=[ti.extension.adstack, ti.extension.data64], default_fp=ti.f64)
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_ad_if_parallel_f64():
-    x = ti.field(ti.f64, shape=2)
-    y = ti.field(ti.f64, shape=2)
+    x = qd.field(qd.f64, shape=2)
+    y = qd.field(qd.f64, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(2):
             t = x[i]
@@ -177,16 +177,16 @@ def test_ad_if_parallel_f64():
     assert x.grad[1] == 1
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_if_parallel_complex():
-    x = ti.field(ti.f32, shape=2)
-    y = ti.field(ti.f32, shape=2)
+    x = qd.field(qd.f32, shape=2)
+    y = qd.field(qd.f32, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(parallelize=1)
+        qd.loop_config(parallelize=1)
         for i in range(2):
             t = 0.0
             if x[i] > 0:
@@ -205,16 +205,16 @@ def test_ad_if_parallel_complex():
     assert x.grad[1] == -0.25
 
 
-@test_utils.test(require=[ti.extension.adstack, ti.extension.data64], default_fp=ti.f64)
+@test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_ad_if_parallel_complex_f64():
-    x = ti.field(ti.f64, shape=2)
-    y = ti.field(ti.f64, shape=2)
+    x = qd.field(qd.f64, shape=2)
+    y = qd.field(qd.f64, shape=2)
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(parallelize=1)
+        qd.loop_config(parallelize=1)
         for i in range(2):
             t = 0.0
             if x[i] > 0:
@@ -235,39 +235,39 @@ def test_ad_if_parallel_complex_f64():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_stack():
-    @ti.kernel
+    @qd.kernel
     def func():
         impl.call_internal("test_stack")
 
     func()
 
 
-@test_utils.test(require=[ti.extension.adstack])
+@test_utils.test(require=[qd.extension.adstack])
 def test_if_condition_depend_on_for_loop_index():
-    scalar = lambda: ti.field(dtype=ti.f32)
-    vec = lambda: ti.Vector.field(3, dtype=ti.f32)
+    scalar = lambda: qd.field(dtype=qd.f32)
+    vec = lambda: qd.Vector.field(3, dtype=qd.f32)
 
     pos = vec()
     F = vec()
     f_bend = scalar()
     loss_n = scalar()
-    ti.root.dense(ti.ij, (10, 10)).place(pos, F)
-    ti.root.dense(ti.i, 1).place(f_bend)
-    ti.root.place(loss_n)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.ij, (10, 10)).place(pos, F)
+    qd.root.dense(qd.i, 1).place(f_bend)
+    qd.root.place(loss_n)
+    qd.root.lazy_grad()
 
-    @ti.kernel
-    def simulation(t: ti.i32):
+    @qd.kernel
+    def simulation(t: qd.i32):
         for i, j in pos:
-            coord = ti.Vector([i, j])
+            coord = qd.Vector([i, j])
             for n in range(12):
-                f = ti.Vector([0.0, 0.0, 0.0])
+                f = qd.Vector([0.0, 0.0, 0.0])
                 if n < 4:
-                    f = ti.Vector([1.0, 1.0, 1.0])
+                    f = qd.Vector([1.0, 1.0, 1.0])
                 else:
                     f = f_bend[0] * pos[coord]
                 F[coord] += f
             pos[coord] += 1.0 * t
 
-    with ti.ad.Tape(loss=loss_n):
+    with qd.ad.Tape(loss=loss_n):
         simulation(5)

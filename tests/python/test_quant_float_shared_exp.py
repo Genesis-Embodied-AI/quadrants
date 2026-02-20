@@ -1,23 +1,23 @@
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @pytest.mark.parametrize("exponent_bits", [5, 6, 7, 8])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_shared_exponents(exponent_bits):
     if exponent_bits == 8:
         pytest.skip("quant with exponent bits fails currently. Reason unclear. TODO: fixme")
-    qflt1 = ti.types.quant.float(exp=exponent_bits, frac=10, signed=False)
-    qflt2 = ti.types.quant.float(exp=exponent_bits, frac=14, signed=False)
-    a = ti.field(dtype=qflt1)
-    b = ti.field(dtype=qflt2)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    qflt1 = qd.types.quant.float(exp=exponent_bits, frac=10, signed=False)
+    qflt2 = qd.types.quant.float(exp=exponent_bits, frac=14, signed=False)
+    a = qd.field(dtype=qflt1)
+    b = qd.field(dtype=qflt2)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(a, b, shared_exponent=True)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     assert a[None] == 0.0
     assert b[None] == 0.0
@@ -30,8 +30,8 @@ def test_shared_exponents(exponent_bits):
     assert a[None] == 0.0
     assert b[None] == 0.0
 
-    @ti.kernel
-    def foo(x: ti.f32, y: ti.f32):
+    @qd.kernel
+    def foo(x: qd.f32, y: qd.f32):
         a[None] = x
         b[None] = y
 
@@ -74,20 +74,20 @@ def test_shared_exponents(exponent_bits):
 
 
 @pytest.mark.parametrize("exponent_bits", [5, 6, 7, 8])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_shared_exponent_add(exponent_bits):
     if exponent_bits == 8:
         pytest.skip("quant with exponent bits fails currently. Reason unclear. TODO: fixme")
-    qflt1 = ti.types.quant.float(exp=exponent_bits, frac=10, signed=False)
-    qflt2 = ti.types.quant.float(exp=exponent_bits, frac=14, signed=False)
-    a = ti.field(dtype=qflt1)
-    b = ti.field(dtype=qflt2)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    qflt1 = qd.types.quant.float(exp=exponent_bits, frac=10, signed=False)
+    qflt2 = qd.types.quant.float(exp=exponent_bits, frac=14, signed=False)
+    a = qd.field(dtype=qflt1)
+    b = qd.field(dtype=qflt2)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(a, b, shared_exponent=True)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
-    @ti.kernel
-    def foo(x: ti.f32, y: ti.f32):
+    @qd.kernel
+    def foo(x: qd.f32, y: qd.f32):
         a[None] = x
         b[None] = y
 
@@ -111,20 +111,20 @@ def test_shared_exponent_add(exponent_bits):
 
 
 @pytest.mark.parametrize("exponent_bits", [5, 6, 7, 8])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_shared_exponent_borrow(exponent_bits):
     if exponent_bits == 8:
         pytest.skip("quant with exponent bits fails currently. Reason unclear. TODO: fixme")
-    qflt1 = ti.types.quant.float(exp=exponent_bits, frac=10, signed=False)
-    qflt2 = ti.types.quant.float(exp=exponent_bits, frac=14, signed=False)
-    a = ti.field(dtype=qflt1)
-    b = ti.field(dtype=qflt2)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    qflt1 = qd.types.quant.float(exp=exponent_bits, frac=10, signed=False)
+    qflt2 = qd.types.quant.float(exp=exponent_bits, frac=14, signed=False)
+    a = qd.field(dtype=qflt1)
+    b = qd.field(dtype=qflt2)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(a, b, shared_exponent=True)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
-    @ti.kernel
-    def foo(x: ti.f32, y: ti.f32):
+    @qd.kernel
+    def foo(x: qd.f32, y: qd.f32):
         a[None] = x
         b[None] = y
 
@@ -141,17 +141,17 @@ def test_shared_exponent_borrow(exponent_bits):
 
 
 @pytest.mark.parametrize("exponent_bits", [5, 6, 7, 8])
-@test_utils.test(require=ti.extension.quant)
+@test_utils.test(require=qd.extension.quant)
 def test_shared_exponent_negative(exponent_bits):
     if exponent_bits == 8:
         pytest.skip("quant with exponent bits fails currently. Reason unclear. TODO: fixme")
-    qflt1 = ti.types.quant.float(exp=exponent_bits, frac=10, signed=False)
-    qflt2 = ti.types.quant.float(exp=exponent_bits, frac=14, signed=True)
-    a = ti.field(dtype=qflt1)
-    b = ti.field(dtype=qflt2)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    qflt1 = qd.types.quant.float(exp=exponent_bits, frac=10, signed=False)
+    qflt2 = qd.types.quant.float(exp=exponent_bits, frac=14, signed=True)
+    a = qd.field(dtype=qflt1)
+    b = qd.field(dtype=qflt2)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(a, b, shared_exponent=True)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
     a[None] = 37
     assert a[None] == 37

@@ -109,9 +109,9 @@ class CPPTestItem(pytest.Item):
         self.args = args
 
     def runtest(self):
-        import quadrants as ti
+        import quadrants as qd
 
-        ti_lib_dir = Path(ti.__path__[0]) / "_lib" / "runtime"
+        ti_lib_dir = Path(qd.__path__[0]) / "_lib" / "runtime"
 
         with tempfile.TemporaryDirectory(prefix="ti-cpp-tests-") as tmpdir:
             try:

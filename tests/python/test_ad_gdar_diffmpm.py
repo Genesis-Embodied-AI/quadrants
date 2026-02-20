@@ -1,13 +1,13 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True)
 def test_gdar_mpm():
-    real = ti.f32
+    real = qd.f32
 
     dim = 2
     N = 30  # reduce to 30 if run out of GPU memory
@@ -26,52 +26,52 @@ def test_gdar_mpm():
     gravity = 9.8
     target = [0.3, 0.6]
 
-    scalar = lambda: ti.field(dtype=real)
-    vec = lambda: ti.Vector.field(dim, dtype=real)
-    mat = lambda: ti.Matrix.field(dim, dim, dtype=real)
+    scalar = lambda: qd.field(dtype=real)
+    vec = lambda: qd.Vector.field(dim, dtype=real)
+    mat = lambda: qd.Matrix.field(dim, dim, dtype=real)
 
-    x = ti.Vector.field(dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
-    x_avg = ti.Vector.field(dim, dtype=real, shape=(), needs_grad=True)
-    v = ti.Vector.field(dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
-    grid_v_in = ti.Vector.field(dim, dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
-    grid_v_out = ti.Vector.field(dim, dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
-    grid_m_in = ti.field(dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
-    C = ti.Matrix.field(dim, dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
-    F = ti.Matrix.field(dim, dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
-    init_v = ti.Vector.field(dim, dtype=real, shape=(), needs_grad=True)
-    loss = ti.field(dtype=real, shape=(), needs_grad=True)
+    x = qd.Vector.field(dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
+    x_avg = qd.Vector.field(dim, dtype=real, shape=(), needs_grad=True)
+    v = qd.Vector.field(dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
+    grid_v_in = qd.Vector.field(dim, dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
+    grid_v_out = qd.Vector.field(dim, dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
+    grid_m_in = qd.field(dtype=real, shape=(max_steps, n_grid, n_grid), needs_grad=True)
+    C = qd.Matrix.field(dim, dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
+    F = qd.Matrix.field(dim, dim, dtype=real, shape=(max_steps, n_particles), needs_grad=True)
+    init_v = qd.Vector.field(dim, dtype=real, shape=(), needs_grad=True)
+    loss = qd.field(dtype=real, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def set_v():
         for i in range(n_particles):
             v[0, i] = init_v[None]
 
-    @ti.kernel
-    def p2g(f: ti.i32):
+    @qd.kernel
+    def p2g(f: qd.i32):
         for p in range(n_particles):
-            base = ti.cast(x[f, p] * inv_dx - 0.5, ti.i32)
-            fx = x[f, p] * inv_dx - ti.cast(base, ti.i32)
+            base = qd.cast(x[f, p] * inv_dx - 0.5, qd.i32)
+            fx = x[f, p] * inv_dx - qd.cast(base, qd.i32)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
-            new_F = (ti.Matrix.diag(dim=2, val=1) + dt * C[f, p]) @ F[f, p]
+            new_F = (qd.Matrix.diag(dim=2, val=1) + dt * C[f, p]) @ F[f, p]
             F[f + 1, p] = new_F
             J = (new_F).determinant()
-            r, s = ti.polar_decompose(new_F)
-            cauchy = 2 * mu * (new_F - r) @ new_F.transpose() + ti.Matrix.diag(2, la * (J - 1) * J)
+            r, s = qd.polar_decompose(new_F)
+            cauchy = 2 * mu * (new_F - r) @ new_F.transpose() + qd.Matrix.diag(2, la * (J - 1) * J)
             stress = -(dt * p_vol * 4 * inv_dx * inv_dx) * cauchy
             affine = stress + p_mass * C[f, p]
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    offset = ti.Vector([i, j])
-                    dpos = (ti.cast(ti.Vector([i, j]), real) - fx) * dx
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    offset = qd.Vector([i, j])
+                    dpos = (qd.cast(qd.Vector([i, j]), real) - fx) * dx
                     weight = w[i][0] * w[j][1]
                     grid_v_in[f, base + offset] += weight * (p_mass * v[f, p] + affine @ dpos)
                     grid_m_in[f, base + offset] += weight * p_mass
 
     bound = 3
 
-    @ti.kernel
-    def grid_op(f: ti.i32):
-        for i, j in ti.ndrange(n_grid, n_grid):
+    @qd.kernel
+    def grid_op(f: qd.i32):
+        for i, j in qd.ndrange(n_grid, n_grid):
             inv_m = 1 / (grid_m_in[f, i, j] + 1e-10)
             v_out = inv_m * grid_v_in[f, i, j]
             v_out[1] -= dt * gravity
@@ -85,18 +85,18 @@ def test_gdar_mpm():
                 v_out[1] = 0
             grid_v_out[f, i, j] = v_out
 
-    @ti.kernel
-    def g2p(f: ti.i32):
+    @qd.kernel
+    def g2p(f: qd.i32):
         for p in range(n_particles):
-            base = ti.cast(x[f, p] * inv_dx - 0.5, ti.i32)
-            fx = x[f, p] * inv_dx - ti.cast(base, real)
+            base = qd.cast(x[f, p] * inv_dx - 0.5, qd.i32)
+            fx = x[f, p] * inv_dx - qd.cast(base, real)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
-            new_v = ti.Vector([0.0, 0.0])
-            new_C = ti.Matrix([[0.0, 0.0], [0.0, 0.0]])
+            new_v = qd.Vector([0.0, 0.0])
+            new_C = qd.Matrix([[0.0, 0.0], [0.0, 0.0]])
 
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    dpos = ti.cast(ti.Vector([i, j]), real) - fx
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    dpos = qd.cast(qd.Vector([i, j]), real) - fx
                     g_v = grid_v_out[f, base[0] + i, base[1] + j]
                     weight = w[i][0] * w[j][1]
                     new_v += weight * g_v
@@ -107,14 +107,14 @@ def test_gdar_mpm():
             x[f + 1, p] = x[f, p] + dt * v[f, p]
             C[f + 1, p] = new_C
 
-    @ti.kernel
+    @qd.kernel
     def compute_x_avg():
         for i in range(n_particles):
             x_avg[None] += (1 / n_particles) * x[steps - 1, i]
 
-    @ti.kernel
+    @qd.kernel
     def compute_loss():
-        dist = (x_avg[None] - ti.Vector(target)) ** 2
+        dist = (x_avg[None] - qd.Vector(target)) ** 2
         loss[None] = 0.5 * (dist(0) + dist(1))
 
     def substep(s):
@@ -142,8 +142,8 @@ def test_gdar_mpm():
 
         x_avg[None] = [0, 0]
 
-        with pytest.raises(ti.QuadrantsAssertionError):
-            with ti.ad.Tape(loss=loss, validation=True):
+        with pytest.raises(qd.QuadrantsAssertionError):
+            with qd.ad.Tape(loss=loss, validation=True):
                 set_v()
                 for s in range(steps - 1):
                     substep(s)

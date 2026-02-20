@@ -67,7 +67,7 @@ def stringify_obj_type(
 
     arg_meta should only be non-None for the top level arguments and for data oriented objects. It is
     used currently to determine whether a value is added to the cache key, as well as the name. eg
-    - at the top level, primitive types have their values added to the cache key if their annotation is ti.Template,
+    - at the top level, primitive types have their values added to the cache key if their annotation is qd.Template,
       since they are baked into the kernel
     - in data oriented objects, the values of all primitive types are added to the cache key, since they are baked
       into the kernel, and require a kernel recompilation, when they change
@@ -108,7 +108,7 @@ def stringify_obj_type(
             _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
             if _child_repr is None:
                 _logging.warn(
-                    f"""A kernel that has been marked as eligible for fast cache was passed 1 or more parameters that are not, in fact, eligible for fast cache: one of the parameters was a @ti.data_oriented objects, and one of its children was not eligible.
+                    f"""A kernel that has been marked as eligible for fast cache was passed 1 or more parameters that are not, in fact, eligible for fast cache: one of the parameters was a @qd.data_oriented objects, and one of its children was not eligible.
 The data oriented object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For information, the path of the value was {path}."""
                 )
                 return None

@@ -40,7 +40,7 @@ class _Ndrange:
         self.acc_dimensions = self.dimensions.copy()
         for i in reversed(range(len(self.bounds) - 1)):
             self.acc_dimensions[i] = self.acc_dimensions[i] * self.acc_dimensions[i + 1]
-        if len(self.acc_dimensions) == 0:  # for the empty case, e.g. ti.ndrange()
+        if len(self.acc_dimensions) == 0:  # for the empty case, e.g. qd.ndrange()
             self.acc_dimensions = [1]
 
     def __iter__(self):
@@ -81,11 +81,11 @@ def ndrange(*args) -> Iterable:
 
         You can loop over 1-D integers in range [start, end), as in native Python
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def loop_1d():
             >>>     start = 2
             >>>     end = 5
-            >>>     for i in ti.ndrange((start, end)):
+            >>>     for i in qd.ndrange((start, end)):
             >>>         print(i)  # will print 2 3 4
 
         Note the braces around `(start, end)` in the above code. If without them,
@@ -93,9 +93,9 @@ def ndrange(*args) -> Iterable:
         interpreted as `range(0, 5)`, and you will get a set of 2-D indices which
         contains 2x5=10 elements, and need two indices i, j to loop over them:
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def loop_2d():
-            >>>     for i, j in ti.ndrange(2, 5):
+            >>>     for i, j in qd.ndrange(2, 5):
             >>>         print(i, j)
             0 0
             ...
@@ -106,9 +106,9 @@ def ndrange(*args) -> Iterable:
         But you do can use a single index i to loop over these 2-D indices, in this case
         the indices are returned as a 1-D array `(0, 1, ..., 9)`:
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def loop_2d_as_1d():
-            >>>     for i in ti.ndrange(2, 5):
+            >>>     for i in qd.ndrange(2, 5):
             >>>         print(i)
             will print 0 1 2 3 4 5 6 7 8 9
 
@@ -118,12 +118,12 @@ def ndrange(*args) -> Iterable:
         a 1-D array of consecutive integers `(0, 1, 2, ...)` whose length equals the
         total number of indices in the last n-k+1 dimensions:
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def loop_3d_as_2d():
             >>>     # use two iterators to loop over a set of 3-D indices
             >>>     # the last two dimensions for 4, 5 will collapse into
             >>>     # the array [0, 1, 2, ..., 19]
-            >>>     for i, j in ti.ndrange(3, 4, 5):
+            >>>     for i, j in qd.ndrange(3, 4, 5):
             >>>         print(i, j)
             will print 0 0, 0 1, ..., 0 19, ..., 2 19.
 
@@ -132,9 +132,9 @@ def ndrange(*args) -> Iterable:
         only top level `for` loops are paralleled in quadrants, instead you can use `ndrange`
         to hold all entries in one top level loop:
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def loop_tensor():
-            >>>     for row, col, channel in ti.ndrange(image_height, image_width, channels):
+            >>>     for row, col, channel in qd.ndrange(image_height, image_width, channels):
             >>>         image[row, col, channel] = ...
     """
     return _Ndrange(*args)

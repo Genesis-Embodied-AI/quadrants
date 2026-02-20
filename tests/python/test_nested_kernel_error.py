@@ -1,19 +1,19 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_nested_kernel_error():
-    @ti.kernel
+    @qd.kernel
     def B():
         pass
 
-    @ti.kernel
+    @qd.kernel
     def A():
         B()
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         A()

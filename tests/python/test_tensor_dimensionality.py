@@ -1,19 +1,19 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@pytest.mark.parametrize("d", range(2, ti._lib.core.get_max_num_indices() + 1))
+@pytest.mark.parametrize("d", range(2, qd._lib.core.get_max_num_indices() + 1))
 @test_utils.test()
 def test_dimensionality(d):
-    x = ti.Vector.field(2, dtype=ti.i32, shape=(2,) * d)
+    x = qd.Vector.field(2, dtype=qd.i32, shape=(2,) * d)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
-        for I in ti.grouped(x):
-            x[I] += ti.Vector([I.sum(), I[0]])
+        for I in qd.grouped(x):
+            x[I] += qd.Vector([I.sum(), I[0]])
 
     for i in range(2**d):
         indices = []

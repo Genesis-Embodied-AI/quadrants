@@ -160,7 +160,7 @@ class Field:
         if not isinstance(other, Field):
             raise TypeError("Cannot copy from a non-field object")
         if self.shape != other.shape:
-            raise ValueError(f"ti.field shape {self.shape} does not match" f" the source field shape {other.shape}")
+            raise ValueError(f"qd.field shape {self.shape} does not match" f" the source field shape {other.shape}")
         from quadrants._kernels import tensor_to_tensor  # pylint: disable=C0415
 
         tensor_to_tensor(self, other)
@@ -187,7 +187,7 @@ class Field:
             key = (key,)
 
         if len(key) != len(self.shape):
-            raise AssertionError("Slicing is not supported on ti.field")
+            raise AssertionError("Slicing is not supported on qd.field")
 
         return key + ((0,) * (_ti_core.get_max_num_indices() - len(key)))  # type: ignore
 
@@ -216,7 +216,7 @@ class ScalarField(Field):
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling ti.sync() between modifying the field, and
+        Note: caller is responsible for calling qd.sync() between modifying the field, and
         reading it.
         """
         impl.get_runtime().materialize()
@@ -271,10 +271,10 @@ class ScalarField(Field):
     @python_scope
     def _from_external_arr(self, arr):
         if len(self.shape) != len(arr.shape):
-            raise ValueError(f"ti.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
+            raise ValueError(f"qd.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
         for i, _ in enumerate(self.shape):
             if self.shape[i] != arr.shape[i]:
-                raise ValueError(f"ti.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
+                raise ValueError(f"qd.field shape {self.shape} does not match" f" the numpy array shape {arr.shape}")
         from quadrants._kernels import ext_arr_to_tensor  # pylint: disable=C0415
 
         ext_arr_to_tensor(arr, self)
@@ -307,13 +307,13 @@ class ScalarField(Field):
             if not isinstance(key, (int, np.integer)):
                 raise TypeError(
                     f"Detected illegal element of type: {type(key)}. "
-                    f"Please be aware that slicing a ti.field is not supported so far."
+                    f"Please be aware that slicing a qd.field is not supported so far."
                 )
         return self.host_accessors[0].getter(*padded_key)  # type: ignore
 
     def __repr__(self):
         # make interactive shell happy, prevent materialization
-        return "<ti.field>"
+        return "<qd.field>"
 
 
 class SNodeHostAccessor:

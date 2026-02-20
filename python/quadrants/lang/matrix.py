@@ -7,8 +7,8 @@ from itertools import product
 
 import numpy as np
 
-from quadrants._lib import core as ti_python_core
-from quadrants._lib.utils import ti_python_core as _ti_python_core
+from quadrants._lib import core as qd_python_core
+from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
@@ -36,7 +36,7 @@ from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-_type_factory = _ti_python_core.get_type_factory_instance()
+_type_factory = _qd_python_core.get_type_factory_instance()
 
 
 def _generate_swizzle_patterns(key_group: str, required_length=4):
@@ -137,7 +137,7 @@ def _infer_entry_dt(entry):
         return impl.get_runtime().default_fp
     if isinstance(entry, expr.Expr):
         dt = entry.ptr.get_rvalue_type()
-        if dt == ti_python_core.DataType_unknown:
+        if dt == qd_python_core.DataType_unknown:
             raise QuadrantsTypeError("Element type of the matrix cannot be inferred. Please set dt instead for now.")
         return dt
     raise QuadrantsTypeError("Element type of the matrix is invalid.")
@@ -145,7 +145,7 @@ def _infer_entry_dt(entry):
 
 def _infer_array_dt(arr):
     assert len(arr) > 0
-    return functools.reduce(ti_python_core.promoted_type, map(_infer_entry_dt, arr))
+    return functools.reduce(qd_python_core.promoted_type, map(_infer_entry_dt, arr))
 
 
 def make_matrix_with_shape(arr, shape, dt):
@@ -156,7 +156,7 @@ def make_matrix_with_shape(arr, shape, dt):
             shape,
             dt,
             [expr.Expr(elt).ptr for elt in arr],
-            ti_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+            qd_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
         )
     )
 
@@ -183,7 +183,7 @@ def make_matrix(arr, dt=None):
             shape,
             dt,
             [expr.Expr(elt).ptr for elt in arr],
-            ti_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+            qd_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
         )
     )
 
@@ -222,15 +222,15 @@ class Matrix(QuadrantsOperations):
 
         use a 2d list to initialize a matrix
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
         >>>     n = 5
-        >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+        >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
         >>>     print(M)  # a 5x5 matrix with integer elements
 
         get the number of rows and columns via the `n`, `m` property:
 
-        >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+        >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
         >>> M.n  # number of rows
         3
         >>> M.m  # number of cols
@@ -238,7 +238,7 @@ class Matrix(QuadrantsOperations):
 
         you can even initialize a matrix with an empty list:
 
-        >>> M = ti.Matrix([[], []], ti.i32)
+        >>> M = qd.Matrix([[], []], qd.i32)
         >>> M.n
         2
         >>> M.m
@@ -284,7 +284,7 @@ class Matrix(QuadrantsOperations):
                 " Matrices/vectors will be automatically unrolled at compile-time for performance."
                 " So the compilation time could be extremely long if the matrix size is too big."
                 " You may use a field to store a large matrix like this, e.g.:\n"
-                f"    x = ti.field(ti.f32, ({self.n}, {self.m})).\n"
+                f"    x = qd.field(qd.f32, ({self.n}, {self.m})).\n"
                 " See https://docs.taichi-lang.org/docs/field#matrix-size"
                 " for more details.",
                 UserWarning,
@@ -431,8 +431,8 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> A = ti.Matrix([0, 1, 2], ti.i32)
-            >>> B = A.cast(ti.f32)
+            >>> A = qd.Matrix([0, 1, 2], qd.i32)
+            >>> B = A.cast(qd.f32)
             >>> B
             [0.0, 1.0, 2.0]
         """
@@ -450,7 +450,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> m = ti.Matrix([[1, 2], [3, 4]])
+            >>> m = qd.Matrix([[1, 2], [3, 4]])
             >>> m.trace()
             5
         """
@@ -487,7 +487,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> a = ti.Vector([3, 4], ti.f32)
+            >>> a = qd.Vector([3, 4], qd.f32)
             >>> a.normalized()
             [0.6, 0.8]
         """
@@ -504,7 +504,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> A = ti.Matrix([[0, 1], [2, 3]])
+            >>> A = qd.Matrix([[0, 1], [2, 3]])
             >>> A.transpose()
             [[0, 2], [1, 3]]
         """
@@ -545,7 +545,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> m = ti.Matrix.diag(3, 1)
+            >>> m = qd.Matrix.diag(3, 1)
             [[1, 0, 0],
              [0, 1, 0],
              [0, 0, 1]]
@@ -560,7 +560,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> m = ti.Matrix([[1, 2], [3, 4]])
+            >>> m = qd.Matrix([[1, 2], [3, 4]])
             >>> m.sum()
             10
         """
@@ -578,7 +578,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> a = ti.Vector([3, 4])
+            >>> a = qd.Vector([3, 4])
             >>> a.norm()
             5
 
@@ -633,7 +633,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> v = ti.Vector([0, 0, 1])
+            >>> v = qd.Vector([0, 0, 1])
             >>> v.any()
             True
         """
@@ -650,7 +650,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> v = ti.Vector([0, 0, 1])
+            >>> v = qd.Vector([0, 0, 1])
             >>> v.all()
             False
         """
@@ -667,7 +667,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> A = ti.Matrix([0, 1, 2, 3])
+            >>> A = qd.Matrix([0, 1, 2, 3])
             >>> A.fill(-1)
             >>> A
             [-1, -1, -1, -1]
@@ -685,7 +685,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> A = ti.Matrix([[0], [1], [2], [3]])
+            >>> A = qd.Matrix([[0], [1], [2], [3]])
             >>> A.to_numpy()
             >>> A
             array([[0], [1], [2], [3]])
@@ -724,7 +724,7 @@ class Matrix(QuadrantsOperations):
 
             So we have to make it happy with a dummy string...
             """
-            return f"<{self.n}x{self.m} ti.Matrix>"
+            return f"<{self.n}x{self.m} qd.Matrix>"
         return str(self.to_numpy())
 
     def __repr__(self):
@@ -786,7 +786,7 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> A = ti.Matrix.unit(3, 1)
+            >>> A = qd.Matrix.unit(3, 1)
             >>> A
             [0, 1, 0]
         """
@@ -950,7 +950,7 @@ class Matrix(QuadrantsOperations):
     @python_scope
     def ndarray(cls, n, m, dtype, shape):
         """Defines a Quadrants ndarray with matrix elements.
-        This function must be called in Python scope, and after `ti.init` is called.
+        This function must be called in Python scope, and after `qd.init` is called.
 
         Args:
             n (int): Number of rows of the matrix.
@@ -963,7 +963,7 @@ class Matrix(QuadrantsOperations):
             The code below shows how a Quadrants ndarray with matrix elements \
             can be declared and defined::
 
-                >>> x = ti.Matrix.ndarray(4, 5, ti.f32, shape=(16, 8))
+                >>> x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
@@ -982,11 +982,11 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def test():
-            >>>     v1 = ti.Vector([1, 2, 3])
-            >>>     v2 = ti.Vector([4, 5, 6])
-            >>>     m = ti.Matrix.rows([v1, v2])
+            >>>     v1 = qd.Vector([1, 2, 3])
+            >>>     v2 = qd.Vector([4, 5, 6])
+            >>>     m = qd.Matrix.rows([v1, v2])
             >>>     print(m)
             >>>
             >>> test()
@@ -1008,11 +1008,11 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def test():
-            >>>     v1 = ti.Vector([1, 2, 3])
-            >>>     v2 = ti.Vector([4, 5, 6])
-            >>>     m = ti.Matrix.cols([v1, v2])
+            >>>     v1 = qd.Vector([1, 2, 3])
+            >>>     v2 = qd.Vector([4, 5, 6])
+            >>>     m = qd.Matrix.cols([v1, v2])
             >>>     print(m)
             >>>
             >>> test()
@@ -1041,8 +1041,8 @@ class Matrix(QuadrantsOperations):
 
         Example::
 
-            >>> v1 = ti.Vector([1, 2, 3])
-            >>> v2 = ti.Vector([3, 4, 5])
+            >>> v1 = qd.Vector([1, 2, 3])
+            >>> v2 = qd.Vector([3, 4, 5])
             >>> v1.dot(v2)
             26
         """
@@ -1102,10 +1102,10 @@ class Vector(Matrix):
         Returns:
             :class:`~quadrants.Matrix`: A vector instance.
         Example::
-            >>> u = ti.Vector([1, 2])
+            >>> u = qd.Vector([1, 2])
             >>> print(u.m, u.n)  # verify a vector is a matrix of shape (n, 1)
             2 1
-            >>> v = ti.Vector([3, 4])
+            >>> v = qd.Vector([3, 4])
             >>> u + v
             [4 6]
         """
@@ -1116,7 +1116,7 @@ class Vector(Matrix):
 
     @classmethod
     def field(cls, n, dtype, *args, **kwargs):
-        """ti.Vector.field"""
+        """qd.Vector.field"""
         ndim = kwargs.get("ndim", 1)
         assert ndim == 1
         kwargs["ndim"] = 1
@@ -1135,7 +1135,7 @@ class Vector(Matrix):
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
 
-                >>> x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))
+                >>> x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
@@ -1159,11 +1159,11 @@ class MatrixField(Field):
         self.n = n
         self.m = m
         self.ndim = ndim
-        self.ptr = ti_python_core.expr_matrix_field([var.ptr for var in self.vars], [n, m][:ndim])
+        self.ptr = qd_python_core.expr_matrix_field([var.ptr for var in self.vars], [n, m][:ndim])
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling ti.sync() between modifying the field, and
+        Note: caller is responsible for calling qd.sync() between modifying the field, and
         reading it.
         """
         impl.get_runtime().materialize()
@@ -1196,7 +1196,7 @@ class MatrixField(Field):
             self.ptr.set_dynamic_index_stride(0)
             return
         length = len(paths[0])
-        if any(len(path) != length or ti_python_core.is_quant(path[length - 1]._dtype) for path in paths):
+        if any(len(path) != length or qd_python_core.is_quant(path[length - 1]._dtype) for path in paths):
             return
         for i in range(length):
             if any(path[i] != paths[0][i] for path in paths):
@@ -1204,7 +1204,7 @@ class MatrixField(Field):
                 break
         for i in range(depth_below_lca, length - 1):
             if any(
-                path[i].ptr.type != ti_python_core.SNodeType.dense
+                path[i].ptr.type != qd_python_core.SNodeType.dense
                 or path[i]._cell_size_bytes != paths[0][i]._cell_size_bytes
                 or path[i + 1]._offset_bytes_in_parent_cell != paths[0][i + 1]._offset_bytes_in_parent_cell
                 for path in paths
@@ -1330,7 +1330,7 @@ class MatrixField(Field):
 
         Example::
 
-            >>> m = ti.Matrix.field(2, 2, ti.f32, shape=(3, 3))
+            >>> m = qd.Matrix.field(2, 2, qd.f32, shape=(3, 3))
             >>> arr = numpy.ones((3, 3, 2, 2))
             >>> m.from_numpy(arr)
         """
@@ -1355,7 +1355,7 @@ class MatrixField(Field):
 
     def __repr__(self):
         # make interactive shell happy, prevent materialization
-        return f"<{self.n}x{self.m} ti.Matrix.field>"
+        return f"<{self.n}x{self.m} qd.Matrix.field>"
 
 
 class MatrixType(CompoundType):
@@ -1441,10 +1441,10 @@ class MatrixType(CompoundType):
         return self(
             [
                 expr.Expr(
-                    ti_python_core.make_get_element_expr(
+                    qd_python_core.make_get_element_expr(
                         func_ret.ptr,
                         ret_index + (i,),
-                        _ti_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                        _qd_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                     )
                 )
                 for i in range(self.m * self.n)
@@ -1626,7 +1626,7 @@ class MatrixNdarray(Ndarray):
 
     Example::
 
-        >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+        >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
     """
 
     def __init__(self, n, m, dtype, shape):
@@ -1645,7 +1645,7 @@ class MatrixNdarray(Ndarray):
             shape,
             Layout.AOS,
             zero_fill=True,
-            dbg_info=ti_python_core.DebugInfo(get_traceback()),
+            dbg_info=qd_python_core.DebugInfo(get_traceback()),
         )
 
     @property
@@ -1654,7 +1654,7 @@ class MatrixNdarray(Ndarray):
 
         Example::
 
-            >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+            >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
             >>> arr.element_shape
             (2, 2)
         """
@@ -1681,7 +1681,7 @@ class MatrixNdarray(Ndarray):
 
         Example::
 
-            >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1))
+            >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1))
             >>> arr.to_numpy()
             [[[[0. 0.]
                [0. 0.]]]
@@ -1697,7 +1697,7 @@ class MatrixNdarray(Ndarray):
 
         Example::
 
-            >>> m = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1), layout=0)
+            >>> m = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1), layout=0)
             >>> arr = np.ones((2, 1, 2, 2))
             >>> m.from_numpy(arr)
         """
@@ -1729,7 +1729,7 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def __repr__(self):
-        return f"<{self.n}x{self.m} {Layout.AOS} ti.Matrix.ndarray>"
+        return f"<{self.n}x{self.m} {Layout.AOS} qd.Matrix.ndarray>"
 
 
 class VectorNdarray(Ndarray):
@@ -1742,7 +1742,7 @@ class VectorNdarray(Ndarray):
 
     Example::
 
-        >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+        >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
     """
 
     def __init__(self, n, dtype, shape):
@@ -1759,7 +1759,7 @@ class VectorNdarray(Ndarray):
             shape,
             Layout.AOS,
             zero_fill=True,
-            dbg_info=ti_python_core.DebugInfo(get_traceback()),
+            dbg_info=qd_python_core.DebugInfo(get_traceback()),
         )
 
     @property
@@ -1768,7 +1768,7 @@ class VectorNdarray(Ndarray):
 
         Example::
 
-            >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+            >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
             >>> a.element_shape
             (3,)
         """
@@ -1792,7 +1792,7 @@ class VectorNdarray(Ndarray):
 
         Example::
 
-            >>> a = ti.VectorNdarray(3, ti.f32, (2, 2))
+            >>> a = qd.VectorNdarray(3, qd.f32, (2, 2))
             >>> a.to_numpy()
             array([[[0., 0., 0.],
                     [0., 0., 0.]],
@@ -1811,7 +1811,7 @@ class VectorNdarray(Ndarray):
         Example::
 
             >>> import numpy as np
-            >>> a = ti.VectorNdarray(3, ti.f32, (2, 2), 0)
+            >>> a = qd.VectorNdarray(3, qd.f32, (2, 2), 0)
             >>> b = np.ones((2, 2, 3), dtype=np.float32)
             >>> a.from_numpy(b)
         """
@@ -1838,7 +1838,7 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def __repr__(self):
-        return f"<{self.n} {Layout.AOS} ti.Vector.ndarray>"
+        return f"<{self.n} {Layout.AOS} qd.Vector.ndarray>"
 
 
 __all__ = ["Matrix", "Vector", "MatrixField", "MatrixNdarray", "VectorNdarray"]

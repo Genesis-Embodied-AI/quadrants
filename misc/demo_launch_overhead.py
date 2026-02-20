@@ -1,12 +1,12 @@
 import time
 
-import quadrants as ti
+import quadrants as qd
 
-ti.init()
+qd.init()
 
 
-@ti.kernel
-def compute_div(a: ti.i32):
+@qd.kernel
+def compute_div(a: qd.i32):
     pass
 
 

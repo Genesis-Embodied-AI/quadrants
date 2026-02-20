@@ -127,15 +127,15 @@ def mix(x, y, a):
 
     Example::
 
-        >>> x = ti.Vector([1, 1, 1])
-        >>> y = ti.Vector([2, 2, 2])
-        >>> a = ti.Vector([1, 0, 0])
-        >>> ti.math.mix(x, y, a)
+        >>> x = qd.Vector([1, 1, 1])
+        >>> y = qd.Vector([2, 2, 2])
+        >>> a = qd.Vector([1, 0, 0])
+        >>> qd.math.mix(x, y, a)
         [2.000000, 1.000000, 1.000000]
-        >>> x = ti.Matrix([[1, 2], [2, 3]], ti.f32)
-        >>> y = ti.Matrix([[3, 5], [4, 5]], ti.f32)
+        >>> x = qd.Matrix([[1, 2], [2, 3]], qd.f32)
+        >>> y = qd.Matrix([[3, 5], [4, 5]], qd.f32)
         >>> a = 0.5
-        >>> ti.math.mix(x, y, a)
+        >>> qd.math.mix(x, y, a)
         [[2.000000, 3.500000], [3.000000, 4.000000]]
     """
     return x * (1.0 - a) + y * a
@@ -162,12 +162,12 @@ def clamp(x, xmin, xmax):
 
     Example::
 
-        >>> v = ti.Vector([0, 0.5, 1.0, 1.5])
-        >>> ti.math.clamp(v, 0.5, 1.0)
+        >>> v = qd.Vector([0, 0.5, 1.0, 1.5])
+        >>> qd.math.clamp(v, 0.5, 1.0)
         [0.500000, 0.500000, 1.000000, 1.000000]
-        >>> x = ti.Matrix([[0, 1], [-2, 2]], ti.f32)
-        >>> y = ti.Matrix([[1, 2], [1, 2]], ti.f32)
-        >>> ti.math.clamp(x, 0.5, y)
+        >>> x = qd.Matrix([[0, 1], [-2, 2]], qd.f32)
+        >>> y = qd.Matrix([[1, 2], [1, 2]], qd.f32)
+        >>> qd.math.clamp(x, 0.5, y)
         [[0.500000, 1.000000], [0.500000, 2.000000]]
     """
     return ops.min(xmax, ops.max(xmin, x))
@@ -195,9 +195,9 @@ def step(edge, x):
 
     Example::
 
-        >>> x = ti.Matrix([[0, 1], [2, 3]], ti.f32)
+        >>> x = qd.Matrix([[0, 1], [2, 3]], qd.f32)
         >>> y = 1
-        >>> ti.math.step(x, y)
+        >>> qd.math.step(x, y)
         [[1.000000, 1.000000], [0.000000, 0.000000]]
     """
     return ops.cast(x >= edge, float)
@@ -206,7 +206,7 @@ def step(edge, x):
 @func
 def fract(x):
     """Compute the fractional part of the argument, element-wise.
-    It's equivalent to `x - ti.floor(x)`.
+    It's equivalent to `x - qd.floor(x)`.
 
     Args:
         x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The
@@ -217,8 +217,8 @@ def fract(x):
 
     Example::
 
-        >>> x = ti.Vector([-1.2, -0.7, 0.3, 1.2])
-        >>> ti.math.fract(x)
+        >>> x = qd.Vector([-1.2, -0.7, 0.3, 1.2])
+        >>> qd.math.fract(x)
         [0.800000, 0.300000, 0.300000, 0.200000]
     """
     return x - ops.floor(x)
@@ -247,10 +247,10 @@ def smoothstep(edge0, edge1, x):
 
     Example::
 
-        >>> edge0 = ti.Vector([0, 1, 2])
+        >>> edge0 = qd.Vector([0, 1, 2])
         >>> edge1 = 1
-        >>> x = ti.Vector([0.5, 1.5, 2.5])
-        >>> ti.math.smoothstep(edge0, edge1, x)
+        >>> x = qd.Vector([0.5, 1.5, 2.5])
+        >>> qd.math.smoothstep(edge0, edge1, x)
         [0.500000, 1.000000, 0.000000]
     """
     t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
@@ -271,8 +271,8 @@ def sign(x):
 
     Example::
 
-        >>> x = ti.Vector([-1.0, 0.0, 1.0])
-        >>> ti.math.sign(x)
+        >>> x = qd.Vector([-1.0, 0.0, 1.0])
+        >>> qd.math.sign(x)
         [-1.000000, 0.000000, 1.000000]
     """
     return ops.cast((x >= 0.0), float) - ops.cast((x <= 0.0), float)
@@ -293,8 +293,8 @@ def normalize(v):
 
     Example::
 
-        >>> v = ti.Vector([1, 2, 3])
-        >>> ti.math.normalize(v)
+        >>> v = qd.Vector([1, 2, 3])
+        >>> qd.math.normalize(v)
         [0.267261, 0.534522, 0.801784]
     """
     return v / v.norm()
@@ -315,8 +315,8 @@ def log2(x):
 
     Example::
 
-        >>> x = ti.Vector([1., 2., 3.])
-        >>> ti.math.log2(x)
+        >>> x = qd.Vector([1., 2., 3.])
+        >>> qd.math.log2(x)
         [0.000000, 1.000000, 1.584962]
     """
     return ops.log(x) / static(ops.log(2.0))
@@ -343,9 +343,9 @@ def reflect(x, n):
 
     Example::
 
-        >>> x = ti.Vector([1., 2., 3.])
-        >>> n = ti.Vector([0., 1., 0.])
-        >>> ti.math.reflect(x, n)
+        >>> x = qd.Vector([1., 2., 3.])
+        >>> n = qd.Vector([0., 1., 0.])
+        >>> qd.math.reflect(x, n)
         [1.000000, -2.000000, 3.000000]
     """
     k = x.dot(n)
@@ -364,8 +364,8 @@ def degrees(x):
 
     Example::
 
-        >>> x = ti.Vector([-pi/2, pi/2])
-        >>> ti.math.degrees(x)
+        >>> x = qd.Vector([-pi/2, pi/2])
+        >>> qd.math.degrees(x)
         [-90.000000, 90.000000]
     """
     return x * static(180.0 / pi)
@@ -383,8 +383,8 @@ def radians(x):
 
     Example::
 
-        >>> x = ti.Vector([-90., 45., 90.])
-        >>> ti.math.radians(x) / pi
+        >>> x = qd.Vector([-90., 45., 90.])
+        >>> qd.math.radians(x) / pi
         [-0.500000, 0.250000, 0.500000]
     """
     return x * static(pi / 180.0)
@@ -405,9 +405,9 @@ def distance(x, y):
 
     Example::
 
-        >>> x = ti.Vector([0, 0, 0])
-        >>> y = ti.Vector([1, 1, 1])
-        >>> ti.math.distance(x, y)
+        >>> x = qd.Vector([0, 0, 0])
+        >>> y = qd.Vector([1, 1, 1])
+        >>> qd.math.distance(x, y)
         1.732051
     """
     return (x - y).norm()
@@ -429,9 +429,9 @@ def refract(x, n, eta):
 
     Example::
 
-        >>> x = ti.Vector([1., 1., 1.])
-        >>> y = ti.Vector([0, 1., 0])
-        >>> ti.math.refract(x, y, 2.0)
+        >>> x = qd.Vector([1., 1., 1.])
+        >>> y = qd.Vector([0, 1., 0])
+        >>> qd.math.refract(x, y, 2.0)
         [2.000000, -1.000000, 2.000000]
     """
     dxn = x.dot(n)
@@ -455,9 +455,9 @@ def dot(x, y):
 
     Example::
 
-        >>> x = ti.Vector([1., 1., 0.])
-        >>> y = ti.Vector([0., 1., 1.])
-        >>> ti.math.dot(x, y)
+        >>> x = qd.Vector([1., 1., 0.])
+        >>> y = qd.Vector([0., 1., 1.])
+        >>> qd.math.dot(x, y)
         1.000000
     """
     return x.dot(y)
@@ -480,9 +480,9 @@ def cross(x, y):
 
     Example::
 
-        >>> x = ti.Vector([1., 0., 0.])
-        >>> y = ti.Vector([0., 1., 0.])
-        >>> ti.math.cross(x, y)
+        >>> x = qd.Vector([1., 0., 0.])
+        >>> y = qd.Vector([0., 1., 0.])
+        >>> qd.math.cross(x, y)
         [0.000000, 0.000000, 1.000000]
     """
     return x.cross(y)
@@ -501,9 +501,9 @@ def mod(x, y):
 
     Example::
 
-        >>> x = ti.Vector([-0.5, 0.5, 1.])
+        >>> x = qd.Vector([-0.5, 0.5, 1.])
         >>> y = 1.0
-        >>> ti.math.mod(x, y)
+        >>> qd.math.mod(x, y)
         [0.500000, 0.500000, 0.000000]
     """
     return x - y * ops.floor(x / y)
@@ -523,7 +523,7 @@ def translate(dx, dy, dz):
 
     Example::
 
-        >>> ti.math.translate(1, 2, 3)
+        >>> qd.math.translate(1, 2, 3)
         [[ 1. 0. 0. 1.]
          [ 0. 1. 0. 2.]
          [ 0. 0. 1. 3.]
@@ -553,7 +553,7 @@ def scale(sx, sy, sz):
 
     Example::
 
-        >>> ti.math.scale(1, 2, 3)
+        >>> qd.math.scale(1, 2, 3)
         [[ 1. 0. 0. 0.]
          [ 0. 2. 0. 0.]
          [ 0. 0. 3. 0.]
@@ -652,7 +652,7 @@ def rotation2d(ang):
 
     Example::
 
-        >>>ti.math.rotation2d(ti.math.radians(30))
+        >>>qd.math.rotation2d(qd.math.radians(30))
         [[0.866025, -0.500000], [0.500000, 0.866025]]
     """
     ca, sa = ops.cos(ang), ops.sin(ang)
@@ -671,7 +671,7 @@ def rotation3d(ang_x, ang_y, ang_z):
         :class:`~quadrants.math.mat4`: rotation matrix
     Example:
 
-        >>> ti.math.rotation3d(0.52, -0.785, 1.046)
+        >>> qd.math.rotation3d(0.52, -0.785, 1.046)
         [[ 0.05048351 -0.61339645 -0.78816002  0.        ]
         [ 0.65833154  0.61388511 -0.4355969   0.        ]
         [ 0.75103329 -0.49688014  0.4348093   0.        ]
@@ -702,8 +702,8 @@ def length(x):
 
     Example::
 
-        >>> x = ti.Vector([1, 1, 1])
-        >>> ti.math.length(x)
+        >>> x = qd.Vector([1, 1, 1])
+        >>> qd.math.length(x)
         1.732051
     """
     return x.norm()
@@ -730,8 +730,8 @@ def inverse(mat):  # pylint: disable=R1710
 
     Example::
 
-        >>> m = ti.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])
-        >>> ti.math.inverse(m)
+        >>> m = qd.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])
+        >>> qd.math.inverse(m)
         [[1.000000, -1.000000, 1.000000],
          [0.000000, 1.000000, -1.000000],
          [0.000000, 0.000000, 1.000000]]
@@ -748,8 +748,8 @@ def isinf(x):
 
     Example:
 
-       >>> x = ti.math.vec4(inf, -inf, nan, 1)
-       >>> ti.math.isinf(x)
+       >>> x = qd.math.vec4(inf, -inf, nan, 1)
+       >>> qd.math.isinf(x)
        [1, 1, 0, 0]
 
     Returns:
@@ -774,8 +774,8 @@ def isnan(x):
 
     Example:
 
-       >>> x = ti.math.vec4(nan, -nan, inf, 1)
-       >>> ti.math.isnan(x)
+       >>> x = qd.math.vec4(nan, -nan, inf, 1)
+       >>> qd.math.isnan(x)
        [1, 1, 0, 0]
 
     Returns:
@@ -800,7 +800,7 @@ def vdir(ang):
     Example:
 
         >>> x = pi / 2
-        >>> ti.math.vdir(x)
+        >>> qd.math.vdir(x)
         [0, 1]
 
     Returns:

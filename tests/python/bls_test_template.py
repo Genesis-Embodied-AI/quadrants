@@ -2,14 +2,14 @@ import random
 
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 
 def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchmark=0, dense=False):
-    x, y, y2 = ti.field(ti.i32), ti.field(ti.i32), ti.field(ti.i32)
+    x, y, y2 = qd.field(qd.i32), qd.field(qd.i32), qd.field(qd.i32)
 
-    index = ti.axes(*range(dim))
-    mismatch = ti.field(ti.i32, shape=())
+    index = qd.axes(*range(dim))
+    mismatch = qd.field(qd.i32, shape=())
 
     if not isinstance(bs, (tuple, list)):
         bs = [bs for _ in range(dim)]
@@ -17,9 +17,9 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
     grid_size = [N // bs[i] for i in range(dim)]
 
     if dense:
-        create_block = lambda: ti.root.dense(index, grid_size)
+        create_block = lambda: qd.root.dense(index, grid_size)
     else:
-        create_block = lambda: ti.root.pointer(index, grid_size)
+        create_block = lambda: qd.root.pointer(index, grid_size)
 
     if scatter:
         block = create_block()
@@ -39,31 +39,31 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
         for i in range(dim):
             block_dim *= bs[i]
 
-    @ti.kernel
+    @qd.kernel
     def populate():
-        for I in ti.grouped(ti.ndrange(*ndrange)):
+        for I in qd.grouped(qd.ndrange(*ndrange)):
             s = 0
-            for i in ti.static(range(dim)):
+            for i in qd.static(range(dim)):
                 s += I[i] ** (i + 1)
             x[I] = s
 
-    @ti.kernel
-    def apply(use_bls: ti.template(), y: ti.template()):
-        if ti.static(use_bls and not scatter):
-            ti.block_local(x)
-        if ti.static(use_bls and scatter):
-            ti.block_local(y)
+    @qd.kernel
+    def apply(use_bls: qd.template(), y: qd.template()):
+        if qd.static(use_bls and not scatter):
+            qd.block_local(x)
+        if qd.static(use_bls and scatter):
+            qd.block_local(y)
 
-        ti.loop_config(block_dim=block_dim)
-        for I in ti.grouped(x):
-            if ti.static(scatter):
-                for offset in ti.static(stencil):
-                    y[I + ti.Vector(offset)] += x[I]
+        qd.loop_config(block_dim=block_dim)
+        for I in qd.grouped(x):
+            if qd.static(scatter):
+                for offset in qd.static(stencil):
+                    y[I + qd.Vector(offset)] += x[I]
             else:
                 # gather
                 s = 0
-                for offset in ti.static(stencil):
-                    s = s + x[I + ti.Vector(offset)]
+                for offset in qd.static(stencil):
+                    s = s + x[I + qd.Vector(offset)]
                 y[I] = s
 
     if benchmark:
@@ -80,16 +80,16 @@ def bls_test_template(dim, N, bs, stencil, block_dim=None, scatter=False, benchm
         apply(False, y2)
         apply(True, y)
 
-    @ti.kernel
+    @qd.kernel
     def check():
-        for I in ti.grouped(y2):
+        for I in qd.grouped(y2):
             if y[I] != y2[I]:
                 print("check failed", I, y[I], y2[I])
                 mismatch[None] = 1
 
     check()
 
-    ti.profiler.print_kernel_profiler_info()
+    qd.profiler.print_kernel_profiler_info()
 
     assert mismatch[None] == 0
 
@@ -106,27 +106,27 @@ def bls_particle_grid(
 ):
     M = N * N * ppc
 
-    m1 = ti.field(ti.f32)
-    m2 = ti.field(ti.f32)
-    m3 = ti.field(ti.f32)
-    pid = ti.field(ti.i32)
-    err = ti.field(ti.i32, shape=())
+    m1 = qd.field(qd.f32)
+    m2 = qd.field(qd.f32)
+    m3 = qd.field(qd.f32)
+    pid = qd.field(qd.i32)
+    err = qd.field(qd.i32, shape=())
 
     max_num_particles_per_block = block_size**2 * 4096
 
-    x = ti.Vector.field(2, dtype=ti.f32)
+    x = qd.Vector.field(2, dtype=qd.f32)
 
-    s1 = ti.field(dtype=ti.f32)
-    s2 = ti.field(dtype=ti.f32)
-    s3 = ti.field(dtype=ti.f32)
+    s1 = qd.field(dtype=qd.f32)
+    s2 = qd.field(dtype=qd.f32)
+    s3 = qd.field(dtype=qd.f32)
 
-    ti.root.dense(ti.i, M).place(x)
-    ti.root.dense(ti.i, M).place(s1, s2, s3)
+    qd.root.dense(qd.i, M).place(x)
+    qd.root.dense(qd.i, M).place(s1, s2, s3)
 
     if pointer_level == 1:
-        block = ti.root.pointer(ti.ij, N // block_size)
+        block = qd.root.pointer(qd.ij, N // block_size)
     elif pointer_level == 2:
-        block = ti.root.pointer(ti.ij, N // block_size // 4).pointer(ti.ij, 4)
+        block = qd.root.pointer(qd.ij, N // block_size // 4).pointer(qd.ij, 4)
     else:
         raise ValueError("pointer_level must be 1 or 2")
 
@@ -139,11 +139,11 @@ def bls_particle_grid(
         grid_offset_block = (0, 0)
         world_offset = 0
 
-    block.dense(ti.ij, block_size).place(m1, offset=grid_offset)
-    block.dense(ti.ij, block_size).place(m2, offset=grid_offset)
-    block.dense(ti.ij, block_size).place(m3, offset=grid_offset)
+    block.dense(qd.ij, block_size).place(m1, offset=grid_offset)
+    block.dense(qd.ij, block_size).place(m2, offset=grid_offset)
+    block.dense(qd.ij, block_size).place(m3, offset=grid_offset)
 
-    block.dynamic(ti.l, max_num_particles_per_block, chunk_size=block_size**2 * ppc * 4).place(
+    block.dynamic(qd.l, max_num_particles_per_block, chunk_size=block_size**2 * ppc * 4).place(
         pid, offset=grid_offset_block + (0,)
     )
 
@@ -163,86 +163,86 @@ def bls_particle_grid(
 
     x.from_numpy(np.array(x_, dtype=np.float32))
 
-    @ti.kernel
+    @qd.kernel
     def insert():
-        ti.loop_config(block_dim=256)
+        qd.loop_config(block_dim=256)
         for i in x:
             # It is important to ensure insert and p2g uses the exact same way to compute the base
             # coordinates. Otherwise there might be coordinate mismatch due to float-point errors.
-            base = ti.Vector(
+            base = qd.Vector(
                 [
-                    int(ti.floor(x[i][0] * N) - grid_offset[0]),
-                    int(ti.floor(x[i][1] * N) - grid_offset[1]),
+                    int(qd.floor(x[i][0] * N) - grid_offset[0]),
+                    int(qd.floor(x[i][1] * N) - grid_offset[1]),
                 ]
             )
-            base_p = ti.rescale_index(m1, pid, base)
-            ti.append(pid.parent(), base_p, i)
+            base_p = qd.rescale_index(m1, pid, base)
+            qd.append(pid.parent(), base_p, i)
 
     scatter_weight = (N * N / M) * 0.01
 
-    @ti.kernel
-    def p2g(use_shared: ti.template(), m: ti.template()):
-        ti.loop_config(block_dim=256)
-        if ti.static(use_shared):
-            ti.block_local(m)
-        for I in ti.grouped(pid):
+    @qd.kernel
+    def p2g(use_shared: qd.template(), m: qd.template()):
+        qd.loop_config(block_dim=256)
+        if qd.static(use_shared):
+            qd.block_local(m)
+        for I in qd.grouped(pid):
             p = pid[I]
 
-            u_ = ti.floor(x[p] * N).cast(ti.i32)
-            Im = ti.rescale_index(pid, m, I)
-            u0 = ti.assume_in_range(u_[0], Im[0], 0, 1)
-            u1 = ti.assume_in_range(u_[1], Im[1], 0, 1)
+            u_ = qd.floor(x[p] * N).cast(qd.i32)
+            Im = qd.rescale_index(pid, m, I)
+            u0 = qd.assume_in_range(u_[0], Im[0], 0, 1)
+            u1 = qd.assume_in_range(u_[1], Im[1], 0, 1)
 
-            u = ti.Vector([u0, u1])
+            u = qd.Vector([u0, u1])
 
-            for offset in ti.static(ti.grouped(ti.ndrange(extend, extend))):
+            for offset in qd.static(qd.grouped(qd.ndrange(extend, extend))):
                 m[u + offset] += scatter_weight
 
-    @ti.kernel
+    @qd.kernel
     def p2g_naive():
-        ti.loop_config(block_dim=256)
+        qd.loop_config(block_dim=256)
         for p in x:
-            u = ti.floor(x[p] * N).cast(ti.i32)
+            u = qd.floor(x[p] * N).cast(qd.i32)
 
-            for offset in ti.static(ti.grouped(ti.ndrange(extend, extend))):
+            for offset in qd.static(qd.grouped(qd.ndrange(extend, extend))):
                 m3[u + offset] += scatter_weight
 
-    @ti.kernel
+    @qd.kernel
     def fill_m1():
-        for i, j in ti.ndrange(N, N):
-            m1[i, j] = ti.random()
+        for i, j in qd.ndrange(N, N):
+            m1[i, j] = qd.random()
 
-    @ti.kernel
-    def g2p(use_shared: ti.template(), s: ti.template()):
-        ti.loop_config(block_dim=256)
-        if ti.static(use_shared):
-            ti.block_local(m1)
-        for I in ti.grouped(pid):
+    @qd.kernel
+    def g2p(use_shared: qd.template(), s: qd.template()):
+        qd.loop_config(block_dim=256)
+        if qd.static(use_shared):
+            qd.block_local(m1)
+        for I in qd.grouped(pid):
             p = pid[I]
 
-            u_ = ti.floor(x[p] * N).cast(ti.i32)
+            u_ = qd.floor(x[p] * N).cast(qd.i32)
 
-            Im = ti.rescale_index(pid, m1, I)
-            u0 = ti.assume_in_range(u_[0], Im[0], 0, 1)
-            u1 = ti.assume_in_range(u_[1], Im[1], 0, 1)
+            Im = qd.rescale_index(pid, m1, I)
+            u0 = qd.assume_in_range(u_[0], Im[0], 0, 1)
+            u1 = qd.assume_in_range(u_[1], Im[1], 0, 1)
 
-            u = ti.Vector([u0, u1])
+            u = qd.Vector([u0, u1])
 
             tot = 0.0
 
-            for offset in ti.static(ti.grouped(ti.ndrange(extend, extend))):
+            for offset in qd.static(qd.grouped(qd.ndrange(extend, extend))):
                 tot += m1[u + offset]
 
             s[p] = tot
 
-    @ti.kernel
-    def g2p_naive(s: ti.template()):
-        ti.loop_config(block_dim=256)
+    @qd.kernel
+    def g2p_naive(s: qd.template()):
+        qd.loop_config(block_dim=256)
         for p in x:
-            u = ti.floor(x[p] * N).cast(ti.i32)
+            u = qd.floor(x[p] * N).cast(qd.i32)
 
             tot = 0.0
-            for offset in ti.static(ti.grouped(ti.ndrange(extend, extend))):
+            for offset in qd.static(qd.grouped(qd.ndrange(extend, extend))):
                 tot += m1[u + offset]
             s[p] = tot
 
@@ -252,7 +252,7 @@ def bls_particle_grid(
         pid.parent(2).snode.deactivate_all()
         insert()
 
-    @ti.kernel
+    @qd.kernel
     def check_m():
         for i in range(grid_offset[0], grid_offset[0] + N):
             for j in range(grid_offset[1], grid_offset[1] + N):
@@ -261,7 +261,7 @@ def bls_particle_grid(
                 if abs(m2[i, j] - m3[i, j]) > 1e-4:
                     err[None] = 1
 
-    @ti.kernel
+    @qd.kernel
     def check_s():
         for i in range(M):
             if abs(s1[i] - s2[i]) > 1e-4:

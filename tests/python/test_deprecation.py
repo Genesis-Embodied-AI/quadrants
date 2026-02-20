@@ -1,31 +1,31 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_remove_is_is_not():
-    with pytest.raises(ti.QuadrantsSyntaxError, match='Operator "is" in Quadrants scope is not supported'):
+    with pytest.raises(qd.QuadrantsSyntaxError, match='Operator "is" in Quadrants scope is not supported'):
 
-        @ti.kernel
+        @qd.kernel
         def func():
-            ti.static(1 is 2)
+            qd.static(1 is 2)
 
         func()
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_deprecate_experimental_real_func():
     with pytest.warns(
         DeprecationWarning,
-        match="ti.experimental.real_func is deprecated because it is no longer experimental. "
-        "Use ti.real_func instead.",
+        match="qd.experimental.real_func is deprecated because it is no longer experimental. "
+        "Use qd.real_func instead.",
     ):
 
-        @ti.experimental.real_func
-        def foo(a: ti.i32) -> ti.i32:
+        @qd.experimental.real_func
+        def foo(a: qd.i32) -> qd.i32:
             s = 0
             for i in range(100):
                 if i == a + 1:
@@ -33,8 +33,8 @@ def test_deprecate_experimental_real_func():
                 s = s + i
             return s
 
-        @ti.kernel
-        def bar(a: ti.i32) -> ti.i32:
+        @qd.kernel
+        def bar(a: qd.i32) -> qd.i32:
             return foo(a)
 
         assert bar(10) == 11 * 5

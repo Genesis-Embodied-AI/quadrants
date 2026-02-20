@@ -110,7 +110,7 @@ class PLYWriter:
     # TODO active and refactor later if user feedback indicates the necessity for a compact the input list
     # pass ti vector/matrix field directly
     # def add_vertex_pos(self, pos):
-    #     assert isinstance(pos, (np.ndarray, ti.Matrix))
+    #     assert isinstance(pos, (np.ndarray, qd.Matrix))
     #     if not isinstance(pos, np.ndarray):
     #         pos = pos.to_numpy()
     #     dim = pos.shape[pos.ndim-1]
@@ -143,7 +143,7 @@ class PLYWriter:
     # TODO active and refactor later if user feedback indicates the necessity for a compact the input list
     # pass ti vector/matrix field directly
     # def add_vertex_normal(self, normal):
-    #     assert isinstance(normal, (np.ndarray, ti.Matrix))
+    #     assert isinstance(normal, (np.ndarray, qd.Matrix))
     #     if not isinstance(normal, np.ndarray):
     #         normal = normal.to_numpy()
     #     dim = normal.shape[normal.ndim-1]
@@ -207,7 +207,7 @@ class PLYWriter:
     # TODO active and refactor later if user feedback indicates the necessity for a compact the input list
     # pass ti vector/matrix field directly
     # def add_vertex_color(self, color):
-    #     assert isinstance(color, (np.ndarray, ti.Matrix))
+    #     assert isinstance(color, (np.ndarray, qd.Matrix))
     #     if not isinstance(color, np.ndarray):
     #         color = color.to_numpy()
     #     channels = color.shape[color.ndim-1]

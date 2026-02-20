@@ -1,8 +1,8 @@
-import quadrants as ti
+import quadrants as qd
 
 
 # diff
-@ti.func
+@qd.func
 def f3() -> int:
     return 123
 
@@ -11,7 +11,7 @@ def f3() -> int:
 
 
 # diff
-@ti.kernel
+@qd.kernel
 def f1() -> None:
     f3()
 

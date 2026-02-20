@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -10,15 +10,15 @@ from tests import test_utils
 @pytest.fixture
 def ti_type(use_ndarray: bool) -> Any:
     if use_ndarray:
-        return ti.ndarray
-    return ti.field
+        return qd.ndarray
+    return qd.field
 
 
 @pytest.fixture
 def ti_annotation(use_ndarray: bool) -> Any:
     if use_ndarray:
-        return ti.types.ndarray()
-    return ti.template()
+        return qd.types.ndarray()
+    return qd.template()
 
 
 @pytest.mark.parametrize("use_ndarray", [False, True])
@@ -26,26 +26,26 @@ def ti_annotation(use_ndarray: bool) -> Any:
 def test_class_method(ti_type: Any, ti_annotation: Any) -> None:
     shape = (20,)
 
-    @ti.data_oriented
+    @qd.data_oriented
     class InnerClass:
         def __init__(self):
-            self.a = ti_type(ti.i32, shape)
-            self.b = ti_type(ti.i32, shape)
+            self.a = ti_type(qd.i32, shape)
+            self.b = ti_type(qd.i32, shape)
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyClass:
         def __init__(self):
             self.inner = InnerClass()
-            self.c = ti_type(ti.i32, shape)
-            self.d = ti_type(ti.i32, shape)
-            self.e = ti_type(ti.i32, shape)
+            self.c = ti_type(qd.i32, shape)
+            self.d = ti_type(qd.i32, shape)
+            self.e = ti_type(qd.i32, shape)
 
-        @ti.func
-        def f1(self_unused, c: ti_annotation, inner: ti.template()):
+        @qd.func
+        def f1(self_unused, c: ti_annotation, inner: qd.template()):
             c[0] = 4
 
-        @ti.kernel
-        def test(self, c: ti_annotation, inner: ti.template()):
+        @qd.kernel
+        def test(self, c: ti_annotation, inner: qd.template()):
             self.f1(c, inner=inner)
 
         def run(self):

@@ -1,19 +1,19 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=ti.cpu, cpu_max_num_threads=1)
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=1)
 def test_serial_range_for():
     n = 1024 * 32
-    s = ti.field(dtype=ti.i32, shape=n)
-    counter = ti.field(dtype=ti.i32, shape=())
+    s = qd.field(dtype=qd.i32, shape=n)
+    counter = qd.field(dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def fill_range():
         counter[None] = 0
         for i in range(n):
-            s[ti.atomic_add(counter[None], 1)] = i
+            s[qd.atomic_add(counter[None], 1)] = i
 
     fill_range()
 
@@ -21,17 +21,17 @@ def test_serial_range_for():
         assert s[i] == i
 
 
-@test_utils.test(arch=ti.cpu, cpu_max_num_threads=1)
+@test_utils.test(arch=qd.cpu, cpu_max_num_threads=1)
 def test_serial_struct_for():
     n = 1024 * 32
-    s = ti.field(dtype=ti.i32, shape=n)
-    counter = ti.field(dtype=ti.i32, shape=())
+    s = qd.field(dtype=qd.i32, shape=n)
+    counter = qd.field(dtype=qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def fill_struct():
         counter[None] = 0
         for i in s:
-            s[ti.atomic_add(counter[None], 1)] = i
+            s[qd.atomic_add(counter[None], 1)] = i
 
     fill_struct()
 

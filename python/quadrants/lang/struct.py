@@ -45,12 +45,12 @@ class Struct:
 
     Example::
 _
-        >>> vec3 = ti.types.vector(3, ti.f32)
-        >>> a = ti.Struct(v=vec3([0, 0, 0]), t=1.0)
+        >>> vec3 = qd.types.vector(3, qd.f32)
+        >>> a = qd.Struct(v=vec3([0, 0, 0]), t=1.0)
         >>> print(a.items)
         dict_items([('v', [0. 0. 0.]), ('t', 1.0)])
         >>>
-        >>> B = ti.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)
+        >>> B = qd.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)
         >>> print(B.items)
         dict_items([('v', [0. 0. 0.]), ('t', 1.0), ('A', {'v': [[0.], [0.], [0.]], 't': 1.0})])
     """
@@ -87,8 +87,8 @@ _
 
         Example::
 
-           >>> vec3 = ti.types.vector(3, ti.f32)
-           >>> sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)
+           >>> vec3 = qd.types.vector(3, qd.f32)
+           >>> sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)
            >>> a.keys
            ['center', 'radius']
         """
@@ -112,8 +112,8 @@ _
 
         Example::
 
-            >>> vec3 = ti.types.vector(3, ti.f32)
-            >>> sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)
+            >>> vec3 = qd.types.vector(3, qd.f32)
+            >>> sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)
             >>> sphere.items
             dict_items([('center', 2), ('radius', 1.0)])
         """
@@ -201,7 +201,7 @@ _
         if impl.inside_kernel():
             item_str = ", ".join([str(k) + "=" + str(v) for k, v in self.items])
             item_str += f", struct_methods={self.__methods}"
-            return f"<ti.Struct {item_str}>"
+            return f"<qd.Struct {item_str}>"
         return str(self.to_dict())
 
     def __repr__(self):
@@ -265,9 +265,9 @@ _
 
         Example:
 
-            >>> vec3 = ti.types.vector(3, ti.f32)
+            >>> vec3 = qd.types.vector(3, qd.f32)
             >>> sphere = {"center": vec3, "radius": float}
-            >>> F = ti.Struct.field(sphere, shape=(3, 3))
+            >>> F = qd.Struct.field(sphere, shape=(3, 3))
             >>> F
             {'center': array([[[0., 0., 0.],
                 [0., 0., 0.],
@@ -410,9 +410,9 @@ class StructField(Field):
 
         Example::
 
-            >>> f1 = ti.Vector.field(3, ti.f32, shape=(3, 3))
-            >>> f2 = ti.field(ti.f32, shape=(3, 3))
-            >>> F = ti.StructField({"center": f1, "radius": f2})
+            >>> f1 = qd.Vector.field(3, qd.f32, shape=(3, 3))
+            >>> f2 = qd.field(qd.f32, shape=(3, 3))
+            >>> F = qd.StructField({"center": f1, "radius": f2})
             >>> F.keys
             ['center', 'radius']
         """
@@ -765,7 +765,7 @@ class StructType(CompoundType):
         """Python scope struct type print support."""
         item_str = ", ".join([str(k) + "=" + str(v) for k, v in self.members.items()])
         item_str += f", struct_methods={self.methods}"
-        return f"<ti.StructType {item_str}>"
+        return f"<qd.StructType {item_str}>"
 
 
 def dataclass(cls):
@@ -781,12 +781,12 @@ def dataclass(cls):
 
     Example::
 
-        >>> @ti.dataclass
+        >>> @qd.dataclass
         >>> class Sphere:
         >>>     center: vec3
-        >>>     radius: ti.f32
+        >>>     radius: qd.f32
         >>>
-        >>>     @ti.func
+        >>>     @qd.func
         >>>     def area(self):
         >>>         return 4 * 3.14 * self.radius * self.radius
         >>>

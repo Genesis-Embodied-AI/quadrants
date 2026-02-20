@@ -28,7 +28,7 @@ def _make_matrix_dtype_from_element_shape(element_dim, element_shape, primitive_
     if element_dim is not None:
         # TODO: expand use case with arbitary tensor dims!
         if element_dim < 0 or element_dim > 2:
-            raise ValueError("Only scalars, vectors, and matrices are allowed as elements of ti.types.ndarray()")
+            raise ValueError("Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()")
         # Check dim consistency. The matrix dtype will be cooked later.
         if element_shape is not None and len(element_shape) != element_dim:
             raise ValueError(
@@ -38,7 +38,7 @@ def _make_matrix_dtype_from_element_shape(element_dim, element_shape, primitive_
         mat_dtype = vector(None, primitive_dtype) if element_dim == 1 else matrix(None, None, primitive_dtype)
     elif element_shape is not None:
         if len(element_shape) > 2:
-            raise ValueError("Only scalars, vectors, and matrices are allowed as elements of ti.types.ndarray()")
+            raise ValueError("Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()")
         mat_dtype = (
             vector(element_shape[0], primitive_dtype)
             if len(element_shape) == 1
@@ -53,7 +53,7 @@ class NdarrayType:
     For external arrays, we treat it as a Quadrants data container with Scalar, Vector or Matrix elements.
     For Quadrants vector/matrix ndarrays, we will automatically identify element dimension and their corresponding axis by the
     dimension of datatype, say scalars, matrices or vectors.
-    For example, given type annotation `ti.types.ndarray(dtype=ti.math.vec3)`, a numpy array `np.zeros(10, 10, 3)` will be
+    For example, given type annotation `qd.types.ndarray(dtype=qd.math.vec3)`, a numpy array `np.zeros(10, 10, 3)` will be
     recognized as a 10x10 matrix composed of vec3 elements.
 
     Args:
@@ -159,12 +159,12 @@ NDArray = NdarrayType
 
 Example::
 
-    >>> @ti.kernel
-    >>> def to_numpy(x: ti.types.ndarray(), y: ti.types.ndarray()):
+    >>> @qd.kernel
+    >>> def to_numpy(x: qd.types.ndarray(), y: qd.types.ndarray()):
     >>>     for i in range(n):
     >>>         x[i] = y[i]
     >>>
-    >>> y = ti.ndarray(ti.f64, shape=n)
+    >>> y = qd.ndarray(qd.f64, shape=n)
     >>> ... # calculate y
     >>> x = numpy.zeros(n)
     >>> to_numpy(x, y)  # `x` will be filled with `y`'s data.

@@ -1,19 +1,19 @@
 import dataclasses
 from typing import Any, cast
 
-import quadrants as ti
+import quadrants as qd
 
 
 def _make_child_obj(obj_type: Any) -> Any:
-    if isinstance(obj_type, ti.types.NDArray):
-        ndarray_type = cast(ti.types.ndarray, obj_type)
+    if isinstance(obj_type, qd.types.NDArray):
+        ndarray_type = cast(qd.types.ndarray, obj_type)
         assert ndarray_type.ndim is not None
         shape = tuple([10] * ndarray_type.ndim)
-        child_obj = ti.ndarray(ndarray_type.dtype, shape=shape)
+        child_obj = qd.ndarray(ndarray_type.dtype, shape=shape)
     elif dataclasses.is_dataclass(obj_type):
         child_obj = build_struct(obj_type)
-    elif isinstance(obj_type, ti.Template) or obj_type == ti.Template:
-        child_obj = ti.field(ti.i32, (10,))
+    elif isinstance(obj_type, qd.Template) or obj_type == qd.Template:
+        child_obj = qd.field(qd.i32, (10,))
     else:
         raise Exception("unknown type ", obj_type)
     return child_obj

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -9,15 +9,15 @@ from tests import test_utils
 
 @test_utils.test()
 def test_nested_subscript():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
-    ti.root.dense(ti.i, 1).place(x)
-    ti.root.dense(ti.i, 1).place(y)
+    qd.root.dense(qd.i, 1).place(x)
+    qd.root.dense(qd.i, 1).place(y)
 
     x[0] = 0
 
-    @ti.kernel
+    @qd.kernel
     def inc():
         for i in range(1):
             x[x[i]] += 1
@@ -29,25 +29,25 @@ def test_nested_subscript():
 
 @test_utils.test()
 def test_norm():
-    val = ti.field(ti.i32)
-    f = ti.field(ti.f32)
+    val = qd.field(qd.i32)
+    f = qd.field(qd.f32)
 
     n = 1024
 
-    ti.root.dense(ti.i, n).dense(ti.i, 2).place(val, f)
+    qd.root.dense(qd.i, n).dense(qd.i, 2).place(val, f)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(n):
             s = 0
             for j in range(10):
                 s += j
-            a = ti.Vector([0.4, 0.3])
-            val[i] = s + ti.cast(a.norm() * 100, ti.i32) + i
+            a = qd.Vector([0.4, 0.3])
+            val[i] = s + qd.cast(a.norm() * 100, qd.i32) + i
 
     test()
 
-    @ti.kernel
+    @qd.kernel
     def test2():
         for i in range(n):
             val[i] += 1
@@ -60,21 +60,21 @@ def test_norm():
 
 @test_utils.test()
 def test_simple2():
-    val = ti.field(ti.i32)
-    f = ti.field(ti.f32)
+    val = qd.field(qd.i32)
+    f = qd.field(qd.f32)
 
     n = 16
 
-    ti.root.dense(ti.i, n).place(val, f)
+    qd.root.dense(qd.i, n).place(val, f)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(n):
             val[i] = i * 2
 
     test()
 
-    @ti.kernel
+    @qd.kernel
     def test2():
         for i in range(n):
             val[i] += 1
@@ -87,7 +87,7 @@ def test_simple2():
 
 @test_utils.test()
 def test_recreate():
-    @ti.kernel
+    @qd.kernel
     def test():
         a = 0
         a, b = 1, 2
@@ -95,12 +95,12 @@ def test_recreate():
     test()
 
 
-@test_utils.test(exclude=[ti.amdgpu])
+@test_utils.test(exclude=[qd.amdgpu])
 def test_local_atomics():
     n = 32
-    val = ti.field(ti.i32, shape=n)
+    val = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(n):
             s = 0
@@ -117,9 +117,9 @@ def test_local_atomics():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_loop_var_life():
-    @ti.kernel
+    @qd.kernel
     def test():
-        for i in ti.static(range(8)):
+        for i in qd.static(range(8)):
             pass
         print(i)
 
@@ -129,9 +129,9 @@ def test_loop_var_life():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_loop_var_life_double_iters():
-    @ti.kernel
+    @qd.kernel
     def test():
-        for i, v in ti.static(enumerate(range(8))):
+        for i, v in qd.static(enumerate(range(8))):
             pass
         print(i)
 
@@ -139,24 +139,24 @@ def test_loop_var_life_double_iters():
         test()
 
 
-@pytest.mark.parametrize("dtype", [ti.i32, ti.f32, ti.i64, ti.f64])
-@pytest.mark.parametrize("ti_zero,zero", [(ti.zero, 0), (ti.one, 1)])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.i64, qd.f64])
+@pytest.mark.parametrize("ti_zero,zero", [(qd.zero, 0), (qd.one, 1)])
 @pytest.mark.parametrize("is_mat", [False, True])
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_meta_zero_one(dtype, ti_zero, zero, is_mat):
     if is_mat:
-        x = ti.Matrix.field(2, 3, dtype, ())
-        y = ti.Matrix.field(2, 3, dtype, ())
+        x = qd.Matrix.field(2, 3, dtype, ())
+        y = qd.Matrix.field(2, 3, dtype, ())
     else:
-        x = ti.field(dtype, ())
-        y = ti.field(dtype, ())
+        x = qd.field(dtype, ())
+        y = qd.field(dtype, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         y[None] = ti_zero(x[None])
 
     for a in [-1, -2.3, -1, -0.3, 0, 1, 1.9, 2, 3]:
-        if ti.types.is_integral(dtype):
+        if qd.types.is_integral(dtype):
             a = int(a)
         x.fill(a)
         func()

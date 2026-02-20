@@ -2,7 +2,7 @@ import sys
 import threading
 import time
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.ast import transform_tree as _original_transform_tree
 
@@ -33,13 +33,13 @@ def test_concurrent_kernel_materialization():
     # before worker threads attempt per-kernel materialization.
     impl.get_runtime().materialize()
 
-    @ti.kernel
-    def kernel_a(x: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def kernel_a(x: qd.types.NDArray[qd.i32, 1]) -> None:
         for i in x:
             x[i] = x[i] + 1
 
-    @ti.kernel
-    def kernel_b(x: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def kernel_b(x: qd.types.NDArray[qd.i32, 1]) -> None:
         for i in x:
             x[i] = x[i] * 2
 
@@ -53,8 +53,8 @@ def test_concurrent_kernel_materialization():
         except Exception as e:
             errors.append(e)
 
-    arr_a = ti.ndarray(ti.i32, (10,))
-    arr_b = ti.ndarray(ti.i32, (10,))
+    arr_a = qd.ndarray(qd.i32, (10,))
+    arr_b = qd.ndarray(qd.i32, (10,))
     arr_a.fill(1)
     arr_b.fill(1)
 

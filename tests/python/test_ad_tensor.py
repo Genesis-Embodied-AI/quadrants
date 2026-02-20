@@ -1,6 +1,6 @@
 import functools
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -28,12 +28,12 @@ def if_has_autograd(func):
 @if_has_autograd
 @test_utils.test()
 def test_ad_tensor_store_load():
-    x = ti.Vector.field(4, dtype=ti.f32, shape=(), needs_grad=True)
-    y = ti.Vector.field(4, dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.Vector.field(4, dtype=qd.f32, shape=(), needs_grad=True)
+    y = qd.Vector.field(4, dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
-    def test(tmp: ti.f32):
-        b = ti.Vector([tmp, tmp, tmp, tmp])
+    @qd.kernel
+    def test(tmp: qd.f32):
+        b = qd.Vector([tmp, tmp, tmp, tmp])
         b[0] = tmp * 4
         y[None] = b * x[None]
 

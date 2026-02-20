@@ -1,13 +1,13 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_bracket_indexing_field():
-    a = ti.field(ti.i32, ())
+    a = qd.field(qd.i32, ())
 
-    @ti.kernel
+    @qd.kernel
     def k1():
         a[()] += 1
 
@@ -17,10 +17,10 @@ def test_bracket_indexing_field():
 
 @test_utils.test()
 def test_bracket_indexing_ndarray():
-    a = ti.ndarray(ti.i32, ())
+    a = qd.ndarray(qd.i32, ())
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray[ti.i32, 0]):
+    @qd.kernel
+    def k1(a: qd.types.NDArray[qd.i32, 0]):
         a[()] += 1
 
     k1(a)

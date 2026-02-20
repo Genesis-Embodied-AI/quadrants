@@ -1,67 +1,67 @@
 """
 This file tests if Quadrants's testing utilities are functional.
 
-TODO: Skips these tests after all tests are using @ti.test
+TODO: Skips these tests after all tests are using @qd.test
 """
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
-### `ti.test`
+### `qd.test`
 
 
 @test_utils.test()
 def test_all_archs():
-    assert ti.lang.impl.current_cfg().arch in test_utils.expected_archs()
+    assert qd.lang.impl.current_cfg().arch in test_utils.expected_archs()
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_arch_cpu():
-    assert ti.lang.impl.current_cfg().arch in [ti.cpu]
+    assert qd.lang.impl.current_cfg().arch in [qd.cpu]
 
 
-@test_utils.test(arch=[ti.cpu])
+@test_utils.test(arch=[qd.cpu])
 def test_arch_list_cpu():
-    assert ti.lang.impl.current_cfg().arch in [ti.cpu]
+    assert qd.lang.impl.current_cfg().arch in [qd.cpu]
 
 
-@test_utils.test(exclude=ti.cpu)
+@test_utils.test(exclude=qd.cpu)
 def test_exclude_cpu():
-    assert ti.lang.impl.current_cfg().arch not in [ti.cpu]
+    assert qd.lang.impl.current_cfg().arch not in [qd.cpu]
 
 
-@test_utils.test(exclude=[ti.cpu])
+@test_utils.test(exclude=[qd.cpu])
 def test_exclude_list_cpu():
-    assert ti.lang.impl.current_cfg().arch not in [ti.cpu]
+    assert qd.lang.impl.current_cfg().arch not in [qd.cpu]
 
 
-@test_utils.test(arch=[ti.cpu, ti.metal])
+@test_utils.test(arch=[qd.cpu, qd.metal])
 def test_multiple_archs():
-    assert ti.lang.impl.current_cfg().arch in [ti.cpu, ti.metal]
+    assert qd.lang.impl.current_cfg().arch in [qd.cpu, qd.metal]
 
 
-@test_utils.test(arch=ti.cpu, debug=True, advanced_optimization=False)
+@test_utils.test(arch=qd.cpu, debug=True, advanced_optimization=False)
 def test_init_args():
-    assert ti.lang.impl.current_cfg().debug == True
-    assert ti.lang.impl.current_cfg().advanced_optimization == False
+    assert qd.lang.impl.current_cfg().debug == True
+    assert qd.lang.impl.current_cfg().advanced_optimization == False
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_require_extensions_1():
-    assert ti.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda, ti.metal]
+    assert qd.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda, qd.metal]
 
 
-@test_utils.test(arch=[ti.cpu], require=ti.extension.sparse)
+@test_utils.test(arch=[qd.cpu], require=qd.extension.sparse)
 def test_require_extensions_2():
-    assert ti.lang.impl.current_cfg().arch in [ti.cpu]
+    assert qd.lang.impl.current_cfg().arch in [qd.cpu]
 
 
-@test_utils.test(arch=[ti.cpu], require=[ti.extension.sparse, ti.extension.bls])
+@test_utils.test(arch=[qd.cpu], require=[qd.extension.sparse, qd.extension.bls])
 def test_require_extensions_2():
-    assert ti.lang.impl.current_cfg().arch in [ti.cuda]
+    assert qd.lang.impl.current_cfg().arch in [qd.cuda]
 
 
 ### `test_utils.approx` and `test_utils.allclose`
@@ -115,8 +115,8 @@ def test_allclose_rel_reordered2(x, allclose):
     assert not allclose(x - x * rel * 3.0, x)
 
 
-@pytest.mark.skipif(ti._lib.core.with_metal(), reason="Skip metal because metal is used as the example")
+@pytest.mark.skipif(qd._lib.core.with_metal(), reason="Skip metal because metal is used as the example")
 def test_disable_fallback():
     with pytest.raises(RuntimeError):
-        ti.init(arch=ti.metal, enable_fallback=False)
-        ti.reset()
+        qd.init(arch=qd.metal, enable_fallback=False)
+        qd.reset()

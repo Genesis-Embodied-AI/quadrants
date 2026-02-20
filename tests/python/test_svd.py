@@ -1,21 +1,21 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.data64, fast_math=False)
+@test_utils.test(require=qd.extension.data64, fast_math=False)
 def test_precision():
-    u = ti.field(ti.f64, shape=())
-    v = ti.field(ti.f64, shape=())
-    w = ti.field(ti.f64, shape=())
+    u = qd.field(qd.f64, shape=())
+    v = qd.field(qd.f64, shape=())
+    w = qd.field(qd.f64, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def forward():
-        v[None] = ti.sqrt(ti.cast(u[None] + 3.25, ti.f64))
-        w[None] = ti.cast(u[None] + 7, ti.f64) / ti.cast(u[None] + 3, ti.f64)
+        v[None] = qd.sqrt(qd.cast(u[None] + 3.25, qd.f64))
+        w[None] = qd.cast(u[None] + 7, qd.f64) / qd.cast(u[None] + 3, qd.f64)
 
     forward()
     assert v[None] ** 2 == test_utils.approx(3.25, abs=1e-12)
@@ -28,19 +28,19 @@ def mat_equal(A, B, tol=1e-6):
 
 def _test_svd(dt, n):
     print(
-        f"arch={ti.lang.impl.current_cfg().arch} default_fp={ti.lang.impl.current_cfg().default_fp} fast_math={ti.lang.impl.current_cfg().fast_math} dim={n}"
+        f"arch={qd.lang.impl.current_cfg().arch} default_fp={qd.lang.impl.current_cfg().default_fp} fast_math={qd.lang.impl.current_cfg().fast_math} dim={n}"
     )
-    A = ti.Matrix.field(n, n, dtype=dt, shape=())
-    A_reconstructed = ti.Matrix.field(n, n, dtype=dt, shape=())
-    U = ti.Matrix.field(n, n, dtype=dt, shape=())
-    UtU = ti.Matrix.field(n, n, dtype=dt, shape=())
-    sigma = ti.Matrix.field(n, n, dtype=dt, shape=())
-    V = ti.Matrix.field(n, n, dtype=dt, shape=())
-    VtV = ti.Matrix.field(n, n, dtype=dt, shape=())
+    A = qd.Matrix.field(n, n, dtype=dt, shape=())
+    A_reconstructed = qd.Matrix.field(n, n, dtype=dt, shape=())
+    U = qd.Matrix.field(n, n, dtype=dt, shape=())
+    UtU = qd.Matrix.field(n, n, dtype=dt, shape=())
+    sigma = qd.Matrix.field(n, n, dtype=dt, shape=())
+    V = qd.Matrix.field(n, n, dtype=dt, shape=())
+    VtV = qd.Matrix.field(n, n, dtype=dt, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = ti.svd(A[None], dt)
+        U[None], sigma[None], V[None] = qd.svd(A[None], dt)
         UtU[None] = U[None].transpose() @ U[None]
         VtV[None] = V[None].transpose() @ V[None]
         A_reconstructed[None] = U[None] @ sigma[None] @ V[None].transpose()
@@ -52,7 +52,7 @@ def _test_svd(dt, n):
 
     run()
 
-    tol = 1e-5 if dt == ti.f32 else 1e-12
+    tol = 1e-5 if dt == qd.f32 else 1e-12
 
     assert mat_equal(UtU.to_numpy(), np.eye(n), tol=tol)
     assert mat_equal(VtV.to_numpy(), np.eye(n), tol=tol)
@@ -64,27 +64,27 @@ def _test_svd(dt, n):
 
 
 @pytest.mark.parametrize("dim", [2, 3])
-@test_utils.test(default_fp=ti.f32, fast_math=False)
+@test_utils.test(default_fp=qd.f32, fast_math=False)
 def test_svd_f32(dim):
-    _test_svd(ti.f32, dim)
+    _test_svd(qd.f32, dim)
 
 
 @pytest.mark.parametrize("dim", [2, 3])
-@test_utils.test(require=ti.extension.data64, default_fp=ti.f64, fast_math=False)
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
 def test_svd_f64(dim):
-    _test_svd(ti.f64, dim)
+    _test_svd(qd.f64, dim)
 
 
 @test_utils.test()
 def test_transpose_no_loop():
-    A = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
-    U = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
-    sigma = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
-    V = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
+    A = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
+    U = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
+    sigma = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
+    V = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def run():
-        U[None], sigma[None], V[None] = ti.svd(A[None])
+        U[None], sigma[None], V[None] = qd.svd(A[None])
 
     run()
     # As long as it passes compilation we are good

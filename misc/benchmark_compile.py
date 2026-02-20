@@ -2,20 +2,20 @@ import autograd.numpy as np
 from autograd import grad
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 
-@ti.test()
+@qd.test()
 def grad_test(tifunc, npfunc=None):
     if npfunc is None:
         npfunc = tifunc
 
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 1).place(x, x.grad, y, y.grad)
+    qd.root.dense(qd.i, 1).place(x, x.grad, y, y.grad)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             y[i] = tifunc(x[i])
@@ -35,10 +35,10 @@ def test_unary():
     import time
 
     t = time.time()
-    grad_test(lambda x: ti.sqrt(x), lambda x: np.sqrt(x))
-    grad_test(lambda x: ti.exp(x), lambda x: np.exp(x))
-    grad_test(lambda x: ti.log(x), lambda x: np.log(x))
-    ti.core.print_profile_info()
+    grad_test(lambda x: qd.sqrt(x), lambda x: np.sqrt(x))
+    grad_test(lambda x: qd.exp(x), lambda x: np.exp(x))
+    grad_test(lambda x: qd.log(x), lambda x: np.log(x))
+    qd.core.print_profile_info()
     print("Total time {:.3f}s".format(time.time() - t))
 
 

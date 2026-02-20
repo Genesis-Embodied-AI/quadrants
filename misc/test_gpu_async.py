@@ -1,14 +1,14 @@
 import time
 
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.cuda)
+qd.init(arch=qd.cuda)
 
-a = ti.field(ti.f32, shape=(1024 * 1024 * 1024))
+a = qd.field(qd.f32, shape=(1024 * 1024 * 1024))
 
 
-@ti.kernel
-def fill(x: ti.f32):
+@qd.kernel
+def fill(x: qd.f32):
     for i in a:
         a[i] = x
 

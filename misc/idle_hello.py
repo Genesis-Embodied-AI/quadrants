@@ -1,7 +1,7 @@
-import quadrants as ti
+import quadrants as qd
 
 
-@ti.kernel
+@qd.kernel
 def func():
     pass
 

@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.types.enums import AutodiffMode
 
 from tests import test_utils
@@ -8,13 +8,13 @@ from tests import test_utils
 
 @test_utils.test(debug=True)
 def test_adjoint_checkbit_needs_grad():
-    x = ti.field(float, shape=(), needs_grad=True)
+    x = qd.field(float, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         x[None] = 1
 
-    with ti.ad.Tape(loss=x, validation=True):
+    with qd.ad.Tape(loss=x, validation=True):
         test()
 
     assert x.snode.ptr.has_adjoint_checkbit()
@@ -22,14 +22,14 @@ def test_adjoint_checkbit_needs_grad():
 
 @test_utils.test(debug=True)
 def test_adjoint_checkbit_lazy_grad():
-    x = ti.field(float, shape=())
-    ti.root.lazy_grad()
+    x = qd.field(float, shape=())
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def test():
         x[None] = 1
 
-    with ti.ad.Tape(loss=x, validation=True):
+    with qd.ad.Tape(loss=x, validation=True):
         test()
 
     assert x.snode.ptr.has_adjoint_checkbit()
@@ -37,15 +37,15 @@ def test_adjoint_checkbit_lazy_grad():
 
 @test_utils.test(debug=True)
 def test_adjoint_checkbit_place_grad():
-    x = ti.field(float)
-    y = ti.field(float)
-    ti.root.place(x, x.grad, y)
+    x = qd.field(float)
+    y = qd.field(float)
+    qd.root.place(x, x.grad, y)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         x[None] = 1
 
-    with ti.ad.Tape(loss=x, validation=True):
+    with qd.ad.Tape(loss=x, validation=True):
         test()
 
     assert x.snode.ptr.has_adjoint_checkbit()
@@ -54,34 +54,35 @@ def test_adjoint_checkbit_place_grad():
 
 @test_utils.test(debug=False)
 def test_adjoint_checkbit_needs_grad():
-    x = ti.field(float, shape=(), needs_grad=True)
+    x = qd.field(float, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         x[None] = 1
 
     with pytest.warns(Warning) as record:
-        with ti.ad.Tape(loss=x, validation=True):
+        with qd.ad.Tape(loss=x, validation=True):
             test()
 
     warn_raised = False
     for warn in record:
+        print("warn.message.args[0]", warn.message.args[0])
         if (
-            "Debug mode is disabled, autodiff valid check will not work. Please specify `ti.init(debug=True)` to enable the check."
+            "Debug mode is disabled, autodiff valid check will not work. Please specify `qd.init(debug=True)` to enable the check."
             in warn.message.args[0]
         ):
             warn_raised = True
     assert warn_raised
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True)
 def test_break_gdar_rule_1():
     N = 16
-    x = ti.field(dtype=ti.f32, shape=N, needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    b = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    b = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def func_broke_rule_1():
         loss[None] = x[1] * b[None]
         b[None] += 100
@@ -92,31 +93,31 @@ def test_break_gdar_rule_1():
     b[None] = 10
     loss.grad[None] = 1
 
-    with pytest.raises(ti.QuadrantsAssertionError):
-        with ti.ad.Tape(loss=loss, validation=True):
+    with pytest.raises(qd.QuadrantsAssertionError):
+        with qd.ad.Tape(loss=loss, validation=True):
             func_broke_rule_1()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True)
 def test_skip_grad_replaced():
     N = 16
-    x = ti.field(dtype=ti.f32, shape=N, needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    b = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    b = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
     # This kernel breaks the global data access rule
-    @ti.kernel
+    @qd.kernel
     def kernel_1():
         loss[None] = x[1] * b[None]
         b[None] += 100
 
-    @ti.ad.grad_replaced
+    @qd.ad.grad_replaced
     def kernel_2():
         loss[None] = x[1] * b[None]
         b[None] += 100
 
     # The user defined grad kernel is not restricted by the global data access rule, thus should be skipped when checking
-    @ti.ad.grad_for(kernel_2)
+    @qd.ad.grad_for(kernel_2)
     def kernel_2_grad():
         pass
 
@@ -126,26 +127,26 @@ def test_skip_grad_replaced():
     b[None] = 10
     loss.grad[None] = 1
 
-    with pytest.raises(ti.QuadrantsAssertionError):
-        with ti.ad.Tape(loss=loss, validation=True):
+    with pytest.raises(qd.QuadrantsAssertionError):
+        with qd.ad.Tape(loss=loss, validation=True):
             kernel_1()
 
-    with ti.ad.Tape(loss=loss, validation=True):
+    with qd.ad.Tape(loss=loss, validation=True):
         kernel_2()
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True)
 def test_autodiff_mode_recovered():
     N = 16
-    x = ti.field(dtype=ti.f32, shape=N, needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    b = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    b = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def kernel_1():
         loss[None] = x[1] * b[None]
 
-    @ti.kernel
+    @qd.kernel
     def kernel_2():
         loss[None] = x[1] * b[None]
 
@@ -156,7 +157,7 @@ def test_autodiff_mode_recovered():
     loss.grad[None] = 1
 
     func_calls = []
-    with ti.ad.Tape(loss=loss, validation=True) as t:
+    with qd.ad.Tape(loss=loss, validation=True) as t:
         kernel_1()
         kernel_2()
         for f, _ in t.calls:
@@ -166,19 +167,19 @@ def test_autodiff_mode_recovered():
         assert f.autodiff_mode == AutodiffMode.NONE
 
 
-@test_utils.test(require=ti.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True)
 def test_validation_kernel_capture():
     N = 16
     T = 8
-    x = ti.field(dtype=ti.f32, shape=N, needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-    b = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    b = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def kernel_1():
         loss[None] = x[1] * b[None]
 
-    @ti.kernel
+    @qd.kernel
     def kernel_2():
         loss[None] = x[1] * b[None]
 
@@ -193,6 +194,6 @@ def test_validation_kernel_capture():
     b[None] = 10
     loss.grad[None] = 1
 
-    with ti.ad.Tape(loss=loss, validation=True) as t:
+    with qd.ad.Tape(loss=loss, validation=True) as t:
         forward(T)
         assert len(t.calls) == 2 * T and len(t.modes) == 2 * T

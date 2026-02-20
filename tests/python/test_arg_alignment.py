@@ -1,12 +1,12 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_ret_write():
-    @ti.kernel
-    def func(a: ti.i16) -> ti.f32:
+    @qd.kernel
+    def func(a: qd.i16) -> qd.f32:
         return 3.0
 
     assert func(255) == 3.0
@@ -14,10 +14,10 @@ def test_ret_write():
 
 @test_utils.test()
 def test_arg_read():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.kernel
-    def func(a: ti.i8, b: ti.i32):
+    @qd.kernel
+    def func(a: qd.i8, b: qd.i32):
         x[None] = b
 
     func(255, 2)

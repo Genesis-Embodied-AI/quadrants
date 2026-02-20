@@ -75,7 +75,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             return tuple([_extract_arg(raise_on_templated_floats, item, annotation, arg_name) for item in arg])
         if issubclass(arg_type, Ndarray):
             raise QuadrantsRuntimeTypeError(
-                "Ndarray shouldn't be passed in via `ti.template()`, please annotate your kernel using `ti.types.ndarray(...)` instead"
+                "Ndarray shouldn't be passed in via `qd.template()`, please annotate your kernel using `qd.types.ndarray(...)` instead"
             )
         if arg_type in _composite_mutable_types or is_data_oriented(arg):
             # [Composite arguments] Return weak reference to the object
@@ -88,7 +88,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
             return weakref.ref(arg)
 
-        # Return value directly for other types, i.e. primitive types and all ti.Field-derived classes
+        # Return value directly for other types, i.e. primitive types and all qd.Field-derived classes
         if raise_on_templated_floats and arg_type is float:
             raise ValueError("Floats not allowed as templated types.")
         return arg

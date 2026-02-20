@@ -1,18 +1,18 @@
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import loop_unique
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_simple_1d():
-    x, y = ti.field(ti.i32), ti.field(ti.i32)
+    x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
-    ti.root.pointer(ti.i, N).place(x)
-    ti.root.pointer(ti.i, N).place(y)
+    qd.root.pointer(qd.i, N).place(x)
+    qd.root.pointer(qd.i, N).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def inc_y():
         for i in x:
             a = loop_unique(x[i])
@@ -29,15 +29,15 @@ def test_loop_unique_simple_1d():
         assert y[i] == expected_result.get(i, 0)
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_binary_op_1d():
-    x, y = ti.field(ti.i32), ti.field(ti.i32)
+    x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
-    ti.root.pointer(ti.i, N).place(x)
-    ti.root.pointer(ti.i, N).place(y)
+    qd.root.pointer(qd.i, N).place(x)
+    qd.root.pointer(qd.i, N).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def inc_y():
         for i in x:
             a = loop_unique(x[i])
@@ -54,15 +54,15 @@ def test_loop_unique_binary_op_1d():
         assert y[i] == expected_result.get(i, 0)
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_nested_1d():
-    x, y = ti.field(ti.i32), ti.field(ti.i32)
+    x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
-    ti.root.pointer(ti.i, N).place(x)
-    ti.root.pointer(ti.i, N).place(y)
+    qd.root.pointer(qd.i, N).place(x)
+    qd.root.pointer(qd.i, N).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def inc_y():
         for i in x:
             for j in range(i):
@@ -80,16 +80,16 @@ def test_loop_unique_nested_1d():
         assert y[i] == expected_result.get(i, 0)
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_2d():
-    x, y, z = ti.field(ti.i32), ti.field(ti.i32), ti.field(ti.i32)
+    x, y, z = qd.field(qd.i32), qd.field(qd.i32), qd.field(qd.i32)
 
     N = 8
-    ti.root.pointer(ti.ij, N).place(x)
-    ti.root.pointer(ti.ij, N).place(y)
-    ti.root.pointer(ti.ij, N).place(z)
+    qd.root.pointer(qd.ij, N).place(x)
+    qd.root.pointer(qd.ij, N).place(y)
+    qd.root.pointer(qd.ij, N).place(z)
 
-    @ti.kernel
+    @qd.kernel
     def inc_y_z():
         for i, j in x:
             a = loop_unique(x[i, j])
@@ -128,25 +128,25 @@ def test_loop_unique_2d():
 
 @test_utils.test()
 def test_loop_unique_ndrange():
-    x, y, z = ti.field(ti.i32), ti.field(ti.i32), ti.field(ti.i32)
+    x, y, z = qd.field(qd.i32), qd.field(qd.i32), qd.field(qd.i32)
 
     N = 8
     M = 32
-    ti.root.dense(ti.ij, N).place(x)
-    ti.root.dense(ti.i, M).place(y)
-    ti.root.dense(ti.ij, N).place(z)
+    qd.root.dense(qd.ij, N).place(x)
+    qd.root.dense(qd.i, M).place(y)
+    qd.root.dense(qd.ij, N).place(z)
 
     a = 3
     b = 5
 
-    @ti.kernel
+    @qd.kernel
     def prepare_x():
-        for i, j in ti.ndrange(a, b):
+        for i, j in qd.ndrange(a, b):
             x[i, j] = i * (b + 1) + j + 1
 
-    @ti.kernel
+    @qd.kernel
     def inc_y_z():
-        for i, j in ti.ndrange(a, b):
+        for i, j in qd.ndrange(a, b):
             u = loop_unique(x[i, j])
             y[u] += i
             z[i, j + 1] += 10  # TODO: demote this

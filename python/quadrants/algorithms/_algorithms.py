@@ -78,7 +78,7 @@ class PrefixSumExecutor:
         ele_nums_pos = self.ele_nums_pos
 
         if input_arr.dtype != i32:
-            raise RuntimeError("Only ti.i32 type is supported for prefix sum.")
+            raise RuntimeError("Only qd.i32 type is supported for prefix sum.")
 
         if current_cfg().arch == cuda:
             inclusive_add = warp_shfl_up_i32

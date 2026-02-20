@@ -86,10 +86,10 @@ class Expr(QuadrantsOperations):
         return self.ptr.get_raw_address()
 
     def __str__(self):
-        return "<ti.Expr>"
+        return "<qd.Expr>"
 
     def __repr__(self):
-        return "<ti.Expr>"
+        return "<qd.Expr>"
 
 
 def _check_in_range(npty, val):
@@ -117,7 +117,7 @@ def make_constant_expr(val, dtype):
         constant_dtype = impl.get_runtime().default_fp if dtype is None else dtype
         if constant_dtype not in real_types:
             raise QuadrantsTypeError(
-                "Floating-point literals must be annotated with a floating-point type. For type casting, use `ti.cast`."
+                "Floating-point literals must be annotated with a floating-point type. For type casting, use `qd.cast`."
             )
         return Expr(_ti_core.make_const_expr_fp(constant_dtype, val))
 
@@ -125,13 +125,13 @@ def make_constant_expr(val, dtype):
         constant_dtype = impl.get_runtime().default_ip if dtype is None else dtype
         if constant_dtype not in integer_types:
             raise QuadrantsTypeError(
-                "Integer literals must be annotated with a integer type. For type casting, use `ti.cast`."
+                "Integer literals must be annotated with a integer type. For type casting, use `qd.cast`."
             )
         if _check_in_range(to_numpy_type(constant_dtype), val):
             return Expr(_ti_core.make_const_expr_int(constant_dtype, _clamp_unsigned_to_range(np.int64, val)))
         if dtype is None:
             raise QuadrantsTypeError(
-                f"Integer literal {val} exceeded the range of default_ip: {impl.get_runtime().default_ip}, please specify the dtype via e.g. `ti.u64({val})` or set a different `default_ip` in `ti.init()`"
+                f"Integer literal {val} exceeded the range of default_ip: {impl.get_runtime().default_ip}, please specify the dtype via e.g. `qd.u64({val})` or set a different `default_ip` in `qd.init()`"
             )
         else:
             raise QuadrantsTypeError(f"Integer literal {val} exceeded the range of specified dtype: {dtype}")

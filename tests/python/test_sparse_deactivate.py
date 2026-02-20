@@ -1,21 +1,21 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32, shape=())
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32, shape=())
 
     n = 16
 
-    ptr = ti.root.pointer(ti.i, n)
-    ptr.dense(ti.i, n).place(x)
+    ptr = qd.root.pointer(qd.i, n)
+    ptr.dense(qd.i, n).place(x)
 
     s[None] = 0
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -25,9 +25,9 @@ def test_pointer():
     func()
     assert s[None] == 32
 
-    @ti.kernel
+    @qd.kernel
     def deactivate():
-        ti.deactivate(ptr, 0)
+        qd.deactivate(ptr, 0)
 
     deactivate()
     s[None] = 0
@@ -35,20 +35,20 @@ def test_pointer():
     assert s[None] == 16
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer1():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 16
 
-    ptr = ti.root.pointer(ti.i, n)
-    ptr.dense(ti.i, n).place(x)
-    ti.root.place(s)
+    ptr = qd.root.pointer(qd.i, n)
+    ptr.dense(qd.i, n).place(x)
+    qd.root.place(s)
 
     s[None] = 0
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -60,9 +60,9 @@ def test_pointer1():
     func()
     assert s[None] == 48
 
-    @ti.kernel
+    @qd.kernel
     def deactivate():
-        ti.deactivate(ptr, 0)
+        qd.deactivate(ptr, 0)
 
     deactivate()
     s[None] = 0
@@ -70,28 +70,28 @@ def test_pointer1():
     assert s[None] == 32
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer2():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     n = 16
 
-    ptr = ti.root.pointer(ti.i, n)
-    ptr.dense(ti.i, n).place(x)
+    ptr = qd.root.pointer(qd.i, n)
+    ptr.dense(qd.i, n).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n * n):
             x[i] = 1.0
 
-    @ti.kernel
+    @qd.kernel
     def set10():
         x[10] = 10.0
 
-    @ti.kernel
+    @qd.kernel
     def clear():
         for i in ptr:
-            ti.deactivate(ptr, i)
+            qd.deactivate(ptr, i)
 
     func()
     clear()
@@ -108,49 +108,49 @@ def test_pointer2():
             assert x[i] == 10.0
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer3():
-    x = ti.field(ti.f32)
-    x_temp = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    x_temp = qd.field(qd.f32)
 
     n = 16
 
-    ptr1 = ti.root.pointer(ti.ij, n)
-    ptr1.dense(ti.ij, n).place(x)
-    ptr2 = ti.root.pointer(ti.ij, n)
-    ptr2.dense(ti.ij, n).place(x_temp)
+    ptr1 = qd.root.pointer(qd.ij, n)
+    ptr1.dense(qd.ij, n).place(x)
+    ptr2 = qd.root.pointer(qd.ij, n)
+    ptr2.dense(qd.ij, n).place(x_temp)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for j in range(n * n):
             for i in range(n * n):
                 x[i, j] = i + j
 
-    @ti.kernel
+    @qd.kernel
     def fill2():
         for i, j in x_temp:
             if x_temp[i, j] < 100:
                 x[i, j] = x_temp[i, j]
 
-    @ti.kernel
+    @qd.kernel
     def copy_to_temp():
         for i, j in x:
             x_temp[i, j] = x[i, j]
 
-    @ti.kernel
+    @qd.kernel
     def copy_from_temp():
         for i, j in x_temp:
             x[i, j] = x_temp[i, j]
 
-    @ti.kernel
+    @qd.kernel
     def clear():
         for i, j in ptr1:
-            ti.deactivate(ptr1, [i, j])
+            qd.deactivate(ptr1, [i, j])
 
-    @ti.kernel
+    @qd.kernel
     def clear_temp():
         for i, j in ptr2:
-            ti.deactivate(ptr2, [i, j])
+            qd.deactivate(ptr2, [i, j])
 
     fill()
     copy_to_temp()
@@ -171,37 +171,37 @@ def test_pointer3():
                     assert xn[i, j] == i + j
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_dynamic():
-    x = ti.field(ti.i32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    s = qd.field(qd.i32)
 
     n = 16
 
-    lst = ti.root.dense(ti.i, n).dynamic(ti.j, 4096)
+    lst = qd.root.dense(qd.i, n).dynamic(qd.j, 4096)
     lst.place(x)
-    ti.root.dense(ti.i, n).place(s)
+    qd.root.dense(qd.i, n).place(s)
 
-    @ti.kernel
-    def func(mul: ti.i32):
+    @qd.kernel
+    def func(mul: qd.i32):
         for i in range(n):
             for j in range(i * i * mul):
-                ti.append(lst, i, j)
+                qd.append(lst, i, j)
 
-    @ti.kernel
+    @qd.kernel
     def fetch_length():
         for i in range(n):
-            s[i] = ti.length(lst, i)
+            s[i] = qd.length(lst, i)
 
     func(1)
     fetch_length()
     for i in range(n):
         assert s[i] == i * i
 
-    @ti.kernel
+    @qd.kernel
     def clear():
         for i in range(n):
-            ti.deactivate(lst, [i])
+            qd.deactivate(lst, [i])
 
     func(2)
     fetch_length()

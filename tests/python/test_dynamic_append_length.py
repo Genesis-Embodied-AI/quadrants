@@ -1,15 +1,15 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 def _test_dynamic_append_length(dt):
-    x = ti.field(int)
-    block = ti.root.dense(ti.i, 10)
-    pixel = block.dynamic(ti.j, 10)
+    x = qd.field(int)
+    block = qd.root.dense(qd.i, 10)
+    pixel = block.dynamic(qd.j, 10)
     pixel.place(x)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(10):
             for j in range(i):
@@ -22,6 +22,6 @@ def _test_dynamic_append_length(dt):
     test()
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal], default_fp=ti.f32, debug=True)
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal], default_fp=qd.f32, debug=True)
 def test_dynamic_append_length_f32():
-    _test_dynamic_append_length(ti.f32)
+    _test_dynamic_append_length(qd.f32)
