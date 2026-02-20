@@ -1,3 +1,5 @@
+import numpy as np
+
 import quadrants as ti
 
 from tests import test_utils
@@ -50,5 +52,27 @@ def test_atomic_dest_field_not_cached():
                 result[i] = x[i]
 
     k()
+    for i in range(n):
+        assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
+
+
+@test_utils.test()
+def test_atomic_dest_ndarray_not_cached():
+    """Same as test_atomic_dest_field_not_cached but for ndarray (ExternalPtrStmt)."""
+    n = 4
+    m = 8
+
+    @ti.kernel
+    def k(x: ti.types.ndarray(), result: ti.types.ndarray()):
+        ti.loop_config(serialize=True)
+        for i in range(n):
+            x[i] = 0
+            for j in range(m):
+                ti.atomic_add(x[i], 1)
+                result[i] = x[i]
+
+    x = np.zeros(n, dtype=np.int32)
+    result = np.zeros(n, dtype=np.int32)
+    k(x, result)
     for i in range(n):
         assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
