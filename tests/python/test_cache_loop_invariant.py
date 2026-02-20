@@ -1,5 +1,4 @@
-import numpy as np
-
+import pytest
 import quadrants as ti
 
 from tests import test_utils
@@ -27,8 +26,9 @@ def test_local_matrix_non_constant_index_real_matrix():
     test_invariant_cache()
 
 
+@pytest.mark.parametrize("use_ndarray", [False, True])
 @test_utils.test()
-def test_atomic_dest_field_not_cached():
+def test_atomic_dest_not_cached(use_ndarray: bool) -> None:
     """Regression: cache_loop_invariant must skip fields written by AtomicOpStmt.
 
     On SPIR-V backends (Metal/Vulkan), atomics in serial tasks are kept as real
@@ -39,11 +39,12 @@ def test_atomic_dest_field_not_cached():
     n = 4
     m = 8
 
-    x = ti.field(dtype=ti.i32, shape=(n,))
-    result = ti.field(dtype=ti.i32, shape=(n,))
+    TensorType = ti.ndarray if use_ndarray else ti.field
+
+    AnnotationType = ti.types.ndarray() if use_ndarray else ti.template()
 
     @ti.kernel
-    def k():
+    def k(x: AnnotationType, result: AnnotationType):
         ti.loop_config(serialize=True)
         for i in range(n):
             x[i] = 0
@@ -51,28 +52,9 @@ def test_atomic_dest_field_not_cached():
                 ti.atomic_add(x[i], 1)
                 result[i] = x[i]
 
-    k()
-    for i in range(n):
-        assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
+    x = TensorType(dtype=ti.i32, shape=(n,))
+    result = TensorType(dtype=ti.i32, shape=(n,))
 
-
-@test_utils.test()
-def test_atomic_dest_ndarray_not_cached():
-    """Same as test_atomic_dest_field_not_cached but for ndarray (ExternalPtrStmt)."""
-    n = 4
-    m = 8
-
-    @ti.kernel
-    def k(x: ti.types.ndarray(), result: ti.types.ndarray()):
-        ti.loop_config(serialize=True)
-        for i in range(n):
-            x[i] = 0
-            for j in range(m):
-                ti.atomic_add(x[i], 1)
-                result[i] = x[i]
-
-    x = np.zeros(n, dtype=np.int32)
-    result = np.zeros(n, dtype=np.int32)
     k(x, result)
     for i in range(n):
         assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
