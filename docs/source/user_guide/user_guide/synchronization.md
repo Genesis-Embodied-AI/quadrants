@@ -8,8 +8,8 @@ Since running code on GPUs is inherently multi-threaded, synchronization of writ
     - think of it like sending a snail mail letter, whilst you work on other things, and lead your life
 - after the store statement has executed, the kernel continues to execute other statements, whilst the data works its way to memory
 ```
-@ti.kernel
-def f1(a: ti.Template) -> None:
+@qd.kernel
+def f1(a: qd.Template) -> None:
      a[0] = 5
      # .. execution continues here immediately
 ```
@@ -32,8 +32,8 @@ There are a few options:
 As an example though, if one submits a batch of tasks, and each task is independent, then parallelizing over the 'batch size' dimension means that threads do not read memory written by other threads
 
 ```
-@ti.kernel
-def f1(batch_size: int, a: ti.Template) -> None:
+@qd.kernel
+def f1(batch_size: int, a: qd.Template) -> None:
     for i_b in range(batch_size):
         # each thread does work independently of other threads
 ```
@@ -43,8 +43,8 @@ def f1(batch_size: int, a: ti.Template) -> None:
 Sometimes we might have multiple for loops, which, on their own are thread safe, however, one for loop must not begin until the previous one has finished.
 
 ```
-@ti.kernel
-def f1(batch_size: int, a: ti.Template) -> None:
+@qd.kernel
+def f1(batch_size: int, a: qd.Template) -> None:
     for i_b in range(batch_size):
         # each thread does work independently of other threads
     for i_b in range(batch_size):
@@ -58,9 +58,9 @@ The default behavior of Quadrants for kernels with multiple top-level for loops 
 Atomics tend to be the main other approach used by Quadrants engineers for synchronization.
 
 ```
-@ti.kernel
-def f1(a: ti.Template, b: ti.Template) -> None:
-    ti.atomic_add(a[0], b[0])
+@qd.kernel
+def f1(a: qd.Template, b: qd.Template) -> None:
+    qd.atomic_add(a[0], b[0])
 ```
 The operation is blocking, and will not return until the addition has taken place
 - this is thus very slow
@@ -73,7 +73,7 @@ Barriers and fences only work well for shared memory. Using shared memory is an 
 ### Shared memory
 
 ```
-ti.simt.block.SharedArray(data_type, shape)
-ti.simt.block.sync()
+qd.simt.block.SharedArray(data_type, shape)
+qd.simt.block.sync()
 ```
 See [tests/python/test_shared_array.py](../../../../tests/python/test_shared_array.py) for examples.

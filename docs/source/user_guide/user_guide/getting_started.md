@@ -13,7 +13,7 @@ pip install quadrants
 ```
 ## Sanity checking the installation
 ```
-python -c 'import quadrants as ti; ti.init(arch=ti.gpu)'
+python -c 'import quadrants as qd; qd.init(arch=qd.gpu)'
 ```
 (should not show any error messages)
 
@@ -67,8 +67,8 @@ Now let's convert it to quadrants
 Here is the function, written as a Quadrants kernel:
 
 ```
-@ti.kernel
-def lcg_ti(B: int, lcg_its: int, a: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.kernel
+def lcg_ti(B: int, lcg_its: int, a: qd.types.NDArray[qd.i32, 1]) -> None:
     for i in range(B):
         x = a[i]
         for j in range(lcg_its):
@@ -77,70 +77,70 @@ def lcg_ti(B: int, lcg_its: int, a: ti.types.NDArray[ti.i32, 1]) -> None:
 ```
 
 Yes, it's the same except:
-- added `@ti.kernel` annotation
-- changed type from `npt.NDArray` to `ti.types.NDArray[ti.i32, 1]`
+- added `@qd.kernel` annotation
+- changed type from `npt.NDArray` to `qd.types.NDArray[qd.i32, 1]`
 
 Before we run this we need to import quadrants, and initialize it:
 
 ```
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 ```
 The `arch` parameter lets you choose between `gpu`, `cpu`, `metal`, `cuda`, `vulkan`.
-- using `ti.gpu` will use the first GPU it finds
+- using `qd.gpu` will use the first GPU it finds
 
 We'll also need to create a quadrants ndarray:
 ```
-a = ti.ndarray(ti.i32, (B,))
+a = qd.ndarray(qd.i32, (B,))
 ```
 By comparison with numpy array:
 - the parameters are reversed
-- we use `ti.i32` instead of `np.int32`
+- we use `qd.i32` instead of `np.int32`
 
 When we time the kernel we have to be careful:
 - running the kernel function `lcg_ti()` starts the kernel
 - ... but it does not wait for it to finish
 
-We'll only wait for it to finish when we access data from the kernel, or we call an explicit synchronization function, like `ti.sync()`. So let's do that:
+We'll only wait for it to finish when we access data from the kernel, or we call an explicit synchronization function, like `qd.sync()`. So let's do that:
 ```
-ti.sync()
+qd.sync()
 end = time.time()
 ```
 
-In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add ti.sync():
+In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add qd.sync():
 
 ```
-ti.sync()
+qd.sync()
 start = time.time()
 ```
 
 The full program then becomes:
 
 ```
-import quadrants as ti
+import quadrants as qd
 import time
 
 
-@ti.kernel
-def lcg_ti(B: int, lcg_its: int, a: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.kernel
+def lcg_ti(B: int, lcg_its: int, a: qd.types.NDArray[qd.i32, 1]) -> None:
     for i in range(B):
         x = a[i]
         for j in range(lcg_its):
             x = (1664525 * x + 1013904223) % 2147483647
         a[i] = x
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
 B = 16000
-a = ti.ndarray(ti.int32, (B,))
+a = qd.ndarray(qd.int32, (B,))
 
-ti.sync()
+qd.sync()
 start = time.time()
 
 lcg_ti(B, 1000, a)
 
-ti.sync()
+qd.sync()
 end = time.time()
 print("elapsed", end - start)
 ```
@@ -175,9 +175,9 @@ We'll do a simple kernel that copies from one tensor to another. To avoid simply
 ```
 import argparse
 import time
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--use-field", action="store_true")
@@ -185,31 +185,31 @@ args = parser.parse_args()
 
 use_field = args.use_field
 if use_field:
-    V = ti.field
-    ParamType = ti.Template
+    V = qd.field
+    ParamType = qd.Template
 else:
-    V = ti.ndarray
-    ParamType = ti.types.NDArray[ti.i32, 1]
+    V = qd.ndarray
+    ParamType = qd.types.NDArray[qd.i32, 1]
 
-@ti.kernel
+@qd.kernel
 def copy_memory(N: int, a: ParamType, b: ParamType) -> None:
     for n in range(N):
         b[n % 100] = a[n % 100]
 
 N = 20_000
-a = V(ti.i32, (100,))
-b = V(ti.i32, (100,))
+a = V(qd.i32, (100,))
+b = V(qd.i32, (100,))
 
 # warmup
 copy_memory(N, a, b)
 
 num_its = 1000
 
-ti.sync()
+qd.sync()
 start = time.time()
 for it in range(num_its):
     copy_memory(N, a, b)
-ti.sync()
+qd.sync()
 end = time.time()
 iteration_time = (end - start) / num_its * 1_000_000
 print("iteration time", iteration_time, "us")
