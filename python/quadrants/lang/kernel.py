@@ -357,61 +357,65 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        self.runtime.materialize()
-        used_py_dataclass_parameters = self._try_load_fastcache(py_args, key)
-        kernel_name = f"{self.func.__name__}_c{self.kernel_counter}_{key[1]}"
-        _logging.trace(f"Materializing kernel {kernel_name} in {self.autodiff_mode}...")
+        with self.runtime.compilation_lock:
+            if key in self.materialized_kernels:
+                return
 
-        pruning = Pruning(kernel_used_parameters=used_py_dataclass_parameters)
-        range_begin = 0 if used_py_dataclass_parameters is None else 1
-        runtime = impl.get_runtime()
-        for _pass in range(range_begin, 2):
-            if _pass >= 1:
-                pruning.enforce()
-            tree, ctx = self.get_tree_and_ctx(
-                pass_idx=_pass,
-                py_args=py_args,
-                template_slot_locations=self.template_slot_locations,
-                arg_features=arg_features,
-                current_kernel=self,
-                pruning=pruning,
-                currently_compiling_materialize_key=key,
-            )
-            runtime._current_global_context = ctx.global_context
+            self.runtime.materialize()
+            used_py_dataclass_parameters = self._try_load_fastcache(py_args, key)
+            kernel_name = f"{self.func.__name__}_c{self.kernel_counter}_{key[1]}"
+            _logging.trace(f"Materializing kernel {kernel_name} in {self.autodiff_mode}...")
 
-            if self.autodiff_mode != _NONE:
-                KernelSimplicityASTChecker(self.func).visit(tree)
+            pruning = Pruning(kernel_used_parameters=used_py_dataclass_parameters)
+            range_begin = 0 if used_py_dataclass_parameters is None else 1
+            runtime = impl.get_runtime()
+            for _pass in range(range_begin, 2):
+                if _pass >= 1:
+                    pruning.enforce()
+                tree, ctx = self.get_tree_and_ctx(
+                    pass_idx=_pass,
+                    py_args=py_args,
+                    template_slot_locations=self.template_slot_locations,
+                    arg_features=arg_features,
+                    current_kernel=self,
+                    pruning=pruning,
+                    currently_compiling_materialize_key=key,
+                )
+                runtime._current_global_context = ctx.global_context
 
-            quadrants_ast_generator = ASTGenerator(
-                ctx=ctx,
-                kernel_name=kernel_name,
-                current_kernel=self,
-                only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
-                tree=tree,
-                dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
-            )
-            quadrants_kernel = impl.get_runtime().prog.create_kernel(
-                quadrants_ast_generator, kernel_name, self.autodiff_mode
-            )
-            if _pass == 1:
-                assert key not in self.materialized_kernels
-                self.materialized_kernels[key] = quadrants_kernel
-            else:
-                for used_parameters in pruning.used_vars_by_func_id.values():
-                    new_used_parameters = set()
-                    for param in used_parameters:
-                        split_param = param.split("__ti_")
-                        for i in range(len(split_param), 1, -1):
-                            joined = "__ti_".join(split_param[:i])
-                            if joined in new_used_parameters:
-                                break
-                            new_used_parameters.add(joined)
-                    used_parameters.clear()
-                    used_parameters.update(new_used_parameters)
-                self.used_py_dataclass_parameters_by_key_enforcing[key] = pruning.used_vars_by_func_id[
-                    Pruning.KERNEL_FUNC_ID
-                ]
-            runtime._current_global_context = None
+                if self.autodiff_mode != _NONE:
+                    KernelSimplicityASTChecker(self.func).visit(tree)
+
+                quadrants_ast_generator = ASTGenerator(
+                    ctx=ctx,
+                    kernel_name=kernel_name,
+                    current_kernel=self,
+                    only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
+                    tree=tree,
+                    dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
+                )
+                quadrants_kernel = impl.get_runtime().prog.create_kernel(
+                    quadrants_ast_generator, kernel_name, self.autodiff_mode
+                )
+                if _pass == 1:
+                    assert key not in self.materialized_kernels
+                    self.materialized_kernels[key] = quadrants_kernel
+                else:
+                    for used_parameters in pruning.used_vars_by_func_id.values():
+                        new_used_parameters = set()
+                        for param in used_parameters:
+                            split_param = param.split("__ti_")
+                            for i in range(len(split_param), 1, -1):
+                                joined = "__ti_".join(split_param[:i])
+                                if joined in new_used_parameters:
+                                    break
+                                new_used_parameters.add(joined)
+                        used_parameters.clear()
+                        used_parameters.update(new_used_parameters)
+                    self.used_py_dataclass_parameters_by_key_enforcing[key] = pruning.used_vars_by_func_id[
+                        Pruning.KERNEL_FUNC_ID
+                    ]
+                runtime._current_global_context = None
 
     def launch_kernel(self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args) -> Any:
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
