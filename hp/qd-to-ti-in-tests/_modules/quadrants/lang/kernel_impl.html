@@ -357,11 +357,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.func</span>
+<span class="sd">        &gt;&gt;&gt; @qd.func</span>
 <span class="sd">        &gt;&gt;&gt; def foo(x):</span>
 <span class="sd">        &gt;&gt;&gt;     return x + 2</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def run():</span>
 <span class="sd">        &gt;&gt;&gt;     print(foo(40))  # 42</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -412,15 +412,15 @@
 
 <span class="c1"># For a Quadrants class definition like below:</span>
 <span class="c1">#</span>
-<span class="c1"># @ti.data_oriented</span>
+<span class="c1"># @qd.data_oriented</span>
 <span class="c1"># class X:</span>
-<span class="c1">#   @ti.kernel</span>
+<span class="c1">#   @qd.kernel</span>
 <span class="c1">#   def foo(self):</span>
 <span class="c1">#     ...</span>
 <span class="c1">#</span>
-<span class="c1"># When ti.kernel runs, the stackframe&#39;s |code_context| of Python 3.8(+) is</span>
+<span class="c1"># When qd.kernel runs, the stackframe&#39;s |code_context| of Python 3.8(+) is</span>
 <span class="c1"># different from that of Python 3.7 and below. In 3.8+, it is &#39;class X:&#39;,</span>
-<span class="c1"># whereas in &lt;=3.7, it is &#39;@ti.data_oriented&#39;. More interestingly, if the class</span>
+<span class="c1"># whereas in &lt;=3.7, it is &#39;@qd.data_oriented&#39;. More interestingly, if the class</span>
 <span class="c1"># inherits, i.e. class X(object):, then in both versions, |code_context| is</span>
 <span class="c1"># &#39;class X(object):&#39;...</span>
 <span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span> <span class="o">=</span> <span class="p">[</span>
@@ -475,7 +475,7 @@
         <span class="nd">@wraps</span><span class="p">(</span><span class="n">_func</span><span class="p">)</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">wrapped_classkernel</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">args</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @ti.data_oriented&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">wrapped_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="n">wrapped</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">wrapped_classkernel</span><span class="p">)</span>
@@ -523,9 +523,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.i32, shape=(4, 8))</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.i32, shape=(4, 8))</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def run():</span>
 <span class="sd">        &gt;&gt;&gt;     # Assigns all the elements of `x` in parallel.</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
@@ -543,7 +543,7 @@
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
-                <span class="s2">&quot;@ti.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. &quot;</span>
+                <span class="s2">&quot;@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. &quot;</span>
                 <span class="s2">&quot;`pure` parameter is intended to be removed in 4.0.0&quot;</span>
             <span class="p">)</span>
 
@@ -561,7 +561,7 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_owner</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">wrapped_kernel_func</span><span class="p">:</span> <span class="n">QuadrantsCallable</span> <span class="o">|</span> <span class="n">BoundQuadrantsCallable</span><span class="p">):</span>
         <span class="n">clsobj</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">kernel_owner</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">clsobj</span><span class="p">,</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="n">clsobj</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @ti.data_oriented&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="n">clsobj</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span> <span class="o">=</span> <span class="n">kernel_owner</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_primal</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_primal</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_adjoint</span>
@@ -593,12 +593,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.data_oriented</span>
+<span class="sd">        &gt;&gt;&gt; @qd.data_oriented</span>
 <span class="sd">        &gt;&gt;&gt; class TiArray:</span>
 <span class="sd">        &gt;&gt;&gt;     def __init__(self, n):</span>
-<span class="sd">        &gt;&gt;&gt;         self.x = ti.field(ti.f32, shape=n)</span>
+<span class="sd">        &gt;&gt;&gt;         self.x = qd.field(qd.f32, shape=n)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt;     @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt;     def inc(self):</span>
 <span class="sd">        &gt;&gt;&gt;         for i in self.x:</span>
 <span class="sd">        &gt;&gt;&gt;             self.x[i] += 1.0</span>

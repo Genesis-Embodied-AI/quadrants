@@ -81,7 +81,7 @@ Module Contents
 
    MeshQuadrants offers first-class support for triangular/tetrahedral meshes
    and allows efficient computation on these irregular data structures,
-   only available for backends supporting `ti.extension.mesh`.
+   only available for backends supporting `qd.extension.mesh`.
 
    See more details in https://github.com/taichi-dev/meshquadrants
 

@@ -310,13 +310,13 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.examples.minimal</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <div class="viewcode-block" id="lcg_ti">
 <a class="viewcode-back" href="../../../autoapi/quadrants/examples/minimal/index.html#quadrants.examples.minimal.lcg_ti">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Linear congruential generator https://en.wikipedia.org/wiki/Linear_congruential_generator</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -331,12 +331,12 @@
 <div class="viewcode-block" id="main">
 <a class="viewcode-back" href="../../../autoapi/quadrants/examples/minimal/index.html#quadrants.examples.minimal.main">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
 
     <span class="n">B</span> <span class="o">=</span> <span class="mi">10</span>
     <span class="n">lcg_its</span> <span class="o">=</span> <span class="mi">10</span>
 
-    <span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
 
     <span class="n">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LCG for B=</span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, lcg_its=</span><span class="si">{</span><span class="n">lcg_its</span><span class="si">}</span><span class="s2">: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>  <span class="c1"># pylint: disable=no-member</span></div>

@@ -711,12 +711,12 @@ Currently contains ‘x64’, ‘x86_64’, ‘arm64’.</p>
 This will destroy all the allocated fields and kernels, and restore
 the runtime to its default configuration.</p>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;before reset: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="go">before rest: 1</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;after reset: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="go"># will raise error because a is unavailable after reset.</span>
 </pre></div>
@@ -737,9 +737,9 @@ importantly, it sets the backend used throughout the program.</p>
 <li><p><strong>default_ip</strong> (<em>Optional</em><em>[</em><em>type</em><em>]</em>) – Default integral type.</p></li>
 <li><p><strong>require_version</strong> – A version string.</p></li>
 <li><p><strong>print_non_pure</strong> – Print the names of kernels, at the time they are executed, which are not annotated with
-&#64;ti.pure</p></li>
+&#64;qd.pure</p></li>
 <li><p><strong>src_ll_cache</strong> – enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-for pure kernels (i.e. kernels declared as &#64;ti.pure)</p></li>
+for pure kernels (i.e. kernels declared as &#64;qd.pure)</p></li>
 <li><p><strong>**kwargs</strong> – <p>Quadrants provides highly customizable compilation through
 <code class="docutils literal notranslate"><span class="pre">kwargs</span></code>, which allows for fine grained control of Quadrants compiler
 behavior. Below we list some of the most frequently used ones. For a
@@ -783,7 +783,7 @@ for how BLS is used.</p>
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">mesh_local</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#mesh_local"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.mesh_local" title="Link to this definition">#</a></dt>
 <dd><p>Hints the compiler to cache the mesh attributes
 and to enable the mesh BLS optimization,
-only available for backends supporting <cite>ti.extension.mesh</cite> and to use with mesh-for loop.</p>
+only available for backends supporting <cite>qd.extension.mesh</cite> and to use with mesh-for loop.</p>
 <p>Related to <a class="github reference external" href="https://github.com/taichi-dev/quadrants/issues/3608">taichi-dev/quadrants#3608</a></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -792,17 +792,17 @@ only available for backends supporting <cite>ti.extension.mesh</cite> and to use
 </dl>
 <p>Examples:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># instantiate model</span>
-<span class="n">mesh_builder</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Mesh</span><span class="o">.</span><span class="n">tri</span><span class="p">()</span>
+<span class="n">mesh_builder</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Mesh</span><span class="o">.</span><span class="n">tri</span><span class="p">()</span>
 <span class="n">mesh_builder</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">place</span><span class="p">({</span>
-    <span class="s1">&#39;x&#39;</span> <span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span>
-    <span class="s1">&#39;y&#39;</span> <span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span>
+    <span class="s1">&#39;x&#39;</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span>
+    <span class="s1">&#39;y&#39;</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 <span class="p">})</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">mesh_builder</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="n">meta</span><span class="p">)</span>
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">foo</span><span class="p">():</span>
     <span class="c1"># hint the compiler to cache mesh vertex attribute `x` and `y`.</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">mesh_local</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">mesh_local</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">v0</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">verts</span><span class="p">:</span> <span class="c1"># mesh-for loop</span>
         <span class="k">for</span> <span class="n">v1</span> <span class="ow">in</span> <span class="n">v0</span><span class="o">.</span><span class="n">verts</span><span class="p">:</span>
             <span class="n">v0</span><span class="o">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">v1</span><span class="o">.</span><span class="n">y</span>
@@ -837,7 +837,7 @@ value untouched.</p>
 </dl>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># hint the compiler that x is in range [8, 12).</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">assume_in_range</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">assume_in_range</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">x</span>
 <span class="go">10</span>
 </pre></div>
@@ -860,10 +860,10 @@ value untouched.</p>
 </dd>
 </dl>
 <p>Examples:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">break_in_serial_for</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">break_in_serial_for</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
     <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">serialize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">serialize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>  <span class="c1"># This loop runs serially</span>
         <span class="n">a</span> <span class="o">+=</span> <span class="n">i</span>
         <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">10</span><span class="p">:</span>
@@ -873,24 +873,24 @@ value untouched.</p>
 <span class="n">break_in_serial_for</span><span class="p">()</span>  <span class="c1"># returns 55</span>
 
 <span class="n">n</span> <span class="o">=</span> <span class="mi">128</span>
-<span class="n">val</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="n">val</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">():</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">parallelize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">block_dim</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">parallelize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">block_dim</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
     <span class="c1"># If the kernel is run on the CPU backend, 8 threads will be used to run it</span>
     <span class="c1"># If the kernel is run on the CUDA backend, each block will have 16 threads.</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
         <span class="n">val</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
 
-<span class="n">u1</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">quant</span><span class="o">.</span><span class="n">int</span><span class="p">(</span><span class="n">bits</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">signed</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">u1</span><span class="p">)</span>
-<span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">u1</span><span class="p">)</span>
-<span class="n">cell</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-<span class="n">cell</span><span class="o">.</span><span class="n">quant_array</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="n">cell</span><span class="o">.</span><span class="n">quant_array</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="n">u1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">quant</span><span class="o">.</span><span class="n">int</span><span class="p">(</span><span class="n">bits</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">signed</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">u1</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">u1</span><span class="p">)</span>
+<span class="n">cell</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<span class="n">cell</span><span class="o">.</span><span class="n">quant_array</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">cell</span><span class="o">.</span><span class="n">quant_array</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">():</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">bit_vectorize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">bit_vectorize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="c1"># 32 bits, instead of 1 bit, will be copied at a time</span>
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
         <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
@@ -906,11 +906,11 @@ only available for cpu and cuda backends.</p>
 <p>For cpu backends this is equal to the cpu thread id,
 For cuda backends this is equal to <cite>block_id * block_dim + thread_id</cite>.</p>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">16</span><span class="p">))</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">16</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ti</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="nb">print</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">global_thread_idx</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="nb">print</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">global_thread_idx</span><span class="p">())</span>
 <span class="gp">&gt;&gt;&gt;</span>
 <span class="go">test()</span>
 </pre></div>
@@ -921,7 +921,7 @@ For cuda backends this is equal to <cite>block_id * block_dim + thread_id</cite>
 <dt class="sig sig-object py" id="quadrants.lang.misc.mesh_patch_idx">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">mesh_patch_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#mesh_patch_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.mesh_patch_idx" title="Link to this definition">#</a></dt>
 <dd><p>Returns the internal mesh patch id of this running thread,
-only available for backends supporting <cite>ti.extension.mesh</cite> and to use within mesh-for loop.</p>
+only available for backends supporting <cite>qd.extension.mesh</cite> and to use within mesh-for loop.</p>
 <p>Related to <a class="github reference external" href="https://github.com/taichi-dev/quadrants/issues/3608">taichi-dev/quadrants#3608</a></p>
 </dd></dl>
 

@@ -493,9 +493,9 @@ The bool value in <cite>cond</cite> must can be determined at compile time.</p>
 </dl>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">year</span> <span class="o">=</span> <span class="mi">2001</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">year</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;the year must be a lunar year&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">qd</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span><span class="n">year</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;the year must be a lunar year&quot;</span><span class="p">)</span>
 <span class="go">AssertionError: the year must be a lunar year</span>
 </pre></div>
 </div>
@@ -513,8 +513,8 @@ The bool value in <cite>cond</cite> must can be determined at compile time.</p>
 <dd><p>Root of the declared Quadrants :func:<a href="#id3"><span class="problematic" id="id4">`</span></a>~quadrants.lang.impl.field`s.</p>
 <p>See also <a class="reference external" href="https://docs.taichi-lang.org/docs/layout">https://docs.taichi-lang.org/docs/layout</a></p>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">pointer</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">pointer</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -546,17 +546,17 @@ and thus needs an dual field to store the gradients.</p></li>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">The</span> <span class="n">code</span> <span class="n">below</span> <span class="n">shows</span> <span class="n">how</span> <span class="n">a</span> <span class="n">Quadrants</span> <span class="n">field</span> <span class="n">can</span> <span class="n">be</span> <span class="n">declared</span> <span class="ow">and</span> <span class="n">defined</span><span class="p">::</span>
 
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="c1"># Equivalently</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">ti</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ij</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s1">&#39;ji&#39;</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s1">&#39;ji&#39;</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span> <span class="c1"># Equivalently</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x4</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">ti</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x4</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x4</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x4</span><span class="p">)</span>
     <span class="o">&gt;&gt;&gt;</span>
-    <span class="o">&gt;&gt;&gt;</span> <span class="n">x5</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="o">&gt;&gt;&gt;</span> <span class="n">x5</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -568,18 +568,18 @@ and thus needs an dual field to store the gradients.</p></li>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>dtype</strong> (<em>Union</em><em>[</em><em>DataType</em><em>, </em><em>MatrixType</em><em>]</em>) – Data type of each element. This can be either a scalar type like ti.f32 or a compound type like ti.types.vector(3, ti.i32).</p></li>
+<li><p><strong>dtype</strong> (<em>Union</em><em>[</em><em>DataType</em><em>, </em><em>MatrixType</em><em>]</em>) – Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
 </ul>
 </dd>
 </dl>
 <p class="rubric">Example</p>
 <p>The code below shows how a Quadrants ndarray with scalar elements can be declared and defined:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>  <span class="c1"># ndarray of shape (16, 8), each element is ti.f32 scalar.</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>  <span class="c1"># ndarray of shape (10, 2), each element is a vector of 3 ti.i32 scalars.</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">matrix_ty</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">matrix_ty</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>  <span class="c1"># ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>  <span class="c1"># ndarray of shape (16, 8), each element is qd.f32 scalar.</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>  <span class="c1"># ndarray of shape (10, 2), each element is a vector of 3 qd.i32 scalars.</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">matrix_ty</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">z</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">matrix_ty</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>  <span class="c1"># ndarray of shape (4, 5), each element is a matrix of (3, 4) qd.float scalars.</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -598,10 +598,10 @@ if the input is a scalar.</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">zero</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">zero</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
 <span class="go">[0, 0]</span>
 </pre></div>
@@ -622,10 +622,10 @@ if the input is a scalar.</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">test</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
 <span class="go">[1, 1]</span>
 </pre></div>
@@ -642,7 +642,7 @@ if the input is a scalar.</p>
 </dd>
 </dl>
 <p>Note that Quadrants has already provided a set of commonly used axes. For example,
-<cite>ti.ij</cite> is just <cite>axes(0, 1)</cite> under the hood.</p>
+<cite>qd.ij</cite> is just <cite>axes(0, 1)</cite> under the hood.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -664,9 +664,9 @@ in many ways similar to <code class="docutils literal notranslate"><span class="
 <p>The most common usage of <cite>static()</cite> is for compile-time evaluation:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cond</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">if</span> <span class="n">ti</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="k">if</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">do_a</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">else</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">do_b</span><span class="p">()</span>
@@ -676,13 +676,13 @@ in many ways similar to <code class="docutils literal notranslate"><span class="
 into either <code class="docutils literal notranslate"><span class="pre">do_a()</span></code> or <code class="docutils literal notranslate"><span class="pre">do_b()</span></code>. Thus there won’t be a runtime
 condition check.</p>
 <p>Another common usage is for compile-time loop unrolling:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ti</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)):</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)):</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="nb">print</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># The above will be unrolled to:</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
@@ -699,18 +699,18 @@ condition check.</p>
 in one <cite>for</cite> loop and a single index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>x</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">ndrange()</span></code>) – an iterator object returned by <cite>ti.ndrange</cite>.</p>
+<dd class="field-odd"><p><strong>x</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">ndrange()</span></code>) – an iterator object returned by <cite>qd.ndrange</cite>.</p>
 </dd>
 </dl>
 <dl>
-<dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># without ti.grouped</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+<dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># without qd.grouped</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
 <span class="go">prints 0, 1, 2, 3, 4, 5</span>
 </pre></div>
 </div>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># with ti.grouped</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">ti</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)):</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># with qd.grouped</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">I</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">ndrange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
 <span class="go">prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]</span>
 </pre></div>

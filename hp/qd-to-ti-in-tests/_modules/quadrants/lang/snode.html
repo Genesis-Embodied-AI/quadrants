@@ -455,7 +455,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Places a list of Quadrants fields under the `self` container.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            *args (List[ti.field]): A list of Quadrants fields to place.</span>
+<span class="sd">            *args (List[qd.field]): A list of Quadrants fields to place.</span>
 <span class="sd">            offset (Union[Number, tuple[Number]]): Offset of the field domain.</span>
 
 <span class="sd">        Returns:</span>
@@ -661,11 +661,11 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SNodeType.&quot;</span><span class="p">)</span> <span class="p">:]</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;ti.SNode of type </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.SNode of type </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="c1"># ti.root.dense(ti.i, 3).dense(ti.jk, (4, 5)).place(x)</span>
-        <span class="c1"># ti.root =&gt; dense [3] =&gt; dense [3, 4, 5] =&gt; place [3, 4, 5]</span>
+        <span class="c1"># qd.root.dense(qd.i, 3).dense(qd.jk, (4, 5)).place(x)</span>
+        <span class="c1"># qd.root =&gt; dense [3] =&gt; dense [3, 4, 5] =&gt; place [3, 4, 5]</span>
         <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SNodeType.&quot;</span><span class="p">)</span> <span class="p">:]</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="n">parent</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">())</span>
@@ -709,7 +709,7 @@
     <span class="k">else</span><span class="p">:</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
             <span class="n">I</span><span class="p">,</span> <span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">Matrix</span><span class="p">)</span>
-        <span class="p">),</span> <span class="s2">&quot;The third argument must be an index (list, ti.Vector, or Expr with TensorType)&quot;</span>
+        <span class="p">),</span> <span class="s2">&quot;The third argument must be an index (list, qd.Vector, or Expr with TensorType)&quot;</span>
         <span class="n">n</span> <span class="o">=</span> <span class="n">I</span><span class="o">.</span><span class="n">n</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">pyfunc</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -838,7 +838,7 @@
 <span class="sd">        indices (Union[int, :class:`~quadrants.Vector`]): The specified field indices of the query.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        ti.u64: The memory address of `f[indices]`.</span>
+<span class="sd">        qd.u64: The memory address of `f[indices]`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>

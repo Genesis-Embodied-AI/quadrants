@@ -328,7 +328,7 @@
     <span class="n">kernel_arguments</span><span class="p">,</span>
     <span class="n">matrix</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">ti_ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
@@ -553,7 +553,7 @@
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span><span class="p">:</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init_func</span><span class="p">(</span><span class="n">ti_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)))</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init_func</span><span class="p">(</span><span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)))</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># Create a copy for non-template arguments,</span>
         <span class="c1"># so that they are passed by value.</span>
@@ -587,7 +587,7 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">visited_funcdef</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Function definition is not allowed in &#39;ti.</span><span class="si">{</span><span class="s1">&#39;kernel&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;func&#39;</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Function definition is not allowed in &#39;qd.</span><span class="si">{</span><span class="s1">&#39;kernel&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;func&#39;</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
             <span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">visited_funcdef</span> <span class="o">=</span> <span class="kc">True</span>
 
@@ -597,13 +597,13 @@
         <span class="k">assert</span> <span class="n">args</span><span class="o">.</span><span class="n">kw_defaults</span> <span class="o">==</span> <span class="p">[]</span>
         <span class="k">assert</span> <span class="n">args</span><span class="o">.</span><span class="n">kwarg</span> <span class="ow">is</span> <span class="kc">None</span>
 
-        <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>  <span class="c1"># ti.kernel</span>
+        <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>  <span class="c1"># qd.kernel</span>
             <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_transform_as_kernel</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>  <span class="c1"># ti.func</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>  <span class="c1"># qd.func</span>
             <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span><span class="p">:</span>

@@ -489,15 +489,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([2, 2, 2])</span>
-<span class="sd">        &gt;&gt;&gt; a = ti.Vector([1, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([2, 2, 2])</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.Vector([1, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mix(x, y, a)</span>
 <span class="sd">        [2.000000, 1.000000, 1.000000]</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[1, 2], [2, 3]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[3, 5], [4, 5]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[1, 2], [2, 3]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Matrix([[3, 5], [4, 5]], qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; a = 0.5</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mix(x, y, a)</span>
 <span class="sd">        [[2.000000, 3.500000], [3.000000, 4.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">a</span></div>
@@ -527,12 +527,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; v = ti.Vector([0, 0.5, 1.0, 1.5])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.clamp(v, 0.5, 1.0)</span>
+<span class="sd">        &gt;&gt;&gt; v = qd.Vector([0, 0.5, 1.0, 1.5])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.clamp(v, 0.5, 1.0)</span>
 <span class="sd">        [0.500000, 0.500000, 1.000000, 1.000000]</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [-2, 2]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[1, 2], [1, 2]], ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.clamp(x, 0.5, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[0, 1], [-2, 2]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Matrix([[1, 2], [1, 2]], qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.clamp(x, 0.5, y)</span>
 <span class="sd">        [[0.500000, 1.000000], [0.500000, 2.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">xmax</span><span class="p">,</span> <span class="n">ops</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span></div>
@@ -563,9 +563,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [2, 3]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([[0, 1], [2, 3]], qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; y = 1</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.step(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.step(x, y)</span>
 <span class="sd">        [[1.000000, 1.000000], [0.000000, 0.000000]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="n">edge</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span></div>
@@ -577,7 +577,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fract">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">fract</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the fractional part of the argument, element-wise.</span>
-<span class="sd">    It&#39;s equivalent to `x - ti.floor(x)`.</span>
+<span class="sd">    It&#39;s equivalent to `x - qd.floor(x)`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The</span>
@@ -588,8 +588,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.2, -0.7, 0.3, 1.2])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.fract(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-1.2, -0.7, 0.3, 1.2])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.fract(x)</span>
 <span class="sd">        [0.800000, 0.300000, 0.300000, 0.200000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
@@ -621,10 +621,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; edge0 = ti.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt; edge0 = qd.Vector([0, 1, 2])</span>
 <span class="sd">        &gt;&gt;&gt; edge1 = 1</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0.5, 1.5, 2.5])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.smoothstep(edge0, edge1, x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([0.5, 1.5, 2.5])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.smoothstep(edge0, edge1, x)</span>
 <span class="sd">        [0.500000, 1.000000, 0.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">t</span> <span class="o">=</span> <span class="n">clamp</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">edge1</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
@@ -648,8 +648,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.sign(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.sign(x)</span>
 <span class="sd">        [-1.000000, 0.000000, 1.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span></div>
@@ -673,8 +673,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; v = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.normalize(v)</span>
+<span class="sd">        &gt;&gt;&gt; v = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.normalize(v)</span>
 <span class="sd">        [0.267261, 0.534522, 0.801784]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">v</span> <span class="o">/</span> <span class="n">v</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -698,8 +698,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.log2(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.log2(x)</span>
 <span class="sd">        [0.000000, 1.000000, 1.584962]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">static</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">))</span></div>
@@ -729,9 +729,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
-<span class="sd">        &gt;&gt;&gt; n = ti.Vector([0., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.reflect(x, n)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; n = qd.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.reflect(x, n)</span>
 <span class="sd">        [1.000000, -2.000000, 3.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">k</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
@@ -753,8 +753,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-pi/2, pi/2])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.degrees(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-pi/2, pi/2])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.degrees(x)</span>
 <span class="sd">        [-90.000000, 90.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="mf">180.0</span> <span class="o">/</span> <span class="n">pi</span><span class="p">)</span></div>
@@ -775,8 +775,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-90., 45., 90.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.radians(x) / pi</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-90., 45., 90.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.radians(x) / pi</span>
 <span class="sd">        [-0.500000, 0.250000, 0.500000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">180.0</span><span class="p">)</span></div>
@@ -800,9 +800,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.distance(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.distance(x, y)</span>
 <span class="sd">        1.732051</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -827,9 +827,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 1.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0, 1., 0])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.refract(x, y, 2.0)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0, 1., 0])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.refract(x, y, 2.0)</span>
 <span class="sd">        [2.000000, -1.000000, 2.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">dxn</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
@@ -856,9 +856,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 1.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.dot(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.dot(x, y)</span>
 <span class="sd">        1.000000</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
@@ -884,9 +884,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 0., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 0.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.cross(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1., 0., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.cross(x, y)</span>
 <span class="sd">        [0.000000, 0.000000, 1.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
@@ -908,9 +908,9 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-0.5, 0.5, 1.])</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([-0.5, 0.5, 1.])</span>
 <span class="sd">        &gt;&gt;&gt; y = 1.0</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.mod(x, y)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.mod(x, y)</span>
 <span class="sd">        [0.500000, 0.500000, 0.000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">y</span> <span class="o">*</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span> <span class="o">/</span> <span class="n">y</span><span class="p">)</span></div>
@@ -933,7 +933,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.translate(1, 2, 3)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.translate(1, 2, 3)</span>
 <span class="sd">        [[ 1. 0. 0. 1.]</span>
 <span class="sd">         [ 0. 1. 0. 2.]</span>
 <span class="sd">         [ 0. 0. 1. 3.]</span>
@@ -966,7 +966,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.scale(1, 2, 3)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.scale(1, 2, 3)</span>
 <span class="sd">        [[ 1. 0. 0. 0.]</span>
 <span class="sd">         [ 0. 2. 0. 0.]</span>
 <span class="sd">         [ 0. 0. 3. 0.]</span>
@@ -1074,7 +1074,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt;ti.math.rotation2d(ti.math.radians(30))</span>
+<span class="sd">        &gt;&gt;&gt;qd.math.rotation2d(qd.math.radians(30))</span>
 <span class="sd">        [[0.866025, -0.500000], [0.500000, 0.866025]]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ca</span><span class="p">,</span> <span class="n">sa</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">ang</span><span class="p">),</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
@@ -1096,7 +1096,7 @@
 <span class="sd">        :class:`~quadrants.math.mat4`: rotation matrix</span>
 <span class="sd">    Example:</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.math.rotation3d(0.52, -0.785, 1.046)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.rotation3d(0.52, -0.785, 1.046)</span>
 <span class="sd">        [[ 0.05048351 -0.61339645 -0.78816002  0.        ]</span>
 <span class="sd">        [ 0.65833154  0.61388511 -0.4355969   0.        ]</span>
 <span class="sd">        [ 0.75103329 -0.49688014  0.4348093   0.        ]</span>
@@ -1133,8 +1133,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.length(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.length(x)</span>
 <span class="sd">        1.732051</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
@@ -1167,8 +1167,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; m = ti.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.inverse(m)</span>
+<span class="sd">        &gt;&gt;&gt; m = qd.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.inverse(m)</span>
 <span class="sd">        [[1.000000, -1.000000, 1.000000],</span>
 <span class="sd">         [0.000000, 1.000000, -1.000000],</span>
 <span class="sd">         [0.000000, 0.000000, 1.000000]]</span>
@@ -1188,8 +1188,8 @@
 
 <span class="sd">    Example:</span>
 
-<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(inf, -inf, nan, 1)</span>
-<span class="sd">       &gt;&gt;&gt; ti.math.isinf(x)</span>
+<span class="sd">       &gt;&gt;&gt; x = qd.math.vec4(inf, -inf, nan, 1)</span>
+<span class="sd">       &gt;&gt;&gt; qd.math.isinf(x)</span>
 <span class="sd">       [1, 1, 0, 0]</span>
 
 <span class="sd">    Returns:</span>
@@ -1217,8 +1217,8 @@
 
 <span class="sd">    Example:</span>
 
-<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(nan, -nan, inf, 1)</span>
-<span class="sd">       &gt;&gt;&gt; ti.math.isnan(x)</span>
+<span class="sd">       &gt;&gt;&gt; x = qd.math.vec4(nan, -nan, inf, 1)</span>
+<span class="sd">       &gt;&gt;&gt; qd.math.isnan(x)</span>
 <span class="sd">       [1, 1, 0, 0]</span>
 
 <span class="sd">    Returns:</span>
@@ -1246,7 +1246,7 @@
 <span class="sd">    Example:</span>
 
 <span class="sd">        &gt;&gt;&gt; x = pi / 2</span>
-<span class="sd">        &gt;&gt;&gt; ti.math.vdir(x)</span>
+<span class="sd">        &gt;&gt;&gt; qd.math.vdir(x)</span>
 <span class="sd">        [0, 1]</span>
 
 <span class="sd">    Returns:</span>

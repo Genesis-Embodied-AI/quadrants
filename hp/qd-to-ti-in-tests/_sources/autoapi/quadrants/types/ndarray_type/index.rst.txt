@@ -24,12 +24,12 @@ Module Contents
 
    Example::
 
-       >>> @ti.kernel
-       >>> def to_numpy(x: ti.types.ndarray(), y: ti.types.ndarray()):
+       >>> @qd.kernel
+       >>> def to_numpy(x: qd.types.ndarray(), y: qd.types.ndarray()):
        >>>     for i in range(n):
        >>>         x[i] = y[i]
        >>>
-       >>> y = ti.ndarray(ti.f64, shape=n)
+       >>> y = qd.ndarray(qd.f64, shape=n)
        >>> ... # calculate y
        >>> x = numpy.zeros(n)
        >>> to_numpy(x, y)  # `x` will be filled with `y`'s data.

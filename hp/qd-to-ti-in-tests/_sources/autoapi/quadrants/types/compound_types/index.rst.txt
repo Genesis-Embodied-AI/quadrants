@@ -32,7 +32,7 @@ Module Contents
 
    Example::
 
-       >>> mat2x2 = ti.types.matrix(2, 2, ti.f32)  # 2x2 matrix type
+       >>> mat2x2 = qd.types.matrix(2, 2, qd.f32)  # 2x2 matrix type
        >>> M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type
 
 
@@ -49,7 +49,7 @@ Module Contents
 
    Example::
 
-       >>> vec3 = ti.types.vector(3, ti.f32)  # 3d vector type
+       >>> vec3 = qd.types.vector(3, qd.f32)  # 3d vector type
        >>> v = vec3([1., 2., 3.])  # an instance of this type
 
 
@@ -65,8 +65,8 @@ Module Contents
 
    Example::
 
-       >>> vec3 = ti.types.vector(3, ti.f32)
-       >>> sphere = ti.types.struct(center=vec3, radius=float)
+       >>> vec3 = qd.types.vector(3, qd.f32)
+       >>> sphere = qd.types.struct(center=vec3, radius=float)
        >>> s = sphere(center=vec3([0., 0., 0.]), radius=1.0)
 
 

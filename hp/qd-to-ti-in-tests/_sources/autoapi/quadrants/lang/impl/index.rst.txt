@@ -55,9 +55,9 @@ Module Contents
    Example::
 
        >>> year = 2001
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def test():
-       >>>     ti.static_assert(year % 4 == 0, "the year must be a lunar year")
+       >>>     qd.static_assert(year % 4 == 0, "the year must be a lunar year")
        AssertionError: the year must be a lunar year
 
 
@@ -74,8 +74,8 @@ Module Contents
 
    Example::
 
-       >>> x = ti.field(ti.f32)
-       >>> ti.root.pointer(ti.ij, 4).dense(ti.ij, 8).place(x)
+       >>> x = qd.field(qd.f32)
+       >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
 
 .. py:function:: field(dtype, *args, **kwargs)
 
@@ -109,17 +109,17 @@ Module Contents
 
        The code below shows how a Quadrants field can be declared and defined::
 
-           >>> x1 = ti.field(ti.f32, shape=(16, 8))
+           >>> x1 = qd.field(qd.f32, shape=(16, 8))
            >>> # Equivalently
-           >>> x2 = ti.field(ti.f32)
-           >>> ti.root.dense(ti.ij, shape=(16, 8)).place(x2)
+           >>> x2 = qd.field(qd.f32)
+           >>> qd.root.dense(qd.ij, shape=(16, 8)).place(x2)
            >>>
-           >>> x3 = ti.field(ti.f32, shape=(16, 8), order='ji')
+           >>> x3 = qd.field(qd.f32, shape=(16, 8), order='ji')
            >>> # Equivalently
-           >>> x4 = ti.field(ti.f32)
-           >>> ti.root.dense(ti.j, shape=8).dense(ti.i, shape=16).place(x4)
+           >>> x4 = qd.field(qd.f32)
+           >>> qd.root.dense(qd.j, shape=8).dense(qd.i, shape=16).place(x4)
            >>>
-           >>> x5 = ti.field(ti.math.vec3, shape=(16, 8))
+           >>> x5 = qd.field(qd.math.vec3, shape=(16, 8))
 
 
 
@@ -127,7 +127,7 @@ Module Contents
 
    Defines a Quadrants ndarray with scalar elements.
 
-   :param dtype: Data type of each element. This can be either a scalar type like ti.f32 or a compound type like ti.types.vector(3, ti.i32).
+   :param dtype: Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
    :type dtype: Union[DataType, MatrixType]
    :param shape: Shape of the ndarray.
    :type shape: Union[int, tuple[int]]
@@ -136,11 +136,11 @@ Module Contents
 
    The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
 
-       >>> x = ti.ndarray(ti.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is ti.f32 scalar.
-       >>> vec3 = ti.types.vector(3, ti.i32)
-       >>> y = ti.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 ti.i32 scalars.
-       >>> matrix_ty = ti.types.matrix(3, 4, float)
-       >>> z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.
+       >>> x = qd.ndarray(qd.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is qd.f32 scalar.
+       >>> vec3 = qd.types.vector(3, qd.i32)
+       >>> y = qd.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 qd.i32 scalars.
+       >>> matrix_ty = qd.types.matrix(3, 4, float)
+       >>> z = qd.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) qd.float scalars.
 
 
 .. py:function:: zero(x)
@@ -155,10 +155,10 @@ Module Contents
 
    Example::
 
-       >>> x = ti.Vector([1, 1])
-       >>> @ti.kernel
+       >>> x = qd.Vector([1, 1])
+       >>> @qd.kernel
        >>> def test():
-       >>>     y = ti.zero(x)
+       >>>     y = qd.zero(x)
        >>>     print(y)
        [0, 0]
 
@@ -175,10 +175,10 @@ Module Contents
 
    Example::
 
-       >>> x = ti.Vector([0, 0])
-       >>> @ti.kernel
+       >>> x = qd.Vector([0, 0])
+       >>> @qd.kernel
        >>> def test():
-       >>>     y = ti.one(x)
+       >>>     y = qd.one(x)
        >>>     print(y)
        [1, 1]
 
@@ -190,7 +190,7 @@ Module Contents
    :param \*x: A list of axes to be activated
 
    Note that Quadrants has already provided a set of commonly used axes. For example,
-   `ti.ij` is just `axes(0, 1)` under the hood.
+   `qd.ij` is just `axes(0, 1)` under the hood.
 
 
 .. py:function:: static(x, *xs) -> Any
@@ -213,9 +213,9 @@ Module Contents
 
        >>> cond = False
        >>>
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
-       >>>     if ti.static(cond):
+       >>>     if qd.static(cond):
        >>>         do_a()
        >>>     else:
        >>>         do_b()
@@ -226,13 +226,13 @@ Module Contents
 
    Another common usage is for compile-time loop unrolling::
 
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
-       >>>     for i in ti.static(range(3)):
+       >>>     for i in qd.static(range(3)):
        >>>         print(i)
        >>>
        >>> # The above will be unrolled to:
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
        >>>     print(0)
        >>>     print(1)
@@ -246,17 +246,17 @@ Module Contents
    This is often used when you want to iterate over all indices returned by `ndrange()`
    in one `for` loop and a single index.
 
-   :param x: an iterator object returned by `ti.ndrange`.
+   :param x: an iterator object returned by `qd.ndrange`.
    :type x: :func:`~quadrants.ndrange`
 
    Example::
-       >>> # without ti.grouped
-       >>> for I in ti.ndrange(2, 3):
+       >>> # without qd.grouped
+       >>> for I in qd.ndrange(2, 3):
        >>>     print(I)
        prints 0, 1, 2, 3, 4, 5
 
-       >>> # with ti.grouped
-       >>> for I in ti.grouped(ti.ndrange(2, 3)):
+       >>> # with qd.grouped
+       >>> for I in qd.grouped(qd.ndrange(2, 3)):
        >>>     print(I)
        prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]
 

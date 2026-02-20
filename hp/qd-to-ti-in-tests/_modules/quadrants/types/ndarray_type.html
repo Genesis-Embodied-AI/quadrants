@@ -340,7 +340,7 @@
     <span class="k">if</span> <span class="n">element_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># TODO: expand use case with arbitary tensor dims!</span>
         <span class="k">if</span> <span class="n">element_dim</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">element_dim</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of ti.types.ndarray()&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()&quot;</span><span class="p">)</span>
         <span class="c1"># Check dim consistency. The matrix dtype will be cooked later.</span>
         <span class="k">if</span> <span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">!=</span> <span class="n">element_dim</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
@@ -350,7 +350,7 @@
         <span class="n">mat_dtype</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">primitive_dtype</span><span class="p">)</span> <span class="k">if</span> <span class="n">element_dim</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">matrix</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">primitive_dtype</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">element_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of ti.types.ndarray()&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only scalars, vectors, and matrices are allowed as elements of qd.types.ndarray()&quot;</span><span class="p">)</span>
         <span class="n">mat_dtype</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">vector</span><span class="p">(</span><span class="n">element_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">primitive_dtype</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">element_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
@@ -365,7 +365,7 @@
 <span class="sd">    For external arrays, we treat it as a Quadrants data container with Scalar, Vector or Matrix elements.</span>
 <span class="sd">    For Quadrants vector/matrix ndarrays, we will automatically identify element dimension and their corresponding axis by the</span>
 <span class="sd">    dimension of datatype, say scalars, matrices or vectors.</span>
-<span class="sd">    For example, given type annotation `ti.types.ndarray(dtype=ti.math.vec3)`, a numpy array `np.zeros(10, 10, 3)` will be</span>
+<span class="sd">    For example, given type annotation `qd.types.ndarray(dtype=qd.math.vec3)`, a numpy array `np.zeros(10, 10, 3)` will be</span>
 <span class="sd">    recognized as a 10x10 matrix composed of vec3 elements.</span>
 
 <span class="sd">    Args:</span>
@@ -477,12 +477,12 @@
 
 <span class="sd">Example::</span>
 
-<span class="sd">    &gt;&gt;&gt; @ti.kernel</span>
-<span class="sd">    &gt;&gt;&gt; def to_numpy(x: ti.types.ndarray(), y: ti.types.ndarray()):</span>
+<span class="sd">    &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">    &gt;&gt;&gt; def to_numpy(x: qd.types.ndarray(), y: qd.types.ndarray()):</span>
 <span class="sd">    &gt;&gt;&gt;     for i in range(n):</span>
 <span class="sd">    &gt;&gt;&gt;         x[i] = y[i]</span>
 <span class="sd">    &gt;&gt;&gt;</span>
-<span class="sd">    &gt;&gt;&gt; y = ti.ndarray(ti.f64, shape=n)</span>
+<span class="sd">    &gt;&gt;&gt; y = qd.ndarray(qd.f64, shape=n)</span>
 <span class="sd">    &gt;&gt;&gt; ... # calculate y</span>
 <span class="sd">    &gt;&gt;&gt; x = numpy.zeros(n)</span>
 <span class="sd">    &gt;&gt;&gt; to_numpy(x, y)  # `x` will be filled with `y`&#39;s data.</span>

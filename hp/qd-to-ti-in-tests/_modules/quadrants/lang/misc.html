@@ -577,12 +577,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; a = ti.field(ti.i32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.field(qd.i32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; a[None] = 1</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;before reset: &quot;, a)</span>
 <span class="sd">        before rest: 1</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; ti.reset()</span>
+<span class="sd">        &gt;&gt;&gt; qd.reset()</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;after reset: &quot;, a)</span>
 <span class="sd">        # will raise error because a is unavailable after reset.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -609,7 +609,7 @@
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+                <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>  <span class="c1"># mark as recognized</span>
         <span class="k">elif</span> <span class="n">value</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_cast</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
@@ -712,9 +712,9 @@
 <span class="sd">        default_ip (Optional[type]): Default integral type.</span>
 <span class="sd">        require_version: A version string.</span>
 <span class="sd">        print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with</span>
-<span class="sd">                        @ti.pure</span>
+<span class="sd">                        @qd.pure</span>
 <span class="sd">        src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,</span>
-<span class="sd">                      for pure kernels (i.e. kernels declared as @ti.pure)</span>
+<span class="sd">                      for pure kernels (i.e. kernels declared as @qd.pure)</span>
 <span class="sd">        **kwargs: Quadrants provides highly customizable compilation through</span>
 <span class="sd">            ``kwargs``, which allows for fine grained control of Quadrants compiler</span>
 <span class="sd">            behavior. Below we list some of the most frequently used ones. For a</span>
@@ -738,9 +738,9 @@
 
     <span class="k">if</span> <span class="s2">&quot;default_up&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s2">&quot;&#39;default_up&#39; is always the unsigned type of &#39;default_ip&#39;. Please set &#39;default_ip&#39; instead.&quot;</span><span class="p">)</span>
-    <span class="c1"># Make a deepcopy in case these args reference to items from ti.cfg, which are</span>
+    <span class="c1"># Make a deepcopy in case these args reference to items from qd.cfg, which are</span>
     <span class="c1"># actually references. If no copy is made and the args are indeed references,</span>
-    <span class="c1"># ti.reset() could override the args to their default values.</span>
+    <span class="c1"># qd.reset() could override the args to their default values.</span>
     <span class="n">default_fp</span> <span class="o">=</span> <span class="n">_deepcopy</span><span class="p">(</span><span class="n">default_fp</span><span class="p">)</span>
     <span class="n">default_ip</span> <span class="o">=</span> <span class="n">_deepcopy</span><span class="p">(</span><span class="n">default_ip</span><span class="p">)</span>
     <span class="n">kwargs</span> <span class="o">=</span> <span class="n">_deepcopy</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
@@ -759,7 +759,7 @@
     <span class="k">if</span> <span class="n">env_default_fp</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_fp&quot;&#39;</span>
+                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;default_fp&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_fp</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
             <span class="n">default_fp</span> <span class="o">=</span> <span class="n">f32</span>
@@ -772,7 +772,7 @@
     <span class="k">if</span> <span class="n">env_default_ip</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_ip</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s1"> overridden by ti.init argument &quot;default_ip&quot;&#39;</span>
+                <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;default_ip&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_ip</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
             <span class="n">default_ip</span> <span class="o">=</span> <span class="n">i32</span>
@@ -793,7 +793,7 @@
     <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;print_full_traceback&quot;</span><span class="p">)</span>
     <span class="n">env_spec</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;unrolling_limit&quot;</span><span class="p">)</span>
 
-    <span class="c1"># compiler configurations (ti.cfg):</span>
+    <span class="c1"># compiler configurations (qd.cfg):</span>
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="n">cfg</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;arch&quot;</span><span class="p">,</span> <span class="s2">&quot;default_fp&quot;</span><span class="p">,</span> <span class="s2">&quot;default_ip&quot;</span><span class="p">]:</span>
             <span class="k">continue</span>
@@ -805,9 +805,9 @@
     <span class="n">unexpected_keys</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unrecognized keyword argument(s) for ti.init: </span><span class="si">{</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unrecognized keyword argument(s) for qd.init: </span><span class="si">{</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
 
-    <span class="c1"># dispatch configurations that are not in ti.cfg:</span>
+    <span class="c1"># dispatch configurations that are not in qd.cfg:</span>
     <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_test_mode</span><span class="p">:</span>
         <span class="n">_ti_core</span><span class="o">.</span><span class="n">set_core_trigger_gdb_when_crash</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">gdb_trigger</span><span class="p">)</span>
@@ -889,7 +889,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">mesh_local</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Hints the compiler to cache the mesh attributes</span>
 <span class="sd">    and to enable the mesh BLS optimization,</span>
-<span class="sd">    only available for backends supporting `ti.extension.mesh` and to use with mesh-for loop.</span>
+<span class="sd">    only available for backends supporting `qd.extension.mesh` and to use with mesh-for loop.</span>
 
 <span class="sd">    Related to https://github.com/taichi-dev/quadrants/issues/3608</span>
 
@@ -899,17 +899,17 @@
 <span class="sd">    Examples::</span>
 
 <span class="sd">        # instantiate model</span>
-<span class="sd">        mesh_builder = ti.Mesh.tri()</span>
+<span class="sd">        mesh_builder = qd.Mesh.tri()</span>
 <span class="sd">        mesh_builder.verts.place({</span>
-<span class="sd">            &#39;x&#39; : ti.f32,</span>
-<span class="sd">            &#39;y&#39; : ti.f32</span>
+<span class="sd">            &#39;x&#39; : qd.f32,</span>
+<span class="sd">            &#39;y&#39; : qd.f32</span>
 <span class="sd">        })</span>
 <span class="sd">        model = mesh_builder.build(meta)</span>
 
-<span class="sd">        @ti.kernel</span>
+<span class="sd">        @qd.kernel</span>
 <span class="sd">        def foo():</span>
 <span class="sd">            # hint the compiler to cache mesh vertex attribute `x` and `y`.</span>
-<span class="sd">            ti.mesh_local(model.verts.x, model.verts.y)</span>
+<span class="sd">            qd.mesh_local(model.verts.x, model.verts.y)</span>
 <span class="sd">            for v0 in model.verts: # mesh-for loop</span>
 <span class="sd">                for v1 in v0.verts:</span>
 <span class="sd">                    v0.x += v1.y</span>
@@ -955,7 +955,7 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; # hint the compiler that x is in range [8, 12).</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.assume_in_range(x, 10, -2, 2)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.assume_in_range(x, 10, -2, 2)</span>
 <span class="sd">        &gt;&gt;&gt; x</span>
 <span class="sd">        10</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1027,10 +1027,10 @@
 
 <span class="sd">    Examples::</span>
 
-<span class="sd">        @ti.kernel</span>
-<span class="sd">        def break_in_serial_for() -&gt; ti.i32:</span>
+<span class="sd">        @qd.kernel</span>
+<span class="sd">        def break_in_serial_for() -&gt; qd.i32:</span>
 <span class="sd">            a = 0</span>
-<span class="sd">            ti.loop_config(serialize=True)</span>
+<span class="sd">            qd.loop_config(serialize=True)</span>
 <span class="sd">            for i in range(100):  # This loop runs serially</span>
 <span class="sd">                a += i</span>
 <span class="sd">                if i == 10:</span>
@@ -1040,24 +1040,24 @@
 <span class="sd">        break_in_serial_for()  # returns 55</span>
 
 <span class="sd">        n = 128</span>
-<span class="sd">        val = ti.field(ti.i32, shape=n)</span>
-<span class="sd">        @ti.kernel</span>
+<span class="sd">        val = qd.field(qd.i32, shape=n)</span>
+<span class="sd">        @qd.kernel</span>
 <span class="sd">        def fill():</span>
-<span class="sd">            ti.loop_config(parallelize=8, block_dim=16)</span>
+<span class="sd">            qd.loop_config(parallelize=8, block_dim=16)</span>
 <span class="sd">            # If the kernel is run on the CPU backend, 8 threads will be used to run it</span>
 <span class="sd">            # If the kernel is run on the CUDA backend, each block will have 16 threads.</span>
 <span class="sd">            for i in range(n):</span>
 <span class="sd">                val[i] = i</span>
 
-<span class="sd">        u1 = ti.types.quant.int(bits=1, signed=False)</span>
-<span class="sd">        x = ti.field(dtype=u1)</span>
-<span class="sd">        y = ti.field(dtype=u1)</span>
-<span class="sd">        cell = ti.root.dense(ti.ij, (128, 4))</span>
-<span class="sd">        cell.quant_array(ti.j, 32).place(x)</span>
-<span class="sd">        cell.quant_array(ti.j, 32).place(y)</span>
-<span class="sd">        @ti.kernel</span>
+<span class="sd">        u1 = qd.types.quant.int(bits=1, signed=False)</span>
+<span class="sd">        x = qd.field(dtype=u1)</span>
+<span class="sd">        y = qd.field(dtype=u1)</span>
+<span class="sd">        cell = qd.root.dense(qd.ij, (128, 4))</span>
+<span class="sd">        cell.quant_array(qd.j, 32).place(x)</span>
+<span class="sd">        cell.quant_array(qd.j, 32).place(y)</span>
+<span class="sd">        @qd.kernel</span>
 <span class="sd">        def copy():</span>
-<span class="sd">            ti.loop_config(bit_vectorize=True)</span>
+<span class="sd">            qd.loop_config(bit_vectorize=True)</span>
 <span class="sd">            # 32 bits, instead of 1 bit, will be copied at a time</span>
 <span class="sd">            for i, j in x:</span>
 <span class="sd">                y[i, j] = x[i, j]</span>
@@ -1089,11 +1089,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; f = ti.field(ti.f32, shape=(16, 16))</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; f = qd.field(qd.f32, shape=(16, 16))</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     for i in ti.grouped(f):</span>
-<span class="sd">        &gt;&gt;&gt;         print(ti.global_thread_idx())</span>
+<span class="sd">        &gt;&gt;&gt;     for i in qd.grouped(f):</span>
+<span class="sd">        &gt;&gt;&gt;         print(qd.global_thread_idx())</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        test()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1105,7 +1105,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.mesh_patch_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">mesh_patch_idx</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the internal mesh patch id of this running thread,</span>
-<span class="sd">    only available for backends supporting `ti.extension.mesh` and to use within mesh-for loop.</span>
+<span class="sd">    only available for backends supporting `qd.extension.mesh` and to use within mesh-for loop.</span>
 
 <span class="sd">    Related to https://github.com/taichi-dev/quadrants/issues/3608</span>
 <span class="sd">    &quot;&quot;&quot;</span>

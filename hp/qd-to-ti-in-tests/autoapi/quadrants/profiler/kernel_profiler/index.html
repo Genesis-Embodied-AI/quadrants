@@ -451,7 +451,7 @@
 <dt class="sig sig-object py" id="quadrants.profiler.kernel_profiler.print_kernel_profiler_info">
 <span class="sig-prename descclassname"><span class="pre">quadrants.profiler.kernel_profiler.</span></span><span class="sig-name descname"><span class="pre">print_kernel_profiler_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'count'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/profiler/kernel_profiler.html#print_kernel_profiler_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.profiler.kernel_profiler.print_kernel_profiler_info" title="Link to this definition">#</a></dt>
 <dd><p>Print the profiling results of Quadrants kernels.</p>
-<p>To enable this profiler, set <code class="docutils literal notranslate"><span class="pre">kernel_profiler=True</span></code> in <code class="docutils literal notranslate"><span class="pre">ti.init()</span></code>.
+<p>To enable this profiler, set <code class="docutils literal notranslate"><span class="pre">kernel_profiler=True</span></code> in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>.
 <code class="docutils literal notranslate"><span class="pre">'count'</span></code> mode: print the statistics (min,max,avg time) of launched kernels,
 <code class="docutils literal notranslate"><span class="pre">'trace'</span></code> mode: print the records of launched kernels with specific profiling metrics (time, memory load/store and core utilization etc.),
 and defaults to <code class="docutils literal notranslate"><span class="pre">'count'</span></code>.</p>
@@ -461,21 +461,21 @@ and defaults to <code class="docutils literal notranslate"><span class="pre">'co
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">var</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">var</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="n">compute</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># equivalent calls :</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="c1"># ti.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># qd.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">
@@ -488,7 +488,7 @@ and defaults to <code class="docutils literal notranslate"><span class="pre">'co
 <dt class="sig sig-object py" id="quadrants.profiler.kernel_profiler.query_kernel_profiler_info">
 <span class="sig-prename descclassname"><span class="pre">quadrants.profiler.kernel_profiler.</span></span><span class="sig-name descname"><span class="pre">query_kernel_profiler_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/profiler/kernel_profiler.html#query_kernel_profiler_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.profiler.kernel_profiler.query_kernel_profiler_info" title="Link to this definition">#</a></dt>
 <dd><p>Query kernel elapsed time(min,avg,max) on devices using the kernel name.</p>
-<p>To enable this profiler, set <cite>kernel_profiler=True</cite> in <cite>ti.init</cite>.</p>
+<p>To enable this profiler, set <cite>kernel_profiler=True</cite> in <cite>qd.init</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>name</strong> (<em>str</em>) – kernel name.</p>
@@ -501,22 +501,22 @@ and defaults to <code class="docutils literal notranslate"><span class="pre">'co
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">n</span> <span class="o">=</span> <span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">var</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">var</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">var</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.1</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="n">fill</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">clear_kernel_profiler_info</span><span class="p">()</span> <span class="c1">#[1]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">clear_kernel_profiler_info</span><span class="p">()</span> <span class="c1">#[1]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">fill</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">query_result</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">query_kernel_profiler_info</span><span class="p">(</span><span class="n">fill</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span> <span class="c1">#[2]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">query_result</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">query_kernel_profiler_info</span><span class="p">(</span><span class="n">fill</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span> <span class="c1">#[2]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;kernel executed times =&quot;</span><span class="p">,</span><span class="n">query_result</span><span class="o">.</span><span class="n">counter</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;kernel elapsed time(min_in_ms) =&quot;</span><span class="p">,</span><span class="n">query_result</span><span class="o">.</span><span class="n">min</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;kernel elapsed time(max_in_ms) =&quot;</span><span class="p">,</span><span class="n">query_result</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
@@ -567,25 +567,25 @@ clear_kernel_profiler_info().</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span> <span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span class="p">)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">fill</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">fill</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">()</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -600,27 +600,27 @@ clear_kernel_profiler_info().</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">num_elements</span> <span class="o">=</span> <span class="mi">128</span><span class="o">*</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">reduction</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># get Quadrants pre-defined metrics</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">&#39;shared_access&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">&#39;shared_access&#39;</span><span class="p">)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">CuptiMetric</span><span class="p">(</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">CuptiMetric</span><span class="p">(</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;</span><span class="p">,</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">header</span><span class="o">=</span><span class="s1">&#39; global.atom &#39;</span><span class="p">,</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;    </span><span class="si">{:8.0f}</span><span class="s1"> &#39;</span><span class="p">)</span>
@@ -628,10 +628,10 @@ clear_kernel_profiler_info().</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">+=</span> <span class="p">[</span><span class="n">global_op_atom</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># metrics setting will be retained until the next configuration</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_metrics</span><span class="p">(</span><span class="n">profiling_metrics</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_metrics</span><span class="p">(</span><span class="n">profiling_metrics</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">reduction</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">
@@ -650,27 +650,27 @@ clear_kernel_profiler_info().</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">kernel_profiler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profiler_toolkit</span><span class="p">(</span><span class="s1">&#39;cupti&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">num_elements</span> <span class="o">=</span> <span class="mi">128</span><span class="o">*</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">num_elements</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">reduction</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># get Quadrants pre-defined metrics</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">&#39;device_utilization&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">&#39;device_utilization&#39;</span><span class="p">)</span>
 
-<span class="gp">&gt;&gt;&gt; </span><span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">CuptiMetric</span><span class="p">(</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">CuptiMetric</span><span class="p">(</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;</span><span class="p">,</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">header</span><span class="o">=</span><span class="s1">&#39; global.atom &#39;</span><span class="p">,</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;    </span><span class="si">{:8.0f}</span><span class="s1"> &#39;</span><span class="p">)</span>
@@ -678,10 +678,10 @@ clear_kernel_profiler_info().</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">+=</span> <span class="p">[</span><span class="n">global_op_atom</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># metrics setting is temporary, and will be clear when exit from this context.</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">collect_kernel_profiler_metrics</span><span class="p">(</span><span class="n">profiling_metrics</span><span class="p">):</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">collect_kernel_profiler_metrics</span><span class="p">(</span><span class="n">profiling_metrics</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">reduction</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">ti</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">

@@ -312,13 +312,13 @@
   <h1>Source code for quadrants.examples.lcg_taichi</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <div class="viewcode-block" id="lcg_ti">
 <a class="viewcode-back" href="../../../autoapi/quadrants/examples/lcg_taichi/index.html#quadrants.examples.lcg_taichi.lcg_ti">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">lcg_its</span><span class="p">):</span>
@@ -330,15 +330,15 @@
 <div class="viewcode-block" id="main">
 <a class="viewcode-back" href="../../../autoapi/quadrants/examples/lcg_taichi/index.html#quadrants.examples.lcg_taichi.main">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
     <span class="n">B</span> <span class="o">=</span> <span class="mi">16000</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="p">(</span><span class="n">B</span><span class="p">,))</span>
 
-    <span class="n">ti</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">lcg_ti</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
     <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;elapsed&quot;</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span></div>
 

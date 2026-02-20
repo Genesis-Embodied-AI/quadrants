@@ -358,7 +358,7 @@
 <span class="sd">    and prints the results to the console by :func:`~quadrants.profiler.kernel_profiler.KernelProfiler.print_info`.</span>
 
 <span class="sd">    ``KernelProfiler`` now support detailed low-level performance metrics (such as memory bandwidth consumption) in its advanced mode.</span>
-<span class="sd">    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.</span>
+<span class="sd">    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
@@ -490,7 +490,7 @@
     <span class="c1"># private methods</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_not_turned_on_with_warning_message</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profiling_mode</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;ti.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
+            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;qd.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span>
 
@@ -669,7 +669,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">print_kernel_profiler_info</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;count&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Print the profiling results of Quadrants kernels.</span>
 
-<span class="sd">    To enable this profiler, set ``kernel_profiler=True`` in ``ti.init()``.</span>
+<span class="sd">    To enable this profiler, set ``kernel_profiler=True`` in ``qd.init()``.</span>
 <span class="sd">    ``&#39;count&#39;`` mode: print the statistics (min,max,avg time) of launched kernels,</span>
 <span class="sd">    ``&#39;trace&#39;`` mode: print the records of launched kernels with specific profiling metrics (time, memory load/store and core utilization etc.),</span>
 <span class="sd">    and defaults to ``&#39;count&#39;``.</span>
@@ -679,21 +679,21 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(ti.cpu, kernel_profiler=True)</span>
-<span class="sd">        &gt;&gt;&gt; var = ti.field(ti.f32, shape=1)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(qd.cpu, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; var = qd.field(qd.f32, shape=1)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def compute():</span>
 <span class="sd">        &gt;&gt;&gt;     var[0] = 1.0</span>
 
 <span class="sd">        &gt;&gt;&gt; compute()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 <span class="sd">        &gt;&gt;&gt; # equivalent calls :</span>
-<span class="sd">        &gt;&gt;&gt; # ti.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; # qd.profiler.print_kernel_profiler_info(&#39;count&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For advanced mode of `KernelProfiler`, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
@@ -707,7 +707,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">query_kernel_profiler_info</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Query kernel elapsed time(min,avg,max) on devices using the kernel name.</span>
 
-<span class="sd">    To enable this profiler, set `kernel_profiler=True` in `ti.init`.</span>
+<span class="sd">    To enable this profiler, set `kernel_profiler=True` in `qd.init`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        name (str): kernel name.</span>
@@ -717,22 +717,22 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(ti.cpu, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(qd.cpu, kernel_profiler=True)</span>
 <span class="sd">        &gt;&gt;&gt; n = 1024*1024</span>
-<span class="sd">        &gt;&gt;&gt; var = ti.field(ti.f32, shape=n)</span>
+<span class="sd">        &gt;&gt;&gt; var = qd.field(qd.f32, shape=n)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def fill():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in range(n):</span>
 <span class="sd">        &gt;&gt;&gt;         var[i] = 0.1</span>
 
 <span class="sd">        &gt;&gt;&gt; fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.clear_kernel_profiler_info() #[1]</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.clear_kernel_profiler_info() #[1]</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; query_result = ti.profiler.query_kernel_profiler_info(fill.__name__) #[2]</span>
+<span class="sd">        &gt;&gt;&gt; query_result = qd.profiler.query_kernel_profiler_info(fill.__name__) #[2]</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel executed times =&quot;,query_result.counter)</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel elapsed time(min_in_ms) =&quot;,query_result.min)</span>
 <span class="sd">        &gt;&gt;&gt; print(&quot;kernel elapsed time(max_in_ms) =&quot;,query_result.max)</span>
@@ -781,25 +781,25 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(arch=ti.cuda, kernel_profiler=True)</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=1024*1024)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(arch=qd.cuda, kernel_profiler=True)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=1024*1024)</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def fill():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         x[i] = i</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;default&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;default&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(100):</span>
 <span class="sd">        &gt;&gt;&gt;     fill()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">get_default_kernel_profiler</span><span class="p">()</span><span class="o">.</span><span class="n">set_toolkit</span><span class="p">(</span><span class="n">toolkit_name</span><span class="p">)</span></div>
 
@@ -815,27 +815,27 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(kernel_profiler=True, arch=ti.cuda)</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(kernel_profiler=True, arch=qd.cuda)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; num_elements = 128*1024*1024</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=num_elements)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.field(ti.f32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.get_predefined_cupti_metrics()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>
 <span class="sd">        &gt;&gt;&gt; # get Quadrants pre-defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = ti.profiler.get_predefined_cupti_metrics(&#39;shared_access&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;shared_access&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; global_op_atom = ti.profiler.CuptiMetric(</span>
+<span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
 <span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     format=&#39;    {:8.0f} &#39;)</span>
@@ -843,10 +843,10 @@
 <span class="sd">        &gt;&gt;&gt; profiling_metrics += [global_op_atom]</span>
 
 <span class="sd">        &gt;&gt;&gt; # metrics setting will be retained until the next configuration</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_metrics(profiling_metrics)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_metrics(profiling_metrics)</span>
 <span class="sd">        &gt;&gt;&gt; for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;     reduction()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        Metrics setting will be retained until the next configuration.</span>
@@ -866,27 +866,27 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(kernel_profiler=True, arch=ti.cuda)</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(kernel_profiler=True, arch=qd.cuda)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profiler_toolkit(&#39;cupti&#39;)</span>
 <span class="sd">        &gt;&gt;&gt; num_elements = 128*1024*1024</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=num_elements)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.field(ti.f32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
 <span class="sd">        &gt;&gt;&gt; # In the case of not parameter, Quadrants will print its pre-defined metrics list</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.get_predefined_cupti_metrics()</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.get_predefined_cupti_metrics()</span>
 <span class="sd">        &gt;&gt;&gt; # get Quadrants pre-defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = ti.profiler.get_predefined_cupti_metrics(&#39;device_utilization&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;device_utilization&#39;)</span>
 
-<span class="sd">        &gt;&gt;&gt; global_op_atom = ti.profiler.CuptiMetric(</span>
+<span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
 <span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     format=&#39;    {:8.0f} &#39;)</span>
@@ -894,10 +894,10 @@
 <span class="sd">        &gt;&gt;&gt; profiling_metrics += [global_op_atom]</span>
 
 <span class="sd">        &gt;&gt;&gt; # metrics setting is temporary, and will be clear when exit from this context.</span>
-<span class="sd">        &gt;&gt;&gt; with ti.profiler.collect_kernel_profiler_metrics(profiling_metrics):</span>
+<span class="sd">        &gt;&gt;&gt; with qd.profiler.collect_kernel_profiler_metrics(profiling_metrics):</span>
 <span class="sd">        &gt;&gt;&gt;     for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;         reduction()</span>
-<span class="sd">        &gt;&gt;&gt;     ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt;     qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        The configuration of the ``metric_list`` will be clear when exit from this context.</span>
