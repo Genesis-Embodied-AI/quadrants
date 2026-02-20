@@ -215,7 +215,7 @@ class TemplateParamsKernelArgs(pydantic.BaseModel):
 def src_ll_cache_template_params_child(args: list[str]) -> None:
     args_obj = TemplateParamsKernelArgs.model_validate_json(args[0])
     qd.init(
-        arch=getattr(ti, args_obj.arch),
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=args_obj.src_ll_cache,
@@ -280,7 +280,7 @@ class HasReturnKernelArgs(pydantic.BaseModel):
 def src_ll_cache_has_return_child(args: list[str]) -> None:
     args_obj = HasReturnKernelArgs.model_validate_json(args[0])
     qd.init(
-        arch=getattr(ti, args_obj.arch),
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=args_obj.src_ll_cache,
@@ -380,7 +380,7 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     # arch can change during the below execcution 🤔
     # TODO: figure out why this is happening, and/or remove arch from python config object (replace
     # with arch_name and arch_idx for example)
-    arch = getattr(ti, qd.lang.impl.current_cfg().arch.name)
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
 
     # need to initialize up front, in order that config hash doesn't change when we re-init later
     qd.reset()
@@ -439,7 +439,7 @@ class ModifySubFuncKernelArgs(pydantic.BaseModel):
 def src_ll_cache_modify_sub_func_child(args: list[str]) -> None:
     args_obj: ModifySubFuncKernelArgs = ModifySubFuncKernelArgs.model_validate_json(args[0])
     qd.init(
-        arch=getattr(ti, args_obj.arch),
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=True,
@@ -529,7 +529,7 @@ def test_src_ll_cache_dupe_kernels(tmp_path: pathlib.Path) -> None:
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
 
-    qd.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
     @qd.func
     def f1(a: qd.types.NDArray[qd.i32, 1]) -> None:
@@ -544,13 +544,13 @@ def test_src_ll_cache_dupe_kernels(tmp_path: pathlib.Path) -> None:
     assert a[0] == 123
     assert not k1._primal.src_ll_cache_observations.cache_loaded
 
-    qd.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
     a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert a[0] == 123
     assert k1._primal.src_ll_cache_observations.cache_loaded
 
-    qd.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
     @qd.func
     def f1(a: qd.types.NDArray[qd.i32, 1]) -> None:
@@ -565,7 +565,7 @@ def test_src_ll_cache_dupe_kernels(tmp_path: pathlib.Path) -> None:
     assert not k1._primal.src_ll_cache_observations.cache_loaded
     assert a[0] == 222
 
-    qd.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
     a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert k1._primal.src_ll_cache_observations.cache_loaded

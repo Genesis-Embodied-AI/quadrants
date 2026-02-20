@@ -19,9 +19,9 @@ def config_debug_dump_path_child(args: list[str]) -> None:
     specify_path = args[2].lower() == "true"
     print("tmp_path", tmp_path)
     if specify_path:
-        qd.init(debug_dump_path=tmp_path, arch=getattr(ti, arch), offline_cache=False)
+        qd.init(debug_dump_path=tmp_path, arch=getattr(qd, arch), offline_cache=False)
     else:
-        qd.init(arch=getattr(ti, arch), offline_cache=False)
+        qd.init(arch=getattr(qd, arch), offline_cache=False)
 
     @qd.kernel(pure=True)
     def k1():

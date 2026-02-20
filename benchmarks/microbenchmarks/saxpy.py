@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import Container, DataSize, DataType
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -13,19 +13,19 @@ def saxpy_default(arch, repeat, container, dtype, dsize, get_metric):
     y = container(dtype, num_elements)
     z = container(dtype, num_elements)
 
-    @ti.kernel
-    def saxpy_field(z: ti.template(), x: ti.template(), y: ti.template()):
+    @qd.kernel
+    def saxpy_field(z: qd.template(), x: qd.template(), y: qd.template()):
         for i in z:
             z[i] = 17 * x[i] + y[i]
 
-    @ti.kernel
-    def saxpy_array(z: ti.types.ndarray(), x: ti.types.ndarray(), y: ti.types.ndarray()):
+    @qd.kernel
+    def saxpy_array(z: qd.types.ndarray(), x: qd.types.ndarray(), y: qd.types.ndarray()):
         for i in z:
             z[i] = 17 * x[i] + y[i]
 
     fill_random(x, dtype, container)
     fill_random(y, dtype, container)
-    func = saxpy_field if container == ti.field else saxpy_array
+    func = saxpy_field if container == qd.field else saxpy_array
     return get_metric(repeat, func, z, x, y)
 
 

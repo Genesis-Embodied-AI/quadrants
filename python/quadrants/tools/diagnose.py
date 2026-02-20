@@ -38,7 +38,7 @@ def main():
 
     def try_print(tag, expr):
         try:
-            cmd = f'import quadrants as ti; print("===="); print({expr}, end="")'
+            cmd = f'import quadrants as qd; print("===="); print({expr}, end="")'
             ret = subprocess.check_output([executable, "-c", cmd]).decode()
             ret = ret.split("====" + os.linesep, maxsplit=1)[1]
             print(f"{tag}: {ret}")
@@ -49,7 +49,7 @@ def main():
     try_print("import", "ti")
     print("")
     for arch in ["cpu", "metal", "cuda", "vulkan"]:
-        try_print(arch, f"ti.lang.misc.is_arch_supported(ti.{arch})")
+        try_print(arch, f"qd.lang.misc.is_arch_supported(qd.{arch})")
     print("")
 
     try:
@@ -88,14 +88,14 @@ def main():
         print(f"{ti_header.decode()}")
 
     try:
-        ti_init_test = subprocess.check_output([executable, "-c", "import quadrants as ti; ti.init()"])
+        ti_init_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init()"])
     except Exception as e:
-        print(f"`ti.init()` failed: {e}")
+        print(f"`qd.init()` failed: {e}")
     else:
         print(f"{ti_init_test.decode()}")
 
     try:
-        ti_cuda_test = subprocess.check_output([executable, "-c", "import quadrants as ti; ti.init(arch=ti.cuda)"])
+        ti_cuda_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init(arch=qd.cuda)"])
     except Exception as e:
         print(f"Quadrants CUDA test failed: {e}")
     else:

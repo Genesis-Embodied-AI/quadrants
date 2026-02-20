@@ -91,8 +91,8 @@ def test_xdg_basedir(tmpdir):
         # environment to the native C++ code.
         os.putenv("XDG_CACHE_HOME", str(tmpdir))
 
-        ti_python_core = qd._lib.utils.import_ti_python_core()
-        repo_dir = ti_python_core.get_repo_dir()
+        qd_python_core = qd._lib.utils.import_qd_python_core()
+        repo_dir = qd_python_core.get_repo_dir()
 
         repo_path = pathlib.Path(repo_dir).resolve()
         expected_path = pathlib.Path(tmpdir / "quadrants").resolve()
@@ -154,11 +154,11 @@ def test_init_bad_arg():
 
 @test_utils.test(arch=qd.cpu)
 def test_init_require_version():
-    ti_python_core = qd._lib.utils.import_ti_python_core()
+    qd_python_core = qd._lib.utils.import_qd_python_core()
     require_version = "{}.{}.{}".format(
-        ti_python_core.get_version_major(),
-        ti_python_core.get_version_minor(),
-        ti_python_core.get_version_patch(),
+        qd_python_core.get_version_major(),
+        qd_python_core.get_version_minor(),
+        qd_python_core.get_version_patch(),
     )
     qd.init(_test_mode=True, debug=True, require_version=require_version)
 
@@ -166,11 +166,11 @@ def test_init_require_version():
 @test_utils.test(arch=qd.cpu)
 def test_init_bad_require_version():
     with pytest.raises(Exception):
-        ti_python_core = qd._lib.utils.import_ti_python_core()
+        qd_python_core = qd._lib.utils.import_qd_python_core()
         bad_require_version = "{}.{}.{}".format(
-            ti_python_core.get_version_major(),
-            ti_python_core.get_version_minor(),
-            ti_python_core.get_version_patch() + 1,
+            qd_python_core.get_version_major(),
+            qd_python_core.get_version_minor(),
+            qd_python_core.get_version_patch() + 1,
         )
         qd.init(_test_mode=True, debug=True, require_version=bad_require_version)
 

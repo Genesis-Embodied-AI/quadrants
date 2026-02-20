@@ -1,10 +1,10 @@
 import time
 
-import quadrants as ti
+import quadrants as qd
 
 
-@ti.kernel
-def lcg_ti(B: int, lcg_its: int, a: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.kernel
+def lcg_ti(B: int, lcg_its: int, a: qd.types.NDArray[qd.i32, 1]) -> None:
     for i in range(B):
         x = a[i]
         for j in range(lcg_its):
@@ -13,15 +13,15 @@ def lcg_ti(B: int, lcg_its: int, a: ti.types.NDArray[ti.i32, 1]) -> None:
 
 
 def main() -> None:
-    ti.init(arch=ti.gpu)
+    qd.init(arch=qd.gpu)
 
     B = 16000
-    a = ti.ndarray(ti.int32, (B,))
+    a = qd.ndarray(qd.int32, (B,))
 
-    ti.sync()
+    qd.sync()
     start = time.time()
     lcg_ti(B, 1000, a)
-    ti.sync()
+    qd.sync()
     end = time.time()
     print("elapsed", end - start)
 

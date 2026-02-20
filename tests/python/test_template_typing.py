@@ -31,7 +31,7 @@ def test_template_no_braces():
 @pytest.mark.parametrize("raise_on_templated_floats", [False, True])
 @test_utils.test()
 def test_template_raise_on_floats(raise_on_templated_floats: bool) -> None:
-    arch = getattr(ti, qd.cfg.arch.name)
+    arch = getattr(qd, qd.cfg.arch.name)
     qd.init(arch=arch, raise_on_templated_floats=raise_on_templated_floats)
 
     @qd.kernel
@@ -49,7 +49,7 @@ def test_template_raise_on_floats(raise_on_templated_floats: bool) -> None:
 @pytest.mark.parametrize("raise_on_templated_floats", [False, True])
 @test_utils.test()
 def test_template_raise_on_data_oriented_floats(raise_on_templated_floats: bool) -> None:
-    arch = getattr(ti, qd.cfg.arch.name)
+    arch = getattr(qd, qd.cfg.arch.name)
     qd.init(arch=arch, raise_on_templated_floats=raise_on_templated_floats)
 
     @qd.data_oriented
@@ -80,7 +80,7 @@ def test_template_raise_on_data_oriented_floats(raise_on_templated_floats: bool)
 @pytest.mark.parametrize("raise_on_templated_floats", [False, True])
 @test_utils.test()
 def test_template_raise_on_global_floats(raise_on_templated_floats: bool) -> None:
-    arch = getattr(ti, qd.cfg.arch.name)
+    arch = getattr(qd, qd.cfg.arch.name)
     qd.init(arch=arch, raise_on_templated_floats=raise_on_templated_floats)
 
     c = 123

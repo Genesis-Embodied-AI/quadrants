@@ -13,7 +13,7 @@ OP_AND = 3
 OP_OR = 4
 OP_XOR = 5
 
-ti_ops = {
+qd_ops = {
     OP_ADD: qd.atomic_add,
     OP_MIN: qd.atomic_min,
     OP_MAX: qd.atomic_max,
@@ -57,7 +57,7 @@ def _test_reduction_single(dtype, criterion, op):
             for i in a:
                 a[i] = i + 1
 
-    ti_op = ti_ops[op]
+    ti_op = qd_ops[op]
 
     @qd.kernel
     def reduce():

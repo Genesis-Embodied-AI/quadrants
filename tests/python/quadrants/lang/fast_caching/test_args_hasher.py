@@ -156,7 +156,7 @@ def test_args_hasher_ndarray_matrix() -> None:
 
 def _ti_init_same_arch() -> None:
     assert qd.cfg is not None
-    qd.init(arch=getattr(ti, qd.cfg.arch.name))
+    qd.init(arch=getattr(qd, qd.cfg.arch.name))
 
 
 @test_utils.test()

@@ -1,12 +1,12 @@
 import time
 
-import quadrants as ti
+import quadrants as qd
 
 t = time.time()
-ti.init(arch=ti.cuda, print_kernel_llvm_ir_optimized=True)
+qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
 
 
-@ti.kernel
+@qd.kernel
 def p():
     print(42)
 
@@ -14,4 +14,4 @@ def p():
 p()
 
 print(f"{time.time() - t:.3f} s")
-ti.core.print_profile_info()
+qd.core.print_profile_info()

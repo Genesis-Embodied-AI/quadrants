@@ -46,7 +46,7 @@ class KernelProfiler:
     and prints the results to the console by :func:`~quadrants.profiler.kernel_profiler.KernelProfiler.print_info`.
 
     ``KernelProfiler`` now support detailed low-level performance metrics (such as memory bandwidth consumption) in its advanced mode.
-    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.
+    This mode is only available for the CUDA backend with CUPTI toolkit, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.
 
     Note:
         For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.
@@ -178,7 +178,7 @@ class KernelProfiler:
     # private methods
     def _check_not_turned_on_with_warning_message(self):
         if self._profiling_mode is False:
-            _ti_core.warn("use 'ti.init(kernel_profiler = True)' to turn on KernelProfiler.")
+            _ti_core.warn("use 'qd.init(kernel_profiler = True)' to turn on KernelProfiler.")
             return True
         return False
 
@@ -355,7 +355,7 @@ def get_default_kernel_profiler():
 def print_kernel_profiler_info(mode="count"):
     """Print the profiling results of Quadrants kernels.
 
-    To enable this profiler, set ``kernel_profiler=True`` in ``ti.init()``.
+    To enable this profiler, set ``kernel_profiler=True`` in ``qd.init()``.
     ``'count'`` mode: print the statistics (min,max,avg time) of launched kernels,
     ``'trace'`` mode: print the records of launched kernels with specific profiling metrics (time, memory load/store and core utilization etc.),
     and defaults to ``'count'``.
@@ -365,21 +365,21 @@ def print_kernel_profiler_info(mode="count"):
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(ti.cpu, kernel_profiler=True)
-        >>> var = ti.field(ti.f32, shape=1)
+        >>> qd.init(qd.cpu, kernel_profiler=True)
+        >>> var = qd.field(qd.f32, shape=1)
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def compute():
         >>>     var[0] = 1.0
 
         >>> compute()
-        >>> ti.profiler.print_kernel_profiler_info()
+        >>> qd.profiler.print_kernel_profiler_info()
         >>> # equivalent calls :
-        >>> # ti.profiler.print_kernel_profiler_info('count')
+        >>> # qd.profiler.print_kernel_profiler_info('count')
 
-        >>> ti.profiler.print_kernel_profiler_info('trace')
+        >>> qd.profiler.print_kernel_profiler_info('trace')
 
     Note:
         For advanced mode of `KernelProfiler`, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.
@@ -390,7 +390,7 @@ def print_kernel_profiler_info(mode="count"):
 def query_kernel_profiler_info(name):
     """Query kernel elapsed time(min,avg,max) on devices using the kernel name.
 
-    To enable this profiler, set `kernel_profiler=True` in `ti.init`.
+    To enable this profiler, set `kernel_profiler=True` in `qd.init`.
 
     Args:
         name (str): kernel name.
@@ -400,22 +400,22 @@ def query_kernel_profiler_info(name):
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(ti.cpu, kernel_profiler=True)
+        >>> qd.init(qd.cpu, kernel_profiler=True)
         >>> n = 1024*1024
-        >>> var = ti.field(ti.f32, shape=n)
+        >>> var = qd.field(qd.f32, shape=n)
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def fill():
         >>>     for i in range(n):
         >>>         var[i] = 0.1
 
         >>> fill()
-        >>> ti.profiler.clear_kernel_profiler_info() #[1]
+        >>> qd.profiler.clear_kernel_profiler_info() #[1]
         >>> for i in range(100):
         >>>     fill()
-        >>> query_result = ti.profiler.query_kernel_profiler_info(fill.__name__) #[2]
+        >>> query_result = qd.profiler.query_kernel_profiler_info(fill.__name__) #[2]
         >>> print("kernel executed times =",query_result.counter)
         >>> print("kernel elapsed time(min_in_ms) =",query_result.min)
         >>> print("kernel elapsed time(max_in_ms) =",query_result.max)
@@ -455,25 +455,25 @@ def set_kernel_profiler_toolkit(toolkit_name="default"):
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(arch=ti.cuda, kernel_profiler=True)
-        >>> x = ti.field(ti.f32, shape=1024*1024)
+        >>> qd.init(arch=qd.cuda, kernel_profiler=True)
+        >>> x = qd.field(qd.f32, shape=1024*1024)
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def fill():
         >>>     for i in x:
         >>>         x[i] = i
 
-        >>> ti.profiler.set_kernel_profiler_toolkit('cupti')
+        >>> qd.profiler.set_kernel_profiler_toolkit('cupti')
         >>> for i in range(100):
         >>>     fill()
-        >>> ti.profiler.print_kernel_profiler_info()
+        >>> qd.profiler.print_kernel_profiler_info()
 
-        >>> ti.profiler.set_kernel_profiler_toolkit('default')
+        >>> qd.profiler.set_kernel_profiler_toolkit('default')
         >>> for i in range(100):
         >>>     fill()
-        >>> ti.profiler.print_kernel_profiler_info()
+        >>> qd.profiler.print_kernel_profiler_info()
     """
     return get_default_kernel_profiler().set_toolkit(toolkit_name)
 
@@ -486,27 +486,27 @@ def set_kernel_profiler_metrics(metric_list=default_cupti_metrics):
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(kernel_profiler=True, arch=ti.cuda)
-        >>> ti.profiler.set_kernel_profiler_toolkit('cupti')
+        >>> qd.init(kernel_profiler=True, arch=qd.cuda)
+        >>> qd.profiler.set_kernel_profiler_toolkit('cupti')
         >>> num_elements = 128*1024*1024
 
-        >>> x = ti.field(ti.f32, shape=num_elements)
-        >>> y = ti.field(ti.f32, shape=())
+        >>> x = qd.field(qd.f32, shape=num_elements)
+        >>> y = qd.field(qd.f32, shape=())
         >>> y[None] = 0
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
         >>>         y[None] += x[i]
 
         >>> # In the case of not parameter, Quadrants will print its pre-defined metrics list
-        >>> ti.profiler.get_predefined_cupti_metrics()
+        >>> qd.profiler.get_predefined_cupti_metrics()
         >>> # get Quadrants pre-defined metrics
-        >>> profiling_metrics = ti.profiler.get_predefined_cupti_metrics('shared_access')
+        >>> profiling_metrics = qd.profiler.get_predefined_cupti_metrics('shared_access')
 
-        >>> global_op_atom = ti.profiler.CuptiMetric(
+        >>> global_op_atom = qd.profiler.CuptiMetric(
         >>>     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',
         >>>     header=' global.atom ',
         >>>     format='    {:8.0f} ')
@@ -514,10 +514,10 @@ def set_kernel_profiler_metrics(metric_list=default_cupti_metrics):
         >>> profiling_metrics += [global_op_atom]
 
         >>> # metrics setting will be retained until the next configuration
-        >>> ti.profiler.set_kernel_profiler_metrics(profiling_metrics)
+        >>> qd.profiler.set_kernel_profiler_metrics(profiling_metrics)
         >>> for i in range(16):
         >>>     reduction()
-        >>> ti.profiler.print_kernel_profiler_info('trace')
+        >>> qd.profiler.print_kernel_profiler_info('trace')
 
     Note:
         Metrics setting will be retained until the next configuration.
@@ -534,27 +534,27 @@ def collect_kernel_profiler_metrics(metric_list=default_cupti_metrics):
 
     Example::
 
-        >>> import quadrants as ti
+        >>> import quadrants as qd
 
-        >>> ti.init(kernel_profiler=True, arch=ti.cuda)
-        >>> ti.profiler.set_kernel_profiler_toolkit('cupti')
+        >>> qd.init(kernel_profiler=True, arch=qd.cuda)
+        >>> qd.profiler.set_kernel_profiler_toolkit('cupti')
         >>> num_elements = 128*1024*1024
 
-        >>> x = ti.field(ti.f32, shape=num_elements)
-        >>> y = ti.field(ti.f32, shape=())
+        >>> x = qd.field(qd.f32, shape=num_elements)
+        >>> y = qd.field(qd.f32, shape=())
         >>> y[None] = 0
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def reduction():
         >>>     for i in x:
         >>>         y[None] += x[i]
 
         >>> # In the case of not parameter, Quadrants will print its pre-defined metrics list
-        >>> ti.profiler.get_predefined_cupti_metrics()
+        >>> qd.profiler.get_predefined_cupti_metrics()
         >>> # get Quadrants pre-defined metrics
-        >>> profiling_metrics = ti.profiler.get_predefined_cupti_metrics('device_utilization')
+        >>> profiling_metrics = qd.profiler.get_predefined_cupti_metrics('device_utilization')
 
-        >>> global_op_atom = ti.profiler.CuptiMetric(
+        >>> global_op_atom = qd.profiler.CuptiMetric(
         >>>     name='l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum',
         >>>     header=' global.atom ',
         >>>     format='    {:8.0f} ')
@@ -562,10 +562,10 @@ def collect_kernel_profiler_metrics(metric_list=default_cupti_metrics):
         >>> profiling_metrics += [global_op_atom]
 
         >>> # metrics setting is temporary, and will be clear when exit from this context.
-        >>> with ti.profiler.collect_kernel_profiler_metrics(profiling_metrics):
+        >>> with qd.profiler.collect_kernel_profiler_metrics(profiling_metrics):
         >>>     for i in range(16):
         >>>         reduction()
-        >>>     ti.profiler.print_kernel_profiler_info('trace')
+        >>>     qd.profiler.print_kernel_profiler_info('trace')
 
     Note:
         The configuration of the ``metric_list`` will be clear when exit from this context.

@@ -3,10 +3,10 @@ This module defines generators of quantized types.
 For more details, read https://yuanming.quadrants.graphics/publication/2021-quanquadrants/quanquadrants.pdf.
 """
 
-from quadrants._lib.utils import ti_python_core as _ti_python_core
+from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.types.primitive_types import i32
 
-_type_factory = _ti_python_core.get_type_factory_instance()
+_type_factory = _qd_python_core.get_type_factory_instance()
 
 
 def int(bits, signed=True, compute=None):  # pylint: disable=W0622
@@ -24,7 +24,7 @@ def int(bits, signed=True, compute=None):  # pylint: disable=W0622
         from quadrants.lang import impl  # pylint: disable=C0415
 
         compute = impl.get_runtime().default_ip if signed else impl.get_runtime().default_up
-    if isinstance(compute, _ti_python_core.DataTypeCxx):
+    if isinstance(compute, _qd_python_core.DataTypeCxx):
         compute = compute.get_ptr()
     return _type_factory.get_quant_int_type(bits, signed, compute)
 
@@ -46,7 +46,7 @@ def fixed(bits, signed=True, max_value=1.0, compute=None, scale=None):
         from quadrants.lang import impl  # pylint: disable=C0415
 
         compute = impl.get_runtime().default_fp
-    if isinstance(compute, _ti_python_core.DataTypeCxx):
+    if isinstance(compute, _qd_python_core.DataTypeCxx):
         compute = compute.get_ptr()
     # TODO: handle cases with bits > 32
     underlying_type = int(bits=bits, signed=signed, compute=i32)
@@ -74,7 +74,7 @@ def float(exp, frac, signed=True, compute=None):  # pylint: disable=W0622
         from quadrants.lang import impl  # pylint: disable=C0415
 
         compute = impl.get_runtime().default_fp
-    if isinstance(compute, _ti_python_core.DataTypeCxx):
+    if isinstance(compute, _qd_python_core.DataTypeCxx):
         compute = compute.get_ptr()
     # Exponent is always unsigned
     exp_type = int(bits=exp, signed=False, compute=i32)

@@ -82,7 +82,7 @@ class LaunchContextBufferCache:
     # pointers, the address of these pointers cannot change, and the set of parameters is fixed.
     # The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage
     # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of
-    # the taichi prog itself, which means that calling `ti.reset()` will automatically clear the cache. Note that
+    # the taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that
     # the cache stores wear references to pointers, so it does not hold alife any allocated memory.
     def __init__(self) -> None:
         # Keep track of taichi runtime to automatically clear cache if destroyed
@@ -345,7 +345,7 @@ class Kernel(FuncBase):
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
             # As for why we are using `print` rather than eg logger.info, it is because
-            # this is only printed when ti.init(print_non_pure=..) is True. And it is
+            # this is only printed when qd.init(print_non_pure=..) is True. And it is
             # confusing to set that to True, and see nothing printed.
             print(f"[NOT_PURE] Debug information: not pure: {self.func.__name__}")
         return None

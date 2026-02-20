@@ -1140,7 +1140,7 @@ def test_prune_used_parameters2():
 def test_prune_used_parameters_fastcache1(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class Nested1:
@@ -1242,7 +1242,7 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
 def test_prune_used_parameters_fastcache2(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:
@@ -1313,7 +1313,7 @@ def test_prune_used_parameters_fastcache2(tmp_path: Path):
 def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
-        qd.init(arch=getattr(ti, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
         @dataclasses.dataclass
         class MyDataclass1:

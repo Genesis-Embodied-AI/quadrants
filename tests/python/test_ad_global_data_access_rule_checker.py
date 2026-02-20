@@ -66,6 +66,7 @@ def test_adjoint_checkbit_needs_grad():
 
     warn_raised = False
     for warn in record:
+        print("warn.message.args[0]", warn.message.args[0])
         if (
             "Debug mode is disabled, autodiff valid check will not work. Please specify `qd.init(debug=True)` to enable the check."
             in warn.message.args[0]

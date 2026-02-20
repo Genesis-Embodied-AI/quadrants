@@ -12,15 +12,15 @@ def print_scoped_profiler_info():
 
     Example::
 
-            >>> import quadrants as ti
-            >>> ti.init(arch=ti.cpu)
-            >>> var = ti.field(ti.f32, shape=1)
-            >>> @ti.kernel
+            >>> import quadrants as qd
+            >>> qd.init(arch=qd.cpu)
+            >>> var = qd.field(qd.f32, shape=1)
+            >>> @qd.kernel
             >>> def compute():
             >>>     var[0] = 1.0
             >>>     print("Setting var[0] =", var[0])
             >>> compute()
-            >>> ti.profiler.print_scoped_profiler_info()
+            >>> qd.profiler.print_scoped_profiler_info()
     """
     _ti_core.print_profile_info()
 

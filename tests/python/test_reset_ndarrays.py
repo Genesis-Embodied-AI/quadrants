@@ -12,7 +12,7 @@ from tests import test_utils
 def test_ndarray_doesnt_crash_on_gc() -> None:
     if sys.platform != "darwin":
         pytest.skip("Only need to check Mac CPU")
-    arch = getattr(ti, qd.cfg.arch.name)
+    arch = getattr(qd, qd.cfg.arch.name)
     for n in range(100):
         qd.init(arch=arch)
         gc.collect()
@@ -48,7 +48,7 @@ def test_ndarray_doesnt_crash_on_gc() -> None:
 
 @test_utils.test()
 def test_ndarray_reset() -> None:
-    arch = getattr(ti, qd.cfg.arch.name)
+    arch = getattr(qd, qd.cfg.arch.name)
     qd.reset()
     qd.init(arch=arch)
     rt = qd.lang.impl.get_runtime()

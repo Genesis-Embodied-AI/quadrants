@@ -131,7 +131,7 @@ class Pruning:
 
         note that this ONLY handles args, not kwargs
         """
-        # We can be called with callables other than ti.func, so filter those out:
+        # We can be called with callables other than qd.func, so filter those out:
         if (
             type(quadrants_callable) not in {QuadrantsCallable, BoundQuadrantsCallable}
             or type(quadrants_callable.wrapper) != Func

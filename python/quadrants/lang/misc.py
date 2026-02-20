@@ -188,12 +188,12 @@ def reset():
 
     Example::
 
-        >>> a = ti.field(ti.i32, shape=())
+        >>> a = qd.field(qd.i32, shape=())
         >>> a[None] = 1
         >>> print("before reset: ", a)
         before rest: 1
         >>>
-        >>> ti.reset()
+        >>> qd.reset()
         >>> print("after reset: ", a)
         # will raise error because a is unavailable after reset.
     """
@@ -219,7 +219,7 @@ class _EnvironmentConfigurator:
         if key in self.kwargs:
             self[key] = self.kwargs[key]
             if value:
-                _ti_core.warn(f'Environment variable {name}={value} overridden by ti.init argument "{key}"')
+                _ti_core.warn(f'Environment variable {name}={value} overridden by qd.init argument "{key}"')
             del self.kwargs[key]  # mark as recognized
         elif value:
             self[key] = _cast(value)
@@ -320,9 +320,9 @@ def init(
         default_ip (Optional[type]): Default integral type.
         require_version: A version string.
         print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with
-                        @ti.pure
+                        @qd.pure
         src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-                      for pure kernels (i.e. kernels declared as @ti.pure)
+                      for pure kernels (i.e. kernels declared as @qd.pure)
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
             behavior. Below we list some of the most frequently used ones. For a
@@ -346,9 +346,9 @@ def init(
 
     if "default_up" in kwargs:
         raise KeyError("'default_up' is always the unsigned type of 'default_ip'. Please set 'default_ip' instead.")
-    # Make a deepcopy in case these args reference to items from ti.cfg, which are
+    # Make a deepcopy in case these args reference to items from qd.cfg, which are
     # actually references. If no copy is made and the args are indeed references,
-    # ti.reset() could override the args to their default values.
+    # qd.reset() could override the args to their default values.
     default_fp = _deepcopy(default_fp)
     default_ip = _deepcopy(default_ip)
     kwargs = _deepcopy(kwargs)
@@ -367,7 +367,7 @@ def init(
     if env_default_fp:
         if default_fp is not None:
             _ti_core.warn(
-                f'Environment variable QD_DEFAULT_FP={env_default_fp} overridden by ti.init argument "default_fp"'
+                f'Environment variable QD_DEFAULT_FP={env_default_fp} overridden by qd.init argument "default_fp"'
             )
         elif env_default_fp == "32":
             default_fp = f32
@@ -380,7 +380,7 @@ def init(
     if env_default_ip:
         if default_ip is not None:
             _ti_core.warn(
-                f'Environment variable QD_DEFAULT_IP={env_default_ip} overridden by ti.init argument "default_ip"'
+                f'Environment variable QD_DEFAULT_IP={env_default_ip} overridden by qd.init argument "default_ip"'
             )
         elif env_default_ip == "32":
             default_ip = i32
@@ -401,7 +401,7 @@ def init(
     env_spec.add("print_full_traceback")
     env_spec.add("unrolling_limit")
 
-    # compiler configurations (ti.cfg):
+    # compiler configurations (qd.cfg):
     for key in dir(cfg):
         if key in ["arch", "default_fp", "default_ip"]:
             continue
@@ -413,9 +413,9 @@ def init(
     unexpected_keys = kwargs.keys()
 
     if len(unexpected_keys):
-        raise KeyError(f'Unrecognized keyword argument(s) for ti.init: {", ".join(unexpected_keys)}')
+        raise KeyError(f'Unrecognized keyword argument(s) for qd.init: {", ".join(unexpected_keys)}')
 
-    # dispatch configurations that are not in ti.cfg:
+    # dispatch configurations that are not in qd.cfg:
     runtime = impl.get_runtime()
     if not _test_mode:
         _ti_core.set_core_trigger_gdb_when_crash(spec_cfg.gdb_trigger)
@@ -488,7 +488,7 @@ def block_local(*args):
 def mesh_local(*args):
     """Hints the compiler to cache the mesh attributes
     and to enable the mesh BLS optimization,
-    only available for backends supporting `ti.extension.mesh` and to use with mesh-for loop.
+    only available for backends supporting `qd.extension.mesh` and to use with mesh-for loop.
 
     Related to https://github.com/taichi-dev/quadrants/issues/3608
 
@@ -498,17 +498,17 @@ def mesh_local(*args):
     Examples::
 
         # instantiate model
-        mesh_builder = ti.Mesh.tri()
+        mesh_builder = qd.Mesh.tri()
         mesh_builder.verts.place({
-            'x' : ti.f32,
-            'y' : ti.f32
+            'x' : qd.f32,
+            'y' : qd.f32
         })
         model = mesh_builder.build(meta)
 
-        @ti.kernel
+        @qd.kernel
         def foo():
             # hint the compiler to cache mesh vertex attribute `x` and `y`.
-            ti.mesh_local(model.verts.x, model.verts.y)
+            qd.mesh_local(model.verts.x, model.verts.y)
             for v0 in model.verts: # mesh-for loop
                 for v1 in v0.verts:
                     v0.x += v1.y
@@ -548,7 +548,7 @@ def assume_in_range(val, base, low, high):
     Example::
 
         >>> # hint the compiler that x is in range [8, 12).
-        >>> x = ti.assume_in_range(x, 10, -2, 2)
+        >>> x = qd.assume_in_range(x, 10, -2, 2)
         >>> x
         10
     """
@@ -617,10 +617,10 @@ def loop_config(
 
     Examples::
 
-        @ti.kernel
-        def break_in_serial_for() -> ti.i32:
+        @qd.kernel
+        def break_in_serial_for() -> qd.i32:
             a = 0
-            ti.loop_config(serialize=True)
+            qd.loop_config(serialize=True)
             for i in range(100):  # This loop runs serially
                 a += i
                 if i == 10:
@@ -630,24 +630,24 @@ def loop_config(
         break_in_serial_for()  # returns 55
 
         n = 128
-        val = ti.field(ti.i32, shape=n)
-        @ti.kernel
+        val = qd.field(qd.i32, shape=n)
+        @qd.kernel
         def fill():
-            ti.loop_config(parallelize=8, block_dim=16)
+            qd.loop_config(parallelize=8, block_dim=16)
             # If the kernel is run on the CPU backend, 8 threads will be used to run it
             # If the kernel is run on the CUDA backend, each block will have 16 threads.
             for i in range(n):
                 val[i] = i
 
-        u1 = ti.types.quant.int(bits=1, signed=False)
-        x = ti.field(dtype=u1)
-        y = ti.field(dtype=u1)
-        cell = ti.root.dense(ti.ij, (128, 4))
-        cell.quant_array(ti.j, 32).place(x)
-        cell.quant_array(ti.j, 32).place(y)
-        @ti.kernel
+        u1 = qd.types.quant.int(bits=1, signed=False)
+        x = qd.field(dtype=u1)
+        y = qd.field(dtype=u1)
+        cell = qd.root.dense(qd.ij, (128, 4))
+        cell.quant_array(qd.j, 32).place(x)
+        cell.quant_array(qd.j, 32).place(y)
+        @qd.kernel
         def copy():
-            ti.loop_config(bit_vectorize=True)
+            qd.loop_config(bit_vectorize=True)
             # 32 bits, instead of 1 bit, will be copied at a time
             for i, j in x:
                 y[i, j] = x[i, j]
@@ -676,11 +676,11 @@ def global_thread_idx():
 
     Example::
 
-        >>> f = ti.field(ti.f32, shape=(16, 16))
-        >>> @ti.kernel
+        >>> f = qd.field(qd.f32, shape=(16, 16))
+        >>> @qd.kernel
         >>> def test():
-        >>>     for i in ti.grouped(f):
-        >>>         print(ti.global_thread_idx())
+        >>>     for i in qd.grouped(f):
+        >>>         print(qd.global_thread_idx())
         >>>
         test()
     """
@@ -689,7 +689,7 @@ def global_thread_idx():
 
 def mesh_patch_idx():
     """Returns the internal mesh patch id of this running thread,
-    only available for backends supporting `ti.extension.mesh` and to use within mesh-for loop.
+    only available for backends supporting `qd.extension.mesh` and to use within mesh-for loop.
 
     Related to https://github.com/taichi-dev/quadrants/issues/3608
     """

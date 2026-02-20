@@ -1,23 +1,23 @@
 from autograd import grad
 
-import quadrants as ti
+import quadrants as qd
 from quadrants._testing import approx
 
 
 # Note: test happens at v = 0.2
-def grad_test(tifunc, npfunc=None, default_fp=ti.f32):
+def grad_test(tifunc, npfunc=None, default_fp=qd.f32):
     if npfunc is None:
         npfunc = tifunc
 
-    @ti.test(default_fp=default_fp)
+    @qd.test(default_fp=default_fp)
     def impl():
-        print(f"arch={ti.cfg.arch} default_fp={ti.cfg.default_fp}")
-        x = ti.field(default_fp)
-        y = ti.field(default_fp)
+        print(f"arch={qd.cfg.arch} default_fp={qd.cfg.default_fp}")
+        x = qd.field(default_fp)
+        y = qd.field(default_fp)
 
-        ti.root.dense(ti.i, 1).place(x, x.grad, y, y.grad)
+        qd.root.dense(qd.i, 1).place(x, x.grad, y, y.grad)
 
-        @ti.kernel
+        @qd.kernel
         def func():
             for i in x:
                 y[i] = tifunc(x[i])
@@ -48,7 +48,7 @@ def test_poly():
     grad_test(lambda x: 0.4 * x * x - 3)
     grad_test(lambda x: (x - 3) * (x - 1))
     grad_test(lambda x: (x - 3) * (x - 1) + x * x)
-    ti.core.print_profile_info()
+    qd.core.print_profile_info()
     print("total_time", time.time() - t)
 
 

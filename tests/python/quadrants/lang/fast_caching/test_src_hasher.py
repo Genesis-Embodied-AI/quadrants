@@ -194,7 +194,7 @@ class VaryKernelFuncKernelArgs(pydantic.BaseModel):
 def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     args_obj: VaryKernelFuncKernelArgs = VaryKernelFuncKernelArgs.model_validate_json(args[0])
     qd.init(
-        arch=getattr(ti, args_obj.arch),
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=True,

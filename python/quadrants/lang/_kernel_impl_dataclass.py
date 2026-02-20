@@ -90,7 +90,7 @@ def expand_func_arguments(
     used_py_dataclasses_parameters_enforcing: set[str] | None, arguments: list[ArgMetadata]
 ) -> list[ArgMetadata]:
     """
-    Used to expand arguments for @ti.func
+    Used to expand arguments for @qd.func
     """
     expanded_arguments = []
     for i, argument in enumerate(arguments):

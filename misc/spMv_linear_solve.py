@@ -1,15 +1,15 @@
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.x64)
+qd.init(arch=qd.x64)
 
 n = 8
 
-K = ti.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100)
-b = ti.field(ti.f32, shape=n)
+K = qd.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100)
+b = qd.field(qd.f32, shape=n)
 
 
-@ti.kernel
-def fill(A: ti.types.sparse_matrix_builder(), b: ti.template(), interval: ti.i32):
+@qd.kernel
+def fill(A: qd.types.sparse_matrix_builder(), b: qd.template(), interval: qd.i32):
     for i in range(n):
         A[i, i] += 2.0
 
@@ -30,7 +30,7 @@ x = A @ b
 print(x)
 
 print("Solving sparse linear systems Ax = b with the solution x:")
-solver = ti.linalg.SparseSolver(solver_type="LLT")
+solver = qd.linalg.SparseSolver(solver_type="LLT")
 solver.analyze_pattern(A)
 solver.factorize(A)
 x = solver.solve(b)
