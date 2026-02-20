@@ -13,8 +13,8 @@ namespace {
 void gather_atomic_dests(
     IRNode *root,
     std::unordered_set<const SNode *> &field_snodes,
-    std::unordered_set<std::vector<int>,
-                       hashing::Hasher<std::vector<int>>> &arr_ids) {
+    std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>
+        &arr_ids) {
   auto stmts = irpass::analysis::gather_statements(
       root, [](Stmt *s) { return s->is<AtomicOpStmt>(); });
   for (auto *s : stmts) {
@@ -64,8 +64,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   std::unordered_set<Stmt *> dynamic_indexed_ptrs_;
   std::unordered_set<const SNode *> atomic_dest_snodes_;
-  std::unordered_set<std::vector<int>,
-                     hashing::Hasher<std::vector<int>>>
+  std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>
       atomic_dest_arr_ids_;
 
   OffloadedStmt *current_offloaded;
