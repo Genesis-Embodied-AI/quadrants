@@ -73,8 +73,8 @@ class MyStructFieldEF:
         value=Name(id='my_struct_ab', ctx=Load()),
         attr='a',
         ctx=Load())""",
-            {"__ti_my_struct_ab__ti_a"},
-            "Name(id='__ti_my_struct_ab__ti_a', ctx=Load())",
+            {"__qd_my_struct_ab__qd_a"},
+            "Name(id='__qd_my_struct_ab__qd_a', ctx=Load())",
         ),
         (
             """
@@ -86,8 +86,8 @@ class MyStructFieldEF:
         attr='d',
         ctx=Load())
 """,
-            {"__ti_my_struct_ab__ti_struct_cd__ti_d"},
-            "Name(id='__ti_my_struct_ab__ti_struct_cd__ti_d', ctx=Load())",
+            {"__qd_my_struct_ab__qd_struct_cd__qd_d"},
+            "Name(id='__qd_my_struct_ab__qd_struct_cd__qd_d', ctx=Load())",
         ),
         (
             """
@@ -101,8 +101,8 @@ class MyStructFieldEF:
             ctx=Load()),
         attr='f',
         ctx=Load())""",
-            {"__ti_my_struct_ab__ti_struct_cd__ti_struct_ef__ti_f"},
-            "Name(id='__ti_my_struct_ab__ti_struct_cd__ti_struct_ef__ti_f', ctx=Load())",
+            {"__qd_my_struct_ab__qd_struct_cd__qd_struct_ef__qd_f"},
+            "Name(id='__qd_my_struct_ab__qd_struct_cd__qd_struct_ef__qd_f', ctx=Load())",
         ),
         (
             """
@@ -116,10 +116,10 @@ class MyStructFieldEF:
               ctx=Load()
             )
             """,
-            {"__ti_my_struct_ab__ti_a"},
+            {"__qd_my_struct_ab__qd_a"},
             """
             Attribute(
-              value=Name(id='__ti_my_struct_ab__ti_a', ctx=Load()),
+              value=Name(id='__qd_my_struct_ab__qd_a', ctx=Load()),
               attr='shape',
               ctx=Load()
             )
@@ -141,28 +141,28 @@ def test_unpack_ast_struct_expressions(ast_in: str, struct_locals: set[str], exp
         (
             [ArgMetadata(MyStructAB, "my_struct_ab")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ab__ti_b"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ab__qd_a"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ab__qd_b"),
             ],
         ),
         (
             [ArgMetadata(MyStructCD, "my_struct_cd")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_c"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_d"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_cd__qd_c"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_cd__qd_d"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_cd__qd_my_struct_ab__qd_a"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_cd__qd_my_struct_ab__qd_b"),
             ],
         ),
         (
             [ArgMetadata(MyStructEF, "my_struct_ef")],
             [
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_e"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_f"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_c"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_d"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a"),
-                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_e"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_f"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_my_struct_cd__qd_c"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_my_struct_cd__qd_d"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a"),
+                ArgMetadata(ti.types.NDArray[ti.i32, 1], "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b"),
             ],
         ),
     ],
@@ -188,30 +188,30 @@ def test_expand_func_arguments(in_meta: list[ArgMetadata], expected_meta: list[A
             "my_struct_ab",
             MyStructFieldAB,
             {
-                "__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_ab__ti_b": ti.template,
+                "__qd_my_struct_ab__qd_a": ti.template,
+                "__qd_my_struct_ab__qd_b": ti.template,
             },
         ),
         (
             "my_struct_cd",
             MyStructFieldCD,
             {
-                "__ti_my_struct_cd__ti_c": ti.template,
-                "__ti_my_struct_cd__ti_d": ti.template,
-                "__ti_my_struct_cd__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_cd__ti_my_struct_ab__ti_b": ti.template,
+                "__qd_my_struct_cd__qd_c": ti.template,
+                "__qd_my_struct_cd__qd_d": ti.template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_a": ti.template,
+                "__qd_my_struct_cd__qd_my_struct_ab__qd_b": ti.template,
             },
         ),
         (
             "my_struct_ef",
             MyStructFieldEF,
             {
-                "__ti_my_struct_ef__ti_e": ti.template,
-                "__ti_my_struct_ef__ti_f": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_c": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_d": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a": ti.template,
-                "__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b": ti.template,
+                "__qd_my_struct_ef__qd_e": ti.template,
+                "__qd_my_struct_ef__qd_f": ti.template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_c": ti.template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_d": ti.template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a": ti.template,
+                "__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b": ti.template,
             },
         ),
     ],

@@ -2,15 +2,15 @@
 
 from typing import Any, Optional, Sequence, Union
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import SNodeCxx
 from quadrants._snode.snode_tree import SNodeTree
 from quadrants.lang import impl, snode
 from quadrants.lang.exception import QuadrantsRuntimeError
 
-_snode_registry = _ti_core.SNodeRegistry()
+_snode_registry = _qd_core.SNodeRegistry()
 
-_Axis = _ti_core.Axis
+_Axis = _qd_core.Axis
 
 
 class FieldsBuilder:
@@ -82,7 +82,7 @@ class FieldsBuilder:
         dimensions: Union[Sequence[int], int],
     ):
         """Same as :func:`quadrants.lang.snode.SNode.pointer`"""
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Pointer SNode is not supported on this backend.")
         self._check_not_finalized()
         self.empty = False
@@ -99,7 +99,7 @@ class FieldsBuilder:
         chunk_size: Optional[int] = None,
     ):
         """Same as :func:`quadrants.lang.snode.SNode.dynamic`"""
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Dynamic SNode is not supported on this backend.")
 
         if dimension >= 2**31:
@@ -121,7 +121,7 @@ class FieldsBuilder:
         dimensions: Union[Sequence[int], int],
     ):
         """Same as :func:`quadrants.lang.snode.SNode.bitmasked`"""
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Bitmasked SNode is not supported on this backend.")
         self._check_not_finalized()
         self.empty = False
@@ -178,7 +178,7 @@ class FieldsBuilder:
         self.finalized = True
         impl.get_runtime().finalize_fields_builder(self)
         return SNodeTree(
-            _ti_core.finalize_snode_tree(_snode_registry, self.ptr, impl.get_runtime()._prog, compile_only)
+            _qd_core.finalize_snode_tree(_snode_registry, self.ptr, impl.get_runtime()._prog, compile_only)
         )
 
     def _check_not_finalized(self):

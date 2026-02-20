@@ -46,12 +46,12 @@ def _populate_struct_locals_from_params_dict(basename: str, struct_locals, struc
     - struct_ab.struct_cd.strucdt_ef.f
 
     And the members of struct_locals should be:
-    - __ti_struct_ab__ti_a
-    - __ti_struct_ab__ti_b
-    - __ti_struct_ab__ti_struct_cd__ti_c
-    - __ti_struct_ab__ti_struct_cd__ti_d
-    - __ti_struct_ab__ti_struct_cd__ti_struct_ef__ti_e
-    - __ti_struct_ab__ti_struct_cd__ti_struct_ef__ti_f
+    - __qd_struct_ab__qd_a
+    - __qd_struct_ab__qd_b
+    - __qd_struct_ab__qd_struct_cd__qd_c
+    - __qd_struct_ab__qd_struct_cd__qd_d
+    - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_e
+    - __qd_struct_ab__qd_struct_cd__qd_struct_ef__qd_f
     """
     for field in dataclasses.fields(struct_type):
         child_name = create_flat_name(basename, field.name)
@@ -69,7 +69,7 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
     - Searches this for any dataclasses:
       - If it finds any dataclasses, then converts them into expanded names.
       - E.g. my_struct: MyStruct, and MyStruct contains a, b, c would become:
-          {"__ti_my_struct_a", "__ti_my_struct_b, "__ti_my_struct_c"}
+          {"__qd_my_struct_a", "__qd_my_struct_b, "__qd_my_struct_c"}
     """
     struct_locals = set()
     assert ctx.func is not None
@@ -118,7 +118,7 @@ def expand_func_arguments(
                     expanded_arguments.append(new_argument)
         else:
             if (
-                not argument.name.startswith("__ti_")
+                not argument.name.startswith("__qd_")
                 or used_py_dataclasses_parameters_enforcing is None
                 or argument.name in used_py_dataclasses_parameters_enforcing
             ):
@@ -164,8 +164,8 @@ def unpack_ast_struct_expressions(tree: ast.Module, struct_locals: set[str]) -> 
         attr='a',
         ctx=Load())
     =>
-    # __ti_my_struct_ab__ti_a
-    Name(id='__ti_my_struct_ab__ti_a', ctx=Load()
+    # __qd_my_struct_ab__qd_a
+    Name(id='__qd_my_struct_ab__qd_a', ctx=Load()
 
     # my_struct_ab.struct_cd.d
     # Attribute(value=Attribute(value=Name()))
@@ -178,8 +178,8 @@ def unpack_ast_struct_expressions(tree: ast.Module, struct_locals: set[str]) -> 
         ctx=Load())
         visit_attribute
     =>
-    # __ti_my_struct_ab__ti_struct_cd__ti_d
-    Name(id='__ti_my_struct_ab__ti_struct_cd__ti_d', ctx=Load()
+    # __qd_my_struct_ab__qd_struct_cd__qd_d
+    Name(id='__qd_my_struct_ab__qd_struct_cd__qd_d', ctx=Load()
 
     # my_struct_ab.struct_cd.struct_ef.f
     # Attribute(value=Attribute(value=Name()))
@@ -194,8 +194,8 @@ def unpack_ast_struct_expressions(tree: ast.Module, struct_locals: set[str]) -> 
         attr='f',
         ctx=Load())
     =>
-    # __ti_my_struct_ab__ti_struct_cd__ti_struct_ef__ti_f
-    Name(id='__ti_my_struct_ab__ti_struct_cd__ti_struct_ef__ti_f', ctx=Load()
+    # __qd_my_struct_ab__qd_struct_cd__qd_struct_ef__qd_f
+    Name(id='__qd_my_struct_ab__qd_struct_cd__qd_struct_ef__qd_f', ctx=Load()
     """
     transformer = FlattenAttributeNameTransformer(struct_locals=struct_locals)
     new_tree = transformer.visit(tree)
@@ -219,5 +219,5 @@ def populate_global_vars_from_dataclass(
                 py_arg=child_value,
                 global_vars=global_vars,
             )
-        elif util.is_ti_template(field.type):
+        elif util.is_qd_template(field.type):
             global_vars[flat_name] = child_value

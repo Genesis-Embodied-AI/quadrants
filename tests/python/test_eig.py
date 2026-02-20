@@ -68,16 +68,16 @@ def _test_eig2x2_complex(dt):
     v_np, w_np = np.linalg.eig(A.to_numpy().astype(dtype))
     v_ti = v.to_numpy().astype(dtype)
     w_ti = w.to_numpy().astype(dtype)
-    v_ti_complex = v_ti[:, 0] + v_ti[:, 1] * 1.0j
-    w_ti_complex = w_ti[0::2, :] + w_ti[1::2, :] * 1.0j
+    v_qd_complex = v_ti[:, 0] + v_ti[:, 1] * 1.0j
+    w_qd_complex = w_ti[0::2, :] + w_ti[1::2, :] * 1.0j
 
     # sort by eigenvalues
     idx_np = np.argsort(v_np)
-    idx_ti = np.argsort(v_ti_complex)
+    idx_ti = np.argsort(v_qd_complex)
 
-    np.testing.assert_allclose(v_ti_complex[idx_ti], v_np[idx_np], atol=tol, rtol=tol)
-    _eigen_vector_equal(w_ti_complex[:, idx_ti[0]], w_np[:, idx_np[0]], tol)
-    _eigen_vector_equal(w_ti_complex[:, idx_ti[1]], w_np[:, idx_np[1]], tol)
+    np.testing.assert_allclose(v_qd_complex[idx_ti], v_np[idx_np], atol=tol, rtol=tol)
+    _eigen_vector_equal(w_qd_complex[:, idx_ti[0]], w_np[:, idx_np[0]], tol)
+    _eigen_vector_equal(w_qd_complex[:, idx_ti[1]], w_np[:, idx_np[1]], tol)
 
 
 def _test_sym_eig2x2(dt):

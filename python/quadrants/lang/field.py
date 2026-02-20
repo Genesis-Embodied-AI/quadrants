@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, cast
 
 import quadrants.lang
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._logging import warn
 from quadrants.lang import impl
@@ -189,7 +189,7 @@ class Field:
         if len(key) != len(self.shape):
             raise AssertionError("Slicing is not supported on ti.field")
 
-        return key + ((0,) * (_ti_core.get_max_num_indices() - len(key)))  # type: ignore
+        return key + ((0,) * (_qd_core.get_max_num_indices() - len(key)))  # type: ignore
 
     def _initialize_host_accessors(self):
         if self.host_accessors:
@@ -238,7 +238,7 @@ class ScalarField(Field):
     @python_scope
     def to_numpy(self, dtype=None):
         """Converts this field to a `numpy.ndarray`."""
-        if self.parent()._snode.ptr.type == _ti_core.SNodeType.dynamic:
+        if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
                 "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array."
             )
@@ -318,7 +318,7 @@ class ScalarField(Field):
 
 class SNodeHostAccessor:
     def __init__(self, snode):
-        if _ti_core.is_real(snode.data_type()):
+        if _qd_core.is_real(snode.data_type()):
             write_func = snode.write_float
             read_func = snode.read_float
         else:
@@ -329,17 +329,17 @@ class SNodeHostAccessor:
                 else:
                     snode.write_int(key, value)
 
-            if _ti_core.is_signed(snode.data_type()):
+            if _qd_core.is_signed(snode.data_type()):
                 read_func = snode.read_int
             else:
                 read_func = snode.read_uint
 
         def getter(*key):
-            assert len(key) == _ti_core.get_max_num_indices()
+            assert len(key) == _qd_core.get_max_num_indices()
             return read_func(key)
 
         def setter(value, *key):
-            assert len(key) == _ti_core.get_max_num_indices()
+            assert len(key) == _qd_core.get_max_num_indices()
             write_func(key, value)
             # same as above
             if (
@@ -370,7 +370,7 @@ class BitpackedFields:
 
     def __init__(self, max_num_bits):
         self.fields = []
-        self.bit_struct_type_builder = _ti_core.BitStructTypeBuilder(max_num_bits)
+        self.bit_struct_type_builder = _qd_core.BitStructTypeBuilder(max_num_bits)
 
     def place(self, *args, shared_exponent=False):
         """Places a list of fields with quantized types inside.

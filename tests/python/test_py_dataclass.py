@@ -61,9 +61,9 @@ def test_ndarray_struct_kwargs():
     @ti.func
     def s3(z3: ti.types.NDArray[ti.i32, 1], my_struct3: MyStruct, bar3: ti.types.NDArray[ti.i32, 1]) -> None:
         # used py dataclass variables:
-        # __ti_my_struct3__ti_a
-        # __ti_my_struct3__ti_b
-        # __ti_my_struct3__ti_c
+        # __qd_my_struct3__qd_a
+        # __qd_my_struct3__qd_b
+        # __qd_my_struct3__qd_c
         z3[25] += 90
         my_struct3.a[47] += 42
         my_struct3.b[49] += 43
@@ -74,9 +74,9 @@ def test_ndarray_struct_kwargs():
     @ti.func
     def s2(z3: ti.types.NDArray[ti.i32, 1], my_struct3: MyStruct, bar3: ti.types.NDArray[ti.i32, 1]) -> None:
         # used py dataclass variables:
-        # __ti_my_struct3__ti_a
-        # __ti_my_struct3__ti_b
-        # __ti_my_struct3__ti_c
+        # __qd_my_struct3__qd_a
+        # __qd_my_struct3__qd_b
+        # __qd_my_struct3__qd_c
         z3[24] += 89
         my_struct3.a[46] += 32
         my_struct3.b[48] += 33
@@ -87,9 +87,9 @@ def test_ndarray_struct_kwargs():
     @ti.func
     def s1(z2: ti.types.NDArray[ti.i32, 1], my_struct2: MyStruct, bar2: ti.types.NDArray[ti.i32, 1]) -> None:
         # used py dataclass variables:
-        # __ti_my_struct2__ti_a
-        # __ti_my_struct2__ti_b
-        # __ti_my_struct2__ti_c
+        # __qd_my_struct2__qd_a
+        # __qd_my_struct2__qd_b
+        # __qd_my_struct2__qd_c
         z2[22] += 88
         my_struct2.a[45] += 22
         my_struct2.b[47] += 23
@@ -100,9 +100,9 @@ def test_ndarray_struct_kwargs():
     @ti.kernel
     def k1(z: ti.types.NDArray[ti.i32, 1], my_struct: MyStruct, bar: ti.types.NDArray[ti.i32, 1]) -> None:
         # used py dataclass variables:
-        # __ti_my_struct__ti_a
-        # __ti_my_struct__ti_b
-        # __ti_my_struct__ti_c
+        # __qd_my_struct__qd_a
+        # __qd_my_struct__qd_b
+        # __qd_my_struct__qd_c
         z[33] += 2
         my_struct.a[35] += 3
         my_struct.b[37] += 5
@@ -1165,11 +1165,11 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
         @ti.func
         def f1(md1: MyDataclass1, md2: MyDataclass2) -> None:
             # used:
-            # __ti_md1__ti_used3
-            # __ti_md2__ti_used1
-            # __ti_md2__ti_used2
-            # __ti_md2__ti_used3
-            # __ti_md1__ti_nested1__ti_n1
+            # __qd_md1__qd_used3
+            # __qd_md2__qd_used1
+            # __qd_md2__qd_used2
+            # __qd_md2__qd_used3
+            # __qd_md1__qd_nested1__qd_n1
             md1.used3[0] = 123
             md2.used1[5] = 555
             md2.used2[5] = 444
@@ -1179,13 +1179,13 @@ def test_prune_used_parameters_fastcache1(tmp_path: Path):
         @ti.kernel(fastcache=True)
         def k1(md1: MyDataclass1, md2: MyDataclass2, trigger_static: ti.Template) -> None:
             # used:
-            # __ti_md1__ti_used1
-            # __ti_md1__ti_used2
-            # __ti_md1__ti_used3
-            # __ti_md2__ti_used1
-            # __ti_md2__ti_used2
-            # __ti_md2__ti_used3
-            # __ti_md1__ti_nested1__ti_n1
+            # __qd_md1__qd_used1
+            # __qd_md1__qd_used2
+            # __qd_md1__qd_used3
+            # __qd_md2__qd_used1
+            # __qd_md2__qd_used2
+            # __qd_md2__qd_used3
+            # __qd_md1__qd_nested1__qd_n1
             md1.used1[0] = 222
             md1.used1[1] = md1.used2[0]
             f1(md1, md2)
@@ -1863,9 +1863,9 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._f1_with_flag[0, 0] == 0
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
-        "__ti_struct_k1",
-        "__ti_struct_k1__ti__f1_no_flag",
-        "__ti_struct_k1__ti__k1",
+        "__qd_struct_k1",
+        "__qd_struct_k1__qd__f1_no_flag",
+        "__qd_struct_k1__qd__k1",
     ]
 
     my_struct = make_struct()
@@ -1877,9 +1877,9 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._f1_with_flag[0, 0] == 0
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
-        "__ti_struct_k1",
-        "__ti_struct_k1__ti__f1_no_flag",
-        "__ti_struct_k1__ti__k1",
+        "__qd_struct_k1",
+        "__qd_struct_k1__qd__f1_no_flag",
+        "__qd_struct_k1__qd__k1",
     ]
 
     my_struct = make_struct()
@@ -1891,9 +1891,9 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._f1_with_flag[0, 0] == 101
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
-        "__ti_struct_k1",
-        "__ti_struct_k1__ti__f1_with_flag",
-        "__ti_struct_k1__ti__k1",
+        "__qd_struct_k1",
+        "__qd_struct_k1__qd__f1_with_flag",
+        "__qd_struct_k1__qd__k1",
     ]
 
     my_struct = make_struct()
@@ -1905,9 +1905,9 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._f1_with_flag[0, 0] == 0
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
-        "__ti_struct_k1",
-        "__ti_struct_k1__ti__f1_no_flag",
-        "__ti_struct_k1__ti__k1",
+        "__qd_struct_k1",
+        "__qd_struct_k1__qd__f1_no_flag",
+        "__qd_struct_k1__qd__k1",
     ]
 
     my_struct = make_struct()
@@ -1919,9 +1919,9 @@ def test_pruning_reuse_func_same_kernel_diff_call() -> None:
     assert my_struct._f1_with_flag[0, 0] == 101
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
     assert sorted(list(k1_primal.used_py_dataclass_parameters_by_key_enforcing[k1_primal._last_launch_key])) == [
-        "__ti_struct_k1",
-        "__ti_struct_k1__ti__f1_with_flag",
-        "__ti_struct_k1__ti__k1",
+        "__qd_struct_k1",
+        "__qd_struct_k1__qd__f1_with_flag",
+        "__qd_struct_k1__qd__k1",
     ]
 
 

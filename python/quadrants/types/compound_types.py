@@ -1,7 +1,7 @@
 import quadrants
-from quadrants._lib.utils import ti_python_core as _ti_python_core
+from quadrants._lib.utils import ti_python_core as _qd_python_core
 
-_type_factory = _ti_python_core.get_type_factory_instance()
+_type_factory = _qd_python_core.get_type_factory_instance()
 
 
 class CompoundType:

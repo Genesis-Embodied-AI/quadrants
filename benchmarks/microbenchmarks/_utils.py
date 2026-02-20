@@ -44,7 +44,7 @@ def dtype_size(ti_dtype):
         return dtype_size_dict[ti_dtype]
 
 
-def get_ti_arch(arch: str):
+def get_qd_arch(arch: str):
     arch_dict = {
         "cuda": ti.cuda,
         "vulkan": ti.vulkan,

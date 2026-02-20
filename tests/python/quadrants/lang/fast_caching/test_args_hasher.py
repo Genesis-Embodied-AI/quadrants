@@ -154,7 +154,7 @@ def test_args_hasher_ndarray_matrix() -> None:
                             assert hash in seen
 
 
-def _ti_init_same_arch() -> None:
+def _qd_init_same_arch() -> None:
     assert ti.cfg is not None
     ti.init(arch=getattr(ti, ti.cfg.arch.name))
 
@@ -168,7 +168,7 @@ def test_args_hasher_field() -> None:
     """
     for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
         for shape in [(2,), (5,), (2, 5)]:
-            _ti_init_same_arch()
+            _qd_init_same_arch()
             arg = ti.field(dtype, shape)
             hash = args_hasher.hash_args(False, [arg], [None])
             assert hash is None
@@ -180,7 +180,7 @@ def test_args_hasher_field_vector() -> None:
     for dtype in [ti.i32, ti.i64, ti.f32, ti.f64]:
         for n in [2, 3]:
             for shape in [(2,), (5,), (2, 5)]:
-                _ti_init_same_arch()
+                _qd_init_same_arch()
                 arg = ti.Vector.field(n, dtype, shape)
                 hash = args_hasher.hash_args(False, [arg], [None])
                 assert hash is None
@@ -193,7 +193,7 @@ def test_args_hasher_field_matrix() -> None:
         for m in [2, 3]:
             for n in [2, 3]:
                 for shape in [(2,), (5,), (2, 5)]:
-                    _ti_init_same_arch()
+                    _qd_init_same_arch()
                     arg = ti.Matrix.field(m, n, dtype, shape)
                     hash = args_hasher.hash_args(False, [arg], [None])
                     assert hash is None

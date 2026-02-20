@@ -1,6 +1,6 @@
 import quadrants as ti
 from microbenchmarks._items import BenchmarkItem
-from microbenchmarks._utils import End2EndTimer, get_ti_arch
+from microbenchmarks._utils import End2EndTimer, get_qd_arch
 
 
 def end2end_executor(repeat, func, *args):
@@ -38,9 +38,9 @@ class MetricType(BenchmarkItem):
     @staticmethod
     def init_quadrants(arch: str, tag_list: list):
         if set(["kernel_elapsed_time_ms"]).issubset(tag_list):
-            ti.init(kernel_profiler=True, arch=get_ti_arch(arch))
+            ti.init(kernel_profiler=True, arch=get_qd_arch(arch))
         elif set(["end2end_time_ms"]).issubset(tag_list):
-            ti.init(kernel_profiler=False, arch=get_ti_arch(arch))
+            ti.init(kernel_profiler=False, arch=get_qd_arch(arch))
         else:
             return False
         return True

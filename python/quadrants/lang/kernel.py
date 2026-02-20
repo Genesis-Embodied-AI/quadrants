@@ -404,9 +404,9 @@ class Kernel(FuncBase):
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
                         for param in used_parameters:
-                            split_param = param.split("__ti_")
+                            split_param = param.split("__qd_")
                             for i in range(len(split_param), 1, -1):
-                                joined = "__ti_".join(split_param[:i])
+                                joined = "__qd_".join(split_param[:i])
                                 if joined in new_used_parameters:
                                     break
                                 new_used_parameters.add(joined)

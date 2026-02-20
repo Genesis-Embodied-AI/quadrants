@@ -2,7 +2,7 @@
 
 import numbers
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     Axis,
     SNodeCxx,
@@ -41,7 +41,7 @@ class SNode:
         """
         if isinstance(dimensions, numbers.Number):
             dimensions = [dimensions] * len(axes)
-        return SNode(self.ptr.dense(axes, dimensions, _ti_core.DebugInfo(get_traceback())))
+        return SNode(self.ptr.dense(axes, dimensions, _qd_core.DebugInfo(get_traceback())))
 
     def pointer(self, axes: list[Axis], dimensions: list[int] | int) -> "SNode":
         """Adds a pointer SNode as a child component of `self`.
@@ -53,11 +53,11 @@ class SNode:
         Returns:
             The added :class:`~quadrants.lang.SNode` instance.
         """
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Pointer SNode is not supported on this backend.")
         if isinstance(dimensions, numbers.Number):
             dimensions = [dimensions] * len(axes)
-        return SNode(self.ptr.pointer(axes, dimensions, _ti_core.DebugInfo(get_traceback())))
+        return SNode(self.ptr.pointer(axes, dimensions, _qd_core.DebugInfo(get_traceback())))
 
     @staticmethod
     def _hash(axes, dimensions):
@@ -79,12 +79,12 @@ class SNode:
         Returns:
             The added :class:`~quadrants.lang.SNode` instance.
         """
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Dynamic SNode is not supported on this backend.")
         assert len(axis) == 1
         if chunk_size is None:
             chunk_size = dimension
-        return SNode(self.ptr.dynamic(axis[0], dimension, chunk_size, _ti_core.DebugInfo(get_traceback())))
+        return SNode(self.ptr.dynamic(axis[0], dimension, chunk_size, _qd_core.DebugInfo(get_traceback())))
 
     def bitmasked(self, axes: list[Axis], dimensions: list[int] | int) -> "SNode":
         """Adds a bitmasked SNode as a child component of `self`.
@@ -96,11 +96,11 @@ class SNode:
         Returns:
             The added :class:`~quadrants.lang.SNode` instance.
         """
-        if not _ti_core.is_extension_supported(impl.current_cfg().arch, _ti_core.Extension.sparse):
+        if not _qd_core.is_extension_supported(impl.current_cfg().arch, _qd_core.Extension.sparse):
             raise QuadrantsRuntimeError("Bitmasked SNode is not supported on this backend.")
         if isinstance(dimensions, numbers.Number):
             dimensions = [dimensions] * len(axes)
-        return SNode(self.ptr.bitmasked(axes, dimensions, _ti_core.DebugInfo(get_traceback())))
+        return SNode(self.ptr.bitmasked(axes, dimensions, _qd_core.DebugInfo(get_traceback())))
 
     def quant_array(self, axes: list[Axis], dimensions: list[int] | int, max_num_bits: int) -> "SNode":
         """Adds a quant_array SNode as a child component of `self`.
@@ -115,7 +115,7 @@ class SNode:
         """
         if isinstance(dimensions, numbers.Number):
             dimensions = [dimensions] * len(axes)
-        return SNode(self.ptr.quant_array(axes, dimensions, max_num_bits, _ti_core.DebugInfo(get_traceback())))
+        return SNode(self.ptr.quant_array(axes, dimensions, max_num_bits, _qd_core.DebugInfo(get_traceback())))
 
     def place(self, *args, offset: numbers.Number | tuple[numbers.Number] | None = None) -> "SNode":
         """Places a list of Quadrants fields under the `self` container.
@@ -135,7 +135,7 @@ class SNode:
         for arg in args:
             if isinstance(arg, BitpackedFields):
                 bit_struct_type = arg.bit_struct_type_builder.build()
-                bit_struct_snode = self.ptr.bit_struct(bit_struct_type, _ti_core.DebugInfo(get_traceback()))
+                bit_struct_snode = self.ptr.bit_struct(bit_struct_type, _qd_core.DebugInfo(get_traceback()))
                 for field, id_in_bit_struct in arg.fields:
                     bit_struct_snode.place(field, offset, id_in_bit_struct)
             elif isinstance(arg, Field):
@@ -184,7 +184,7 @@ class SNode:
         if p is None:
             return None
 
-        if p.type == _ti_core.SNodeType.root:
+        if p.type == _qd_core.SNodeType.root:
             return impl.root
 
         return SNode(p)
@@ -294,7 +294,7 @@ class SNode:
         ch = self._get_children()
         for c in ch:
             c.deactivate_all()
-        SNodeType = _ti_core.SNodeType
+        SNodeType = _qd_core.SNodeType
         if self.ptr.type == SNodeType.pointer or self.ptr.type == SNodeType.bitmasked:
             from quadrants._kernels import snode_deactivate  # pylint: disable=C0415
 
@@ -387,7 +387,7 @@ def append(node, indices, val):
         impl.get_runtime()
         .compiling_callable.ast_builder()
         .expr_snode_append(node._snode.ptr, expr.make_expr_group(indices), ptrs),
-        dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+        dbg_info=_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
     )
     a = impl.expr_init(append_expr)
     return a
@@ -408,7 +408,7 @@ def is_active(node, indices):
         impl.get_runtime()
         .compiling_callable.ast_builder()
         .expr_snode_is_active(node._snode.ptr, expr.make_expr_group(indices)),
-        dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+        dbg_info=_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
     )
 
 
@@ -420,7 +420,7 @@ def activate(node, indices):
         indices (Union[int, :class:`~quadrants.Vector`]): the indices to activate.
     """
     impl.get_runtime().compiling_callable.ast_builder().insert_activate(
-        node._snode.ptr, expr.make_expr_group(indices), _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+        node._snode.ptr, expr.make_expr_group(indices), _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     )
 
 
@@ -435,7 +435,7 @@ def deactivate(node, indices):
         indices (Union[int, :class:`~quadrants.Vector`]): the indices to deactivate.
     """
     impl.get_runtime().compiling_callable.ast_builder().insert_deactivate(
-        node._snode.ptr, expr.make_expr_group(indices), _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+        node._snode.ptr, expr.make_expr_group(indices), _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     )
 
 
@@ -453,7 +453,7 @@ def length(node, indices):
         impl.get_runtime()
         .compiling_callable.ast_builder()
         .expr_snode_length(node._snode.ptr, expr.make_expr_group(indices)),
-        dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+        dbg_info=_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
     )
 
 
@@ -473,7 +473,7 @@ def get_addr(f, indices):
         impl.get_runtime()
         .compiling_callable.ast_builder()
         .expr_snode_get_addr(f._snode.ptr, expr.make_expr_group(indices)),
-        dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+        dbg_info=_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
     )
 
 

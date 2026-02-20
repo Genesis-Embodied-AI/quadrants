@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 
 from quadrants._lib import core as ti_python_core
-from quadrants._lib.utils import ti_python_core as _ti_python_core
+from quadrants._lib.utils import ti_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
@@ -36,7 +36,7 @@ from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-_type_factory = _ti_python_core.get_type_factory_instance()
+_type_factory = _qd_python_core.get_type_factory_instance()
 
 
 def _generate_swizzle_patterns(key_group: str, required_length=4):
@@ -695,7 +695,7 @@ class Matrix(QuadrantsOperations):
         return self.entries
 
     @quadrants_scope
-    def __ti_repr__(self):
+    def __qd_repr__(self):
         yield "["
         for i in range(self.n):
             if i:
@@ -1444,7 +1444,7 @@ class MatrixType(CompoundType):
                     ti_python_core.make_get_element_expr(
                         func_ret.ptr,
                         ret_index + (i,),
-                        _ti_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                        _qd_python_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                     )
                 )
                 for i in range(self.m * self.n)

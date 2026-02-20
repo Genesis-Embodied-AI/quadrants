@@ -6,7 +6,7 @@ import warnings
 from copy import deepcopy as _deepcopy
 
 from quadrants import _logging, _snode
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl
@@ -98,37 +98,37 @@ ijkl = axes(0, 1, 2, 3)
 
 # ----------------------
 
-x86_64 = _ti_core.x64
+x86_64 = _qd_core.x64
 """The x64 CPU backend.
 """
 # ----------------------
 
-x64 = _ti_core.x64
+x64 = _qd_core.x64
 """The X64 CPU backend.
 """
 # ----------------------
 
-arm64 = _ti_core.arm64
+arm64 = _qd_core.arm64
 """The ARM CPU backend.
 """
 # ----------------------
 
-cuda = _ti_core.cuda
+cuda = _qd_core.cuda
 """The CUDA backend.
 """
 # ----------------------
 
-amdgpu = _ti_core.amdgpu
+amdgpu = _qd_core.amdgpu
 """The AMDGPU backend.
 """
 # ----------------------
 
-metal = _ti_core.metal
+metal = _qd_core.metal
 """The Apple Metal backend.
 """
 # ----------------------
 
-vulkan = _ti_core.vulkan
+vulkan = _qd_core.vulkan
 """The Vulkan backend.
 """
 # ----------------------
@@ -142,7 +142,7 @@ GPU is detected, Quadrants falls back to the CPU backend.
 """
 # ----------------------
 
-cpu = _ti_core.host_arch()
+cpu = _qd_core.host_arch()
 """A list of CPU backends supported on the current system.
 Currently contains 'x64', 'x86_64', 'arm64'.
 
@@ -159,7 +159,7 @@ def timeline_save(fn):
     return impl.get_runtime().prog.timeline_save(fn)
 
 
-extension = _ti_core.Extension
+extension = _qd_core.Extension
 """An instance of Quadrants extension.
 
 The list of currently available extensions is ['sparse', 'quant', \
@@ -178,7 +178,7 @@ def is_extension_supported(arch, ext):
     Returns:
         bool: Whether `ext` is supported on `arch`.
     """
-    return _ti_core.is_extension_supported(arch, ext)
+    return _qd_core.is_extension_supported(arch, ext)
 
 
 def reset():
@@ -219,7 +219,7 @@ class _EnvironmentConfigurator:
         if key in self.kwargs:
             self[key] = self.kwargs[key]
             if value:
-                _ti_core.warn(f'Environment variable {name}={value} overridden by ti.init argument "{key}"')
+                _qd_core.warn(f'Environment variable {name}={value} overridden by ti.init argument "{key}"')
             del self.kwargs[key]  # mark as recognized
         elif value:
             self[key] = _cast(value)
@@ -285,16 +285,16 @@ def check_require_version(require_version):
         ) from None
     # Get installed version
     versions = [
-        int(_ti_core.get_version_major()),
-        int(_ti_core.get_version_minor()),
-        int(_ti_core.get_version_patch()),
+        int(_qd_core.get_version_major()),
+        int(_qd_core.get_version_minor()),
+        int(_qd_core.get_version_patch()),
     ]
     # Match installed version and required version.
     match = major == versions[0] and (minor < versions[1] or minor == versions[1] and patch <= versions[2])
 
     if not match:
         raise Exception(
-            f"Quadrants version mismatch. Required version >= {major}.{minor}.{patch}, installed version = {_ti_core.get_version_string()}."
+            f"Quadrants version mismatch. Required version >= {major}.{minor}.{patch}, installed version = {_qd_core.get_version_string()}."
         )
 
 
@@ -366,7 +366,7 @@ def init(
     env_default_fp = os.environ.get("QD_DEFAULT_FP")
     if env_default_fp:
         if default_fp is not None:
-            _ti_core.warn(
+            _qd_core.warn(
                 f'Environment variable QD_DEFAULT_FP={env_default_fp} overridden by ti.init argument "default_fp"'
             )
         elif env_default_fp == "32":
@@ -379,7 +379,7 @@ def init(
     env_default_ip = os.environ.get("QD_DEFAULT_IP")
     if env_default_ip:
         if default_ip is not None:
-            _ti_core.warn(
+            _qd_core.warn(
                 f'Environment variable QD_DEFAULT_IP={env_default_ip} overridden by ti.init argument "default_ip"'
             )
         elif env_default_ip == "32":
@@ -418,7 +418,7 @@ def init(
     # dispatch configurations that are not in ti.cfg:
     runtime = impl.get_runtime()
     if not _test_mode:
-        _ti_core.set_core_trigger_gdb_when_crash(spec_cfg.gdb_trigger)
+        _qd_core.set_core_trigger_gdb_when_crash(spec_cfg.gdb_trigger)
         runtime.short_circuit_operators = spec_cfg.short_circuit_operators
         runtime.print_full_traceback = spec_cfg.print_full_traceback
         runtime.unrolling_limit = spec_cfg.unrolling_limit
@@ -430,11 +430,11 @@ def init(
     env_arch = os.environ.get("QD_ARCH")
     if env_arch is not None:
         _logging.info(f"Following QD_ARCH setting up for arch={env_arch}")
-        arch = _ti_core.arch_from_name(env_arch)
+        arch = _qd_core.arch_from_name(env_arch)
     cfg.arch = adaptive_arch_select(arch, enable_fallback)
-    print(f"[Quadrants] Starting on arch={_ti_core.arch_name(cfg.arch)}")
+    print(f"[Quadrants] Starting on arch={_qd_core.arch_name(cfg.arch)}")
 
-    if cfg.arch == _ti_core.amdgpu and get_os_name() == "win":
+    if cfg.arch == _qd_core.amdgpu and get_os_name() == "win":
         _logging.warn("AMDGPU support on Windows is experimental and may not work as expected.")
 
     if _test_mode:
@@ -461,7 +461,7 @@ def init(
 def no_activate(*args):
     """Deactivates a SNode pointer."""
     compiling_callable = get_runtime().compiling_callable
-    assert isinstance(compiling_callable, _ti_core.KernelCxx)
+    assert isinstance(compiling_callable, _qd_core.KernelCxx)
     for v in args:
         compiling_callable.no_activate(v._snode.ptr)
 
@@ -481,7 +481,7 @@ def block_local(*args):
     for a in args:
         for v in a._get_field_members():
             get_runtime().compiling_callable.ast_builder().insert_snode_access_flag(
-                _ti_core.SNodeAccessFlag.block_local, v.ptr
+                _qd_core.SNodeAccessFlag.block_local, v.ptr
             )
 
 
@@ -516,7 +516,7 @@ def mesh_local(*args):
     for a in args:
         for v in a._get_field_members():
             get_runtime().compiling_callable.ast_builder().insert_snode_access_flag(
-                _ti_core.SNodeAccessFlag.mesh_local, v.ptr
+                _qd_core.SNodeAccessFlag.mesh_local, v.ptr
             )
 
 
@@ -524,7 +524,7 @@ def cache_read_only(*args):
     for a in args:
         for v in a._get_field_members():
             get_runtime().compiling_callable.ast_builder().insert_snode_access_flag(
-                _ti_core.SNodeAccessFlag.read_only, v.ptr
+                _qd_core.SNodeAccessFlag.read_only, v.ptr
             )
 
 
@@ -552,8 +552,8 @@ def assume_in_range(val, base, low, high):
         >>> x
         10
     """
-    return _ti_core.expr_assume_in_range(
-        Expr(val).ptr, Expr(base).ptr, low, high, _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    return _qd_core.expr_assume_in_range(
+        Expr(val).ptr, Expr(base).ptr, low, high, _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     )
 
 
@@ -563,8 +563,8 @@ def loop_unique(val, covers=None):
     if not isinstance(covers, (list, tuple)):
         covers = [covers]
     covers = [x.snode.ptr if isinstance(x, Expr) else x.ptr for x in covers]  # type: ignore
-    return _ti_core.expr_loop_unique(
-        Expr(val).ptr, covers, _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    return _qd_core.expr_loop_unique(
+        Expr(val).ptr, covers, _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     )
 
 
@@ -696,7 +696,7 @@ def mesh_patch_idx():
     return (
         impl.get_runtime()
         .compiling_callable.ast_builder()
-        .insert_patch_idx_expr(_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()))
+        .insert_patch_idx_expr(_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()))
     )
 
 
@@ -711,18 +711,18 @@ def is_arch_supported(arch):
     """
 
     arch_table = {
-        cuda: _ti_core.with_cuda,
-        amdgpu: _ti_core.with_amdgpu,
-        metal: _ti_core.with_metal,
-        vulkan: _ti_core.with_vulkan,
+        cuda: _qd_core.with_cuda,
+        amdgpu: _qd_core.with_amdgpu,
+        metal: _qd_core.with_metal,
+        vulkan: _qd_core.with_vulkan,
         cpu: lambda: True,
     }
     with_arch = arch_table.get(arch, lambda: False)
     try:
         return with_arch()
     except Exception as e:
-        arch = _ti_core.arch_name(arch)
-        _ti_core.warn(
+        arch = _qd_core.arch_name(arch)
+        _qd_core.warn(
             f"{e.__class__.__name__}: '{e}' occurred when detecting "
             f"{arch}, consider adding `QD_ENABLE_{arch.upper()}=0` "
             f" to environment variables to suppress this warning message."
@@ -745,7 +745,7 @@ def adaptive_arch_select(arch, enable_fallback):
 
 
 def get_host_arch_list():
-    return [_ti_core.host_arch()]
+    return [_qd_core.host_arch()]
 
 
 def is_extension_enabled(ext: Extension) -> bool:

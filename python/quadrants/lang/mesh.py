@@ -5,7 +5,7 @@ import json
 import numpy as np
 
 from quadrants import lang
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.field import Field, ScalarField
@@ -16,16 +16,16 @@ from quadrants.types import u16, u32
 from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 
-MeshTopology = _ti_core.MeshTopology
-MeshElementType = _ti_core.MeshElementType
-MeshRelationType = _ti_core.MeshRelationType
-ConvType = _ti_core.ConvType
-element_order = _ti_core.element_order
-from_end_element_order = _ti_core.from_end_element_order
-to_end_element_order = _ti_core.to_end_element_order
-relation_by_orders = _ti_core.relation_by_orders
-inverse_relation = _ti_core.inverse_relation
-element_type_name = _ti_core.element_type_name
+MeshTopology = _qd_core.MeshTopology
+MeshElementType = _qd_core.MeshElementType
+MeshRelationType = _qd_core.MeshRelationType
+ConvType = _qd_core.ConvType
+element_order = _qd_core.element_order
+from_end_element_order = _qd_core.from_end_element_order
+to_end_element_order = _qd_core.to_end_element_order
+relation_by_orders = _qd_core.relation_by_orders
+inverse_relation = _qd_core.inverse_relation
+element_type_name = _qd_core.element_type_name
 
 
 class MeshAttrType:
@@ -40,7 +40,7 @@ class MeshReorderedScalarFieldProxy(ScalarField):
     def __init__(
         self,
         field: ScalarField,
-        mesh_ptr: _ti_core.MeshPtr,
+        mesh_ptr: _qd_core.MeshPtr,
         element_type: MeshElementType,
         g2r_field: ScalarField,
     ):
@@ -72,7 +72,7 @@ class MeshReorderedMatrixFieldProxy(MatrixField):
     def __init__(
         self,
         field: MatrixField,
-        mesh_ptr: _ti_core.MeshPtr,
+        mesh_ptr: _qd_core.MeshPtr,
         element_type: MeshElementType,
         g2r_field: ScalarField,
     ):
@@ -149,7 +149,7 @@ class MeshElementField:
             else:
                 self.field_dict[key] = impl.field(dtype, shape=None, needs_grad=needs_grad)
 
-        size = _ti_core.get_num_elements(self.mesh.mesh_ptr, self._type)
+        size = _qd_core.get_num_elements(self.mesh.mesh_ptr, self._type)
         if layout == Layout.SOA:
             for key in members.keys():
                 impl.root.dense(impl.axes(0), size).place(self.field_dict[key])
@@ -230,7 +230,7 @@ class MeshElementField:
 
     @python_scope
     def __len__(self):
-        return _ti_core.get_num_elements(self.mesh.mesh_ptr, self._type)
+        return _qd_core.get_num_elements(self.mesh.mesh_ptr, self._type)
 
 
 class MeshElement:
@@ -309,7 +309,7 @@ class MeshElement:
 # Define the instance of the Mesh Type, stores the field (type and data) info
 class MeshInstance:
     def __init__(self):
-        self.mesh_ptr = _ti_core.create_mesh()
+        self.mesh_ptr = _qd_core.create_mesh()
         self.relation_set = set()
         self.verts = MeshElementField(self, MeshElementType.Vertex, {}, {}, {})
         self.edges = MeshElementField(self, MeshElementType.Edge, {}, {}, {})
@@ -327,23 +327,23 @@ class MeshInstance:
         raise QuadrantsSyntaxError("Position info is not in the file.")
 
     def set_owned_offset(self, element_type: MeshElementType, owned_offset: ScalarField):
-        _ti_core.set_owned_offset(self.mesh_ptr, element_type, owned_offset.vars[0].ptr.snode())
+        _qd_core.set_owned_offset(self.mesh_ptr, element_type, owned_offset.vars[0].ptr.snode())
 
     def set_total_offset(self, element_type: MeshElementType, total_offset: ScalarField):
-        _ti_core.set_total_offset(self.mesh_ptr, element_type, total_offset.vars[0].ptr.snode())
+        _qd_core.set_total_offset(self.mesh_ptr, element_type, total_offset.vars[0].ptr.snode())
 
     def set_index_mapping(self, element_type: MeshElementType, conv_type: ConvType, mapping: ScalarField):
-        _ti_core.set_index_mapping(self.mesh_ptr, element_type, conv_type, mapping.vars[0].ptr.snode())
+        _qd_core.set_index_mapping(self.mesh_ptr, element_type, conv_type, mapping.vars[0].ptr.snode())
 
     def set_num_patches(self, num_patches: int):
-        _ti_core.set_num_patches(self.mesh_ptr, num_patches)
+        _qd_core.set_num_patches(self.mesh_ptr, num_patches)
 
     def set_patch_max_element_num(self, element_type: MeshElementType, max_element_num: int):
-        _ti_core.set_patch_max_element_num(self.mesh_ptr, element_type, max_element_num)
+        _qd_core.set_patch_max_element_num(self.mesh_ptr, element_type, max_element_num)
 
     def set_relation_fixed(self, rel_type: MeshRelationType, value: ScalarField):
         self.relation_set.add(rel_type)
-        _ti_core.set_relation_fixed(self.mesh_ptr, rel_type, value.vars[0].ptr.snode())
+        _qd_core.set_relation_fixed(self.mesh_ptr, rel_type, value.vars[0].ptr.snode())
 
     def set_relation_dynamic(
         self,
@@ -353,7 +353,7 @@ class MeshInstance:
         offset: ScalarField,
     ):
         self.relation_set.add(rel_type)
-        _ti_core.set_relation_dynamic(
+        _qd_core.set_relation_dynamic(
             self.mesh_ptr,
             rel_type,
             value.vars[0].ptr.snode(),
@@ -362,23 +362,23 @@ class MeshInstance:
         )
 
     def add_mesh_attribute(self, element_type, snode, reorder_type):
-        _ti_core.add_mesh_attribute(self.mesh_ptr, element_type, snode, reorder_type)
+        _qd_core.add_mesh_attribute(self.mesh_ptr, element_type, snode, reorder_type)
 
     def get_relation_size(self, from_index, to_element_type):
-        return _ti_core.get_relation_size(
+        return _qd_core.get_relation_size(
             self.mesh_ptr,
             from_index.ptr,
             to_element_type,
-            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
         )
 
     def get_relation_access(self, from_index, to_element_type, neighbor_idx_ptr):
-        return _ti_core.get_relation_access(
+        return _qd_core.get_relation_access(
             self.mesh_ptr,
             from_index.ptr,
             to_element_type,
             neighbor_idx_ptr,
-            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
         )
 
 
@@ -463,7 +463,7 @@ class MeshBuilder:
         instance.set_num_patches(metadata.num_patches)
 
         for element in metadata.element_fields:
-            _ti_core.set_num_elements(instance.mesh_ptr, element, metadata.num_elements[element])
+            _qd_core.set_num_elements(instance.mesh_ptr, element, metadata.num_elements[element])
             instance.set_patch_max_element_num(element, metadata.max_num_per_patch[element])
 
             element_name = element_type_name(element)
@@ -525,7 +525,7 @@ class Mesh:
         instance.set_num_patches(metadata.num_patches)
 
         for element in metadata.element_fields:
-            _ti_core.set_num_elements(instance.mesh_ptr, element, metadata.num_elements[element])
+            _qd_core.set_num_elements(instance.mesh_ptr, element, metadata.num_elements[element])
             instance.set_patch_max_element_num(element, metadata.max_num_per_patch[element])
 
             element_name = element_type_name(element)
@@ -605,7 +605,7 @@ class MeshElementFieldProxy:
                     element_type,
                     entry_expr,
                     ConvType.l2r if element_field.attr_dict[key].reorder else ConvType.l2g,
-                    _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                    _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                 )
             )  # transform index space
             global_entry_expr_group = impl.make_expr_group(*tuple([global_entry_expr]))
@@ -617,7 +617,7 @@ class MeshElementFieldProxy:
                         ast_builder.expr_subscript(
                             attr.ptr,
                             global_entry_expr_group,
-                            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                         )
                     ),
                 )
@@ -632,7 +632,7 @@ class MeshElementFieldProxy:
                         ast_builder.expr_subscript(
                             var,
                             global_entry_expr_group,
-                            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                         )
                     ),
                 )
@@ -662,7 +662,7 @@ class MeshElementFieldProxy:
                 self.element_type,
                 self.entry_expr,
                 ConvType.l2g,
-                _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
         )
         return l2g_expr

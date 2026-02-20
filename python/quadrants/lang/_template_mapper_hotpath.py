@@ -32,7 +32,7 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -56,7 +56,7 @@ AnnotationType = Union[
 ]
 
 
-_ExprCxx = _ti_core.ExprCxx
+_ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
 
@@ -153,7 +153,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                 )
         needs_grad = getattr(arg, "requires_grad", False) if annotation.needs_grad is None else annotation.needs_grad
         if element_shape:
-            element_type = _ti_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
+            element_type = _qd_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
         else:
             element_type = arg.dtype
         return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary
