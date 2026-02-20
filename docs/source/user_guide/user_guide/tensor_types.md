@@ -73,7 +73,7 @@ Let's define each of these column headings.
 When running a kernel, two things need to happen:
 - the kernel needs to be compiled
 - the parameters need to be sent to the GPU
-- the kernel launch need to be sent to the GPU
+- the kernel launch needs to be sent to the GPU
 
 Compilation speed is not affected by the tensor type. However:
 - field args and ndarrays both are passed in to the GPU as parameters, and hence increase launch latency
@@ -88,7 +88,7 @@ Each tensor type is bound to the compiled kernel in some way:
     - the data type (`ti.i32` vs `ti.f32` for example)
     - the number of dimensions
     - you cannot pass in an ndarray with different data type or number of dimensions into the kernel, however
-    - ... no recompilatino is needed for:
+    - ... no recompilation is needed for:
          - resizing the ndarray, or
          - passing in a different ndarray, that matches data type and number of dimensions
 
@@ -100,7 +100,7 @@ Both ndarrays and field args provide better encapsulation, and kernel re-use.
 
 ## launch latency vs runtime speed
 
-For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performacne for very short kernels.
+For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performance for very short kernels.
 
 # Recommendations
 

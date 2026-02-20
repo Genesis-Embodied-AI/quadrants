@@ -1,4 +1,4 @@
-# Troublshooting
+# Troubleshooting
 
 ## In case of crash/seg fault
 

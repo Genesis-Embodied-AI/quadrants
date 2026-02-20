@@ -29,7 +29,7 @@ def lcg_np(B: int, lcg_its: int, a: npt.NDArray) -> None:
             x = (1664525 * x + 1013904223) % 2147483647
         a[i] = x
 ```
-We are taking in a numpy array, of size B, looping over it. For each value in the array, wwe run 1000 iterations of LCG, then update the original value.
+We are taking in a numpy array, of size B, looping over it. For each value in the array, we run 1000 iterations of LCG, then update the original value.
 
 Let's write out the full code, including creating a numpy array, and timing this method:
 
@@ -108,7 +108,7 @@ ti.sync()
 end = time.time()
 ```
 
-In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asychronously. So before calling start we also add ti.sync():
+In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add ti.sync():
 
 ```
 ti.sync()
@@ -168,7 +168,7 @@ On one of our linux boxes with a 5090 GPU, the results are:
 
 Quadrants ndarrays are easy to use, and flexible, but we can increase speed by another ~30% or so (depending on the kernel), by using fields.
 
-The kernel above doesn't load or store data except at the start and end: it's just exercising the GPU APU. To see the difference between Taichi ndarray and Quadrants field runtime speed, we need a kernel that does more loads and stores.
+The kernel above doesn't load or store data except at the start and end: it's just exercising the GPU ALU. To see the difference between Quadrants ndarray and Quadrants field runtime speed, we need a kernel that does more loads and stores.
 
 We'll do a simple kernel that copies from one tensor to another. To avoid simply measuring the latency to read and write from/to global memory, we'll read and write the same values repeatedly.
 

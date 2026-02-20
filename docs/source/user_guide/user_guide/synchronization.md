@@ -8,7 +8,8 @@ Since running code on GPUs is inherently multi-threaded, synchronization of writ
     - think of it like sending a snail mail letter, whilst you work on other things, and lead your life
 - after the store statement has executed, the kernel continues to execute other statements, whilst the data works its way to memory
 ```
-@ti.kernel f1(a: ti.Template) -> None:
+@ti.kernel
+def f1(a: ti.Template) -> None:
      a[0] = 5
      # .. execution continues here immediately
 ```

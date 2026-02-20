@@ -16,7 +16,7 @@ The following compound types are available:
 | `@ti.data_oriented`                |yes                          | yes                       | no                   |  yes               |yes                                   | yes                       | no             | no                |          |
 | `@dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes                                   | yes                     |yes         | no                | recommended approach |
 
-`@dataclass.dataclass` is the current recommended approach:
+`@dataclasses.dataclass` is the current recommended approach:
 - supports both fields and ndarrays
 - can be nested
 - can be used in both kernel and func calls
@@ -39,7 +39,7 @@ The members are read-only. However, ndarrays and fields are stored as references
 
 ## Limitations:
 - on Mac, can only be used with Fields, not with ndarray [*1]
-- Passing python dataclasses to `@ti.real_func` it not supported currently
+- Passing python dataclasses to `@ti.real_func` is not supported currently
 - automatic differentiation is not supported currently
 
 Notes:
