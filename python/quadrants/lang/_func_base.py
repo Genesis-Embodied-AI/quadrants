@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -59,7 +59,7 @@ MAX_ARG_NUM = 512
 # Define proxies for fast lookup
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
-_arch_cuda = _ti_core.Arch.cuda
+_arch_cuda = _qd_core.Arch.cuda
 
 
 class FuncBase:
@@ -436,7 +436,7 @@ class FuncBase:
         if actual_argument_slot >= MAX_ARG_NUM:
             raise QuadrantsRuntimeError(
                 f"The number of elements in kernel arguments is too big! Do not exceed {MAX_ARG_NUM} on "
-                f"{_ti_core.arch_name(impl.current_cfg().arch)} backend."
+                f"{_qd_core.arch_name(impl.current_cfg().arch)} backend."
             )
         actual_argument_slot += 1
 

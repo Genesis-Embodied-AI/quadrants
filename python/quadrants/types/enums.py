@@ -1,10 +1,10 @@
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 
-Layout = _ti_core.Layout
-AutodiffMode = _ti_core.AutodiffMode
-SNodeGradType = _ti_core.SNodeGradType
-Format = _ti_core.Format
-BoundaryMode = _ti_core.BoundaryMode
+Layout = _qd_core.Layout
+AutodiffMode = _qd_core.AutodiffMode
+SNodeGradType = _qd_core.SNodeGradType
+Format = _qd_core.Format
+BoundaryMode = _qd_core.BoundaryMode
 
 
 def to_boundary_enum(boundary):

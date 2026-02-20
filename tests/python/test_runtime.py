@@ -91,7 +91,7 @@ def test_xdg_basedir(tmpdir):
         # environment to the native C++ code.
         os.putenv("XDG_CACHE_HOME", str(tmpdir))
 
-        ti_python_core = ti._lib.utils.import_ti_python_core()
+        ti_python_core = ti._lib.utils.import_qd_python_core()
         repo_dir = ti_python_core.get_repo_dir()
 
         repo_path = pathlib.Path(repo_dir).resolve()
@@ -154,7 +154,7 @@ def test_init_bad_arg():
 
 @test_utils.test(arch=ti.cpu)
 def test_init_require_version():
-    ti_python_core = ti._lib.utils.import_ti_python_core()
+    ti_python_core = ti._lib.utils.import_qd_python_core()
     require_version = "{}.{}.{}".format(
         ti_python_core.get_version_major(),
         ti_python_core.get_version_minor(),
@@ -166,7 +166,7 @@ def test_init_require_version():
 @test_utils.test(arch=ti.cpu)
 def test_init_bad_require_version():
     with pytest.raises(Exception):
-        ti_python_core = ti._lib.utils.import_ti_python_core()
+        ti_python_core = ti._lib.utils.import_qd_python_core()
         bad_require_version = "{}.{}.{}".format(
             ti_python_core.get_version_major(),
             ti_python_core.get_version_minor(),

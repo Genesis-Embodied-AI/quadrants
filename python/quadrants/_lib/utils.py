@@ -36,7 +36,7 @@ def get_os_name():
     assert False, f"Unknown platform name {name}"
 
 
-def import_ti_python_core():
+def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
@@ -117,7 +117,7 @@ def check_exists(src):
         raise FileNotFoundError(f'File "{src}" not exist. Installation corrupted or build incomplete?')
 
 
-ti_python_core = import_ti_python_core()
+ti_python_core = import_qd_python_core()
 
 ti_python_core.set_python_package_dir(package_root)
 

@@ -1,10 +1,10 @@
 # type: ignore
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 
 __version__ = (
-    _ti_core.get_version_major(),
-    _ti_core.get_version_minor(),
-    _ti_core.get_version_patch(),
+    _qd_core.get_version_major(),
+    _qd_core.get_version_minor(),
+    _qd_core.get_version_patch(),
 )
 __version_str__ = ".".join(map(str, __version__))
 

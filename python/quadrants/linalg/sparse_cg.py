@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.impl import get_runtime
@@ -27,13 +27,13 @@ class SparseCG:
         self.ti_arch = get_runtime().prog.config().arch
         self.matrix = A
         self.b = b
-        if self.ti_arch == _ti_core.Arch.cuda:
-            self.cg_solver = _ti_core.make_cucg_solver(A.matrix, max_iter, atol, True)
-        elif self.ti_arch == _ti_core.Arch.x64 or self.ti_arch == _ti_core.Arch.arm64:
+        if self.ti_arch == _qd_core.Arch.cuda:
+            self.cg_solver = _qd_core.make_cucg_solver(A.matrix, max_iter, atol, True)
+        elif self.ti_arch == _qd_core.Arch.x64 or self.ti_arch == _qd_core.Arch.arm64:
             if self.dtype == f32:
-                self.cg_solver = _ti_core.make_float_cg_solver(A.matrix, max_iter, atol, True)
+                self.cg_solver = _qd_core.make_float_cg_solver(A.matrix, max_iter, atol, True)
             elif self.dtype == f64:
-                self.cg_solver = _ti_core.make_double_cg_solver(A.matrix, max_iter, atol, True)
+                self.cg_solver = _qd_core.make_double_cg_solver(A.matrix, max_iter, atol, True)
             else:
                 raise QuadrantsRuntimeError(f"Unsupported CG dtype: {self.dtype}")
             if isinstance(b, Ndarray):
@@ -48,7 +48,7 @@ class SparseCG:
             raise QuadrantsRuntimeError(f"Unsupported CG arch: {self.ti_arch}")
 
     def solve(self):
-        if self.ti_arch == _ti_core.Arch.cuda:
+        if self.ti_arch == _qd_core.Arch.cuda:
             if isinstance(self.b, Ndarray):
                 x = ScalarNdarray(self.b.dtype, [self.matrix.m])
                 self.cg_solver.solve(get_runtime().prog, x.arr, self.b.arr)

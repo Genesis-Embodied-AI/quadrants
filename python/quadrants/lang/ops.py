@@ -7,7 +7,7 @@ from typing import Union
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import expr, impl
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.field import Field
@@ -29,7 +29,7 @@ def is_quadrants_expr(a):
 
 def wrap_if_not_expr(a):
     return (
-        expr.Expr(a, dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()))
+        expr.Expr(a, dbg_info=_qd_core.DebugInfo(impl.get_runtime().get_current_src_info()))
         if not is_quadrants_expr(a)
         else a
     )
@@ -81,7 +81,7 @@ def cast(obj, dtype):
     if is_quadrants_class(obj):
         # TODO: unify with element_wise_unary
         return obj.cast(dtype)
-    return expr.Expr(_ti_core.value_cast(expr.Expr(obj).ptr, dtype))
+    return expr.Expr(_qd_core.value_cast(expr.Expr(obj).ptr, dtype))
 
 
 def bit_cast(obj, dtype):
@@ -114,14 +114,14 @@ def bit_cast(obj, dtype):
     if is_quadrants_class(obj):
         raise ValueError("Cannot apply bit_cast on Quadrants classes")
     else:
-        return expr.Expr(_ti_core.bits_cast(expr.Expr(obj).ptr, dtype))
+        return expr.Expr(_qd_core.bits_cast(expr.Expr(obj).ptr, dtype))
 
 
 def _unary_operation(quadrants_op, python_op, a):
     if isinstance(a, Field):
         return NotImplemented
     if is_quadrants_expr(a):
-        return expr.Expr(quadrants_op(a.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return expr.Expr(quadrants_op(a.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix):
@@ -134,7 +134,7 @@ def _binary_operation(quadrants_op, python_op, a, b):
         return NotImplemented
     if is_quadrants_expr(a) or is_quadrants_expr(b):
         a, b = wrap_if_not_expr(a), wrap_if_not_expr(b)
-        return expr.Expr(quadrants_op(a.ptr, b.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return expr.Expr(quadrants_op(a.ptr, b.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix) or isinstance(b, Matrix):
@@ -147,7 +147,7 @@ def _ternary_operation(quadrants_op, python_op, a, b, c):
         return NotImplemented
     if is_quadrants_expr(a) or is_quadrants_expr(b) or is_quadrants_expr(c):
         a, b, c = wrap_if_not_expr(a), wrap_if_not_expr(b), wrap_if_not_expr(c)
-        return expr.Expr(quadrants_op(a.ptr, b.ptr, c.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return expr.Expr(quadrants_op(a.ptr, b.ptr, c.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix) or isinstance(b, Matrix) or isinstance(c, Matrix):
@@ -177,7 +177,7 @@ def neg(x):
         >>> y
         [-1, 1]
     """
-    return _unary_operation(_ti_core.expr_neg, _bt_ops_mod.neg, x)
+    return _unary_operation(_qd_core.expr_neg, _bt_ops_mod.neg, x)
 
 
 def sin(x):
@@ -197,7 +197,7 @@ def sin(x):
         >>> ti.sin(x)
         [-1., 0., 1.]
     """
-    return _unary_operation(_ti_core.expr_sin, np.sin, x)
+    return _unary_operation(_qd_core.expr_sin, np.sin, x)
 
 
 def cos(x):
@@ -217,7 +217,7 @@ def cos(x):
         >>> ti.cos(x)
         [-1., 1., 0.]
     """
-    return _unary_operation(_ti_core.expr_cos, np.cos, x)
+    return _unary_operation(_qd_core.expr_cos, np.cos, x)
 
 
 def asin(x):
@@ -242,7 +242,7 @@ def asin(x):
         >>> ti.asin(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi
         [-90., 0., 90.]
     """
-    return _unary_operation(_ti_core.expr_asin, np.arcsin, x)
+    return _unary_operation(_qd_core.expr_asin, np.arcsin, x)
 
 
 def acos(x):
@@ -267,7 +267,7 @@ def acos(x):
         >>> ti.acos(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi
         [180., 90., 0.]
     """
-    return _unary_operation(_ti_core.expr_acos, np.arccos, x)
+    return _unary_operation(_qd_core.expr_acos, np.arccos, x)
 
 
 def sqrt(x):
@@ -288,7 +288,7 @@ def sqrt(x):
         >>> y
         [1.0, 2.0, 3.0]
     """
-    return _unary_operation(_ti_core.expr_sqrt, np.sqrt, x)
+    return _unary_operation(_qd_core.expr_sqrt, np.sqrt, x)
 
 
 def rsqrt(x):
@@ -305,11 +305,11 @@ def rsqrt(x):
     def _rsqrt(x):
         return 1 / np.sqrt(x)
 
-    return _unary_operation(_ti_core.expr_rsqrt, _rsqrt, x)
+    return _unary_operation(_qd_core.expr_rsqrt, _rsqrt, x)
 
 
 def _round(x):
-    return _unary_operation(_ti_core.expr_round, np.round, x)
+    return _unary_operation(_qd_core.expr_round, np.round, x)
 
 
 def round(x, dtype=None):  # pylint: disable=redefined-builtin
@@ -340,7 +340,7 @@ def round(x, dtype=None):  # pylint: disable=redefined-builtin
 
 
 def _floor(x):
-    return _unary_operation(_ti_core.expr_floor, np.floor, x)
+    return _unary_operation(_qd_core.expr_floor, np.floor, x)
 
 
 def floor(x, dtype=None):
@@ -371,7 +371,7 @@ def floor(x, dtype=None):
 
 
 def _ceil(x):
-    return _unary_operation(_ti_core.expr_ceil, np.ceil, x)
+    return _unary_operation(_qd_core.expr_ceil, np.ceil, x)
 
 
 def ceil(x, dtype=None):
@@ -404,7 +404,7 @@ def ceil(x, dtype=None):
 
 
 def frexp(x):
-    return _unary_operation(_ti_core.expr_frexp, np.frexp, x)
+    return _unary_operation(_qd_core.expr_frexp, np.frexp, x)
 
 
 def tan(x):
@@ -431,7 +431,7 @@ def tan(x):
         >>> test()
         [-0.0, -22877334.0, 0.0]
     """
-    return _unary_operation(_ti_core.expr_tan, np.tan, x)
+    return _unary_operation(_qd_core.expr_tan, np.tan, x)
 
 
 def tanh(x):
@@ -455,7 +455,7 @@ def tanh(x):
         >>> test()
         [-0.761594, 0.000000, 0.761594]
     """
-    return _unary_operation(_ti_core.expr_tanh, np.tanh, x)
+    return _unary_operation(_qd_core.expr_tanh, np.tanh, x)
 
 
 def exp(x):
@@ -479,7 +479,7 @@ def exp(x):
         >>> test()
         [0.367879, 1.000000, 2.718282]
     """
-    return _unary_operation(_ti_core.expr_exp, np.exp, x)
+    return _unary_operation(_qd_core.expr_exp, np.exp, x)
 
 
 def log(x):
@@ -506,7 +506,7 @@ def log(x):
         >>> test()
         [-nan, -inf, 0.000000]
     """
-    return _unary_operation(_ti_core.expr_log, np.log, x)
+    return _unary_operation(_qd_core.expr_log, np.log, x)
 
 
 def abs(x):  # pylint: disable=W0622
@@ -530,7 +530,7 @@ def abs(x):  # pylint: disable=W0622
         >>> test()
         [1.0, 0.0, 1.0]
     """
-    return _unary_operation(_ti_core.expr_abs, builtins.abs, x)
+    return _unary_operation(_qd_core.expr_abs, builtins.abs, x)
 
 
 def bit_not(a):
@@ -542,14 +542,14 @@ def bit_not(a):
     Returns:
         Bitwise not of `a`.
     """
-    return _unary_operation(_ti_core.expr_bit_not, _bt_ops_mod.invert, a)
+    return _unary_operation(_qd_core.expr_bit_not, _bt_ops_mod.invert, a)
 
 
 def popcnt(a):
     def _popcnt(x):
         return bin(x).count("1")
 
-    return _unary_operation(_ti_core.expr_popcnt, _popcnt, a)
+    return _unary_operation(_qd_core.expr_popcnt, _popcnt, a)
 
 
 def logical_not(a):
@@ -561,7 +561,7 @@ def logical_not(a):
     Returns:
         `1` iff `a=0`, otherwise `0`.
     """
-    return _unary_operation(_ti_core.expr_logic_not, np.logical_not, a)
+    return _unary_operation(_qd_core.expr_logic_not, np.logical_not, a)
 
 
 def random(dtype=float) -> Union[float, int]:
@@ -599,7 +599,7 @@ def random(dtype=float) -> Union[float, int]:
         >>>     print(j)  # 73412986184350777
     """
     dtype = cook_dtype(dtype)
-    x = expr.Expr(_ti_core.make_rand_expr(dtype, _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())))
+    x = expr.Expr(_qd_core.make_rand_expr(dtype, _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())))
     return impl.expr_init(x)
 
 
@@ -616,7 +616,7 @@ def add(a, b):
     Returns:
         sum of `a` and `b`.
     """
-    return _binary_operation(_ti_core.expr_add, _bt_ops_mod.add, a, b)
+    return _binary_operation(_qd_core.expr_add, _bt_ops_mod.add, a, b)
 
 
 def sub(a, b):
@@ -629,7 +629,7 @@ def sub(a, b):
     Returns:
         `a` subtract `b`.
     """
-    return _binary_operation(_ti_core.expr_sub, _bt_ops_mod.sub, a, b)
+    return _binary_operation(_qd_core.expr_sub, _bt_ops_mod.sub, a, b)
 
 
 def mul(a, b):
@@ -642,7 +642,7 @@ def mul(a, b):
     Returns:
         `a` multiplied by `b`.
     """
-    return _binary_operation(_ti_core.expr_mul, _bt_ops_mod.mul, a, b)
+    return _binary_operation(_qd_core.expr_mul, _bt_ops_mod.mul, a, b)
 
 
 def mod(x1, x2):
@@ -677,9 +677,9 @@ def mod(x1, x2):
 
     def expr_python_mod(a, b):
         # a % b = a - (a // b) * b
-        quotient = expr.Expr(_ti_core.expr_floordiv(a, b))
-        multiply = expr.Expr(_ti_core.expr_mul(b, quotient.ptr))
-        return _ti_core.expr_sub(a, multiply.ptr)
+        quotient = expr.Expr(_qd_core.expr_floordiv(a, b))
+        multiply = expr.Expr(_qd_core.expr_mul(b, quotient.ptr))
+        return _qd_core.expr_sub(a, multiply.ptr)
 
     return _binary_operation(expr_python_mod, _bt_ops_mod.mod, x1, x2)
 
@@ -721,7 +721,7 @@ def pow(base, exponent):  # pylint: disable=W0622
         >>> test()
         [-0.125000, 0.125000]
     """
-    return _binary_operation(_ti_core.expr_pow, _bt_ops_mod.pow, base, exponent)
+    return _binary_operation(_qd_core.expr_pow, _bt_ops_mod.pow, base, exponent)
 
 
 def floordiv(a, b):
@@ -734,7 +734,7 @@ def floordiv(a, b):
     Returns:
         The floor function of `a` divided by `b`.
     """
-    return _binary_operation(_ti_core.expr_floordiv, _bt_ops_mod.floordiv, a, b)
+    return _binary_operation(_qd_core.expr_floordiv, _bt_ops_mod.floordiv, a, b)
 
 
 def truediv(a, b):
@@ -747,7 +747,7 @@ def truediv(a, b):
     Returns:
         The true value of `a` divided by `b`.
     """
-    return _binary_operation(_ti_core.expr_truediv, _bt_ops_mod.truediv, a, b)
+    return _binary_operation(_qd_core.expr_truediv, _bt_ops_mod.truediv, a, b)
 
 
 def max_impl(a, b):
@@ -760,7 +760,7 @@ def max_impl(a, b):
     Returns:
         The maxnimum of `a` and `b`.
     """
-    return _binary_operation(_ti_core.expr_max, np.maximum, a, b)
+    return _binary_operation(_qd_core.expr_max, np.maximum, a, b)
 
 
 def min_impl(a, b):
@@ -773,7 +773,7 @@ def min_impl(a, b):
     Returns:
         The minimum of `a` and `b`.
     """
-    return _binary_operation(_ti_core.expr_min, np.minimum, a, b)
+    return _binary_operation(_qd_core.expr_min, np.minimum, a, b)
 
 
 def atan2(x1, x2):
@@ -802,7 +802,7 @@ def atan2(x1, x2):
         >>> test()
         [-135.0, -45.0, 135.0, 45.0]
     """
-    return _binary_operation(_ti_core.expr_atan2, np.arctan2, x1, x2)
+    return _binary_operation(_qd_core.expr_atan2, np.arctan2, x1, x2)
 
 
 def raw_div(x1, x2):
@@ -831,7 +831,7 @@ def raw_div(x1, x2):
             return a // b
         return a / b
 
-    return _binary_operation(_ti_core.expr_div, c_div, x1, x2)
+    return _binary_operation(_qd_core.expr_div, c_div, x1, x2)
 
 
 def raw_mod(x1, x2):
@@ -858,7 +858,7 @@ def raw_mod(x1, x2):
     def c_mod(x, y):
         return x - y * int(float(x) / y)
 
-    return _binary_operation(_ti_core.expr_mod, c_mod, x1, x2)
+    return _binary_operation(_qd_core.expr_mod, c_mod, x1, x2)
 
 
 def cmp_lt(a, b):
@@ -872,7 +872,7 @@ def cmp_lt(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly smaller than RHS, False otherwise
 
     """
-    return _binary_operation(_ti_core.expr_cmp_lt, _bt_ops_mod.lt, a, b)
+    return _binary_operation(_qd_core.expr_cmp_lt, _bt_ops_mod.lt, a, b)
 
 
 def cmp_le(a, b):
@@ -886,7 +886,7 @@ def cmp_le(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is smaller than or equal to RHS, False otherwise
 
     """
-    return _binary_operation(_ti_core.expr_cmp_le, _bt_ops_mod.le, a, b)
+    return _binary_operation(_qd_core.expr_cmp_le, _bt_ops_mod.le, a, b)
 
 
 def cmp_gt(a, b):
@@ -900,7 +900,7 @@ def cmp_gt(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly larger than RHS, False otherwise
 
     """
-    return _binary_operation(_ti_core.expr_cmp_gt, _bt_ops_mod.gt, a, b)
+    return _binary_operation(_qd_core.expr_cmp_gt, _bt_ops_mod.gt, a, b)
 
 
 def cmp_ge(a, b):
@@ -914,7 +914,7 @@ def cmp_ge(a, b):
         bool: True if LHS is greater than or equal to RHS, False otherwise
 
     """
-    return _binary_operation(_ti_core.expr_cmp_ge, _bt_ops_mod.ge, a, b)
+    return _binary_operation(_qd_core.expr_cmp_ge, _bt_ops_mod.ge, a, b)
 
 
 def cmp_eq(a, b):
@@ -928,7 +928,7 @@ def cmp_eq(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is equal to RHS, False otherwise.
 
     """
-    return _binary_operation(_ti_core.expr_cmp_eq, _bt_ops_mod.eq, a, b)
+    return _binary_operation(_qd_core.expr_cmp_eq, _bt_ops_mod.eq, a, b)
 
 
 def cmp_ne(a, b):
@@ -942,7 +942,7 @@ def cmp_ne(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is not equal to RHS, False otherwise
 
     """
-    return _binary_operation(_ti_core.expr_cmp_ne, _bt_ops_mod.ne, a, b)
+    return _binary_operation(_qd_core.expr_cmp_ne, _bt_ops_mod.ne, a, b)
 
 
 def bit_or(a, b):
@@ -956,7 +956,7 @@ def bit_or(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-or with RHS
 
     """
-    return _binary_operation(_ti_core.expr_bit_or, _bt_ops_mod.or_, a, b)
+    return _binary_operation(_qd_core.expr_bit_or, _bt_ops_mod.or_, a, b)
 
 
 def bit_and(a, b):
@@ -970,7 +970,7 @@ def bit_and(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-and with RHS
 
     """
-    return _binary_operation(_ti_core.expr_bit_and, _bt_ops_mod.and_, a, b)
+    return _binary_operation(_qd_core.expr_bit_and, _bt_ops_mod.and_, a, b)
 
 
 def bit_xor(a, b):
@@ -984,7 +984,7 @@ def bit_xor(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-xor with RHS
 
     """
-    return _binary_operation(_ti_core.expr_bit_xor, _bt_ops_mod.xor, a, b)
+    return _binary_operation(_qd_core.expr_bit_xor, _bt_ops_mod.xor, a, b)
 
 
 def bit_shl(a, b):
@@ -998,7 +998,7 @@ def bit_shl(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS << RHS
 
     """
-    return _binary_operation(_ti_core.expr_bit_shl, _bt_ops_mod.lshift, a, b)
+    return _binary_operation(_qd_core.expr_bit_shl, _bt_ops_mod.lshift, a, b)
 
 
 def bit_sar(a, b):
@@ -1012,7 +1012,7 @@ def bit_sar(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS >> RHS
 
     """
-    return _binary_operation(_ti_core.expr_bit_sar, _bt_ops_mod.rshift, a, b)
+    return _binary_operation(_qd_core.expr_bit_sar, _bt_ops_mod.rshift, a, b)
 
 
 @quadrants_scope
@@ -1040,7 +1040,7 @@ def bit_shr(x1, x2):
         >>> main()
         [3, 2]
     """
-    return _binary_operation(_ti_core.expr_bit_shr, _bt_ops_mod.rshift, x1, x2)
+    return _binary_operation(_qd_core.expr_bit_shr, _bt_ops_mod.rshift, x1, x2)
 
 
 def logical_and(a, b):
@@ -1054,7 +1054,7 @@ def logical_and(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-and RHS (with short-circuit semantics)
 
     """
-    return _binary_operation(_ti_core.expr_logical_and, lambda a, b: a and b, a, b)
+    return _binary_operation(_qd_core.expr_logical_and, lambda a, b: a and b, a, b)
 
 
 def logical_or(a, b):
@@ -1068,7 +1068,7 @@ def logical_or(a, b):
         Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-or RHS (with short-circuit semantics)
 
     """
-    return _binary_operation(_ti_core.expr_logical_or, lambda a, b: a or b, a, b)
+    return _binary_operation(_qd_core.expr_logical_or, lambda a, b: a or b, a, b)
 
 
 def select(cond, x1, x2):
@@ -1103,7 +1103,7 @@ def select(cond, x1, x2):
     def py_select(cond, x1, x2):
         return x1 * cond + x2 * (1 - cond)
 
-    return _ternary_operation(_ti_core.expr_select, py_select, cond, x1, x2)
+    return _ternary_operation(_qd_core.expr_select, py_select, cond, x1, x2)
 
 
 def ifte(cond, x1, x2):
@@ -1125,7 +1125,7 @@ def ifte(cond, x1, x2):
     def py_ifte(cond, x1, x2):
         return x1 if cond else x2
 
-    return _ternary_operation(_ti_core.expr_ifte, py_ifte, cond, x1, x2)
+    return _ternary_operation(_qd_core.expr_ifte, py_ifte, cond, x1, x2)
 
 
 def clz(a):
@@ -1137,7 +1137,7 @@ def clz(a):
                 return 32 - i
         return 0
 
-    return _unary_operation(_ti_core.expr_clz, _clz, a)
+    return _unary_operation(_qd_core.expr_clz, _clz, a)
 
 
 @writeback_binary
@@ -1167,7 +1167,7 @@ def atomic_add(x, y):
         >>>
         >>>     ti.atomic_add(1, x)  # will raise QuadrantsSyntaxError
     """
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1197,7 +1197,7 @@ def atomic_mul(x, y):
         >>>
         >>>     ti.atomic_mul(1, x)  # will raise QuadrantsSyntaxError
     """
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1227,7 +1227,7 @@ def atomic_sub(x, y):
         >>>
         >>>     ti.atomic_sub(1, x)  # will raise QuadrantsSyntaxError
     """
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1257,7 +1257,7 @@ def atomic_min(x, y):
         >>>
         >>>     ti.atomic_min(1, x)  # will raise QuadrantsSyntaxError
     """
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1287,7 +1287,7 @@ def atomic_max(x, y):
         >>>
         >>>     ti.atomic_max(1, x)  # will raise QuadrantsSyntaxError
     """
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return impl.expr_init(expr.Expr(_qd_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1318,7 +1318,7 @@ def atomic_and(x, y):
         >>>     ti.atomic_and(1, x)  # will raise QuadrantsSyntaxError
     """
     return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        expr.Expr(_qd_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     )
 
 
@@ -1350,7 +1350,7 @@ def atomic_or(x, y):
         >>>     ti.atomic_or(1, x)  # will raise QuadrantsSyntaxError
     """
     return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        expr.Expr(_qd_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     )
 
 
@@ -1382,13 +1382,13 @@ def atomic_xor(x, y):
         >>>     ti.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
     """
     return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        expr.Expr(_qd_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     )
 
 
 @writeback_binary
 def assign(a, b):
-    impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _ti_core.DebugInfo(stack_info()))
+    impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _qd_core.DebugInfo(stack_info()))
     return a
 
 

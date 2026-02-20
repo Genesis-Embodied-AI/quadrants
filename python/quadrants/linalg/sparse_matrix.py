@@ -4,7 +4,7 @@ from functools import reduce
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
@@ -251,11 +251,11 @@ class SparseMatrixBuilder:
         if num_rows is not None:
             quadrants_arch = get_runtime().prog.config().arch
             if quadrants_arch in [
-                _ti_core.Arch.x64,
-                _ti_core.Arch.arm64,
-                _ti_core.Arch.cuda,
+                _qd_core.Arch.x64,
+                _qd_core.Arch.arm64,
+                _qd_core.Arch.cuda,
             ]:
-                self.ptr = _ti_core.SparseMatrixBuilder(
+                self.ptr = _qd_core.SparseMatrixBuilder(
                     num_rows,
                     num_cols,
                     max_num_triplets,
@@ -277,18 +277,18 @@ class SparseMatrixBuilder:
     def print_triplets(self):
         """Print the triplets stored in the builder"""
         quadrants_arch = get_runtime().prog.config().arch
-        if quadrants_arch in [_ti_core.Arch.x64, _ti_core.Arch.arm64]:
+        if quadrants_arch in [_qd_core.Arch.x64, _qd_core.Arch.arm64]:
             self.ptr.print_triplets_eigen()
-        elif quadrants_arch == _ti_core.Arch.cuda:
+        elif quadrants_arch == _qd_core.Arch.cuda:
             self.ptr.print_triplets_cuda()
 
     def build(self, dtype=f32, _format="CSR"):
         """Create a sparse matrix using the triplets"""
         quadrants_arch = get_runtime().prog.config().arch
-        if quadrants_arch in [_ti_core.Arch.x64, _ti_core.Arch.arm64]:
+        if quadrants_arch in [_qd_core.Arch.x64, _qd_core.Arch.arm64]:
             sm = self.ptr.build()
             return SparseMatrix(sm=sm, dtype=self.dtype)
-        if quadrants_arch == _ti_core.Arch.cuda:
+        if quadrants_arch == _qd_core.Arch.cuda:
             if self.dtype != f32:
                 raise QuadrantsRuntimeError("CUDA sparse matrix only supports f32.")
             sm = self.ptr.build_cuda()

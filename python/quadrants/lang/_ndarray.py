@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
@@ -106,9 +106,9 @@ class Ndarray:
         Args:
             val (Union[int, float]): Value to fill.
         """
-        if impl.current_cfg().arch != _ti_core.Arch.cuda and impl.current_cfg().arch != _ti_core.Arch.x64:
+        if impl.current_cfg().arch != _qd_core.Arch.cuda and impl.current_cfg().arch != _qd_core.Arch.x64:
             self._fill_by_kernel(val)
-        elif _ti_core.is_tensor(self.element_type):
+        elif _qd_core.is_tensor(self.element_type):
             self._fill_by_kernel(val)
         elif self.dtype == primitive_types.f32:
             impl.get_runtime().prog.fill_float(self.arr, val)
@@ -281,7 +281,7 @@ class ScalarNdarray(Ndarray):
         super().__init__()
         self.dtype = cook_dtype(dtype)
         self.arr = impl.get_runtime().prog.create_ndarray(
-            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_ti_core.DebugInfo(get_traceback())
+            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
         )
         self.shape = tuple(self.arr.shape)
         self.element_type = dtype

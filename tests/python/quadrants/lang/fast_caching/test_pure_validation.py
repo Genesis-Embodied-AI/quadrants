@@ -172,7 +172,7 @@ def test_pure_validation_builtin_values_inf():
 
 
 @test_utils.test()
-def test_pure_validation_builtin_values_ti_pi():
+def test_pure_validation_builtin_values_qd_pi():
     class MyEnum(enum.IntEnum):
         foo = 1
         bar = 2

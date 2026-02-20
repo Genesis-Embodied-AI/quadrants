@@ -1,6 +1,6 @@
 # type: ignore
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 
 
 class CuptiMetric:
@@ -244,9 +244,9 @@ def get_predefined_cupti_metrics(name=""):
         name (str): cupti metri name.
     """
     if name not in predefined_cupti_metrics:
-        _ti_core.warn("Valid Quadrants predefined metrics list (str):")
+        _qd_core.warn("Valid Quadrants predefined metrics list (str):")
         for key in predefined_cupti_metrics:
-            _ti_core.warn(f"    '{key}'")
+            _qd_core.warn(f"    '{key}'")
         return None
     return predefined_cupti_metrics[name]
 

@@ -1,6 +1,6 @@
 # type: ignore
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.util import quadrants_scope
@@ -23,26 +23,26 @@ class AnyArray:
         self.ptr.type_check(impl.get_runtime().prog.config())
 
     def element_shape(self):
-        return _ti_core.get_external_tensor_element_shape(self.ptr)
+        return _qd_core.get_external_tensor_element_shape(self.ptr)
 
     def layout(self):
         # 0: scalar; 1: vector (SOA); 2: matrix (SOA); -1: vector
         # (AOS); -2: matrix (AOS)
-        element_dim = _ti_core.get_external_tensor_element_dim(self.ptr)
+        element_dim = _qd_core.get_external_tensor_element_dim(self.ptr)
         if element_dim == 1 or element_dim == 2:
             return Layout.SOA
         return Layout.AOS
 
     def get_type(self):
         return NdarrayTypeMetadata(
-            _ti_core.get_external_tensor_element_type(self.ptr), None, _ti_core.get_external_tensor_needs_grad(self.ptr)
+            _qd_core.get_external_tensor_element_type(self.ptr), None, _qd_core.get_external_tensor_needs_grad(self.ptr)
         )  # AnyArray can take any shape
 
     @property
     @quadrants_scope
     def grad(self):
         """Returns the gradient of this array."""
-        return AnyArray(_ti_core.make_external_tensor_grad_expr(self.ptr))
+        return AnyArray(_qd_core.make_external_tensor_grad_expr(self.ptr))
 
     @property
     @quadrants_scope
@@ -52,9 +52,9 @@ class AnyArray:
         Returns:
             List[Int]: The result list.
         """
-        dim = _ti_core.get_external_tensor_dim(self.ptr)
-        dbg_info = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
-        return [Expr(_ti_core.get_external_tensor_shape_along_axis(self.ptr, i, dbg_info)) for i in range(dim)]
+        dim = _qd_core.get_external_tensor_dim(self.ptr)
+        dbg_info = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
+        return [Expr(_qd_core.get_external_tensor_shape_along_axis(self.ptr, i, dbg_info)) for i in range(dim)]
 
     @quadrants_scope
     def _loop_range(self):
@@ -91,7 +91,7 @@ class AnyArrayAccess:
             ast_builder.expr_subscript(
                 self.arr.ptr,
                 make_expr_group(*indices),
-                _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
         )
 

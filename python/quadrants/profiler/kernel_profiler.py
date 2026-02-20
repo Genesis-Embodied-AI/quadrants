@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.profiler.kernel_metrics import default_cupti_metrics
 
@@ -80,7 +80,7 @@ class KernelProfiler:
         if status is True:
             self._profiling_toolkit = toolkit_name
         else:
-            _ti_core.warn(
+            _qd_core.warn(
                 f"Failed to set kernel profiler toolkit ({toolkit_name}) , keep using ({self._profiling_toolkit})."
             )
         return status
@@ -178,7 +178,7 @@ class KernelProfiler:
     # private methods
     def _check_not_turned_on_with_warning_message(self):
         if self._profiling_mode is False:
-            _ti_core.warn("use 'ti.init(kernel_profiler = True)' to turn on KernelProfiler.")
+            _qd_core.warn("use 'ti.init(kernel_profiler = True)' to turn on KernelProfiler.")
             return True
         return False
 
@@ -220,7 +220,7 @@ class KernelProfiler:
 
     def _make_table_header(self, mode):
         header_str = f"Kernel Profiler({mode}, {self._profiling_toolkit})"
-        arch_name = f" @ {_ti_core.arch_name(impl.current_cfg().arch).upper()}"
+        arch_name = f" @ {_qd_core.arch_name(impl.current_cfg().arch).upper()}"
         device_name = impl.get_runtime().prog.get_kernel_profiler_device_name()
         if len(device_name) > 1:  # default device_name = ' '
             device_name = " on " + device_name
@@ -336,11 +336,11 @@ class KernelProfiler:
         print(outer_partition_line)
 
 
-_ti_kernel_profiler = KernelProfiler()
+_qd_kernel_profiler = KernelProfiler()
 
 
 def get_default_kernel_profiler():
-    """We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_ti_kernel_profiler``) now.
+    """We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_qd_kernel_profiler``) now.
 
     For ``KernelProfiler`` using ``CuptiToolkit``, GPU devices can only work in a certain configuration.
     Profiling mode and metrics are configured by the host(CPU) via CUPTI APIs, and device(GPU) will use
@@ -349,7 +349,7 @@ def get_default_kernel_profiler():
     the profiling configuration of other instances will be changed as a result.
     For data retention purposes, multiple instances will be considered in the future.
     """
-    return _ti_kernel_profiler
+    return _qd_kernel_profiler
 
 
 def print_kernel_profiler_info(mode="count"):

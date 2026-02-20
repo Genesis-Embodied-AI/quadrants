@@ -300,11 +300,11 @@ class QuadrantsOperations:
         else:
             assert False, op
 
-    def __ti_int__(self):
+    def __qd_int__(self):
         return ops.cast(self, int)
 
-    def __ti_bool__(self):
+    def __qd_bool__(self):
         return ops.cast(self, primitive_types.u1)
 
-    def __ti_float__(self):
+    def __qd_float__(self):
         return ops.cast(self, float)

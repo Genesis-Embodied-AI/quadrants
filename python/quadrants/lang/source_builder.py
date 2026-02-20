@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.expr import make_expr_group
@@ -35,12 +35,12 @@ class SourceBuilder:
             self.td = tempfile.mkdtemp()
 
         if filename.endswith((".cpp", ".c", ".cc")):
-            if impl.current_cfg().arch not in [_ti_core.Arch.x64, _ti_core.Arch.cuda]:
+            if impl.current_cfg().arch not in [_qd_core.Arch.x64, _qd_core.Arch.cuda]:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             if compile_fn is None:
 
                 def compile_fn_impl(filename):
-                    if impl.current_cfg().arch == _ti_core.Arch.x64:
+                    if impl.current_cfg().arch == _qd_core.Arch.x64:
                         subprocess.call(
                             get_clangpp() + " -flto -c " + filename + " -o " + os.path.join(self.td, "source.bc"),
                             shell=True,
@@ -61,7 +61,7 @@ class SourceBuilder:
             self.bc = compile_fn(filename)
             self.mode = "bc"
         elif filename.endswith(".cu"):
-            if impl.current_cfg().arch not in [_ti_core.Arch.cuda]:
+            if impl.current_cfg().arch not in [_qd_core.Arch.cuda]:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             if compile_fn is None:
                 shutil.copy(filename, os.path.join(self.td, "source.cu"))
@@ -82,12 +82,12 @@ class SourceBuilder:
             self.bc = compile_fn(filename)
             self.mode = "bc"
         elif filename.endswith((".so", ".dylib", ".dll")):
-            if impl.current_cfg().arch not in [_ti_core.Arch.x64]:
+            if impl.current_cfg().arch not in [_qd_core.Arch.x64]:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             self.so = ctypes.CDLL(filename)
             self.mode = "so"
         elif filename.endswith(".ll"):
-            if impl.current_cfg().arch not in [_ti_core.Arch.x64, _ti_core.Arch.cuda]:
+            if impl.current_cfg().arch not in [_qd_core.Arch.x64, _qd_core.Arch.cuda]:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             subprocess.call(
                 "llvm-as " + filename + " -o " + os.path.join(self.td, "source.bc"),
@@ -96,7 +96,7 @@ class SourceBuilder:
             self.bc = os.path.join(self.td, "source.bc")
             self.mode = "bc"
         elif filename.endswith(".bc"):
-            if impl.current_cfg().arch not in [_ti_core.Arch.x64, _ti_core.Arch.cuda]:
+            if impl.current_cfg().arch not in [_qd_core.Arch.x64, _qd_core.Arch.cuda]:
                 raise QuadrantsSyntaxError("Unsupported arch for external function call")
             self.bc = filename
             self.mode = "bc"
@@ -106,7 +106,7 @@ class SourceBuilder:
 
     @classmethod
     def from_source(cls, source_code, compile_fn=None):
-        if impl.current_cfg().arch not in [_ti_core.Arch.x64, _ti_core.Arch.cuda]:
+        if impl.current_cfg().arch not in [_qd_core.Arch.x64, _qd_core.Arch.cuda]:
             raise QuadrantsSyntaxError("Unsupported arch for external function call")
         _temp_dir = tempfile.mkdtemp()
         _temp_source = os.path.join(_temp_dir, "_temp_source.cpp")
@@ -123,7 +123,7 @@ class SourceBuilder:
                 item,
                 make_expr_group(args),
                 make_expr_group([]),
-                _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
 
         if self.mode == "bc":
@@ -138,7 +138,7 @@ class SourceBuilder:
                 "",
                 make_expr_group(args),
                 make_expr_group(outputs),
-                _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
 
         if self.mode == "so":

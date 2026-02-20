@@ -111,9 +111,9 @@ class Pruning:
         for i, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
-                if caller_arg_name.startswith("__ti_"):
+                if caller_arg_name.startswith("__qd_"):
                     callee_param_name = child_metas[child_arg_id + self_offset].name
-                    if callee_param_name in used_callee_vars or not callee_param_name.startswith("__ti_"):
+                    if callee_param_name in used_callee_vars or not callee_param_name.startswith("__qd_"):
                         callee_param_by_called_arg_name[caller_arg_name] = callee_param_name
             child_arg_id += 1
         self.callee_param_by_caller_arg_name_by_func_id[callee_func_id] = callee_param_by_called_arg_name
@@ -145,7 +145,7 @@ class Pruning:
         callee_metas: list[ArgMetadata] = node.func.ptr.wrapper.arg_metas_expanded  # type: ignore
         callee_metas_pruned = []
         for _callee_meta in callee_metas:
-            if _callee_meta.name.startswith("__ti_"):
+            if _callee_meta.name.startswith("__qd_"):
                 if _callee_meta.name in caller_used_args:
                     callee_metas_pruned.append(_callee_meta)
             else:
@@ -167,12 +167,12 @@ class Pruning:
                 break
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
-                if caller_arg_name.startswith("__ti_"):
+                if caller_arg_name.startswith("__qd_"):
                     callee_param_name = self.callee_param_by_caller_arg_name_by_func_id[callee_func_id].get(
                         caller_arg_name
                     )
                     if callee_param_name is None or (
-                        callee_param_name not in caller_used_args and callee_param_name.startswith("__ti_")
+                        callee_param_name not in caller_used_args and callee_param_name.startswith("__qd_")
                     ):
                         continue
             new_args.append(py_args[i])

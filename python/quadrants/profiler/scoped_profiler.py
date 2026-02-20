@@ -1,6 +1,6 @@
 # type: ignore
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 
 
 def print_scoped_profiler_info():
@@ -8,7 +8,7 @@ def print_scoped_profiler_info():
 
     This profiler is automatically on.
 
-    Call function imports from C++ : _ti_core.print_profile_info()
+    Call function imports from C++ : _qd_core.print_profile_info()
 
     Example::
 
@@ -22,15 +22,15 @@ def print_scoped_profiler_info():
             >>> compute()
             >>> ti.profiler.print_scoped_profiler_info()
     """
-    _ti_core.print_profile_info()
+    _qd_core.print_profile_info()
 
 
 def clear_scoped_profiler_info():
     """Clear profiler's records about time elapsed on the host tasks.
 
-    Call function imports from C++ : _ti_core.clear_profile_info()
+    Call function imports from C++ : _qd_core.clear_profile_info()
     """
-    _ti_core.clear_profile_info()
+    _qd_core.clear_profile_info()
 
 
 __all__ = ["print_scoped_profiler_info", "clear_scoped_profiler_info"]

@@ -5,7 +5,7 @@ from types import MethodType
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import expr, impl, ops
 from quadrants.lang.exception import (
     QuadrantsRuntimeTypeError,
@@ -598,7 +598,7 @@ class StructType(CompoundType):
                 dtype = cook_dtype(dtype)
                 self.members[k] = dtype
                 elements.append([dtype, k])
-        self.dtype = _ti_core.get_type_factory_instance().get_struct_type(elements)
+        self.dtype = _qd_core.get_type_factory_instance().get_struct_type(elements)
 
     def __call__(self, *args, **kwargs):
         """Create an instance of this struct type."""
@@ -670,10 +670,10 @@ class StructType(CompoundType):
                 d[name] = dtype.from_quadrants_object(func_ret, ret_index + (index,))
             else:
                 d[name] = expr.Expr(
-                    _ti_core.make_get_element_expr(
+                    _qd_core.make_get_element_expr(
                         func_ret.ptr,
                         ret_index + (index,),
-                        _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                        _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                     )
                 )
         d["__struct_methods"] = self.methods

@@ -121,7 +121,7 @@ class CallTransformer:
     # raw_string: 'qwerty {1} {} {1:.3f} {k:.4f} {k:}'
     # raw_args: [1.0, 2.0]
     # raw_keywords: {'k': <ti.Expr>}
-    # return value: ['qwerty {} {} {} {} {}', 2.0, 1.0, ['__ti_fmt_value__', 2.0, '.3f'], ['__ti_fmt_value__', <ti.Expr>, '.4f'], <ti.Expr>]
+    # return value: ['qwerty {} {} {} {} {}', 2.0, 1.0, ['__qd_fmt_value__', 2.0, '.3f'], ['__qd_fmt_value__', <ti.Expr>, '.4f'], <ti.Expr>]
     def _canonicalize_formatted_string(raw_string: str, *raw_args: list, **raw_keywords: dict):
         raw_brackets = re.findall(r"{(.*?)}", raw_string)
         brackets = []
@@ -158,7 +158,7 @@ class CallTransformer:
         for item, spec in brackets:
             new_arg = raw_args[item] if isinstance(item, int) else raw_keywords[item]
             if spec is not None:
-                args.append(["__ti_fmt_value__", new_arg, spec])
+                args.append(["__qd_fmt_value__", new_arg, spec])
             else:
                 args.append(new_arg)
         args.insert(0, re.sub(r"{.*?}", "{}", raw_string))
