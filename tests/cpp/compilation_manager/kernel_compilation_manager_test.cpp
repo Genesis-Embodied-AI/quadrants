@@ -108,9 +108,9 @@ TEST_F(KernelCompilationManagerTest, DumpNewKernel) {
   mgr_->cache_kernel(checksum, compile_config_, std::move(ckd), kernel);
   mgr_->dump();
   auto cache_file =
-      temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
+      temp_dir_ / "kernel_compilation_manager" / (checksum + ".qdc");
   EXPECT_TRUE(std::filesystem::exists(cache_file));
-  auto metadata_file = temp_dir_ / "kernel_compilation_manager" / "ticache.tcb";
+  auto metadata_file = temp_dir_ / "kernel_compilation_manager" / "qdcache.tcb";
   EXPECT_TRUE(std::filesystem::exists(metadata_file));
 }
 
@@ -144,7 +144,7 @@ TEST_F(KernelCompilationManagerTest, DumpMemCacheOnlyKernel) {
 
   // Verify the kernel data was NOT written to disk
   auto cache_file =
-      temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
+      temp_dir_ / "kernel_compilation_manager" / (checksum + ".qdc");
   EXPECT_FALSE(std::filesystem::exists(cache_file));
 }
 
@@ -162,8 +162,8 @@ TEST_F(KernelCompilationManagerTest, DumpMultipleKernels) {
 
   mgr_->dump();
 
-  auto cache_file1 = temp_dir_ / "kernel_compilation_manager" / "key1.tic";
-  auto cache_file2 = temp_dir_ / "kernel_compilation_manager" / "key2.tic";
+  auto cache_file1 = temp_dir_ / "kernel_compilation_manager" / "key1.qdc";
+  auto cache_file2 = temp_dir_ / "kernel_compilation_manager" / "key2.qdc";
   EXPECT_TRUE(std::filesystem::exists(cache_file1));
   EXPECT_TRUE(std::filesystem::exists(cache_file2));
 }

@@ -62,9 +62,9 @@ class
 
 class KernelCompilationManager final {
  public:
-  static constexpr char kMetadataFilename[] = "ticache.tcb";
-  static constexpr char kCacheFilenameFormat[] = "{}.tic";
-  static constexpr char kMetadataLockName[] = "ticache.lock";
+  static constexpr char kMetadataFilename[] = "qdcache.tcb";
+  static constexpr char kCacheFilenameFormat[] = "{}.qdc";
+  static constexpr char kMetadataLockName[] = "qdcache.lock";
 
   using KernelCacheData = CacheData::DataWrapper;
   using CachingKernels = std::unordered_map<std::string, KernelCacheData>;

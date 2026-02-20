@@ -26,7 +26,7 @@ class KernelLaunchHandle {
 
 class CompiledKernelDataFile {
  public:
-  static constexpr char kHeadStr[] = "TIC";
+  static constexpr char kHeadStr[] = "QDC";
   static constexpr std::size_t kHeadSize = std::size(kHeadStr);
   static constexpr std::size_t kHashSize = 64;
   enum class Err {

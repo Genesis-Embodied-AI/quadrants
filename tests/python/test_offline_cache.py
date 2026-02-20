@@ -24,7 +24,7 @@ supported_archs_offline_cache = {v for v in supported_archs_offline_cache if v i
 
 def cache_files_size(path: pathlib.Path) -> int:
     result = 0
-    for filepath in path.rglob("*.tic"):
+    for filepath in path.rglob("*.qdc"):
         if filepath.is_file():
             result += os.stat(filepath).st_size
     return result
@@ -33,7 +33,7 @@ def cache_files_size(path: pathlib.Path) -> int:
 def expected_num_cache_files(num_kernels: int = 0) -> int:
     if num_kernels == 0:
         return 0
-    # code files(*.tic) + metadata files(ticache.tcb)
+    # code files(*.qdc) + metadata files(qdcache.tcb)
     return num_kernels + 1
 
 

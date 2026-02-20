@@ -253,9 +253,9 @@ def test():
                 subdir_path = os.path.join(tmp_cache_file_path, p)
                 if os.path.isdir(subdir_path):
                     stat[p] = len(os.listdir(subdir_path))
-                elif p.endswith(".tic"):
+                elif p.endswith(".qdc"):
                     countof_tic += 1
-            stat["*.tic"] = countof_tic
+            stat["*.qdc"] = countof_tic
             shutil.rmtree(tmp_cache_file_path)
             print("Summary of testing the offline cache:")
             print(f"    Simple statistics: {stat}")

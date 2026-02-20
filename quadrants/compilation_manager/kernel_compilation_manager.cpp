@@ -9,7 +9,7 @@ namespace quadrants::lang {
 
 namespace offline_cache {
 
-constexpr char kTiCacheFilenameExt[] = "tic";
+constexpr char kQdCacheFilenameExt[] = "qdc";
 
 template <>
 struct CacheCleanerUtils<CacheData> {
@@ -47,7 +47,7 @@ struct CacheCleanerUtils<CacheData> {
   static bool is_valid_cache_file(const CacheCleanerConfig &config,
                                   const std::string &name) {
     std::string ext = filename_extension(name);
-    return ext == kTiCacheFilenameExt;
+    return ext == kQdCacheFilenameExt;
   }
 };
 
