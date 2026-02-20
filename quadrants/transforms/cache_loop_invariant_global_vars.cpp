@@ -1,11 +1,14 @@
 #include "quadrants/transforms/loop_invariant_detector.h"
 #include "quadrants/ir/analysis.h"
-#include <iostream>
 
 namespace quadrants::lang {
 
 namespace {
 
+// Collect the SNodes that are destinations of any AtomicOpStmt in |root|.
+// These SNodes must not be cached by the loop-invariant caching pass because
+// the AtomicOpStmt writes directly to global memory and any cached load would
+// return a stale value.
 void gather_atomic_dest_snodes(IRNode *root,
                                std::unordered_set<const SNode *> &result) {
   auto stmts = irpass::analysis::gather_statements(
@@ -14,18 +17,11 @@ void gather_atomic_dest_snodes(IRNode *root,
     auto *dest = s->as<AtomicOpStmt>()->dest;
     if (auto *gptr = dest->cast<GlobalPtrStmt>()) {
       result.insert(gptr->snode);
-      std::cerr << "[cache_pass] found atomic dest snode: " << gptr->snode->get_node_type_name_hinted() << std::endl;
     } else if (auto *mptr = dest->cast<MatrixPtrStmt>()) {
       if (auto *gptr = mptr->origin->cast<GlobalPtrStmt>()) {
         result.insert(gptr->snode);
-        std::cerr << "[cache_pass] found atomic dest snode (via matrix): " << gptr->snode->get_node_type_name_hinted() << std::endl;
       }
     }
-  }
-  if (stmts.empty()) {
-    // no atomics found at all
-  } else if (result.empty()) {
-    std::cerr << "[cache_pass] WARNING: found " << stmts.size() << " AtomicOpStmt but could not extract SNode from any" << std::endl;
   }
 }
 
@@ -238,11 +234,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
                stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
       gptr = stmt->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
     }
-    bool result = gptr && atomic_dest_snodes_.count(gptr->snode);
-    if (result) {
-      std::cerr << "[cache_pass] BLOCKED caching of snode: " << gptr->snode->get_node_type_name_hinted() << std::endl;
-    }
-    return result;
+    return gptr && atomic_dest_snodes_.count(gptr->snode);
   }
 
   std::optional<int> find_cache_depth_if_cacheable(Stmt *operand,
