@@ -23,3 +23,32 @@ def test_local_matrix_non_constant_index_real_matrix():
                     assert x_print == x[i][1]
 
     test_invariant_cache()
+
+
+@test_utils.test()
+def test_atomic_dest_field_not_cached():
+    """Regression: cache_loop_invariant must skip fields written by AtomicOpStmt.
+
+    On SPIR-V backends (Metal/Vulkan), atomics in serial tasks are kept as real
+    atomic operations (not demoted to load-op-store).  The cache pass must
+    recognise these AtomicOpStmt destinations and refuse to cache loads from the
+    same field, otherwise reads inside the loop return stale pre-loop values.
+    """
+    n = 4
+    m = 8
+
+    x = ti.field(dtype=ti.i32, shape=(n,))
+    result = ti.field(dtype=ti.i32, shape=(n,))
+
+    @ti.kernel
+    def k():
+        ti.loop_config(serialize=True)
+        for i in range(n):
+            x[i] = 0
+            for j in range(m):
+                ti.atomic_add(x[i], 1)
+                result[i] = x[i]
+
+    k()
+    for i in range(n):
+        assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
