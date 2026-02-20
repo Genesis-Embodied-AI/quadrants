@@ -1,16 +1,16 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[ti.cuda, ti.cpu])
+@test_utils.test(arch=[qd.cuda, qd.cpu])
 def test_local_matrix_non_constant_index_real_matrix():
     N = 1
-    x = ti.Vector.field(3, float, shape=1)
+    x = qd.Vector.field(3, float, shape=1)
 
-    @ti.kernel
+    @qd.kernel
     def test_invariant_cache():
         for i in range(1):
             x[i][1] = x[i][1] + 1.0
@@ -40,21 +40,21 @@ def test_atomic_dest_not_cached(use_ndarray: bool) -> None:
     n = 4
     m = 8
 
-    TensorType = ti.ndarray if use_ndarray else ti.field
+    TensorType = qd.ndarray if use_ndarray else qd.field
 
-    AnnotationType = ti.types.ndarray() if use_ndarray else ti.template()
+    AnnotationType = qd.types.ndarray() if use_ndarray else qd.template()
 
-    @ti.kernel
+    @qd.kernel
     def k(x: AnnotationType, result: AnnotationType):
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(n):
             x[i] = 0
             for j in range(m):
-                ti.atomic_add(x[i], 1)
+                qd.atomic_add(x[i], 1)
                 result[i] = x[i]
 
-    x = TensorType(dtype=ti.i32, shape=(n,))
-    result = TensorType(dtype=ti.i32, shape=(n,))
+    x = TensorType(dtype=qd.i32, shape=(n,))
+    result = TensorType(dtype=qd.i32, shape=(n,))
 
     k(x, result)
     for i in range(n):
