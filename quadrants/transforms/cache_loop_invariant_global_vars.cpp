@@ -1,7 +1,35 @@
 #include "quadrants/transforms/loop_invariant_detector.h"
 #include "quadrants/ir/analysis.h"
+#include <iostream>
 
 namespace quadrants::lang {
+
+namespace {
+
+void gather_atomic_dest_snodes(IRNode *root,
+                               std::unordered_set<const SNode *> &result) {
+  auto stmts = irpass::analysis::gather_statements(
+      root, [](Stmt *s) { return s->is<AtomicOpStmt>(); });
+  for (auto *s : stmts) {
+    auto *dest = s->as<AtomicOpStmt>()->dest;
+    if (auto *gptr = dest->cast<GlobalPtrStmt>()) {
+      result.insert(gptr->snode);
+      std::cerr << "[cache_pass] found atomic dest snode: " << gptr->snode->get_node_type_name_hinted() << std::endl;
+    } else if (auto *mptr = dest->cast<MatrixPtrStmt>()) {
+      if (auto *gptr = mptr->origin->cast<GlobalPtrStmt>()) {
+        result.insert(gptr->snode);
+        std::cerr << "[cache_pass] found atomic dest snode (via matrix): " << gptr->snode->get_node_type_name_hinted() << std::endl;
+      }
+    }
+  }
+  if (stmts.empty()) {
+    // no atomics found at all
+  } else if (result.empty()) {
+    std::cerr << "[cache_pass] WARNING: found " << stmts.size() << " AtomicOpStmt but could not extract SNode from any" << std::endl;
+  }
+}
+
+}  // namespace
 
 class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
  public:
@@ -27,6 +55,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
   std::unordered_set<MatrixPtrStmt *> loop_unique_matrix_ptr_;
 
   std::unordered_set<Stmt *> dynamic_indexed_ptrs_;
+  std::unordered_set<const SNode *> atomic_dest_snodes_;
 
   OffloadedStmt *current_offloaded;
 
@@ -48,6 +77,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     current_offloaded = stmt;
     dynamic_indexed_ptrs_ =
         irpass::analysis::gather_dynamically_indexed_pointers(stmt);
+    atomic_dest_snodes_.clear();
+    gather_atomic_dest_snodes(stmt, atomic_dest_snodes_);
 
     // We don't need to visit TLS/BLS prologues/epilogues.
     if (stmt->body) {
@@ -199,12 +230,30 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     return alloca_stmt;
   }
 
+  bool is_atomic_dest(Stmt *stmt) {
+    GlobalPtrStmt *gptr = nullptr;
+    if (stmt->is<GlobalPtrStmt>()) {
+      gptr = stmt->as<GlobalPtrStmt>();
+    } else if (stmt->is<MatrixPtrStmt>() &&
+               stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
+      gptr = stmt->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
+    }
+    bool result = gptr && atomic_dest_snodes_.count(gptr->snode);
+    if (result) {
+      std::cerr << "[cache_pass] BLOCKED caching of snode: " << gptr->snode->get_node_type_name_hinted() << std::endl;
+    }
+    return result;
+  }
+
   std::optional<int> find_cache_depth_if_cacheable(Stmt *operand,
                                                    Block *current_scope) {
     if (is_dynamically_indexed(operand)) {
       return std::nullopt;
     }
     if (!is_offload_unique(operand)) {
+      return std::nullopt;
+    }
+    if (is_atomic_dest(operand)) {
       return std::nullopt;
     }
     std::optional<int> depth;
