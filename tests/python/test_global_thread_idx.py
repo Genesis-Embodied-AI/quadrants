@@ -1,19 +1,19 @@
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_global_thread_idx():
     n = 128
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n):
-            tid = ti.global_thread_idx()
+            tid = qd.global_thread_idx()
             x[tid] = tid
 
     func()

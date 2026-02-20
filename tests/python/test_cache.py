@@ -1,6 +1,6 @@
 import pathlib
 
-import quadrants as ti
+import quadrants as qd
 from quadrants._test_tools import ti_init_same_arch
 from quadrants.lang.misc import get_host_arch_list
 
@@ -9,14 +9,14 @@ from tests import test_utils
 
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_primitive_args():
-    @ti.data_oriented
+    @qd.data_oriented
     class StructStaticConfig:
         flag: bool = True
 
-    @ti.kernel
-    def fun(static_args: ti.template(), constant: ti.template(), value: ti.types.ndarray()):
-        if ti.static(static_args.flag):
-            if ti.static(constant > 0):
+    @qd.kernel
+    def fun(static_args: qd.template(), constant: qd.template(), value: qd.types.ndarray()):
+        if qd.static(static_args.flag):
+            if qd.static(constant > 0):
                 value[None] = value[None] + 1
             else:
                 assert "Invalid 'constant' branch"
@@ -31,7 +31,7 @@ def test_cache_primitive_args():
 
     static_args = StructStaticConfig()
     constant = 1234567890
-    value = ti.ndarray(ti.i32, shape=())
+    value = qd.ndarray(qd.i32, shape=())
     value[None] = 1
 
     fun(static_args, constant, value)
@@ -63,9 +63,9 @@ def test_cache_primitive_args():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_multi_entry_static():
-    @ti.kernel
-    def fun(flag: ti.template(), value: ti.template()):
-        if ti.static(flag):
+    @qd.kernel
+    def fun(flag: qd.template(), value: qd.template()):
+        if qd.static(flag):
             value[None] = value[None] + 1
         else:
             value[None] = value[None] - 1
@@ -76,7 +76,7 @@ def test_cache_multi_entry_static():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == 0
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
-    value = ti.field(ti.i32, shape=())
+    value = qd.field(qd.i32, shape=())
     value[None] = 1
 
     fun(True, value)
@@ -106,9 +106,9 @@ def test_cache_multi_entry_static():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_fields_only():
-    @ti.kernel
-    def fun(flag: ti.template(), value: ti.template()):
-        if ti.static(flag):
+    @qd.kernel
+    def fun(flag: qd.template(), value: qd.template()):
+        if qd.static(flag):
             value[None] = value[None] + 1
         else:
             assert "Invalid 'static_args.flag_1' branch"
@@ -120,7 +120,7 @@ def test_cache_fields_only():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
     flag = True
-    value = ti.field(ti.i32, shape=())
+    value = qd.field(qd.i32, shape=())
     value[None] = 1
 
     fun(flag, value)
@@ -142,8 +142,8 @@ def test_cache_fields_only():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_cache_ndarray_only():
-    @ti.kernel
-    def fun(value: ti.types.ndarray()):
+    @qd.kernel
+    def fun(value: qd.types.ndarray()):
         value[None] = value[None] + 1
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
@@ -152,7 +152,7 @@ def test_cache_ndarray_only():
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == 0
     assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == 0
 
-    value = ti.ndarray(ti.i32, shape=())
+    value = qd.ndarray(qd.i32, shape=())
     value[None] = 1
 
     fun(value)
@@ -174,7 +174,7 @@ def test_cache_ndarray_only():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
-    launch_kernel_orig = ti.lang.kernel_impl.Kernel.launch_kernel
+    launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
 
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     is_valid = False
@@ -187,13 +187,13 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
 
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
-    @ti.kernel(fastcache=True)
-    def fun(value: ti.types.ndarray(), offset: ti.template()):
+    @qd.kernel(fastcache=True)
+    def fun(value: qd.types.ndarray(), offset: qd.template()):
         value[None] = value[None] + offset
 
     assert len(fun._primal.compiled_kernel_data_by_key) == 0
 
-    value = ti.ndarray(ti.i32, shape=())
+    value = qd.ndarray(qd.i32, shape=())
     value[None] = 1
 
     assert not is_valid
@@ -213,7 +213,7 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
 
     monkeypatch.setattr("quadrants.lang.kernel_impl.Kernel.launch_kernel", launch_kernel)
 
-    value = ti.ndarray(ti.i32, shape=())
+    value = qd.ndarray(qd.i32, shape=())
     value[None] = 1
 
     assert not is_valid

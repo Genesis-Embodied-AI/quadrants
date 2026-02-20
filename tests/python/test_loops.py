@@ -1,25 +1,25 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_loops():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
     N = 512
 
-    ti.root.dense(ti.i, N).place(x)
-    ti.root.dense(ti.i, N).place(y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, N).place(x)
+    qd.root.dense(qd.i, N).place(y)
+    qd.root.lazy_grad()
 
     for i in range(N // 2, N):
         y[i] = i - 300
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in range(ti.static(N // 2 + 3), N):
+        for i in range(qd.static(N // 2 + 3), N):
             x[i] = abs(y[i])
 
     func()
@@ -33,14 +33,14 @@ def test_loops():
 
 @test_utils.test()
 def test_numpy_loops():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
 
     N = 512
 
-    ti.root.dense(ti.i, N).place(x)
-    ti.root.dense(ti.i, N).place(y)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, N).place(x)
+    qd.root.dense(qd.i, N).place(y)
+    qd.root.lazy_grad()
 
     for i in range(N // 2, N):
         y[i] = i - 300
@@ -50,7 +50,7 @@ def test_numpy_loops():
     begin = (np.ones(1) * (N // 2 + 3)).astype(np.int32).reshape(())
     end = (np.ones(1) * N).astype(np.int32).reshape(())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(begin, end):
             x[i] = abs(y[i])
@@ -67,13 +67,13 @@ def test_numpy_loops():
 @test_utils.test()
 def test_nested_loops():
     # this may crash if any LLVM allocas are called in the loop body
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
 
     n = 2048
 
-    ti.root.dense(ti.ij, n).place(x)
+    qd.root.dense(qd.ij, n).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def paint():
         for i in range(n):
             for j in range(n):
@@ -84,9 +84,9 @@ def test_nested_loops():
 
 @test_utils.test()
 def test_zero_outer_loop():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(0):
             x[None] = 1
@@ -98,9 +98,9 @@ def test_zero_outer_loop():
 
 @test_utils.test()
 def test_zero_inner_loop():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in range(1):
             for j in range(0):
@@ -113,17 +113,17 @@ def test_zero_inner_loop():
 
 @test_utils.test()
 def test_dynamic_loop_range():
-    x = ti.field(ti.i32)
-    c = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    c = qd.field(qd.i32)
     n = 2000
 
-    ti.root.dense(ti.i, n).place(x)
-    ti.root.place(c)
+    qd.root.dense(qd.i, n).place(x)
+    qd.root.place(c)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in x:
-            x[i] = ti.atomic_add(c[None], 1)
+            x[i] = qd.atomic_add(c[None], 1)
         for i in range(c[None], c[None] * 2):
             x[i - n] += c[None]
 
@@ -135,13 +135,13 @@ def test_dynamic_loop_range():
 @test_utils.test()
 def test_loop_arg_as_range():
     # Dynamic range loops are intended to make sure global tmps work
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     n = 1000
 
-    ti.root.dense(ti.i, n).place(x)
+    qd.root.dense(qd.i, n).place(x)
 
-    @ti.kernel
-    def test(b: ti.i32, e: ti.i32):
+    @qd.kernel
+    def test(b: qd.i32, e: qd.i32):
         for i in range(b, e):
             x[i - b] = i
 
@@ -159,10 +159,10 @@ def test_loop_arg_as_range():
 @test_utils.test()
 def test_assignment_in_nested_loops():
     # https://github.com/taichi-dev/quadrants/issues/1109
-    m = ti.field(ti.f32, 3)
-    x = ti.field(ti.f32, ())
+    m = qd.field(qd.f32, 3)
+    x = qd.field(qd.f32, ())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a = x[None]
         for i in m:
@@ -178,8 +178,8 @@ def test_assignment_in_nested_loops():
 
 @test_utils.test(print_full_traceback=False)
 def test_break_in_outermost_for_not_in_outermost_scope():
-    @ti.kernel
-    def foo() -> ti.i32:
+    @qd.kernel
+    def foo() -> qd.i32:
         a = 0
         if True:
             for i in range(1000):
@@ -193,9 +193,9 @@ def test_break_in_outermost_for_not_in_outermost_scope():
 
 @test_utils.test()
 def test_cache_loop_invariant_global_var_in_nested_loops():
-    p = ti.field(float, 1)
+    p = qd.field(float, 1)
 
-    @ti.kernel
+    @qd.kernel
     def k():
         for n in range(1):
             for t in range(2):

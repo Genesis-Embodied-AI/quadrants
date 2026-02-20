@@ -1,19 +1,19 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_kernel_template_basic():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32)
 
     n = 16
 
-    ti.root.dense(ti.i, n).place(x, y)
+    qd.root.dense(qd.i, n).place(x, y)
 
-    @ti.kernel
-    def inc(a: ti.template(), b: ti.template()):
+    @qd.kernel
+    def inc(a: qd.template(), b: qd.template()):
         for i in a:
             a[i] += b
 
@@ -24,8 +24,8 @@ def test_kernel_template_basic():
         assert x[i] == 1
         assert y[i] == 2
 
-    @ti.kernel
-    def inc2(z: ti.i32, a: ti.template(), b: ti.i32):
+    @qd.kernel
+    def inc2(z: qd.i32, a: qd.template(), b: qd.i32):
         for i in a:
             a[i] += b + z
 
@@ -36,29 +36,29 @@ def test_kernel_template_basic():
 
 @test_utils.test()
 def test_kernel_template_gradient():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
-    z = ti.field(ti.f32)
-    loss = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    z = qd.field(qd.f32)
+    loss = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, 16).place(x, y, z)
-    ti.root.place(loss)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.i, 16).place(x, y, z)
+    qd.root.place(loss)
+    qd.root.lazy_grad()
 
-    @ti.kernel
-    def double(a: ti.template(), b: ti.template()):
+    @qd.kernel
+    def double(a: qd.template(), b: qd.template()):
         for i in range(16):
             b[i] = a[i] * 2 + 1
 
-    @ti.kernel
+    @qd.kernel
     def compute_loss():
         for i in range(16):
-            ti.atomic_add(loss[None], z[i])
+            qd.atomic_add(loss[None], z[i])
 
     for i in range(16):
         x[i] = i
 
-    with ti.ad.Tape(loss):
+    with qd.ad.Tape(loss):
         double(x, y)
         double(y, z)
         compute_loss()
@@ -70,24 +70,24 @@ def test_kernel_template_gradient():
 
 @test_utils.test()
 def test_func_template():
-    a = [ti.field(dtype=ti.f32) for _ in range(2)]
-    b = [ti.field(dtype=ti.f32) for _ in range(2)]
+    a = [qd.field(dtype=qd.f32) for _ in range(2)]
+    b = [qd.field(dtype=qd.f32) for _ in range(2)]
 
     for l in range(2):
-        ti.root.dense(ti.ij, 16).place(a[l], b[l])
+        qd.root.dense(qd.ij, 16).place(a[l], b[l])
 
-    @ti.func
-    def sample(x: ti.template(), l: ti.template(), I):
+    @qd.func
+    def sample(x: qd.template(), l: qd.template(), I):
         return x[l][I]
 
-    @ti.kernel
-    def fill(l: ti.template()):
-        for I in ti.grouped(a[l]):
+    @qd.kernel
+    def fill(l: qd.template()):
+        for I in qd.grouped(a[l]):
             a[l][I] = l
 
-    @ti.kernel
-    def aTob(l: ti.template()):
-        for I in ti.grouped(b[l]):
+    @qd.kernel
+    def aTob(l: qd.template()):
+        for I in qd.grouped(b[l]):
             b[l][I] = sample(a, l, I)
 
     for l in range(2):
@@ -102,23 +102,23 @@ def test_func_template():
 
 @test_utils.test()
 def test_func_template2():
-    a = ti.field(dtype=ti.f32)
-    b = ti.field(dtype=ti.f32)
+    a = qd.field(dtype=qd.f32)
+    b = qd.field(dtype=qd.f32)
 
-    ti.root.dense(ti.ij, 16).place(a, b)
+    qd.root.dense(qd.ij, 16).place(a, b)
 
-    @ti.func
-    def sample(x: ti.template(), I):
+    @qd.func
+    def sample(x: qd.template(), I):
         return x[I]
 
-    @ti.kernel
+    @qd.kernel
     def fill():
-        for I in ti.grouped(a):
+        for I in qd.grouped(a):
             a[I] = 1.0
 
-    @ti.kernel
+    @qd.kernel
     def aTob():
-        for I in ti.grouped(b):
+        for I in qd.grouped(b):
             b[I] = sample(a, I)
 
     for l in range(2):

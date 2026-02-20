@@ -1,15 +1,15 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
 
 def _test_pow_f(dt):
-    z = ti.field(dt, shape=())
+    z = qd.field(dt, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func(x: dt, y: dt):
         z[None] = x**y
 
@@ -20,10 +20,10 @@ def _test_pow_f(dt):
 
 
 def _test_pow_i(dt):
-    z = ti.field(dt, shape=())
+    z = qd.field(dt, shape=())
 
-    @ti.kernel
-    def func(x: dt, y: ti.template()):
+    @qd.kernel
+    def func(x: dt, y: qd.template()):
         z[None] = x**y
 
     for x in range(-5, 5):
@@ -34,29 +34,29 @@ def _test_pow_i(dt):
 
 @test_utils.test()
 def test_pow_f32():
-    _test_pow_f(ti.f32)
+    _test_pow_f(qd.f32)
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_pow_f64():
-    _test_pow_f(ti.f64)
+    _test_pow_f(qd.f64)
 
 
 @test_utils.test()
 def test_pow_i32():
-    _test_pow_i(ti.i32)
+    _test_pow_i(qd.i32)
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_pow_i64():
-    _test_pow_i(ti.i64)
+    _test_pow_i(qd.i64)
 
 
 def _ipow_negative_exp(dt):
-    z = ti.field(dt, shape=())
+    z = qd.field(dt, shape=())
 
-    @ti.kernel
-    def foo(x: dt, y: ti.template()):
+    @qd.kernel
+    def foo(x: dt, y: qd.template()):
         z[None] = x**y
 
     with pytest.raises(QuadrantsRuntimeError):
@@ -66,26 +66,26 @@ def _ipow_negative_exp(dt):
 @test_utils.test(
     debug=True,
     advanced_optimization=False,
-    exclude=[ti.vulkan, ti.metal],
+    exclude=[qd.vulkan, qd.metal],
 )
 def test_ipow_negative_exp_i32():
-    _ipow_negative_exp(ti.i32)
+    _ipow_negative_exp(qd.i32)
 
 
 @test_utils.test(
     debug=True,
     advanced_optimization=False,
-    require=ti.extension.data64,
-    exclude=[ti.vulkan, ti.metal],
+    require=qd.extension.data64,
+    exclude=[qd.vulkan, qd.metal],
 )
 def test_ipow_negative_exp_i64():
-    _ipow_negative_exp(ti.i64)
+    _ipow_negative_exp(qd.i64)
 
 
 def _test_pow_int_base_int_exp(dt_base, dt_exp):
-    z = ti.field(dt_base, shape=())
+    z = qd.field(dt_base, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func(x: dt_base, y: dt_exp):
         z[None] = x**y
 
@@ -97,19 +97,19 @@ def _test_pow_int_base_int_exp(dt_base, dt_exp):
 
 @test_utils.test()
 def test_pow_int_base_int_exp_32():
-    _test_pow_int_base_int_exp(ti.i32, ti.i32)
+    _test_pow_int_base_int_exp(qd.i32, qd.i32)
 
 
-@pytest.mark.parametrize("dt_base, dt_exp", [(ti.i32, ti.i64), (ti.i64, ti.i64), (ti.i64, ti.i32)])
-@test_utils.test(require=ti.extension.data64)
+@pytest.mark.parametrize("dt_base, dt_exp", [(qd.i32, qd.i64), (qd.i64, qd.i64), (qd.i64, qd.i32)])
+@test_utils.test(require=qd.extension.data64)
 def test_pow_int_base_int_exp_64(dt_base, dt_exp):
     _test_pow_int_base_int_exp(dt_base, dt_exp)
 
 
 def _test_pow_float_base_int_exp(dt_base, dt_exp):
-    z = ti.field(dt_base, shape=())
+    z = qd.field(dt_base, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func(x: dt_base, y: dt_exp):
         z[None] = x**y
 
@@ -121,10 +121,10 @@ def _test_pow_float_base_int_exp(dt_base, dt_exp):
 
 @test_utils.test()
 def test_pow_float_base_int_exp_32():
-    _test_pow_float_base_int_exp(ti.f32, ti.i32)
+    _test_pow_float_base_int_exp(qd.f32, qd.i32)
 
 
-@pytest.mark.parametrize("dt_base, dt_exp", [(ti.f64, ti.i32), (ti.f32, ti.i64), (ti.f64, ti.i64)])
-@test_utils.test(require=ti.extension.data64)
+@pytest.mark.parametrize("dt_base, dt_exp", [(qd.f64, qd.i32), (qd.f32, qd.i64), (qd.f64, qd.i64)])
+@test_utils.test(require=qd.extension.data64)
 def test_pow_float_base_int_exp_64(dt_base, dt_exp):
     _test_pow_float_base_int_exp(dt_base, dt_exp)

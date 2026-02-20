@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile, mkstemp
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants._lib import core as _ti_core
 from quadrants.lang import cpu, cuda, gpu, metal, vulkan
 from quadrants.lang.misc import is_arch_supported
@@ -19,17 +19,17 @@ from quadrants.lang.misc import is_arch_supported
 def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=False):
     if regerate_groundtruth_images:
         ground_truth_name = f"tests/python/expected/{image_name}.png"
-        ti.tools.imwrite(image, ground_truth_name)
+        qd.tools.imwrite(image, ground_truth_name)
     else:
         ground_truth_name = str(pathlib.Path(__file__).parent) + f"/python/expected/{image_name}.png"
-        ground_truth_np = ti.tools.imread(ground_truth_name)
+        ground_truth_np = qd.tools.imread(ground_truth_name)
 
         # TODO:Fix this on Windows
         with NamedTemporaryFile(suffix=".png") as fp:
             actual_name = fp.name
 
-        ti.tools.imwrite(image, actual_name)
-        actual_np = ti.tools.imread(actual_name)
+        qd.tools.imwrite(image, actual_name)
+        actual_np = qd.tools.imread(actual_name)
 
         assert len(ground_truth_np.shape) == len(actual_np.shape)
         for i in range(len(ground_truth_np.shape)):
@@ -44,8 +44,8 @@ def verify_image(image, image_name, tolerance=0.1, regerate_groundtruth_images=F
 
 
 def get_rel_eps():
-    arch = ti.lang.impl.current_cfg().arch
-    if arch == ti.metal:
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal:
         # Debatable, different hardware could yield different precisions
         # On AMD Radeon Pro 5500M, 1e-6 works fine...
         # https://github.com/taichi-dev/quadrants/pull/1779
@@ -172,12 +172,12 @@ def expected_archs():
 def test(arch=None, exclude=None, require=None, **options):
     """
         Performs tests on archs in `expected_archs()` which are in `arch` and not in `exclude` and satisfy `require`
-    .. function:: ti.test(arch=[], exclude=[], require=[], **options)
+    .. function:: qd.test(arch=[], exclude=[], require=[], **options)
 
         :parameter arch: backends to include
         :parameter exclude: backends and platforms to exclude
         :parameter require: extensions required
-        :parameter options: other options to be passed into ``ti.init``
+        :parameter options: other options to be passed into ``qd.init``
 
     """
 
@@ -247,7 +247,7 @@ def test(arch=None, exclude=None, require=None, **options):
             if not all(_ti_core.is_extension_supported(req_arch, e) for e in require):
                 continue
 
-            if ti.extension.adstack in require:
+            if qd.extension.adstack in require:
                 options["ad_stack_experimental_enabled"] = True
 
             current_options = copy.deepcopy(options)

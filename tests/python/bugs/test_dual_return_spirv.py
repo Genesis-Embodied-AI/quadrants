@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -10,14 +10,14 @@ def test_spirv_dual_return():
     """
     n = 5
 
-    @ti.kernel
+    @qd.kernel
     def k1() -> tuple[bool, bool]:
         a = False
-        for i_b in ti.ndrange(1):
+        for i_b in qd.ndrange(1):
             a = True
 
         b = False
-        for i_b in ti.ndrange(1):
+        for i_b in qd.ndrange(1):
             b = i_b > n
         return a, b
 

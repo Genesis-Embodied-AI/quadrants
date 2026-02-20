@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -7,8 +7,8 @@ from tests import test_utils
 def test_scalar():
     n = 16
 
-    x = ti.field(ti.i32, shape=n)
-    y = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
+    y = qd.field(qd.i32, shape=n)
 
     x[1] = 2
 
@@ -28,7 +28,7 @@ def test_scalar():
 
 @test_utils.test()
 def test_struct():
-    @ti.dataclass
+    @qd.dataclass
     class C:
         i: int
         f: float

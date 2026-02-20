@@ -3,7 +3,7 @@ import operator as ops
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -24,35 +24,35 @@ binary_func_table = [
     (ops.le,) * 2,
     (ops.gt,) * 2,
     (ops.ge,) * 2,
-    (ti.max, np.maximum),
-    (ti.min, np.minimum),
-    (ti.atan2, np.arctan2),
+    (qd.max, np.maximum),
+    (qd.min, np.minimum),
+    (qd.atan2, np.arctan2),
 ]
 
 unary_func_table = [
     (ops.neg,) * 2,
     (ops.invert,) * 2,
-    (ti.lang.ops.logical_not, np.logical_not),
-    (ti.lang.ops.abs, np.abs),
-    (ti.exp, np.exp),
-    (ti.log, np.log),
-    (ti.sin, np.sin),
-    (ti.cos, np.cos),
-    (ti.tan, np.tan),
-    (ti.asin, np.arcsin),
-    (ti.acos, np.arccos),
-    (ti.tanh, np.tanh),
-    (ti.round, np.round),
-    (ti.floor, np.floor),
-    (ti.ceil, np.ceil),
+    (qd.lang.ops.logical_not, np.logical_not),
+    (qd.lang.ops.abs, np.abs),
+    (qd.exp, np.exp),
+    (qd.log, np.log),
+    (qd.sin, np.sin),
+    (qd.cos, np.cos),
+    (qd.tan, np.tan),
+    (qd.asin, np.arcsin),
+    (qd.acos, np.arccos),
+    (qd.tanh, np.tanh),
+    (qd.round, np.round),
+    (qd.floor, np.floor),
+    (qd.ceil, np.ceil),
 ]
 
 
 @pytest.mark.parametrize("ti_func,np_func", binary_func_table)
 def test_python_scope_vector_binary(ti_func, np_func):
-    ti.init()
-    x = ti.Vector([2, 3])
-    y = ti.Vector([5, 4])
+    qd.init()
+    x = qd.Vector([2, 3])
+    y = qd.Vector([5, 4])
 
     result = ti_func(x, y).to_numpy()
     if ti_func in [ops.eq, ops.ne, ops.lt, ops.le, ops.gt, ops.ge]:
@@ -63,22 +63,22 @@ def test_python_scope_vector_binary(ti_func, np_func):
 
 @pytest.mark.parametrize("ti_func,np_func", unary_func_table)
 def test_python_scope_vector_unary(ti_func, np_func):
-    ti.init()
-    x = ti.Vector([2, 3] if ti_func in [ops.invert, ti.lang.ops.logical_not] else [0.2, 0.3])
+    qd.init()
+    x = qd.Vector([2, 3] if ti_func in [ops.invert, qd.lang.ops.logical_not] else [0.2, 0.3])
 
     result = ti_func(x).to_numpy()
-    if ti_func in [ti.lang.ops.logical_not]:
+    if ti_func in [qd.lang.ops.logical_not]:
         result = result.astype(bool)
     expected = np_func(x.to_numpy())
     assert test_utils.allclose(result, expected)
 
 
 def test_python_scope_matmul():
-    ti.init()
+    qd.init()
     a = np.array([[1, 2], [3, 4]])
     b = np.array([[5, 6], [7, 8]])
-    x = ti.Matrix(a)
-    y = ti.Matrix(b)
+    x = qd.Matrix(a)
+    y = qd.Matrix(b)
 
     result = (x @ y).to_numpy()
     expected = a @ b
@@ -86,11 +86,11 @@ def test_python_scope_matmul():
 
 
 def test_python_scope_linalg():
-    ti.init()
+    qd.init()
     a = np.array([3, 4, -2])
     b = np.array([-5, 0, 6])
-    x = ti.Vector(a)
-    y = ti.Vector(b)
+    x = qd.Vector(a)
+    y = qd.Vector(b)
 
     assert test_utils.allclose(x.dot(y), np.dot(a, b))
     assert test_utils.allclose(x.norm(), np.sqrt(np.dot(a, a)))
@@ -99,23 +99,23 @@ def test_python_scope_linalg():
     assert y.all() == 0
 
 
-@test_utils.test(arch=[ti.x64, ti.cuda, ti.metal])
+@test_utils.test(arch=[qd.x64, qd.cuda, qd.metal])
 def test_16_min_max():
-    @ti.kernel
-    def min_u16(a: ti.u16, b: ti.u16) -> ti.u16:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_u16(a: qd.u16, b: qd.u16) -> qd.u16:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def min_i16(a: ti.i16, b: ti.i16) -> ti.i16:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_i16(a: qd.i16, b: qd.i16) -> qd.i16:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def max_u16(a: ti.u16, b: ti.u16) -> ti.u16:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_u16(a: qd.u16, b: qd.u16) -> qd.u16:
+        return qd.max(a, b)
 
-    @ti.kernel
-    def max_i16(a: ti.i16, b: ti.i16) -> ti.i16:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_i16(a: qd.i16, b: qd.i16) -> qd.i16:
+        return qd.max(a, b)
 
     a, b = 4, 2
     assert min_u16(a, b) == min(a, b)
@@ -126,21 +126,21 @@ def test_16_min_max():
 
 @test_utils.test()
 def test_32_min_max():
-    @ti.kernel
-    def min_u32(a: ti.u32, b: ti.u32) -> ti.u32:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_u32(a: qd.u32, b: qd.u32) -> qd.u32:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def min_i32(a: ti.i32, b: ti.i32) -> ti.i32:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_i32(a: qd.i32, b: qd.i32) -> qd.i32:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def max_u32(a: ti.u32, b: ti.u32) -> ti.u32:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_u32(a: qd.u32, b: qd.u32) -> qd.u32:
+        return qd.max(a, b)
 
-    @ti.kernel
-    def max_i32(a: ti.i32, b: ti.i32) -> ti.i32:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_i32(a: qd.i32, b: qd.i32) -> qd.i32:
+        return qd.max(a, b)
 
     a, b = 4, 2
     assert min_u32(a, b) == min(a, b)
@@ -149,23 +149,23 @@ def test_32_min_max():
     assert max_i32(a, b) == max(a, b)
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_64_min_max():
-    @ti.kernel
-    def min_u64(a: ti.u64, b: ti.u64) -> ti.u64:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_u64(a: qd.u64, b: qd.u64) -> qd.u64:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def min_i64(a: ti.i64, b: ti.i64) -> ti.i64:
-        return ti.min(a, b)
+    @qd.kernel
+    def min_i64(a: qd.i64, b: qd.i64) -> qd.i64:
+        return qd.min(a, b)
 
-    @ti.kernel
-    def max_u64(a: ti.u64, b: ti.u64) -> ti.u64:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_u64(a: qd.u64, b: qd.u64) -> qd.u64:
+        return qd.max(a, b)
 
-    @ti.kernel
-    def max_i64(a: ti.i64, b: ti.i64) -> ti.i64:
-        return ti.max(a, b)
+    @qd.kernel
+    def max_i64(a: qd.i64, b: qd.i64) -> qd.i64:
+        return qd.max(a, b)
 
     a, b = 4, 2
     assert min_u64(a, b) == min(a, b)
@@ -176,17 +176,17 @@ def test_64_min_max():
 
 @test_utils.test()
 def test_min_max_vector_starred():
-    @ti.kernel
-    def min_starred() -> ti.i32:
-        a = ti.Vector([1, 2, 3])
-        b = ti.Vector([4, 5, 6])
-        return ti.min(*a, *b)
+    @qd.kernel
+    def min_starred() -> qd.i32:
+        a = qd.Vector([1, 2, 3])
+        b = qd.Vector([4, 5, 6])
+        return qd.min(*a, *b)
 
-    @ti.kernel
-    def max_starred() -> ti.i32:
-        a = ti.Vector([1, 2, 3])
-        b = ti.Vector([4, 5, 6])
-        return ti.max(*a, *b)
+    @qd.kernel
+    def max_starred() -> qd.i32:
+        a = qd.Vector([1, 2, 3])
+        b = qd.Vector([4, 5, 6])
+        return qd.max(*a, *b)
 
     assert min_starred() == 1
     assert max_starred() == 6

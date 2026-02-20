@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -6,15 +6,15 @@ from tests import test_utils
 @test_utils.test()
 def test_kernel_sync():
     n = 128
-    x = ti.field(ti.i32, shape=(3,))
-    y = ti.field(ti.i32, shape=(n,))
+    x = qd.field(qd.i32, shape=(3,))
+    y = qd.field(qd.i32, shape=(n,))
     # These [] calls are all on CPU, so no synchronization needed
     x[0] = 42
     assert x[0] == 42
     x[1] = 233
     x[2] = -1
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in y:
             y[i] = x[i % 3]

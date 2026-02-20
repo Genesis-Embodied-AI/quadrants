@@ -1,14 +1,14 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_advanced_store_forwarding_nested_loops():
-    val = ti.field(ti.i32)
-    ti.root.place(val)
+    val = qd.field(qd.i32)
+    qd.root.place(val)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         # If we want to do store-forwarding to local loads inside loops,
         # we should pass the last local store into the loop, rather than use
@@ -26,10 +26,10 @@ def test_advanced_store_forwarding_nested_loops():
 
 @test_utils.test()
 def test_advanced_unused_store_elimination_if():
-    val = ti.field(ti.i32)
-    ti.root.place(val)
+    val = qd.field(qd.i32)
+    qd.root.place(val)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a = 1
         if val[None]:
@@ -52,19 +52,19 @@ def test_advanced_unused_store_elimination_if():
 @test_utils.test()
 def test_local_store_in_nested_for_and_if():
     # See https://github.com/taichi-dev/quadrants/pull/862.
-    val = ti.field(ti.i32, shape=(3, 3, 3))
+    val = qd.field(qd.i32, shape=(3, 3, 3))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i, j, k in val:
             if i < 2 and j < 2 and k < 2:
                 a = 0
-                for di, dj, dk in ti.ndrange((0, 2), (0, 2), (0, 2)):
+                for di, dj, dk in qd.ndrange((0, 2), (0, 2), (0, 2)):
                     if val[i + di, j + dj, k + dk] == 1:
                         a = val[i + di, j + dj, k + dk]
 
-                for di, dj, dk in ti.ndrange((0, 2), (0, 2), (0, 2)):
+                for di, dj, dk in qd.ndrange((0, 2), (0, 2), (0, 2)):
                     val[i + di, j + dj, k + dk] = a
 
     val[1, 1, 1] = 1
@@ -78,11 +78,11 @@ def test_local_store_in_nested_for_and_if():
 
 @test_utils.test()
 def test_advanced_store_forwarding_continue_in_if():
-    val = ti.field(ti.i32)
-    ti.root.place(val)
+    val = qd.field(qd.i32)
+    qd.root.place(val)
 
-    @ti.kernel
-    def func(n: ti.i32):
+    @qd.kernel
+    def func(n: qd.i32):
         # Launch just one thread
         for _ in range(1):
             a = 10
@@ -108,10 +108,10 @@ def test_advanced_store_forwarding_continue_in_if():
 
 @test_utils.test()
 def test_advanced_store_elimination_in_loop():
-    val = ti.field(ti.i32)
-    ti.root.place(val)
+    val = qd.field(qd.i32)
+    qd.root.place(val)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         # Launch just one thread
         for _ in range(1):
@@ -131,12 +131,12 @@ def test_advanced_store_elimination_in_loop():
 
 @test_utils.test()
 def test_parallel_assignment():
-    mat = ti.field(ti.i32, shape=(3, 4))
+    mat = qd.field(qd.i32, shape=(3, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         c = 0
-        for i in ti.static(range(4)):
+        for i in qd.static(range(4)):
             mat[0, c], mat[1, c], mat[2, c] = 1, 2, 3
             c += 1
 
@@ -148,22 +148,22 @@ def test_parallel_assignment():
 
 @test_utils.test()
 def test_casts_int_uint():
-    @ti.kernel
-    def my_cast(x: ti.f32) -> ti.u32:
-        y = ti.floor(x, ti.i32)
-        return ti.cast(y, ti.u32)
+    @qd.kernel
+    def my_cast(x: qd.f32) -> qd.u32:
+        y = qd.floor(x, qd.i32)
+        return qd.cast(y, qd.u32)
 
     assert my_cast(-1) == 4294967295
 
 
 @test_utils.test()
 def test_negative_exp():
-    @ti.dataclass
+    @qd.dataclass
     class Particle:
-        epsilon: ti.f32
+        epsilon: qd.f32
 
-    @ti.kernel
-    def test() -> ti.f32:
+    @qd.kernel
+    def test() -> qd.f32:
         p1 = Particle()
         p1.epsilon = 1.0
         e = p1.epsilon

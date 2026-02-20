@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -13,14 +13,14 @@ def test_order_scalar():
     Z = 4
     S = 4
 
-    a = ti.field(ti.i32, shape=(X, Y, Z), order="ijk")
-    b = ti.field(ti.i32, shape=(X, Y, Z), order="ikj")
-    c = ti.field(ti.i32, shape=(X, Y, Z), order="jik")
-    d = ti.field(ti.i32, shape=(X, Y, Z), order="jki")
-    e = ti.field(ti.i32, shape=(X, Y, Z), order="kij")
-    f = ti.field(ti.i32, shape=(X, Y, Z), order="kji")
+    a = qd.field(qd.i32, shape=(X, Y, Z), order="ijk")
+    b = qd.field(qd.i32, shape=(X, Y, Z), order="ikj")
+    c = qd.field(qd.i32, shape=(X, Y, Z), order="jik")
+    d = qd.field(qd.i32, shape=(X, Y, Z), order="jki")
+    e = qd.field(qd.i32, shape=(X, Y, Z), order="kij")
+    f = qd.field(qd.i32, shape=(X, Y, Z), order="kji")
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i, j, k in b:
             a[i, j, k] = i * j * k
@@ -30,9 +30,9 @@ def test_order_scalar():
             e[i, j, k] = i * j * k
             f[i, j, k] = i * j * k
 
-    @ti.kernel
-    def get_field_addr(a: ti.template(), i: ti.i32, j: ti.i32, k: ti.i32) -> ti.u64:
-        return ti.get_addr(a, [i, j, k])
+    @qd.kernel
+    def get_field_addr(a: qd.template(), i: qd.i32, j: qd.i32, k: qd.i32) -> qd.u64:
+        return qd.get_addr(a, [i, j, k])
 
     fill()
 
@@ -62,12 +62,12 @@ def test_order_vector():
     Z = 2
     S = 4
 
-    a = ti.Vector.field(Z, ti.i32, shape=(X, Y), order="ij", layout=ti.Layout.AOS)
-    b = ti.Vector.field(Z, ti.i32, shape=(X, Y), order="ji", layout=ti.Layout.AOS)
-    c = ti.Vector.field(Z, ti.i32, shape=(X, Y), order="ij", layout=ti.Layout.SOA)
-    d = ti.Vector.field(Z, ti.i32, shape=(X, Y), order="ji", layout=ti.Layout.SOA)
+    a = qd.Vector.field(Z, qd.i32, shape=(X, Y), order="ij", layout=qd.Layout.AOS)
+    b = qd.Vector.field(Z, qd.i32, shape=(X, Y), order="ji", layout=qd.Layout.AOS)
+    c = qd.Vector.field(Z, qd.i32, shape=(X, Y), order="ij", layout=qd.Layout.SOA)
+    d = qd.Vector.field(Z, qd.i32, shape=(X, Y), order="ji", layout=qd.Layout.SOA)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i, j in b:
             a[i, j] = [i, j]
@@ -75,9 +75,9 @@ def test_order_vector():
             c[i, j] = [i, j]
             d[i, j] = [i, j]
 
-    @ti.kernel
-    def get_field_addr(a: ti.template(), i: ti.i32, j: ti.i32) -> ti.u64:
-        return ti.get_addr(a, [i, j])
+    @qd.kernel
+    def get_field_addr(a: qd.template(), i: qd.i32, j: qd.i32) -> qd.u64:
+        return qd.get_addr(a, [i, j])
 
     fill()
 
@@ -98,28 +98,28 @@ def test_order_vector():
 @test_utils.test(arch=get_host_arch_list())
 def test_order_must_throw_scalar():
     with pytest.raises(
-        ti.QuadrantsCompilationError,
+        qd.QuadrantsCompilationError,
         match="The dimensionality of shape and order must be the same",
     ):
-        a = ti.field(dtype=ti.f32, shape=3, order="ij")
-    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when order is set"):
-        b = ti.field(dtype=ti.f32, shape=None, order="i")
-    with pytest.raises(ti.QuadrantsCompilationError, match="The axes in order must be different"):
-        c = ti.field(dtype=ti.f32, shape=(3, 4, 3), order="iji")
-    with pytest.raises(ti.QuadrantsCompilationError, match="Invalid axis"):
-        d = ti.field(dtype=ti.f32, shape=(3, 4, 3), order="ijl")
+        a = qd.field(dtype=qd.f32, shape=3, order="ij")
+    with pytest.raises(qd.QuadrantsCompilationError, match="shape cannot be None when order is set"):
+        b = qd.field(dtype=qd.f32, shape=None, order="i")
+    with pytest.raises(qd.QuadrantsCompilationError, match="The axes in order must be different"):
+        c = qd.field(dtype=qd.f32, shape=(3, 4, 3), order="iji")
+    with pytest.raises(qd.QuadrantsCompilationError, match="Invalid axis"):
+        d = qd.field(dtype=qd.f32, shape=(3, 4, 3), order="ijl")
 
 
 @test_utils.test(arch=get_host_arch_list())
 def test_order_must_throw_vector():
     with pytest.raises(
-        ti.QuadrantsCompilationError,
+        qd.QuadrantsCompilationError,
         match="The dimensionality of shape and order must be the same",
     ):
-        a = ti.Vector.field(3, dtype=ti.f32, shape=3, order="ij")
-    with pytest.raises(ti.QuadrantsCompilationError, match="shape cannot be None when order is set"):
-        b = ti.Vector.field(3, dtype=ti.f32, shape=None, order="i")
-    with pytest.raises(ti.QuadrantsCompilationError, match="The axes in order must be different"):
-        c = ti.Vector.field(3, dtype=ti.f32, shape=(3, 4, 3), order="iii")
-    with pytest.raises(ti.QuadrantsCompilationError, match="Invalid axis"):
-        d = ti.Vector.field(3, dtype=ti.f32, shape=(3, 4, 3), order="ihj")
+        a = qd.Vector.field(3, dtype=qd.f32, shape=3, order="ij")
+    with pytest.raises(qd.QuadrantsCompilationError, match="shape cannot be None when order is set"):
+        b = qd.Vector.field(3, dtype=qd.f32, shape=None, order="i")
+    with pytest.raises(qd.QuadrantsCompilationError, match="The axes in order must be different"):
+        c = qd.Vector.field(3, dtype=qd.f32, shape=(3, 4, 3), order="iii")
+    with pytest.raises(qd.QuadrantsCompilationError, match="Invalid axis"):
+        d = qd.Vector.field(3, dtype=qd.f32, shape=(3, 4, 3), order="ihj")

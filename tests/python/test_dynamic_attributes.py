@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 def _test_dynamic_attributes(dt):
     n = 10
-    x = ti.field(int)
-    block = ti.root.dense(ti.i, n)
-    pixel = block.dynamic(ti.j, n)
+    x = qd.field(int)
+    block = qd.root.dense(qd.i, n)
+    pixel = block.dynamic(qd.j, n)
     pixel.place(x)
 
-    y = ti.field(int)
-    row = ti.root.dynamic(ti.i, n)
+    y = qd.field(int)
+    row = qd.root.dynamic(qd.i, n)
     row.place(y)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         # test append for depth 2 snode
         for i in range(n):
@@ -40,7 +40,7 @@ def _test_dynamic_attributes(dt):
         # appending elements to fully active cells will take no effect
         y.deactivate()
         for j in range(n):
-            ti.append(y.parent(), [], j * j)
+            qd.append(y.parent(), [], j * j)
             assert y[j] == j * j
 
         # test deactivate for depth 1 snode in both two ways
@@ -49,13 +49,13 @@ def _test_dynamic_attributes(dt):
             assert y[j] == 0
             y[j] = j
 
-        ti.deactivate(y.parent(), [])
+        qd.deactivate(y.parent(), [])
         for j in range(n):
             assert y[j] == 0
 
     test()
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal], default_fp=ti.f32, debug=True)
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal], default_fp=qd.f32, debug=True)
 def test_dynamic_attributes_f32():
-    _test_dynamic_attributes(ti.f32)
+    _test_dynamic_attributes(qd.f32)

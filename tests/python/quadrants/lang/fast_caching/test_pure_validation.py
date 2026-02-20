@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -13,96 +13,96 @@ from tests import test_utils
 def test_pure_validation_prim():
     a = 2
 
-    @ti.kernel
+    @qd.kernel
     def k1():
         print(a)
 
     k1()
 
-    @ti.pure
-    @ti.kernel
-    def k1b(a: ti.i32):
+    @qd.pure
+    @qd.kernel
+    def k1b(a: qd.i32):
         print(a)
 
     k1b(a)
 
-    @ti.pure
-    @ti.kernel
-    def k1c(a: ti.Template):
+    @qd.pure
+    @qd.kernel
+    def k1c(a: qd.Template):
         print(a)
 
     k1c(a)
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k2():
         print(a)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         k2()
 
 
 @test_utils.test()
 def test_pure_validation_field():
-    a = ti.field(ti.i32, (10,))
+    a = qd.field(qd.i32, (10,))
 
-    @ti.kernel
+    @qd.kernel
     def k1_f():
         print(a[0])
 
     k1_f()
 
-    @ti.pure
-    @ti.kernel
-    def k1c_f(a: ti.Template):
+    @qd.pure
+    @qd.kernel
+    def k1c_f(a: qd.Template):
         print(a[0])
 
     k1c_f(a)
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k2_f():
         print(a[0])
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         k2_f()
 
 
 @test_utils.test()
 def test_pure_validation_field_child():
-    a = ti.field(ti.i32, (10,))
+    a = qd.field(qd.i32, (10,))
 
-    @ti.func
+    @qd.func
     def k1_f():
         print(a[0])
 
-    @ti.kernel
+    @qd.kernel
     def k1():
         k1_f()
 
     k1()
 
-    @ti.func
-    def k1c_f(a: ti.Template):
+    @qd.func
+    def k1c_f(a: qd.Template):
         print(a[0])
 
-    @ti.pure
-    @ti.kernel
-    def k1c(a: ti.Template):
+    @qd.pure
+    @qd.kernel
+    def k1c(a: qd.Template):
         k1c_f(a)
 
     k1c(a)
 
-    @ti.func
+    @qd.func
     def k2_f():
         print(a[0])
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k2():
         k2_f()
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         k2()
 
 
@@ -110,18 +110,18 @@ def test_pure_validation_field_child():
 def test_pure_validation_data_oriented_not_param():
     # When the data oriented arrives into the kernel without being passed in as a parameter,
     # to the kernel, that's a pure violation
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None:
-            self.b = ti.field(ti.i32, (10,))
+            self.b = qd.field(qd.i32, (10,))
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k1() -> None:
         my_do.b[0] = 5
 
     my_do = MyDataOriented()
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         k1()
 
 
@@ -129,14 +129,14 @@ def test_pure_validation_data_oriented_not_param():
 def test_pure_validation_data_oriented_as_param():
     # When the data oriented arrives into the kernel as a parameter,
     # to the kernel, that's ok
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None:
-            self.b = ti.field(ti.i32, (10,))
+            self.b = qd.field(qd.i32, (10,))
 
-    @ti.pure
-    @ti.kernel
-    def k1(my_data_oriented: ti.template()) -> None:
+    @qd.pure
+    @qd.kernel
+    def k1(my_data_oriented: qd.template()) -> None:
         my_data_oriented.b[0] = 5
 
     my_do = MyDataOriented()
@@ -149,8 +149,8 @@ def test_pure_validation_enum():
         foo = 1
         bar = 2
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.i32:
+    @qd.kernel(pure=True)
+    def k1() -> qd.i32:
         return MyEnum.bar
 
     v = k1()
@@ -163,9 +163,9 @@ def test_pure_validation_builtin_values_inf():
         foo = 1
         bar = 2
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
-        return ti.math.inf
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
+        return qd.math.inf
 
     v = k1()
     assert v > 1e8
@@ -177,9 +177,9 @@ def test_pure_validation_builtin_values_ti_pi():
         foo = 1
         bar = 2
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
-        return ti.math.pi
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
+        return qd.math.pi
 
     v = k1()
     assert int(k1() * 100) == 314
@@ -191,8 +191,8 @@ def test_pure_validation_builtin_values_np_pi():
         foo = 1
         bar = 2
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
         return np.pi
 
     v = k1()
@@ -205,8 +205,8 @@ def test_pure_validation_builtin_values_math_pi():
         foo = 1
         bar = 2
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
         return math.pi
 
     assert int(k1() * 100) == 314
@@ -216,24 +216,24 @@ def test_pure_validation_builtin_values_math_pi():
 def test_pure_validation_actual_violation_exceptoin():
     a = 5
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
         return a
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         k1()
 
 
 @test_utils.test()
 def test_pure_validation_actual_violation_warning():
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch
-    ti.init(arch=arch, offline_cache=False)
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch
+    qd.init(arch=arch, offline_cache=False)
 
     SOME_GLOBAL = 5
 
-    @ti.kernel(pure=True)
-    def k1() -> ti.f32:
+    @qd.kernel(pure=True)
+    def k1() -> qd.f32:
         return SOME_GLOBAL
 
     with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
@@ -245,8 +245,8 @@ def test_pure_validation_actual_violation_warning():
 
     foo = Foo()
 
-    @ti.kernel(pure=True)
-    def k2() -> ti.f32:
+    @qd.kernel(pure=True)
+    def k2() -> qd.f32:
         return foo.BAR
 
     with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):

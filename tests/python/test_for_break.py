@@ -1,15 +1,15 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_for_break():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     N, M = 4, 4
-    ti.root.dense(ti.ij, (N, M)).place(x)
+    qd.root.dense(qd.ij, (N, M)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             for j in range(M):
@@ -28,11 +28,11 @@ def test_for_break():
 
 @test_utils.test()
 def test_for_break2():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     N, M = 8, 8
-    ti.root.dense(ti.ij, (N, M)).place(x)
+    qd.root.dense(qd.ij, (N, M)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             for j in range(M):
@@ -49,13 +49,13 @@ def test_for_break2():
                 assert x[i, j] == 100 * i + j
 
 
-@test_utils.test(exclude=ti.vulkan)
+@test_utils.test(exclude=qd.vulkan)
 def test_for_break3():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     N, M = 8, 8
-    ti.root.dense(ti.ij, (N, M)).place(x)
+    qd.root.dense(qd.ij, (N, M)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             for j in range(i, M - i):
@@ -74,11 +74,11 @@ def test_for_break3():
 
 @test_utils.test()
 def test_for_break_complex():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
     N, M = 16, 32
-    ti.root.dense(ti.ij, (N, M)).place(x)
+    qd.root.dense(qd.ij, (N, M)).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(1, N):
             for j in range(3, M):
@@ -97,11 +97,11 @@ def test_for_break_complex():
 
 @test_utils.test()
 def test_serial_for_with_break_and_continue():
-    @ti.kernel
-    def test_kernel() -> ti.i32:
+    @qd.kernel
+    def test_kernel() -> qd.i32:
         stop = 0
         sum = 0
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(10):
             if i % 2 == 0:
                 continue
@@ -115,12 +115,12 @@ def test_serial_for_with_break_and_continue():
 
 @test_utils.test()
 def test_write_after_break():
-    a = ti.field(ti.i32, shape=5)
+    a = qd.field(qd.i32, shape=5)
     a.fill(-1)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(5):
             while True:
                 if i > 3:

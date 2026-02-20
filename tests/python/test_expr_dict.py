@@ -1,11 +1,11 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_expr_dict_basic():
-    @ti.kernel
+    @qd.kernel
     def func(u: int, v: float) -> float:
         x = {"foo": 2 + u, "bar": 3 + v}
         return x["foo"] * 100 + x["bar"]
@@ -13,11 +13,11 @@ def test_expr_dict_basic():
     assert func(2, 0.1) == test_utils.approx(403.1)
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_expr_dict_field():
-    a = ti.field(ti.f32, shape=(4,))
+    a = qd.field(qd.f32, shape=(4,))
 
-    @ti.kernel
+    @qd.kernel
     def func() -> float:
         x = {"foo": 2 + a[0], "bar": 3 + a[1]}
         return x["foo"] * 100 + x["bar"]
@@ -27,13 +27,13 @@ def test_expr_dict_field():
     assert func() == test_utils.approx(403.1)
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_dictcomp_multiple_ifs():
     n = 8
-    x = ti.field(ti.i32, shape=(n,))
+    x = qd.field(qd.i32, shape=(n,))
 
-    @ti.kernel
-    def test() -> ti.i32:
+    @qd.kernel
+    def test() -> qd.i32:
         # Quadrants doesn't support global fields appearing anywhere after "for"
         # here.
         a = {x[j]: x[j] + j for j in range(100) if j > 2 if j < 5}

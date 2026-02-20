@@ -1,43 +1,43 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_argument_error():
-    x = ti.field(ti.i32)
+    x = qd.field(qd.i32)
 
-    ti.root.place(x)
+    qd.root.place(x)
 
     try:
 
-        @ti.kernel
+        @qd.kernel
         def set_i32_notype(v):
             pass
 
-    except ti.QuadrantsSyntaxError:
+    except qd.QuadrantsSyntaxError:
         pass
 
     try:
 
-        @ti.kernel
+        @qd.kernel
         def set_i32_args(*args):
             pass
 
-    except ti.QuadrantsSyntaxError:
+    except qd.QuadrantsSyntaxError:
         pass
 
     try:
 
-        @ti.kernel
+        @qd.kernel
         def set_i32_kwargs(**kwargs):
             pass
 
-    except ti.QuadrantsSyntaxError:
+    except qd.QuadrantsSyntaxError:
         pass
 
-    @ti.kernel
-    def set_i32(v: ti.i32):
+    @qd.kernel
+    def set_i32(v: qd.i32):
         x[None] = v
 
     set_i32(123)

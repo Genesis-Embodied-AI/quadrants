@@ -1,20 +1,20 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.quant_basic)
+@test_utils.test(require=qd.extension.quant_basic)
 def test_quant_int_implicit_cast():
-    qi13 = ti.types.quant.int(13, True)
-    x = ti.field(dtype=qi13)
+    qi13 = qd.types.quant.int(13, True)
+    x = qd.field(dtype=qi13)
 
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
-    ti.root.place(bitpack)
+    qd.root.place(bitpack)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         x[None] = 10.3
 
@@ -23,26 +23,26 @@ def test_quant_int_implicit_cast():
 
 
 @test_utils.test(
-    require=ti.extension.quant_basic,
+    require=qd.extension.quant_basic,
 )
 def test_quant_store_fusion() -> None:
-    x = ti.field(dtype=ti.types.quant.int(16, True))
-    y = ti.field(dtype=ti.types.quant.int(16, True))
-    v = ti.BitpackedFields(max_num_bits=32)
+    x = qd.field(dtype=qd.types.quant.int(16, True))
+    y = qd.field(dtype=qd.types.quant.int(16, True))
+    v = qd.BitpackedFields(max_num_bits=32)
     v.place(x, y)
-    ti.root.dense(ti.i, 10).place(v)
+    qd.root.dense(qd.i, 10).place(v)
 
-    z = ti.field(dtype=ti.i32, shape=(10, 2))
+    z = qd.field(dtype=qd.i32, shape=(10, 2))
 
-    @ti.real_func
-    def probe(x: ti.template(), z: ti.template(), i: int, j: int) -> None:
+    @qd.real_func
+    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
         z[i, j] = x[i]
 
     # should fuse store
     # note: don't think this actually tests that store is fused?
-    @ti.kernel
+    @qd.kernel
     def store():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(10):
             x[i] = i
             y[i] = i + 1
@@ -50,7 +50,7 @@ def test_quant_store_fusion() -> None:
             probe(y, z, i, 1)
 
     store()
-    ti.sync()
+    qd.sync()
 
     print("z", z.to_numpy())
 
@@ -65,24 +65,24 @@ def test_quant_store_fusion() -> None:
     reason="Bug in store fusion. TODO: fix this. Logged at https://linear.app/genesis-ai-company/issue/CMP-57/fuse-store-bug-for-16-bit-quantization"
 )
 @test_utils.test(
-    require=ti.extension.quant_basic,
+    require=qd.extension.quant_basic,
 )
 def test_quant_store_no_fusion() -> None:
-    x = ti.field(dtype=ti.types.quant.int(16, True))
-    y = ti.field(dtype=ti.types.quant.int(16, True))
-    v = ti.BitpackedFields(max_num_bits=32)
+    x = qd.field(dtype=qd.types.quant.int(16, True))
+    y = qd.field(dtype=qd.types.quant.int(16, True))
+    v = qd.BitpackedFields(max_num_bits=32)
     v.place(x, y)
-    ti.root.dense(ti.i, 10).place(v)
+    qd.root.dense(qd.i, 10).place(v)
 
-    z = ti.field(dtype=ti.i32, shape=(10, 2))
+    z = qd.field(dtype=qd.i32, shape=(10, 2))
 
-    @ti.real_func
-    def probe(x: ti.template(), z: ti.template(), i: int, j: int) -> None:
+    @qd.real_func
+    def probe(x: qd.template(), z: qd.template(), i: int, j: int) -> None:
         z[i, j] = x[i]
 
-    @ti.kernel
+    @qd.kernel
     def store():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i in range(10):
             x[i] = i
             probe(x, z, i, 0)
@@ -90,7 +90,7 @@ def test_quant_store_no_fusion() -> None:
             probe(y, z, i, 1)
 
     store()
-    ti.sync()
+    qd.sync()
 
     print("z", z.to_numpy())
 

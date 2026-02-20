@@ -1,24 +1,24 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.pointer(ti.i, n).dense(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.pointer(qd.i, n).dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def activate():
         for i in range(n):
             x[i * n] = 0
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -28,22 +28,22 @@ def test_pointer():
     assert s[None] == n * n
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer2():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.pointer(ti.i, n).dense(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.pointer(qd.i, n).dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def activate():
         for i in range(n * n):
             x[i] = i
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += i
@@ -54,23 +54,23 @@ def test_pointer2():
     assert s[None] == N * (N - 1) / 2
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_nested_struct_fill_and_clear():
-    a = ti.field(dtype=ti.f32)
+    a = qd.field(dtype=qd.f32)
     N = 512
 
-    ptr = ti.root.pointer(ti.ij, [N, N])
-    ptr.dense(ti.ij, [8, 8]).place(a)
+    ptr = qd.root.pointer(qd.ij, [N, N])
+    ptr.dense(qd.ij, [8, 8]).place(a)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
-        for i, j in ti.ndrange(N * 8, N * 8):
+        for i, j in qd.ndrange(N * 8, N * 8):
             a[i, j] = 2.0
 
-    @ti.kernel
+    @qd.kernel
     def clear():
         for i, j in a.parent():
-            ti.deactivate(ptr, ti.rescale_index(a, ptr, [i, j]))
+            qd.deactivate(ptr, qd.rescale_index(a, ptr, [i, j]))
 
     def task():
         fill()
@@ -78,4 +78,4 @@ def test_nested_struct_fill_and_clear():
 
     for i in range(10):
         task()
-        ti.sync()
+        qd.sync()

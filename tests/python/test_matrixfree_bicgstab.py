@@ -2,32 +2,32 @@ import math
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.linalg import LinearOperator, MatrixFreeBICGSTAB
 
 from tests import test_utils
 
-vk_on_mac = (ti.vulkan, "Darwin")
+vk_on_mac = (qd.vulkan, "Darwin")
 
 
-@pytest.mark.parametrize("ti_dtype", [ti.f32, ti.f64])
-@test_utils.test(arch=[ti.cpu, ti.cuda, ti.vulkan], exclude=[vk_on_mac])
+@pytest.mark.parametrize("ti_dtype", [qd.f32, qd.f64])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac])
 def test_matrixfree_bicgstab(ti_dtype):
     GRID = 32
-    Ax = ti.field(dtype=ti_dtype, shape=(GRID, GRID))
-    x = ti.field(dtype=ti_dtype, shape=(GRID, GRID))
-    b = ti.field(dtype=ti_dtype, shape=(GRID, GRID))
+    Ax = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
+    x = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
+    b = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        for i, j in ti.ndrange(GRID, GRID):
+        for i, j in qd.ndrange(GRID, GRID):
             xl = i / (GRID - 1)
             yl = j / (GRID - 1)
-            b[i, j] = ti.sin(2 * math.pi * xl) * ti.sin(2 * math.pi * yl)
+            b[i, j] = qd.sin(2 * math.pi * xl) * qd.sin(2 * math.pi * yl)
             x[i, j] = 0.0
 
-    @ti.kernel
-    def compute_Ax(v: ti.template(), mv: ti.template()):
+    @qd.kernel
+    def compute_Ax(v: qd.template(), mv: qd.template()):
         for i, j in v:
             # Notice the LinearOperator A here is non-symmetric!
             l = 2.0 * v[i - 1, j] if i - 1 >= 0 else 0.0
@@ -37,11 +37,11 @@ def test_matrixfree_bicgstab(ti_dtype):
             # Avoid ill-conditioned matrix A
             mv[i, j] = 20 * v[i, j] - l - r - t - b
 
-    @ti.kernel
-    def check_solution(sol: ti.template(), ans: ti.template(), tol: ti_dtype) -> bool:
+    @qd.kernel
+    def check_solution(sol: qd.template(), ans: qd.template(), tol: ti_dtype) -> bool:
         exit_code = True
-        for i, j in ti.ndrange(GRID, GRID):
-            if ti.abs(ans[i, j] - sol[i, j]) < tol:
+        for i, j in qd.ndrange(GRID, GRID):
+            if qd.abs(ans[i, j] - sol[i, j]) < tol:
                 pass
             else:
                 exit_code = False
@@ -51,7 +51,7 @@ def test_matrixfree_bicgstab(ti_dtype):
     init()
     MatrixFreeBICGSTAB(A, b, x, maxiter=10 * GRID * GRID, tol=1e-18, quiet=True)
     compute_Ax(x, Ax)
-    # `tol` can't be < 1e-6 for ti.f32 because of accumulating round-off error;
+    # `tol` can't be < 1e-6 for qd.f32 because of accumulating round-off error;
     # see https://en.wikipedia.org/wiki/Conjugate_gradient_method#cite_note-6
     # for more details.
     result = check_solution(Ax, b, tol=1e-6)

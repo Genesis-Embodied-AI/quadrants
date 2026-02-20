@@ -1,14 +1,14 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(exclude=[ti.amdgpu])
+@test_utils.test(exclude=[qd.amdgpu])
 def test_cfg_continue():
-    x = ti.field(dtype=int, shape=1)
-    state = ti.field(dtype=int, shape=1)
+    x = qd.field(dtype=int, shape=1)
+    state = qd.field(dtype=int, shape=1)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for p in range(1):
             if state[p] == 0:

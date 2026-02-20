@@ -1,8 +1,8 @@
-import quadrants as ti
+import quadrants as qd
 
 
 # same
-@ti.func
+@qd.func
 def f2() -> None:
     pass
 
@@ -11,7 +11,7 @@ def f2() -> None:
 
 
 # same
-@ti.kernel
+@qd.kernel
 def f1() -> None:
     f2()
 

@@ -1,21 +1,21 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.pointer(ti.i, n).dense(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.pointer(qd.i, n).dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -28,21 +28,21 @@ def test_pointer():
     assert s[None] == 256
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer_is_active():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ptr = ti.root.pointer(ti.i, n)
-    ptr.dense(ti.i, n).place(x)
-    ti.root.place(s)
+    ptr = qd.root.pointer(qd.i, n)
+    ptr.dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(n * n):
-            s[None] += ti.is_active(ptr, ti.rescale_index(x, ptr, [i]))
+            s[None] += qd.is_active(ptr, qd.rescale_index(x, ptr, [i]))
 
     x[0] = 1
     x[127] = 1
@@ -52,20 +52,20 @@ def test_pointer_is_active():
     assert s[None] == 256
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer_is_active_2():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).pointer(ti.j, n).place(x)
-    ti.root.place(s)
+    qd.root.dense(qd.i, n).pointer(qd.j, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j in ti.ndrange(n, n):
-            s[None] += ti.is_active(x.parent(), [i, j])
+        for i, j in qd.ndrange(n, n):
+            s[None] += qd.is_active(x.parent(), [i, j])
 
     x[0, 0] = 1
     x[0, 127] = 1
@@ -75,17 +75,17 @@ def test_pointer_is_active_2():
     assert s[None] == 3
 
 
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer2():
-    x = ti.field(ti.f32)
-    s = ti.field(ti.i32)
+    x = qd.field(qd.f32)
+    s = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.pointer(ti.i, n).pointer(ti.i, n).dense(ti.i, n).place(x)
-    ti.root.place(s)
+    qd.root.pointer(qd.i, n).pointer(qd.i, n).dense(qd.i, n).place(x)
+    qd.root.place(s)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             s[None] += 1
@@ -106,15 +106,15 @@ def test_pointer2():
 
 
 @pytest.mark.skip(reason="https://github.com/taichi-dev/quadrants/issues/2520")
-@test_utils.test(require=ti.extension.sparse)
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer_direct_place():
-    x, y = ti.field(ti.i32), ti.field(ti.i32)
+    x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 1
-    ti.root.pointer(ti.i, N).place(x)
-    ti.root.pointer(ti.i, N).place(y)
+    qd.root.pointer(qd.i, N).place(x)
+    qd.root.pointer(qd.i, N).place(y)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         pass
 

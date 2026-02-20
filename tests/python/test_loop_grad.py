@@ -1,21 +1,21 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_loop_grad():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     n = 16
     m = 8
 
-    ti.root.dense(ti.ij, (n, m)).place(x)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.ij, (n, m)).place(x)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for k in range(n):
             for i in range(m - 1):
@@ -36,18 +36,18 @@ def test_loop_grad():
         assert x.grad[k, 0] == 2 ** (m - 1 - 0)
 
 
-@test_utils.test(require=ti.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 @pytest.mark.skip(reason="not yet supported")
 def test_loop_grad_complex():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     n = 16
     m = 8
 
-    ti.root.dense(ti.ij, (n, m)).place(x)
-    ti.root.lazy_grad()
+    qd.root.dense(qd.ij, (n, m)).place(x)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for k in range(n):
             t = k * k

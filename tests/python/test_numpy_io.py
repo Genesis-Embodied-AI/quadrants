@@ -1,18 +1,18 @@
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_to_numpy_2d():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
     m = 7
 
-    ti.root.dense(ti.ij, (n, m)).place(val)
+    qd.root.dense(qd.ij, (n, m)).place(val)
 
     for i in range(n):
         for j in range(m):
@@ -28,12 +28,12 @@ def test_to_numpy_2d():
 
 @test_utils.test()
 def test_from_numpy_2d():
-    val = ti.field(ti.i32)
+    val = qd.field(qd.i32)
 
     n = 4
     m = 7
 
-    ti.root.dense(ti.ij, (n, m)).place(val)
+    qd.root.dense(qd.ij, (n, m)).place(val)
 
     arr = np.empty(shape=(n, m), dtype=np.int32)
 
@@ -51,7 +51,7 @@ def test_from_numpy_2d():
 @test_utils.test()
 def test_to_numpy_struct():
     n = 16
-    f = ti.Struct.field({"a": ti.i32, "b": ti.f32}, shape=(n,))
+    f = qd.Struct.field({"a": qd.i32, "b": qd.f32}, shape=(n,))
 
     for i in range(n):
         f[i].a = i
@@ -67,7 +67,7 @@ def test_to_numpy_struct():
 @test_utils.test()
 def test_from_numpy_struct():
     n = 16
-    f = ti.Struct.field({"a": ti.i32, "b": ti.f32}, shape=(n,))
+    f = qd.Struct.field({"a": qd.i32, "b": qd.f32}, shape=(n,))
 
     arr_dict = {
         "a": np.arange(n, dtype=np.int32),
@@ -81,14 +81,14 @@ def test_from_numpy_struct():
         assert f[i].b == i * 2
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_f64():
-    val = ti.field(ti.f64)
+    val = qd.field(qd.f64)
 
     n = 4
     m = 7
 
-    ti.root.dense(ti.ij, (n, m)).place(val)
+    qd.root.dense(qd.ij, (n, m)).place(val)
 
     for i in range(n):
         for j in range(m):
@@ -105,7 +105,7 @@ def test_f64():
 def test_matrix():
     n = 4
     m = 7
-    val = ti.Matrix.field(2, 3, ti.f32, shape=(n, m))
+    val = qd.Matrix.field(2, 3, qd.f32, shape=(n, m))
 
     nparr = np.empty(shape=(n, m, 2, 3), dtype=np.float32)
     for i in range(n):
@@ -125,9 +125,9 @@ def test_numpy_io_example():
     m = 7
 
     # Quadrants tensors
-    val = ti.field(ti.i32, shape=(n, m))
-    vec = ti.Vector.field(3, dtype=ti.i32, shape=(n, m))
-    mat = ti.Matrix.field(3, 4, dtype=ti.i32, shape=(n, m))
+    val = qd.field(qd.i32, shape=(n, m))
+    vec = qd.Vector.field(3, dtype=qd.i32, shape=(n, m))
+    mat = qd.Matrix.field(3, 4, dtype=qd.i32, shape=(n, m))
 
     # Scalar
     arr = np.ones(shape=(n, m), dtype=np.int32)
@@ -170,11 +170,11 @@ def test_from_numpy_non_contiguous():
     p = 4
     arr = np.ones(shape=(n, m, p, p), dtype=np.int32)
 
-    val = ti.field(ti.i32, shape=(2, 2))
+    val = qd.field(qd.i32, shape=(2, 2))
     val.from_numpy(arr[0:6:3, 0:6:3, 0, 0])
 
-    vec = ti.Vector.field(3, dtype=ti.i32, shape=(2, 2))
+    vec = qd.Vector.field(3, dtype=qd.i32, shape=(2, 2))
     vec.from_numpy(arr[0:6:3, 0:6:3, 0:3, 0])
 
-    mat = ti.Matrix.field(3, 4, dtype=ti.i32, shape=(2, 2))
+    mat = qd.Matrix.field(3, 4, dtype=qd.i32, shape=(2, 2))
     mat.from_numpy(arr[0:6:3, 0:6:3, 0:3, 0:4])
