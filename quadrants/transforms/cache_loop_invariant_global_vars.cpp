@@ -5,21 +5,33 @@ namespace quadrants::lang {
 
 namespace {
 
-// Collect the SNodes that are destinations of any AtomicOpStmt in |root|.
-// These SNodes must not be cached by the loop-invariant caching pass because
-// the AtomicOpStmt writes directly to global memory and any cached load would
+// Collect the identities of all AtomicOpStmt destinations in |root|.
+// Field destinations are recorded by SNode; ndarray destinations by arg_id.
+// These must not be cached by the loop-invariant caching pass because the
+// AtomicOpStmt writes directly to global memory and any cached load would
 // return a stale value.
-void gather_atomic_dest_snodes(IRNode *root,
-                               std::unordered_set<const SNode *> &result) {
+void gather_atomic_dests(
+    IRNode *root,
+    std::unordered_set<const SNode *> &field_snodes,
+    std::unordered_set<std::vector<int>,
+                       hashing::Hasher<std::vector<int>>> &arr_ids) {
   auto stmts = irpass::analysis::gather_statements(
       root, [](Stmt *s) { return s->is<AtomicOpStmt>(); });
   for (auto *s : stmts) {
     auto *dest = s->as<AtomicOpStmt>()->dest;
     if (auto *gptr = dest->cast<GlobalPtrStmt>()) {
-      result.insert(gptr->snode);
+      field_snodes.insert(gptr->snode);
+    } else if (auto *eptr = dest->cast<ExternalPtrStmt>()) {
+      if (auto *arg = eptr->base_ptr->cast<ArgLoadStmt>()) {
+        arr_ids.insert(arg->arg_id);
+      }
     } else if (auto *mptr = dest->cast<MatrixPtrStmt>()) {
       if (auto *gptr = mptr->origin->cast<GlobalPtrStmt>()) {
-        result.insert(gptr->snode);
+        field_snodes.insert(gptr->snode);
+      } else if (auto *eptr = mptr->origin->cast<ExternalPtrStmt>()) {
+        if (auto *arg = eptr->base_ptr->cast<ArgLoadStmt>()) {
+          arr_ids.insert(arg->arg_id);
+        }
       }
     }
   }
@@ -52,6 +64,9 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   std::unordered_set<Stmt *> dynamic_indexed_ptrs_;
   std::unordered_set<const SNode *> atomic_dest_snodes_;
+  std::unordered_set<std::vector<int>,
+                     hashing::Hasher<std::vector<int>>>
+      atomic_dest_arr_ids_;
 
   OffloadedStmt *current_offloaded;
 
@@ -74,7 +89,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     dynamic_indexed_ptrs_ =
         irpass::analysis::gather_dynamically_indexed_pointers(stmt);
     atomic_dest_snodes_.clear();
-    gather_atomic_dest_snodes(stmt, atomic_dest_snodes_);
+    atomic_dest_arr_ids_.clear();
+    gather_atomic_dests(stmt, atomic_dest_snodes_, atomic_dest_arr_ids_);
 
     // We don't need to visit TLS/BLS prologues/epilogues.
     if (stmt->body) {
@@ -228,13 +244,32 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   bool is_atomic_dest(Stmt *stmt) {
     GlobalPtrStmt *gptr = nullptr;
+    ExternalPtrStmt *eptr = nullptr;
+
     if (stmt->is<GlobalPtrStmt>()) {
       gptr = stmt->as<GlobalPtrStmt>();
-    } else if (stmt->is<MatrixPtrStmt>() &&
-               stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
-      gptr = stmt->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
+    } else if (stmt->is<ExternalPtrStmt>()) {
+      eptr = stmt->as<ExternalPtrStmt>();
+    } else if (stmt->is<MatrixPtrStmt>()) {
+      auto *origin = stmt->as<MatrixPtrStmt>()->origin;
+      if (origin->is<GlobalPtrStmt>()) {
+        gptr = origin->as<GlobalPtrStmt>();
+      } else if (origin->is<ExternalPtrStmt>()) {
+        eptr = origin->as<ExternalPtrStmt>();
+      }
     }
-    return gptr && atomic_dest_snodes_.count(gptr->snode);
+
+    if (gptr && atomic_dest_snodes_.count(gptr->snode)) {
+      return true;
+    }
+    if (eptr) {
+      if (auto *arg = eptr->base_ptr->cast<ArgLoadStmt>()) {
+        if (atomic_dest_arr_ids_.count(arg->arg_id)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   std::optional<int> find_cache_depth_if_cacheable(Stmt *operand,
