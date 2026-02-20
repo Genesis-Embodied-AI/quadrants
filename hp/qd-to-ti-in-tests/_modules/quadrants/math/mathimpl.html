@@ -1,0 +1,1413 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.math.mathimpl &#8212; Quadrants 0.4.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../_static/documentation_options.js?v=c87aa342"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/math/mathimpl';</script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.4.1" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.4.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.math.mathimpl</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.math.mathimpl</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+
+<span class="c1"># pylint: disable=W0622</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Math functions for glsl-like functions and other stuff.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">static</span><span class="p">,</span> <span class="n">zero</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ops</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">acos</span><span class="p">,</span>
+    <span class="n">asin</span><span class="p">,</span>
+    <span class="n">atan2</span><span class="p">,</span>
+    <span class="n">ceil</span><span class="p">,</span>
+    <span class="n">cos</span><span class="p">,</span>
+    <span class="n">exp</span><span class="p">,</span>
+    <span class="n">floor</span><span class="p">,</span>
+    <span class="n">log</span><span class="p">,</span>
+    <span class="nb">max</span><span class="p">,</span>
+    <span class="nb">min</span><span class="p">,</span>
+    <span class="nb">pow</span><span class="p">,</span>
+    <span class="nb">round</span><span class="p">,</span>
+    <span class="n">sin</span><span class="p">,</span>
+    <span class="n">sqrt</span><span class="p">,</span>
+    <span class="n">tan</span><span class="p">,</span>
+    <span class="n">tanh</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">vector</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f64</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u64</span>
+
+<span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span>
+
+<div class="viewcode-block" id="e">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.e">[docs]</a>
+<span class="n">e</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">e</span></div>
+
+<span class="sd">&quot;&quot;&quot;The mathematical constant e = 2.718281….</span>
+<span class="sd">Directly imported from the Python standard library `math`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="pi">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.pi">[docs]</a>
+<span class="n">pi</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span></div>
+
+<span class="sd">&quot;&quot;&quot;The mathematical constant π = 3.141592….</span>
+<span class="sd">Directly imported from the Python standard library `math`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="inf">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.inf">[docs]</a>
+<span class="n">inf</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">inf</span></div>
+
+<span class="sd">&quot;&quot;&quot;A floating-point positive infinity. (For negative infinity, use `-inf`).</span>
+<span class="sd">Directly imported from the Python standard library `math`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="nan">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.nan">[docs]</a>
+<span class="n">nan</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">nan</span></div>
+
+<span class="sd">&quot;&quot;&quot;A floating-point &quot;not a number&quot; (NaN) value.</span>
+<span class="sd">Directly imported from the Python standard library `math`</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="vec2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.vec2">[docs]</a>
+<span class="n">vec2</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;2D floating vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="vec3">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.vec3">[docs]</a>
+<span class="n">vec3</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;3D floating vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="vec4">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.vec4">[docs]</a>
+<span class="n">vec4</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;4D floating vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ivec2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.ivec2">[docs]</a>
+<span class="n">ivec2</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_ip</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;2D signed int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ivec3">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.ivec3">[docs]</a>
+<span class="n">ivec3</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_ip</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;3D signed int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ivec4">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.ivec4">[docs]</a>
+<span class="n">ivec4</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_ip</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;3D signed int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="uvec2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.uvec2">[docs]</a>
+<span class="n">uvec2</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_up</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;2D unsigned int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="uvec3">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.uvec3">[docs]</a>
+<span class="n">uvec3</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_up</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;3D unsigned int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="uvec4">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.uvec4">[docs]</a>
+<span class="n">uvec4</span> <span class="o">=</span> <span class="n">vector</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_up</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;4D unsigned int vector type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="mat2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.mat2">[docs]</a>
+<span class="n">mat2</span> <span class="o">=</span> <span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;2x2 floating matrix type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="mat3">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.mat3">[docs]</a>
+<span class="n">mat3</span> <span class="o">=</span> <span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;3x3 floating matrix type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="mat4">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.mat4">[docs]</a>
+<span class="n">mat4</span> <span class="o">=</span> <span class="n">matrix</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span><span class="p">)</span></div>
+
+<span class="sd">&quot;&quot;&quot;4x4 floating matrix type.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="mix">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.mix">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mix</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Performs a linear interpolation between `x` and `y` using</span>
+<span class="sd">    `a` to weight between them. The return value is computed as</span>
+<span class="sd">    `x * (1 - a) + a * y`.</span>
+
+<span class="sd">    The arguments can be scalars or :class:`~quadrants.Matrix`,</span>
+<span class="sd">    as long as the operation can be performed.</span>
+
+<span class="sd">    This function is similar to the `mix` function in GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the start of the range in which to interpolate.</span>
+<span class="sd">        y (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the end of the range in which to interpolate.</span>
+<span class="sd">        a (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the weight to use to interpolate between x and y.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The linear</span>
+<span class="sd">            interpolation of `x` and `y` by weight `a`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Vector([2, 2, 2])</span>
+<span class="sd">        &gt;&gt;&gt; a = ti.Vector([1, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        [2.000000, 1.000000, 1.000000]</span>
+<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[1, 2], [2, 3]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[3, 5], [4, 5]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; a = 0.5</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.mix(x, y, a)</span>
+<span class="sd">        [[2.000000, 3.500000], [3.000000, 4.000000]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">a</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="clamp">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.clamp">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">clamp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrain a value to lie between two further values, element-wise.</span>
+<span class="sd">    The returned value is computed as `min(max(x, xmin), xmax)`.</span>
+
+<span class="sd">    The arguments can be scalars or :class:`~quadrants.Matrix`,</span>
+<span class="sd">    as long as they can be broadcasted to a common shape.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the value to constrain.</span>
+<span class="sd">        y (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the lower end of the range into which to constrain `x`.</span>
+<span class="sd">        a (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the upper end of the range into which to constrain `x`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The value of `x` constrained to the range `xmin` to `xmax`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; v = ti.Vector([0, 0.5, 1.0, 1.5])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.clamp(v, 0.5, 1.0)</span>
+<span class="sd">        [0.500000, 0.500000, 1.000000, 1.000000]</span>
+<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [-2, 2]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Matrix([[1, 2], [1, 2]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.clamp(x, 0.5, y)</span>
+<span class="sd">        [[0.500000, 1.000000], [0.500000, 2.000000]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">xmax</span><span class="p">,</span> <span class="n">ops</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="step">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.step">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="n">edge</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a step function by comparing two values, element-wise.</span>
+
+<span class="sd">    `step` generates a step function by comparing `x` to edge.</span>
+<span class="sd">    For element i of the return value, 0.0 is returned if x[i] &lt; edge[i],</span>
+<span class="sd">    and 1.0 is returned otherwise.</span>
+
+<span class="sd">    The two arguments can be scalars or :class:`~quadrants.Matrix`,</span>
+<span class="sd">    as long as they can be broadcasted to a common shape.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        edge (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the location of the edge of the step function.</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specify</span>
+<span class="sd">            the value to be used to generate the step function.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The return value is computed as `x &gt;= edge`, with type promoted.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([[0, 1], [2, 3]], ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; y = 1</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.step(x, y)</span>
+<span class="sd">        [[1.000000, 1.000000], [0.000000, 0.000000]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="n">edge</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="fract">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.fract">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fract</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the fractional part of the argument, element-wise.</span>
+<span class="sd">    It&#39;s equivalent to `x - ti.floor(x)`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The</span>
+<span class="sd">            input value.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The fractional part of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.2, -0.7, 0.3, 1.2])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.fract(x)</span>
+<span class="sd">        [0.800000, 0.300000, 0.300000, 0.200000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="smoothstep">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.smoothstep">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">smoothstep</span><span class="p">(</span><span class="n">edge0</span><span class="p">,</span> <span class="n">edge1</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Performs smooth Hermite interpolation between 0 and 1 when</span>
+<span class="sd">    `edge0 &lt; x &lt; edge1`, element-wise.</span>
+
+<span class="sd">    The arguments can be scalars or :class:`~quadrants.Matrix`,</span>
+<span class="sd">    as long as they can be broadcasted to a common shape.</span>
+
+<span class="sd">    This function is equivalent to the `smoothstep` in GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        edge0 (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specifies</span>
+<span class="sd">            the value of the lower edge of the Hermite function.</span>
+<span class="sd">        edge1 (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specifies</span>
+<span class="sd">            the value of the upper edge of the Hermite function.</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): Specifies</span>
+<span class="sd">            the source value for interpolation.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The smoothly interpolated value.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; edge0 = ti.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt; edge1 = 1</span>
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0.5, 1.5, 2.5])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.smoothstep(edge0, edge1, x)</span>
+<span class="sd">        [0.500000, 1.000000, 0.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">clamp</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">edge1</span> <span class="o">-</span> <span class="n">edge0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">t</span> <span class="o">*</span> <span class="n">t</span> <span class="o">*</span> <span class="p">(</span><span class="mf">3.0</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">t</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="sign">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.sign">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sign</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract the sign of the parameter, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The</span>
+<span class="sd">            input value.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        -1.0 if `x` is less than 0.0, 0.0 if `x` is equal to 0.0,</span>
+<span class="sd">        and +1.0 if `x` is greater than 0.0.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.sign(x)</span>
+<span class="sd">        [-1.000000, 0.000000, 1.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">((</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="normalize">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.normalize">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculates the unit vector in the same direction as the</span>
+<span class="sd">    original vector `v`.</span>
+
+<span class="sd">    It&#39;s equivalent to the `normalize` function is GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The vector to normalize.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The normalized vector :math:`v/|v|`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; v = ti.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.normalize(v)</span>
+<span class="sd">        [0.267261, 0.534522, 0.801784]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">v</span> <span class="o">/</span> <span class="n">v</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="log2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.log2">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">log2</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the base 2 logarithm of `x`, so that if :math:`2^y=x`,</span>
+<span class="sd">    then :math:`y=\\log2(x)`.</span>
+
+<span class="sd">    This is equivalent to the `log2` function is GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The input value.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The base 2 logarithm of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.log2(x)</span>
+<span class="sd">        [0.000000, 1.000000, 1.584962]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">static</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">))</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="reflect">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.reflect">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reflect</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the reflection direction for an incident vector.</span>
+
+<span class="sd">    For a given incident vector `x` and surface normal `n` this</span>
+<span class="sd">    function returns the reflection direction calculated as</span>
+<span class="sd">    :math:`x - 2.0 * dot(x, n) * n`.</span>
+
+<span class="sd">    This is equivalent to the `reflect` function is GLSL.</span>
+
+<span class="sd">    `n` should be normalized in order to achieve the desired result.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The incident vector.</span>
+<span class="sd">        n (:class:`~quadrants.Matrix`): The normal vector.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The reflected vector.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 2., 3.])</span>
+<span class="sd">        &gt;&gt;&gt; n = ti.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.reflect(x, n)</span>
+<span class="sd">        [1.000000, -2.000000, 3.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">k</span> <span class="o">*</span> <span class="n">n</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="degrees">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.degrees">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">degrees</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert `x` in radians to degrees, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The input angle in radians.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        angle in degrees.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-pi/2, pi/2])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.degrees(x)</span>
+<span class="sd">        [-90.000000, 90.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="mf">180.0</span> <span class="o">/</span> <span class="n">pi</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="radians">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.radians">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">radians</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert `x` in degrees to radians, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The input angle in degrees.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        angle in radians.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-90., 45., 90.])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.radians(x) / pi</span>
+<span class="sd">        [-0.500000, 0.250000, 0.500000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">static</span><span class="p">(</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">180.0</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="distance">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.distance">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">distance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the distance between two points.</span>
+
+<span class="sd">    This function is equivalent to the `distance` function is GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The first input point.</span>
+<span class="sd">        y (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The second input point.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The distance between the two points.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.distance(x, y)</span>
+<span class="sd">        1.732051</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="refract">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.refract">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">refract</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">eta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the refraction direction for an incident vector.</span>
+
+<span class="sd">    This function is equivalent to the `refract` function in GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The incident vector.</span>
+<span class="sd">        n (:class:`~quadrants.Matrix`): The normal vector.</span>
+<span class="sd">        eta (float): The ratio of indices of refraction.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.Matrix`: The refraction direction vector.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0, 1., 0])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.refract(x, y, 2.0)</span>
+<span class="sd">        [2.000000, -1.000000, 2.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dxn</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">eta</span> <span class="o">*</span> <span class="n">eta</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">dxn</span> <span class="o">*</span> <span class="n">dxn</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">k</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">eta</span> <span class="o">*</span> <span class="n">x</span> <span class="o">-</span> <span class="p">(</span><span class="n">eta</span> <span class="o">*</span> <span class="n">dxn</span> <span class="o">+</span> <span class="n">ops</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">k</span><span class="p">))</span> <span class="o">*</span> <span class="n">n</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="dot">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.dot">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the dot product of two vectors.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The first input vector.</span>
+<span class="sd">        y (:class:`~quadrants.Matrix`): The second input vector.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The dot product of two vectors.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 1.])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.dot(x, y)</span>
+<span class="sd">        1.000000</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="cross">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.cross">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">cross</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the cross product of two vectors.</span>
+
+<span class="sd">    The two input vectors must have the same dimension :math:`d &lt;= 3`.</span>
+
+<span class="sd">    This function calls the `cross` method of :class:`~quadrants.Vector`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The first input vector.</span>
+<span class="sd">        y (:class:`~quadrants.Matrix`): The second input vector.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The cross product of two vectors.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1., 0., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; y = ti.Vector([0., 1., 0.])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.cross(x, y)</span>
+<span class="sd">        [0.000000, 0.000000, 1.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="mod">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.mod">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mod</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute value of one parameter modulo another, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The first input.</span>
+<span class="sd">        y (:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`): The second input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        the value of `x` modulo `y`. This is computed as `x - y * floor(x/y)`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([-0.5, 0.5, 1.])</span>
+<span class="sd">        &gt;&gt;&gt; y = 1.0</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.mod(x, y)</span>
+<span class="sd">        [0.500000, 0.500000, 0.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">y</span> <span class="o">*</span> <span class="n">ops</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">x</span> <span class="o">/</span> <span class="n">y</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="translate">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.translate">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">translate</span><span class="p">(</span><span class="n">dx</span><span class="p">,</span> <span class="n">dy</span><span class="p">,</span> <span class="n">dz</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constructs a translation Matrix with shape (4, 4).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        dx (float): delta x.</span>
+<span class="sd">        dy (float): delta y.</span>
+<span class="sd">        dz (float): delta z.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat4`: translation matrix.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; ti.math.translate(1, 2, 3)</span>
+<span class="sd">        [[ 1. 0. 0. 1.]</span>
+<span class="sd">         [ 0. 1. 0. 2.]</span>
+<span class="sd">         [ 0. 0. 1. 3.]</span>
+<span class="sd">         [ 0. 0. 0. 1.]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">mat4</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">dx</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">dy</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">dz</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+        <span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="scale">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.scale">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">sx</span><span class="p">,</span> <span class="n">sy</span><span class="p">,</span> <span class="n">sz</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Constructs a scale Matrix with shape (4, 4).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        sx (float): scale x.</span>
+<span class="sd">        sy (float): scale y.</span>
+<span class="sd">        sz (float): scale z.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat4`: scale matrix.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; ti.math.scale(1, 2, 3)</span>
+<span class="sd">        [[ 1. 0. 0. 0.]</span>
+<span class="sd">         [ 0. 2. 0. 0.]</span>
+<span class="sd">         [ 0. 0. 3. 0.]</span>
+<span class="sd">         [ 0. 0. 0. 1.]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">mat4</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="p">[</span><span class="n">sx</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">sy</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">sz</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+        <span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="rot_by_axis">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.rot_by_axis">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rot_by_axis</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">ang</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the 4x4 matrix representation of a 3d rotation with given axis `axis` and angle `ang`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        axis (vec3): rotation axis</span>
+<span class="sd">        ang (float): angle in radians unit</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat4`: rotation matrix</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
+
+    <span class="n">axis</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">c</span><span class="p">)</span> <span class="o">*</span> <span class="n">axis</span>
+    <span class="k">return</span> <span class="n">mat4</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="p">[</span>
+                <span class="n">c</span> <span class="o">+</span> <span class="n">temp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="mf">0.0</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="p">[</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                <span class="n">c</span> <span class="o">+</span> <span class="n">temp</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="mf">0.0</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="p">[</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">temp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">s</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">c</span> <span class="o">+</span> <span class="n">temp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">axis</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                <span class="mf">0.0</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+        <span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="rot_yaw_pitch_roll">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.rot_yaw_pitch_roll">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rot_yaw_pitch_roll</span><span class="p">(</span><span class="n">yaw</span><span class="p">,</span> <span class="n">pitch</span><span class="p">,</span> <span class="n">roll</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns a 4x4 homogeneous rotation matrix representing the 3d rotation with Euler angles (rotate with Y axis first, X axis second, Z axis third).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        yaw   (float): yaw angle in radians unit</span>
+<span class="sd">        pitch (float): pitch angle in radians unit</span>
+<span class="sd">        roll  (float): roll angle in radians unit</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat4`: rotation matrix</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ch</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">yaw</span><span class="p">)</span>
+    <span class="n">sh</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">yaw</span><span class="p">)</span>
+    <span class="n">cp</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">pitch</span><span class="p">)</span>
+    <span class="n">sp</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">pitch</span><span class="p">)</span>
+    <span class="n">cb</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">roll</span><span class="p">)</span>
+    <span class="n">sb</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">roll</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">mat4</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="p">[</span><span class="n">ch</span> <span class="o">*</span> <span class="n">cb</span> <span class="o">+</span> <span class="n">sh</span> <span class="o">*</span> <span class="n">sp</span> <span class="o">*</span> <span class="n">sb</span><span class="p">,</span> <span class="n">sb</span> <span class="o">*</span> <span class="n">cp</span><span class="p">,</span> <span class="o">-</span><span class="n">sh</span> <span class="o">*</span> <span class="n">cb</span> <span class="o">+</span> <span class="n">ch</span> <span class="o">*</span> <span class="n">sp</span> <span class="o">*</span> <span class="n">sb</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="o">-</span><span class="n">ch</span> <span class="o">*</span> <span class="n">sb</span> <span class="o">+</span> <span class="n">sh</span> <span class="o">*</span> <span class="n">sp</span> <span class="o">*</span> <span class="n">cb</span><span class="p">,</span> <span class="n">cb</span> <span class="o">*</span> <span class="n">cp</span><span class="p">,</span> <span class="n">sb</span> <span class="o">*</span> <span class="n">sh</span> <span class="o">+</span> <span class="n">ch</span> <span class="o">*</span> <span class="n">sp</span> <span class="o">*</span> <span class="n">cb</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="n">sh</span> <span class="o">*</span> <span class="n">cp</span><span class="p">,</span> <span class="o">-</span><span class="n">sp</span><span class="p">,</span> <span class="n">ch</span> <span class="o">*</span> <span class="n">cp</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span>
+            <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span>
+        <span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="rotation2d">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.rotation2d">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rotation2d</span><span class="p">(</span><span class="n">ang</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the matrix representation of a 2d counter-clockwise rotation,</span>
+<span class="sd">    given the angle of rotation.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        ang (float): Angle of rotation in radians.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat2`: 2x2 rotation matrix.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt;ti.math.rotation2d(ti.math.radians(30))</span>
+<span class="sd">        [[0.866025, -0.500000], [0.500000, 0.866025]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ca</span><span class="p">,</span> <span class="n">sa</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">ang</span><span class="p">),</span> <span class="n">ops</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mat2</span><span class="p">([[</span><span class="n">ca</span><span class="p">,</span> <span class="o">-</span><span class="n">sa</span><span class="p">],</span> <span class="p">[</span><span class="n">sa</span><span class="p">,</span> <span class="n">ca</span><span class="p">]])</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="rotation3d">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.rotation3d">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rotation3d</span><span class="p">(</span><span class="n">ang_x</span><span class="p">,</span> <span class="n">ang_y</span><span class="p">,</span> <span class="n">ang_z</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns a 4x4 homogeneous rotation matrix representing the 3d rotation with Euler angles (rotate with Y axis first, X axis second, Z axis third).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        ang_x (float): angle in radians unit around X axis</span>
+<span class="sd">        ang_y (float): angle in radians unit around Y axis</span>
+<span class="sd">        ang_z (float): angle in radians unit around Z axis</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        :class:`~quadrants.math.mat4`: rotation matrix</span>
+<span class="sd">    Example:</span>
+
+<span class="sd">        &gt;&gt;&gt; ti.math.rotation3d(0.52, -0.785, 1.046)</span>
+<span class="sd">        [[ 0.05048351 -0.61339645 -0.78816002  0.        ]</span>
+<span class="sd">        [ 0.65833154  0.61388511 -0.4355969   0.        ]</span>
+<span class="sd">        [ 0.75103329 -0.49688014  0.4348093   0.        ]</span>
+<span class="sd">        [ 0.          0.          0.          1.        ]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">rot_yaw_pitch_roll</span><span class="p">(</span><span class="n">ang_z</span><span class="p">,</span> <span class="n">ang_x</span><span class="p">,</span> <span class="n">ang_y</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="eye">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.eye">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">eye</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the nxn identity matrix.</span>
+
+<span class="sd">    Alias for :func:`~quadrants.Matrix.identity`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Matrix</span><span class="o">.</span><span class="n">identity</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="length">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.length">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">length</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the length of a vector.</span>
+
+<span class="sd">    This function is equivalent to the `length` function in GLSL.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        x (:class:`~quadrants.Matrix`): The vector of which to calculate the length.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The Euclidean norm of the vector.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.length(x)</span>
+<span class="sd">        1.732051</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="determinant">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.determinant">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">determinant</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Alias for :func:`quadrants.Matrix.determinant`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">determinant</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="inverse">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.inverse">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inverse</span><span class="p">(</span><span class="n">mat</span><span class="p">):</span>  <span class="c1"># pylint: disable=R1710</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the inverse of a matrix.</span>
+
+<span class="sd">    This function is equivalent to the `inverse` function in GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        mat (:class:`quadrants.Matrix`): The matrix of which to take the inverse. \</span>
+<span class="sd">            Supports only 2x2, 3x3 and 4x4 matrices.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Inverse of the input matrix.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; m = ti.math.mat3([(1, 1, 0), (0, 1, 1), (0, 0, 1)])</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.inverse(m)</span>
+<span class="sd">        [[1.000000, -1.000000, 1.000000],</span>
+<span class="sd">         [0.000000, 1.000000, -1.000000],</span>
+<span class="sd">         [0.000000, 0.000000, 1.000000]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">mat</span><span class="o">.</span><span class="n">inverse</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="isinf">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.isinf">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">isinf</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Determines whether the parameter is positive or negative infinity, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`quadrants.Matrix`): The input.</span>
+
+<span class="sd">    Example:</span>
+
+<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(inf, -inf, nan, 1)</span>
+<span class="sd">       &gt;&gt;&gt; ti.math.isinf(x)</span>
+<span class="sd">       [1, 1, 0, 0]</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        For each element i of the result, returns 1 if x[i] is posititve or negative floating point infinity and 0 otherwise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ftype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
+    <span class="n">fx</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ftype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">ftype</span> <span class="o">==</span> <span class="n">f64</span><span class="p">):</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">fx</span><span class="p">,</span> <span class="n">u64</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y</span> <span class="o">&gt;&gt;</span> <span class="mi">32</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x7FFFFFFF</span><span class="p">)</span> <span class="o">==</span> <span class="mh">0x7FF00000</span> <span class="ow">and</span> <span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">fx</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">y</span> <span class="o">&amp;</span> <span class="mh">0x7FFFFFFF</span><span class="p">)</span> <span class="o">==</span> <span class="mh">0x7F800000</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="isnan">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.isnan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Determines whether the parameter is a number, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (:mod:`~quadrants.types.primitive_types`, :class:`quadrants.Matrix`): The input.</span>
+
+<span class="sd">    Example:</span>
+
+<span class="sd">       &gt;&gt;&gt; x = ti.math.vec4(nan, -nan, inf, 1)</span>
+<span class="sd">       &gt;&gt;&gt; ti.math.isnan(x)</span>
+<span class="sd">       [1, 1, 0, 0]</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        For each element i of the result, returns 1 if x[i] is posititve or negative floating point NaN (Not a Number) and 0 otherwise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ftype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
+    <span class="n">fx</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ftype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">static</span><span class="p">(</span><span class="n">ftype</span> <span class="o">==</span> <span class="n">f64</span><span class="p">):</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">fx</span><span class="p">,</span> <span class="n">u64</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y</span> <span class="o">&gt;&gt;</span> <span class="mi">32</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x7FFFFFFF</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mh">0x7FF00000</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">bit_cast</span><span class="p">(</span><span class="n">fx</span><span class="p">,</span> <span class="n">u32</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">y</span> <span class="o">&amp;</span> <span class="mh">0x7FFFFFFF</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mh">0x7F800000</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="vdir">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.vdir">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">vdir</span><span class="p">(</span><span class="n">ang</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the 2d unit vector with argument equals `ang`.</span>
+
+<span class="sd">    x (:mod:`~quadrants.types.primitive_types`): The input angle in radians.</span>
+
+<span class="sd">    Example:</span>
+
+<span class="sd">        &gt;&gt;&gt; x = pi / 2</span>
+<span class="sd">        &gt;&gt;&gt; ti.math.vdir(x)</span>
+<span class="sd">        [0, 1]</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        a 2d vector with argument equals `ang`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">vec2</span><span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="n">ang</span><span class="p">),</span> <span class="n">sin</span><span class="p">(</span><span class="n">ang</span><span class="p">))</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="popcnt">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.popcnt">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@func</span>
+<div class="viewcode-block" id="clz">
+<a class="viewcode-back" href="../../../autoapi/quadrants/math/mathimpl/index.html#quadrants.math.mathimpl.clz">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">ops</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;acos&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;asin&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atan2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ceil&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;clamp&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;clz&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;cos&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;cross&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;degrees&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;determinant&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;distance&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;dot&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;e&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exp&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;eye&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;floor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fract&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inf&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;inverse&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;isinf&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;isnan&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ivec2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ivec3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ivec4&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;length&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;log&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;log2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mat2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mat3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mat4&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;min&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mix&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;mod&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;translate&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;scale&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;nan&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;normalize&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;pi&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;pow&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;popcnt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;radians&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;reflect&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;refract&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;rot_by_axis&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;rot_yaw_pitch_roll&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;rotation2d&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;rotation3d&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;round&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sign&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sin&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;smoothstep&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sqrt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;step&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tan&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tanh&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;uvec2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;uvec3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;uvec4&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;vdir&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;vec2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;vec3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;vec4&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
