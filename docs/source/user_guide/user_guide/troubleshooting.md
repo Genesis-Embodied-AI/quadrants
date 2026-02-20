@@ -1,4 +1,4 @@
-# Troublshooting
+# Troubleshooting
 
 ## In case of crash/seg fault
 
@@ -7,7 +7,7 @@
 
 To run without cache:
 ```
-ti.init(offline_cache=False, ...)
+qd.init(offline_cache=False, ...)
 ```
 
 To clear cache:

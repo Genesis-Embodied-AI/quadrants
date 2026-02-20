@@ -5,7 +5,7 @@ To create a scalar tensor, use a shape of `()`. Note that this only works for fi
 You can access the value in a scalar tensor by indexing with `[None]`:
 
 ```
-@ti.kernel
-def f1(a: ti.Template) -> None:
+@qd.kernel
+def f1(a: qd.Template) -> None:
     a[None] += 1
 ```
