@@ -6,7 +6,6 @@ from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
 from quadrants.lang import _kernel_impl_dataclass, impl, ops
-
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,

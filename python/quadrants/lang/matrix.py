@@ -1324,7 +1324,7 @@ class MatrixField(Field):
         Returns:
             torch.tensor: The result torch tensor.
         """
-        import torch  # pylint: disable=C0415
+        assert torch is not None
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)

@@ -73,12 +73,9 @@ from quadrants.types.primitive_types import (
     u64,
 )
 
-torch_is_available = False
 torch = None
 try:
     import torch
-
-    torch_is_available = True
 except Exception:
     pass
 
@@ -894,11 +891,9 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
             dtype = dtype.dtype
-        assert torch_is_available and torch
-        print('size', shape, 'dtype', dtype)
+        assert torch is not None
         if type(shape) == int:
             shape = (shape,)
-            print('updated size', shape, 'dtype', dtype)
         res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
         res.fill = res.fill_  # type: ignore
         return res

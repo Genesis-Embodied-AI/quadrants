@@ -47,9 +47,7 @@ def has_pytorch():
     _env_torch = os.environ.get("QD_ENABLE_TORCH", "1")
     if not _env_torch or int(_env_torch):
         try:
-            import torch  # noqa: F401 pylint: disable=C0415
-
-            _has_pytorch = True
+            _has_pytorch = torch is not None
         except:
             pass
     return _has_pytorch
@@ -139,7 +137,7 @@ def to_pytorch_type(dt):
         DataType: The counterpart data type in torch.
 
     """
-    import torch  # pylint: disable=C0415
+    assert torch is not None
 
     # pylint: disable=E1101
     if dt == f32:
@@ -217,7 +215,7 @@ def to_quadrants_type(dt):
         return f16
 
     if has_pytorch():
-        import torch  # pylint: disable=C0415
+        assert torch is not None
 
         # pylint: disable=E1101
         if dt == torch.float32:
