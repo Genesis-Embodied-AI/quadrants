@@ -59,6 +59,7 @@ from ._kernel_types import (
 )
 from ._pruning import Pruning
 from ._quadrants_callable import QuadrantsCallable
+from quadrants._lib.core.quadrants_python import Arch
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
@@ -540,6 +541,8 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
+        if impl.get_runtime().prog.config().arch == Arch.python:
+            return self.func(*py_args, **kwargs)
         self.raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
 
