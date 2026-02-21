@@ -191,3 +191,18 @@ def test_python_backend_ndarray_matrix() -> None:
     a.fill(0)
     foo5(a)
     assert a[2].tolist() == [[5, 4, 3], [2, 3, 4]]
+
+
+def test_python_backend_zero_as_item() -> None:
+    qd.init(qd.python)
+
+    t = qd.ndarray(qd.i32, ())
+    # print('t', t, dir(t))
+    print("t.fill", t.fill)
+    print("t.old_getter", t.old_getter)
+    print("t.__getitem__", t.__getitem__)
+    t[()] = 3
+    print("t", t)
+    print("t.fill", t.fill)
+    print("t.old_getter", t.old_getter)
+    print("t[0]", t[0])

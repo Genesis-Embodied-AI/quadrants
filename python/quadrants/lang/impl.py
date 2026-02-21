@@ -884,9 +884,10 @@ def field(dtype, shape, *args, **kwargs):
         # else:
         dtype = dtype_to_torch_dtype(dtype)
         print("dtype", dtype, type(dtype), "shape", shape)
-        res = torch.zeros(size=shape, dtype=dtype)
+        # res = torch.zeros(size=shape, dtype=dtype)
+        res = py_tensor.create_tensor(shape, dtype)
 
-        py_tensor.init_py_tensor(res)
+        # py_tensor.init_py_tensor(res)
         # res.fill = res.fill_  # type: ignore
         return res
     if isinstance(dtype, MatrixType):
@@ -926,9 +927,10 @@ def ndarray(dtype, shape, needs_grad=False):
         assert torch is not None
         if type(shape) == int:
             shape = (shape,)
-        res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
-
-        py_tensor.init_py_tensor(res)
+        # res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
+        dtype = dtype_to_torch_dtype(dtype)
+        res = py_tensor.create_tensor(shape, dtype)
+        # py_tensor.init_py_tensor(res)
         # res.fill = res.fill_  # type: ignore
         return res
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
@@ -1255,6 +1257,12 @@ def grouped(x):
     """
     if isinstance(x, _Ndrange):
         return x.grouped()
+    # print('returning x', x)
+    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+        return [[i] for i in range(x.shape[0])]
+    #     for idx in range(x.shape[0]):
+    #         yield [idx]
+    #     return
     return x
 
 

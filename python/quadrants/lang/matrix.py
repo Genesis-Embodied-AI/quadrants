@@ -986,9 +986,9 @@ class Matrix(QuadrantsOperations):
             shape = (*shape, m, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
-            res = torch.zeros(size=shape, dtype=dtype)
-
-            py_tensor.init_py_tensor(res)
+            # res = torch.zeros(size=shape, dtype=dtype)
+            res = py_tensor.create_tensor(shape, dtype)
+            # py_tensor.init_py_tensor(res)
             # res.fill = res.fill_  # type: ignore
             return res
         return MatrixNdarray(n, m, dtype, shape)
@@ -1167,9 +1167,9 @@ class Vector(Matrix):
             shape = (*shape, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
-            res = torch.zeros(size=shape, dtype=dtype)
-
-            py_tensor.init_py_tensor(res)
+            # res = torch.zeros(size=shape, dtype=dtype)
+            res = py_tensor.create_tensor(shape, dtype)
+            # py_tensor.init_py_tensor(res)
             # res.fill = res.fill_  # type: ignore
             return res
         return VectorNdarray(n, dtype, shape)
