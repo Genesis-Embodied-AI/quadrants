@@ -46,8 +46,8 @@ class MyTorchTensor(torch.Tensor):
         return super().__getitem__(key)
 
     def __setitem__(self, key, v):
-        print('setitem', key, v)
-        print('type(v)', type(v))
+        print("setitem", key, v)
+        print("type(v)", type(v))
         # if isinstance(v, np.NDArray):
         if type(v) is np.ndarray:
             v = torch.from_numpy(v)
