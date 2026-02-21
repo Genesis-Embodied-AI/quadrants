@@ -302,7 +302,6 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def __setitem__(self, key, value):
-        print("__setitem__")
         self._initialize_host_accessor()
         self.host_accessor.setter(value, *self._pad_key(key))
 
