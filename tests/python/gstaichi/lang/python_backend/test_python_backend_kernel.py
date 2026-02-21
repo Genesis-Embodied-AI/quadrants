@@ -75,3 +75,30 @@ def test_python_backend_atomics(atomic_func, python_func) -> None:
     for i in range(N):
         expected = eval(python_func, {}, {"x": i, "y": 5})
         assert a[i] == expected
+
+
+@pytest.mark.parametrize(
+    "static_flag,expected_output",
+    [
+        (False, 3),
+        (True, 5),
+    ],
+)
+def test_python_backend_static(static_flag: bool, expected_output: int) -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(static_flag: qd.template(), a: qd.types.ndarray[qd.i32, 1]):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            if qd.static(static_flag):
+                a[i_b] = 5
+            else:
+                a[i_b] = 3
+
+    N = 10
+    a = qd.ndarray(qd.i32, (N,))
+    a.fill(0)
+    foo5(static_flag, a)
+    assert a[2] == expected_output
