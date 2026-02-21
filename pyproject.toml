@@ -62,7 +62,6 @@ dev = [
     "yapf",
     "distro",
     "isort",
-    "pip",
     "pylint",
     "pyright",
     "requests",
