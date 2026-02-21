@@ -1,0 +1,1071 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.ast.ast_transformer_utils &#8212; Quadrants 0.4.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../../_static/documentation_options.js?v=ff822928"></script>
+    <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/ast/ast_transformer_utils';</script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.4.2" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.4.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformer_utils</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.ast.ast_transformer_utils</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">builtins</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">textwrap</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextWrapper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTBuilder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">ndrange</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">QuadrantsCompilationError</span><span class="p">,</span>
+    <span class="n">QuadrantsNameError</span><span class="p">,</span>
+    <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
+    <span class="n">handle_exception_from_cpp</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncBase</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.._pruning</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pruning</span>
+
+<div class="viewcode-block" id="AutodiffMode">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.AutodiffMode">[docs]</a>
+<span class="n">AutodiffMode</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">AutodiffMode</span></div>
+
+
+
+<div class="viewcode-block" id="Builder">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.Builder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Builder</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;ASTTransformerFuncContext&quot;</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+        <span class="n">method_name</span> <span class="o">=</span> <span class="s2">&quot;build_&quot;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">error_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Unsupported node &quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">))</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">with</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">src_info_guard</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;violates_pure&quot;</span><span class="p">):</span>
+                    <span class="c1"># assume False until proven otherwise</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">return</span> <span class="n">res</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">stack_trace</span> <span class="o">=</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
+            <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">raised</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="n">e</span><span class="o">.</span><span class="n">with_traceback</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">raised</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">e</span> <span class="o">=</span> <span class="n">handle_exception_from_cpp</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">QuadrantsCompilationError</span><span class="p">):</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="o">+</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+                <span class="k">raise</span> <span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;quadrants stack trace:</span>
+<span class="s2">===</span>
+<span class="si">{</span><span class="n">stack_trace</span><span class="si">}</span>
+<span class="s2">===</span>
+
+<span class="s2">Your code:</span>
+<span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="si">}{</span><span class="n">e</span><span class="si">}</span>
+<span class="s2">&quot;&quot;&quot;</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="n">msg</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="VariableScopeGuard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.VariableScopeGuard">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">VariableScopeGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scopes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
+<div class="viewcode-block" id="VariableScopeGuard.scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.VariableScopeGuard.scopes">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span> <span class="o">=</span> <span class="n">scopes</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="StaticScopeStatus">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.StaticScopeStatus">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StaticScopeStatus</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="StaticScopeStatus.is_in_static_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.StaticScopeStatus.is_in_static_scope">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_in_static_scope</span> <span class="o">=</span> <span class="kc">False</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="StaticScopeGuard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.StaticScopeGuard">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StaticScopeGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">StaticScopeStatus</span><span class="p">):</span>
+<div class="viewcode-block" id="StaticScopeGuard.status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.StaticScopeGuard.status">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_static_scope</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_static_scope</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_static_scope</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev</span></div>
+
+
+
+<div class="viewcode-block" id="NonStaticControlFlowStatus">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NonStaticControlFlowStatus</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="NonStaticControlFlowStatus.is_in_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowStatus.is_in_non_static_control_flow">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span> <span class="o">=</span> <span class="kc">False</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="NonStaticControlFlowGuard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NonStaticControlFlowGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">NonStaticControlFlowStatus</span><span class="p">):</span>
+<div class="viewcode-block" id="NonStaticControlFlowGuard.status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticControlFlowGuard.status">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev</span></div>
+
+
+
+<div class="viewcode-block" id="LoopStatus">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopStatus">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LoopStatus</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<div class="viewcode-block" id="LoopStatus.Normal">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopStatus.Normal">[docs]</a>
+    <span class="n">Normal</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="LoopStatus.Break">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopStatus.Break">[docs]</a>
+    <span class="n">Break</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="LoopStatus.Continue">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopStatus.Continue">[docs]</a>
+    <span class="n">Continue</span> <span class="o">=</span> <span class="mi">2</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="LoopScopeAttribute">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeAttribute">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LoopScopeAttribute</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">is_static</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+<div class="viewcode-block" id="LoopScopeAttribute.is_static">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeAttribute.is_static">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_static</span> <span class="o">=</span> <span class="n">is_static</span></div>
+
+<div class="viewcode-block" id="LoopScopeAttribute.status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeAttribute.status">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">:</span> <span class="n">LoopStatus</span> <span class="o">=</span> <span class="n">LoopStatus</span><span class="o">.</span><span class="n">Normal</span></div>
+
+<div class="viewcode-block" id="LoopScopeAttribute.nearest_non_static_if">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeAttribute.nearest_non_static_if">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nearest_non_static_if</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="LoopScopeGuard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeGuard">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LoopScopeGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scopes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">non_static_guard</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="LoopScopeGuard.scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeGuard.scopes">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span> <span class="o">=</span> <span class="n">scopes</span></div>
+
+<div class="viewcode-block" id="LoopScopeGuard.non_static_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.LoopScopeGuard.non_static_guard">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span> <span class="o">=</span> <span class="n">non_static_guard</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LoopScopeAttribute</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scopes</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="NonStaticIfGuard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NonStaticIfGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">if_node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">,</span>
+        <span class="n">loop_attribute</span><span class="p">:</span> <span class="n">LoopScopeAttribute</span><span class="p">,</span>
+        <span class="n">non_static_status</span><span class="p">:</span> <span class="n">NonStaticControlFlowStatus</span><span class="p">,</span>
+    <span class="p">):</span>
+<div class="viewcode-block" id="NonStaticIfGuard.loop_attribute">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard.loop_attribute">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span> <span class="o">=</span> <span class="n">loop_attribute</span></div>
+
+<div class="viewcode-block" id="NonStaticIfGuard.if_node">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard.if_node">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">if_node</span> <span class="o">=</span> <span class="n">if_node</span></div>
+
+<div class="viewcode-block" id="NonStaticIfGuard.non_static_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.NonStaticIfGuard.non_static_guard">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span> <span class="o">=</span> <span class="n">NonStaticControlFlowGuard</span><span class="p">(</span><span class="n">non_static_status</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">old_non_static_if</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span><span class="o">.</span><span class="n">nearest_non_static_if</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span><span class="o">.</span><span class="n">nearest_non_static_if</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">if_node</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">loop_attribute</span><span class="o">.</span><span class="n">nearest_non_static_if</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">old_non_static_if</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_static_guard</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_val</span><span class="p">,</span> <span class="n">exc_tb</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ReturnStatus">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ReturnStatus">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ReturnStatus</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<div class="viewcode-block" id="ReturnStatus.NoReturn">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ReturnStatus.NoReturn">[docs]</a>
+    <span class="n">NoReturn</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="ReturnStatus.ReturnedVoid">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ReturnStatus.ReturnedVoid">[docs]</a>
+    <span class="n">ReturnedVoid</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="ReturnStatus.ReturnedValue">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ReturnStatus.ReturnedValue">[docs]</a>
+    <span class="n">ReturnedValue</span> <span class="o">=</span> <span class="mi">2</span></div>
+</div>
+
+
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="PureViolation">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.PureViolation">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PureViolation</span><span class="p">:</span>
+<div class="viewcode-block" id="PureViolation.var_name">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.PureViolation.var_name">[docs]</a>
+    <span class="n">var_name</span><span class="p">:</span> <span class="nb">str</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ASTTransformerGlobalContext">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ASTTransformerGlobalContext</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">&quot;Kernel&quot;</span><span class="p">,</span> <span class="n">pruning</span><span class="p">:</span> <span class="s2">&quot;Pruning&quot;</span><span class="p">,</span> <span class="n">currently_compiling_materialize_key</span><span class="p">,</span> <span class="n">pass_idx</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="ASTTransformerGlobalContext.current_kernel">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.current_kernel">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="p">:</span> <span class="s2">&quot;Kernel&quot;</span> <span class="o">=</span> <span class="n">current_kernel</span></div>
+
+<div class="viewcode-block" id="ASTTransformerGlobalContext.pruning">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.pruning">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pruning</span><span class="p">:</span> <span class="s2">&quot;Pruning&quot;</span> <span class="o">=</span> <span class="n">pruning</span></div>
+
+<div class="viewcode-block" id="ASTTransformerGlobalContext.currently_compiling_materialize_key">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.currently_compiling_materialize_key">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">currently_compiling_materialize_key</span> <span class="o">=</span> <span class="n">currently_compiling_materialize_key</span></div>
+
+<div class="viewcode-block" id="ASTTransformerGlobalContext.pass_idx">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.pass_idx">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pass_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">pass_idx</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ASTTransformerFuncContext</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">global_context</span><span class="p">:</span> <span class="n">ASTTransformerGlobalContext</span><span class="p">,</span>
+        <span class="n">template_slot_locations</span><span class="p">,</span>
+        <span class="n">end_lineno</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">is_kernel</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">func</span><span class="p">:</span> <span class="s2">&quot;FuncBase&quot;</span><span class="p">,</span>
+        <span class="n">arg_features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">template_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">is_pure</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">file</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">src</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">start_lineno</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">ast_builder</span><span class="p">:</span> <span class="n">ASTBuilder</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">autodiff_mode</span><span class="p">:</span> <span class="n">AutodiffMode</span><span class="p">,</span>
+        <span class="n">raise_on_templated_floats</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">extension</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.global_context">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.global_context">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_context</span><span class="p">:</span> <span class="n">ASTTransformerGlobalContext</span> <span class="o">=</span> <span class="n">global_context</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.func">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.func">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">:</span> <span class="s2">&quot;FuncBase&quot;</span> <span class="o">=</span> <span class="n">func</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.local_scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.local_scopes">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.loop_scopes">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_scopes">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LoopScopeAttribute</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.template_slot_locations">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.template_slot_locations">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span> <span class="o">=</span> <span class="n">template_slot_locations</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_kernel">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_kernel">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">is_kernel</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.arg_features">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.arg_features">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arg_features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="n">arg_features</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.returns">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.returns">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">returns</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.global_vars">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.global_vars">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">global_vars</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.template_vars">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.template_vars">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">template_vars</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_pure">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_pure">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">is_pure</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.py_args">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.py_args">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.return_data">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.return_data">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">return_data</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.file">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.file">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">file</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.src">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.src">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.indent">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.indent">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="s2">&quot; &quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">break</span>
+<div class="viewcode-block" id="ASTTransformerFuncContext.lineno_offset">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.lineno_offset">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lineno_offset</span> <span class="o">=</span> <span class="n">start_lineno</span> <span class="o">-</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.start_lineno">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.start_lineno">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_lineno</span> <span class="o">=</span> <span class="n">start_lineno</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.end_lineno">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.end_lineno">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_lineno</span> <span class="o">=</span> <span class="n">end_lineno</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.raised">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.raised">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raised</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.non_static_control_flow_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_control_flow_status">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span> <span class="o">=</span> <span class="n">NonStaticControlFlowStatus</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.static_scope_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.static_scope_status">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span> <span class="o">=</span> <span class="n">StaticScopeStatus</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.returned">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.returned">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">returned</span> <span class="o">=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">NoReturn</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.ast_builder">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.ast_builder">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ast_builder</span> <span class="o">=</span> <span class="n">ast_builder</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.visited_funcdef">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.visited_funcdef">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visited_funcdef</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_real_function">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_real_function">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.kernel_args">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.kernel_args">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.only_parse_function_def">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.only_parse_function_def">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.autodiff_mode">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.autodiff_mode">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">=</span> <span class="n">autodiff_mode</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.loop_depth">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_depth">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.raise_on_templated_floats">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.raise_on_templated_floats">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">raise_on_templated_floats</span></div>
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.expanding_dataclass_call_parameters">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.expanding_dataclass_call_parameters">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.adstack_enabled">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.adstack_enabled">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adstack_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span>
+                <span class="n">extension</span><span class="o">.</span><span class="n">adstack</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="ow">and</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">ad_stack_experimental_enabled</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># e.g.: FunctionDef, Module, Global</span>
+<div class="viewcode-block" id="ASTTransformerFuncContext.variable_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.variable_scope_guard">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">variable_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">VariableScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">)</span></div>
+
+
+    <span class="c1"># e.g.: For, While</span>
+<div class="viewcode-block" id="ASTTransformerFuncContext.loop_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_scope_guard">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">loop_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">is_static</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">is_static</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">LoopScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">LoopScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_guard</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.non_static_if_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_if_guard">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">non_static_if_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">if_node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">NonStaticIfGuard</span><span class="p">(</span>
+            <span class="n">if_node</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_loop_scope</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.non_static_control_flow_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.non_static_control_flow_guard">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">non_static_control_flow_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NonStaticControlFlowGuard</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">NonStaticControlFlowGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.static_scope_guard">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.static_scope_guard">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">static_scope_guard</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StaticScopeGuard</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StaticScopeGuard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.current_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.current_scope">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.current_loop_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.current_loop_scope">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_loop_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.loop_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">loop_status</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LoopStatus</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">status</span>
+        <span class="k">return</span> <span class="n">LoopStatus</span><span class="o">.</span><span class="n">Normal</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.set_loop_status">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.set_loop_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_loop_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">LoopStatus</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_in_static_for">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_static_for">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in_static_for</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_scopes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">is_static</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_in_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_non_static_control_flow">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in_non_static_control_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_in_static_scope">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_static_scope">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in_static_scope</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">static_scope_status</span><span class="o">.</span><span class="n">is_in_static_scope</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_var_declared">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_var_declared">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_var_declared</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.create_variable">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.create_variable">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">var</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_scope</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Recreating variables is not allowed&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_scope</span><span class="p">()[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">var</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.check_loop_var">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.check_loop_var">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_loop_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_var_declared</span><span class="p">(</span><span class="n">loop_var</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Variable &#39;</span><span class="si">{</span><span class="n">loop_var</span><span class="si">}</span><span class="s2">&#39; is already declared in the outer scope and cannot be used as loop variable&quot;</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.get_var_by_name">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.get_var_by_name">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_var_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_scopes</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+                <span class="n">val</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="kc">None</span>
+
+        <span class="n">reason</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">violates_pure</span><span class="p">,</span> <span class="n">found_name</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_vars</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not permitted to access floats as templated values&quot;</span><span class="p">)</span>
+            <span class="n">found_name</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_vars</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> is in global vars, therefore violates pure&quot;</span>
+            <span class="n">violates_pure</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">found_name</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not permitted to access floats as global values&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">found_name</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable-msg=C0415</span>
+                <span class="n">Matrix</span><span class="p">,</span>
+                <span class="n">make_matrix</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">var</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">violates_pure</span><span class="p">,</span> <span class="n">make_matrix</span><span class="p">(</span><span class="n">var</span><span class="o">.</span><span class="n">to_list</span><span class="p">()),</span> <span class="n">reason</span>
+            <span class="k">return</span> <span class="n">violates_pure</span><span class="p">,</span> <span class="n">var</span><span class="p">,</span> <span class="n">reason</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">builtins</span><span class="p">,</span> <span class="n">name</span><span class="p">),</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsNameError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Name &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot; is not defined&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.get_pos_info">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.get_pos_info">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_pos_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;File &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="si">}</span><span class="s1">&quot;, line </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">lineno_offset</span><span class="si">}</span><span class="s1">, in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">:</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="n">col_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">col_offset</span>
+        <span class="n">end_col_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">end_col_offset</span>
+
+        <span class="n">wrapper</span> <span class="o">=</span> <span class="n">TextWrapper</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">80</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">gen_line</span><span class="p">(</span><span class="n">code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">hint</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">hint</span> <span class="o">+=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">code</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">hint</span><span class="p">))</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="n">wrapper</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+            <span class="n">hint</span> <span class="o">=</span> <span class="n">wrapper</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="n">hint</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">code</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">c</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">h</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">hint</span><span class="p">)])</span>
+
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">):</span>
+                <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">col_offset</span> <span class="o">+</span> <span class="s2">&quot;^&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="n">end_col_offset</span> <span class="o">-</span> <span class="n">col_offset</span><span class="p">)</span>
+                <span class="n">msg</span> <span class="o">+=</span> <span class="n">gen_line</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span><span class="p">],</span> <span class="n">hint</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node_type</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+
+            <span class="k">if</span> <span class="n">node_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;For&quot;</span><span class="p">,</span> <span class="s2">&quot;While&quot;</span><span class="p">,</span> <span class="s2">&quot;FunctionDef&quot;</span><span class="p">,</span> <span class="s2">&quot;If&quot;</span><span class="p">]:</span>
+                <span class="n">end_lineno</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">end_lineno</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span>
+
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">end_lineno</span><span class="p">):</span>
+                <span class="n">last</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">while</span> <span class="n">last</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">last</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">isspace</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">last</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">isprintable</span><span class="p">()):</span>
+                    <span class="n">last</span> <span class="o">-=</span> <span class="mi">1</span>
+                <span class="n">first</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">while</span> <span class="n">first</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="ow">and</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">first</span><span class="p">]</span><span class="o">.</span><span class="n">isspace</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">first</span><span class="p">]</span><span class="o">.</span><span class="n">isprintable</span><span class="p">()</span>
+                <span class="p">):</span>
+                    <span class="n">first</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">col_offset</span> <span class="o">+</span> <span class="s2">&quot;^&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="n">last</span> <span class="o">-</span> <span class="n">col_offset</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">first</span> <span class="o">+</span> <span class="s2">&quot;^&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="n">end_col_offset</span> <span class="o">-</span> <span class="n">first</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">first</span> <span class="o">&lt;</span> <span class="n">last</span><span class="p">:</span>
+                    <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">first</span> <span class="o">+</span> <span class="s2">&quot;^&quot;</span> <span class="o">*</span> <span class="p">(</span><span class="n">last</span> <span class="o">-</span> <span class="n">first</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">msg</span> <span class="o">+=</span> <span class="n">gen_line</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">hint</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">msg</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="get_decorator">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.get_decorator">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">wanted</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span>
+        <span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">,</span> <span class="s2">&quot;static&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">,</span> <span class="s2">&quot;static_assert&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">grouped</span><span class="p">,</span> <span class="s2">&quot;grouped&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">ndrange</span><span class="p">,</span> <span class="s2">&quot;ndrange&quot;</span><span class="p">),</span>
+    <span class="p">]:</span>
+        <span class="k">if</span> <span class="n">ASTResolver</span><span class="o">.</span><span class="n">resolve_to</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">wanted</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">name</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
