@@ -7,7 +7,7 @@ import numpy as np
 from quadrants._lib import core as _ti_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
-from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
+from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type, dtype_to_numpy_dtype
 from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
@@ -28,6 +28,7 @@ class Ndarray:
     """
 
     def __init__(self):
+        print("ndarray init")
         self.host_accessor = None
         self.shape = None
         self.element_type = None
@@ -37,6 +38,7 @@ class Ndarray:
         self.grad: "TensorNdarray | None" = None
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
+        print("ndarray init end")
 
     def __del__(self):
         if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:
@@ -280,9 +282,13 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        self.arr = impl.get_runtime().prog.create_ndarray(
-            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_ti_core.DebugInfo(get_traceback())
-        )
+        if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+            np_dtype = dtype_to_numpy_dtype(dtype)
+            self.arr = np.zeros(shape=arr_shape, dtype=np_dtype)
+        else:
+            self.arr = impl.get_runtime().prog.create_ndarray(
+                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_ti_core.DebugInfo(get_traceback())
+            )
         self.shape = tuple(self.arr.shape)
         self.element_type = dtype
 
@@ -292,6 +298,7 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def __setitem__(self, key, value):
+        print("__setitem__")
         self._initialize_host_accessor()
         self.host_accessor.setter(value, *self._pad_key(key))
 

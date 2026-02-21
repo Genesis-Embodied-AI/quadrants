@@ -84,6 +84,9 @@ Program::Program(Arch desired_arch) : snode_rw_accessors_bank_(this) {
 #else
     QD_ERROR("This quadrants is not compiled with Vulkan")
 #endif
+  } else if (config.arch == Arch::python) {
+    program_impl_ = nullptr;  // Python backend doesn't have a ProgramImpl
+    return;
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -309,6 +312,15 @@ void Program::dump_cache_data_to_disk() {
 
 void Program::finalize() {
   if (finalized_) {
+    return;
+  }
+
+  if(compile_config().arch == Arch::python) {
+    // No need to finalize for Python backend, but we still want to set
+    // finalized_ to true and decrease num_instances_ for proper cleanup.
+    QD_TRACE("Python backend does not require finalization.");
+    finalized_ = true;
+    num_instances_ -= 1;
     return;
   }
 

@@ -56,6 +56,7 @@ from quadrants.lang.util import (
     python_scope,
     quadrants_scope,
     warning,
+    dtype_to_numpy_dtype,
 )
 from quadrants.types.enums import SNodeGradType
 from quadrants.types.ndarray_type import NdarrayType
@@ -879,13 +880,19 @@ def ndarray(dtype, shape, needs_grad=False):
             >>> z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.
     """
     # primal
+    print('impl.ndarray')
+    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+        return np.zeros(shape=shape, dtype=dtype_to_numpy_dtype(dtype))
     if isinstance(shape, numbers.Number):
         shape = (shape,)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
+        print('cook dtype')
         dt = cook_dtype(dtype)
+        print('dt', dt)
         x = ScalarNdarray(dt, shape)
+        print('x', x)
     elif isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
             x = VectorNdarray(dtype.n, dtype.dtype, shape)

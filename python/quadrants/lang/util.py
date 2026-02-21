@@ -277,6 +277,19 @@ def cook_dtype(dtype: Any) -> _ti_core.DataTypeCxx:
     raise ValueError(f"Invalid data type {dtype}")
 
 
+def dtype_to_numpy_dtype(dtype: Any):
+    print('dtype', dtype)
+    return {
+        float: np.float32,
+        int: np.int32,
+        i32: np.int32,
+        f32: np.float32,
+        i64: np.int64,
+        f64: np.float64,
+        bool: np.bool_
+    }[dtype]
+
+
 def in_quadrants_scope():
     return impl.inside_kernel()
 

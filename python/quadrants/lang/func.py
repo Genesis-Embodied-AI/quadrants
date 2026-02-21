@@ -4,8 +4,9 @@ from quadrants._lib import core as _ti_core
 from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
-from quadrants._lib.core.quadrants_python import FunctionKey
+from quadrants._lib.core.quadrants_python import FunctionKey, Arch
 from quadrants.lang import _kernel_impl_dataclass, impl, ops
+# from quadrants.lang._kernel_types 
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,
@@ -53,6 +54,13 @@ class Func(FuncBase):
 
     def __call__(self: "Func", *py_args, **kwargs) -> Any:
         runtime = impl.get_runtime()
+        # for k, v in runtime.__dict__.items():
+        #     print(k, v)
+        # print(runtime.prog.config().arch)
+        if runtime.prog.config().arch == Arch.python:
+            # print('python runtime')
+            # print("func", self.func)
+            return self.func(*py_args, **kwargs)
         global_context = runtime._current_global_context
         current_kernel = global_context.current_kernel if global_context is not None else None
         py_args = self.fuse_args(

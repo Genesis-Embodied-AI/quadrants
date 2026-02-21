@@ -133,6 +133,9 @@ vulkan = _ti_core.vulkan
 """
 # ----------------------
 
+"""The python backend"""
+python = _ti_core.python
+
 gpu = [cuda, metal, vulkan, amdgpu]
 """A list of GPU backends supported on the current system.
 Currently contains 'cuda', 'metal', 'vulkan', 'amdgpu'.
@@ -444,14 +447,14 @@ def init(
 
     # create a new program:
     impl.get_runtime().create_program()
+    if cfg.arch != _ti_core.python:
+        _logging.trace("Materializing runtime...")
+        impl.get_runtime().prog.materialize_runtime()
 
-    _logging.trace("Materializing runtime...")
-    impl.get_runtime().prog.materialize_runtime()
+        impl._root_fb = _snode.FieldsBuilder()
 
-    impl._root_fb = _snode.FieldsBuilder()
-
-    if cfg.debug:
-        impl.get_runtime()._register_signal_handlers()
+        if cfg.debug:
+            impl.get_runtime()._register_signal_handlers()
 
     # Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)
     os.chdir(current_dir)
@@ -716,6 +719,7 @@ def is_arch_supported(arch):
         metal: _ti_core.with_metal,
         vulkan: _ti_core.with_vulkan,
         cpu: lambda: True,
+        python: lambda: True,
     }
     with_arch = arch_table.get(arch, lambda: False)
     try:
@@ -799,6 +803,7 @@ __all__ = [
     "amdgpu",
     "gpu",
     "metal",
+    "python",
     "vulkan",
     "extension",
     "loop_config",
