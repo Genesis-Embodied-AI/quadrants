@@ -316,8 +316,6 @@ void Program::finalize() {
   }
 
   if (compile_config().arch == Arch::python) {
-    // No need to finalize for Python backend, but we still want to set
-    // finalized_ to true and decrease num_instances_ for proper cleanup.
     QD_TRACE("Python backend does not require finalization.");
     finalized_ = true;
     num_instances_ -= 1;
