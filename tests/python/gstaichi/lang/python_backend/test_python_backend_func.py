@@ -1,4 +1,3 @@
-
 import quadrants as qd
 
 
