@@ -1,10 +1,10 @@
 from typing import Any, Callable
 
 from quadrants._lib import core as _ti_core
+from quadrants._lib.core.quadrants_python import Arch, FunctionKey
 from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
-from quadrants._lib.core.quadrants_python import FunctionKey, Arch
 from quadrants.lang import _kernel_impl_dataclass, impl, ops
 
 # from quadrants.lang._kernel_types

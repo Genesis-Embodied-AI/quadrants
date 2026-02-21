@@ -7,7 +7,13 @@ import numpy as np
 from quadrants._lib import core as _ti_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
-from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type, dtype_to_numpy_dtype
+from quadrants.lang.util import (
+    cook_dtype,
+    dtype_to_numpy_dtype,
+    get_traceback,
+    python_scope,
+    to_numpy_type,
+)
 from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata

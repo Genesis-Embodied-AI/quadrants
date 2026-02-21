@@ -23,6 +23,7 @@ from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
+    dtype_to_numpy_dtype,
     get_traceback,
     in_python_scope,
     python_scope,
@@ -30,7 +31,6 @@ from quadrants.lang.util import (
     to_numpy_type,
     to_pytorch_type,
     warning,
-    dtype_to_numpy_dtype,
 )
 from quadrants.types import primitive_types
 from quadrants.types.compound_types import CompoundType

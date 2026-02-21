@@ -14,6 +14,7 @@ from weakref import ReferenceType
 
 from quadrants import _logging
 from quadrants._lib.core.quadrants_python import (
+    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -59,7 +60,6 @@ from ._kernel_types import (
 )
 from ._pruning import Pruning
 from ._quadrants_callable import QuadrantsCallable
-from quadrants._lib.core.quadrants_python import Arch
 
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION

@@ -33,9 +33,9 @@ from quadrants.lang.matrix import (
     MatrixField,
     MatrixNdarray,
     MatrixType,
-    VectorType,
     Vector,
     VectorNdarray,
+    VectorType,
     make_matrix,
 )
 from quadrants.lang.mesh import (
@@ -52,12 +52,12 @@ from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
     cook_dtype,
+    dtype_to_numpy_dtype,
     get_traceback,
     is_quadrants_class,
     python_scope,
     quadrants_scope,
     warning,
-    dtype_to_numpy_dtype,
 )
 from quadrants.types.enums import SNodeGradType
 from quadrants.types.ndarray_type import NdarrayType
