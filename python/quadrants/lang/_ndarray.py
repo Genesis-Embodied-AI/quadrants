@@ -34,7 +34,6 @@ class Ndarray:
     """
 
     def __init__(self):
-        print("ndarray init")
         self.host_accessor = None
         self.shape = None
         self.element_type = None
@@ -44,7 +43,6 @@ class Ndarray:
         self.grad: "TensorNdarray | None" = None
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
-        print("ndarray init end")
 
     def __del__(self):
         if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:
