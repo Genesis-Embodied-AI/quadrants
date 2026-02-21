@@ -23,7 +23,7 @@ from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
-    dtype_to_numpy_dtype,
+    dtype_to_torch_dtype,
     get_traceback,
     in_python_scope,
     python_scope,
@@ -36,6 +36,12 @@ from quadrants.types import primitive_types
 from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
+
+torch = None
+try:
+    import torch
+except Exception:
+    pass
 
 _type_factory = _ti_python_core.get_type_factory_instance()
 
@@ -249,6 +255,11 @@ class Matrix(QuadrantsOperations):
     _is_quadrants_class = True
     _is_matrix_class = True
     __array_priority__ = 1000
+
+    def __new__(cls, arr, dt=None):
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            assert torch is not None
+            return torch.Tensor(arr)
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
@@ -970,8 +981,11 @@ class Matrix(QuadrantsOperations):
             shape = (shape,)
         if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
             shape = (*shape, m, n)
-            dtype = dtype_to_numpy_dtype(dtype)
-            return np.zeros(shape=shape, dtype=dtype)
+            dtype = dtype_to_torch_dtype(dtype)
+            assert torch is not None
+            res = torch.zeros(size=shape, dtype=dtype)
+            res.fill = res.fill_  # type: ignore
+            return res
         return MatrixNdarray(n, m, dtype, shape)
 
     @staticmethod
@@ -1146,8 +1160,11 @@ class Vector(Matrix):
             shape = (shape,)
         if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
             shape = (*shape, n)
-            dtype = dtype_to_numpy_dtype(dtype)
-            return np.zeros(shape=shape, dtype=dtype)
+            dtype = dtype_to_torch_dtype(dtype)
+            assert torch is not None
+            res = torch.zeros(size=shape, dtype=dtype)
+            res.fill = res.fill_  # type: ignore
+            return res
         return VectorNdarray(n, dtype, shape)
 
 

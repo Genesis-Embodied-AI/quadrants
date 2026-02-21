@@ -52,7 +52,7 @@ from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
     cook_dtype,
-    dtype_to_numpy_dtype,
+    dtype_to_torch_dtype,
     get_traceback,
     is_quadrants_class,
     python_scope,
@@ -72,6 +72,14 @@ from quadrants.types.primitive_types import (
     u32,
     u64,
 )
+
+torch_is_available = False
+torch = None
+try:
+    import torch
+    torch_is_available = True
+except Exception:
+    pass
 
 if TYPE_CHECKING:
     from quadrants.lang._ndarray import Ndarray
@@ -885,7 +893,14 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
             dtype = dtype.dtype
-        return np.zeros(shape=shape, dtype=dtype_to_numpy_dtype(dtype))
+        assert torch_is_available and torch
+        print('size', shape, 'dtype', dtype)
+        if type(shape) == int:
+            shape = (shape,)
+            print('updated size', shape, 'dtype', dtype)
+        res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
+        res.fill = res.fill_  # type: ignore
+        return res 
     if isinstance(shape, numbers.Number):
         shape = (shape,)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):

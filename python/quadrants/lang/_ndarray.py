@@ -19,6 +19,13 @@ from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
 from quadrants.types.utils import is_real, is_signed
 
+torch_is_available = False
+try:
+    import torch
+    torch_is_available = True
+except Exception:
+    pass
+
 if TYPE_CHECKING:
     from quadrants.lang.matrix import MatrixNdarray, VectorNdarray
 
@@ -287,8 +294,9 @@ class ScalarNdarray(Ndarray):
         super().__init__()
         self.dtype = cook_dtype(dtype)
         if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+            assert torch_is_available
             np_dtype = dtype_to_numpy_dtype(dtype)
-            self.arr = np.zeros(shape=arr_shape, dtype=np_dtype)
+            self.arr = torch.zeros(shape=arr_shape, dtype=np_dtype)
         else:
             self.arr = impl.get_runtime().prog.create_ndarray(
                 self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_ti_core.DebugInfo(get_traceback())

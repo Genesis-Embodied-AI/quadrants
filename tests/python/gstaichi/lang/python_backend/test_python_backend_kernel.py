@@ -41,3 +41,14 @@ def test_python_backend_kernel() -> None:
     a[2] = 9
     k1b(a)
     assert a[2] == 7
+
+    @qd.kernel
+    def foo5(a: qd.types.ndarray[qd.i32, 1]):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            qd.atomic_add(a[i_b], 1)
+
+    a.fill(3)
+    foo5(a)
+    assert a[2] == 4

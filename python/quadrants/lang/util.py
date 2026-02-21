@@ -29,6 +29,12 @@ from quadrants.types.primitive_types import (
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
 
+torch = None
+try:
+    import torch
+except Exception:
+    pass
+
 
 def has_pytorch():
     """Whether has pytorch in the current Python environment.
@@ -278,7 +284,6 @@ def cook_dtype(dtype: Any) -> _ti_core.DataTypeCxx:
 
 
 def dtype_to_numpy_dtype(dtype: Any):
-    # print('dtype', dtype)
     return {
         float: np.float32,
         int: np.int32,
@@ -288,6 +293,20 @@ def dtype_to_numpy_dtype(dtype: Any):
         f64: np.float64,
         bool: np.bool_,
         u1: np.bool_,
+    }[dtype]
+
+
+def dtype_to_torch_dtype(dtype: Any):
+    assert torch is not None
+    return {
+        float: torch.float32,
+        int: torch.int32,
+        i32: torch.int32,
+        f32: torch.float32,
+        i64: torch.int64,
+        f64: torch.float64,
+        bool: torch.bool,
+        u1: torch.bool,
     }[dtype]
 
 

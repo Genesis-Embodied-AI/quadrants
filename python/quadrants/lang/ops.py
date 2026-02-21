@@ -44,6 +44,8 @@ def _read_matrix_or_scalar(x):
 def writeback_binary(foo):
     @functools.wraps(foo)
     def wrapped(a, b):
+        if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+            return foo(a, b)
         if isinstance(a, Field) or isinstance(b, Field):
             return NotImplemented
         if not (is_quadrants_expr(a) and a.ptr.is_lvalue()):
@@ -1167,6 +1169,9 @@ def atomic_add(x, y):
         >>>
         >>>     ti.atomic_add(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x += y
+        return x
     return impl.expr_init(expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
