@@ -302,7 +302,8 @@ def in_python_scope():
 def quadrants_scope(func):
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
+        if impl.get_runtime().prog.config().arch != _ti_core.Arch.python:
+            assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
         return func(*args, **kwargs)
 
     return wrapped
