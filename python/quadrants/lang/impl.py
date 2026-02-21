@@ -920,6 +920,9 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
             dtype = dtype.dtype
+        elif type(dtype) is MatrixType:
+            shape = (*shape, dtype.n, dtype.m)
+            dtype = dtype.dtype
         assert torch is not None
         if type(shape) == int:
             shape = (shape,)

@@ -155,3 +155,39 @@ def test_python_backend_field_matrix() -> None:
     a.fill(0)
     foo5(a)
     assert a[2].tolist() == [[5, 4, 3], [2, 3, 4]]
+
+
+def test_python_backend_ndarray_vector() -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(a: qd.types.ndarray()):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            a[i_b] = qd.Vector([5, 4, 3])
+
+    N = 10
+    vec3 = qd.types.vector(3, qd.i32)
+    a = qd.ndarray(vec3, (N,))
+    a.fill(0)
+    foo5(a)
+    assert a[2].tolist() == [5, 4, 3]
+
+
+def test_python_backend_ndarray_matrix() -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(a: qd.types.ndarray()):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            a[i_b] = qd.Matrix([[5, 4, 3], [2, 3, 4]])
+
+    N = 10
+    mat2x3 = qd.types.matrix(2, 3, qd.i32)
+    a = qd.ndarray(mat2x3, (N,))
+    a.fill(0)
+    foo5(a)
+    assert a[2].tolist() == [[5, 4, 3], [2, 3, 4]]
