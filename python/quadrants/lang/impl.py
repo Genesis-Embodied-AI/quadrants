@@ -73,6 +73,8 @@ from quadrants.types.primitive_types import (
     u64,
 )
 
+from . import py_tensor
+
 torch = None
 try:
     import torch
@@ -883,7 +885,6 @@ def field(dtype, shape, *args, **kwargs):
         dtype = dtype_to_torch_dtype(dtype)
         print("dtype", dtype, type(dtype), "shape", shape)
         res = torch.zeros(size=shape, dtype=dtype)
-        from . import py_tensor
 
         py_tensor.init_py_tensor(res)
         # res.fill = res.fill_  # type: ignore
@@ -923,7 +924,6 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(shape) == int:
             shape = (shape,)
         res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
-        from . import py_tensor
 
         py_tensor.init_py_tensor(res)
         # res.fill = res.fill_  # type: ignore
