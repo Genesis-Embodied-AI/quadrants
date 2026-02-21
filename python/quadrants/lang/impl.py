@@ -77,6 +77,7 @@ torch_is_available = False
 torch = None
 try:
     import torch
+
     torch_is_available = True
 except Exception:
     pass
@@ -900,7 +901,7 @@ def ndarray(dtype, shape, needs_grad=False):
             print('updated size', shape, 'dtype', dtype)
         res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
         res.fill = res.fill_  # type: ignore
-        return res 
+        return res
     if isinstance(shape, numbers.Number):
         shape = (shape,)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):

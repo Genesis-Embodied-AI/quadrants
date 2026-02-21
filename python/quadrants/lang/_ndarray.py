@@ -22,6 +22,7 @@ from quadrants.types.utils import is_real, is_signed
 torch_is_available = False
 try:
     import torch
+
     torch_is_available = True
 except Exception:
     pass

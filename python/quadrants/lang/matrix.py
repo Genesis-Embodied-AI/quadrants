@@ -260,6 +260,7 @@ class Matrix(QuadrantsOperations):
         if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
             assert torch is not None
             return torch.Tensor(arr)
+        return super().__new__(cls)
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
