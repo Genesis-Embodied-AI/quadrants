@@ -3,6 +3,7 @@ handle initializatin torhc tensor for python backend
 """
 
 from functools import partial
+
 import numpy as np
 
 torch = None
