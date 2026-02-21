@@ -1202,6 +1202,9 @@ def atomic_mul(x, y):
         >>>
         >>>     ti.atomic_mul(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x *= y
+        return x
     return impl.expr_init(expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
@@ -1232,6 +1235,9 @@ def atomic_sub(x, y):
         >>>
         >>>     ti.atomic_sub(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x -= y
+        return x
     return impl.expr_init(expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
@@ -1262,6 +1268,9 @@ def atomic_min(x, y):
         >>>
         >>>     ti.atomic_min(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x[()] = min(x[()], y)
+        return x
     return impl.expr_init(expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
@@ -1292,6 +1301,9 @@ def atomic_max(x, y):
         >>>
         >>>     ti.atomic_max(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x[()] = max(x[()], y)
+        return x
     return impl.expr_init(expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
@@ -1322,6 +1334,9 @@ def atomic_and(x, y):
         >>>
         >>>     ti.atomic_and(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x &= y
+        return x
     return impl.expr_init(
         expr.Expr(_ti_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
@@ -1354,6 +1369,9 @@ def atomic_or(x, y):
         >>>
         >>>     ti.atomic_or(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x |= y
+        return x
     return impl.expr_init(
         expr.Expr(_ti_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
@@ -1386,6 +1404,10 @@ def atomic_xor(x, y):
         >>>
         >>>     ti.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
     """
+    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        x ^= y
+        return x
+
     return impl.expr_init(
         expr.Expr(_ti_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
