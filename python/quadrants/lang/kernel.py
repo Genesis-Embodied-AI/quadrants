@@ -64,6 +64,7 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
+_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -542,12 +543,11 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
-        if self.arch_is_python is None:
-            self.arch_is_python = impl.get_runtime().prog.config().arch == Arch.python
-        if self.arch_is_python:
+        config = impl.current_cfg()
+        if config.arch == _ARCH_PYTHON:
             return self.func(*py_args, **kwargs)
 
-        self.raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
+        self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
 
         # Transform the primal kernel to forward mode grad kernel
