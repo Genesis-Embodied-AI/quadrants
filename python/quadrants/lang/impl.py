@@ -885,7 +885,7 @@ def ndarray(dtype, shape, needs_grad=False):
     if get_runtime().prog.config().arch == _ti_core.Arch.python:
         # if type(dtype) in {QuadrantsCallable}:
         #     dtype = dtype()
-        print('type dtype', type(dtype))
+        # print('type dtype', type(dtype))
         if type(dtype) is VectorType:
             # print('got vector', dtype.m, dtype.n)
             shape = (*shape, dtype.n)

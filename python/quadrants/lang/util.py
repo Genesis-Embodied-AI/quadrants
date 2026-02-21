@@ -278,7 +278,7 @@ def cook_dtype(dtype: Any) -> _ti_core.DataTypeCxx:
 
 
 def dtype_to_numpy_dtype(dtype: Any):
-    print('dtype', dtype)
+    # print('dtype', dtype)
     return {
         float: np.float32,
         int: np.int32,
