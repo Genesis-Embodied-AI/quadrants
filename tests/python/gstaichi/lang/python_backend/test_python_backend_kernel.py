@@ -102,3 +102,56 @@ def test_python_backend_static(static_flag: bool, expected_output: int) -> None:
     a.fill(0)
     foo5(static_flag, a)
     assert a[2] == expected_output
+
+
+def test_python_backend_field() -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(a: qd.template()):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            a[i_b] = 5
+
+    N = 10
+    a = qd.field(qd.i32, (N,))
+    a.fill(0)
+    foo5(a)
+    assert a[2] == 5
+
+
+def test_python_backend_field_vector() -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(a: qd.template()):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            a[i_b] = qd.Vector([5, 4, 3])
+
+    N = 10
+    vec3 = qd.types.vector(3, qd.i32)
+    a = qd.field(vec3, (N,))
+    a.fill(0)
+    foo5(a)
+    assert a[2].tolist() == [5, 4, 3]
+
+
+def test_python_backend_field_matrix() -> None:
+    qd.init(qd.python)
+
+    @qd.kernel
+    def foo5(a: qd.template()):
+        B = a.shape[0]
+        qd.loop_config(serialize=False)
+        for i_b in range(B):
+            a[i_b] = qd.Matrix([[5, 4, 3], [2, 3, 4]])
+
+    N = 10
+    mat2x3 = qd.types.matrix(2, 3, qd.i32)
+    a = qd.field(mat2x3, (N,))
+    a.fill(0)
+    foo5(a)
+    assert a[2].tolist() == [[5, 4, 3], [2, 3, 4]]

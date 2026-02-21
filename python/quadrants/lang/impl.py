@@ -824,7 +824,7 @@ def _field(
 
 
 @python_scope
-def field(dtype, *args, **kwargs):
+def field(dtype, shape, *args, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
@@ -862,11 +862,37 @@ def field(dtype, *args, **kwargs):
             >>> x5 = ti.field(ti.math.vec3, shape=(16, 8))
 
     """
+    if isinstance(shape, numbers.Number):
+        shape = (shape,)
+    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+        assert torch is not None
+        if isinstance(dtype, MatrixType):
+            # if isinstance(dtype, torch.Tensor):
+            print("got matrix")
+            if dtype.ndim == 1:
+                shape = (*shape, dtype.n)
+            else:
+                shape = (*shape, dtype.n, dtype.m)
+            # shape = (*shape, *dtype.shape)
+            # if len(dtype.shape) == 1:
+            #     shape = (*shape, dtype.n, dtype.m)
+            # else:
+            #     shape = (*shape, dtype.n)
+            dtype = dtype.dtype
+        # else:
+        dtype = dtype_to_torch_dtype(dtype)
+        print("dtype", dtype, type(dtype), "shape", shape)
+        res = torch.zeros(size=shape, dtype=dtype)
+        from . import py_tensor
+
+        py_tensor.init_py_tensor(res)
+        # res.fill = res.fill_  # type: ignore
+        return res
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
-            return Vector.field(dtype.n, dtype.dtype, *args, **kwargs)
-        return Matrix.field(dtype.n, dtype.m, dtype.dtype, *args, **kwargs)
-    return _field(dtype, *args, **kwargs)
+            return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
+        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, **kwargs)
+    return _field(dtype, shape, *args, **kwargs)
 
 
 @python_scope
@@ -887,6 +913,8 @@ def ndarray(dtype, shape, needs_grad=False):
             >>> z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.
     """
     # primal
+    if isinstance(shape, numbers.Number):
+        shape = (shape,)
     if get_runtime().prog.config().arch == _ti_core.Arch.python:
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
@@ -895,10 +923,11 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(shape) == int:
             shape = (shape,)
         res = torch.zeros(size=shape, dtype=dtype_to_torch_dtype(dtype))
-        res.fill = res.fill_  # type: ignore
+        from . import py_tensor
+
+        py_tensor.init_py_tensor(res)
+        # res.fill = res.fill_  # type: ignore
         return res
-    if isinstance(shape, numbers.Number):
-        shape = (shape,)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
