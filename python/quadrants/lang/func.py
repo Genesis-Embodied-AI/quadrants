@@ -6,7 +6,8 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._lib.core.quadrants_python import FunctionKey, Arch
 from quadrants.lang import _kernel_impl_dataclass, impl, ops
-# from quadrants.lang._kernel_types 
+
+# from quadrants.lang._kernel_types
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,
