@@ -30,6 +30,7 @@ from quadrants.lang.util import (
     to_numpy_type,
     to_pytorch_type,
     warning,
+    dtype_to_numpy_dtype,
 )
 from quadrants.types import primitive_types
 from quadrants.types.compound_types import CompoundType
@@ -967,6 +968,11 @@ class Matrix(QuadrantsOperations):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            print("m", m, "n", n, "dtype", dtype, "shape", shape)
+            shape = (*shape, m, n)
+            dtype = dtype_to_numpy_dtype(dtype)
+            return np.zeros(shape=shape, dtype=dtype)
         return MatrixNdarray(n, m, dtype, shape)
 
     @staticmethod
@@ -1137,8 +1143,14 @@ class Vector(Matrix):
 
                 >>> x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))
         """
+        print("Vector.ndarray")
         if isinstance(shape, numbers.Number):
             shape = (shape,)
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            print("n", n, "dtype", dtype, "shape", shape)
+            shape = (*shape, n)
+            dtype = dtype_to_numpy_dtype(dtype)
+            return np.zeros(shape=shape, dtype=dtype)
         return VectorNdarray(n, dtype, shape)
 
 
@@ -1608,6 +1620,7 @@ class VectorType(MatrixType):
         return Vector.field(self.n, dtype=self.dtype, **kwargs)
 
     def ndarray(self, **kwargs):
+        print("VecotrType.ndarray")
         return Vector.ndarray(self.n, dtype=self.dtype, **kwargs)
 
     def to_string(self):

@@ -286,7 +286,8 @@ def dtype_to_numpy_dtype(dtype: Any):
         f32: np.float32,
         i64: np.int64,
         f64: np.float64,
-        bool: np.bool_
+        bool: np.bool_,
+        u1: np.bool_,
     }[dtype]
 
 
