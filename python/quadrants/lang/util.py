@@ -29,6 +29,12 @@ from quadrants.types.primitive_types import (
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
 
+torch = None
+try:
+    import torch
+except Exception:
+    pass
+
 
 def has_pytorch():
     """Whether has pytorch in the current Python environment.
@@ -41,9 +47,7 @@ def has_pytorch():
     _env_torch = os.environ.get("QD_ENABLE_TORCH", "1")
     if not _env_torch or int(_env_torch):
         try:
-            import torch  # noqa: F401 pylint: disable=C0415
-
-            _has_pytorch = True
+            _has_pytorch = torch is not None
         except:
             pass
     return _has_pytorch
@@ -133,7 +137,7 @@ def to_pytorch_type(dt):
         DataType: The counterpart data type in torch.
 
     """
-    import torch  # pylint: disable=C0415
+    assert torch is not None
 
     # pylint: disable=E1101
     if dt == f32:
@@ -211,7 +215,7 @@ def to_quadrants_type(dt):
         return f16
 
     if has_pytorch():
-        import torch  # pylint: disable=C0415
+        assert torch is not None
 
         # pylint: disable=E1101
         if dt == torch.float32:
@@ -277,6 +281,33 @@ def cook_dtype(dtype: Any) -> _ti_core.DataTypeCxx:
     raise ValueError(f"Invalid data type {dtype}")
 
 
+def dtype_to_numpy_dtype(dtype: Any):
+    return {
+        float: np.float32,
+        int: np.int32,
+        i32: np.int32,
+        f32: np.float32,
+        i64: np.int64,
+        f64: np.float64,
+        bool: np.bool_,
+        u1: np.bool_,
+    }[dtype]
+
+
+def dtype_to_torch_dtype(dtype: Any):
+    assert torch is not None
+    return {
+        float: torch.float32,
+        int: torch.int32,
+        i32: torch.int32,
+        f32: torch.float32,
+        i64: torch.int64,
+        f64: torch.float64,
+        bool: torch.bool,
+        u1: torch.bool,
+    }[dtype]
+
+
 def in_quadrants_scope():
     return impl.inside_kernel()
 
@@ -288,7 +319,8 @@ def in_python_scope():
 def quadrants_scope(func):
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
+        if impl.get_runtime().prog.config().arch != _ti_core.Arch.python:
+            assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
         return func(*args, **kwargs)
 
     return wrapped

@@ -14,6 +14,7 @@ from weakref import ReferenceType
 
 from quadrants import _logging
 from quadrants._lib.core.quadrants_python import (
+    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -63,6 +64,7 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
+_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -302,6 +304,7 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
+        self.arch_is_python: bool | None = None
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -540,7 +543,11 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
-        self.raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
+        config = impl.current_cfg()
+        if config.arch == _ARCH_PYTHON:
+            return self.func(*py_args, **kwargs)
+
+        self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
 
         # Transform the primal kernel to forward mode grad kernel

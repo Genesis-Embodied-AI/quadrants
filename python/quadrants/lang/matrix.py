@@ -23,6 +23,7 @@ from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
+    dtype_to_torch_dtype,
     get_traceback,
     in_python_scope,
     python_scope,
@@ -35,6 +36,14 @@ from quadrants.types import primitive_types
 from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
+
+from . import py_tensor
+
+torch = None
+try:
+    import torch
+except Exception:
+    pass
 
 _type_factory = _ti_python_core.get_type_factory_instance()
 
@@ -248,6 +257,12 @@ class Matrix(QuadrantsOperations):
     _is_quadrants_class = True
     _is_matrix_class = True
     __array_priority__ = 1000
+
+    def __new__(cls, arr, dt=None):
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            assert torch is not None
+            return torch.Tensor(arr)
+        return super().__new__(cls)
 
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
@@ -967,6 +982,15 @@ class Matrix(QuadrantsOperations):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            shape = (*shape, m, n)
+            dtype = dtype_to_torch_dtype(dtype)
+            assert torch is not None
+            # res = torch.zeros(size=shape, dtype=dtype)
+            res = py_tensor.create_tensor(shape, dtype)
+            # py_tensor.init_py_tensor(res)
+            # res.fill = res.fill_  # type: ignore
+            return res
         return MatrixNdarray(n, m, dtype, shape)
 
     @staticmethod
@@ -1139,6 +1163,15 @@ class Vector(Matrix):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
+        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+            shape = (*shape, n)
+            dtype = dtype_to_torch_dtype(dtype)
+            assert torch is not None
+            # res = torch.zeros(size=shape, dtype=dtype)
+            res = py_tensor.create_tensor(shape, dtype)
+            # py_tensor.init_py_tensor(res)
+            # res.fill = res.fill_  # type: ignore
+            return res
         return VectorNdarray(n, dtype, shape)
 
 
@@ -1297,7 +1330,7 @@ class MatrixField(Field):
         Returns:
             torch.tensor: The result torch tensor.
         """
-        import torch  # pylint: disable=C0415
+        assert torch is not None
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)

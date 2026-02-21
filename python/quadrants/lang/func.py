@@ -1,10 +1,10 @@
 from typing import Any, Callable
 
 from quadrants._lib import core as _ti_core
+from quadrants._lib.core.quadrants_python import Arch, FunctionKey
 from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
-from quadrants._lib.core.quadrants_python import FunctionKey
 from quadrants.lang import _kernel_impl_dataclass, impl, ops
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
@@ -53,6 +53,8 @@ class Func(FuncBase):
 
     def __call__(self: "Func", *py_args, **kwargs) -> Any:
         runtime = impl.get_runtime()
+        if runtime.prog.config().arch == Arch.python:
+            return self.func(*py_args, **kwargs)
         global_context = runtime._current_global_context
         current_kernel = global_context.current_kernel if global_context is not None else None
         py_args = self.fuse_args(
