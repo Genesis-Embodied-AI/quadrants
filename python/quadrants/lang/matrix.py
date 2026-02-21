@@ -37,6 +37,8 @@ from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
+from . import py_tensor
+
 torch = None
 try:
     import torch
@@ -985,7 +987,6 @@ class Matrix(QuadrantsOperations):
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
             res = torch.zeros(size=shape, dtype=dtype)
-            from . import py_tensor
 
             py_tensor.init_py_tensor(res)
             # res.fill = res.fill_  # type: ignore
@@ -1167,7 +1168,6 @@ class Vector(Matrix):
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
             res = torch.zeros(size=shape, dtype=dtype)
-            from . import py_tensor
 
             py_tensor.init_py_tensor(res)
             # res.fill = res.fill_  # type: ignore

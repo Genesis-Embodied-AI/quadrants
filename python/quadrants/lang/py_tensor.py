@@ -1,8 +1,8 @@
 """
 handle initializatin torhc tensor for python backend
 """
-from functools import partial
 
+from functools import partial
 
 torch = None
 try:
@@ -17,5 +17,5 @@ def from_numpy(self: torch.Tensor, numpy_tensor):
 
 
 def init_py_tensor(t: torch.Tensor) -> None:
-    t.fill = t.fill_   # type: ignore
+    t.fill = t.fill_  # type: ignore
     t.from_numpy = partial(from_numpy, t)
