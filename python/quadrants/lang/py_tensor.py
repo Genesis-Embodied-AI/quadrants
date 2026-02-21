@@ -22,6 +22,7 @@ def getitem_wrapper(self: torch.Tensor, key):
     print("get_item wrapper", self, key)
     if key == 0 and len(self.shape) == 0:
         return self.item()
+    return self.super().__getitem__(key)
 
 
 def init_py_tensor(t: torch.Tensor) -> None:
