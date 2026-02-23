@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Synchronization &#8212; Quadrants 0.4.1 documentation</title>
+    <title>Synchronization &#8212; Quadrants 0.4.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=c87aa342"></script>
+    <script src="../../_static/documentation_options.js?v=ff822928"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@
     <link rel="prev" title="Scalar tensors" href="scalar_tensors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.4.1" />
+  <meta name="docsearch:version" content="0.4.2" />
   </head>
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.4.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.4.2 documentation</p>
   
 </a></div>
     
@@ -274,7 +274,7 @@
 
 
 
-<li class="toctree-l1"><a class="reference internal" href="static.html">ti.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Synchronization</a></li>
@@ -284,7 +284,7 @@
 
 
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troublshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 </div>
 </nav></div>
@@ -359,7 +359,8 @@
 </li>
 <li><p>after the store statement has executed, the kernel continues to execute other statements, whilst the data works its way to memory</p></li>
 </ul>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span> <span class="n">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
      <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>
      <span class="c1"># .. execution continues here immediately</span>
 </pre></div>
@@ -378,8 +379,8 @@
 <li><p>not always possible of course</p></li>
 </ul>
 <p>As an example though, if one submits a batch of tasks, and each task is independent, then parallelizing over the ‘batch size’ dimension means that threads do not read memory written by other threads</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i_b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
         <span class="c1"># each thread does work independently of other threads</span>
 </pre></div>
@@ -388,8 +389,8 @@
 <section id="use-separate-kernels-for-synchronization">
 <h2>Use separate kernels for synchronization<a class="headerlink" href="#use-separate-kernels-for-synchronization" title="Link to this heading">#</a></h2>
 <p>Sometimes we might have multiple for loops, which, on their own are thread safe, however, one for loop must not begin until the previous one has finished.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i_b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
         <span class="c1"># each thread does work independently of other threads</span>
     <span class="k">for</span> <span class="n">i_b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
@@ -401,9 +402,9 @@
 <section id="use-atomics">
 <h2>Use atomics<a class="headerlink" href="#use-atomics" title="Link to this heading">#</a></h2>
 <p>Atomics tend to be the main other approach used by Quadrants engineers for synchronization.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">ti</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 </pre></div>
 </div>
 <p>The operation is blocking, and will not return until the addition has taken place</p>
@@ -417,8 +418,8 @@
 <p>Barriers and fences only work well for shared memory. Using shared memory is an advanced feature, not typically used by Quadrants users. Can be done though. Quadrants offers:</p>
 <section id="shared-memory">
 <h3>Shared memory<a class="headerlink" href="#shared-memory" title="Link to this heading">#</a></h3>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ti</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="n">data_type</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
-<span class="n">ti</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="n">data_type</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>See <a class="reference download internal" download="" href="../../_downloads/cd2bde4df0fd05526c617a6215fd3b29/test_shared_array.py"><span class="xref download myst">tests/python/test_shared_array.py</span></a> for examples.</p>

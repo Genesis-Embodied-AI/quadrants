@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Scalar tensors &#8212; Quadrants 0.4.1 documentation</title>
+    <title>Scalar tensors &#8212; Quadrants 0.4.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=c87aa342"></script>
+    <script src="../../_static/documentation_options.js?v=ff822928"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@
     <link rel="prev" title="Sub-functions" href="sub_functions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.4.1" />
+  <meta name="docsearch:version" content="0.4.2" />
   </head>
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.4.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.4.2 documentation</p>
   
 </a></div>
     
@@ -274,7 +274,7 @@
 
 
 
-<li class="toctree-l1"><a class="reference internal" href="static.html">ti.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
@@ -284,7 +284,7 @@
 
 
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troublshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 </div>
 </nav></div>
@@ -349,8 +349,8 @@
 <h1>Scalar tensors<a class="headerlink" href="#scalar-tensors" title="Link to this heading">#</a></h1>
 <p>To create a scalar tensor, use a shape of <code class="docutils literal notranslate"><span class="pre">()</span></code>. Note that this only works for fields, not ndarrays. (An NDArray needs to have at least one dimension).</p>
 <p>You can access the value in a scalar tensor by indexing with <code class="docutils literal notranslate"><span class="pre">[None]</span></code>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
