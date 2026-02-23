@@ -41,12 +41,12 @@ class CallTransformer:
 
         func = node.func.ptr
         replace_func = {
-            id(print): impl.ti_print,
+            id(print): impl.qd_print,
             id(min): qd_ops.min,
             id(max): qd_ops.max,
-            id(int): impl.ti_int,
-            id(bool): impl.ti_bool,
-            id(float): impl.ti_float,
+            id(int): impl.qd_int,
+            id(bool): impl.qd_bool,
+            id(float): impl.qd_float,
             id(any): matrix_ops.any,
             id(all): matrix_ops.all,
             id(abs): abs,
@@ -337,13 +337,13 @@ class CallTransformer:
                 py_args.append(arg.ptr)
         py_kwargs = dict(ChainMap(*[keyword.ptr for keyword in node_keywords]))
 
-        if id(func) in [id(print), id(impl.ti_print)]:
+        if id(func) in [id(print), id(impl.qd_print)]:
             ctx.func.has_print = True
 
         if isinstance(node.func, ast.Attribute) and isinstance(node.func.value.ptr, str) and node.func.attr == "format":
             raw_string = node.func.value.ptr
             py_args = CallTransformer._canonicalize_formatted_string(raw_string, *py_args, **py_kwargs)
-            node.ptr = impl.ti_format(*py_args)
+            node.ptr = impl.qd_format(*py_args)
             return node.ptr
 
         if id(func) == id(Matrix) or id(func) == id(Vector):

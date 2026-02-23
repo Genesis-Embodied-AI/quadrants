@@ -12,8 +12,8 @@ dlpack_arch = [qd.cpu, qd.cuda, qd.metal, qd.amdgpu]
 dlpack_ineligible_arch = [qd.vulkan]
 
 
-def ti_to_torch(ti_tensor: qd.types.NDArray) -> torch.Tensor:
-    cap = ti_tensor.to_dlpack()
+def qd_to_torch(qd_tensor: qd.types.NDArray) -> torch.Tensor:
+    cap = qd_tensor.to_dlpack()
     torch_tensor = torch.utils.dlpack.from_dlpack(cap)
     return torch_tensor
 
@@ -37,11 +37,11 @@ def is_v520_amdgpu():
 def test_dlpack_types(tensor_type, dtype, shape: tuple[int], poses: list[tuple[int, ...]]) -> None:
     if qd.cfg.arch == qd.metal and dtype is qd.f64:
         pytest.skip("Metal does not support f64")
-    ti_tensor = tensor_type(dtype, shape)
+    qd_tensor = tensor_type(dtype, shape)
     for i, pos in enumerate(poses):
-        ti_tensor[pos] = i * 10 + 10
+        qd_tensor[pos] = i * 10 + 10
     qd.sync()
-    dlpack = ti_tensor.to_dlpack()
+    dlpack = qd_tensor.to_dlpack()
     tt = torch.utils.dlpack.from_dlpack(dlpack)
     assert tuple(tt.shape) == shape
     expected_torch_type = {
@@ -56,7 +56,7 @@ def test_dlpack_types(tensor_type, dtype, shape: tuple[int], poses: list[tuple[i
         # can't run torch kernels on AWS AMD GPU
         tt = tt.cpu()
     for i, pos in enumerate(poses):
-        assert tt[pos] == ti_tensor[pos]
+        assert tt[pos] == qd_tensor[pos]
         assert tt[pos] != 0
 
 
@@ -102,7 +102,7 @@ def test_dlpack_vec3(tensor_type):
     a[0, 1] = (7, 8, 9)
     a[1, 0] = (11, 12, 13)
     qd.sync()
-    tt = ti_to_torch(a)
+    tt = qd_to_torch(a)
     if is_v520_amdgpu():
         # can't run torch accessor kernels on v520
         tt = tt.cpu()
@@ -127,7 +127,7 @@ def test_dlpack_mat2x3(tensor_type):
     a[0, 0] = ((5, 4, 1), (3, 2, 20))
     a[0, 1] = ((7, 8, 21), (9, 10, 22))
     a[1, 0] = ((11, 12, 23), (13, 14, 23))
-    tt = ti_to_torch(a)
+    tt = qd_to_torch(a)
     if is_v520_amdgpu():
         # can't run torch accessor kernels on v520
         tt = tt.cpu()
@@ -160,8 +160,8 @@ def test_dlpack_2_arrays(tensor_type):
     # first field has offset 0
     # second field has non-zero offset, so we are testing
     # non-zero offsets
-    a_t = ti_to_torch(a)
-    b_t = ti_to_torch(b)
+    a_t = qd_to_torch(a)
+    b_t = qd_to_torch(b)
 
     if is_v520_amdgpu():
         # can't run torch accessor kernels on v520
@@ -180,7 +180,7 @@ def test_dlpack_non_sequenced_axes():
     # call qd.sync())
     qd.sync()
     with pytest.raises(RuntimeError):
-        ti_to_torch(field_ikj)
+        qd_to_torch(field_ikj)
 
 
 @test_utils.test(arch=dlpack_arch)
@@ -216,12 +216,12 @@ def test_dlpack_field_multiple_tree_nodes():
     e[0] = 555
     qd.sync()
 
-    a_t = ti_to_torch(a)
+    a_t = qd_to_torch(a)
 
-    b_t = ti_to_torch(b)
-    c_t = ti_to_torch(c)
-    d_t = ti_to_torch(d)
-    e_t = ti_to_torch(e)
+    b_t = qd_to_torch(b)
+    c_t = qd_to_torch(c)
+    d_t = qd_to_torch(d)
+    e_t = qd_to_torch(e)
 
     if is_v520_amdgpu():
         # can't run torch accessor kernels on v520

@@ -10,13 +10,13 @@ from tests import test_utils
 vk_on_mac = (qd.vulkan, "Darwin")
 
 
-@pytest.mark.parametrize("ti_dtype", [qd.f32, qd.f64])
+@pytest.mark.parametrize("qd_dtype", [qd.f32, qd.f64])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac])
-def test_matrixfree_bicgstab(ti_dtype):
+def test_matrixfree_bicgstab(qd_dtype):
     GRID = 32
-    Ax = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
-    x = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
-    b = qd.field(dtype=ti_dtype, shape=(GRID, GRID))
+    Ax = qd.field(dtype=qd_dtype, shape=(GRID, GRID))
+    x = qd.field(dtype=qd_dtype, shape=(GRID, GRID))
+    b = qd.field(dtype=qd_dtype, shape=(GRID, GRID))
 
     @qd.kernel
     def init():
@@ -38,7 +38,7 @@ def test_matrixfree_bicgstab(ti_dtype):
             mv[i, j] = 20 * v[i, j] - l - r - t - b
 
     @qd.kernel
-    def check_solution(sol: qd.template(), ans: qd.template(), tol: ti_dtype) -> bool:
+    def check_solution(sol: qd.template(), ans: qd.template(), tol: qd_dtype) -> bool:
         exit_code = True
         for i, j in qd.ndrange(GRID, GRID):
             if qd.abs(ans[i, j] - sol[i, j]) < tol:

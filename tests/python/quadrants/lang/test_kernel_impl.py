@@ -3,7 +3,7 @@ import pathlib
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import ti_init_same_arch
+from quadrants._test_tools import qd_init_same_arch
 
 from tests import test_utils
 
@@ -14,19 +14,19 @@ def test_fe_ll_observations(tmp_path: pathlib.Path) -> None:
     def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         a[0] += 1
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = qd.ndarray(qd.i32, (10,))
     assert not k1._primal.fe_ll_cache_observations.cache_hit
     k1(a)
     assert not k1._primal.fe_ll_cache_observations.cache_hit
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = qd.ndarray(qd.i32, (10,))
     k1._primal.fe_ll_cache_observations.cache_hit = False
     k1(a)
     assert k1._primal.fe_ll_cache_observations.cache_hit
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = qd.ndarray(qd.i32, (10,))
     k1._primal.fe_ll_cache_observations.cache_hit = False
     k1(a)

@@ -30,7 +30,7 @@ def test_binop():
         a[0] = x + y
         a[1] = x - y
         a[2] = x * y
-        a[3] = impl.ti_float(x) / y
+        a[3] = impl.qd_float(x) / y
         a[4] = x // y
         a[5] = x % y
         a[6] = x**y

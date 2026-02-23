@@ -9,7 +9,7 @@ import pytest
 
 import quadrants as qd
 import quadrants.lang
-from quadrants._test_tools import ti_init_same_arch
+from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang._kernel_types import SrcLlCacheObservations
 
 from tests import test_utils
@@ -20,7 +20,7 @@ RET_SUCCESS = 42
 
 @test_utils.test()
 def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.kernel
     def no_pure() -> None:
@@ -30,7 +30,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
     assert no_pure._primal is not None
     assert not no_pure._primal.src_ll_cache_observations.cache_key_generated
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.kernel(fastcache=True)
     def has_pure() -> None:
@@ -52,7 +52,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
         last_compiled_kernel_data_str = has_pure._primal._last_compiled_kernel_data._debug_dump_to_string()
         assert last_compiled_kernel_data_str is not None and last_compiled_kernel_data_str != ""
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     has_pure()
     assert has_pure._primal.src_ll_cache_observations.cache_key_generated
@@ -64,7 +64,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
 
 @test_utils.test()
 def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.pure
     @qd.kernel
@@ -91,7 +91,7 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
         last_compiled_kernel_data_str = has_pure._primal._last_compiled_kernel_data._debug_dump_to_string()
         assert last_compiled_kernel_data_str is not None and last_compiled_kernel_data_str != ""
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     # corrupt the cache files
     for file in tmp_path.glob("python_side_cache/*"):
         print("file", file)
@@ -109,7 +109,7 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
         assert has_pure._primal._last_compiled_kernel_data._debug_dump_to_string() == last_compiled_kernel_data_str
 
     # check cache works again
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     has_pure()
     assert has_pure._primal.src_ll_cache_observations.cache_key_generated
     assert has_pure._primal.src_ll_cache_observations.cache_validated
@@ -124,7 +124,7 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
 @test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
 def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     class RandomClass:
         pass
@@ -159,21 +159,21 @@ def test_src_ll_cache_repeat_after_load(tmp_path: pathlib.Path) -> None:
     Check that repeatedly calling kernel actually works, c.f. was doing
     no-op for a bit.
     """
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.pure
     @qd.kernel
     def has_pure(a: qd.types.NDArray[qd.i32, 1]) -> None:
         a[0] += 1
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = qd.ndarray(qd.i32, (10,))
     a[0] = 5
     for i in range(3):
         has_pure(a)
         assert a[0] == 6 + i
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     a = qd.ndarray(qd.i32, (10,))
     a[0] = 5
     for i in range(3):
@@ -188,9 +188,9 @@ def test_src_ll_cache_flag(tmp_path: pathlib.Path, src_ll_cache: bool) -> None:
     Test qd.init(src_ll_cache) flag
     """
     if src_ll_cache:
-        ti_init_same_arch(offline_cache_file_path=str(tmp_path), src_ll_cache=src_ll_cache)
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), src_ll_cache=src_ll_cache)
     else:
-        ti_init_same_arch()
+        qd_init_same_arch()
 
     @qd.pure
     @qd.kernel
@@ -356,7 +356,7 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     Check that modifiying primtiive values in a data oriented object does result
     in the kernel correctly recompiling to reflect those new values, even with pure on.
     """
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.data_oriented
     class MyDataOrientedChild:

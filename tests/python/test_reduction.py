@@ -57,18 +57,18 @@ def _test_reduction_single(dtype, criterion, op):
             for i in a:
                 a[i] = i + 1
 
-    ti_op = qd_ops[op]
+    qd_op = qd_ops[op]
 
     @qd.kernel
     def reduce():
         for i in a:
-            ti_op(tot[None], a[i])
+            qd_op(tot[None], a[i])
 
     @qd.kernel
     def reduce_tmp() -> dtype:
         s = qd.zero(tot[None]) if op == OP_ADD or op == OP_XOR else a[0]
         for i in a:
-            ti_op(s, a[i])
+            qd_op(s, a[i])
         return s
 
     fill()

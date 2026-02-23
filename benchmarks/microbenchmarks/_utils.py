@@ -36,12 +36,12 @@ def tags2name(tag_list):
     return "_".join(tag_list)
 
 
-def dtype_size(ti_dtype):
+def dtype_size(qd_dtype):
     dtype_size_dict = {qd.i32: 4, qd.i64: 8, qd.f32: 4, qd.f64: 8}
-    if ti_dtype not in dtype_size_dict:
-        raise RuntimeError("Unsupported qd.dtype: " + str(type(ti_dtype)))
+    if qd_dtype not in dtype_size_dict:
+        raise RuntimeError("Unsupported qd.dtype: " + str(type(qd_dtype)))
     else:
-        return dtype_size_dict[ti_dtype]
+        return dtype_size_dict[qd_dtype]
 
 
 def get_qd_arch(arch: str):

@@ -14,17 +14,17 @@ from tests import test_utils
 
 
 @pytest.fixture
-def ti_type(use_ndarray: bool) -> Any:
+def qd_type(use_ndarray: bool) -> Any:
     if use_ndarray:
         return qd.ndarray
     return qd.field
 
 
 @pytest.fixture
-def ti_annotation(use_ndarray: bool) -> Any:
+def qd_annotation(use_ndarray: bool) -> Any:
     class TiTemplateBuilder:
         """
-        Allows ti_annotation[qd.i32, 2] to be legal
+        Allows qd_annotation[qd.i32, 2] to be legal
         """
 
         def __getitem__(self, _):
@@ -141,23 +141,23 @@ def test_ndarray_struct_kwargs():
 
 @test_utils.test()
 @pytest.mark.parametrize("use_ndarray", [False, True])
-def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
+def test_ndarray_struct(qd_type: Any, qd_annotation: Any) -> None:
     gc.collect()
     gc.collect()
-    a = ti_type(qd.i32, shape=(55,))
-    b = ti_type(qd.i32, shape=(57, 23))
-    c = ti_type(qd.i32, shape=(211, 34, 25))
-    d = ti_type(qd.i32, shape=(223,))
-    e = ti_type(qd.i32, shape=(227,))
+    a = qd_type(qd.i32, shape=(55,))
+    b = qd_type(qd.i32, shape=(57, 23))
+    c = qd_type(qd.i32, shape=(211, 34, 25))
+    d = qd_type(qd.i32, shape=(223,))
+    e = qd_type(qd.i32, shape=(227,))
 
     @dataclass
     class MyStruct:
-        a: ti_annotation[qd.i32, 1]
-        b: ti_annotation[qd.i32, 2]
-        c: ti_annotation[qd.i32, 3]
+        a: qd_annotation[qd.i32, 1]
+        b: qd_annotation[qd.i32, 2]
+        c: qd_annotation[qd.i32, 3]
 
     @qd.func
-    def s3(z3: ti_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[qd.i32, 1]) -> None:
+    def s3(z3: qd_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z3[25] += 90
         my_struct3.a[47] += 42
@@ -173,7 +173,7 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         z3[20] = my_struct3.c[5, 0, 0]
 
     @qd.func
-    def s2(z3: ti_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: ti_annotation[qd.i32, 1]) -> None:
+    def s2(z3: qd_annotation[qd.i32, 1], my_struct3: MyStruct, bar3: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z3[24] += 89
         my_struct3.a[46] += 32
@@ -183,7 +183,7 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         s3(z3, my_struct3, bar3)
 
     @qd.func
-    def s1(z2: ti_annotation[qd.i32, 1], my_struct2: MyStruct, bar2: ti_annotation[qd.i32, 1]) -> None:
+    def s1(z2: qd_annotation[qd.i32, 1], my_struct2: MyStruct, bar2: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z2[22] += 88
         my_struct2.a[45] += 22
@@ -193,7 +193,7 @@ def test_ndarray_struct(ti_type: Any, ti_annotation: Any) -> None:
         s2(z2, my_struct2, bar2)
 
     @qd.kernel
-    def k1(z: ti_annotation[qd.i32, 1], my_struct: MyStruct, bar: ti_annotation[qd.i32, 1]) -> None:
+    def k1(z: qd_annotation[qd.i32, 1], my_struct: MyStruct, bar: qd_annotation[qd.i32, 1]) -> None:
         # stores
         z[33] += 2
         my_struct.a[35] += 3
@@ -384,32 +384,32 @@ def test_ndarray_struct_diverse_params():
 
 @test_utils.test()
 @pytest.mark.parametrize("use_ndarray", [False, True])
-def test_ndarray_struct_primitives(ti_type: Any, ti_annotation: Any) -> None:
+def test_ndarray_struct_primitives(qd_type: Any, qd_annotation: Any) -> None:
     gc.collect()
     gc.collect()
 
-    a = ti_type(qd.i32, shape=(55,))
-    b = ti_type(qd.i32, shape=(57,))
-    c = ti_type(qd.i32, shape=(211,))
-    z_param = ti_type(qd.i32, shape=(223,))
-    bar_param = ti_type(qd.i32, shape=(227,))
+    a = qd_type(qd.i32, shape=(55,))
+    b = qd_type(qd.i32, shape=(57,))
+    c = qd_type(qd.i32, shape=(211,))
+    z_param = qd_type(qd.i32, shape=(223,))
+    bar_param = qd_type(qd.i32, shape=(227,))
 
     @dataclass
     class MyStructAB:
         p3: qd.i32
-        a: ti_annotation[qd.i32, 1]
+        a: qd_annotation[qd.i32, 1]
         p1: qd.i32
         p2: qd.i32
 
     @dataclass
     class MyStructC:
-        c: ti_annotation[qd.i32, 1]
+        c: qd_annotation[qd.i32, 1]
 
     @qd.kernel
     def k1(
-        z: ti_annotation[qd.i32, 1],
+        z: qd_annotation[qd.i32, 1],
         my_struct_ab: MyStructAB,
-        bar: ti_annotation[qd.i32, 1],
+        bar: qd_annotation[qd.i32, 1],
         my_struct_c: MyStructC,
     ) -> None:
         my_struct_ab.a[36] += my_struct_ab.p1
