@@ -58,7 +58,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/user_guide/tensor_types';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="ti.static" href="static.html" />
+    <link rel="next" title="qd.static" href="static.html" />
     <link rel="prev" title="Supported systems" href="supported_systems.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -274,7 +274,7 @@
 
 
 
-<li class="toctree-l1"><a class="reference internal" href="static.html">ti.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
@@ -284,7 +284,7 @@
 
 
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troublshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 </div>
 </nav></div>
@@ -349,9 +349,9 @@
 <h1>Tensor types<a class="headerlink" href="#tensor-types" title="Link to this heading">#</a></h1>
 <p>There are three core tensor types:</p>
 <ul class="simple">
-<li><p>ndarray (<code class="docutils literal notranslate"><span class="pre">ti.ndarray</span></code>)</p></li>
-<li><p>global field (<code class="docutils literal notranslate"><span class="pre">ti.field</span></code>, referenced as a global variable, from a kernel)</p></li>
-<li><p>field arg (<code class="docutils literal notranslate"><span class="pre">ti.field</span></code>, passed into a kernel as a parameter)</p></li>
+<li><p>ndarray (<code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>)</p></li>
+<li><p>global field (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, referenced as a global variable, from a kernel)</p></li>
+<li><p>field arg (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, passed into a kernel as a parameter)</p></li>
 </ul>
 </section>
 <section class="tex2jax_ignore mathjax_ignore" id="example-of-each-tensor-type">
@@ -359,28 +359,28 @@
 <p>Let’s first give an example of using each:</p>
 <section id="ndarray">
 <h2>NDArray<a class="headerlink" href="#ndarray" title="Link to this heading">#</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">p1</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">p1</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="n">p1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">ti.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code></p>
+<p>Note that the typing for NDArray is <code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[data_type,</span> <span class="pre">number_dimensions]</span></code></p>
 </section>
 <section id="global-field">
 <h2>Global field<a class="headerlink" href="#global-field" title="Link to this heading">#</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
@@ -389,18 +389,18 @@
 </section>
 <section id="field-args">
 <h2>Field args<a class="headerlink" href="#field-args" title="Link to this heading">#</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ti</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="n">ti</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
 
-<span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">p1</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">p1</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="n">p1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>In this case, we provide the field to the kernel via a parameter, with typing type of <code class="docutils literal notranslate"><span class="pre">ti.Template</span></code>.</p>
+<p>In this case, we provide the field to the kernel via a parameter, with typing type of <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>.</p>
 </section>
 </section>
 <section class="tex2jax_ignore mathjax_ignore" id="comparison-of-tensor-types">
@@ -447,7 +447,7 @@
 <ul class="simple">
 <li><p>the kernel needs to be compiled</p></li>
 <li><p>the parameters need to be sent to the GPU</p></li>
-<li><p>the kernel launch need to be sent to the GPU</p></li>
+<li><p>the kernel launch needs to be sent to the GPU</p></li>
 </ul>
 <p>Compilation speed is not affected by the tensor type. However:</p>
 <ul class="simple">
@@ -463,15 +463,15 @@
 </li>
 <li><p>field args are permanently bound to the compiled kernel</p>
 <ul>
-<li><p>however, as the typing <code class="docutils literal notranslate"><span class="pre">ti.Template</span></code> alludes to, you can call the kernel with different fields, and the kernel will be automatically recompiled to bind with the new field</p></li>
+<li><p>however, as the typing <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> alludes to, you can call the kernel with different fields, and the kernel will be automatically recompiled to bind with the new field</p></li>
 </ul>
 </li>
 <li><p>ndarrays are only bound by:</p>
 <ul>
-<li><p>the data type (<code class="docutils literal notranslate"><span class="pre">ti.i32</span></code> vs <code class="docutils literal notranslate"><span class="pre">ti.f32</span></code> for example)</p></li>
+<li><p>the data type (<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> vs <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> for example)</p></li>
 <li><p>the number of dimensions</p></li>
 <li><p>you cannot pass in an ndarray with different data type or number of dimensions into the kernel, however</p></li>
-<li><p>… no recompilatino is needed for:</p>
+<li><p>… no recompilation is needed for:</p>
 <ul>
 <li><p>resizing the ndarray, or</p></li>
 <li><p>passing in a different ndarray, that matches data type and number of dimensions</p></li>
@@ -488,7 +488,7 @@
 </section>
 <section id="launch-latency-vs-runtime-speed">
 <h2>launch latency vs runtime speed<a class="headerlink" href="#launch-latency-vs-runtime-speed" title="Link to this heading">#</a></h2>
-<p>For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performacne for very short kernels.</p>
+<p>For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performance for very short kernels.</p>
 </section>
 </section>
 <section class="tex2jax_ignore mathjax_ignore" id="recommendations">
@@ -524,7 +524,7 @@
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">ti.static</p>
+        <p class="prev-next-title">qd.static</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

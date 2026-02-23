@@ -316,13 +316,13 @@
 <p>Each top-level for-loop will be parallelized, within a kernel</p>
 <ul class="simple">
 <li><p>adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop not being parallelized</p></li>
-<li><p>a for-loop inside one or more inlined &#64;ti.func, and/or static <code class="docutils literal notranslate"><span class="pre">if</span></code> will be still be parallelized however</p></li>
+<li><p>a for-loop inside one or more inlined &#64;qd.func, and/or static <code class="docutils literal notranslate"><span class="pre">if</span></code> will be still be parallelized however</p></li>
 </ul>
 <p>Each top-level for-loop will be launched as a separate GPU kernel, under the hood.</p>
 <p>The top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:</p>
 <ul class="simple">
-<li><p>if statements where the conditional is <code class="docutils literal notranslate"><span class="pre">ti.static</span></code></p></li>
-<li><p>inline functions (<code class="docutils literal notranslate"><span class="pre">&#64;ti.func</span></code>)</p></li>
+<li><p>if statements where the conditional is <code class="docutils literal notranslate"><span class="pre">qd.static</span></code></p></li>
+<li><p>inline functions (<code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>)</p></li>
 </ul>
 <section id="does-gpu-kernel-launch-latency-matter">
 <h2>Does GPU kernel launch latency matter?<a class="headerlink" href="#does-gpu-kernel-launch-latency-matter" title="Link to this heading">#</a></h2>
@@ -353,7 +353,7 @@
 <li><p>constant memory: global memory, but which can be stored easily in cache</p></li>
 <li><p>local memory: storage which is private to each specific thread, but, unintuitively, is stored off-chip, and is as slow as global memory</p></li>
 </ul>
-<p>Quadrants gives access to shared memory, using <code class="docutils literal notranslate"><span class="pre">ti.stmt.SharedArray()</span></code>, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.</p>
+<p>Quadrants gives access to shared memory, using <code class="docutils literal notranslate"><span class="pre">qd.stmt.SharedArray()</span></code>, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.</p>
 </section>
 <section id="thread-synchronization">
 <h2>Thread synchronization<a class="headerlink" href="#thread-synchronization" title="Link to this heading">#</a></h2>
@@ -369,7 +369,7 @@
 <section id="maximizing-gpu-core-utilization">
 <h2>Maximizing GPU core utilization<a class="headerlink" href="#maximizing-gpu-core-utilization" title="Link to this heading">#</a></h2>
 <p>A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i_b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>  <span class="c1"># parallelized across B GPU threads</span>
         <span class="c1"># work done by each thread</span>
@@ -384,7 +384,7 @@
 </section>
 <section id="compromise">
 <h2>Compromise<a class="headerlink" href="#compromise" title="Link to this heading">#</a></h2>
-<p>The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kerenl launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it’s useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.</p>
+<p>The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kernel launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it’s useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.</p>
 </section>
 </section>
 
