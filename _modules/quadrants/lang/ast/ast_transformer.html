@@ -823,7 +823,7 @@
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Invalid value for fstring.&quot;</span><span class="p">)</span>
 
         <span class="n">args</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">str_spec</span><span class="p">)</span>
-        <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">ti_format</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">qd_format</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
 
@@ -1280,7 +1280,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_static_for">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_static_for">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_static_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">,</span> <span class="n">is_grouped</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">ti_unroll_limit</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">unrolling_limit</span>
+        <span class="n">qd_unroll_limit</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">unrolling_limit</span>
         <span class="k">if</span> <span class="n">is_grouped</span><span class="p">:</span>
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
             <span class="n">ndrange_arg</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
@@ -1295,11 +1295,11 @@
 
             <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">grouped</span><span class="p">(</span><span class="n">ndrange_arg</span><span class="p">):</span>
                 <span class="n">iter_time</span> <span class="o">+=</span> <span class="mi">1</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">ti_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">ti_unroll_limit</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">qd_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">qd_unroll_limit</span><span class="p">:</span>
                     <span class="n">alert_already</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="n">warnings</span><span class="o">.</span><span class="n">warn_explicit</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">&quot;&quot;&quot;You are unrolling more than</span>
-<span class="s2">                        </span><span class="si">{</span><span class="n">ti_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">qd_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
 <span class="s2">                        You can use a non-static for loop if you want to decrease the compile time.</span>
 <span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0).&quot;&quot;&quot;</span><span class="p">,</span>
                         <span class="ne">SyntaxWarning</span><span class="p">,</span>
@@ -1327,11 +1327,11 @@
                     <span class="n">target_values</span> <span class="o">=</span> <span class="p">[</span><span class="n">target_values</span><span class="p">]</span>
 
                 <span class="n">iter_time</span> <span class="o">+=</span> <span class="mi">1</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">ti_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">ti_unroll_limit</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">qd_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">qd_unroll_limit</span><span class="p">:</span>
                     <span class="n">alert_already</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="n">warnings</span><span class="o">.</span><span class="n">warn_explicit</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">&quot;&quot;&quot;You are unrolling more than</span>
-<span class="s2">                        </span><span class="si">{</span><span class="n">ti_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">qd_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
 <span class="s2">                        You can use a non-static for loop if you want to decrease the compile time.</span>
 <span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0).&quot;&quot;&quot;</span><span class="p">,</span>
                         <span class="ne">SyntaxWarning</span><span class="p">,</span>
@@ -1783,11 +1783,11 @@
         <span class="k">return</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span>
 
     <span class="nd">@staticmethod</span>
-<div class="viewcode-block" id="ASTTransformer.ti_format_list_to_assert_msg">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.ti_format_list_to_assert_msg">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ti_format_list_to_assert_msg</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
+<div class="viewcode-block" id="ASTTransformer.qd_format_list_to_assert_msg">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.qd_format_list_to_assert_msg">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">qd_format_list_to_assert_msg</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
         <span class="c1"># TODO: ignore formats here for now</span>
-        <span class="n">entries</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">ti_format_list_to_content_entries</span><span class="p">([</span><span class="n">raw</span><span class="p">])</span>
+        <span class="n">entries</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">qd_format_list_to_content_entries</span><span class="p">([</span><span class="n">raw</span><span class="p">])</span>
         <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
         <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
@@ -1827,13 +1827,13 @@
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">msg</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Str</span><span class="p">):</span>
                     <span class="k">pass</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">msg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__qd_format__&quot;</span><span class="p">:</span>
-                    <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">ti_format_list_to_assert_msg</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+                    <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">qd_format_list_to_assert_msg</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;assert info must be constant or formatted string, not </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">msg</span> <span class="o">=</span> <span class="n">unparse</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="n">test</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
-        <span class="n">impl</span><span class="o">.</span><span class="n">ti_assert</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)))</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)))</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
 

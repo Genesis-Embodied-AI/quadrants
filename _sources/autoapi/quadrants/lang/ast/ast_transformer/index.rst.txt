@@ -349,7 +349,7 @@ Module Contents
 
 
 
-   .. py:method:: ti_format_list_to_assert_msg(raw) -> tuple[str, list]
+   .. py:method:: qd_format_list_to_assert_msg(raw) -> tuple[str, list]
       :staticmethod:
 
 

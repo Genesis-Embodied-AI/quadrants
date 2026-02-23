@@ -35,7 +35,7 @@ Module Contents
    .. py:attribute:: dtype
 
 
-   .. py:attribute:: ti_arch
+   .. py:attribute:: qd_arch
 
 
    .. py:attribute:: matrix
