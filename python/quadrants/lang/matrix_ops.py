@@ -1,8 +1,6 @@
-# type: ignore
-
 import quadrants.lang.ops as ops_mod
-from quadrants.lang.impl import static
-from quadrants.lang.kernel_impl import func, pyfunc
+from quadrants.lang import impl
+from quadrants.lang import kernel_impl
 from quadrants.lang.matrix import Matrix, Vector
 from quadrants.lang.matrix_ops_utils import (
     arg_at,
@@ -22,40 +20,40 @@ from quadrants.types.annotations import template
 
 
 @preconditions(arg_at(0, assert_tensor))
-@pyfunc
+@kernel_impl.pyfunc
 def _reduce(mat, fun: template()):
-    shape = static(mat.get_shape())
-    if static(len(shape) == 1):
+    shape = impl.static(mat.get_shape())
+    if impl.static(len(shape) == 1):
         result = mat[0]
-        for i in static(range(1, shape[0])):
+        for i in impl.static(range(1, shape[0])):
             result = fun(result, mat[i])
         return result
     result = mat[0, 0]
-    for i in static(range(shape[0])):
-        for j in static(range(shape[1])):
-            if static(i != 0 or j != 0):
+    for i in impl.static(range(shape[0])):
+        for j in impl.static(range(shape[1])):
+            if impl.static(i != 0 or j != 0):
                 result = fun(result, mat[i, j])
     return result
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def _filled_vector(n: template(), dtype: template(), val: template()):
-    return Vector([val for _ in static(range(n))], dtype)
+    return Vector([val for _ in impl.static(range(n))], dtype)
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def _filled_matrix(n: template(), m: template(), dtype: template(), val: template()):
-    return Matrix([[val for _ in static(range(m))] for _ in static(range(n))], dtype)
+    return Matrix([[val for _ in impl.static(range(m))] for _ in impl.static(range(n))], dtype)
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def _unit_vector(n: template(), i: template(), dtype: template()):
-    return Vector([i == j for j in static(range(n))], dtype)
+    return Vector([i == j for j in impl.static(range(n))], dtype)
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def _identity_matrix(n: template(), dtype: template()):
-    return Matrix([[i == j for j in static(range(n))] for i in static(range(n))], dtype)
+    return Matrix([[i == j for j in impl.static(range(n))] for i in impl.static(range(n))], dtype)
 
 
 @preconditions(
@@ -67,38 +65,38 @@ def _identity_matrix(n: template(), dtype: template()):
         msg="Cols/rows must be a list of lists, or a list of vectors",
     ),
 )
-@pyfunc
+@kernel_impl.pyfunc
 def rows(rows):  # pylint: disable=W0621
     return Matrix([[x for x in row] for row in rows])
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def cols(cols):  # pylint: disable=W0621
     return rows(cols).transpose()
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def E(mat: template(), x: template(), y: template(), n: template()):
     return mat[x % n, y % n]
 
 
 @preconditions(square_matrix, dim_lt(0, 5))
-@pyfunc
+@kernel_impl.pyfunc
 def determinant(mat):
-    shape = static(mat.get_shape())
-    if static(shape[0] == 1):
+    shape = impl.static(mat.get_shape())
+    if impl.static(shape[0] == 1):
         return mat[0, 0]
-    if static(shape[0] == 2):
+    if impl.static(shape[0] == 2):
         return mat[0, 0] * mat[1, 1] - mat[0, 1] * mat[1, 0]
-    if static(shape[0] == 3):
+    if impl.static(shape[0] == 3):
         return (
             mat[0, 0] * (mat[1, 1] * mat[2, 2] - mat[2, 1] * mat[1, 2])
             - mat[1, 0] * (mat[0, 1] * mat[2, 2] - mat[2, 1] * mat[0, 2])
             + mat[2, 0] * (mat[0, 1] * mat[1, 2] - mat[1, 1] * mat[0, 2])
         )
-    if static(shape[0] == 4):
+    if impl.static(shape[0] == 4):
         det = mat[0, 0] * 0  # keep type
-        for i in static(range(4)):
+        for i in impl.static(range(4)):
             det = det + (-1) ** i * (
                 mat[i, 0]
                 * (
@@ -116,26 +114,26 @@ def determinant(mat):
 
 
 @preconditions(square_matrix, dim_lt(0, 5))
-@pyfunc
+@kernel_impl.pyfunc
 def inverse(mat):
-    shape = static(mat.get_shape())
-    if static(shape[0] == 1):
+    shape = impl.static(mat.get_shape())
+    if impl.static(shape[0] == 1):
         return Matrix([[1.0 / mat[0, 0]]])
     inv_determinant = 1.0 / determinant(mat)
-    if static(shape[0] == 2):
+    if impl.static(shape[0] == 2):
         return inv_determinant * Matrix([[mat[1, 1], -mat[0, 1]], [-mat[1, 0], mat[0, 0]]])
-    if static(shape[0] == 3):
+    if impl.static(shape[0] == 3):
         return inv_determinant * Matrix(
             [
                 [
                     E(mat, i + 1, j + 1, 3) * E(mat, i + 2, j + 2, 3)
                     - E(mat, i + 2, j + 1, 3) * E(mat, i + 1, j + 2, 3)
-                    for i in static(range(3))
+                    for i in impl.static(range(3))
                 ]
-                for j in static(range(3))
+                for j in impl.static(range(3))
             ]
         )
-    if static(shape[0] == 4):
+    if impl.static(shape[0] == 4):
         return inv_determinant * Matrix(
             [
                 [
@@ -159,9 +157,9 @@ def inverse(mat):
                             )
                         )
                     )
-                    for i in static(range(4))
+                    for i in impl.static(range(4))
                 ]
-                for j in static(range(4))
+                for j in impl.static(range(4))
             ]
         )
     # unreachable
@@ -169,126 +167,128 @@ def inverse(mat):
 
 
 @preconditions(check_transpose)
-@pyfunc
+@kernel_impl.pyfunc
 def transpose(mat):
-    shape = static(mat.get_shape())
-    return Matrix([[mat[i, j] for i in static(range(shape[0]))] for j in static(range(shape[1]))])
+    shape = impl.static(mat.get_shape())
+    return Matrix([[mat[i, j] for i in impl.static(range(shape[0]))] for j in impl.static(range(shape[1]))])
 
 
 @preconditions(arg_at(0, is_int_const))
-@pyfunc
+@kernel_impl.pyfunc
 def diag(dim: template(), val: template()):
-    return Matrix([[val if i == j else 0 for j in static(range(dim))] for i in static(range(dim))])
+    return Matrix([[val if i == j else 0 for j in impl.static(range(dim))] for i in impl.static(range(dim))])
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def sum(mat):  # pylint: disable=W0622
     return _reduce(mat, ops_mod.add)
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def norm_sqr(mat):
     return sum(mat * mat)
 
 
 @preconditions(arg_at(0, assert_tensor))
-@pyfunc
+@kernel_impl.pyfunc
 def norm(mat, eps=0.0):
     return ops_mod.sqrt(norm_sqr(mat) + eps)
 
 
 @preconditions(arg_at(0, assert_tensor))
-@pyfunc
+@kernel_impl.pyfunc
 def norm_inv(mat, eps=0.0):
     return ops_mod.rsqrt(norm_sqr(mat) + eps)
 
 
 @preconditions(arg_at(0, assert_vector()))
-@pyfunc
+@kernel_impl.pyfunc
 def normalized(vec, eps=0.0):
     invlen = 1 / (norm(vec) + eps)
     return invlen * vec
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def any(mat):  # pylint: disable=W0622
     return _reduce(mat != 0, ops_mod.logical_or) and True
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def all(mat):  # pylint: disable=W0622
     return _reduce(mat != 0, ops_mod.logical_and) and True
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def max(mat):  # pylint: disable=W0622
     return _reduce(mat, ops_mod.max_impl)
 
 
 @preconditions(assert_tensor)
-@pyfunc
+@kernel_impl.pyfunc
 def min(mat):  # pylint: disable=W0622
     return _reduce(mat, ops_mod.min_impl)
 
 
 @preconditions(square_matrix)
-@pyfunc
+@kernel_impl.pyfunc
 def trace(mat):
-    shape = static(mat.get_shape())
+    shape = impl.static(mat.get_shape())
     result = mat[0, 0]
-    # TODO: get rid of static when
+    # TODO: get rid of impl.static when
     # CHI IR Tensor repr is ready stable
-    for i in static(range(1, shape[0])):
+    for i in impl.static(range(1, shape[0])):
         result = result + mat[i, i]
     return result
 
 
 @preconditions(arg_at(0, assert_tensor))
-@pyfunc
+@kernel_impl.pyfunc
 def fill(mat: template(), val):
-    shape = static(mat.get_shape())
-    if static(len(shape) == 1):
-        for i in static(range(shape[0])):
+    shape = impl.static(mat.get_shape())
+    if impl.static(len(shape) == 1):
+        for i in impl.static(range(shape[0])):
             mat[i] = val
+    elif impl.static(len(shape) == 0):
+        mat[()] = val
     else:
-        for i in static(range(shape[0])):
-            for j in static(range(shape[1])):
+        for i in impl.static(range(shape[0])):
+            for j in impl.static(range(shape[1])):
                 mat[i, j] = val
 
 
 @preconditions(check_matmul)
-@pyfunc
+@kernel_impl.pyfunc
 def _matmul_helper(mat_x, mat_y):
-    shape_x = static(mat_x.get_shape())
-    shape_y = static(mat_y.get_shape())
-    if static(len(shape_x) == 1 and len(shape_y) == 1):
+    shape_x = impl.static(mat_x.get_shape())
+    shape_y = impl.static(mat_y.get_shape())
+    if impl.static(len(shape_x) == 1 and len(shape_y) == 1):
         return dot(mat_x, mat_y)
-    if static(len(shape_y) == 1):
+    if impl.static(len(shape_y) == 1):
         zero_elem = mat_x[0, 0] * mat_y[0] * 0  # for correct return type
         vec_z = _filled_vector(shape_x[0], None, zero_elem)
-        for i in static(range(shape_x[0])):
-            for j in static(range(shape_x[1])):
+        for i in impl.static(range(shape_x[0])):
+            for j in impl.static(range(shape_x[1])):
                 vec_z[i] = vec_z[i] + mat_x[i, j] * mat_y[j]
         return vec_z
     zero_elem = mat_x[0, 0] * mat_y[0, 0] * 0  # for correct return type
     mat_z = _filled_matrix(shape_x[0], shape_y[1], None, zero_elem)
-    for i in static(range(shape_x[0])):
-        for j in static(range(shape_y[1])):
-            for k in static(range(shape_x[1])):
+    for i in impl.static(range(shape_x[0])):
+        for j in impl.static(range(shape_y[1])):
+            for k in impl.static(range(shape_x[1])):
                 mat_z[i, j] = mat_z[i, j] + mat_x[i, k] * mat_y[k, j]
     return mat_z
 
 
-@pyfunc
+@kernel_impl.pyfunc
 def matmul(mat_x, mat_y):
-    shape_x = static(mat_x.get_shape())
-    shape_y = static(mat_y.get_shape())
-    if static(len(shape_x) == 1 and len(shape_y) == 2):
+    shape_x = impl.static(mat_x.get_shape())
+    shape_y = impl.static(mat_y.get_shape())
+    if impl.static(len(shape_x) == 1 and len(shape_y) == 2):
         return _matmul_helper(transpose(mat_y), mat_x)
     return _matmul_helper(mat_x, mat_y)
 
@@ -297,7 +297,7 @@ def matmul(mat_x, mat_y):
     arg_at(0, assert_vector("lhs for dot is not a vector")),
     arg_at(1, assert_vector("rhs for dot is not a vector")),
 )
-@pyfunc
+@kernel_impl.pyfunc
 def dot(vec_x, vec_y):
     return sum(vec_x * vec_y)
 
@@ -308,12 +308,12 @@ def dot(vec_x, vec_y):
     same_shapes,
     arg_at(0, dim_lt(0, 4)),
 )
-@pyfunc
+@kernel_impl.pyfunc
 def cross(vec_x, vec_y):
-    shape = static(vec_x.get_shape())
-    if static(shape[0] == 2):
+    shape = impl.static(vec_x.get_shape())
+    if impl.static(shape[0] == 2):
         return vec_x[0] * vec_y[1] - vec_x[1] * vec_y[0]
-    if static(shape[0] == 3):
+    if impl.static(shape[0] == 3):
         return Vector(
             [
                 vec_x[1] * vec_y[2] - vec_x[2] * vec_y[1],
@@ -328,14 +328,14 @@ def cross(vec_x, vec_y):
     arg_at(0, assert_vector("lhs for outer_product is not a vector")),
     arg_at(1, assert_vector("rhs for outer_product is not a vector")),
 )
-@pyfunc
+@kernel_impl.pyfunc
 def outer_product(vec_x, vec_y):
-    shape_x = static(vec_x.get_shape())
-    shape_y = static(vec_y.get_shape())
-    return Matrix([[vec_x[i] * vec_y[j] for j in static(range(shape_y[0]))] for i in static(range(shape_x[0]))])
+    shape_x = impl.static(vec_x.get_shape())
+    shape_y = impl.static(vec_y.get_shape())
+    return Matrix([[vec_x[i] * vec_y[j] for j in impl.static(range(shape_y[0]))] for i in impl.static(range(shape_x[0]))])
 
 
 @preconditions(assert_tensor)
-@func
+@kernel_impl.func
 def cast(mat, dtype: template()):
     return ops_mod.cast(mat, dtype)

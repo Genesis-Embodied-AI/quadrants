@@ -1,5 +1,3 @@
-# type: ignore
-
 import collections.abc
 from typing import Iterable
 
@@ -7,8 +5,8 @@ import numpy as np
 
 from quadrants.lang import ops
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
-from quadrants.lang.expr import Expr
-from quadrants.lang.matrix import Matrix
+from quadrants import lang
+from quadrants.lang import matrix
 from quadrants.types.utils import is_integral
 
 
@@ -26,7 +24,7 @@ class _Ndrange:
         for arg in args:
             for bound in arg:
                 if not isinstance(bound, (int, np.integer)) and not (
-                    isinstance(bound, Expr) and is_integral(bound.ptr.get_rvalue_type())
+                    isinstance(bound, lang.expr.Expr) and is_integral(bound.ptr.get_rvalue_type())
                 ):
                     raise QuadrantsTypeError(
                         "Every argument of ndrange should be an integer scalar or a tuple/list of (int, int)"
@@ -146,7 +144,7 @@ class GroupedNDRange:
 
     def __iter__(self):
         for ind in self.r:
-            yield Matrix(list(ind))
+            yield matrix.Matrix(list(ind))
 
 
 __all__ = ["ndrange"]

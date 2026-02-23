@@ -261,7 +261,14 @@ class Matrix(QuadrantsOperations):
     def __new__(cls, arr, dt=None):
         if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
             assert torch is not None
-            return torch.Tensor(arr)
+            print("arr", arr)
+            # arr = 
+            arr = [v.item() if isinstance(v, (torch.Tensor, py_tensor.MyTorchTensor)) and v.shape == () else v for v in arr]
+            print("arr2", arr)
+            # return py_tensor.create_tensor
+            res = py_tensor.MyTorchTensor(arr)
+            py_tensor.init_py_tensor(res)
+            return res
         return super().__new__(cls)
 
     def __init__(self, arr, dt=None):

@@ -1,5 +1,3 @@
-# type: ignore
-
 import builtins
 import functools
 import operator as _bt_ops_mod  # bt for builtin
@@ -8,7 +6,7 @@ from typing import Union
 import numpy as np
 
 from quadrants._lib import core as _ti_core
-from quadrants.lang import expr, impl
+from quadrants import lang
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.field import Field
 from quadrants.lang.util import (
@@ -20,16 +18,16 @@ from quadrants.lang.util import (
 
 
 def stack_info():
-    return impl.get_runtime().get_current_src_info()
+    return lang.impl.get_runtime().get_current_src_info()
 
 
 def is_quadrants_expr(a):
-    return isinstance(a, expr.Expr)
+    return isinstance(a, lang.expr.Expr)
 
 
 def wrap_if_not_expr(a):
     return (
-        expr.Expr(a, dbg_info=_ti_core.DebugInfo(impl.get_runtime().get_current_src_info()))
+        lang.expr.Expr(a, dbg_info=_ti_core.DebugInfo(lang.impl.get_runtime().get_current_src_info()))
         if not is_quadrants_expr(a)
         else a
     )
@@ -44,7 +42,7 @@ def _read_matrix_or_scalar(x):
 def writeback_binary(foo):
     @functools.wraps(foo)
     def wrapped(a, b):
-        if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
             return foo(a, b)
         if isinstance(a, Field) or isinstance(b, Field):
             return NotImplemented
@@ -83,7 +81,7 @@ def cast(obj, dtype):
     if is_quadrants_class(obj):
         # TODO: unify with element_wise_unary
         return obj.cast(dtype)
-    return expr.Expr(_ti_core.value_cast(expr.Expr(obj).ptr, dtype))
+    return lang.expr.Expr(_ti_core.value_cast(lang.expr.Expr(obj).ptr, dtype))
 
 
 def bit_cast(obj, dtype):
@@ -116,14 +114,14 @@ def bit_cast(obj, dtype):
     if is_quadrants_class(obj):
         raise ValueError("Cannot apply bit_cast on Quadrants classes")
     else:
-        return expr.Expr(_ti_core.bits_cast(expr.Expr(obj).ptr, dtype))
+        return lang.expr.Expr(_ti_core.bits_cast(lang.expr.Expr(obj).ptr, dtype))
 
 
 def _unary_operation(quadrants_op, python_op, a):
     if isinstance(a, Field):
         return NotImplemented
     if is_quadrants_expr(a):
-        return expr.Expr(quadrants_op(a.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return lang.expr.Expr(quadrants_op(a.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix):
@@ -136,7 +134,7 @@ def _binary_operation(quadrants_op, python_op, a, b):
         return NotImplemented
     if is_quadrants_expr(a) or is_quadrants_expr(b):
         a, b = wrap_if_not_expr(a), wrap_if_not_expr(b)
-        return expr.Expr(quadrants_op(a.ptr, b.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return lang.expr.Expr(quadrants_op(a.ptr, b.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix) or isinstance(b, Matrix):
@@ -149,7 +147,7 @@ def _ternary_operation(quadrants_op, python_op, a, b, c):
         return NotImplemented
     if is_quadrants_expr(a) or is_quadrants_expr(b) or is_quadrants_expr(c):
         a, b, c = wrap_if_not_expr(a), wrap_if_not_expr(b), wrap_if_not_expr(c)
-        return expr.Expr(quadrants_op(a.ptr, b.ptr, c.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+        return lang.expr.Expr(quadrants_op(a.ptr, b.ptr, c.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     from quadrants.lang.matrix import Matrix  # pylint: disable-msg=C0415
 
     if isinstance(a, Matrix) or isinstance(b, Matrix) or isinstance(c, Matrix):
@@ -539,7 +537,7 @@ def bit_not(a):
     """The bit not function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         Bitwise not of `a`.
@@ -558,7 +556,7 @@ def logical_not(a):
     """The logical not function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         `1` iff `a=0`, otherwise `0`.
@@ -601,8 +599,8 @@ def random(dtype=float) -> Union[float, int]:
         >>>     print(j)  # 73412986184350777
     """
     dtype = cook_dtype(dtype)
-    x = expr.Expr(_ti_core.make_rand_expr(dtype, _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())))
-    return impl.expr_init(x)
+    x = lang.expr.Expr(_ti_core.make_rand_expr(dtype, _ti_core.DebugInfo(lang.impl.get_runtime().get_current_src_info())))
+    return lang.impl.expr_init(x)
 
 
 # NEXT: add matpow(self, power)
@@ -612,8 +610,8 @@ def add(a, b):
     """The add function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         sum of `a` and `b`.
@@ -625,8 +623,8 @@ def sub(a, b):
     """The sub function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         `a` subtract `b`.
@@ -638,8 +636,8 @@ def mul(a, b):
     """The multiply function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         `a` multiplied by `b`.
@@ -679,8 +677,8 @@ def mod(x1, x2):
 
     def expr_python_mod(a, b):
         # a % b = a - (a // b) * b
-        quotient = expr.Expr(_ti_core.expr_floordiv(a, b))
-        multiply = expr.Expr(_ti_core.expr_mul(b, quotient.ptr))
+        quotient = lang.expr.Expr(_ti_core.expr_floordiv(a, b))
+        multiply = lang.expr.Expr(_ti_core.expr_mul(b, quotient.ptr))
         return _ti_core.expr_sub(a, multiply.ptr)
 
     return _binary_operation(expr_python_mod, _bt_ops_mod.mod, x1, x2)
@@ -730,8 +728,8 @@ def floordiv(a, b):
     """The floor division function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.
 
     Returns:
         The floor function of `a` divided by `b`.
@@ -743,8 +741,8 @@ def truediv(a, b):
     """True division function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.
 
     Returns:
         The true value of `a` divided by `b`.
@@ -756,8 +754,8 @@ def max_impl(a, b):
     """The maxnimum function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         The maxnimum of `a` and `b`.
@@ -769,8 +767,8 @@ def min_impl(a, b):
     """The minimum function.
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.
 
     Returns:
         The minimum of `a` and `b`.
@@ -867,11 +865,11 @@ def cmp_lt(a, b):
     """Compare two values (less than)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly smaller than RHS, False otherwise
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: True if LHS is strictly smaller than RHS, False otherwise
 
     """
     return _binary_operation(_ti_core.expr_cmp_lt, _bt_ops_mod.lt, a, b)
@@ -881,11 +879,11 @@ def cmp_le(a, b):
     """Compare two values (less than or equal to)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is smaller than or equal to RHS, False otherwise
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: True if LHS is smaller than or equal to RHS, False otherwise
 
     """
     return _binary_operation(_ti_core.expr_cmp_le, _bt_ops_mod.le, a, b)
@@ -895,11 +893,11 @@ def cmp_gt(a, b):
     """Compare two values (greater than)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly larger than RHS, False otherwise
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: True if LHS is strictly larger than RHS, False otherwise
 
     """
     return _binary_operation(_ti_core.expr_cmp_gt, _bt_ops_mod.gt, a, b)
@@ -909,8 +907,8 @@ def cmp_ge(a, b):
     """Compare two values (greater than or equal to)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
         bool: True if LHS is greater than or equal to RHS, False otherwise
@@ -923,11 +921,11 @@ def cmp_eq(a, b):
     """Compare two values (equal to)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is equal to RHS, False otherwise.
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: True if LHS is equal to RHS, False otherwise.
 
     """
     return _binary_operation(_ti_core.expr_cmp_eq, _bt_ops_mod.eq, a, b)
@@ -937,11 +935,11 @@ def cmp_ne(a, b):
     """Compare two values (not equal to)
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is not equal to RHS, False otherwise
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: True if LHS is not equal to RHS, False otherwise
 
     """
     return _binary_operation(_ti_core.expr_cmp_ne, _bt_ops_mod.ne, a, b)
@@ -951,11 +949,11 @@ def bit_or(a, b):
     """Computes bitwise-or
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-or with RHS
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: LHS bitwise-or with RHS
 
     """
     return _binary_operation(_ti_core.expr_bit_or, _bt_ops_mod.or_, a, b)
@@ -965,11 +963,11 @@ def bit_and(a, b):
     """Compute bitwise-and
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-and with RHS
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: LHS bitwise-and with RHS
 
     """
     return _binary_operation(_ti_core.expr_bit_and, _bt_ops_mod.and_, a, b)
@@ -979,11 +977,11 @@ def bit_xor(a, b):
     """Compute bitwise-xor
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-xor with RHS
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: LHS bitwise-xor with RHS
 
     """
     return _binary_operation(_ti_core.expr_bit_xor, _bt_ops_mod.xor, a, b)
@@ -993,11 +991,11 @@ def bit_shl(a, b):
     """Compute bitwise shift left
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS << RHS
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, int]: LHS << RHS
 
     """
     return _binary_operation(_ti_core.expr_bit_shl, _bt_ops_mod.lshift, a, b)
@@ -1007,11 +1005,11 @@ def bit_sar(a, b):
     """Compute bitwise shift right
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS >> RHS
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, int]: LHS >> RHS
 
     """
     return _binary_operation(_ti_core.expr_bit_sar, _bt_ops_mod.rshift, a, b)
@@ -1049,11 +1047,11 @@ def logical_and(a, b):
     """Compute logical_and
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-and RHS (with short-circuit semantics)
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: LHS logical-and RHS (with short-circuit semantics)
 
     """
     return _binary_operation(_ti_core.expr_logical_and, lambda a, b: a and b, a, b)
@@ -1063,11 +1061,11 @@ def logical_or(a, b):
     """Compute logical_or
 
     Args:
-        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
-        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
+        a (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS
+        b (Union[:class:`~quadrants.lang.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS
 
     Returns:
-        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-or RHS (with short-circuit semantics)
+        Union[:class:`~quadrants.lang.lang.expr.Expr`, bool]: LHS logical-or RHS (with short-circuit semantics)
 
     """
     return _binary_operation(_ti_core.expr_logical_or, lambda a, b: a or b, a, b)
@@ -1169,10 +1167,10 @@ def atomic_add(x, y):
         >>>
         >>>     ti.atomic_add(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x += y
         return x
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1202,10 +1200,10 @@ def atomic_mul(x, y):
         >>>
         >>>     ti.atomic_mul(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x *= y
         return x
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1235,10 +1233,10 @@ def atomic_sub(x, y):
         >>>
         >>>     ti.atomic_sub(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x -= y
         return x
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1268,10 +1266,10 @@ def atomic_min(x, y):
         >>>
         >>>     ti.atomic_min(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x[()] = min(x[()], y)
         return x
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1301,10 +1299,10 @@ def atomic_max(x, y):
         >>>
         >>>     ti.atomic_max(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x[()] = max(x[()], y)
         return x
-    return impl.expr_init(expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
 
 
 @writeback_binary
@@ -1334,11 +1332,11 @@ def atomic_and(x, y):
         >>>
         >>>     ti.atomic_and(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x &= y
         return x
-    return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
 
 
@@ -1369,11 +1367,11 @@ def atomic_or(x, y):
         >>>
         >>>     ti.atomic_or(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x |= y
         return x
-    return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
 
 
@@ -1404,18 +1402,18 @@ def atomic_xor(x, y):
         >>>
         >>>     ti.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
     """
-    if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
         x ^= y
         return x
 
-    return impl.expr_init(
-        expr.Expr(_ti_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
     )
 
 
 @writeback_binary
 def assign(a, b):
-    impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _ti_core.DebugInfo(stack_info()))
+    lang.impl.get_runtime().compiling_callable.ast_builder().expr_assign(a.ptr, b.ptr, _ti_core.DebugInfo(stack_info()))
     return a
 
 

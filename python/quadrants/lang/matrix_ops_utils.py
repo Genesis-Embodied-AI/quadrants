@@ -5,9 +5,13 @@ import functools
 from quadrants.lang.exception import QuadrantsCompilationError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix
+from . import impl
+from quadrants._lib import core
 
 
 def do_check(checker_fns, *args, **kwargs):
+    if impl.get_runtime().prog.config().arch == core.Arch.python:
+        return True, None
     for f in checker_fns:
         ok, msg = f(*args, **kwargs)
         if not ok:
