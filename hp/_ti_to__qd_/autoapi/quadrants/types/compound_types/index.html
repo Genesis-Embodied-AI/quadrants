@@ -452,7 +452,7 @@
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mat2x2</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 2x2 matrix type</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mat2x2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 2x2 matrix type</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">M</span> <span class="o">=</span> <span class="n">mat2x2</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]])</span>  <span class="c1"># an instance of this type</span>
 </pre></div>
 </div>
@@ -474,7 +474,7 @@
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 3d vector type</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># 3d vector type</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">v</span> <span class="o">=</span> <span class="n">vec3</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">,</span> <span class="mf">3.</span><span class="p">])</span>  <span class="c1"># an instance of this type</span>
 </pre></div>
 </div>
@@ -494,8 +494,8 @@ struct members.</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">sphere</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sphere</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">s</span> <span class="o">=</span> <span class="n">sphere</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="n">vec3</span><span class="p">([</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">]),</span> <span class="n">radius</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
 </pre></div>
 </div>

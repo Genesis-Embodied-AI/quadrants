@@ -333,7 +333,7 @@
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.shared_array is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.shared_array is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -343,7 +343,7 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_and_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -353,7 +353,7 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_or_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.sync_any_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_any_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -363,7 +363,7 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_count_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.sync_count_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_count_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -375,7 +375,7 @@
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.mem_sync is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_sync is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -385,7 +385,7 @@
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;localInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -397,7 +397,7 @@
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;globalInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ti.block.global_thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.global_thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -413,7 +413,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;ti.simt.block.shared_array shape must be an integer or a tuple of integers, but got </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;qd.simt.block.shared_array shape must be an integer or a tuple of integers, but got </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">MatrixType</span><span class="p">):</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">tensor_type</span>

@@ -452,7 +452,7 @@
         <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span>
             <span class="s2">&quot;Number of struct-for indices does not match loop variable dimensionality &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">group</span><span class="o">.</span><span class="n">size</span><span class="p">()</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">loop_range</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">). Maybe you wanted to &quot;</span>
-            <span class="s1">&#39;use &quot;for I in ti.grouped(x)&quot; to group all indices into a single vector I?&#39;</span>
+            <span class="s1">&#39;use &quot;for I in qd.grouped(x)&quot; to group all indices into a single vector I?&#39;</span>
         <span class="p">)</span>
     <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loop_range</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">):</span>
@@ -684,14 +684,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">compiling_callable</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelCxx</span> <span class="o">|</span> <span class="n">Kernel</span> <span class="o">|</span> <span class="n">Function</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compiling_callable</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;_compiling_callable attribute not initialized. Maybe you forgot to call `ti.init()` first?&quot;</span>
+                <span class="s2">&quot;_compiling_callable attribute not initialized. Maybe you forgot to call `qd.init()` first?&quot;</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compiling_callable</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">prog</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Program</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;_prog attribute not initialized. Maybe you forgot to call `ti.init()` first?&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;_prog attribute not initialized. Maybe you forgot to call `qd.init()` first?&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">initialize_fields_builder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">):</span>
@@ -777,7 +777,7 @@
                 <span class="sa">f</span><span class="s2">&quot;These field(s) are not placed:</span><span class="se">\n</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">not_placed</span><span class="p">)</span>
                 <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">Please consider specifying a shape for them. E.g.,&quot;</span>
-                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  x = ti.field(float, shape=(2, 3))&quot;</span>
+                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  x = qd.field(float, shape=(2, 3))&quot;</span>
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_gradient_field_not_placed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">gradient_type</span><span class="p">):</span>
@@ -799,9 +799,9 @@
                 <span class="sa">f</span><span class="s2">&quot;These field(s) requrie `needs_</span><span class="si">{</span><span class="n">gradient_type</span><span class="si">}</span><span class="s2">=True`, however their </span><span class="si">{</span><span class="n">gradient_type</span><span class="si">}</span><span class="s2"> field(s) are not placed:</span><span class="se">\n</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">not_placed</span><span class="p">)</span>
                 <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bar</span><span class="si">}</span><span class="s2">Please consider place the </span><span class="si">{</span><span class="n">gradient_type</span><span class="si">}</span><span class="s2"> field(s). E.g.,&quot;</span>
-                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  ti.root.dense(ti.i, 1).place(x.</span><span class="si">{gradient_type}</span><span class="s2">)&quot;</span>
+                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  qd.root.dense(qd.i, 1).place(x.</span><span class="si">{gradient_type}</span><span class="s2">)&quot;</span>
                 <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2"> Or specify a shape for the field(s). E.g.,&quot;</span>
-                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  x = ti.field(float, shape=(2, 3), needs_</span><span class="si">{gradient_type}</span><span class="s2">=True)&quot;</span>
+                <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">  x = qd.field(float, shape=(2, 3), needs_</span><span class="si">{gradient_type}</span><span class="s2">=True)&quot;</span>
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_matrix_field_member_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -882,7 +882,7 @@
 
 
 
-<span class="c1"># we don&#39;t add @quadrants_scope decorator for @ti.pyfunc to work</span>
+<span class="c1"># we don&#39;t add @quadrants_scope decorator for @qd.pyfunc to work</span>
 <div class="viewcode-block" id="static_assert">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/impl/index.html#quadrants.lang.impl.static_assert">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">static_assert</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -898,9 +898,9 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; year = 2001</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     ti.static_assert(year % 4 == 0, &quot;the year must be a lunar year&quot;)</span>
+<span class="sd">        &gt;&gt;&gt;     qd.static_assert(year % 4 == 0, &quot;the year must be a lunar year&quot;)</span>
 <span class="sd">        AssertionError: the year must be a lunar year</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
@@ -973,10 +973,10 @@
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_root_fb</span><span class="p">,</span> <span class="n">fields_builder</span><span class="o">.</span><span class="n">FieldsBuilder</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">_root_fb</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">_get_children</span><span class="p">()</span>
 
-    <span class="c1"># TODO: Record all of the SNodeTrees that finalized under &#39;ti.root&#39;</span>
+    <span class="c1"># TODO: Record all of the SNodeTrees that finalized under &#39;qd.root&#39;</span>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">deactivate_all</span><span class="p">():</span>
-        <span class="n">warning</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;&#39;ti.root.deactivate_all()&#39; would deactivate all finalized snodes.&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="n">warning</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;&#39;qd.root.deactivate_all()&#39; would deactivate all finalized snodes.&quot;&quot;&quot;</span><span class="p">)</span>
         <span class="n">deactivate_all_snodes</span><span class="p">()</span>
 
     <span class="nd">@property</span>
@@ -994,7 +994,7 @@
         <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">_root_fb</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;ti.root&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;qd.root&quot;</span>
 
 
 <div class="viewcode-block" id="root">
@@ -1007,8 +1007,8 @@
 
 <span class="sd">Example::</span>
 
-<span class="sd">    &gt;&gt;&gt; x = ti.field(ti.f32)</span>
-<span class="sd">    &gt;&gt;&gt; ti.root.pointer(ti.ij, 4).dense(ti.ij, 8).place(x)</span>
+<span class="sd">    &gt;&gt;&gt; x = qd.field(qd.f32)</span>
+<span class="sd">    &gt;&gt;&gt; qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 
@@ -1167,17 +1167,17 @@
 
 <span class="sd">        The code below shows how a Quadrants field can be declared and defined::</span>
 
-<span class="sd">            &gt;&gt;&gt; x1 = ti.field(ti.f32, shape=(16, 8))</span>
+<span class="sd">            &gt;&gt;&gt; x1 = qd.field(qd.f32, shape=(16, 8))</span>
 <span class="sd">            &gt;&gt;&gt; # Equivalently</span>
-<span class="sd">            &gt;&gt;&gt; x2 = ti.field(ti.f32)</span>
-<span class="sd">            &gt;&gt;&gt; ti.root.dense(ti.ij, shape=(16, 8)).place(x2)</span>
+<span class="sd">            &gt;&gt;&gt; x2 = qd.field(qd.f32)</span>
+<span class="sd">            &gt;&gt;&gt; qd.root.dense(qd.ij, shape=(16, 8)).place(x2)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
-<span class="sd">            &gt;&gt;&gt; x3 = ti.field(ti.f32, shape=(16, 8), order=&#39;ji&#39;)</span>
+<span class="sd">            &gt;&gt;&gt; x3 = qd.field(qd.f32, shape=(16, 8), order=&#39;ji&#39;)</span>
 <span class="sd">            &gt;&gt;&gt; # Equivalently</span>
-<span class="sd">            &gt;&gt;&gt; x4 = ti.field(ti.f32)</span>
-<span class="sd">            &gt;&gt;&gt; ti.root.dense(ti.j, shape=8).dense(ti.i, shape=16).place(x4)</span>
+<span class="sd">            &gt;&gt;&gt; x4 = qd.field(qd.f32)</span>
+<span class="sd">            &gt;&gt;&gt; qd.root.dense(qd.j, shape=8).dense(qd.i, shape=16).place(x4)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
-<span class="sd">            &gt;&gt;&gt; x5 = ti.field(ti.math.vec3, shape=(16, 8))</span>
+<span class="sd">            &gt;&gt;&gt; x5 = qd.field(qd.math.vec3, shape=(16, 8))</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
@@ -1195,17 +1195,17 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants ndarray with scalar elements.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like ti.f32 or a compound type like ti.types.vector(3, ti.i32).</span>
+<span class="sd">        dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).</span>
 <span class="sd">        shape (Union[int, tuple[int]]): Shape of the ndarray.</span>
 
 <span class="sd">    Example:</span>
 <span class="sd">        The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::</span>
 
-<span class="sd">            &gt;&gt;&gt; x = ti.ndarray(ti.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is ti.f32 scalar.</span>
-<span class="sd">            &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.i32)</span>
-<span class="sd">            &gt;&gt;&gt; y = ti.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 ti.i32 scalars.</span>
-<span class="sd">            &gt;&gt;&gt; matrix_ty = ti.types.matrix(3, 4, float)</span>
-<span class="sd">            &gt;&gt;&gt; z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.</span>
+<span class="sd">            &gt;&gt;&gt; x = qd.ndarray(qd.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is qd.f32 scalar.</span>
+<span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.i32)</span>
+<span class="sd">            &gt;&gt;&gt; y = qd.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 qd.i32 scalars.</span>
+<span class="sd">            &gt;&gt;&gt; matrix_ty = qd.types.matrix(3, 4, float)</span>
+<span class="sd">            &gt;&gt;&gt; z = qd.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) qd.float scalars.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># primal</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
@@ -1384,10 +1384,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([1, 1])</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([1, 1])</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.zero(x)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.zero(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        [0, 0]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1410,10 +1410,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Vector([0, 0])</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Vector([0, 0])</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.one(x)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.one(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        [1, 1]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1430,7 +1430,7 @@
 <span class="sd">        *x: A list of axes to be activated</span>
 
 <span class="sd">    Note that Quadrants has already provided a set of commonly used axes. For example,</span>
-<span class="sd">    `ti.ij` is just `axes(0, 1)` under the hood.</span>
+<span class="sd">    `qd.ij` is just `axes(0, 1)` under the hood.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">[</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Axis</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">]</span></div>
 
@@ -1458,9 +1458,9 @@
 
 <span class="sd">            &gt;&gt;&gt; cond = False</span>
 <span class="sd">            &gt;&gt;&gt;</span>
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def run():</span>
-<span class="sd">            &gt;&gt;&gt;     if ti.static(cond):</span>
+<span class="sd">            &gt;&gt;&gt;     if qd.static(cond):</span>
 <span class="sd">            &gt;&gt;&gt;         do_a()</span>
 <span class="sd">            &gt;&gt;&gt;     else:</span>
 <span class="sd">            &gt;&gt;&gt;         do_b()</span>
@@ -1471,19 +1471,19 @@
 
 <span class="sd">        Another common usage is for compile-time loop unrolling::</span>
 
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def run():</span>
-<span class="sd">            &gt;&gt;&gt;     for i in ti.static(range(3)):</span>
+<span class="sd">            &gt;&gt;&gt;     for i in qd.static(range(3)):</span>
 <span class="sd">            &gt;&gt;&gt;         print(i)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; # The above will be unrolled to:</span>
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def run():</span>
 <span class="sd">            &gt;&gt;&gt;     print(0)</span>
 <span class="sd">            &gt;&gt;&gt;     print(1)</span>
 <span class="sd">            &gt;&gt;&gt;     print(2)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">):</span>  <span class="c1"># for python-ish pointer assign: x, y = ti.static(y, x)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">):</span>  <span class="c1"># for python-ish pointer assign: x, y = qd.static(y, x)</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">static</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="n">static</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">xs</span><span class="p">]</span>
 
     <span class="k">if</span> <span class="p">(</span>
@@ -1520,7 +1520,7 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">FunctionType</span><span class="p">,</span> <span class="n">MethodType</span><span class="p">,</span> <span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
         <span class="k">return</span> <span class="n">x</span>
 
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input to ti.static must be compile-time constants or global pointers, instead of </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input to qd.static must be compile-time constants or global pointers, instead of </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -1534,16 +1534,16 @@
 <span class="sd">    in one `for` loop and a single index.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        x (:func:`~quadrants.ndrange`): an iterator object returned by `ti.ndrange`.</span>
+<span class="sd">        x (:func:`~quadrants.ndrange`): an iterator object returned by `qd.ndrange`.</span>
 
 <span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; # without ti.grouped</span>
-<span class="sd">        &gt;&gt;&gt; for I in ti.ndrange(2, 3):</span>
+<span class="sd">        &gt;&gt;&gt; # without qd.grouped</span>
+<span class="sd">        &gt;&gt;&gt; for I in qd.ndrange(2, 3):</span>
 <span class="sd">        &gt;&gt;&gt;     print(I)</span>
 <span class="sd">        prints 0, 1, 2, 3, 4, 5</span>
 
-<span class="sd">        &gt;&gt;&gt; # with ti.grouped</span>
-<span class="sd">        &gt;&gt;&gt; for I in ti.grouped(ti.ndrange(2, 3)):</span>
+<span class="sd">        &gt;&gt;&gt; # with qd.grouped</span>
+<span class="sd">        &gt;&gt;&gt; for I in qd.grouped(qd.ndrange(2, 3)):</span>
 <span class="sd">        &gt;&gt;&gt;     print(I)</span>
 <span class="sd">        prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1585,7 +1585,7 @@
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">mesh_relation_access</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">from_index</span><span class="p">,</span> <span class="n">to_element_type</span><span class="p">):</span>
-    <span class="c1"># to support ti.mesh_local and access mesh attribute as field</span>
+    <span class="c1"># to support qd.mesh_local and access mesh attribute as field</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">from_index</span><span class="p">,</span> <span class="n">MeshInstance</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">from_index</span><span class="p">,</span> <span class="n">element_type_name</span><span class="p">(</span><span class="n">to_element_type</span><span class="p">))</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">MeshInstance</span><span class="p">):</span>

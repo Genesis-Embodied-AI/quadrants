@@ -382,10 +382,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([0, 1, 2], ti.i32)</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.cast(x, ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([0, 1, 2], qd.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.cast(x, qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -418,13 +418,13 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
 <span class="sd">        &gt;&gt;&gt;     x = 3.14</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.bit_cast(x, ti.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.bit_cast(x, qd.i32)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)  # 1078523331</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.bit_cast(y, ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.bit_cast(y, qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # 3.14</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -490,8 +490,8 @@
 <span class="sd">        Matrix or scalar `y`, so that `y = -x`. `y` has the same type as `x`.</span>
 
 <span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([1, -1])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.neg(a)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([1, -1])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.neg(a)</span>
 <span class="sd">        &gt;&gt;&gt; y</span>
 <span class="sd">        [-1, 1]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -513,8 +513,8 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([-pi/2., 0, pi/2.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.sin(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([-pi/2., 0, pi/2.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.sin(x)</span>
 <span class="sd">        [-1., 0., 1.]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_sin</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
@@ -536,8 +536,8 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([-pi, 0, pi/2.])</span>
-<span class="sd">        &gt;&gt;&gt; ti.cos(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([-pi, 0, pi/2.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.cos(x)</span>
 <span class="sd">        [-1., 1., 0.]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cos</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
@@ -565,7 +565,7 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; ti.asin(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
+<span class="sd">        &gt;&gt;&gt; qd.asin(qd.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
 <span class="sd">        [-90., 0., 90.]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_asin</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
@@ -593,7 +593,7 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; ti.acos(ti.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
+<span class="sd">        &gt;&gt;&gt; qd.acos(qd.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
 <span class="sd">        [180., 90., 0.]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_acos</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
@@ -615,8 +615,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.Matrix([1., 4., 9.])</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.sqrt(x)</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([1., 4., 9.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.sqrt(x)</span>
 <span class="sd">        &gt;&gt;&gt; y</span>
 <span class="sd">        [1.0, 2.0, 3.0]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -665,10 +665,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1.5, 1.2, 2.7])</span>
-<span class="sd">        &gt;&gt;&gt;     print(ti.round(x))</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.5, 1.2, 2.7])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.round(x))</span>
 <span class="sd">        [-2., 1., 3.]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">_round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -699,10 +699,10 @@
 <span class="sd">        The floor of each element in `x`, with return value type `dtype`.</span>
 
 <span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-1.1, 2.2, 3.])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.floor(x, ti.f64)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.1, 2.2, 3.])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.floor(x, qd.f64)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)  # [-2.000000000000, 2.000000000000, 3.000000000000]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">_floor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -735,10 +735,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([3.14, -1.5])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.ceil(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([3.14, -1.5])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.ceil(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)  # [4.0, -1.0]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">_ceil</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -760,7 +760,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">tan</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric tangent function, element-wise.</span>
 
-<span class="sd">    Equivalent to `ti.sin(x)/ti.cos(x)` element-wise.</span>
+<span class="sd">    Equivalent to `qd.sin(x)/qd.cos(x)` element-wise.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
@@ -772,10 +772,10 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-pi, pi/2, pi])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.tan(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-pi, pi/2, pi])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.tan(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -799,10 +799,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.tanh(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.tanh(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -826,10 +826,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.exp(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.exp(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -856,10 +856,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.log(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.log(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -883,10 +883,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1.0, 0.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.abs(x)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.abs(x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -949,18 +949,18 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.random(float)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.random(float)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # 0.090257</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.random(ti.f64)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.random(qd.f64)</span>
 <span class="sd">        &gt;&gt;&gt;     print(y)  # 0.716101627301</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     i = ti.random(ti.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     i = qd.random(qd.i32)</span>
 <span class="sd">        &gt;&gt;&gt;     print(i)  # -963722261</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     j = ti.random(ti.i64)</span>
+<span class="sd">        &gt;&gt;&gt;     j = qd.random(qd.i64)</span>
 <span class="sd">        &gt;&gt;&gt;     print(j)  # 73412986184350777</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1030,11 +1030,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([3.0, 4.0, 5.0])</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([3.0, 4.0, 5.0])</span>
 <span class="sd">        &gt;&gt;&gt;     y = 3</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.mod(y, x)</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.mod(y, x)</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -1079,11 +1079,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-2.0, 2.0])</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-2.0, 2.0])</span>
 <span class="sd">        &gt;&gt;&gt;     y = -3</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.pow(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.pow(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -1163,11 +1163,11 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; from math import pi</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([-1.0, 1.0, -1.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Matrix([-1.0, -1.0, 1.0, 1.0])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atan2(y, x) * 180 / pi</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 1.0, -1.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([-1.0, -1.0, 1.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atan2(y, x) * 180 / pi</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; test()</span>
@@ -1191,7 +1191,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def main():</span>
 <span class="sd">        &gt;&gt;&gt;     x = 5</span>
 <span class="sd">        &gt;&gt;&gt;     y = 3</span>
@@ -1226,10 +1226,10 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def main():</span>
-<span class="sd">        &gt;&gt;&gt;     print(ti.mod(-4, 3))  # 2</span>
-<span class="sd">        &gt;&gt;&gt;     print(ti.raw_mod(-4, 3))  # -1</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.mod(-4, 3))  # 2</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.raw_mod(-4, 3))  # -1</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">c_mod</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
@@ -1411,11 +1411,11 @@
 <span class="sd">        This is a scalar if both `x1` and `x2` are scalars.</span>
 
 <span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def main():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([7, 8])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Matrix([1, 2])</span>
-<span class="sd">        &gt;&gt;&gt;     print(ti.bit_shr(x, y))</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([7, 8])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.bit_shr(x, y))</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; main()</span>
 <span class="sd">        [3, 2]</span>
@@ -1470,12 +1470,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def main():</span>
-<span class="sd">        &gt;&gt;&gt;     cond = ti.Matrix([0, 1, 0, 1])</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Matrix([1, 2, 3, 4])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Matrix([-1, -2, -3, -4])</span>
-<span class="sd">        &gt;&gt;&gt;     print(ti.select(cond, x, y))</span>
+<span class="sd">        &gt;&gt;&gt;     cond = qd.Matrix([0, 1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([1, 2, 3, 4])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([-1, -2, -3, -4])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.select(cond, x, y))</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; main()</span>
 <span class="sd">        [-1, 2, -3, 4]</span>
@@ -1543,15 +1543,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([0, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_add(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_add(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 2, 3]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 0, 0], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_add(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_add(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_add</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1576,15 +1576,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([4, 5, 6])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_mul(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([4, 5, 6])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_mul(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 2, 3]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [4, 10, 18], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_mul(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_mul(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1609,15 +1609,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([0, 0, 0])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_sub(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_sub(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [-1, -2, -3]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 0, 0], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_sub(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_sub(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1642,15 +1642,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
 <span class="sd">        &gt;&gt;&gt;     x = 2</span>
 <span class="sd">        &gt;&gt;&gt;     y = 1</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_min(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_min(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # 1  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # 2, the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_min(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_min(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_min</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1675,15 +1675,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
 <span class="sd">        &gt;&gt;&gt;     x = 1</span>
 <span class="sd">        &gt;&gt;&gt;     y = 2</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_max(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_max(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # 2  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # 1, the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_max(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_max(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
@@ -1708,15 +1708,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1, 0, 1])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_and(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_and(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 0, 1]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_and(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_and(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_and</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -1743,15 +1743,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1, 0, 1])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_or(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_or(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [-1, 2, 3]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_or(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_or(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_or</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -1778,15 +1778,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([-1, 0, 1])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([1, 2, 3])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.atomic_xor(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_xor(x, y)</span>
 <span class="sd">        &gt;&gt;&gt;     print(x)  # [-2, 2, 2]  the new value of x</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     ti.atomic_xor(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_xor</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -1818,11 +1818,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def foo():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([0, 1, 2])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([3, 4, 5])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.max(x, y, 4)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([3, 4, 5])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.max(x, y, 4)</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [4, 4, 5]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">num_args</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
@@ -1853,11 +1853,11 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def foo():</span>
-<span class="sd">        &gt;&gt;&gt;     x = ti.Vector([0, 1, 2])</span>
-<span class="sd">        &gt;&gt;&gt;     y = ti.Vector([3, 4, 5])</span>
-<span class="sd">        &gt;&gt;&gt;     z = ti.min(x, y, 1)</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([3, 4, 5])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.min(x, y, 1)</span>
 <span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 1, 1]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">num_args</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>

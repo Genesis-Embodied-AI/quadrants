@@ -319,8 +319,8 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">ti_python_core</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ti_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">qd_python_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">qd_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">ops_mod</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">NdarrayHostAccess</span>
@@ -449,7 +449,7 @@
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">dt</span> <span class="o">==</span> <span class="n">ti_python_core</span><span class="o">.</span><span class="n">DataType_unknown</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">dt</span> <span class="o">==</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DataType_unknown</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix cannot be inferred. Please set dt instead for now.&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">dt</span>
     <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix is invalid.&quot;</span><span class="p">)</span>
@@ -457,7 +457,7 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_infer_array_dt</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
     <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-    <span class="k">return</span> <span class="n">functools</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">ti_python_core</span><span class="o">.</span><span class="n">promoted_type</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="n">_infer_entry_dt</span><span class="p">,</span> <span class="n">arr</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">functools</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">qd_python_core</span><span class="o">.</span><span class="n">promoted_type</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="n">_infer_entry_dt</span><span class="p">,</span> <span class="n">arr</span><span class="p">))</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">make_matrix_with_shape</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
@@ -468,7 +468,7 @@
             <span class="n">shape</span><span class="p">,</span>
             <span class="n">dt</span><span class="p">,</span>
             <span class="p">[</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">elt</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">],</span>
-            <span class="n">ti_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
+            <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
         <span class="p">)</span>
     <span class="p">)</span>
 
@@ -495,7 +495,7 @@
             <span class="n">shape</span><span class="p">,</span>
             <span class="n">dt</span><span class="p">,</span>
             <span class="p">[</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">elt</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">],</span>
-            <span class="n">ti_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
+            <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
         <span class="p">)</span>
     <span class="p">)</span>
 
@@ -536,15 +536,15 @@
 
 <span class="sd">        use a 2d list to initialize a matrix</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def test():</span>
 <span class="sd">        &gt;&gt;&gt;     n = 5</span>
-<span class="sd">        &gt;&gt;&gt;     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)</span>
 <span class="sd">        &gt;&gt;&gt;     print(M)  # a 5x5 matrix with integer elements</span>
 
 <span class="sd">        get the number of rows and columns via the `n`, `m` property:</span>
 
-<span class="sd">        &gt;&gt;&gt; M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)</span>
+<span class="sd">        &gt;&gt;&gt; M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)</span>
 <span class="sd">        &gt;&gt;&gt; M.n  # number of rows</span>
 <span class="sd">        3</span>
 <span class="sd">        &gt;&gt;&gt; M.m  # number of cols</span>
@@ -552,7 +552,7 @@
 
 <span class="sd">        you can even initialize a matrix with an empty list:</span>
 
-<span class="sd">        &gt;&gt;&gt; M = ti.Matrix([[], []], ti.i32)</span>
+<span class="sd">        &gt;&gt;&gt; M = qd.Matrix([[], []], qd.i32)</span>
 <span class="sd">        &gt;&gt;&gt; M.n</span>
 <span class="sd">        2</span>
 <span class="sd">        &gt;&gt;&gt; M.m</span>
@@ -598,7 +598,7 @@
                 <span class="s2">&quot; Matrices/vectors will be automatically unrolled at compile-time for performance.&quot;</span>
                 <span class="s2">&quot; So the compilation time could be extremely long if the matrix size is too big.&quot;</span>
                 <span class="s2">&quot; You may use a field to store a large matrix like this, e.g.:</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;    x = ti.field(ti.f32, (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">)).</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;    x = qd.field(qd.f32, (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">)).</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="s2">&quot; See https://docs.taichi-lang.org/docs/field#matrix-size&quot;</span>
                 <span class="s2">&quot; for more details.&quot;</span><span class="p">,</span>
                 <span class="ne">UserWarning</span><span class="p">,</span>
@@ -753,8 +753,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; A = ti.Matrix([0, 1, 2], ti.i32)</span>
-<span class="sd">            &gt;&gt;&gt; B = A.cast(ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix([0, 1, 2], qd.i32)</span>
+<span class="sd">            &gt;&gt;&gt; B = A.cast(qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; B</span>
 <span class="sd">            [0.0, 1.0, 2.0]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -775,7 +775,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; m = ti.Matrix([[1, 2], [3, 4]])</span>
+<span class="sd">            &gt;&gt;&gt; m = qd.Matrix([[1, 2], [3, 4]])</span>
 <span class="sd">            &gt;&gt;&gt; m.trace()</span>
 <span class="sd">            5</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -818,7 +818,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; a = ti.Vector([3, 4], ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt; a = qd.Vector([3, 4], qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; a.normalized()</span>
 <span class="sd">            [0.6, 0.8]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -838,7 +838,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; A = ti.Matrix([[0, 1], [2, 3]])</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix([[0, 1], [2, 3]])</span>
 <span class="sd">            &gt;&gt;&gt; A.transpose()</span>
 <span class="sd">            [[0, 2], [1, 3]]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -885,7 +885,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; m = ti.Matrix.diag(3, 1)</span>
+<span class="sd">            &gt;&gt;&gt; m = qd.Matrix.diag(3, 1)</span>
 <span class="sd">            [[1, 0, 0],</span>
 <span class="sd">             [0, 1, 0],</span>
 <span class="sd">             [0, 0, 1]]</span>
@@ -903,7 +903,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; m = ti.Matrix([[1, 2], [3, 4]])</span>
+<span class="sd">            &gt;&gt;&gt; m = qd.Matrix([[1, 2], [3, 4]])</span>
 <span class="sd">            &gt;&gt;&gt; m.sum()</span>
 <span class="sd">            10</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -924,7 +924,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; a = ti.Vector([3, 4])</span>
+<span class="sd">            &gt;&gt;&gt; a = qd.Vector([3, 4])</span>
 <span class="sd">            &gt;&gt;&gt; a.norm()</span>
 <span class="sd">            5</span>
 
@@ -994,7 +994,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; v = ti.Vector([0, 0, 1])</span>
+<span class="sd">            &gt;&gt;&gt; v = qd.Vector([0, 0, 1])</span>
 <span class="sd">            &gt;&gt;&gt; v.any()</span>
 <span class="sd">            True</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1014,7 +1014,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; v = ti.Vector([0, 0, 1])</span>
+<span class="sd">            &gt;&gt;&gt; v = qd.Vector([0, 0, 1])</span>
 <span class="sd">            &gt;&gt;&gt; v.all()</span>
 <span class="sd">            False</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1034,7 +1034,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; A = ti.Matrix([0, 1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix([0, 1, 2, 3])</span>
 <span class="sd">            &gt;&gt;&gt; A.fill(-1)</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            [-1, -1, -1, -1]</span>
@@ -1055,7 +1055,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; A = ti.Matrix([[0], [1], [2], [3]])</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix([[0], [1], [2], [3]])</span>
 <span class="sd">            &gt;&gt;&gt; A.to_numpy()</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            array([[0], [1], [2], [3]])</span>
@@ -1095,7 +1095,7 @@
 
 <span class="sd">            So we have to make it happy with a dummy string...</span>
 <span class="sd">            &quot;&quot;&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> ti.Matrix&gt;&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix&gt;&quot;</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -1165,7 +1165,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; A = ti.Matrix.unit(3, 1)</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.Matrix.unit(3, 1)</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            [0, 1, 0]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1338,7 +1338,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.ndarray">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants ndarray with matrix elements.</span>
-<span class="sd">        This function must be called in Python scope, and after `ti.init` is called.</span>
+<span class="sd">        This function must be called in Python scope, and after `qd.init` is called.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Number of rows of the matrix.</span>
@@ -1351,7 +1351,7 @@
 <span class="sd">            The code below shows how a Quadrants ndarray with matrix elements \</span>
 <span class="sd">            can be declared and defined::</span>
 
-<span class="sd">                &gt;&gt;&gt; x = ti.Matrix.ndarray(4, 5, ti.f32, shape=(16, 8))</span>
+<span class="sd">                &gt;&gt;&gt; x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
@@ -1373,11 +1373,11 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def test():</span>
-<span class="sd">            &gt;&gt;&gt;     v1 = ti.Vector([1, 2, 3])</span>
-<span class="sd">            &gt;&gt;&gt;     v2 = ti.Vector([4, 5, 6])</span>
-<span class="sd">            &gt;&gt;&gt;     m = ti.Matrix.rows([v1, v2])</span>
+<span class="sd">            &gt;&gt;&gt;     v1 = qd.Vector([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt;     v2 = qd.Vector([4, 5, 6])</span>
+<span class="sd">            &gt;&gt;&gt;     m = qd.Matrix.rows([v1, v2])</span>
 <span class="sd">            &gt;&gt;&gt;     print(m)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; test()</span>
@@ -1402,11 +1402,11 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def test():</span>
-<span class="sd">            &gt;&gt;&gt;     v1 = ti.Vector([1, 2, 3])</span>
-<span class="sd">            &gt;&gt;&gt;     v2 = ti.Vector([4, 5, 6])</span>
-<span class="sd">            &gt;&gt;&gt;     m = ti.Matrix.cols([v1, v2])</span>
+<span class="sd">            &gt;&gt;&gt;     v1 = qd.Vector([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt;     v2 = qd.Vector([4, 5, 6])</span>
+<span class="sd">            &gt;&gt;&gt;     m = qd.Matrix.cols([v1, v2])</span>
 <span class="sd">            &gt;&gt;&gt;     print(m)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; test()</span>
@@ -1438,8 +1438,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; v1 = ti.Vector([1, 2, 3])</span>
-<span class="sd">            &gt;&gt;&gt; v2 = ti.Vector([3, 4, 5])</span>
+<span class="sd">            &gt;&gt;&gt; v1 = qd.Vector([1, 2, 3])</span>
+<span class="sd">            &gt;&gt;&gt; v2 = qd.Vector([3, 4, 5])</span>
 <span class="sd">            &gt;&gt;&gt; v1.dot(v2)</span>
 <span class="sd">            26</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1509,10 +1509,10 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: A vector instance.</span>
 <span class="sd">        Example::</span>
-<span class="sd">            &gt;&gt;&gt; u = ti.Vector([1, 2])</span>
+<span class="sd">            &gt;&gt;&gt; u = qd.Vector([1, 2])</span>
 <span class="sd">            &gt;&gt;&gt; print(u.m, u.n)  # verify a vector is a matrix of shape (n, 1)</span>
 <span class="sd">            2 1</span>
-<span class="sd">            &gt;&gt;&gt; v = ti.Vector([3, 4])</span>
+<span class="sd">            &gt;&gt;&gt; v = qd.Vector([3, 4])</span>
 <span class="sd">            &gt;&gt;&gt; u + v</span>
 <span class="sd">            [4 6]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1528,7 +1528,7 @@
 <div class="viewcode-block" id="Vector.field">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.field">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;ti.Vector.field&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;qd.Vector.field&quot;&quot;&quot;</span>
         <span class="n">ndim</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="k">assert</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span>
         <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;ndim&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
@@ -1550,7 +1550,7 @@
 <span class="sd">        Example:</span>
 <span class="sd">            The code below shows how a Quadrants ndarray with vector elements can be declared and defined::</span>
 
-<span class="sd">                &gt;&gt;&gt; x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))</span>
+<span class="sd">                &gt;&gt;&gt; x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
@@ -1589,14 +1589,14 @@
 
 <div class="viewcode-block" id="MatrixField.ptr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.ptr">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ti_python_core</span><span class="o">.</span><span class="n">expr_matrix_field</span><span class="p">([</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">],</span> <span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">][:</span><span class="n">ndim</span><span class="p">])</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">expr_matrix_field</span><span class="p">([</span><span class="n">var</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">],</span> <span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">][:</span><span class="n">ndim</span><span class="p">])</span></div>
 
 
 <div class="viewcode-block" id="MatrixField.to_dlpack">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_dlpack">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Note: caller is responsible for calling ti.sync() between modifying the field, and</span>
+<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field, and</span>
 <span class="sd">        reading it.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
@@ -1633,7 +1633,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_dynamic_index_stride</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="k">return</span>
         <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="n">length</span> <span class="ow">or</span> <span class="n">ti_python_core</span><span class="o">.</span><span class="n">is_quant</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="n">length</span> <span class="ow">or</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">is_quant</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">):</span>
             <span class="k">return</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">):</span>
@@ -1641,7 +1641,7 @@
                 <span class="k">break</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth_below_lca</span><span class="p">,</span> <span class="n">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
-                <span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">ti_python_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dense</span>
+                <span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dense</span>
                 <span class="ow">or</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_cell_size_bytes</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_cell_size_bytes</span>
                 <span class="ow">or</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span> <span class="o">!=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_offset_bytes_in_parent_cell</span>
                 <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">paths</span>
@@ -1778,7 +1778,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; m = ti.Matrix.field(2, 2, ti.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; m = qd.Matrix.field(2, 2, qd.f32, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; arr = numpy.ones((3, 3, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1804,7 +1804,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># make interactive shell happy, prevent materialization</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> ti.Matrix.field&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix.field&gt;&quot;</span></div>
 
 
 
@@ -1891,7 +1891,7 @@
         <span class="k">return</span> <span class="bp">self</span><span class="p">(</span>
             <span class="p">[</span>
                 <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
-                    <span class="n">ti_python_core</span><span class="o">.</span><span class="n">make_get_element_expr</span><span class="p">(</span>
+                    <span class="n">qd_python_core</span><span class="o">.</span><span class="n">make_get_element_expr</span><span class="p">(</span>
                         <span class="n">func_ret</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
                         <span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span><span class="p">,),</span>
                         <span class="n">_qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
@@ -2078,7 +2078,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))</span>
+<span class="sd">        &gt;&gt;&gt; arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
@@ -2117,7 +2117,7 @@
             <span class="n">shape</span><span class="p">,</span>
             <span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">,</span>
             <span class="n">zero_fill</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">dbg_info</span><span class="o">=</span><span class="n">ti_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">()),</span>
+            <span class="n">dbg_info</span><span class="o">=</span><span class="n">qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">()),</span>
         <span class="p">)</span></div>
 
 
@@ -2129,7 +2129,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; arr.element_shape</span>
 <span class="sd">            (2, 2)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -2159,7 +2159,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1))</span>
+<span class="sd">            &gt;&gt;&gt; arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1))</span>
 <span class="sd">            &gt;&gt;&gt; arr.to_numpy()</span>
 <span class="sd">            [[[[0. 0.]</span>
 <span class="sd">               [0. 0.]]]</span>
@@ -2178,7 +2178,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; m = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1), layout=0)</span>
+<span class="sd">            &gt;&gt;&gt; m = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1), layout=0)</span>
 <span class="sd">            &gt;&gt;&gt; arr = np.ones((2, 1, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -2211,7 +2211,7 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> ti.Matrix.ndarray&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Matrix.ndarray&gt;&quot;</span></div>
 
 
 
@@ -2227,7 +2227,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; a = ti.VectorNdarray(3, ti.f32, (3, 3))</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (3, 3))</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
@@ -2261,7 +2261,7 @@
             <span class="n">shape</span><span class="p">,</span>
             <span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">,</span>
             <span class="n">zero_fill</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">dbg_info</span><span class="o">=</span><span class="n">ti_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">()),</span>
+            <span class="n">dbg_info</span><span class="o">=</span><span class="n">qd_python_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">()),</span>
         <span class="p">)</span></div>
 
 
@@ -2273,7 +2273,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; a = ti.VectorNdarray(3, ti.f32, (3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; a.element_shape</span>
 <span class="sd">            (3,)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -2300,7 +2300,7 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; a = ti.VectorNdarray(3, ti.f32, (2, 2))</span>
+<span class="sd">            &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; a.to_numpy()</span>
 <span class="sd">            array([[[0., 0., 0.],</span>
 <span class="sd">                    [0., 0., 0.]],</span>
@@ -2322,7 +2322,7 @@
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<span class="sd">            &gt;&gt;&gt; a = ti.VectorNdarray(3, ti.f32, (2, 2), 0)</span>
+<span class="sd">            &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (2, 2), 0)</span>
 <span class="sd">            &gt;&gt;&gt; b = np.ones((2, 2, 3), dtype=np.float32)</span>
 <span class="sd">            &gt;&gt;&gt; a.from_numpy(b)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -2350,7 +2350,7 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> ti.Vector.ndarray&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Vector.ndarray&gt;&quot;</span></div>
 
 
 

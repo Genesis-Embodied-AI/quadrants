@@ -462,11 +462,11 @@ will JIT compile it into native instructions.</p>
 </dd>
 </dl>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">func</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">foo</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">2</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="n">foo</span><span class="p">(</span><span class="mi">40</span><span class="p">))</span>  <span class="c1"># 42</span>
 </pre></div>
@@ -511,9 +511,9 @@ The top-level <code class="docutils literal notranslate"><span class="pre">for</
 to either a CPU thread pool or massively parallel GPUs.</p>
 <p>Kernel’s gradient kernel would be generated automatically by the AutoDiff system.</p>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="c1"># Assigns all the elements of `x` in parallel.</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">:</span>
@@ -530,12 +530,12 @@ to either a CPU thread pool or massively parallel GPUs.</p>
 Quadrants kernels can be defined inside a class.</p>
 <p>See also <a class="reference external" href="https://docs.taichi-lang.org/docs/odop">https://docs.taichi-lang.org/docs/odop</a></p>
 <p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@ti</span><span class="o">.</span><span class="n">data_oriented</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">TiArray</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="k">def</span><span class="w"> </span><span class="nf">inc</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">:</span>
 <span class="gp">&gt;&gt;&gt; </span>            <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>

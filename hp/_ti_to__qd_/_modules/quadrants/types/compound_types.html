@@ -311,7 +311,7 @@
                   
   <h1>Source code for quadrants.types.compound_types</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ti_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">qd_python_core</span> <span class="k">as</span> <span class="n">_qd_python_core</span>
 
 <span class="n">_type_factory</span> <span class="o">=</span> <span class="n">_qd_python_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span>
 
@@ -337,7 +337,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; mat2x2 = ti.types.matrix(2, 2, ti.f32)  # 2x2 matrix type</span>
+<span class="sd">        &gt;&gt;&gt; mat2x2 = qd.types.matrix(2, 2, qd.f32)  # 2x2 matrix type</span>
 <span class="sd">        &gt;&gt;&gt; M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
@@ -358,7 +358,7 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)  # 3d vector type</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)  # 3d vector type</span>
 <span class="sd">        &gt;&gt;&gt; v = vec3([1., 2., 3.])  # an instance of this type</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
@@ -379,8 +379,8 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; sphere = ti.types.struct(center=vec3, radius=float)</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; sphere = qd.types.struct(center=vec3, radius=float)</span>
 <span class="sd">        &gt;&gt;&gt; s = sphere(center=vec3([0., 0., 0.]), radius=1.0)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">struct</span><span class="o">.</span><span class="n">StructType</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>

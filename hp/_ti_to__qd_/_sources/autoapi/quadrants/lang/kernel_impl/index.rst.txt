@@ -36,11 +36,11 @@ Module Contents
 
    Example::
 
-       >>> @ti.func
+       >>> @qd.func
        >>> def foo(x):
        >>>     return x + 2
        >>>
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
        >>>     print(foo(40))  # 42
 
@@ -78,9 +78,9 @@ Module Contents
 
    Example::
 
-       >>> x = ti.field(ti.i32, shape=(4, 8))
+       >>> x = qd.field(qd.i32, shape=(4, 8))
        >>>
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def run():
        >>>     # Assigns all the elements of `x` in parallel.
        >>>     for i in x:
@@ -98,12 +98,12 @@ Module Contents
 
    Example::
 
-       >>> @ti.data_oriented
+       >>> @qd.data_oriented
        >>> class TiArray:
        >>>     def __init__(self, n):
-       >>>         self.x = ti.field(ti.f32, shape=n)
+       >>>         self.x = qd.field(qd.f32, shape=n)
        >>>
-       >>>     @ti.kernel
+       >>>     @qd.kernel
        >>>     def inc(self):
        >>>         for i in self.x:
        >>>             self.x[i] += 1.0

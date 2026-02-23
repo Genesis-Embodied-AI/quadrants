@@ -342,7 +342,7 @@
     <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">old_call</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">new_call</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">ret</span> <span class="o">=</span> <span class="n">old_call</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="c1"># print&#39;s in kernel won&#39;t take effect until ti.sync(), discussion:</span>
+        <span class="c1"># print&#39;s in kernel won&#39;t take effect until qd.sync(), discussion:</span>
         <span class="c1"># https://github.com/taichi-dev/quadrants/pull/1303#discussion_r444897102</span>
         <span class="nb">print</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">pop_python_print_buffer</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ret</span>
