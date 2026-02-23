@@ -396,7 +396,7 @@
     <span class="c1"># pointers, the address of these pointers cannot change, and the set of parameters is fixed.</span>
     <span class="c1"># The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage</span>
     <span class="c1"># collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of</span>
-    <span class="c1"># the taichi prog itself, which means that calling `ti.reset()` will automatically clear the cache. Note that</span>
+    <span class="c1"># the taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that</span>
     <span class="c1"># the cache stores wear references to pointers, so it does not hold alife any allocated memory.</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># Keep track of taichi runtime to automatically clear cache if destroyed</span>
@@ -746,7 +746,7 @@
             <span class="c1"># The bit in caps should not be modified without updating corresponding test</span>
             <span class="c1"># freetext can be freely modified.</span>
             <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because</span>
-            <span class="c1"># this is only printed when ti.init(print_non_pure=..) is True. And it is</span>
+            <span class="c1"># this is only printed when qd.init(print_non_pure=..) is True. And it is</span>
             <span class="c1"># confusing to set that to True, and see nothing printed.</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[NOT_PURE] Debug information: not pure: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>

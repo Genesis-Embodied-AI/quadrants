@@ -359,12 +359,12 @@
 
 <span class="sd">    Example::</span>
 <span class="sd">_</span>
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; a = ti.Struct(v=vec3([0, 0, 0]), t=1.0)</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; a = qd.Struct(v=vec3([0, 0, 0]), t=1.0)</span>
 <span class="sd">        &gt;&gt;&gt; print(a.items)</span>
 <span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0)])</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; B = ti.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)</span>
+<span class="sd">        &gt;&gt;&gt; B = qd.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)</span>
 <span class="sd">        &gt;&gt;&gt; print(B.items)</span>
 <span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0), (&#39;A&#39;, {&#39;v&#39;: [[0.], [0.], [0.]], &#39;t&#39;: 1.0})])</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -403,8 +403,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">           &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">           &gt;&gt;&gt; sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
+<span class="sd">           &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">           &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">           &gt;&gt;&gt; a.keys</span>
 <span class="sd">           [&#39;center&#39;, &#39;radius&#39;]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -437,8 +437,8 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">            &gt;&gt;&gt; sphere = ti.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
+<span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">            &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">            &gt;&gt;&gt; sphere.items</span>
 <span class="sd">            dict_items([(&#39;center&#39;, 2), (&#39;radius&#39;, 1.0)])</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -527,7 +527,7 @@
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
             <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">])</span>
             <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">__methods</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;ti.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -596,9 +596,9 @@
 
 <span class="sd">        Example:</span>
 
-<span class="sd">            &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; sphere = {&quot;center&quot;: vec3, &quot;radius&quot;: float}</span>
-<span class="sd">            &gt;&gt;&gt; F = ti.Struct.field(sphere, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; F = qd.Struct.field(sphere, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; F</span>
 <span class="sd">            {&#39;center&#39;: array([[[0., 0., 0.],</span>
 <span class="sd">                [0., 0., 0.],</span>
@@ -762,9 +762,9 @@
 
 <span class="sd">        Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; f1 = ti.Vector.field(3, ti.f32, shape=(3, 3))</span>
-<span class="sd">            &gt;&gt;&gt; f2 = ti.field(ti.f32, shape=(3, 3))</span>
-<span class="sd">            &gt;&gt;&gt; F = ti.StructField({&quot;center&quot;: f1, &quot;radius&quot;: f2})</span>
+<span class="sd">            &gt;&gt;&gt; f1 = qd.Vector.field(3, qd.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; f2 = qd.field(qd.f32, shape=(3, 3))</span>
+<span class="sd">            &gt;&gt;&gt; F = qd.StructField({&quot;center&quot;: f1, &quot;radius&quot;: f2})</span>
 <span class="sd">            &gt;&gt;&gt; F.keys</span>
 <span class="sd">            [&#39;center&#39;, &#39;radius&#39;]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1140,7 +1140,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Python scope struct type print support.&quot;&quot;&quot;</span>
         <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
         <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">methods</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;ti.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
 
 
 <div class="viewcode-block" id="dataclass">
@@ -1158,12 +1158,12 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.dataclass</span>
+<span class="sd">        &gt;&gt;&gt; @qd.dataclass</span>
 <span class="sd">        &gt;&gt;&gt; class Sphere:</span>
 <span class="sd">        &gt;&gt;&gt;     center: vec3</span>
-<span class="sd">        &gt;&gt;&gt;     radius: ti.f32</span>
+<span class="sd">        &gt;&gt;&gt;     radius: qd.f32</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt;     @ti.func</span>
+<span class="sd">        &gt;&gt;&gt;     @qd.func</span>
 <span class="sd">        &gt;&gt;&gt;     def area(self):</span>
 <span class="sd">        &gt;&gt;&gt;         return 4 * 3.14 * self.radius * self.radius</span>
 <span class="sd">        &gt;&gt;&gt;</span>

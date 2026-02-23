@@ -478,7 +478,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">spmv</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="n">res</span><span class="o">.</span><span class="n">arr</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">res</span>
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Sparse matrix-matrix/vector multiplication does not support </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2"> for now. Supported types are SparseMatrix, ti.field, and numpy ndarray.&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Sparse matrix-matrix/vector multiplication does not support </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2"> for now. Supported types are SparseMatrix, qd.field, and numpy ndarray.&quot;</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
@@ -508,20 +508,20 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the sparse matrix from a ndarray.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            ndarray (Union[ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]): the ndarray to build the sparse matrix from.</span>
+<span class="sd">            ndarray (Union[qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]): the ndarray to build the sparse matrix from.</span>
 
 <span class="sd">        Raises:</span>
 <span class="sd">            QuadrantsRuntimeError: If the input is not a ndarray or the length is not divisible by 3.</span>
 
 <span class="sd">        Example::</span>
 <span class="sd">            &gt;&gt;&gt; N = 5</span>
-<span class="sd">            &gt;&gt;&gt; triplets = ti.Vector.ndarray(n=3, dtype=ti.f32, shape=10, layout=ti.Layout.AOS)</span>
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
-<span class="sd">            &gt;&gt;&gt; def fill(triplets: ti.types.ndarray()):</span>
+<span class="sd">            &gt;&gt;&gt; triplets = qd.Vector.ndarray(n=3, dtype=qd.f32, shape=10, layout=qd.Layout.AOS)</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">            &gt;&gt;&gt; def fill(triplets: qd.types.ndarray()):</span>
 <span class="sd">            &gt;&gt;&gt;     for i in range(N):</span>
-<span class="sd">            &gt;&gt;&gt;        triplets[i] = ti.Vector([i, (i + 1) % N, i+1], dt=ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt;        triplets[i] = qd.Vector([i, (i + 1) % N, i+1], dt=qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; fill(triplets)</span>
-<span class="sd">            &gt;&gt;&gt; A = ti.linalg.SparseMatrix(n=N, m=N, dtype=ti.f32)</span>
+<span class="sd">            &gt;&gt;&gt; A = qd.linalg.SparseMatrix(n=N, m=N, dtype=qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; A.build_from_ndarray(triplets)</span>
 <span class="sd">            &gt;&gt;&gt; print(A)</span>
 <span class="sd">            [0, 1, 0, 0, 0]</span>
@@ -537,7 +537,7 @@
             <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">make_sparse_matrix_from_ndarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">,</span> <span class="n">ndarray</span><span class="o">.</span><span class="n">arr</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;Sparse matrix only supports building from [ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]&quot;</span>
+                <span class="s2">&quot;Sparse matrix only supports building from [qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]&quot;</span>
             <span class="p">)</span></div>
 
 
@@ -565,7 +565,7 @@
 <span class="sd">        num_rows (int): the first dimension of a sparse matrix.</span>
 <span class="sd">        num_cols (int): the second dimension of a sparse matrix.</span>
 <span class="sd">        max_num_triplets (int): the maximum number of triplets.</span>
-<span class="sd">        dtype (ti.dtype): the data type of the sparse matrix.</span>
+<span class="sd">        dtype (qd.dtype): the data type of the sparse matrix.</span>
 <span class="sd">        storage_format (str): the storage format of the sparse matrix.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 

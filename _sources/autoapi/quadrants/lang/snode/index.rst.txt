@@ -120,7 +120,7 @@ Module Contents
       Places a list of Quadrants fields under the `self` container.
 
       :param \*args: A list of Quadrants fields to place.
-      :type \*args: List[ti.field]
+      :type \*args: List[qd.field]
       :param offset: Offset of the field domain.
       :type offset: Union[Number, tuple[Number]]
 
@@ -262,6 +262,6 @@ Module Contents
    :type indices: Union[int, :class:`~quadrants.Vector`]
 
    :returns: The memory address of `f[indices]`.
-   :rtype: ti.u64
+   :rtype: qd.u64
 
 

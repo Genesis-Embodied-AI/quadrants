@@ -321,7 +321,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A class to add CUPTI metric for :class:`~quadrants.profiler.kernel_profiler.KernelProfiler`.</span>
 
 <span class="sd">    This class is designed to add user selected CUPTI metrics.</span>
-<span class="sd">    Only available for the CUDA backend now, i.e. you need ``ti.init(kernel_profiler=True, arch=ti.cuda)``.</span>
+<span class="sd">    Only available for the CUDA backend now, i.e. you need ``qd.init(kernel_profiler=True, arch=qd.cuda)``.</span>
 <span class="sd">    For usage of this class, see examples in func :func:`~quadrants.profiler.set_kernel_profiler_metrics` and :func:`~quadrants.profiler.collect_kernel_profiler_metrics`.</span>
 
 <span class="sd">    Args:</span>
@@ -332,32 +332,32 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        &gt;&gt;&gt; import quadrants as ti</span>
+<span class="sd">        &gt;&gt;&gt; import quadrants as qd</span>
 
-<span class="sd">        &gt;&gt;&gt; ti.init(kernel_profiler=True, arch=ti.cuda)</span>
+<span class="sd">        &gt;&gt;&gt; qd.init(kernel_profiler=True, arch=qd.cuda)</span>
 <span class="sd">        &gt;&gt;&gt; num_elements = 128*1024*1024</span>
 
-<span class="sd">        &gt;&gt;&gt; x = ti.field(ti.f32, shape=num_elements)</span>
-<span class="sd">        &gt;&gt;&gt; y = ti.field(ti.f32, shape=())</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.f32, shape=num_elements)</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.field(qd.f32, shape=())</span>
 <span class="sd">        &gt;&gt;&gt; y[None] = 0</span>
 
-<span class="sd">        &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def reduction():</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         y[None] += x[i]</span>
 
-<span class="sd">        &gt;&gt;&gt; global_op_atom = ti.profiler.CuptiMetric(</span>
+<span class="sd">        &gt;&gt;&gt; global_op_atom = qd.profiler.CuptiMetric(</span>
 <span class="sd">        &gt;&gt;&gt;     name=&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     header=&#39; global.atom &#39;,</span>
 <span class="sd">        &gt;&gt;&gt;     val_format=&#39;    {:8.0f} &#39;)</span>
 
 <span class="sd">        &gt;&gt;&gt; # add and set user defined metrics</span>
-<span class="sd">        &gt;&gt;&gt; profiling_metrics = ti.profiler.get_predefined_cupti_metrics(&#39;global_access&#39;) + [global_op_atom]</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.set_kernel_profile_metrics(profiling_metrics)</span>
+<span class="sd">        &gt;&gt;&gt; profiling_metrics = qd.profiler.get_predefined_cupti_metrics(&#39;global_access&#39;) + [global_op_atom]</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.set_kernel_profile_metrics(profiling_metrics)</span>
 
 <span class="sd">        &gt;&gt;&gt; for i in range(16):</span>
 <span class="sd">        &gt;&gt;&gt;     reduction()</span>
-<span class="sd">        &gt;&gt;&gt; ti.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; qd.profiler.print_kernel_profiler_info(&#39;trace&#39;)</span>
 
 <span class="sd">    Note:</span>
 <span class="sd">        For details about using CUPTI in Quadrants, please visit https://docs.taichi-lang.org/docs/profiler#advanced-mode.</span>
@@ -435,7 +435,7 @@
 <span class="c1"># Shared Memory Metrics</span>
 <span class="n">shared_utilization</span> <span class="o">=</span> <span class="n">CuptiMetric</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1tex__data_pipe_lsu_wavefronts_mem_shared.avg.pct_of_peak_sustained_elapsed&quot;</span><span class="p">,</span>
-    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; uti.shared &quot;</span><span class="p">,</span>
+    <span class="n">header</span><span class="o">=</span><span class="s2">&quot; uqd.shared &quot;</span><span class="p">,</span>
     <span class="n">val_format</span><span class="o">=</span><span class="s2">&quot;   </span><span class="si">{:6.2f}</span><span class="s2"> % &quot;</span><span class="p">,</span>
 <span class="p">)</span>
 

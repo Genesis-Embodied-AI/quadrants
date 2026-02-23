@@ -326,15 +326,15 @@
 
 <span class="sd">    Example::</span>
 
-<span class="sd">            &gt;&gt;&gt; import quadrants as ti</span>
-<span class="sd">            &gt;&gt;&gt; ti.init(arch=ti.cpu)</span>
-<span class="sd">            &gt;&gt;&gt; var = ti.field(ti.f32, shape=1)</span>
-<span class="sd">            &gt;&gt;&gt; @ti.kernel</span>
+<span class="sd">            &gt;&gt;&gt; import quadrants as qd</span>
+<span class="sd">            &gt;&gt;&gt; qd.init(arch=qd.cpu)</span>
+<span class="sd">            &gt;&gt;&gt; var = qd.field(qd.f32, shape=1)</span>
+<span class="sd">            &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">            &gt;&gt;&gt; def compute():</span>
 <span class="sd">            &gt;&gt;&gt;     var[0] = 1.0</span>
 <span class="sd">            &gt;&gt;&gt;     print(&quot;Setting var[0] =&quot;, var[0])</span>
 <span class="sd">            &gt;&gt;&gt; compute()</span>
-<span class="sd">            &gt;&gt;&gt; ti.profiler.print_scoped_profiler_info()</span>
+<span class="sd">            &gt;&gt;&gt; qd.profiler.print_scoped_profiler_info()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">_ti_core</span><span class="o">.</span><span class="n">print_profile_info</span><span class="p">()</span></div>
 

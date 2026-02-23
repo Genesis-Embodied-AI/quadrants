@@ -434,13 +434,13 @@
 <span class="sd">            names and types for element attributes.</span>
 <span class="sd">        reorder: True if reorders the internal memory for coalesced data access within mesh-for loop.</span>
 <span class="sd">        needs_grad: True if needs to record grad.</span>
-<span class="sd">        layout: ti.Layout.AoS/ti.Layout.SoA</span>
+<span class="sd">        layout: qd.Layout.AoS/qd.Layout.SoA</span>
 
 <span class="sd">        Example::</span>
 <span class="sd">        &gt;&gt;&gt; import meshquadrants_patcher as Patcher</span>
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; mesh = Patcher.load_mesh(&quot;bunny.obj&quot;, relations=[&#39;FV&#39;])</span>
-<span class="sd">        &gt;&gt;&gt; mesh.faces.place({&#39;area&#39; : ti.f32}) # declares a mesh attribute `area` for each face element.</span>
+<span class="sd">        &gt;&gt;&gt; mesh.faces.place({&#39;area&#39; : qd.f32}) # declares a mesh attribute `area` for each face element.</span>
 <span class="sd">        &gt;&gt;&gt; mesh.verts.place({&#39;pos&#39; : vec3}, reorder=True) # declares a mesh attribute `pos` for each vertex element, and reorder it in memory.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
@@ -580,9 +580,9 @@
 <span class="sd">        needs_grad: True if needs to record grad.</span>
 
 <span class="sd">        Example::</span>
-<span class="sd">        &gt;&gt;&gt; vec3 = ti.types.vector(3, ti.f32)</span>
-<span class="sd">        &gt;&gt;&gt; mesh = ti.TriMesh()</span>
-<span class="sd">        &gt;&gt;&gt; mesh.faces.place({&#39;area&#39; : ti.f32}) # declares a mesh attribute `area` for each face element.</span>
+<span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt; mesh = qd.TriMesh()</span>
+<span class="sd">        &gt;&gt;&gt; mesh.faces.place({&#39;area&#39; : qd.f32}) # declares a mesh attribute `area` for each face element.</span>
 <span class="sd">        &gt;&gt;&gt; mesh.verts.place({&#39;pos&#39; : vec3}, reorder=True) # declares a mesh attribute `pos` for each vertex element, and reorder it in memory.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -877,7 +877,7 @@
 
 <span class="sd">    MeshQuadrants offers first-class support for triangular/tetrahedral meshes</span>
 <span class="sd">    and allows efficient computation on these irregular data structures,</span>
-<span class="sd">    only available for backends supporting `ti.extension.mesh`.</span>
+<span class="sd">    only available for backends supporting `qd.extension.mesh`.</span>
 
 <span class="sd">    See more details in https://github.com/taichi-dev/meshquadrants</span>
 <span class="sd">    &quot;&quot;&quot;</span>

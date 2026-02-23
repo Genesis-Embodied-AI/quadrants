@@ -146,7 +146,7 @@ Module Contents
 
    .. py:method:: to_dlpack()
 
-      Note: caller is responsible for calling ti.sync() between modifying the field, and
+      Note: caller is responsible for calling qd.sync() between modifying the field, and
       reading it.
 
 

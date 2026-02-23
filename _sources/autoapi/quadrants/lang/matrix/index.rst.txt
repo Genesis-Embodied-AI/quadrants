@@ -43,15 +43,15 @@ Module Contents
 
        use a 2d list to initialize a matrix
 
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def test():
        >>>     n = 5
-       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
        >>>     print(M)  # a 5x5 matrix with integer elements
 
        get the number of rows and columns via the `n`, `m` property:
 
-       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
        >>> M.n  # number of rows
        3
        >>> M.m  # number of cols
@@ -59,7 +59,7 @@ Module Contents
 
        you can even initialize a matrix with an empty list:
 
-       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M = qd.Matrix([[], []], qd.i32)
        >>> M.n
        2
        >>> M.m
@@ -91,8 +91,8 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([0, 1, 2], ti.i32)
-          >>> B = A.cast(ti.f32)
+          >>> A = qd.Matrix([0, 1, 2], qd.i32)
+          >>> B = A.cast(qd.f32)
           >>> B
           [0.0, 1.0, 2.0]
 
@@ -108,7 +108,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m = qd.Matrix([[1, 2], [3, 4]])
           >>> m.trace()
           5
 
@@ -140,7 +140,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.Vector([3, 4], ti.f32)
+          >>> a = qd.Vector([3, 4], qd.f32)
           >>> a.normalized()
           [0.6, 0.8]
 
@@ -155,7 +155,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([[0, 1], [2, 3]])
+          >>> A = qd.Matrix([[0, 1], [2, 3]])
           >>> A.transpose()
           [[0, 2], [1, 3]]
 
@@ -191,7 +191,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix.diag(3, 1)
+          >>> m = qd.Matrix.diag(3, 1)
           [[1, 0, 0],
            [0, 1, 0],
            [0, 0, 1]]
@@ -204,7 +204,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix([[1, 2], [3, 4]])
+          >>> m = qd.Matrix([[1, 2], [3, 4]])
           >>> m.sum()
           10
 
@@ -220,7 +220,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.Vector([3, 4])
+          >>> a = qd.Vector([3, 4])
           >>> a.norm()
           5
 
@@ -266,7 +266,7 @@ Module Contents
 
       Example::
 
-          >>> v = ti.Vector([0, 0, 1])
+          >>> v = qd.Vector([0, 0, 1])
           >>> v.any()
           True
 
@@ -281,7 +281,7 @@ Module Contents
 
       Example::
 
-          >>> v = ti.Vector([0, 0, 1])
+          >>> v = qd.Vector([0, 0, 1])
           >>> v.all()
           False
 
@@ -296,7 +296,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([0, 1, 2, 3])
+          >>> A = qd.Matrix([0, 1, 2, 3])
           >>> A.fill(-1)
           >>> A
           [-1, -1, -1, -1]
@@ -312,7 +312,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix([[0], [1], [2], [3]])
+          >>> A = qd.Matrix([[0], [1], [2], [3]])
           >>> A.to_numpy()
           >>> A
           array([[0], [1], [2], [3]])
@@ -374,7 +374,7 @@ Module Contents
 
       Example::
 
-          >>> A = ti.Matrix.unit(3, 1)
+          >>> A = qd.Matrix.unit(3, 1)
           >>> A
           [0, 1, 0]
 
@@ -435,7 +435,7 @@ Module Contents
 
 
       Defines a Quadrants ndarray with matrix elements.
-      This function must be called in Python scope, and after `ti.init` is called.
+      This function must be called in Python scope, and after `qd.init` is called.
 
       :param n: Number of rows of the matrix.
       :type n: int
@@ -450,7 +450,7 @@ Module Contents
 
           The code below shows how a Quadrants ndarray with matrix elements             can be declared and defined::
 
-              >>> x = ti.Matrix.ndarray(4, 5, ti.f32, shape=(16, 8))
+              >>> x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))
 
 
 
@@ -469,11 +469,11 @@ Module Contents
 
       Example::
 
-          >>> @ti.kernel
+          >>> @qd.kernel
           >>> def test():
-          >>>     v1 = ti.Vector([1, 2, 3])
-          >>>     v2 = ti.Vector([4, 5, 6])
-          >>>     m = ti.Matrix.rows([v1, v2])
+          >>>     v1 = qd.Vector([1, 2, 3])
+          >>>     v2 = qd.Vector([4, 5, 6])
+          >>>     m = qd.Matrix.rows([v1, v2])
           >>>     print(m)
           >>>
           >>> test()
@@ -495,11 +495,11 @@ Module Contents
 
       Example::
 
-          >>> @ti.kernel
+          >>> @qd.kernel
           >>> def test():
-          >>>     v1 = ti.Vector([1, 2, 3])
-          >>>     v2 = ti.Vector([4, 5, 6])
-          >>>     m = ti.Matrix.cols([v1, v2])
+          >>>     v1 = qd.Vector([1, 2, 3])
+          >>>     v2 = qd.Vector([4, 5, 6])
+          >>>     m = qd.Matrix.cols([v1, v2])
           >>>     print(m)
           >>>
           >>> test()
@@ -521,8 +521,8 @@ Module Contents
 
       Example::
 
-          >>> v1 = ti.Vector([1, 2, 3])
-          >>> v2 = ti.Vector([3, 4, 5])
+          >>> v1 = qd.Vector([1, 2, 3])
+          >>> v2 = qd.Vector([3, 4, 5])
           >>> v1.dot(v2)
           26
 
@@ -588,15 +588,15 @@ Module Contents
 
        use a 2d list to initialize a matrix
 
-       >>> @ti.kernel
+       >>> @qd.kernel
        >>> def test():
        >>>     n = 5
-       >>>     M = ti.Matrix([[0] * n for _ in range(n)], ti.i32)
+       >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
        >>>     print(M)  # a 5x5 matrix with integer elements
 
        get the number of rows and columns via the `n`, `m` property:
 
-       >>> M = ti.Matrix([[0, 1], [2, 3], [4, 5]], ti.i32)
+       >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
        >>> M.n  # number of rows
        3
        >>> M.m  # number of cols
@@ -604,7 +604,7 @@ Module Contents
 
        you can even initialize a matrix with an empty list:
 
-       >>> M = ti.Matrix([[], []], ti.i32)
+       >>> M = qd.Matrix([[], []], qd.i32)
        >>> M.n
        2
        >>> M.m
@@ -618,7 +618,7 @@ Module Contents
       :classmethod:
 
 
-      ti.Vector.field
+      qd.Vector.field
 
 
 
@@ -639,7 +639,7 @@ Module Contents
 
       The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
 
-          >>> x = ti.Vector.ndarray(3, ti.f32, shape=(16, 8))
+          >>> x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))
 
 
 
@@ -676,7 +676,7 @@ Module Contents
 
    .. py:method:: to_dlpack()
 
-      Note: caller is responsible for calling ti.sync() between modifying the field, and
+      Note: caller is responsible for calling qd.sync() between modifying the field, and
       reading it.
 
 
@@ -741,7 +741,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.Matrix.field(2, 2, ti.f32, shape=(3, 3))
+          >>> m = qd.Matrix.field(2, 2, qd.f32, shape=(3, 3))
           >>> arr = numpy.ones((3, 3, 2, 2))
           >>> m.from_numpy(arr)
 
@@ -765,7 +765,7 @@ Module Contents
 
    Example::
 
-       >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+       >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
 
 
    .. py:attribute:: n
@@ -795,7 +795,7 @@ Module Contents
 
       Example::
 
-          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(3, 3))
+          >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))
           >>> arr.element_shape
           (2, 2)
 
@@ -806,7 +806,7 @@ Module Contents
 
       Example::
 
-          >>> arr = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1))
+          >>> arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1))
           >>> arr.to_numpy()
           [[[[0. 0.]
              [0. 0.]]]
@@ -822,7 +822,7 @@ Module Contents
 
       Example::
 
-          >>> m = ti.MatrixNdarray(2, 2, ti.f32, shape=(2, 1), layout=0)
+          >>> m = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1), layout=0)
           >>> arr = np.ones((2, 1, 2, 2))
           >>> m.from_numpy(arr)
 
@@ -844,7 +844,7 @@ Module Contents
 
    Example::
 
-       >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+       >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
 
 
    .. py:attribute:: n
@@ -871,7 +871,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.VectorNdarray(3, ti.f32, (3, 3))
+          >>> a = qd.VectorNdarray(3, qd.f32, (3, 3))
           >>> a.element_shape
           (3,)
 
@@ -882,7 +882,7 @@ Module Contents
 
       Example::
 
-          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2))
+          >>> a = qd.VectorNdarray(3, qd.f32, (2, 2))
           >>> a.to_numpy()
           array([[[0., 0., 0.],
                   [0., 0., 0.]],
@@ -901,7 +901,7 @@ Module Contents
       Example::
 
           >>> import numpy as np
-          >>> a = ti.VectorNdarray(3, ti.f32, (2, 2), 0)
+          >>> a = qd.VectorNdarray(3, qd.f32, (2, 2), 0)
           >>> b = np.ones((2, 2, 3), dtype=np.float32)
           >>> a.from_numpy(b)
 
