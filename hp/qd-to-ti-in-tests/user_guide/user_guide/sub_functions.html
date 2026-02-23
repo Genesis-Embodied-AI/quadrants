@@ -59,7 +59,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Scalar tensors" href="scalar_tensors.html" />
-    <link rel="prev" title="ti.static" href="static.html" />
+    <link rel="prev" title="qd.static" href="static.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.4.2" />
@@ -274,7 +274,7 @@
 
 
 
-<li class="toctree-l1"><a class="reference internal" href="static.html">ti.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
@@ -284,7 +284,7 @@
 
 
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troublshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 </div>
 </nav></div>
@@ -347,14 +347,14 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="sub-functions">
 <h1>Sub-functions<a class="headerlink" href="#sub-functions" title="Link to this heading">#</a></h1>
-<p>A &#64;ti.kernel can call other functions, as long as those functions have an appropriate taichi annotation.</p>
-<section id="ti-func">
-<h2>ti.func<a class="headerlink" href="#ti-func" title="Link to this heading">#</a></h2>
-<p>&#64;ti.func is the standard annotation for a function that can be called from a kernel. They can also be called from other &#64;ti.func’s. &#64;ti.func is inlined into the calling kernel.</p>
+<p>A &#64;qd.kernel can call other functions, as long as those functions have an appropriate taichi annotation.</p>
+<section id="qd-func">
+<h2>qd.func<a class="headerlink" href="#qd-func" title="Link to this heading">#</a></h2>
+<p>&#64;qd.func is the standard annotation for a function that can be called from a kernel. They can also be called from other &#64;qd.func’s. &#64;qd.func is inlined into the calling kernel.</p>
 </section>
-<section id="ti-real-func">
-<h2>ti.real_func<a class="headerlink" href="#ti-real-func" title="Link to this heading">#</a></h2>
-<p>&#64;ti.real_func is experimental. &#64;ti.real_func is like &#64;ti.func, but will not be inlined.</p>
+<section id="qd-real-func">
+<h2>qd.real_func<a class="headerlink" href="#qd-real-func" title="Link to this heading">#</a></h2>
+<p>&#64;qd.real_func is experimental. &#64;qd.real_func is like &#64;qd.func, but will not be inlined.</p>
 </section>
 </section>
 
@@ -374,7 +374,7 @@
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">ti.static</p>
+        <p class="prev-next-title">qd.static</p>
       </div>
     </a>
     <a class="right-next"
@@ -405,8 +405,8 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ti-func">ti.func</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ti-real-func">ti.real_func</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-func">qd.func</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-real-func">qd.real_func</a></li>
 </ul>
   </nav></div>
 
