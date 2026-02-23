@@ -1,9 +1,9 @@
 # Tensor types
 
 There are three core tensor types:
-- ndarray (`ti.ndarray`)
-- global field (`ti.field`, referenced as a global variable, from a kernel)
-- field arg (`ti.field`, passed into a kernel as a parameter)
+- ndarray (`qd.ndarray`)
+- global field (`qd.field`, referenced as a global variable, from a kernel)
+- field arg (`qd.field`, passed into a kernel as a parameter)
 
 # Example of each tensor type
 
@@ -12,29 +12,29 @@ Let's first give an example of using each:
 ## NDArray
 
 ```
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
-a = ti.ndarray(ti.i32, shape=(10,))
+a = qd.ndarray(qd.i32, shape=(10,))
 
-@ti.kernel
-def f1(p1: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.kernel
+def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
 
-Note that the typing for NDArray is `ti.types.NDArray[data_type, number_dimensions]`
+Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`
 
 ## Global field
 
 ```
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
-a = ti.field(ti.i32, shape=(10,))
+a = qd.field(qd.i32, shape=(10,))
 
-@ti.kernel
+@qd.kernel
 def f1() -> None:
     a[0] += 1
 ```
@@ -43,17 +43,17 @@ You can see that we access the global variable referencing the field directly fr
 ## Field args
 
 ```
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.gpu)
+qd.init(arch=qd.gpu)
 
-a = ti.field(ti.i32, shape=(10,))
+a = qd.field(qd.i32, shape=(10,))
 
-@ti.kernel
-def f1(p1: ti.Template) -> None:
+@qd.kernel
+def f1(p1: qd.Template) -> None:
     p1[0] += 1
 ```
-In this case, we provide the field to the kernel via a parameter, with typing type of `ti.Template`.
+In this case, we provide the field to the kernel via a parameter, with typing type of `qd.Template`.
 
 # Comparison of tensor types
 
@@ -73,7 +73,7 @@ Let's define each of these column headings.
 When running a kernel, two things need to happen:
 - the kernel needs to be compiled
 - the parameters need to be sent to the GPU
-- the kernel launch need to be sent to the GPU
+- the kernel launch needs to be sent to the GPU
 
 Compilation speed is not affected by the tensor type. However:
 - field args and ndarrays both are passed in to the GPU as parameters, and hence increase launch latency
@@ -83,12 +83,12 @@ Each tensor type is bound to the compiled kernel in some way:
 - global fields are permanently bound to the kernel
     - to use the kernel with a different tensor, you'd need to copy and paste the kernel, with a new name
 - field args are permanently bound to the compiled kernel
-    - however, as the typing `ti.Template` alludes to, you can call the kernel with different fields, and the kernel will be automatically recompiled to bind with the new field
+    - however, as the typing `qd.Template` alludes to, you can call the kernel with different fields, and the kernel will be automatically recompiled to bind with the new field
 - ndarrays are only bound by:
-    - the data type (`ti.i32` vs `ti.f32` for example)
+    - the data type (`qd.i32` vs `qd.f32` for example)
     - the number of dimensions
     - you cannot pass in an ndarray with different data type or number of dimensions into the kernel, however
-    - ... no recompilatino is needed for:
+    - ... no recompilation is needed for:
          - resizing the ndarray, or
          - passing in a different ndarray, that matches data type and number of dimensions
 
@@ -100,7 +100,7 @@ Both ndarrays and field args provide better encapsulation, and kernel re-use.
 
 ## launch latency vs runtime speed
 
-For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performacne for very short kernels.
+For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performance for very short kernels.
 
 # Recommendations
 
