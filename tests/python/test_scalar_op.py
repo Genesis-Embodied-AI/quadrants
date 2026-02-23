@@ -48,26 +48,26 @@ unary_func_table = [
 ]
 
 
-@pytest.mark.parametrize("ti_func,np_func", binary_func_table)
-def test_python_scope_vector_binary(ti_func, np_func):
+@pytest.mark.parametrize("qd_func,np_func", binary_func_table)
+def test_python_scope_vector_binary(qd_func, np_func):
     qd.init()
     x = qd.Vector([2, 3])
     y = qd.Vector([5, 4])
 
-    result = ti_func(x, y).to_numpy()
-    if ti_func in [ops.eq, ops.ne, ops.lt, ops.le, ops.gt, ops.ge]:
+    result = qd_func(x, y).to_numpy()
+    if qd_func in [ops.eq, ops.ne, ops.lt, ops.le, ops.gt, ops.ge]:
         result = result.astype(bool)
     expected = np_func(x.to_numpy(), y.to_numpy())
     assert test_utils.allclose(result, expected)
 
 
-@pytest.mark.parametrize("ti_func,np_func", unary_func_table)
-def test_python_scope_vector_unary(ti_func, np_func):
+@pytest.mark.parametrize("qd_func,np_func", unary_func_table)
+def test_python_scope_vector_unary(qd_func, np_func):
     qd.init()
-    x = qd.Vector([2, 3] if ti_func in [ops.invert, qd.lang.ops.logical_not] else [0.2, 0.3])
+    x = qd.Vector([2, 3] if qd_func in [ops.invert, qd.lang.ops.logical_not] else [0.2, 0.3])
 
-    result = ti_func(x).to_numpy()
-    if ti_func in [qd.lang.ops.logical_not]:
+    result = qd_func(x).to_numpy()
+    if qd_func in [qd.lang.ops.logical_not]:
         result = result.astype(bool)
     expected = np_func(x.to_numpy())
     assert test_utils.allclose(result, expected)

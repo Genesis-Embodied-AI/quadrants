@@ -10,7 +10,7 @@ import pydantic
 import pytest
 
 import quadrants as qd
-from quadrants._test_tools import ti_init_same_arch
+from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher, src_hasher
 from quadrants.lang._wrap_inspect import get_source_info_and_src
@@ -29,15 +29,15 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
 
     # for some reason, print_ir_dbg_info is being set to True after a bit
     # so we are forcing it to false each initialization for now
-    ti_init_same_arch(print_ir_dbg_info=False)
+    qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_base = src_hasher.create_cache_key(False, kernel_info, [], [])
 
-    ti_init_same_arch(print_ir_dbg_info=False)
+    qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_same = src_hasher.create_cache_key(False, kernel_info, [], [])
 
-    ti_init_same_arch(print_ir_dbg_info=False, random_seed=123)
+    qd_init_same_arch(print_ir_dbg_info=False, random_seed=123)
     kernel_info, _src = get_source_info_and_src(f1.fn)
     cache_key_diff = src_hasher.create_cache_key(False, kernel_info, [], [])
 
@@ -85,7 +85,7 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     temp_import_path = tmp_path / "temp_import"
     temp_import_path.mkdir(exist_ok=True)
 
-    ti_init_same_arch(offline_cache_file_path=str(offline_cache_path))
+    qd_init_same_arch(offline_cache_file_path=str(offline_cache_path))
 
     monkeypatch.syspath_prepend(temp_import_path)
 
@@ -155,9 +155,9 @@ def test_src_hasher_print_non_pure(tmp_path: pathlib.Path, print_non_pure: bool 
     Test qd.init parameter print_non_pure, which should print non pure functions when enabled
     """
     if print_non_pure:
-        ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True, print_non_pure=print_non_pure)
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True, print_non_pure=print_non_pure)
     else:
-        ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+        qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
     @qd.pure
     @qd.kernel

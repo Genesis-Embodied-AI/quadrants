@@ -423,14 +423,14 @@ def test_gpu_sparse_matrix():
     h_X = np.asarray([1.0, 2.0, 3.0, 4.0], dtype=np_val_dtype)
     h_Y = np.asarray([19.0, 8.0, 51.0, 52.0], dtype=np_val_dtype)
 
-    ti_dtype = qd.f32
-    X = qd.ndarray(shape=num_cols, dtype=ti_dtype)
-    Y = qd.ndarray(shape=num_rows, dtype=ti_dtype)
+    qd_dtype = qd.f32
+    X = qd.ndarray(shape=num_cols, dtype=qd_dtype)
+    Y = qd.ndarray(shape=num_rows, dtype=qd_dtype)
 
     X.from_numpy(h_X)
     Y.fill(0.0)
 
-    A_builder = qd.linalg.SparseMatrixBuilder(num_rows=4, num_cols=4, dtype=ti_dtype, max_num_triplets=50)
+    A_builder = qd.linalg.SparseMatrixBuilder(num_rows=4, num_cols=4, dtype=qd_dtype, max_num_triplets=50)
 
     @qd.kernel
     def fill(

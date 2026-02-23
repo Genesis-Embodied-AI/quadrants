@@ -3,7 +3,7 @@ import quadrants as qd
 from . import textwrap2, warnings_helper
 
 
-def ti_init_same_arch(**options) -> None:
+def qd_init_same_arch(**options) -> None:
     """
     Used in tests to call qd.init, passing in the same arch as currently
     configured. Since it's fairly fiddly to do that, extracting this out

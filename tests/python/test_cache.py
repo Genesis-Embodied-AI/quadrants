@@ -1,7 +1,7 @@
 import pathlib
 
 import quadrants as qd
-from quadrants._test_tools import ti_init_same_arch
+from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -176,7 +176,7 @@ def test_cache_ndarray_only():
 def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
     launch_kernel_orig = qd.lang.kernel_impl.Kernel.launch_kernel
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     is_valid = False
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args):
@@ -202,7 +202,7 @@ def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
     assert value[None] == 4
     assert len(fun._primal.compiled_kernel_data_by_key) == 1
 
-    ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
     is_valid = False
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args):

@@ -906,7 +906,7 @@ def ndarray(dtype, shape, needs_grad=False):
 
 
 @quadrants_scope
-def ti_format_list_to_content_entries(raw):
+def qd_format_list_to_content_entries(raw):
     # return a pair of [content, format]
     def entry2content(_var):
         if isinstance(_var, str):
@@ -935,7 +935,7 @@ def ti_format_list_to_content_entries(raw):
             elif hasattr(_var, "__qd_repr__"):
                 res = _var.__qd_repr__()  # type: ignore
             elif isinstance(_var, (list, tuple)):
-                # If the first element is '__qd_format__', this list is the result of ti_format.
+                # If the first element is '__qd_format__', this list is the result of qd_format.
                 if len(_var) > 0 and isinstance(_var[0], str) and _var[0] == "__qd_format__":
                     res = _var[1:]
                 else:
@@ -971,7 +971,7 @@ def ti_format_list_to_content_entries(raw):
 
 
 @quadrants_scope
-def ti_print(*_vars, sep=" ", end="\n"):
+def qd_print(*_vars, sep=" ", end="\n"):
     def add_separators(_vars):
         for i, _var in enumerate(_vars):
             if i:
@@ -980,14 +980,14 @@ def ti_print(*_vars, sep=" ", end="\n"):
         yield end
 
     _vars = add_separators(_vars)
-    contents, formats = ti_format_list_to_content_entries(_vars)
+    contents, formats = qd_format_list_to_content_entries(_vars)
     ast_builder = get_runtime().compiling_callable.ast_builder()
     debug_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     ast_builder.create_print(contents, formats, debug_info)
 
 
 @quadrants_scope
-def ti_format(*args):
+def qd_format(*args):
     content = args[0]
     mixed = args[1:]
     new_mixed = []
@@ -1010,7 +1010,7 @@ def ti_format(*args):
 
 
 @quadrants_scope
-def ti_assert(cond, msg, extra_args, dbg_info):
+def qd_assert(cond, msg, extra_args, dbg_info):
     # Mostly a wrapper to help us convert from Expr (defined in Python) to
     # _qd_core.Expr (defined in C++)
     ast_builder = get_runtime().compiling_callable.ast_builder()
@@ -1018,21 +1018,21 @@ def ti_assert(cond, msg, extra_args, dbg_info):
 
 
 @quadrants_scope
-def ti_int(_var):
+def qd_int(_var):
     if hasattr(_var, "__qd_int__"):
         return _var.__qd_int__()
     return int(_var)
 
 
 @quadrants_scope
-def ti_bool(_var):
+def qd_bool(_var):
     if hasattr(_var, "__qd_bool__"):
         return _var.__qd_bool__()
     return bool(_var)
 
 
 @quadrants_scope
-def ti_float(_var):
+def qd_float(_var):
     if hasattr(_var, "__qd_float__"):
         return _var.__qd_float__()
     return float(_var)

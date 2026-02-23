@@ -423,7 +423,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
         args.insert(0, str_spec)
-        node.ptr = impl.ti_format(*args)
+        node.ptr = impl.qd_format(*args)
         return node.ptr
 
     @staticmethod
@@ -832,7 +832,7 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_static_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
-        ti_unroll_limit = impl.get_runtime().unrolling_limit
+        qd_unroll_limit = impl.get_runtime().unrolling_limit
         if is_grouped:
             assert len(node.iter.args[0].args) == 1
             ndrange_arg = build_stmt(ctx, node.iter.args[0].args[0])
@@ -847,11 +847,11 @@ class ASTTransformer(Builder):
 
             for value in impl.grouped(ndrange_arg):
                 iter_time += 1
-                if not alert_already and ti_unroll_limit and iter_time > ti_unroll_limit:
+                if not alert_already and qd_unroll_limit and iter_time > qd_unroll_limit:
                     alert_already = True
                     warnings.warn_explicit(
                         f"""You are unrolling more than
-                        {ti_unroll_limit} iterations, so the compile time may be extremely long.
+                        {qd_unroll_limit} iterations, so the compile time may be extremely long.
                         You can use a non-static for loop if you want to decrease the compile time.
                         You can disable this warning by setting qd.init(unrolling_limit=0).""",
                         SyntaxWarning,
@@ -879,11 +879,11 @@ class ASTTransformer(Builder):
                     target_values = [target_values]
 
                 iter_time += 1
-                if not alert_already and ti_unroll_limit and iter_time > ti_unroll_limit:
+                if not alert_already and qd_unroll_limit and iter_time > qd_unroll_limit:
                     alert_already = True
                     warnings.warn_explicit(
                         f"""You are unrolling more than
-                        {ti_unroll_limit} iterations, so the compile time may be extremely long.
+                        {qd_unroll_limit} iterations, so the compile time may be extremely long.
                         You can use a non-static for loop if you want to decrease the compile time.
                         You can disable this warning by setting qd.init(unrolling_limit=0).""",
                         SyntaxWarning,
@@ -1301,9 +1301,9 @@ class ASTTransformer(Builder):
         return msg, args
 
     @staticmethod
-    def ti_format_list_to_assert_msg(raw) -> tuple[str, list]:
+    def qd_format_list_to_assert_msg(raw) -> tuple[str, list]:
         # TODO: ignore formats here for now
-        entries, _ = impl.ti_format_list_to_content_entries([raw])
+        entries, _ = impl.qd_format_list_to_content_entries([raw])
         msg = ""
         args = []
         for entry in entries:
@@ -1340,13 +1340,13 @@ class ASTTransformer(Builder):
                 elif isinstance(node.msg, ast.Str):
                     pass
                 elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__qd_format__":
-                    msg, extra_args = ASTTransformer.ti_format_list_to_assert_msg(msg)
+                    msg, extra_args = ASTTransformer.qd_format_list_to_assert_msg(msg)
                 else:
                     raise QuadrantsSyntaxError(f"assert info must be constant or formatted string, not {type(msg)}")
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.ti_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.get_pos_info(node)))
+        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.get_pos_info(node)))
         return None
 
     @staticmethod
