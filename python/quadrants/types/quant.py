@@ -3,7 +3,7 @@ This module defines generators of quantized types.
 For more details, read https://yuanming.quadrants.graphics/publication/2021-quanquadrants/quanquadrants.pdf.
 """
 
-from quadrants._lib.utils import ti_python_core as _qd_python_core
+from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.types.primitive_types import i32
 
 _type_factory = _qd_python_core.get_type_factory_instance()

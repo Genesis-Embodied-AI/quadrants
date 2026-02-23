@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -8,21 +8,21 @@ def test_running_loss():
     return
     steps = 16
 
-    total_loss = ti.field(ti.f32)
-    running_loss = ti.field(ti.f32)
-    additional_loss = ti.field(ti.f32)
+    total_loss = qd.field(qd.f32)
+    running_loss = qd.field(qd.f32)
+    additional_loss = qd.field(qd.f32)
 
-    ti.root.place(total_loss)
-    ti.root.dense(ti.i, steps).place(running_loss)
-    ti.root.place(additional_loss)
-    ti.root.lazy_grad()
+    qd.root.place(total_loss)
+    qd.root.dense(qd.i, steps).place(running_loss)
+    qd.root.place(additional_loss)
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def compute_loss():
         total_loss[None] = 0.0
         for i in range(steps):
-            ti.atomic_add(total_loss[None], running_loss[i] * 2)
-        ti.atomic_add(total_loss[None], additional_loss[None] * 3)
+            qd.atomic_add(total_loss[None], running_loss[i] * 2)
+        qd.atomic_add(total_loss[None], additional_loss[None] * 3)
 
     compute_loss()
 
@@ -34,18 +34,18 @@ def test_running_loss():
 
 @test_utils.test()
 def test_reduce_separate():
-    a = ti.field(ti.f32, shape=(16))
-    b = ti.field(ti.f32, shape=(4))
-    c = ti.field(ti.f32, shape=())
+    a = qd.field(qd.f32, shape=(16))
+    b = qd.field(qd.f32, shape=(4))
+    c = qd.field(qd.f32, shape=())
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def reduce1():
         for i in range(16):
             b[i // 4] += a[i]
 
-    @ti.kernel
+    @qd.kernel
     def reduce2():
         for i in range(4):
             c[None] += b[i]
@@ -62,13 +62,13 @@ def test_reduce_separate():
 
 @test_utils.test()
 def test_reduce_merged():
-    a = ti.field(ti.f32, shape=(16))
-    b = ti.field(ti.f32, shape=(4))
-    c = ti.field(ti.f32, shape=())
+    a = qd.field(qd.f32, shape=(16))
+    b = qd.field(qd.f32, shape=(4))
+    c = qd.field(qd.f32, shape=())
 
-    ti.root.lazy_grad()
+    qd.root.lazy_grad()
 
-    @ti.kernel
+    @qd.kernel
     def reduce():
         for i in range(16):
             b[i // 4] += a[i]

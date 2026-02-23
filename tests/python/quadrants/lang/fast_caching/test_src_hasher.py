@@ -9,7 +9,7 @@ from typing import Callable
 import pydantic
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants._test_tools import ti_init_same_arch
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher, src_hasher
@@ -23,7 +23,7 @@ RET_SUCCESS = 42
 
 @test_utils.test()
 def test_src_hasher_create_cache_key_vary_config() -> None:
-    @ti.kernel
+    @qd.kernel
     def f1() -> None:
         pass
 
@@ -141,7 +141,7 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
 
 # Should be enough to run these on cpu I think, and anything involving
 # stdout/stderr capture is fairly flaky on other arch
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 @pytest.mark.parametrize(
     "print_non_pure",
     [
@@ -152,15 +152,15 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
 )
 def test_src_hasher_print_non_pure(tmp_path: pathlib.Path, print_non_pure: bool | None, capfd) -> None:
     """
-    Test ti.init parameter print_non_pure, which should print non pure functions when enabled
+    Test qd.init parameter print_non_pure, which should print non pure functions when enabled
     """
     if print_non_pure:
         ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True, print_non_pure=print_non_pure)
     else:
         ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k1_pure() -> None:
         pass
 
@@ -169,7 +169,7 @@ def test_src_hasher_print_non_pure(tmp_path: pathlib.Path, print_non_pure: bool 
     output_contains_not_pure = "[NOT_PURE]" in out
     assert not output_contains_not_pure
 
-    @ti.kernel
+    @qd.kernel
     def not_pure_k1() -> None:
         pass
 
@@ -193,8 +193,8 @@ class VaryKernelFuncKernelArgs(pydantic.BaseModel):
 
 def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     args_obj: VaryKernelFuncKernelArgs = VaryKernelFuncKernelArgs.model_validate_json(args[0])
-    ti.init(
-        arch=getattr(ti, args_obj.arch),
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=True,
@@ -211,13 +211,13 @@ def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
 
 # Should be enough to run these on cpu I think, and anything involving
 # stdout/stderr capture is fairly flaky on other arch
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
 def test_src_hasher_vary_kernel_func(tmp_path: pathlib.Path) -> None:
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
 
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch.name
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
     env["PYTHONPATH"] = "."
 

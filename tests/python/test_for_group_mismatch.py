@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
@@ -8,27 +8,27 @@ from tests import test_utils
 
 @test_utils.test(arch=get_host_arch_list(), print_full_traceback=False)
 def test_struct_for_mismatch():
-    x = ti.field(ti.f32, (3, 4))
+    x = qd.field(qd.f32, (3, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             print(i)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
 @test_utils.test(arch=get_host_arch_list(), print_full_traceback=False)
 def test_struct_for_mismatch2():
-    x = ti.field(ti.f32, (3, 4))
+    x = qd.field(qd.f32, (3, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i, j, k in x:
             print(i, j, k)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
@@ -38,14 +38,14 @@ def _test_grouped_struct_for_mismatch():
     # need grouped refactor
     # for now, it just throw a unfriendly message:
     # AssertionError: __getitem__ cannot be called in Python-scope
-    x = ti.field(ti.f32, (3, 4))
+    x = qd.field(qd.f32, (3, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j in ti.grouped(x):
+        for i, j in qd.grouped(x):
             print(i, j)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
@@ -53,12 +53,12 @@ def _test_grouped_struct_for_mismatch():
 def _test_ndrange_for_mismatch():
     # doesn't work for now
     # need ndrange refactor
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in ti.ndrange(3, 4):
+        for i in qd.ndrange(3, 4):
             print(i)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
@@ -66,12 +66,12 @@ def _test_ndrange_for_mismatch():
 def _test_ndrange_for_mismatch2():
     # doesn't work for now
     # need ndrange and grouped refactor
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j, k in ti.ndrange(3, 4):
+        for i, j, k in qd.ndrange(3, 4):
             print(i, j, k)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
@@ -79,12 +79,12 @@ def _test_ndrange_for_mismatch2():
 def _test_grouped_ndrange_for_mismatch():
     # doesn't work for now
     # need ndrange and grouped refactor
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in ti.grouped(ti.ndrange(3, 4)):
+        for i in qd.grouped(qd.ndrange(3, 4)):
             print(i)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()
 
 
@@ -92,10 +92,10 @@ def _test_grouped_ndrange_for_mismatch():
 def _test_static_ndrange_for_mismatch():
     # doesn't work for now
     # need ndrange and static refactor
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in ti.static(ti.ndrange(3, 4)):
+        for i in qd.static(qd.ndrange(3, 4)):
             print(i)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         func()

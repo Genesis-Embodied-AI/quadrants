@@ -1,14 +1,14 @@
-import quadrants as ti
+import quadrants as qd
 
-ti.init()
+qd.init()
 
-x = ti.field(ti.i32)
-y = ti.field(ti.i32)
+x = qd.field(qd.i32)
+y = qd.field(qd.i32)
 
-ti.root.pointer(ti.ij, 4).dense(ti.ij, 8).place(x, y)
+qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x, y)
 
 
-@ti.kernel
+@qd.kernel
 def copy():
     for i, j in y:
         x[i, j] = y[i, j]

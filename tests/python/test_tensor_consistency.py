@@ -1,25 +1,25 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 _QD_DTYPE_TO_NP_DTYPE = {
-    ti.u1: np.bool_,
-    ti.u8: np.uint8,
-    ti.u16: np.uint16,
-    ti.u32: np.uint32,
-    ti.u64: np.uint64,
-    ti.i8: np.int8,
-    ti.i16: np.int16,
-    ti.i32: np.int32,
-    ti.i64: np.int64,
+    qd.u1: np.bool_,
+    qd.u8: np.uint8,
+    qd.u16: np.uint16,
+    qd.u32: np.uint32,
+    qd.u64: np.uint64,
+    qd.i8: np.int8,
+    qd.i16: np.int16,
+    qd.i32: np.int32,
+    qd.i64: np.int64,
 }
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_kernel_write_to_numpy_consistency(tensor_type, dtype) -> None:
     """
@@ -28,12 +28,12 @@ def test_tensor_consistency_kernel_write_to_numpy_consistency(tensor_type, dtype
     poses = [0, 2, 5, 11]
     a = tensor_type(dtype, (16,))
 
-    TensorType = ti.types.NDArray if tensor_type == ti.ndarray else ti.Template
+    TensorType = qd.types.NDArray if tensor_type == qd.ndarray else qd.Template
 
-    @ti.kernel
+    @qd.kernel
     def k1(a: TensorType) -> None:
         for b_ in range(1):
-            for pos in ti.static(poses):
+            for pos in qd.static(poses):
                 a[pos] = 1
 
     k1(a)
@@ -44,8 +44,8 @@ def test_tensor_consistency_kernel_write_to_numpy_consistency(tensor_type, dtype
         assert a_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_kernel_from_numpy_to_numpy_consistency(tensor_type, dtype) -> None:
     """
@@ -69,8 +69,8 @@ def test_tensor_consistency_kernel_from_numpy_to_numpy_consistency(tensor_type, 
         assert b_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_np_read_write_np_consistency(tensor_type, dtype) -> None:
     """
@@ -89,12 +89,12 @@ def test_tensor_consistency_np_read_write_np_consistency(tensor_type, dtype) -> 
         a_np[pos] = 1
     a.from_numpy(a_np)
 
-    TensorType = ti.types.NDArray if tensor_type == ti.ndarray else ti.Template
+    TensorType = qd.types.NDArray if tensor_type == qd.ndarray else qd.Template
 
-    @ti.kernel
+    @qd.kernel
     def k1(a: TensorType, b: TensorType) -> None:
         for b_ in range(1):
-            for pos in ti.static(poses):
+            for pos in qd.static(poses):
                 b[pos] = a[pos]
 
     k1(a, b)
@@ -105,8 +105,8 @@ def test_tensor_consistency_np_read_write_np_consistency(tensor_type, dtype) -> 
         assert b_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_from_numpy_accessor_read_consistency(tensor_type, dtype) -> None:
     """
@@ -127,8 +127,8 @@ def test_tensor_consistency_from_numpy_accessor_read_consistency(tensor_type, dt
         assert a[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_accessor_write_to_numpy_consistency(tensor_type, dtype) -> None:
     """
@@ -146,9 +146,9 @@ def test_tensor_consistency_accessor_write_to_numpy_consistency(tensor_type, dty
         assert a_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
-@pytest.mark.parametrize("std_dtype", [ti.i8, ti.i32])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
+@pytest.mark.parametrize("std_dtype", [qd.i8, qd.i32])
 @test_utils.test()
 def test_tensor_consistency_from_numpy_kern_read(tensor_type, dtype, std_dtype) -> None:
     """
@@ -166,9 +166,9 @@ def test_tensor_consistency_from_numpy_kern_read(tensor_type, dtype, std_dtype) 
         a_np[pos] = 1
     a.from_numpy(a_np)
 
-    TensorType = ti.types.NDArray if tensor_type == ti.ndarray else ti.Template
+    TensorType = qd.types.NDArray if tensor_type == qd.ndarray else qd.Template
 
-    @ti.kernel
+    @qd.kernel
     def k1(a: TensorType, b: TensorType) -> None:
         for b_ in range(1):
             for i in range(N):
@@ -182,9 +182,9 @@ def test_tensor_consistency_from_numpy_kern_read(tensor_type, dtype, std_dtype) 
         assert b_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("tensor_type", [ti.field, ti.ndarray])
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
-@pytest.mark.parametrize("std_dtype", [ti.i8, ti.i32])
+@pytest.mark.parametrize("tensor_type", [qd.field, qd.ndarray])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
+@pytest.mark.parametrize("std_dtype", [qd.i8, qd.i32])
 @test_utils.test()
 def test_tensor_consistency_kern_write_to_numpy(tensor_type, dtype, std_dtype) -> None:
     """
@@ -202,9 +202,9 @@ def test_tensor_consistency_kern_write_to_numpy(tensor_type, dtype, std_dtype) -
         a_np[pos] = 1
     a.from_numpy(a_np)
 
-    TensorType = ti.types.NDArray if tensor_type == ti.ndarray else ti.Template
+    TensorType = qd.types.NDArray if tensor_type == qd.ndarray else qd.Template
 
-    @ti.kernel
+    @qd.kernel
     def k1(a: TensorType, b: TensorType) -> None:
         for b_ in range(1):
             for i in range(N):
@@ -218,7 +218,7 @@ def test_tensor_consistency_kern_write_to_numpy(tensor_type, dtype, std_dtype) -
         assert b_np[i] == (1 if i in poses else 0)
 
 
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_ext_to_kern(dtype) -> None:
     """
@@ -234,25 +234,25 @@ def test_tensor_consistency_ext_to_kern(dtype) -> None:
         a_np[pos] = 1
         anti_poses_l.remove(pos)
 
-    result = ti.ndarray(ti.i32, ())
+    result = qd.ndarray(qd.i32, ())
     result[()] = 1
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray, result: ti.types.NDArray) -> None:
+    @qd.kernel
+    def k1(a: qd.types.NDArray, result: qd.types.NDArray) -> None:
         for b_ in range(1):
-            for pos in ti.static(poses_l):
+            for pos in qd.static(poses_l):
                 if a[pos] != 1:
                     result[()] = 0
-            for pos in ti.static(anti_poses_l):
+            for pos in qd.static(anti_poses_l):
                 if a[pos] != 0:
                     result[()] = 0
 
     k1(a_np, result)
-    ti.sync()
+    qd.sync()
     assert result[()] == 1
 
 
-@pytest.mark.parametrize("dtype", [ti.u1, ti.u8, ti.u16, ti.u32, ti.u64, ti.i8, ti.i32, ti.i16, ti.i64])
+@pytest.mark.parametrize("dtype", [qd.u1, qd.u8, qd.u16, qd.u32, qd.u64, qd.i8, qd.i32, qd.i16, qd.i64])
 @test_utils.test()
 def test_tensor_consistency_kern_to_ext(dtype) -> None:
     """
@@ -265,15 +265,15 @@ def test_tensor_consistency_kern_to_ext(dtype) -> None:
     np_dtype = _QD_DTYPE_TO_NP_DTYPE[dtype]
     a_np = np.zeros(dtype=np_dtype, shape=(N,))
 
-    @ti.kernel
-    def k1(a: ti.types.NDArray) -> None:
+    @qd.kernel
+    def k1(a: qd.types.NDArray) -> None:
         for b_ in range(1):
-            for pos in ti.static(poses_l):
+            for pos in qd.static(poses_l):
                 a[pos] = 1
 
     k1(a_np)
 
-    ti.sync()
+    qd.sync()
 
     for i in range(N):
         assert a_np[i] == (1 if i in poses_l else 0)

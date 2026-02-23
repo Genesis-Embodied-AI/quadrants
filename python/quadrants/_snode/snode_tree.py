@@ -1,7 +1,7 @@
 # type: ignore
 
-# The reason we import just the quadrants.core.util module, instead of the ti_python_core
-# object within it, is that ti_python_core is stateful. While in practice ti_python_core is
+# The reason we import just the quadrants.core.util module, instead of the qd_python_core
+# object within it, is that qd_python_core is stateful. While in practice qd_python_core is
 # loaded during the import procedure, it's probably still good to delay the
 # access to it.
 

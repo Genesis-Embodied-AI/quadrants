@@ -158,7 +158,7 @@ class SparseMatrix:
             self.matrix.spmv(get_runtime().prog, other.arr, res.arr)
             return res
         raise QuadrantsRuntimeError(
-            f"Sparse matrix-matrix/vector multiplication does not support {type(other)} for now. Supported types are SparseMatrix, ti.field, and numpy ndarray."
+            f"Sparse matrix-matrix/vector multiplication does not support {type(other)} for now. Supported types are SparseMatrix, qd.field, and numpy ndarray."
         )
 
     def __getitem__(self, indices):
@@ -183,20 +183,20 @@ class SparseMatrix:
         """Build the sparse matrix from a ndarray.
 
         Args:
-            ndarray (Union[ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]): the ndarray to build the sparse matrix from.
+            ndarray (Union[qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]): the ndarray to build the sparse matrix from.
 
         Raises:
             QuadrantsRuntimeError: If the input is not a ndarray or the length is not divisible by 3.
 
         Example::
             >>> N = 5
-            >>> triplets = ti.Vector.ndarray(n=3, dtype=ti.f32, shape=10, layout=ti.Layout.AOS)
-            >>> @ti.kernel
-            >>> def fill(triplets: ti.types.ndarray()):
+            >>> triplets = qd.Vector.ndarray(n=3, dtype=qd.f32, shape=10, layout=qd.Layout.AOS)
+            >>> @qd.kernel
+            >>> def fill(triplets: qd.types.ndarray()):
             >>>     for i in range(N):
-            >>>        triplets[i] = ti.Vector([i, (i + 1) % N, i+1], dt=ti.f32)
+            >>>        triplets[i] = qd.Vector([i, (i + 1) % N, i+1], dt=qd.f32)
             >>> fill(triplets)
-            >>> A = ti.linalg.SparseMatrix(n=N, m=N, dtype=ti.f32)
+            >>> A = qd.linalg.SparseMatrix(n=N, m=N, dtype=qd.f32)
             >>> A.build_from_ndarray(triplets)
             >>> print(A)
             [0, 1, 0, 0, 0]
@@ -212,7 +212,7 @@ class SparseMatrix:
             get_runtime().prog.make_sparse_matrix_from_ndarray(self.matrix, ndarray.arr)
         else:
             raise QuadrantsRuntimeError(
-                "Sparse matrix only supports building from [ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]"
+                "Sparse matrix only supports building from [qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]"
             )
 
     def mmwrite(self, filename):
@@ -233,7 +233,7 @@ class SparseMatrixBuilder:
         num_rows (int): the first dimension of a sparse matrix.
         num_cols (int): the second dimension of a sparse matrix.
         max_num_triplets (int): the maximum number of triplets.
-        dtype (ti.dtype): the data type of the sparse matrix.
+        dtype (qd.dtype): the data type of the sparse matrix.
         storage_format (str): the storage format of the sparse matrix.
     """
 

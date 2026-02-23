@@ -121,7 +121,7 @@ class SNode:
         """Places a list of Quadrants fields under the `self` container.
 
         Args:
-            *args (List[ti.field]): A list of Quadrants fields to place.
+            *args (List[qd.field]): A list of Quadrants fields to place.
             offset (Union[Number, tuple[Number]]): Offset of the field domain.
 
         Returns:
@@ -311,11 +311,11 @@ class SNode:
 
     def __repr__(self):
         type_ = str(self.ptr.type)[len("SNodeType.") :]
-        return f"<ti.SNode of type {type_}>"
+        return f"<qd.SNode of type {type_}>"
 
     def __str__(self):
-        # ti.root.dense(ti.i, 3).dense(ti.jk, (4, 5)).place(x)
-        # ti.root => dense [3] => dense [3, 4, 5] => place [3, 4, 5]
+        # qd.root.dense(qd.i, 3).dense(qd.jk, (4, 5)).place(x)
+        # qd.root => dense [3] => dense [3, 4, 5] => place [3, 4, 5]
         type_ = str(self.ptr.type)[len("SNodeType.") :]
         shape = str(list(self.shape))
         parent = str(self.parent())
@@ -356,7 +356,7 @@ def rescale_index(a, b, I):
     else:
         assert isinstance(
             I, (expr.Expr, matrix.Matrix)
-        ), "The third argument must be an index (list, ti.Vector, or Expr with TensorType)"
+        ), "The third argument must be an index (list, qd.Vector, or Expr with TensorType)"
         n = I.n
 
     from quadrants.lang.kernel_impl import pyfunc  # pylint: disable=C0415
@@ -467,7 +467,7 @@ def get_addr(f, indices):
         indices (Union[int, :class:`~quadrants.Vector`]): The specified field indices of the query.
 
     Returns:
-        ti.u64: The memory address of `f[indices]`.
+        qd.u64: The memory address of `f[indices]`.
     """
     return expr.Expr(
         impl.get_runtime()

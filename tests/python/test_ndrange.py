@@ -1,18 +1,18 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_1d():
-    x = ti.field(ti.f32, shape=(16))
+    x = qd.field(qd.f32, shape=(16))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in ti.ndrange((4, 10)):
+        for i in qd.ndrange((4, 10)):
             x[i] = i
 
     func()
@@ -26,13 +26,13 @@ def test_1d():
 
 @test_utils.test()
 def test_2d():
-    x = ti.field(ti.f32, shape=(16, 32))
+    x = qd.field(qd.f32, shape=(16, 32))
 
     t = 8
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j in ti.ndrange((4, 10), (3, t)):
+        for i, j in qd.ndrange((4, 10), (3, t)):
             val = i + j * 10
             x[i, j] = val
 
@@ -47,11 +47,11 @@ def test_2d():
 
 @test_utils.test()
 def test_3d():
-    x = ti.field(ti.f32, shape=(16, 32, 64))
+    x = qd.field(qd.f32, shape=(16, 32, 64))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j, k in ti.ndrange((4, 10), (3, 8), 17):
+        for i, j, k in qd.ndrange((4, 10), (3, 8), 17):
             x[i, j, k] = i + j * 10 + k * 100
 
     func()
@@ -66,14 +66,14 @@ def test_3d():
 
 @test_utils.test()
 def test_tensor_based_3d():
-    x = ti.field(ti.i32, shape=(6, 6, 6))
-    y = ti.field(ti.i32, shape=(6, 6, 6))
+    x = qd.field(qd.i32, shape=(6, 6, 6))
+    y = qd.field(qd.i32, shape=(6, 6, 6))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        lower = ti.Vector([0, 1, 2])
-        upper = ti.Vector([3, 4, 5])
-        for I in ti.grouped(ti.ndrange((lower[0], upper[0]), (lower[1], upper[1]), (lower[2], upper[2]))):
+        lower = qd.Vector([0, 1, 2])
+        upper = qd.Vector([3, 4, 5])
+        for I in qd.grouped(qd.ndrange((lower[0], upper[0]), (lower[1], upper[1]), (lower[2], upper[2]))):
             x[I] = I[0] + I[1] + I[2]
         for i in range(0, 3):
             for j in range(1, 4):
@@ -90,11 +90,11 @@ def test_tensor_based_3d():
 
 @test_utils.test()
 def test_static_grouped():
-    x = ti.field(ti.f32, shape=(16, 32, 64))
+    x = qd.field(qd.f32, shape=(16, 32, 64))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for I in ti.static(ti.grouped(ti.ndrange((4, 5), (3, 5), 5))):
+        for I in qd.static(qd.grouped(qd.ndrange((4, 5), (3, 5), 5))):
             x[I] = I[0] + I[1] * 10 + I[2] * 100
 
     func()
@@ -109,12 +109,12 @@ def test_static_grouped():
 
 @test_utils.test()
 def test_static_grouped_static():
-    x = ti.Matrix.field(2, 3, dtype=ti.f32, shape=(16, 4))
+    x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=(16, 4))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i, j in ti.ndrange(16, 4):
-            for I in ti.static(ti.grouped(ti.ndrange(2, 3))):
+        for i, j in qd.ndrange(16, 4):
+            for I in qd.static(qd.grouped(qd.ndrange(2, 3))):
                 x[i, j][I] = I[0] + I[1] * 10 + i + j * 4
 
     func()
@@ -131,11 +131,11 @@ def test_field_init_eye():
 
     n = 32
 
-    A = ti.field(ti.f32, (n, n))
+    A = qd.field(qd.f32, (n, n))
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        for i, j in ti.ndrange(n, n):
+        for i, j in qd.ndrange(n, n):
             if i == j:
                 A[i, j] = 1
 
@@ -149,11 +149,11 @@ def test_ndrange_index_floordiv():
 
     n = 10
 
-    A = ti.field(ti.f32, (n, n))
+    A = qd.field(qd.f32, (n, n))
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        for i, j in ti.ndrange(n, n):
+        for i, j in qd.ndrange(n, n):
             if i // 2 == 0:
                 A[i, j] = i
 
@@ -172,12 +172,12 @@ def test_nested_ndrange():
 
     n = 2
 
-    A = ti.field(ti.i32, (n, n, n, n))
+    A = qd.field(qd.i32, (n, n, n, n))
 
-    @ti.kernel
+    @qd.kernel
     def init():
-        for i, j in ti.ndrange(n, n):
-            for k, l in ti.ndrange(n, n):
+        for i, j in qd.ndrange(n, n):
+            for k, l in qd.ndrange(n, n):
                 r = i * n**3 + j * n**2 + k * n + l
                 A[i, j, k, l] = r
 
@@ -190,19 +190,19 @@ def test_nested_ndrange():
                     assert A[i, j, k, l] == r
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_ndrange_ast_transform():
     n, u, v = 4, 3, 2
 
-    a = ti.field(ti.i32, ())
-    b = ti.field(ti.i32, ())
-    A = ti.field(ti.i32, (n, n))
+    a = qd.field(qd.i32, ())
+    b = qd.field(qd.i32, ())
+    A = qd.field(qd.i32, (n, n))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         # `__getitem__ cannot be called from Python-scope` will be raised if
-        # `a[None]` is not transformed to `ti.subscript(a, None)` in ti.ndrange:
-        for i, j in ti.ndrange(a[None], b[None]):
+        # `a[None]` is not transformed to `qd.subscript(a, None)` in qd.ndrange:
+        for i, j in qd.ndrange(a[None], b[None]):
             r = i * n + j + 1
             A[i, j] = r
 
@@ -222,10 +222,10 @@ def test_ndrange_ast_transform():
 
 @test_utils.test()
 def test_grouped_ndrange_star():
-    @ti.kernel
-    def foo() -> ti.i32:
+    @qd.kernel
+    def foo() -> qd.i32:
         ret = 0
-        for I in ti.grouped(ti.ndrange(*[[1, 3]] * 3)):
+        for I in qd.grouped(qd.ndrange(*[[1, 3]] * 3)):
             ret += I[0] + I[1] + I[2]
         return ret
 
@@ -234,13 +234,13 @@ def test_grouped_ndrange_star():
 
 @test_utils.test()
 def test_ndrange_three_arguments():
-    @ti.kernel
+    @qd.kernel
     def foo():
-        for i in ti.ndrange((1, 2, 3)):
+        for i in qd.ndrange((1, 2, 3)):
             pass
 
     with pytest.raises(
-        ti.QuadrantsSyntaxError,
+        qd.QuadrantsSyntaxError,
         match=r"Every argument of ndrange should be a scalar or a tuple/list like \(begin, end\)",
     ):
         foo()
@@ -248,10 +248,10 @@ def test_ndrange_three_arguments():
 
 @test_utils.test()
 def test_ndrange_start_greater_than_end():
-    @ti.kernel
-    def ndrange_test(i1: ti.i32, i2: ti.i32, j1: ti.i32, j2: ti.i32) -> ti.i32:
-        n: ti.i32 = 0
-        for i, j in ti.ndrange((i1, i2), (j1, j2)):
+    @qd.kernel
+    def ndrange_test(i1: qd.i32, i2: qd.i32, j1: qd.i32, j2: qd.i32) -> qd.i32:
+        n: qd.i32 = 0
+        for i, j in qd.ndrange((i1, i2), (j1, j2)):
             n += 1
         return n
 
@@ -263,13 +263,13 @@ def test_ndrange_start_greater_than_end():
 
 @test_utils.test()
 def test_ndrange_non_integer_arguments():
-    @ti.kernel
+    @qd.kernel
     def example():
-        for i in ti.ndrange((1.1, 10.5)):
+        for i in qd.ndrange((1.1, 10.5)):
             pass
 
     with pytest.raises(
-        ti.QuadrantsTypeError,
+        qd.QuadrantsTypeError,
         match=r"Every argument of ndrange should be an integer scalar or a tuple/list of \(int, int\)",
     ):
         example()
@@ -279,9 +279,9 @@ def test_ndrange_non_integer_arguments():
 def test_ndrange_should_accept_numpy_integer():
     a, b = np.int64(0), np.int32(10)
 
-    @ti.kernel
+    @qd.kernel
     def example():
-        for i in ti.ndrange((a, b)):
+        for i in qd.ndrange((a, b)):
             pass
 
     example()
@@ -289,13 +289,13 @@ def test_ndrange_should_accept_numpy_integer():
 
 @test_utils.test()
 def test_static_ndrange_non_integer_arguments():
-    @ti.kernel
+    @qd.kernel
     def example():
-        for i in ti.static(ti.ndrange(0.1, 0.2, 0.3)):
+        for i in qd.static(qd.ndrange(0.1, 0.2, 0.3)):
             pass
 
     with pytest.raises(
-        ti.QuadrantsTypeError,
+        qd.QuadrantsTypeError,
         match=r"Every argument of ndrange should be an integer scalar or a tuple/list of \(int, int\)",
     ):
         example()
@@ -305,9 +305,9 @@ def test_static_ndrange_non_integer_arguments():
 def test_static_ndrange_should_accept_numpy_integer():
     a, b = np.int64(0), np.int32(10)
 
-    @ti.kernel
+    @qd.kernel
     def example():
-        for i in ti.static(ti.ndrange((a, b))):
+        for i in qd.static(qd.ndrange((a, b))):
             pass
 
     example()
@@ -315,27 +315,27 @@ def test_static_ndrange_should_accept_numpy_integer():
 
 @test_utils.test()
 def test_2d_loop_over_ndarray():
-    @ti.kernel
-    def foo(arr: ti.types.ndarray(dtype=ti.i32, ndim=1)):
+    @qd.kernel
+    def foo(arr: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         M = arr.shape[0]
-        for i, j in ti.ndrange(M, M):
-            verts = ti.math.vec4(arr[i], arr[i + 1], arr[j], arr[j + 1])
+        for i, j in qd.ndrange(M, M):
+            verts = qd.math.vec4(arr[i], arr[i + 1], arr[j], arr[j + 1])
 
-    array = ti.ndarray(ti.i32, shape=(16,))
+    array = qd.ndarray(qd.i32, shape=(16,))
     foo(array)
 
 
 @test_utils.test()
 def test_dimension_error():
     with pytest.raises(
-        ti.QuadrantsSyntaxError,
+        qd.QuadrantsSyntaxError,
         match="Ndrange for loop with number of the loop variables not equal to "
         "the dimension of the ndrange is not supported",
     ):
 
-        @ti.kernel
+        @qd.kernel
         def func():
-            for i in ti.ndrange(4, 4):
+            for i in qd.ndrange(4, 4):
                 pass
 
         func()
@@ -345,9 +345,9 @@ def test_dimension_error():
 def test_generators_forbidden_in_range():
     ndrange = (n for n in range(10))
 
-    @ti.kernel
+    @qd.kernel
     def populate():
-        for I in ti.grouped(ti.ndrange(*ndrange)):
+        for I in qd.grouped(qd.ndrange(*ndrange)):
             pass
 
     with pytest.raises(ValueError):
@@ -358,9 +358,9 @@ def test_generators_forbidden_in_range():
 def test_tuples_ok_in_range():
     ndrange = tuple(n for n in range(10))
 
-    @ti.kernel
+    @qd.kernel
     def populate():
-        for I in ti.grouped(ti.ndrange(*ndrange)):
+        for I in qd.grouped(qd.ndrange(*ndrange)):
             pass
 
     populate()

@@ -1,12 +1,12 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 def _get_matrix_swizzle_apis():
-    swizzle_gen = ti.lang.matrix._generate_swizzle_patterns
+    swizzle_gen = qd.lang.matrix._generate_swizzle_patterns
     KEMAP_SET = ["xyzw", "rgba", "stpq"]
     res = []
     for key_group in KEMAP_SET:
@@ -53,7 +53,7 @@ def _get_expected_matrix_apis():
 
 
 user_api = {}
-user_api[ti] = [
+user_api[qd] = [
     "BitpackedFields",
     "CRITICAL",
     "DEBUG",
@@ -236,7 +236,7 @@ user_api[ti] = [
     "x86_64",
     "zero",
 ]
-user_api[ti.ad] = [
+user_api[qd.ad] = [
     "FwdMode",
     "Tape",
     "clear_all_gradients",
@@ -244,8 +244,8 @@ user_api[ti.ad] = [
     "grad_replaced",
     "no_grad",
 ]
-user_api[ti.algorithms] = ["PrefixSumExecutor", "parallel_sort"]
-user_api[ti.Field] = [
+user_api[qd.algorithms] = ["PrefixSumExecutor", "parallel_sort"]
+user_api[qd.Field] = [
     "copy_from",
     "dtype",
     "fill",
@@ -257,7 +257,7 @@ user_api[ti.Field] = [
     "to_numpy",
     "to_torch",
 ]
-user_api[ti.FieldsBuilder] = [
+user_api[qd.FieldsBuilder] = [
     "bitmasked",
     "deactivate_all",
     "dense",
@@ -269,7 +269,7 @@ user_api[ti.FieldsBuilder] = [
     "pointer",
     "quant_array",
 ]
-user_api[ti.math] = [
+user_api[qd.math] = [
     "acos",
     "asin",
     "atan2",
@@ -342,8 +342,8 @@ user_api[ti.math] = [
     "vec3",
     "vec4",
 ]
-user_api[ti.Matrix] = _get_expected_matrix_apis()
-user_api[ti.MatrixField] = [
+user_api[qd.Matrix] = _get_expected_matrix_apis()
+user_api[qd.MatrixField] = [
     "copy_from",
     "dtype",
     "fill",
@@ -357,7 +357,7 @@ user_api[ti.MatrixField] = [
     "to_numpy",
     "to_torch",
 ]
-user_api[ti.MatrixNdarray] = [
+user_api[qd.MatrixNdarray] = [
     "copy_from",
     "element_shape",
     "fill",
@@ -366,8 +366,8 @@ user_api[ti.MatrixNdarray] = [
     "to_dlpack",
     "to_numpy",
 ]
-user_api[ti.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "to_dlpack"]
-user_api[ti.SNode] = [
+user_api[qd.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "to_dlpack"]
+user_api[qd.SNode] = [
     "bitmasked",
     "deactivate_all",
     "dense",
@@ -380,7 +380,7 @@ user_api[ti.SNode] = [
     "quant_array",
     "shape",
 ]
-user_api[ti.ScalarField] = [
+user_api[qd.ScalarField] = [
     "copy_from",
     "dtype",
     "fill",
@@ -393,7 +393,7 @@ user_api[ti.ScalarField] = [
     "to_numpy",
     "to_torch",
 ]
-user_api[ti.ScalarNdarray] = [
+user_api[qd.ScalarNdarray] = [
     "copy_from",
     "element_shape",
     "fill",
@@ -402,8 +402,8 @@ user_api[ti.ScalarNdarray] = [
     "to_dlpack",
     "to_numpy",
 ]
-user_api[ti.Struct] = ["entries", "field", "items", "keys", "methods", "to_dict"]
-user_api[ti.StructField] = [
+user_api[qd.Struct] = ["entries", "field", "items", "keys", "methods", "to_dict"]
+user_api[qd.StructField] = [
     "copy_from",
     "dtype",
     "fill",
@@ -417,7 +417,7 @@ user_api[ti.StructField] = [
     "to_numpy",
     "to_torch",
 ]
-user_api[ti.VectorNdarray] = [
+user_api[qd.VectorNdarray] = [
     "copy_from",
     "element_shape",
     "fill",
@@ -426,11 +426,11 @@ user_api[ti.VectorNdarray] = [
     "to_dlpack",
     "to_numpy",
 ]
-user_api[ti.sparse] = ["grid", "usage"]
+user_api[qd.sparse] = ["grid", "usage"]
 
 
 @pytest.mark.parametrize("src", user_api.keys())
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_api(src):
     expected = sorted(user_api[src])
     actual = sorted([s for s in dir(src) if not s.startswith("_")])

@@ -1,13 +1,13 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_cse():
-    A = ti.field(ti.f32, shape=())
+    A = qd.field(qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a = 0
         a += 10
@@ -20,9 +20,9 @@ def test_cse():
 
 @test_utils.test()
 def test_store_forward():
-    A = ti.field(ti.f32, shape=())
+    A = qd.field(qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a = 0
         a = 123

@@ -1,13 +1,13 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_ftz_f32():
-    a = ti.field(dtype=ti.f32, shape=2)
+    a = qd.field(dtype=qd.f32, shape=2)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         a[0] = 1e-45
         a[1] = 1e-10 * 1e-35
@@ -17,11 +17,11 @@ def test_ftz_f32():
     assert a[1] == 0
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_ftz_f64():
-    a = ti.field(dtype=ti.f64, shape=2)
+    a = qd.field(dtype=qd.f64, shape=2)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         a[0] = 1e-323
         x = 1e-300

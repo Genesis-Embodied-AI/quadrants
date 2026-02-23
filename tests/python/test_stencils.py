@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -6,14 +6,14 @@ from tests import test_utils
 @test_utils.test()
 def test_simple():
     # Note: access simplification does not work in this case. Maybe worth fixing.
-    x = ti.field(ti.i32)
-    y = ti.field(ti.i32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.i32)
 
     n = 128
 
-    ti.root.dense(ti.i, n).place(x, y)
+    qd.root.dense(qd.i, n).place(x, y)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         for i in range(n - 1):
             x[i] = 1

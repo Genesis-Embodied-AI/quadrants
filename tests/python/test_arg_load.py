@@ -1,21 +1,21 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_arg_load():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32)
 
-    ti.root.place(x, y)
+    qd.root.place(x, y)
 
-    @ti.kernel
-    def set_i32(v: ti.i32):
+    @qd.kernel
+    def set_i32(v: qd.i32):
         x[None] = v
 
-    @ti.kernel
-    def set_f32(v: ti.f32):
+    @qd.kernel
+    def set_f32(v: qd.f32):
         y[None] = v
 
     set_i32(123)
@@ -31,19 +31,19 @@ def test_arg_load():
     assert y[None] == 1.5
 
 
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_arg_load_f64():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32)
 
-    ti.root.place(x, y)
+    qd.root.place(x, y)
 
-    @ti.kernel
-    def set_f64(v: ti.f64):
-        y[None] = ti.cast(v, ti.f32)
+    @qd.kernel
+    def set_f64(v: qd.f64):
+        y[None] = qd.cast(v, qd.f32)
 
-    @ti.kernel
-    def set_i64(v: ti.i64):
+    @qd.kernel
+    def set_i64(v: qd.i64):
         y[None] = v
 
     set_i64(789)
@@ -56,12 +56,12 @@ def test_arg_load_f64():
 @test_utils.test()
 def test_ndarray():
     N = 128
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
-    ti.root.dense(ti.i, N).place(x)
+    qd.root.dense(qd.i, N).place(x)
 
-    @ti.kernel
-    def set_f32(v: ti.types.ndarray()):
+    @qd.kernel
+    def set_f32(v: qd.types.ndarray()):
         for i in range(N):
             x[i] = v[i] + i
 

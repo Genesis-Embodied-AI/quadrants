@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -10,16 +10,16 @@ this_dir = os.path.dirname(os.path.abspath(__file__))
 model_file_path = os.path.join(this_dir, "ell.json")
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_mesh_patch_idx():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"idx": ti.i32})
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"idx": qd.i32})
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for v in model.verts:
-            v.idx = ti.mesh_patch_idx()
+            v.idx = qd.mesh_patch_idx()
 
     foo()
     idx = model.verts.idx.to_numpy()
@@ -28,12 +28,12 @@ def test_mesh_patch_idx():
 
 
 def _test_mesh_for(cell_reorder=False, vert_reorder=False, extra_tests=True):
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"t": ti.i32}, reorder=vert_reorder)
-    mesh_builder.cells.place({"t": ti.i32}, reorder=cell_reorder)
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"t": qd.i32}, reorder=vert_reorder)
+    mesh_builder.cells.place({"t": qd.i32}, reorder=cell_reorder)
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
 
-    @ti.kernel
+    @qd.kernel
     def cell_vert():
         for c in model.cells:
             for j in range(c.verts.size):
@@ -44,7 +44,7 @@ def _test_mesh_for(cell_reorder=False, vert_reorder=False, extra_tests=True):
     model.cells.t.fill(0)
     assert total == 892
 
-    @ti.kernel
+    @qd.kernel
     def vert_cell():
         for v in model.verts:
             for j in range(v.cells.size):
@@ -58,7 +58,7 @@ def _test_mesh_for(cell_reorder=False, vert_reorder=False, extra_tests=True):
     if not extra_tests:
         return
 
-    @ti.kernel
+    @qd.kernel
     def cell_cell():
         for c in model.cells:
             for j in range(c.cells.size):
@@ -69,7 +69,7 @@ def _test_mesh_for(cell_reorder=False, vert_reorder=False, extra_tests=True):
     model.cells.t.fill(0)
     assert total == 690
 
-    @ti.kernel
+    @qd.kernel
     def vert_vert():
         for v in model.verts:
             for j in range(v.verts.size):
@@ -81,42 +81,42 @@ def _test_mesh_for(cell_reorder=False, vert_reorder=False, extra_tests=True):
     assert total == 1144
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_mesh_for():
     _test_mesh_for(False, False)
     _test_mesh_for(False, True)
 
 
-@test_utils.test(require=ti.extension.mesh, optimize_mesh_reordered_mapping=False)
+@test_utils.test(require=qd.extension.mesh, optimize_mesh_reordered_mapping=False)
 def test_mesh_reordered_opt():
     _test_mesh_for(True, True, False)
 
 
-@test_utils.test(require=ti.extension.mesh, mesh_localize_to_end_mapping=False)
+@test_utils.test(require=qd.extension.mesh, mesh_localize_to_end_mapping=False)
 def test_mesh_localize_mapping0():
     _test_mesh_for(False, False, False)
     _test_mesh_for(True, True, False)
 
 
-@test_utils.test(require=ti.extension.mesh, mesh_localize_from_end_mapping=True)
+@test_utils.test(require=qd.extension.mesh, mesh_localize_from_end_mapping=True)
 def test_mesh_localize_mapping1():
     _test_mesh_for(False, False, False)
     _test_mesh_for(True, True, False)
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_mesh_reorder():
-    vec3i = ti.types.vector(3, ti.i32)
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"s": ti.i32, "s3": vec3i}, reorder=True)
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
+    vec3i = qd.types.vector(3, qd.i32)
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"s": qd.i32, "s3": vec3i}, reorder=True)
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
 
     id2 = np.array([x**2 for x in range(len(model.verts))])
     id123 = np.array([[x**1, x**2, x**3] for x in range(len(model.verts))])
     model.verts.s.from_numpy(id2)
     model.verts.s3.from_numpy(id123)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for v in model.verts:
             assert v.s == v.id**2
@@ -140,15 +140,15 @@ def test_mesh_reorder():
         assert id234[i][2] == i**4
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_mesh_minor_relations():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"y": ti.i32})
-    mesh_builder.edges.place({"x": ti.i32})
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"y": qd.i32})
+    mesh_builder.edges.place({"x": qd.i32})
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
     model.edges.x.fill(1)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for v in model.verts:
             for i in range(v.cells.size):
@@ -162,17 +162,17 @@ def test_mesh_minor_relations():
     assert total == 576
 
 
-@test_utils.test(require=ti.extension.mesh, demote_no_access_mesh_fors=True)
+@test_utils.test(require=qd.extension.mesh, demote_no_access_mesh_fors=True)
 def test_multiple_meshes():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"y": ti.i32})
-    meta = ti.Mesh.load_meta(model_file_path)
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"y": qd.i32})
+    meta = qd.Mesh.load_meta(model_file_path)
     model1 = mesh_builder.build(meta)
     model2 = mesh_builder.build(meta)
 
     model1.verts.y.from_numpy(np.array([x**2 for x in range(len(model1.verts))]))
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for v in model1.verts:
             model2.verts.y[v.id] = v.y
@@ -183,17 +183,17 @@ def test_multiple_meshes():
         assert out[i] == i**2
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_mesh_local():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"a": ti.i32})
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
-    ext_a = ti.field(ti.i32, shape=len(model.verts))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"a": qd.i32})
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
+    ext_a = qd.field(qd.i32, shape=len(model.verts))
 
-    @ti.kernel
-    def foo(cache: ti.template()):
-        if ti.static(cache):
-            ti.mesh_local(ext_a, model.verts.a)
+    @qd.kernel
+    def foo(cache: qd.template()):
+        if qd.static(cache):
+            qd.mesh_local(ext_a, model.verts.a)
         for f in model.faces:
             m = f.verts[0].id + f.verts[1].id + f.verts[2].id
             f.verts[0].a += m
@@ -218,19 +218,19 @@ def test_mesh_local():
         assert res1[i] == res4[i]
 
 
-@test_utils.test(require=ti.extension.mesh, experimental_auto_mesh_local=True)
+@test_utils.test(require=qd.extension.mesh, experimental_auto_mesh_local=True)
 def test_auto_mesh_local():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.verts.place({"a": ti.i32, "s": ti.i32})
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
-    ext_a = ti.field(ti.i32, shape=len(model.verts))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.verts.place({"a": qd.i32, "s": qd.i32})
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
+    ext_a = qd.field(qd.i32, shape=len(model.verts))
 
-    @ti.kernel
-    def foo(cache: ti.template()):
+    @qd.kernel
+    def foo(cache: qd.template()):
         for v in model.verts:
             v.s = v.id
-        if ti.static(cache):
-            ti.mesh_local(ext_a, model.verts.a)
+        if qd.static(cache):
+            qd.mesh_local(ext_a, model.verts.a)
         for f in model.faces:
             m = f.verts[0].s + f.verts[1].s + f.verts[2].s
             f.verts[0].a += m
@@ -254,13 +254,13 @@ def test_auto_mesh_local():
         assert res1[i] == res4[i]
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_nested_mesh_for():
-    mesh_builder = ti.lang.mesh._TetMesh()
-    mesh_builder.faces.place({"a": ti.i32, "b": ti.i32})
-    model = mesh_builder.build(ti.Mesh.load_meta(model_file_path))
+    mesh_builder = qd.lang.mesh._TetMesh()
+    mesh_builder.faces.place({"a": qd.i32, "b": qd.i32})
+    model = mesh_builder.build(qd.Mesh.load_meta(model_file_path))
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for f in model.faces:
             for i in range(f.verts.size):
@@ -273,16 +273,16 @@ def test_nested_mesh_for():
     assert (a == b).all() == 1
 
 
-@test_utils.test(require=ti.extension.mesh)
+@test_utils.test(require=qd.extension.mesh)
 def test_multiple_mesh_major_relations():
-    mesh = ti.lang.mesh._TetMesh()
-    mesh.verts.place({"s": ti.i32, "s_": ti.i32, "s1": ti.i32, "a": ti.i32, "b": ti.i32, "c": ti.i32})
-    mesh.edges.place({"s2": ti.i32})
-    mesh.cells.place({"s3": ti.i32})
+    mesh = qd.lang.mesh._TetMesh()
+    mesh.verts.place({"s": qd.i32, "s_": qd.i32, "s1": qd.i32, "a": qd.i32, "b": qd.i32, "c": qd.i32})
+    mesh.edges.place({"s2": qd.i32})
+    mesh.cells.place({"s3": qd.i32})
 
-    model = mesh.build(ti.Mesh.load_meta(model_file_path))
+    model = mesh.build(qd.Mesh.load_meta(model_file_path))
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for u in model.verts:
             u.s1 = u.id
@@ -291,7 +291,7 @@ def test_multiple_mesh_major_relations():
         for c in model.cells:
             c.s3 = c.id
 
-        ti.mesh_local(model.verts.s1, model.edges.s2, model.cells.s3)
+        qd.mesh_local(model.verts.s1, model.edges.s2, model.cells.s3)
         for u in model.verts:
             a, b, c = 0, 0, 0
             for i in range(u.verts.size):

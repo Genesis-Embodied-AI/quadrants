@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -7,10 +7,10 @@ from tests import test_utils
 def test_1d():
     N = 16
 
-    x = ti.field(ti.f32, shape=(N,))
-    y = ti.field(ti.f32, shape=(N,))
+    x = qd.field(qd.f32, shape=(N,))
+    y = qd.field(qd.f32, shape=(N,))
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             y[i] = x[i]
@@ -29,12 +29,12 @@ def test_3d():
     N = 2
     M = 2
 
-    x = ti.field(ti.f32, shape=(N, M))
-    y = ti.field(ti.f32, shape=(N, M))
+    x = qd.field(qd.f32, shape=(N, M))
+    y = qd.field(qd.f32, shape=(N, M))
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for I in ti.grouped(x):
+        for I in qd.grouped(x):
             y[I] = x[I]
 
     for i in range(N):
@@ -52,9 +52,9 @@ def test_3d():
 def test_matrix():
     N = 16
 
-    x = ti.Matrix.field(2, 2, dtype=ti.f32, shape=(N,), layout=ti.Layout.AOS)
+    x = qd.Matrix.field(2, 2, dtype=qd.f32, shape=(N,), layout=qd.Layout.AOS)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             x[i][1, 1] = x[i][0, 0]
@@ -71,11 +71,11 @@ def test_matrix():
 @test_utils.test()
 def test_alloc_in_kernel():
     return  # build bots may not have this much memory to tests...
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
-    ti.root.pointer(ti.i, 8192).dense(ti.i, 1024 * 1024).place(x)
+    qd.root.pointer(qd.i, 8192).dense(qd.i, 1024 * 1024).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def touch():
         for i in range(4096):
             x[i * 1024 * 1024] = 1

@@ -18,11 +18,11 @@ class FieldsBuilder:
 
     Example::
 
-        x = ti.field(ti.i32)
-        y = ti.field(ti.f32)
-        fb = ti.FieldsBuilder()
-        fb.dense(ti.ij, 8).place(x)
-        fb.pointer(ti.ij, 8).dense(ti.ij, 4).place(y)
+        x = qd.field(qd.i32)
+        y = qd.field(qd.f32)
+        fb = qd.FieldsBuilder()
+        fb.dense(qd.ij, 8).place(x)
+        fb.pointer(qd.ij, 8).dense(qd.ij, 4).place(y)
 
         # After this line, `x` and `y` are placed. No more fields can be placed
         # into `fb`.

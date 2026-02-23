@@ -3,7 +3,7 @@ import dataclasses
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang._func_base import FuncBase
 from quadrants.lang._pruning import Pruning
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -17,21 +17,21 @@ from tests import test_utils
 
 @dataclasses.dataclass
 class MyStructAB:
-    a: ti.types.NDArray[ti.i32, 1]
-    b: ti.types.NDArray[ti.i32, 1]
+    a: qd.types.NDArray[qd.i32, 1]
+    b: qd.types.NDArray[qd.i32, 1]
 
 
 @dataclasses.dataclass
 class MyStructCD:
-    c: ti.types.NDArray[ti.i32, 1]
-    d: ti.types.NDArray[ti.i32, 1]
+    c: qd.types.NDArray[qd.i32, 1]
+    d: qd.types.NDArray[qd.i32, 1]
     my_struct_ab: MyStructAB
 
 
 @dataclasses.dataclass
 class MyStructEF:
-    e: ti.types.NDArray[ti.i32, 1]
-    f: ti.types.NDArray[ti.i32, 1]
+    e: qd.types.NDArray[qd.i32, 1]
+    f: qd.types.NDArray[qd.i32, 1]
     my_struct_cd: MyStructCD
 
 

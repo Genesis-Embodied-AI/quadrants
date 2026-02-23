@@ -1,12 +1,12 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test(debug=True)
 def test_logical_and_i32():
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32) -> ti.i32:
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32) -> qd.i32:
         return x and y
 
     assert func(1, 2) == 2
@@ -17,8 +17,8 @@ def test_logical_and_i32():
 
 @test_utils.test(debug=True)
 def test_logical_or_i32():
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32) -> ti.i32:
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32) -> qd.i32:
         return x or y
 
     assert func(1, 2) == 1
@@ -29,19 +29,19 @@ def test_logical_or_i32():
 
 @test_utils.test(debug=True)
 def test_logical_vec_i32():
-    vec4d = ti.types.vector(4, ti.i32)
+    vec4d = qd.types.vector(4, qd.i32)
 
-    @ti.kernel
+    @qd.kernel
     def p() -> vec4d:
-        a = ti.Vector([2, 2, 0, 0])
-        b = ti.Vector([1, 0, 1, 0])
+        a = qd.Vector([2, 2, 0, 0])
+        b = qd.Vector([1, 0, 1, 0])
         z = a or b
         return z
 
-    @ti.kernel
+    @qd.kernel
     def q() -> vec4d:
-        a = ti.Vector([2, 2, 0, 0])
-        b = ti.Vector([1, 0, 1, 0])
+        a = qd.Vector([2, 2, 0, 0])
+        b = qd.Vector([1, 0, 1, 0])
         z = a and b
         return z
 
@@ -59,21 +59,21 @@ def test_logical_vec_i32():
 
 
 # FIXME: bool vectors not supported on spir-v
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_logical_vec_bool():
-    vec4d = ti.types.vector(4, ti.u1)
+    vec4d = qd.types.vector(4, qd.u1)
 
-    @ti.kernel
+    @qd.kernel
     def p() -> vec4d:
-        a = ti.Vector([True, True, False, False])
-        b = ti.Vector([True, False, True, False])
+        a = qd.Vector([True, True, False, False])
+        b = qd.Vector([True, False, True, False])
         z = a or b
         return z
 
-    @ti.kernel
+    @qd.kernel
     def q() -> vec4d:
-        a = ti.Vector([True, True, False, False])
-        b = ti.Vector([True, False, True, False])
+        a = qd.Vector([True, True, False, False])
+        b = qd.Vector([True, False, True, False])
         z = a and b
         return z
 

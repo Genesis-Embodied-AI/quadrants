@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -13,13 +13,13 @@ OP_AND = 3
 OP_OR = 4
 OP_XOR = 5
 
-ti_ops = {
-    OP_ADD: ti.atomic_add,
-    OP_MIN: ti.atomic_min,
-    OP_MAX: ti.atomic_max,
-    OP_AND: ti.atomic_and,
-    OP_OR: ti.atomic_or,
-    OP_XOR: ti.atomic_xor,
+qd_ops = {
+    OP_ADD: qd.atomic_add,
+    OP_MIN: qd.atomic_min,
+    OP_MAX: qd.atomic_max,
+    OP_AND: qd.atomic_and,
+    OP_OR: qd.atomic_or,
+    OP_XOR: qd.atomic_xor,
 }
 
 np_ops = {
@@ -35,38 +35,38 @@ np_ops = {
 def _test_reduction_single(dtype, criterion, op):
     N = 1024 * 1024
     if (
-        ti.lang.impl.current_cfg().arch == ti.vulkan or ti.lang.impl.current_cfg().arch == ti.metal
-    ) and dtype == ti.f32:
+        qd.lang.impl.current_cfg().arch == qd.vulkan or qd.lang.impl.current_cfg().arch == qd.metal
+    ) and dtype == qd.f32:
         # Vulkan is not capable of such large number in its float32...
         N = 1024 * 16
 
-    a = ti.field(dtype, shape=N)
-    tot = ti.field(dtype, shape=())
+    a = qd.field(dtype, shape=N)
+    tot = qd.field(dtype, shape=())
 
-    if dtype in [ti.f32, ti.f64]:
+    if dtype in [qd.f32, qd.f64]:
 
-        @ti.kernel
+        @qd.kernel
         def fill():
             for i in a:
                 a[i] = i + 0.5
 
     else:
 
-        @ti.kernel
+        @qd.kernel
         def fill():
             for i in a:
                 a[i] = i + 1
 
-    ti_op = ti_ops[op]
+    ti_op = qd_ops[op]
 
-    @ti.kernel
+    @qd.kernel
     def reduce():
         for i in a:
             ti_op(tot[None], a[i])
 
-    @ti.kernel
+    @qd.kernel
     def reduce_tmp() -> dtype:
-        s = ti.zero(tot[None]) if op == OP_ADD or op == OP_XOR else a[0]
+        s = qd.zero(tot[None]) if op == OP_ADD or op == OP_XOR else a[0]
         for i in a:
             ti_op(s, a[i])
         return s
@@ -86,46 +86,46 @@ def _test_reduction_single(dtype, criterion, op):
 @pytest.mark.parametrize("op", [OP_ADD, OP_MIN, OP_MAX, OP_AND, OP_OR, OP_XOR])
 @test_utils.test()
 def test_reduction_single_i32(op):
-    _test_reduction_single(ti.i32, lambda x, y: int(x) % 2**32 == int(y) % 2**32, op)
+    _test_reduction_single(qd.i32, lambda x, y: int(x) % 2**32 == int(y) % 2**32, op)
 
 
 @pytest.mark.parametrize("op", [OP_ADD])
 @test_utils.test()
 def test_reduction_single_u32(op):
-    _test_reduction_single(ti.u32, lambda x, y: int(x) % 2**32 == int(y) % 2**32, op)
+    _test_reduction_single(qd.u32, lambda x, y: int(x) % 2**32 == int(y) % 2**32, op)
 
 
 @pytest.mark.parametrize("op", [OP_ADD, OP_MIN, OP_MAX])
 @test_utils.test()
 def test_reduction_single_f32(op):
-    _test_reduction_single(ti.f32, lambda x, y: x == approx(y, 3e-4), op)
+    _test_reduction_single(qd.f32, lambda x, y: x == approx(y, 3e-4), op)
 
 
 @pytest.mark.parametrize("op", [OP_ADD])
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_reduction_single_i64(op):
-    _test_reduction_single(ti.i64, lambda x, y: int(x) % 2**64 == int(y) % 2**64, op)
+    _test_reduction_single(qd.i64, lambda x, y: int(x) % 2**64 == int(y) % 2**64, op)
 
 
 @pytest.mark.parametrize("op", [OP_ADD])
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_reduction_single_u64(op):
-    _test_reduction_single(ti.u64, lambda x, y: int(x) % 2**64 == int(y) % 2**64, op)
+    _test_reduction_single(qd.u64, lambda x, y: int(x) % 2**64 == int(y) % 2**64, op)
 
 
 @pytest.mark.parametrize("op", [OP_ADD])
-@test_utils.test(require=ti.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_reduction_single_f64(op):
-    _test_reduction_single(ti.f64, lambda x, y: x == approx(y, 1e-12), op)
+    _test_reduction_single(qd.f64, lambda x, y: x == approx(y, 1e-12), op)
 
 
 @test_utils.test()
 def test_reduction_different_scale():
-    @ti.kernel
-    def func(n: ti.template()) -> ti.i32:
+    @qd.kernel
+    def func(n: qd.template()) -> qd.i32:
         x = 0
         for i in range(n):
-            ti.atomic_add(x, 1)
+            qd.atomic_add(x, 1)
         return x
 
     # 10 and 60 since OpenGL TLS stride size = 32
@@ -136,12 +136,12 @@ def test_reduction_different_scale():
 
 @test_utils.test()
 def test_reduction_non_full_warp():
-    @ti.kernel
-    def test() -> ti.i32:
+    @qd.kernel
+    def test() -> qd.i32:
         hit_time = 1
-        ti.loop_config(block_dim=8)
+        qd.loop_config(block_dim=8)
         for i in range(8):
-            ti.atomic_min(hit_time, 1)
+            qd.atomic_min(hit_time, 1)
         return hit_time
 
     assert test() == 1
@@ -149,12 +149,12 @@ def test_reduction_non_full_warp():
 
 @test_utils.test()
 def test_reduction_ndarray():
-    @ti.kernel
-    def reduce(a: ti.types.ndarray()) -> ti.i32:
+    @qd.kernel
+    def reduce(a: qd.types.ndarray()) -> qd.i32:
         s = 0
         for i in a:
-            ti.atomic_add(s, a[i])
-            ti.atomic_sub(s, 2)
+            qd.atomic_add(s, a[i])
+            qd.atomic_sub(s, 2)
         return s
 
     n = 1024

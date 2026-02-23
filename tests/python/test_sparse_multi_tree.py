@@ -1,19 +1,19 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_pointer():
-    e = ti.Vector.field(2, dtype=int, shape=16)
+    e = qd.Vector.field(2, dtype=int, shape=16)
 
-    e[0] = ti.Vector([0, 0])
+    e[0] = qd.Vector([0, 0])
 
-    a = ti.field(float, shape=512)
-    b = ti.field(dtype=float)
-    ti.root.pointer(ti.i, 32).dense(ti.i, 16).place(b)
+    a = qd.field(float, shape=512)
+    b = qd.field(dtype=float)
+    qd.root.pointer(qd.i, 32).dense(qd.i, 16).place(b)
 
-    @ti.kernel
+    @qd.kernel
     def test():
         for i in a:
             a[i] = i
@@ -21,7 +21,7 @@ def test_pointer():
             b[i] += a[i]
 
     test()
-    ti.sync()
+    qd.sync()
 
     b_np = b.to_numpy()
     for i in range(512):

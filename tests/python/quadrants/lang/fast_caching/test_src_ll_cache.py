@@ -7,7 +7,7 @@ import sys
 import pydantic
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 import quadrants.lang
 from quadrants._test_tools import ti_init_same_arch
 from quadrants.lang._kernel_types import SrcLlCacheObservations
@@ -22,7 +22,7 @@ RET_SUCCESS = 42
 def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.kernel
+    @qd.kernel
     def no_pure() -> None:
         pass
 
@@ -32,7 +32,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
 
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.kernel(fastcache=True)
+    @qd.kernel(fastcache=True)
     def has_pure() -> None:
         pass
 
@@ -45,7 +45,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
     assert has_pure._primal._last_compiled_kernel_data is not None
 
     last_compiled_kernel_data_str = None
-    if quadrants.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda]:
+    if quadrants.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda]:
         # we only support _last_compiled_kernel_data on cpu and cuda
         # and it only changes anything on cuda anyway, because it affects the PTX
         # cache
@@ -58,7 +58,7 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
     assert has_pure._primal.src_ll_cache_observations.cache_key_generated
     assert has_pure._primal.src_ll_cache_observations.cache_validated
     assert has_pure._primal.src_ll_cache_observations.cache_loaded
-    if quadrants.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda]:
+    if quadrants.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda]:
         assert has_pure._primal._last_compiled_kernel_data._debug_dump_to_string() == last_compiled_kernel_data_str
 
 
@@ -66,8 +66,8 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
 def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def has_pure() -> None:
         pass
 
@@ -84,7 +84,7 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
     assert not has_pure._primal.src_ll_cache_observations.cache_key_generated
 
     last_compiled_kernel_data_str = None
-    if quadrants.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda]:
+    if quadrants.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda]:
         # we only support _last_compiled_kernel_data on cpu and cuda
         # and it only changes anything on cuda anyway, because it affects the PTX
         # cache
@@ -105,7 +105,7 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
     assert not has_pure._primal.src_ll_cache_observations.cache_validated
     assert not has_pure._primal.src_ll_cache_observations.cache_loaded
     has_pure._primal.src_ll_cache_observations = SrcLlCacheObservations()
-    if quadrants.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda]:
+    if quadrants.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda]:
         assert has_pure._primal._last_compiled_kernel_data._debug_dump_to_string() == last_compiled_kernel_data_str
 
     # check cache works again
@@ -115,13 +115,13 @@ def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
     assert has_pure._primal.src_ll_cache_observations.cache_validated
     assert has_pure._primal.src_ll_cache_observations.cache_loaded
     has_pure._primal.src_ll_cache_observations = SrcLlCacheObservations()
-    if quadrants.lang.impl.current_cfg().arch in [ti.cpu, ti.cuda]:
+    if quadrants.lang.impl.current_cfg().arch in [qd.cpu, qd.cuda]:
         assert has_pure._primal._last_compiled_kernel_data._debug_dump_to_string() == last_compiled_kernel_data_str
 
 
 # Should be enough to run these on cpu I think, and anything involving
 # stdout/stderr capture is fairly flaky on other arch
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows stderr not working with capfd")
 def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
@@ -129,9 +129,9 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
     class RandomClass:
         pass
 
-    @ti.pure
-    @ti.kernel
-    def k1(foo: ti.Template) -> None:
+    @qd.pure
+    @qd.kernel
+    def k1(foo: qd.Template) -> None:
         pass
 
     k1(foo=RandomClass())
@@ -141,8 +141,8 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
     assert "[FASTCACHE][INVALID_FUNC]" in err
     assert k1.__name__ in err
 
-    @ti.kernel
-    def not_pure_k1(foo: ti.Template) -> None:
+    @qd.kernel
+    def not_pure_k1(foo: qd.Template) -> None:
         pass
 
     not_pure_k1(foo=RandomClass())
@@ -161,20 +161,20 @@ def test_src_ll_cache_repeat_after_load(tmp_path: pathlib.Path) -> None:
     """
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.pure
-    @ti.kernel
-    def has_pure(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.pure
+    @qd.kernel
+    def has_pure(a: qd.types.NDArray[qd.i32, 1]) -> None:
         a[0] += 1
 
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     a[0] = 5
     for i in range(3):
         has_pure(a)
         assert a[0] == 6 + i
 
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     a[0] = 5
     for i in range(3):
         has_pure(a)
@@ -185,15 +185,15 @@ def test_src_ll_cache_repeat_after_load(tmp_path: pathlib.Path) -> None:
 @test_utils.test()
 def test_src_ll_cache_flag(tmp_path: pathlib.Path, src_ll_cache: bool) -> None:
     """
-    Test ti.init(src_ll_cache) flag
+    Test qd.init(src_ll_cache) flag
     """
     if src_ll_cache:
         ti_init_same_arch(offline_cache_file_path=str(tmp_path), src_ll_cache=src_ll_cache)
     else:
         ti_init_same_arch()
 
-    @ti.pure
-    @ti.kernel
+    @qd.pure
+    @qd.kernel
     def k1() -> None:
         pass
 
@@ -214,19 +214,19 @@ class TemplateParamsKernelArgs(pydantic.BaseModel):
 
 def src_ll_cache_template_params_child(args: list[str]) -> None:
     args_obj = TemplateParamsKernelArgs.model_validate_json(args[0])
-    ti.init(
-        arch=getattr(ti, args_obj.arch),
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=args_obj.src_ll_cache,
     )
 
-    @ti.pure
-    @ti.kernel
-    def k1(a: ti.template(), output: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.pure
+    @qd.kernel
+    def k1(a: qd.template(), output: qd.types.NDArray[qd.i32, 1]) -> None:
         output[0] = a
 
-    output = ti.ndarray(ti.i32, (10,))
+    output = qd.ndarray(qd.i32, (10,))
     k1(args_obj.a, output)
     assert output[0] == args_obj.a
     print(TEST_RAN)
@@ -239,7 +239,7 @@ def test_src_ll_cache_template_params(tmp_path: pathlib.Path, src_ll_cache: bool
     """
     template primitive kernel params should be in the cache key
     """
-    arch = ti.lang.impl.current_cfg().arch.name
+    arch = qd.lang.impl.current_cfg().arch.name
 
     def create_args(a: int) -> str:
         obj = TemplateParamsKernelArgs(
@@ -279,21 +279,21 @@ class HasReturnKernelArgs(pydantic.BaseModel):
 
 def src_ll_cache_has_return_child(args: list[str]) -> None:
     args_obj = HasReturnKernelArgs.model_validate_json(args[0])
-    ti.init(
-        arch=getattr(ti, args_obj.arch),
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=args_obj.src_ll_cache,
     )
 
-    @ti.pure
-    @ti.kernel
-    def k1(a: ti.i32, output: ti.types.NDArray[ti.i32, 1]) -> bool:
+    @qd.pure
+    @qd.kernel
+    def k1(a: qd.i32, output: qd.types.NDArray[qd.i32, 1]) -> bool:
         output[0] = a
-        if ti.static(args_obj.return_something):
+        if qd.static(args_obj.return_something):
             return True
 
-    output = ti.ndarray(ti.i32, (10,))
+    output = qd.ndarray(qd.i32, (10,))
     if args_obj.return_something:
         assert k1(3, output)
         # Sanity check that the kernel actually ran, and did something.
@@ -306,7 +306,7 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
         # we won't ever be able to load from the cache, since it will have failed
         # to cache the first time. By induction, it will always raise.
         with pytest.raises(
-            ti.QuadrantsSyntaxError, match="Kernel has a return type but does not have a return statement"
+            qd.QuadrantsSyntaxError, match="Kernel has a return type but does not have a return statement"
         ):
             k1(3, output)
     print(TEST_RAN)
@@ -317,8 +317,8 @@ def src_ll_cache_has_return_child(args: list[str]) -> None:
 @pytest.mark.parametrize("src_ll_cache", [False, True])
 @test_utils.test()
 def test_src_ll_cache_has_return(tmp_path: pathlib.Path, src_ll_cache: bool, return_something: bool) -> None:
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch.name
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
     env["PYTHONPATH"] = "."
     # need to test what happens when loading from fast cache, so run several runs
@@ -358,20 +358,20 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     """
     ti_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOrientedChild:
         def __init__(self) -> None:
             self.b = 10
 
-    @ti.data_oriented
+    @qd.data_oriented
     class MyDataOriented:
         def __init__(self) -> None:
             self.a = 3
             self.child = MyDataOrientedChild()
 
-        @ti.pure
-        @ti.kernel
-        def k1(self) -> tuple[ti.i32, ti.i32]:
+        @qd.pure
+        @qd.kernel
+        def k1(self) -> tuple[qd.i32, qd.i32]:
             return self.a, self.child.b
 
     my_do = MyDataOriented()
@@ -380,47 +380,47 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     # arch can change during the below execcution 🤔
     # TODO: figure out why this is happening, and/or remove arch from python config object (replace
     # with arch_name and arch_idx for example)
-    arch = getattr(ti, ti.lang.impl.current_cfg().arch.name)
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
 
     # need to initialize up front, in order that config hash doesn't change when we re-init later
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.a = 5
     my_do.child.b = 20
     assert tuple(my_do.k1()) == (5, 20)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert not my_do.k1._primal.src_ll_cache_observations.cache_validated
 
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.a = 5
     assert tuple(my_do.k1()) == (5, 20)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
 
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.a = 7
     assert tuple(my_do.k1()) == (7, 20)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert not my_do.k1._primal.src_ll_cache_observations.cache_validated
 
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.a = 7
     assert tuple(my_do.k1()) == (7, 20)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
 
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.child.b = 30
     assert tuple(my_do.k1()) == (7, 30)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert not my_do.k1._primal.src_ll_cache_observations.cache_validated
 
-    ti.reset()
-    ti.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
     my_do.child.b = 30
     assert tuple(my_do.k1()) == (7, 30)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
@@ -438,8 +438,8 @@ class ModifySubFuncKernelArgs(pydantic.BaseModel):
 
 def src_ll_cache_modify_sub_func_child(args: list[str]) -> None:
     args_obj: ModifySubFuncKernelArgs = ModifySubFuncKernelArgs.model_validate_json(args[0])
-    ti.init(
-        arch=getattr(ti, args_obj.arch),
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
         offline_cache=True,
         offline_cache_file_path=args_obj.offline_cache_file_path,
         src_ll_cache=True,
@@ -448,7 +448,7 @@ def src_ll_cache_modify_sub_func_child(args: list[str]) -> None:
     sys.path.append(args_obj.module_file_path)
     mod = importlib.import_module(args_obj.module_name)
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     mod.k1(a)
     assert a[0] == args_obj.expected_val
     assert mod.k1._primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
@@ -459,20 +459,20 @@ def src_ll_cache_modify_sub_func_child(args: list[str]) -> None:
 
 @test_utils.test()
 def test_src_ll_cache_modify_sub_func(tmp_path: pathlib.Path) -> None:
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch.name
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
     env["PYTHONPATH"] = "."
 
     kernels_src = """
-import quadrants as ti
+import quadrants as qd
 
-@ti.kernel(fastcache=True)
-def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.kernel(fastcache=True)
+def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
     f1(a)
 
-@ti.func
-def f1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+@qd.func
+def f1(a: qd.types.NDArray[qd.i32, 1]) -> None:
     a[0] = {val}
 """
 
@@ -526,47 +526,47 @@ def f1(a: ti.types.NDArray[ti.i32, 1]) -> None:
 @test_utils.test()
 def test_src_ll_cache_dupe_kernels(tmp_path: pathlib.Path) -> None:
     use_fast_cache = True
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch.name
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
 
-    ti.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
-    @ti.func
-    def f1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def f1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         a[0] = 123
 
-    @ti.kernel(fastcache=use_fast_cache)
-    def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel(fastcache=use_fast_cache)
+    def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         f1(a)
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert a[0] == 123
     assert not k1._primal.src_ll_cache_observations.cache_loaded
 
-    ti.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
-    a = ti.ndarray(ti.i32, (10,))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert a[0] == 123
     assert k1._primal.src_ll_cache_observations.cache_loaded
 
-    ti.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
-    @ti.func
-    def f1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.func
+    def f1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         a[0] = 222
 
-    @ti.kernel(fastcache=use_fast_cache)
-    def k1(a: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel(fastcache=use_fast_cache)
+    def k1(a: qd.types.NDArray[qd.i32, 1]) -> None:
         f1(a)
 
-    a = ti.ndarray(ti.i32, (10,))
+    a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert not k1._primal.src_ll_cache_observations.cache_loaded
     assert a[0] == 222
 
-    ti.init(arch=getattr(ti, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
-    a = ti.ndarray(ti.i32, (10,))
+    qd.init(arch=getattr(qd, arch), src_ll_cache=True, offline_cache=True, offline_cache_file_path=str(tmp_path))
+    a = qd.ndarray(qd.i32, (10,))
     k1(a)
     assert k1._primal.src_ll_cache_observations.cache_loaded
     assert a[0] == 222

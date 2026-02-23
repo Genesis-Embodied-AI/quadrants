@@ -1,16 +1,16 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_ptr_scalar():
-    a = ti.field(dtype=ti.f32, shape=())
+    a = qd.field(dtype=qd.f32, shape=())
 
-    @ti.kernel
-    def func(t: ti.f32):
-        b = ti.static(a)
-        c = ti.static(b)
+    @qd.kernel
+    def func(t: qd.f32):
+        b = qd.static(a)
+        c = qd.static(b)
         b[None] = b[None] * t
         c[None] = a[None] + t
 
@@ -22,12 +22,12 @@ def test_ptr_scalar():
 
 @test_utils.test()
 def test_ptr_matrix():
-    a = ti.Matrix.field(2, 2, dtype=ti.f32, shape=())
+    a = qd.Matrix.field(2, 2, dtype=qd.f32, shape=())
 
-    @ti.kernel
-    def func(t: ti.f32):
+    @qd.kernel
+    def func(t: qd.f32):
         a[None] = [[2, 3], [4, 5]]
-        b = ti.static(a)
+        b = qd.static(a)
         b[None][1, 0] = t
 
     for x in range(-5, 5):
@@ -37,11 +37,11 @@ def test_ptr_matrix():
 
 @test_utils.test()
 def test_ptr_field():
-    a = ti.field(dtype=ti.f32, shape=(3, 4))
+    a = qd.field(dtype=qd.f32, shape=(3, 4))
 
-    @ti.kernel
-    def func(t: ti.f32):
-        b = ti.static(a)
+    @qd.kernel
+    def func(t: qd.f32):
+        b = qd.static(a)
         b[1, 3] = b[1, 2] * t
         b[2, 0] = b[2, 1] + t
 
@@ -55,12 +55,12 @@ def test_ptr_field():
 
 @test_utils.test()
 def test_pythonish_tuple_assign():
-    a = ti.field(dtype=ti.f32, shape=())
-    b = ti.field(dtype=ti.f32, shape=())
+    a = qd.field(dtype=qd.f32, shape=())
+    b = qd.field(dtype=qd.f32, shape=())
 
-    @ti.kernel
-    def func(x: ti.f32, y: ti.f32):
-        u, v = ti.static(b, a)
+    @qd.kernel
+    def func(x: qd.f32, y: qd.f32):
+        u, v = qd.static(b, a)
         u[None] = x
         v[None] = y
 
@@ -72,19 +72,19 @@ def test_pythonish_tuple_assign():
 
 @test_utils.test()
 def test_ptr_func():
-    a = ti.field(dtype=ti.f32, shape=(3,))
+    a = qd.field(dtype=qd.f32, shape=(3,))
 
     def add2numbers_py(x, y):
         return x + y
 
-    @ti.func
+    @qd.func
     def add2numbers_func(x, y):
         return x + y
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        add_py = ti.static(add2numbers_py)
-        add_func = ti.static(add2numbers_func)
+        add_py = qd.static(add2numbers_py)
+        add_func = qd.static(add2numbers_func)
         a[0] = add_py(2, 3)
         a[1] = add_func(3, 7)
 
@@ -95,21 +95,21 @@ def test_ptr_func():
 
 @test_utils.test()
 def test_ptr_class_func():
-    @ti.data_oriented
+    @qd.data_oriented
     class MyClass:
         def __init__(self):
-            self.a = ti.field(dtype=ti.f32, shape=(3))
+            self.a = qd.field(dtype=qd.f32, shape=(3))
 
         def add2numbers_py(self, x, y):
             return x + y
 
-        @ti.func
+        @qd.func
         def add2numbers_func(self, x, y):
             return x + y
 
-        @ti.kernel
+        @qd.kernel
         def func(self):
-            a, add_py, add_func = ti.static(self.a, self.add2numbers_py, self.add2numbers_func)
+            a, add_py, add_func = qd.static(self.a, self.add2numbers_py, self.add2numbers_func)
             a[0] = add_py(2, 3)
             a[1] = add_func(3, 7)
 

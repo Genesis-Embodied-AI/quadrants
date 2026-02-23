@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -7,9 +7,9 @@ n = 1000
 
 @test_utils.test()
 def test_for_continue():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         # Launch just one thread
         for _ in range(1):
@@ -27,9 +27,9 @@ def test_for_continue():
 
 @test_utils.test()
 def test_while_continue():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         # Launch just one thread
         for _ in range(1):
@@ -50,9 +50,9 @@ def test_while_continue():
 
 @test_utils.test()
 def test_kernel_continue():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         for i in range(n):
             if i % 2 == 0:
@@ -69,9 +69,9 @@ def test_kernel_continue():
 
 @test_utils.test()
 def test_unconditional_continue():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def run():
         # Launch just one thread
         for _ in range(1):
@@ -88,10 +88,10 @@ def test_unconditional_continue():
 
 @test_utils.test()
 def test_kernel_continue_in_nested_if():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
-    def run(a: ti.i32):
+    @qd.kernel
+    def run(a: qd.i32):
         for i in range(1):
             if a:
                 if a:
@@ -110,10 +110,10 @@ def test_kernel_continue_in_nested_if():
 
 @test_utils.test()
 def test_kernel_continue_in_nested_if_2():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
-    def run(a: ti.i32):
+    @qd.kernel
+    def run(a: qd.i32):
         for i in range(1):
             if a:
                 if a:
@@ -131,10 +131,10 @@ def test_kernel_continue_in_nested_if_2():
 
 @test_utils.test()
 def test_kernel_continue_in_nested_if_3():
-    x = ti.field(ti.i32, shape=n)
+    x = qd.field(qd.i32, shape=n)
 
-    @ti.kernel
-    def run(a: ti.i32):
+    @qd.kernel
+    def run(a: qd.i32):
         for i in range(1):
             if a:
                 continue
@@ -152,9 +152,9 @@ def test_kernel_continue_in_nested_if_3():
 
 @test_utils.test()
 def test_kernel_continue_in_simple_if():
-    img = ti.field(ti.i32, (2, 2))
+    img = qd.field(qd.i32, (2, 2))
 
-    @ti.kernel
+    @qd.kernel
     def K():
         for i, j in img:
             img[i, j] = 0

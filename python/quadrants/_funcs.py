@@ -37,9 +37,9 @@ def randn(dt=None):
 
     Example::
 
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def main():
-        >>>     print(ti.randn())
+        >>>     print(qd.randn())
         >>>
         >>> main()
         -0.463608
@@ -55,8 +55,8 @@ def _polar_decompose2d(A, dt):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Polar_decomposition.
 
     Args:
-        A (ti.Matrix(2, 2)): input 2x2 matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(2, 2)): input 2x2 matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
         Decomposed 2x2 matrices `U` and `P`. `U` is a 2x2 orthogonal matrix
@@ -103,8 +103,8 @@ def _polar_decompose3d(A, dt):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Polar_decomposition.
 
     Args:
-        A (ti.Matrix(3, 3)): input 3x3 matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(3, 3)): input 3x3 matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
         Decomposed 3x3 matrices `U` and `P`.
@@ -121,8 +121,8 @@ def _svd2d(A, dt):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Singular_value_decomposition.
 
     Args:
-        A (ti.Matrix(2, 2)): input 2x2 matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(2, 2)): input 2x2 matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
         Decomposed 2x2 matrices `U`, 'S' and `V`.
@@ -163,8 +163,8 @@ def _svd3d(A, dt, iters=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Singular_value_decomposition.
 
     Args:
-        A (ti.Matrix(3, 3)): input 3x3 matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(3, 3)): input 3x3 matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
         iters (int): iteration number to control algorithm precision.
 
     Returns:
@@ -208,12 +208,12 @@ def _eig2x2(A, dt):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
     Args:
-        A (ti.Matrix(2, 2)): input 2x2 matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(2, 2)): input 2x2 matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
-        eigenvalues (ti.Matrix(2, 2)): The eigenvalues in complex form. Each row stores one eigenvalue. The first number of the eigenvalue represents the real part and the second number represents the imaginary part.
-        eigenvectors: (ti.Matrix(4, 2)): The eigenvectors in complex form. Each column stores one eigenvector. Each eigenvector consists of 2 entries, each of which is represented by two numbers for its real part and imaginary part.
+        eigenvalues (qd.Matrix(2, 2)): The eigenvalues in complex form. Each row stores one eigenvalue. The first number of the eigenvalue represents the real part and the second number represents the imaginary part.
+        eigenvectors: (qd.Matrix(4, 2)): The eigenvectors in complex form. Each column stores one eigenvector. Each eigenvector consists of 2 entries, each of which is represented by two numbers for its real part and imaginary part.
     """
     tr = A.trace()
     det = A.determinant()
@@ -255,12 +255,12 @@ def _sym_eig2x2(A, dt):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
     Args:
-        A (ti.Matrix(2, 2)): input 2x2 symmetric matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(2, 2)): input 2x2 symmetric matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
-        eigenvalues (ti.Vector(2)): The eigenvalues. Each entry store one eigen value.
-        eigenvectors (ti.Matrix(2, 2)): The eigenvectors. Each column stores one eigenvector.
+        eigenvalues (qd.Vector(2)): The eigenvalues. Each entry store one eigen value.
+        eigenvectors (qd.Matrix(2, 2)): The eigenvectors. Each column stores one eigenvector.
     """
     assert all(A == A.transpose()), "A needs to be symmetric"
     tr = A.trace()
@@ -411,12 +411,12 @@ def _sym_eig3x3(A, dt):
     Mathematical concept refers to https://www.mpi-hd.mpg.de/personalhomes/globes/3x3/.
 
     Args:
-        A (ti.Matrix(3, 3)): input 3x3 symmetric matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(3, 3)): input 3x3 symmetric matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
-        eigenvalues (ti.Vector(3)): The eigenvalues. Each entry store one eigen value.
-        eigenvectors (ti.Matrix(3, 3)): The eigenvectors. Each column stores one eigenvector.
+        eigenvalues (qd.Vector(3)): The eigenvalues. Each entry store one eigen value.
+        eigenvectors (qd.Matrix(3, 3)): The eigenvectors. Each column stores one eigenvector.
     """
     assert all(A == A.transpose()), "A needs to be symmetric"
     M_SQRT3 = 1.73205080756887729352744634151
@@ -530,8 +530,8 @@ def polar_decompose(A, dt=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Polar_decomposition.
 
     Args:
-        A (ti.Matrix(n, n)): input nxn matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(n, n)): input nxn matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
         Decomposed nxn matrices `U` and `P`.
@@ -551,8 +551,8 @@ def svd(A, dt=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Singular_value_decomposition.
 
     Args:
-        A (ti.Matrix(n, n)): input nxn matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts ti.f32 or ti.f64.
+        A (qd.Matrix(n, n)): input nxn matrix `A`.
+        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
 
     Returns:
         Decomposed nxn matrices `U`, 'S' and `V`.
@@ -572,12 +572,12 @@ def eig(A, dt=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
     Args:
-        A (ti.Matrix(n, n)): 2D Matrix for which the eigenvalues and right eigenvectors will be computed.
+        A (qd.Matrix(n, n)): 2D Matrix for which the eigenvalues and right eigenvectors will be computed.
         dt (DataType): The datatype for the eigenvalues and right eigenvectors.
 
     Returns:
-        eigenvalues (ti.Matrix(n, 2)): The eigenvalues in complex form. Each row stores one eigenvalue. The first number of the eigenvalue represents the real part and the second number represents the imaginary part.
-        eigenvectors (ti.Matrix(n*2, n)): The eigenvectors in complex form. Each column stores one eigenvector. Each eigenvector consists of n entries, each of which is represented by two numbers for its real part and imaginary part.
+        eigenvalues (qd.Matrix(n, 2)): The eigenvalues in complex form. Each row stores one eigenvalue. The first number of the eigenvalue represents the real part and the second number represents the imaginary part.
+        eigenvectors (qd.Matrix(n*2, n)): The eigenvectors in complex form. Each column stores one eigenvector. Each eigenvector consists of n entries, each of which is represented by two numbers for its real part and imaginary part.
     """
     if dt is None:
         dt = impl.get_runtime().default_fp
@@ -592,12 +592,12 @@ def sym_eig(A, dt=None):
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
     Args:
-        A (ti.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
+        A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
         dt (DataType): The datatype for the eigenvalues and right eigenvectors.
 
     Returns:
-        eigenvalues (ti.Vector(n)): The eigenvalues. Each entry store one eigen value.
-        eigenvectors (ti.Matrix(n, n)): The eigenvectors. Each column stores one eigenvector.
+        eigenvalues (qd.Vector(n)): The eigenvalues. Each entry store one eigen value.
+        eigenvectors (qd.Matrix(n, n)): The eigenvectors. Each column stores one eigenvector.
     """
     if dt is None:
         dt = impl.get_runtime().default_fp
@@ -675,12 +675,12 @@ def solve(A, b, dt=None):
     """Solve a matrix using Gauss elimination method.
 
     Args:
-        A (ti.Matrix(n, n)): input nxn matrix `A`.
-        b (ti.Vector(n, 1)): input nx1 vector `b`.
+        A (qd.Matrix(n, n)): input nxn matrix `A`.
+        b (qd.Vector(n, 1)): input nx1 vector `b`.
         dt (DataType): The datatype for the `A` and `b`.
 
     Returns:
-        x (ti.Vector(n, 1)): the solution of Ax=b.
+        x (qd.Vector(n, 1)): the solution of Ax=b.
     """
     assert A.n == A.m, "Only square matrix is supported"
     assert A.n >= 2 and A.n <= 3, "Only 2D and 3D matrices are supported"

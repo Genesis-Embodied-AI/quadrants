@@ -78,9 +78,9 @@ class PerformanceDispatcher(Generic[P, R]):
         self, implementation: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
     ) -> Callable[[Callable], Callable] | Type[DispatchImpl]:
         """
-        Use register to register a function with a @ti.perf_dispatch meta function
+        Use register to register a function with a @qd.perf_dispatch meta function
 
-        See @ti.perf_dispatch for documentation about using @ti.perf_dispatch meta function
+        See @qd.perf_dispatch for documentation about using @qd.perf_dispatch meta function
 
         is_compatible is an optional function that will return whether the function being registered can
         run on the specific arguments being passed in. If there are circumstances where this function being
@@ -288,21 +288,21 @@ def perf_dispatch(
 
     Example usage:
 
-    @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
-    def my_func1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape))
+    def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
 
-    @ti.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=5, active=2)
-    def my_func2(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=5, active=2)
+    def my_func2(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
         # note: this is intentionally empty. The function body will NEVER be called.
 
     @my_func1.register
-    @ti.kernel
-    def my_func1_impl1(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def my_func1_impl1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]) -> None:
         # implementation 1 here...
 
     @my_func1.register(is_compatible=lambda a, c: a.shape[0] < 2)
-    @ti.kernel
-    def my_func1_impl2(a: ti.types.NDArray[ti.i32, 1], c: ti.types.NDArray[ti.i32, 1]) -> None:
+    @qd.kernel
+    def my_func1_impl2(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]) -> None:
         # implementation 2 here...
 
     Then simply call the meta-function, just like any other function:
@@ -310,7 +310,7 @@ def perf_dispatch(
     my_func1(a, b)
 
     Note that the effect of each implementation must be identical, including side effects, otherwise subtle
-    and hard to diagnose bugs are likely to occur. @ti.perf_dispatch does NOT check that the implementations have
+    and hard to diagnose bugs are likely to occur. @qd.perf_dispatch does NOT check that the implementations have
     identical effects.
 
     ## Geometry
@@ -320,7 +320,7 @@ def perf_dispatch(
     is the stride and padding to a call to a convolutional kernel, as well as the number of channels, the height
     and the width.
 
-    The meta function @ti.perf_dispatch annotation MUST provide a function that returns a geometry hash
+    The meta function @qd.perf_dispatch annotation MUST provide a function that returns a geometry hash
     given the arguments.
 
     You are free to return any valid hash.
