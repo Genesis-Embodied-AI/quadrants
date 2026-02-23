@@ -312,7 +312,7 @@
   <h1>Source code for quadrants.lang.intrinsics</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 
 
@@ -340,13 +340,13 @@
 <span class="sd">    Comparing cycle counts across different backends or hardware is not meaningful.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_clock_i64&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;amdgpu_clock_i64&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;spirv_clock_i64&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">x64</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arm64</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">x64</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">arm64</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cpu_clock_i64&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="c1"># No-op if not supported</span>
     <span class="k">return</span> <span class="mi">0</span></div>
@@ -372,8 +372,8 @@
 <span class="sd">    sudo nvidia-smi -lgc 1200</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
-        <span class="n">clock_rate_khz</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_clock_rate_khz&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="n">clock_rate_khz</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_clock_rate_khz&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">clock_rate_khz</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
     <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">clock_freq_hz</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> not implemented for arch </span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 

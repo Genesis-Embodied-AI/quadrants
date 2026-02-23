@@ -316,7 +316,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">info</span>
 
 <span class="n">pybuf_enabled</span> <span class="o">=</span> <span class="kc">False</span>
@@ -329,7 +329,7 @@
     <span class="n">pybuf_enabled</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">sys</span><span class="o">.</span><span class="n">__stdout__</span></div>
 
 
-<span class="n">_ti_core</span><span class="o">.</span><span class="n">toggle_python_print_buffer</span><span class="p">(</span><span class="n">pybuf_enabled</span><span class="p">)</span>
+<span class="n">_qd_core</span><span class="o">.</span><span class="n">toggle_python_print_buffer</span><span class="p">(</span><span class="n">pybuf_enabled</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_shell_pop_print</span><span class="p">(</span><span class="n">old_call</span><span class="p">):</span>
@@ -344,7 +344,7 @@
         <span class="n">ret</span> <span class="o">=</span> <span class="n">old_call</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="c1"># print&#39;s in kernel won&#39;t take effect until qd.sync(), discussion:</span>
         <span class="c1"># https://github.com/taichi-dev/quadrants/pull/1303#discussion_r444897102</span>
-        <span class="nb">print</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">pop_python_print_buffer</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">pop_python_print_buffer</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ret</span>
 
     <span class="k">return</span> <span class="n">new_call</span>

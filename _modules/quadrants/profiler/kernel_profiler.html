@@ -314,7 +314,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">default_cupti_metrics</span>
 
@@ -392,7 +392,7 @@
         <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span> <span class="o">=</span> <span class="n">toolkit_name</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Failed to set kernel profiler toolkit (</span><span class="si">{</span><span class="n">toolkit_name</span><span class="si">}</span><span class="s2">) , keep using (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span><span class="si">}</span><span class="s2">).&quot;</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="n">status</span>
@@ -490,7 +490,7 @@
     <span class="c1"># private methods</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_not_turned_on_with_warning_message</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profiling_mode</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;qd.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;use &#39;qd.init(kernel_profiler = True)&#39; to turn on KernelProfiler.&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span>
 
@@ -532,7 +532,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_make_table_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
         <span class="n">header_str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Kernel Profiler(</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_profiling_toolkit</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="n">arch_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; @ </span><span class="si">{</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">arch_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; @ </span><span class="si">{</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="n">device_name</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_kernel_profiler_device_name</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">device_name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># default device_name = &#39; &#39;</span>
             <span class="n">device_name</span> <span class="o">=</span> <span class="s2">&quot; on &quot;</span> <span class="o">+</span> <span class="n">device_name</span>
@@ -648,11 +648,11 @@
         <span class="nb">print</span><span class="p">(</span><span class="n">outer_partition_line</span><span class="p">)</span>
 
 
-<span class="n">_ti_kernel_profiler</span> <span class="o">=</span> <span class="n">KernelProfiler</span><span class="p">()</span>
+<span class="n">_qd_kernel_profiler</span> <span class="o">=</span> <span class="n">KernelProfiler</span><span class="p">()</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_default_kernel_profiler</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_ti_kernel_profiler``) now.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;We have only one :class:`~quadrants.profiler.kernelprofiler.KernelProfiler` instance(i.e. ``_qd_kernel_profiler``) now.</span>
 
 <span class="sd">    For ``KernelProfiler`` using ``CuptiToolkit``, GPU devices can only work in a certain configuration.</span>
 <span class="sd">    Profiling mode and metrics are configured by the host(CPU) via CUPTI APIs, and device(GPU) will use</span>
@@ -661,7 +661,7 @@
 <span class="sd">    the profiling configuration of other instances will be changed as a result.</span>
 <span class="sd">    For data retention purposes, multiple instances will be considered in the future.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_ti_kernel_profiler</span>
+    <span class="k">return</span> <span class="n">_qd_kernel_profiler</span>
 
 
 <div class="viewcode-block" id="print_kernel_profiler_info">

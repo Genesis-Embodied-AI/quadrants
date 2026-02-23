@@ -318,7 +318,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">DataTypeCxx</span><span class="p">,</span>
     <span class="n">Function</span><span class="p">,</span>
@@ -392,7 +392,7 @@
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">expr_init_shared_array</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">element_type</span><span class="p">):</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
-    <span class="n">debug_info</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">debug_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_alloca_shared_array</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">element_type</span><span class="p">,</span> <span class="n">debug_info</span><span class="p">)</span>
 
 
@@ -401,7 +401,7 @@
     <span class="n">compiling_callable</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span>
     <span class="k">if</span> <span class="n">rhs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span>
-            <span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_alloca</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()))</span>
+            <span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_alloca</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()))</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s2">&quot;_DIM&quot;</span><span class="p">)):</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span><span class="o">*</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_list</span><span class="p">(),</span> <span class="n">ndim</span><span class="o">=</span><span class="n">rhs</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
@@ -417,9 +417,9 @@
         <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">expr_init</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">rhs</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">dict</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">expr_init</span><span class="p">(</span><span class="n">val</span><span class="p">))</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">rhs</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DataTypeCxx</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_Ndrange</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
@@ -431,7 +431,7 @@
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span>
         <span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_var</span><span class="p">(</span>
-            <span class="n">Expr</span><span class="p">(</span><span class="n">rhs</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+            <span class="n">Expr</span><span class="p">(</span><span class="n">rhs</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
         <span class="p">)</span>
     <span class="p">)</span>
 
@@ -454,7 +454,7 @@
             <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">group</span><span class="o">.</span><span class="n">size</span><span class="p">()</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">loop_range</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">). Maybe you wanted to &quot;</span>
             <span class="s1">&#39;use &quot;for I in qd.grouped(x)&quot; to group all indices into a single vector I?&#39;</span>
         <span class="p">)</span>
-    <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loop_range</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">):</span>
         <span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_frontend_struct_for_on_external_tensor</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">loop_range</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">(),</span> <span class="n">dbg_info</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
@@ -511,7 +511,7 @@
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">*</span><span class="n">_indices</span><span class="p">,</span> <span class="n">skip_reordered</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-    <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
     <span class="c1"># Directly evaluate in Python for non-Quadrants types</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
@@ -629,7 +629,7 @@
                 <span class="n">multiple_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">j</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
                 <span class="n">return_shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]),)</span>
         <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">subscript_with_multiple_indices</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">subscript_with_multiple_indices</span><span class="p">(</span>
                 <span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
                 <span class="n">multiple_indices</span><span class="p">,</span>
                 <span class="n">return_shape</span><span class="p">,</span>
@@ -739,7 +739,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">create_program</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Program</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Program</span><span class="p">()</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">materialize_root_fb</span><span class="p">(</span><span class="n">is_first_call</span><span class="p">):</span>
@@ -835,7 +835,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_register_signal_handlers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_handler_registry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_signal_handler_registry</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">HackedSignalRegister</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_signal_handler_registry</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">HackedSignalRegister</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">:</span>
@@ -867,7 +867,7 @@
         <span class="n">nd</span><span class="o">.</span><span class="n">_reset</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
-    <span class="n">_ti_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
+    <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>
@@ -1033,7 +1033,7 @@
 
     <span class="n">x</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">prog</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
     <span class="n">x</span><span class="o">.</span><span class="n">declaration_tb</span> <span class="o">=</span> <span class="n">get_traceback</span><span class="p">(</span><span class="n">stacklevel</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-    <span class="n">x</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="n">x</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
     <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
     <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_grad_type</span><span class="p">(</span><span class="n">SNodeGradType</span><span class="o">.</span><span class="n">PRIMAL</span><span class="p">)</span>
     <span class="n">pyquadrants</span><span class="o">.</span><span class="n">global_vars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -1042,11 +1042,11 @@
     <span class="n">x_dual</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="c1"># The x_grad_checkbit is used for global data access rule checker</span>
     <span class="n">x_grad_checkbit</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
         <span class="c1"># adjoint</span>
         <span class="n">x_grad</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">prog</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
         <span class="n">x_grad</span><span class="o">.</span><span class="n">declaration_tb</span> <span class="o">=</span> <span class="n">get_traceback</span><span class="p">(</span><span class="n">stacklevel</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-        <span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
         <span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.grad&quot;</span><span class="p">)</span>
         <span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_grad_type</span><span class="p">(</span><span class="n">SNodeGradType</span><span class="o">.</span><span class="n">ADJOINT</span><span class="p">)</span>
         <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_adjoint</span><span class="p">(</span><span class="n">x_grad</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
@@ -1057,16 +1057,16 @@
             <span class="c1"># adjoint checkbit</span>
             <span class="n">x_grad_checkbit</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">prog</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">u8</span>
-            <span class="k">if</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
                 <span class="n">dtype</span> <span class="o">=</span> <span class="n">i32</span>
-            <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span>
+            <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span>
             <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.grad_checkbit&quot;</span><span class="p">)</span>
             <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_grad_type</span><span class="p">(</span><span class="n">SNodeGradType</span><span class="o">.</span><span class="n">ADJOINT_CHECKBIT</span><span class="p">)</span>
             <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_adjoint_checkbit</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
 
         <span class="c1"># dual</span>
         <span class="n">x_dual</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">prog</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
-        <span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
         <span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.dual&quot;</span><span class="p">)</span>
         <span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_grad_type</span><span class="p">(</span><span class="n">SNodeGradType</span><span class="o">.</span><span class="n">DUAL</span><span class="p">)</span>
         <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_dual</span><span class="p">(</span><span class="n">x_dual</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
@@ -1225,7 +1225,7 @@
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported as ndarray element type&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">DataTypeCxx</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dt</span><span class="si">}</span><span class="s2"> is not supported for ndarray with `needs_grad=True` or `needs_dual=True`.&quot;</span>
             <span class="p">)</span>
@@ -1247,7 +1247,7 @@
             <span class="k">return</span> <span class="n">_var</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">Expr</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_ti_repr</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_qd_repr</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
         <span class="k">yield</span> <span class="s2">&quot;[&quot;</span>  <span class="c1"># distinguishing tuple &amp; list will increase maintenance cost</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">i</span><span class="p">:</span>
@@ -1257,19 +1257,19 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">vars2entries</span><span class="p">(</span><span class="n">_vars</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">_var</span> <span class="ow">in</span> <span class="n">_vars</span><span class="p">:</span>
-            <span class="c1"># If the first element is &#39;__ti_fmt_value__&#39;, this list is an Expr and its format.</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__ti_fmt_value__&quot;</span><span class="p">:</span>
+            <span class="c1"># If the first element is &#39;__qd_fmt_value__&#39;, this list is an Expr and its format.</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__qd_fmt_value__&quot;</span><span class="p">:</span>
                 <span class="c1"># yield [Expr, format] as a whole and don&#39;t pass it to vars2entries() again</span>
                 <span class="k">yield</span> <span class="n">_var</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
                 <span class="k">continue</span>
-            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__ti_repr__&quot;</span><span class="p">):</span>
-                <span class="n">res</span> <span class="o">=</span> <span class="n">_var</span><span class="o">.</span><span class="n">__ti_repr__</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__qd_repr__&quot;</span><span class="p">):</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="n">_var</span><span class="o">.</span><span class="n">__qd_repr__</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-                <span class="c1"># If the first element is &#39;__ti_format__&#39;, this list is the result of ti_format.</span>
-                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__ti_format__&quot;</span><span class="p">:</span>
+                <span class="c1"># If the first element is &#39;__qd_format__&#39;, this list is the result of ti_format.</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__qd_format__&quot;</span><span class="p">:</span>
                     <span class="n">res</span> <span class="o">=</span> <span class="n">_var</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="n">res</span> <span class="o">=</span> <span class="n">list_ti_repr</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span>
+                    <span class="n">res</span> <span class="o">=</span> <span class="n">list_qd_repr</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">yield</span> <span class="n">_var</span>
                 <span class="k">continue</span>
@@ -1312,7 +1312,7 @@
     <span class="n">_vars</span> <span class="o">=</span> <span class="n">add_separators</span><span class="p">(</span><span class="n">_vars</span><span class="p">)</span>
     <span class="n">contents</span><span class="p">,</span> <span class="n">formats</span> <span class="o">=</span> <span class="n">ti_format_list_to_content_entries</span><span class="p">(</span><span class="n">_vars</span><span class="p">)</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
-    <span class="n">debug_info</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">debug_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="n">ast_builder</span><span class="o">.</span><span class="n">create_print</span><span class="p">(</span><span class="n">contents</span><span class="p">,</span> <span class="n">formats</span><span class="p">,</span> <span class="n">debug_info</span><span class="p">)</span>
 
 
@@ -1324,7 +1324,7 @@
     <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">mixed</span><span class="p">:</span>
         <span class="c1"># x is a (formatted) Expr</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__ti_fmt_value__&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__qd_fmt_value__&quot;</span><span class="p">):</span>
             <span class="n">new_mixed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
@@ -1335,36 +1335,36 @@
 
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
         <span class="n">res</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
-    <span class="n">res</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;__ti_format__&quot;</span><span class="p">)</span>
+    <span class="n">res</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;__qd_format__&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">res</span>
 
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ti_assert</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">):</span>
     <span class="c1"># Mostly a wrapper to help us convert from Expr (defined in Python) to</span>
-    <span class="c1"># _ti_core.Expr (defined in C++)</span>
+    <span class="c1"># _qd_core.Expr (defined in C++)</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
     <span class="n">ast_builder</span><span class="o">.</span><span class="n">create_assert_stmt</span><span class="p">(</span><span class="n">Expr</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
 
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ti_int</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__ti_int__&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__ti_int__</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__qd_int__&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__qd_int__</span><span class="p">()</span>
     <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span>
 
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ti_bool</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__ti_bool__&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__ti_bool__</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__qd_bool__&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__qd_bool__</span><span class="p">()</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span>
 
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ti_float</span><span class="p">(</span><span class="n">_var</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__ti_float__&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__ti_float__</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="s2">&quot;__qd_float__&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_var</span><span class="o">.</span><span class="n">__qd_float__</span><span class="p">()</span>
     <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">_var</span><span class="p">)</span>
 
 
@@ -1432,11 +1432,11 @@
 <span class="sd">    Note that Quadrants has already provided a set of commonly used axes. For example,</span>
 <span class="sd">    `qd.ij` is just `axes(0, 1)` under the hood.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">[</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">Axis</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">]</span></div>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Axis</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span><span class="p">]</span></div>
 
 
 
-<span class="n">Axis</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Axis</span>
+<span class="n">Axis</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Axis</span>
 
 
 <div class="viewcode-block" id="static">
@@ -1572,15 +1572,15 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">default_cfg</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">default_compile_config</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">default_compile_config</span><span class="p">()</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">call_internal</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">expr_init</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">insert_internal_func_call</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">InternalOp</span><span class="p">,</span> <span class="n">name</span><span class="p">),</span> <span class="n">make_expr_group</span><span class="p">(</span><span class="n">args</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">expr_init</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">insert_internal_func_call</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">InternalOp</span><span class="p">,</span> <span class="n">name</span><span class="p">),</span> <span class="n">make_expr_group</span><span class="p">(</span><span class="n">args</span><span class="p">)))</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_cuda_compute_capability</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_compute_capability&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_compute_capability&quot;</span><span class="p">)</span>
 
 
 <span class="nd">@quadrants_scope</span>

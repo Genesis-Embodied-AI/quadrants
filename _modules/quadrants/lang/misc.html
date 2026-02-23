@@ -318,7 +318,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">copy</span><span class="w"> </span><span class="kn">import</span> <span class="n">deepcopy</span> <span class="k">as</span> <span class="n">_deepcopy</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_logging</span><span class="p">,</span> <span class="n">_snode</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">Extension</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_os_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
@@ -457,7 +457,7 @@
 
 <div class="viewcode-block" id="x86_64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.x86_64">[docs]</a>
-<span class="n">x86_64</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">x64</span></div>
+<span class="n">x86_64</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">x64</span></div>
 
 <span class="sd">&quot;&quot;&quot;The x64 CPU backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -465,7 +465,7 @@
 
 <div class="viewcode-block" id="x64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.x64">[docs]</a>
-<span class="n">x64</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">x64</span></div>
+<span class="n">x64</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">x64</span></div>
 
 <span class="sd">&quot;&quot;&quot;The X64 CPU backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -473,7 +473,7 @@
 
 <div class="viewcode-block" id="arm64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.arm64">[docs]</a>
-<span class="n">arm64</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arm64</span></div>
+<span class="n">arm64</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">arm64</span></div>
 
 <span class="sd">&quot;&quot;&quot;The ARM CPU backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -481,7 +481,7 @@
 
 <div class="viewcode-block" id="cuda">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.cuda">[docs]</a>
-<span class="n">cuda</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">cuda</span></div>
+<span class="n">cuda</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span></div>
 
 <span class="sd">&quot;&quot;&quot;The CUDA backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -489,7 +489,7 @@
 
 <div class="viewcode-block" id="amdgpu">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.amdgpu">[docs]</a>
-<span class="n">amdgpu</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">amdgpu</span></div>
+<span class="n">amdgpu</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span></div>
 
 <span class="sd">&quot;&quot;&quot;The AMDGPU backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -497,7 +497,7 @@
 
 <div class="viewcode-block" id="metal">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.metal">[docs]</a>
-<span class="n">metal</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">metal</span></div>
+<span class="n">metal</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">metal</span></div>
 
 <span class="sd">&quot;&quot;&quot;The Apple Metal backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -505,7 +505,7 @@
 
 <div class="viewcode-block" id="vulkan">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.vulkan">[docs]</a>
-<span class="n">vulkan</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">vulkan</span></div>
+<span class="n">vulkan</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span></div>
 
 <span class="sd">&quot;&quot;&quot;The Vulkan backend.</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -525,7 +525,7 @@
 
 <div class="viewcode-block" id="cpu">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.cpu">[docs]</a>
-<span class="n">cpu</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">host_arch</span><span class="p">()</span></div>
+<span class="n">cpu</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">host_arch</span><span class="p">()</span></div>
 
 <span class="sd">&quot;&quot;&quot;A list of CPU backends supported on the current system.</span>
 <span class="sd">Currently contains &#39;x64&#39;, &#39;x86_64&#39;, &#39;arm64&#39;.</span>
@@ -545,7 +545,7 @@
 
 <div class="viewcode-block" id="extension">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.extension">[docs]</a>
-<span class="n">extension</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Extension</span></div>
+<span class="n">extension</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Extension</span></div>
 
 <span class="sd">&quot;&quot;&quot;An instance of Quadrants extension.</span>
 
@@ -565,7 +565,7 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        bool: Whether `ext` is supported on `arch`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="n">ext</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="n">ext</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="reset">
@@ -609,7 +609,7 @@
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwargs</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>  <span class="c1"># mark as recognized</span>
         <span class="k">elif</span> <span class="n">value</span><span class="p">:</span>
             <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_cast</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
@@ -675,16 +675,16 @@
         <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
     <span class="c1"># Get installed version</span>
     <span class="n">versions</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="nb">int</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">get_version_major</span><span class="p">()),</span>
-        <span class="nb">int</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">get_version_minor</span><span class="p">()),</span>
-        <span class="nb">int</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">get_version_patch</span><span class="p">()),</span>
+        <span class="nb">int</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_version_major</span><span class="p">()),</span>
+        <span class="nb">int</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_version_minor</span><span class="p">()),</span>
+        <span class="nb">int</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_version_patch</span><span class="p">()),</span>
     <span class="p">]</span>
     <span class="c1"># Match installed version and required version.</span>
     <span class="n">match</span> <span class="o">=</span> <span class="n">major</span> <span class="o">==</span> <span class="n">versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">and</span> <span class="p">(</span><span class="n">minor</span> <span class="o">&lt;</span> <span class="n">versions</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span> <span class="n">minor</span> <span class="o">==</span> <span class="n">versions</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">and</span> <span class="n">patch</span> <span class="o">&lt;=</span> <span class="n">versions</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Quadrants version mismatch. Required version &gt;= </span><span class="si">{</span><span class="n">major</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">minor</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">patch</span><span class="si">}</span><span class="s2">, installed version = </span><span class="si">{</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">get_version_string</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Quadrants version mismatch. Required version &gt;= </span><span class="si">{</span><span class="n">major</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">minor</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">patch</span><span class="si">}</span><span class="s2">, installed version = </span><span class="si">{</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_version_string</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
         <span class="p">)</span>
 
 
@@ -758,7 +758,7 @@
     <span class="n">env_default_fp</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DEFAULT_FP&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_default_fp</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_FP=</span><span class="si">{</span><span class="n">env_default_fp</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;default_fp&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_fp</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
@@ -771,7 +771,7 @@
     <span class="n">env_default_ip</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DEFAULT_IP&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_default_ip</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">default_ip</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s1">&#39;Environment variable QD_DEFAULT_IP=</span><span class="si">{</span><span class="n">env_default_ip</span><span class="si">}</span><span class="s1"> overridden by qd.init argument &quot;default_ip&quot;&#39;</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">env_default_ip</span> <span class="o">==</span> <span class="s2">&quot;32&quot;</span><span class="p">:</span>
@@ -810,7 +810,7 @@
     <span class="c1"># dispatch configurations that are not in qd.cfg:</span>
     <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_test_mode</span><span class="p">:</span>
-        <span class="n">_ti_core</span><span class="o">.</span><span class="n">set_core_trigger_gdb_when_crash</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">gdb_trigger</span><span class="p">)</span>
+        <span class="n">_qd_core</span><span class="o">.</span><span class="n">set_core_trigger_gdb_when_crash</span><span class="p">(</span><span class="n">spec_cfg</span><span class="o">.</span><span class="n">gdb_trigger</span><span class="p">)</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">short_circuit_operators</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">short_circuit_operators</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">print_full_traceback</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">print_full_traceback</span>
         <span class="n">runtime</span><span class="o">.</span><span class="n">unrolling_limit</span> <span class="o">=</span> <span class="n">spec_cfg</span><span class="o">.</span><span class="n">unrolling_limit</span>
@@ -822,11 +822,11 @@
     <span class="n">env_arch</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_ARCH&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">env_arch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Following QD_ARCH setting up for arch=</span><span class="si">{</span><span class="n">env_arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">arch</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_from_name</span><span class="p">(</span><span class="n">env_arch</span><span class="p">)</span>
+        <span class="n">arch</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_from_name</span><span class="p">(</span><span class="n">env_arch</span><span class="p">)</span>
     <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">=</span> <span class="n">adaptive_arch_select</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="n">enable_fallback</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Quadrants] Starting on arch=</span><span class="si">{</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Quadrants] Starting on arch=</span><span class="si">{</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">and</span> <span class="n">get_os_name</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;win&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">and</span> <span class="n">get_os_name</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;win&quot;</span><span class="p">:</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;AMDGPU support on Windows is experimental and may not work as expected.&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">_test_mode</span><span class="p">:</span>
@@ -856,7 +856,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">no_activate</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Deactivates a SNode pointer.&quot;&quot;&quot;</span>
     <span class="n">compiling_callable</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span>
-    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">compiling_callable</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">KernelCxx</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">compiling_callable</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">KernelCxx</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
         <span class="n">compiling_callable</span><span class="o">.</span><span class="n">no_activate</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span></div>
 
@@ -879,7 +879,7 @@
     <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
             <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_snode_access_flag</span><span class="p">(</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">block_local</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">block_local</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
             <span class="p">)</span></div>
 
 
@@ -917,7 +917,7 @@
     <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
             <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_snode_access_flag</span><span class="p">(</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">mesh_local</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">mesh_local</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
             <span class="p">)</span></div>
 
 
@@ -928,7 +928,7 @@
     <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">_get_field_members</span><span class="p">():</span>
             <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_snode_access_flag</span><span class="p">(</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">read_only</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeAccessFlag</span><span class="o">.</span><span class="n">read_only</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">ptr</span>
             <span class="p">)</span></div>
 
 
@@ -959,8 +959,8 @@
 <span class="sd">        &gt;&gt;&gt; x</span>
 <span class="sd">        10</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_assume_in_range</span><span class="p">(</span>
-        <span class="n">Expr</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(</span><span class="n">base</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_assume_in_range</span><span class="p">(</span>
+        <span class="n">Expr</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(</span><span class="n">base</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="p">)</span></div>
 
 
@@ -971,8 +971,8 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">covers</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
         <span class="n">covers</span> <span class="o">=</span> <span class="p">[</span><span class="n">covers</span><span class="p">]</span>
     <span class="n">covers</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">snode</span><span class="o">.</span><span class="n">ptr</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="k">else</span> <span class="n">x</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">covers</span><span class="p">]</span>  <span class="c1"># type: ignore</span>
-    <span class="k">return</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">expr_loop_unique</span><span class="p">(</span>
-        <span class="n">Expr</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">covers</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_loop_unique</span><span class="p">(</span>
+        <span class="n">Expr</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">covers</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="p">)</span>
 
 
@@ -1112,7 +1112,7 @@
     <span class="k">return</span> <span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
         <span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
-        <span class="o">.</span><span class="n">insert_patch_idx_expr</span><span class="p">(</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()))</span>
+        <span class="o">.</span><span class="n">insert_patch_idx_expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()))</span>
     <span class="p">)</span></div>
 
 
@@ -1128,18 +1128,18 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">arch_table</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">cuda</span><span class="p">:</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">with_cuda</span><span class="p">,</span>
-        <span class="n">amdgpu</span><span class="p">:</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">with_amdgpu</span><span class="p">,</span>
-        <span class="n">metal</span><span class="p">:</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">with_metal</span><span class="p">,</span>
-        <span class="n">vulkan</span><span class="p">:</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">with_vulkan</span><span class="p">,</span>
+        <span class="n">cuda</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_cuda</span><span class="p">,</span>
+        <span class="n">amdgpu</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_amdgpu</span><span class="p">,</span>
+        <span class="n">metal</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_metal</span><span class="p">,</span>
+        <span class="n">vulkan</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_vulkan</span><span class="p">,</span>
         <span class="n">cpu</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">}</span>
     <span class="n">with_arch</span> <span class="o">=</span> <span class="n">arch_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">False</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">with_arch</span><span class="p">()</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="n">arch</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">arch</span><span class="p">)</span>
-        <span class="n">_ti_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="n">arch</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_name</span><span class="p">(</span><span class="n">arch</span><span class="p">)</span>
+        <span class="n">_qd_core</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: &#39;</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&#39; occurred when detecting &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">, consider adding `QD_ENABLE_</span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">=0` &quot;</span>
             <span class="sa">f</span><span class="s2">&quot; to environment variables to suppress this warning message.&quot;</span>
@@ -1162,7 +1162,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_host_arch_list</span><span class="p">():</span>
-    <span class="k">return</span> <span class="p">[</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">host_arch</span><span class="p">()]</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">host_arch</span><span class="p">()]</span>
 
 
 <div class="viewcode-block" id="is_extension_enabled">

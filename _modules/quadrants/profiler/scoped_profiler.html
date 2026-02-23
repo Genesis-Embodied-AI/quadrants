@@ -312,7 +312,7 @@
   <h1>Source code for quadrants.profiler.scoped_profiler</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 
 
 <div class="viewcode-block" id="print_scoped_profiler_info">
@@ -322,7 +322,7 @@
 
 <span class="sd">    This profiler is automatically on.</span>
 
-<span class="sd">    Call function imports from C++ : _ti_core.print_profile_info()</span>
+<span class="sd">    Call function imports from C++ : _qd_core.print_profile_info()</span>
 
 <span class="sd">    Example::</span>
 
@@ -336,7 +336,7 @@
 <span class="sd">            &gt;&gt;&gt; compute()</span>
 <span class="sd">            &gt;&gt;&gt; qd.profiler.print_scoped_profiler_info()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_ti_core</span><span class="o">.</span><span class="n">print_profile_info</span><span class="p">()</span></div>
+    <span class="n">_qd_core</span><span class="o">.</span><span class="n">print_profile_info</span><span class="p">()</span></div>
 
 
 
@@ -345,9 +345,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">clear_scoped_profiler_info</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Clear profiler&#39;s records about time elapsed on the host tasks.</span>
 
-<span class="sd">    Call function imports from C++ : _ti_core.clear_profile_info()</span>
+<span class="sd">    Call function imports from C++ : _qd_core.clear_profile_info()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_ti_core</span><span class="o">.</span><span class="n">clear_profile_info</span><span class="p">()</span></div>
+    <span class="n">_qd_core</span><span class="o">.</span><span class="n">clear_profile_info</span><span class="p">()</span></div>
 
 
 

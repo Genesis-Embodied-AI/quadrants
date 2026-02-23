@@ -316,7 +316,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span><span class="p">,</span> <span class="n">ScalarNdarray</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsRuntimeError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
@@ -592,11 +592,11 @@
         <span class="k">if</span> <span class="n">num_rows</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">quadrants_arch</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
             <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="ow">in</span> <span class="p">[</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">,</span>
-                <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">,</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span>
             <span class="p">]:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">SparseMatrixBuilder</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SparseMatrixBuilder</span><span class="p">(</span>
                     <span class="n">num_rows</span><span class="p">,</span>
                     <span class="n">num_cols</span><span class="p">,</span>
                     <span class="n">max_num_triplets</span><span class="p">,</span>
@@ -620,9 +620,9 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">print_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Print the triplets stored in the builder&quot;&quot;&quot;</span>
         <span class="n">quadrants_arch</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="ow">in</span> <span class="p">[</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="ow">in</span> <span class="p">[</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">]:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">print_triplets_eigen</span><span class="p">()</span>
-        <span class="k">elif</span> <span class="n">quadrants_arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">quadrants_arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">print_triplets_cuda</span><span class="p">()</span></div>
 
 
@@ -631,10 +631,10 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">f32</span><span class="p">,</span> <span class="n">_format</span><span class="o">=</span><span class="s2">&quot;CSR&quot;</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a sparse matrix using the triplets&quot;&quot;&quot;</span>
         <span class="n">quadrants_arch</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
-        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="ow">in</span> <span class="p">[</span><span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="ow">in</span> <span class="p">[</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">x64</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">arm64</span><span class="p">]:</span>
             <span class="n">sm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
             <span class="k">return</span> <span class="n">SparseMatrix</span><span class="p">(</span><span class="n">sm</span><span class="o">=</span><span class="n">sm</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="o">==</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">quadrants_arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">f32</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;CUDA sparse matrix only supports f32.&quot;</span><span class="p">)</span>
             <span class="n">sm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">build_cuda</span><span class="p">()</span>

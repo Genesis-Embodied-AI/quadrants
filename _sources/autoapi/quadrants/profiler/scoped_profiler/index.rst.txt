@@ -22,7 +22,7 @@ Module Contents
 
    This profiler is automatically on.
 
-   Call function imports from C++ : _ti_core.print_profile_info()
+   Call function imports from C++ : _qd_core.print_profile_info()
 
    Example::
 
@@ -41,6 +41,6 @@ Module Contents
 
    Clear profiler's records about time elapsed on the host tasks.
 
-   Call function imports from C++ : _ti_core.clear_profile_info()
+   Call function imports from C++ : _qd_core.clear_profile_info()
 
 

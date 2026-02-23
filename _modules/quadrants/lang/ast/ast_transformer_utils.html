@@ -320,7 +320,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">textwrap</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextWrapper</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_ti_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTBuilder</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndrange</span><span class="w"> </span><span class="kn">import</span> <span class="n">ndrange</span>
@@ -338,7 +338,7 @@
 
 <div class="viewcode-block" id="AutodiffMode">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.AutodiffMode">[docs]</a>
-<span class="n">AutodiffMode</span> <span class="o">=</span> <span class="n">_ti_core</span><span class="o">.</span><span class="n">AutodiffMode</span></div>
+<span class="n">AutodiffMode</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">AutodiffMode</span></div>
 
 
 
@@ -771,7 +771,7 @@
 <div class="viewcode-block" id="ASTTransformerFuncContext.adstack_enabled">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.adstack_enabled">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">adstack_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">_ti_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span>
                 <span class="n">extension</span><span class="o">.</span><span class="n">adstack</span><span class="p">,</span>
             <span class="p">)</span>
