@@ -301,6 +301,22 @@ def check_require_version(require_version):
         )
 
 
+_FLOAT_DTYPES = frozenset({f32, f64})
+
+
+def _install_python_backend_dtype_call():
+    """Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0)."""
+    DataTypeCxx = type(f32)
+    _original = DataTypeCxx.__call__
+
+    def _dtype_call(self, value):
+        if impl.is_python_backend():
+            return float(value) if self in _FLOAT_DTYPES else int(value)
+        return _original(self, value)
+
+    DataTypeCxx.__call__ = _dtype_call
+
+
 def init(
     arch=None,
     default_fp=None,
@@ -455,6 +471,8 @@ def init(
 
         if cfg.debug:
             impl.get_runtime()._register_signal_handlers()
+    else:
+        _install_python_backend_dtype_call()
 
     # Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)
     os.chdir(current_dir)
