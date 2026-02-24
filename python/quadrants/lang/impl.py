@@ -1248,9 +1248,6 @@ def grouped(x):
         return x.grouped()
     if is_python_backend():
         return [[i] for i in range(x.shape[0])]
-    #     for idx in range(x.shape[0]):
-    #         yield [idx]
-    #     return
     return x
 
 
