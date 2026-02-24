@@ -14,6 +14,13 @@ except Exception:
 
 
 class MyTorchTensor(torch.Tensor):
+    # Expose zero-copy torch views of self so that downstream code
+    # (e.g. Genesis qd_to_torch) can access the data without conversion.
+    _tc = property(lambda self: self)
+    _T_tc = property(lambda self: self)
+    _np = property(lambda self: self.numpy())
+    _T_np = property(lambda self: self.numpy())
+
     @classmethod
     def zeros(cls, *args, **kwargs):
         return cls(torch.zeros(*args, **kwargs))
