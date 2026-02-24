@@ -72,6 +72,11 @@ TaskCodegen::TaskCodegen(const Params &params)
 
   fill_snode_to_root();
   ir_ = std::make_shared<spirv::IRBuilder>(arch_, caps_);
+  // Workaround for Metal/MoltenVK shader compiler bug: the compiler
+  // incorrectly hoists storage buffer loads out of loops (LICM), causing
+  // stale reads when a buffer is written and re-read within the same loop.
+  // Marking buffer accesses as Volatile prevents this optimization.
+  use_volatile_buffer_access_ = (arch_ == Arch::metal);
 }
 
 void TaskCodegen::fill_snode_to_root() {
@@ -2174,6 +2179,9 @@ spirv::Value TaskCodegen::get_buffer_value(BufferInfo buffer, DataType dt) {
 
   spirv::Value buffer_value =
       ir_->buffer_argument(type, 0, binding, buffer_instance_name(buffer));
+  if (use_volatile_buffer_access_) {
+    ir_->decorate(spv::OpDecorate, buffer_value, spv::DecorationVolatile);
+  }
   buffer_value_map_[key] = buffer_value;
   QD_TRACE("buffer name = {}, value = {}", buffer_instance_name(buffer),
            buffer_value.id);
