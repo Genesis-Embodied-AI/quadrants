@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.util import has_pytorch
 
 from tests import test_utils
@@ -14,11 +14,11 @@ if has_pytorch():
 
 
 def is_v520_amdgpu():
-    return os.environ.get("QD_AMDGPU_V520", None) == "1" and ti.cfg.arch == ti.amdgpu
+    return os.environ.get("QD_AMDGPU_V520", None) == "1" and qd.cfg.arch == qd.amdgpu
 
 
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_torch_cuda_context():
     device = torch.device("cuda:0")
     x = torch.tensor([2.0], requires_grad=True, device=device)
@@ -32,10 +32,10 @@ def test_torch_cuda_context():
 def test_torch_ad():
     n = 32
 
-    x = ti.field(ti.f32, shape=n, needs_grad=True)
-    y = ti.field(ti.f32, shape=n, needs_grad=True)
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=n, needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def torch_kernel():
         for i in range(n):
             # Do whatever complex operations here
@@ -51,7 +51,7 @@ def test_torch_ad():
 
         @staticmethod
         def backward(ctx, outp_grad):
-            ti.ad.clear_all_gradients()
+            qd.ad.clear_all_gradients()
             y.grad.from_torch(outp_grad)
             torch_kernel.grad()
             inp_grad = x.grad.to_torch()
@@ -79,10 +79,10 @@ def test_torch_ad_gpu():
     device = torch.device("cuda:0")
     n = 32
 
-    x = ti.field(ti.f32, shape=n, needs_grad=True)
-    y = ti.field(ti.f32, shape=n, needs_grad=True)
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=n, needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def torch_kernel():
         for i in range(n):
             # Do whatever complex operations here
@@ -98,7 +98,7 @@ def test_torch_ad_gpu():
 
         @staticmethod
         def backward(ctx, outp_grad):
-            ti.ad.clear_all_gradients()
+            qd.ad.clear_all_gradients()
             y.grad.from_torch(outp_grad)
             torch_kernel.grad()
             inp_grad = x.grad.to_torch(device=device)

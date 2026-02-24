@@ -14,7 +14,7 @@ interfere with them.
 
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -35,15 +35,15 @@ def test_serial_atomic_counter_with_nested_loops():
     n_batches = 1
     max_constraints = 1500
 
-    link_jnt_start = ti.field(dtype=ti.i32, shape=(n_links,))
-    link_jnt_end = ti.field(dtype=ti.i32, shape=(n_links,))
-    jnt_dof_start = ti.field(dtype=ti.i32, shape=(n_joints,))
-    jnt_dof_end = ti.field(dtype=ti.i32, shape=(n_joints,))
-    frictionloss = ti.field(dtype=ti.f32, shape=(n_dofs,))
+    link_jnt_start = qd.field(dtype=qd.i32, shape=(n_links,))
+    link_jnt_end = qd.field(dtype=qd.i32, shape=(n_links,))
+    jnt_dof_start = qd.field(dtype=qd.i32, shape=(n_joints,))
+    jnt_dof_end = qd.field(dtype=qd.i32, shape=(n_joints,))
+    frictionloss = qd.field(dtype=qd.f32, shape=(n_dofs,))
 
-    n_constraints = ti.field(dtype=ti.i32, shape=(n_batches,))
-    n_constraints_fl = ti.field(dtype=ti.i32, shape=(n_batches,))
-    efc_frictionloss = ti.field(dtype=ti.f32, shape=(max_constraints, n_batches))
+    n_constraints = qd.field(dtype=qd.i32, shape=(n_batches,))
+    n_constraints_fl = qd.field(dtype=qd.i32, shape=(n_batches,))
+    efc_frictionloss = qd.field(dtype=qd.f32, shape=(max_constraints, n_batches))
 
     link_jnt_start.from_numpy(np.array([0, 1, 1, 2, 3, 4, 5, 6, 7], dtype=np.int32))
     link_jnt_end.from_numpy(np.array([1, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
@@ -55,17 +55,17 @@ def test_serial_atomic_counter_with_nested_loops():
     n_constraints_fl.fill(0)
     efc_frictionloss.fill(0.0)
 
-    @ti.kernel
+    @qd.kernel
     def add_inequality_constraints():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for i_b in range(n_batches):
             n_constraints_fl[i_b] = 0
             for i_l in range(n_links):
                 for i_j in range(link_jnt_start[i_l], link_jnt_end[i_l]):
                     for i_d in range(jnt_dof_start[i_j], jnt_dof_end[i_j]):
                         if frictionloss[i_d] > 0.0:
-                            i_con = ti.atomic_add(n_constraints[i_b], 1)
-                            ti.atomic_add(n_constraints_fl[i_b], 1)
+                            i_con = qd.atomic_add(n_constraints[i_b], 1)
+                            qd.atomic_add(n_constraints_fl[i_b], 1)
                             efc_frictionloss[i_con, i_b] = frictionloss[i_d]
 
     add_inequality_constraints()
@@ -88,24 +88,24 @@ def test_serial_atomic_counter_simple():
     device-memory RMW — which Metal miscompiles.
     """
     n = 16
-    data = ti.field(dtype=ti.f32, shape=(n,))
-    counter = ti.field(dtype=ti.i32, shape=())
-    counter2 = ti.field(dtype=ti.i32, shape=())
-    output = ti.field(dtype=ti.f32, shape=(n,))
+    data = qd.field(dtype=qd.f32, shape=(n,))
+    counter = qd.field(dtype=qd.i32, shape=())
+    counter2 = qd.field(dtype=qd.i32, shape=())
+    output = qd.field(dtype=qd.f32, shape=(n,))
 
     data.from_numpy(np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], dtype=np.float32))
     counter.fill(0)
     counter2.fill(0)
     output.fill(0.0)
 
-    @ti.kernel
+    @qd.kernel
     def count_nonzero():
-        ti.loop_config(serialize=True)
+        qd.loop_config(serialize=True)
         for _ in range(1):
             for i in range(n):
                 if data[i] > 0.0:
-                    idx = ti.atomic_add(counter[None], 1)
-                    ti.atomic_add(counter2[None], 1)
+                    idx = qd.atomic_add(counter[None], 1)
+                    qd.atomic_add(counter2[None], 1)
                     output[idx] = data[i]
 
     count_nonzero()

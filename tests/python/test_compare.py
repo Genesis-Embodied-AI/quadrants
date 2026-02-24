@@ -1,19 +1,19 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang import impl
 
 from tests import test_utils
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=ti.metal)
+@test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_compare_basics():
-    a = ti.field(ti.i32)
-    ti.root.dynamic(ti.i, 256).place(a)
-    b = ti.field(ti.i32, shape=())
-    c = ti.field(ti.i32, shape=())
+    a = qd.field(qd.i32)
+    qd.root.dynamic(qd.i, 256).place(a)
+    b = qd.field(qd.i32, shape=())
+    c = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         b[None] = 3
         c[None] = 5
@@ -45,14 +45,14 @@ def test_compare_basics():
     assert a[11]
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=ti.metal)
+@test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_compare_equality():
-    a = ti.field(ti.i32)
-    ti.root.dynamic(ti.i, 256).place(a)
-    b = ti.field(ti.i32, shape=())
-    c = ti.field(ti.i32, shape=())
+    a = qd.field(qd.i32)
+    qd.root.dynamic(qd.i, 256).place(a)
+    b = qd.field(qd.i32, shape=())
+    c = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         b[None] = 3
         c[None] = 3
@@ -84,35 +84,35 @@ def test_compare_equality():
     assert not a[11]
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=[ti.metal])
+@test_utils.test(require=qd.extension.sparse, exclude=[qd.metal])
 def test_no_duplicate_eval():
-    a = ti.field(ti.i32)
-    ti.root.dynamic(ti.i, 256).place(a)
+    a = qd.field(qd.i32)
+    qd.root.dynamic(qd.i, 256).place(a)
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        a[2] = 0 <= ti.append(a.parent(), [], 10) < 1
+        a[2] = 0 <= qd.append(a.parent(), [], 10) < 1
 
     func()
     assert a[0] == 10
     assert a[1] == 0  # not appended twice
-    assert a[2]  # ti.append returns 0
+    assert a[2]  # qd.append returns 0
 
 
 @test_utils.test()
 def test_no_duplicate_eval_func():
-    a = ti.field(ti.i32, ())
-    b = ti.field(ti.i32, ())
+    a = qd.field(qd.i32, ())
+    b = qd.field(qd.i32, ())
 
-    @ti.func
+    @qd.func
     def why_this_foo_fail(n):
-        return ti.atomic_add(b[None], n)
+        return qd.atomic_add(b[None], n)
 
     def foo(n):
         ast_builder = impl.get_runtime().compiling_callable.ast_builder()
-        return ti.atomic_add(impl.subscript(ast_builder, b, None), n)
+        return qd.atomic_add(impl.subscript(ast_builder, b, None), n)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a[None] = 0 <= foo(2) < 1
 
@@ -121,15 +121,15 @@ def test_no_duplicate_eval_func():
     assert b[None] == 2
 
 
-@test_utils.test(require=ti.extension.sparse, exclude=ti.metal)
+@test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_chain_compare():
-    a = ti.field(ti.i32)
-    ti.root.dynamic(ti.i, 256).place(a)
-    b = ti.field(ti.i32, shape=())
-    c = ti.field(ti.i32, shape=())
-    d = ti.field(ti.i32, shape=())
+    a = qd.field(qd.i32)
+    qd.root.dynamic(qd.i, 256).place(a)
+    b = qd.field(qd.i32, shape=())
+    c = qd.field(qd.i32, shape=())
+    d = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         b[None] = 2
         c[None] = 3
@@ -144,40 +144,40 @@ def test_chain_compare():
 
 @test_utils.test()
 def test_static_in():
-    @ti.kernel
-    def foo(a: ti.template()) -> ti.i32:
+    @qd.kernel
+    def foo(a: qd.template()) -> qd.i32:
         b = 0
-        if ti.static(a in [ti.i32, ti.u32]):
+        if qd.static(a in [qd.i32, qd.u32]):
             b = 1
-        elif ti.static(a not in [ti.f32, ti.f64]):
+        elif qd.static(a not in [qd.f32, qd.f64]):
             b = 2
         return b
 
-    assert foo(ti.u32) == 1
-    assert foo(ti.i64) == 2
-    assert foo(ti.f32) == 0
+    assert foo(qd.u32) == 1
+    assert foo(qd.i64) == 2
+    assert foo(qd.f32) == 0
 
 
 @test_utils.test()
 def test_non_static_in():
-    with pytest.raises(ti.QuadrantsCompilationError, match='"In" is only supported inside `ti.static`.'):
+    with pytest.raises(qd.QuadrantsCompilationError, match='"In" is only supported inside `qd.static`.'):
 
-        @ti.kernel
-        def foo(a: ti.template()) -> ti.i32:
+        @qd.kernel
+        def foo(a: qd.template()) -> qd.i32:
             b = 0
-            if a in [ti.i32, ti.u32]:
+            if a in [qd.i32, qd.u32]:
                 b = 1
             return b
 
-        foo(ti.i32)
+        foo(qd.i32)
 
 
-@test_utils.test(default_ip=ti.i64, require=ti.extension.data64)
+@test_utils.test(default_ip=qd.i64, require=qd.extension.data64)
 def test_compare_ret_type():
     # The purpose of this test is to make sure a comparison returns i32
     # regardless of default_ip so that it can always serve as the condition of
     # an if/while statement.
-    @ti.kernel
+    @qd.kernel
     def foo():
         for i in range(100):
             if i == 0:
@@ -191,5 +191,5 @@ def test_compare_ret_type():
 
 @test_utils.test()
 def test_python_scope_compare():
-    v = ti.math.vec3(0, 1, 2)
+    v = qd.math.vec3(0, 1, 2)
     assert (v < 1)[0] == 1

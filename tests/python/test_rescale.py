@@ -1,25 +1,25 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_rescale():
-    a = ti.field(ti.f32)
-    b = ti.field(ti.f32)
-    ti.root.dense(ti.ij, 4).dense(ti.ij, 4).place(a)
-    ti.root.dense(ti.ij, 4).place(b)
+    a = qd.field(qd.f32)
+    b = qd.field(qd.f32)
+    qd.root.dense(qd.ij, 4).dense(qd.ij, 4).place(a)
+    qd.root.dense(qd.ij, 4).place(b)
 
-    @ti.kernel
+    @qd.kernel
     def set_b():
-        for I in ti.grouped(a):
-            Ib = ti.rescale_index(a, b, I)
+        for I in qd.grouped(a):
+            Ib = qd.rescale_index(a, b, I)
             b[Ib] += 1.0
 
-    @ti.kernel
+    @qd.kernel
     def set_a():
-        for I in ti.grouped(b):
-            Ia = ti.rescale_index(b, a, I)
+        for I in qd.grouped(b):
+            Ia = qd.rescale_index(b, a, I)
             a[Ia] = 1.0
 
     set_a()

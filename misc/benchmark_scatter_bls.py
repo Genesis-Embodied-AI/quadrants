@@ -1,12 +1,12 @@
 import sys
 
-import quadrants as ti
+import quadrants as qd
 
 sys.path.append("../tests/python/")
 
 from bls_test_template import bls_particle_grid
 
-ti.init(arch=ti.cuda, kernel_profiler=True)
+qd.init(arch=qd.cuda, kernel_profiler=True)
 bls_particle_grid(
     N=512,
     ppc=10,
@@ -17,4 +17,4 @@ bls_particle_grid(
     use_offset=True,
 )
 
-ti.print_kernel_profile_info()
+qd.print_kernel_profile_info()

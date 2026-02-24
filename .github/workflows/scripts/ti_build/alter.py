@@ -16,8 +16,8 @@ from .compiler import get_cache_home
 from .tinysh import Command
 
 
-def _write_ti_bashrc():
-    path = get_cache_home() / "ti.bashrc"
+def _write_qd_bashrc():
+    path = get_cache_home() / "qd.bashrc"
     envs = get_cache_home() / "ti-env.sh"
     _write_env(envs)
     with open(path, "w") as f:
@@ -32,7 +32,7 @@ def _write_ti_bashrc():
     return path
 
 
-def _write_ti_zshrc():
+def _write_qd_zshrc():
     dotdir = get_cache_home() / "zdotdir"
     dotdir.mkdir(parents=True, exist_ok=True)
     path = dotdir / ".zshrc"
@@ -49,8 +49,8 @@ def _write_ti_zshrc():
     return dotdir
 
 
-def _write_ti_pwshrc():
-    path = get_cache_home() / "ti.ps1"
+def _write_qd_pwshrc():
+    path = get_cache_home() / "qd.ps1"
     with open(path, "w") as f:
         f.write(
             "\n".join(
@@ -101,7 +101,7 @@ def enter_shell():
         shell = _find_shell() or Shell("cmd.exe", "cmd.exe")
         if shell.name in ("pwsh.exe", "powershell.exe"):
             pwsh = Command(shell.exe)
-            path = _write_ti_pwshrc()
+            path = _write_qd_pwshrc()
             pwsh("-ExecutionPolicy", "Bypass", "-NoExit", "-File", str(path))
         elif shell.name == "cmd.exe":
             cmd = Command(shell.exe)
@@ -119,10 +119,10 @@ def enter_shell():
             shell = Shell(name, path)
 
         if shell.name == "bash":
-            path = _write_ti_bashrc()
+            path = _write_qd_bashrc()
             os.execl(shell.exe, shell.exe, "--rcfile", str(path))
         elif shell.name == "zsh":
-            path = _write_ti_zshrc()
+            path = _write_qd_zshrc()
             env = os.environ.copy()
             env["ZDOTDIR"] = str(path)
             os.execle(shell.exe, shell.exe, env)

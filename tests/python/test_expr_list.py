@@ -1,11 +1,11 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(ti.cpu)
+@test_utils.test(qd.cpu)
 def test_expr_list_basic():
-    @ti.kernel
+    @qd.kernel
     def func(u: int, v: float) -> float:
         x = [2 + u, 3 + v]
         return x[0] * 100 + x[1]
@@ -15,10 +15,10 @@ def test_expr_list_basic():
 
 @test_utils.test()
 def test_listcomp_multiple_ifs():
-    x = ti.field(ti.i32, shape=(4,))
+    x = qd.field(qd.i32, shape=(4,))
 
-    @ti.kernel
-    def test() -> ti.i32:
+    @qd.kernel
+    def test() -> qd.i32:
         # Quadrants doesn't support global fields appearing anywhere after "for"
         # here.
         a = [x[0] for j in range(100) if j > 2 if j < 5]

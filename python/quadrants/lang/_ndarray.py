@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import (
@@ -62,14 +62,14 @@ class Ndarray:
 
     def to_dlpack(self):
         """
-        Note: caller is responsible for calling ti.sync() between modifying the ndarray, and
+        Note: caller is responsible for calling qd.sync() between modifying the ndarray, and
         reading it.
         """
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
     def _reset(self):
         """
-        Called by runtime, when we call ti.reset()
+        Called by runtime, when we call qd.reset()
         """
         self.arr = None
         self.grad = None
@@ -120,9 +120,9 @@ class Ndarray:
         Args:
             val (Union[int, float]): Value to fill.
         """
-        if impl.current_cfg().arch != _ti_core.Arch.cuda and impl.current_cfg().arch != _ti_core.Arch.x64:
+        if impl.current_cfg().arch != _qd_core.Arch.cuda and impl.current_cfg().arch != _qd_core.Arch.x64:
             self._fill_by_kernel(val)
-        elif _ti_core.is_tensor(self.element_type):
+        elif _qd_core.is_tensor(self.element_type):
             self._fill_by_kernel(val)
         elif self.dtype == primitive_types.f32:
             impl.get_runtime().prog.fill_float(self.arr, val)
@@ -258,7 +258,7 @@ class Ndarray:
         raise NotImplementedError()
 
     def _fill_by_kernel(self, val):
-        """Fills ndarray with a specific scalar value using a ti.kernel.
+        """Fills ndarray with a specific scalar value using a qd.kernel.
 
         Args:
             val (Union[int, float]): Value to fill.
@@ -300,7 +300,7 @@ class ScalarNdarray(Ndarray):
             self.arr = torch.zeros(shape=arr_shape, dtype=np_dtype)
         else:
             self.arr = impl.get_runtime().prog.create_ndarray(
-                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_ti_core.DebugInfo(get_traceback())
+                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
             )
         self.shape = tuple(self.arr.shape)
         self.element_type = dtype
@@ -338,7 +338,7 @@ class ScalarNdarray(Ndarray):
         fill_ndarray(self, val)
 
     def __repr__(self):
-        return "<ti.ndarray>"
+        return "<qd.ndarray>"
 
 
 class NdarrayHostAccessor:

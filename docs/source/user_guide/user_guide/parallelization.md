@@ -2,13 +2,13 @@
 
 Each top-level for-loop will be parallelized, within a kernel
 - adding a non-static `if` over the top of a for-loop will lead to the for-loop not being parallelized
-- a for-loop inside one or more inlined @ti.func, and/or static `if` will be still be parallelized however
+- a for-loop inside one or more inlined @qd.func, and/or static `if` will be still be parallelized however
 
 Each top-level for-loop will be launched as a separate GPU kernel, under the hood.
 
 The top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
-- if statements where the conditional is `ti.static`
-- inline functions (`@ti.func`)
+- if statements where the conditional is `qd.static`
+- inline functions (`@qd.func`)
 
 ## Does GPU kernel launch latency matter?
 
@@ -36,7 +36,7 @@ There are some additional types, but these are variations on global memory:
 - constant memory: global memory, but which can be stored easily in cache
 - local memory: storage which is private to each specific thread, but, unintuitively, is stored off-chip, and is as slow as global memory
 
-Quadrants gives access to shared memory, using `ti.stmt.SharedArray()`, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
+Quadrants gives access to shared memory, using `qd.stmt.SharedArray()`, but typically Quadrants kernels use only global memory and register memory. You cannot directly request to use registers, but registers will be used to hold any local variables, within the limits of available registers. Fields, ndarrays, and other data, are stored in global memory. This holds some implications for synchronization.
 
 ## Thread synchronization
 
@@ -57,7 +57,7 @@ If there is a way of partitioning data such that no thread ever needs to read da
 A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:
 
 ```
-@ti.kernel
+@qd.kernel
 def k1() -> None:
     for i_b in range(B):  # parallelized across B GPU threads
         # work done by each thread
@@ -73,4 +73,4 @@ However, we might need to break into multiple launches in order to synchronize w
 
 ## Compromise
 
-The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kerenl launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it's useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.
+The recommendations above often are self-conflicting. For example, maximizing the number of cores being used might require using atomics for synchronization, which might make the kernels slower. Reducing kernel launches similarly might require using atomics, which would make the kernels run more slowly. So it will not in general be possible to satisfy all the above guidelines. But, it's useful to be aware of the design choices above, and strive to achieve them. Exact choices for best performance will often be an empirical question.

@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -7,11 +7,11 @@ from tests import test_utils
 def test_ad_reduce_fwd():
     N = 16
 
-    x = ti.field(dtype=ti.f32, shape=N)
-    loss = ti.field(dtype=ti.f32, shape=())
-    ti.root.lazy_dual()
+    x = qd.field(dtype=qd.f32, shape=N)
+    loss = qd.field(dtype=qd.f32, shape=())
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             loss[None] += x[i] ** 2
@@ -21,7 +21,7 @@ def test_ad_reduce_fwd():
         x[i] = i
         total_loss += i * i
 
-    with ti.ad.FwdMode(loss=loss, param=x, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=loss, param=x, seed=[1.0 for _ in range(N)]):
         func()
 
     assert total_loss == test_utils.approx(loss[None])

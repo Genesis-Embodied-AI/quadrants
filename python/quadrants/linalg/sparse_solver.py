@@ -3,7 +3,7 @@
 import numpy as np
 
 import quadrants.lang
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
@@ -30,14 +30,14 @@ class SparseSolver:
         if solver_type in solver_type_list and ordering in solver_ordering:
             quadrants_arch = quadrants.lang.impl.get_runtime().prog.config().arch
             assert (
-                quadrants_arch == _ti_core.Arch.x64
-                or quadrants_arch == _ti_core.Arch.arm64
-                or quadrants_arch == _ti_core.Arch.cuda
+                quadrants_arch == _qd_core.Arch.x64
+                or quadrants_arch == _qd_core.Arch.arm64
+                or quadrants_arch == _qd_core.Arch.cuda
             ), "SparseSolver only supports CPU and CUDA for now."
-            if quadrants_arch == _ti_core.Arch.cuda:
-                self.solver = _ti_core.make_cusparse_solver(dtype, solver_type, ordering)
+            if quadrants_arch == _qd_core.Arch.cuda:
+                self.solver = _qd_core.make_cusparse_solver(dtype, solver_type, ordering)
             else:
-                self.solver = _ti_core.make_sparse_solver(dtype, solver_type, ordering)
+                self.solver = _qd_core.make_sparse_solver(dtype, solver_type, ordering)
         else:
             raise QuadrantsRuntimeError(
                 f"The solver type {solver_type} with {ordering} is not supported for now. Only {solver_type_list} with {solver_ordering} are supported."
@@ -58,9 +58,9 @@ class SparseSolver:
         if isinstance(sparse_matrix, SparseMatrix):
             self.matrix = sparse_matrix
             quadrants_arch = quadrants.lang.impl.get_runtime().prog.config().arch
-            if quadrants_arch == _ti_core.Arch.x64 or quadrants_arch == _ti_core.Arch.arm64:
+            if quadrants_arch == _qd_core.Arch.x64 or quadrants_arch == _qd_core.Arch.arm64:
                 self.solver.compute(sparse_matrix.matrix)
-            elif quadrants_arch == _ti_core.Arch.cuda:
+            elif quadrants_arch == _qd_core.Arch.cuda:
                 self.analyze_pattern(self.matrix)
                 self.factorize(self.matrix)
         else:
