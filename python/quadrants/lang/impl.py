@@ -543,6 +543,8 @@ class PyQuadrants:
         self.materialized = False
 
     def sync(self):
+        if is_python_backend():
+            return
         self.materialize()
         assert self._prog is not None
         self._prog.synchronize()
