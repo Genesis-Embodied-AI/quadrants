@@ -302,3 +302,124 @@ def test_size_in_kernel():
     assert a[3, 0].item() == 3.0
     assert a[3, 1].item() == 6.0
     assert a[3, 2].item() == 9.0
+
+
+def test_dtype_call_f32():
+    """qd.f32(0.0) should work in the python backend (DataTypeCxx.__call__)."""
+    qd.init(qd.python)
+
+    @qd.kernel
+    def use_dtype_call(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+        x = qd.f32(0.0)
+        y = qd.f32(3)
+        a[0] = x
+        a[1] = y
+
+    a = qd.ndarray(qd.f32, shape=(2,))
+    use_dtype_call(a)
+    assert a[0] == 0.0
+    assert a[1] == 3.0
+
+
+def test_dtype_call_i32():
+    """qd.i32(3.7) should truncate to 3 in the python backend."""
+    qd.init(qd.python)
+
+    @qd.kernel
+    def use_i32(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        a[0] = qd.i32(3.7)
+
+    a = qd.ndarray(qd.i32, shape=(1,))
+    use_i32(a)
+    assert a[0] == 3
+
+
+def test_ndrange_in_kernel():
+    """qd.ndrange() should work inside a python backend kernel."""
+    qd.init(qd.python)
+
+    @qd.kernel
+    def fill_2d(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        idx = 0
+        for i, j in qd.ndrange(3, 4):
+            a[idx] = i * 10 + j
+            idx += 1
+
+    a = qd.ndarray(qd.i32, shape=(12,))
+    fill_2d(a)
+    assert a[0] == 0
+    assert a[1] == 1
+    assert a[4] == 10
+    assert a[11] == 23
+
+
+def test_ndrange_with_tensor_bounds():
+    """ndrange should accept 0-d tensor bounds (from .shape[0])."""
+    qd.init(qd.python)
+
+    @qd.kernel
+    def sum_2d(
+        a: qd.types.ndarray(dtype=qd.f32, ndim=2),
+        out: qd.types.ndarray(dtype=qd.f32, ndim=1),
+    ):
+        total = qd.f32(0.0)
+        for i, j in qd.ndrange(a.shape[0], a.shape[1]):
+            total += a[i, j]
+        out[0] = total
+
+    a = qd.ndarray(qd.f32, shape=(3, 4))
+    a.fill(1.0)
+    out = qd.ndarray(qd.f32, shape=(1,))
+    sum_2d(a, out)
+    assert out[0] == 12.0
+
+
+def test_transpose_no_args():
+    """MyTorchTensor.transpose() with no args should transpose a 2D matrix."""
+    qd.init(qd.python)
+    t = MyTorchTensor([[1, 2, 3], [4, 5, 6]])
+    tt = t.transpose()
+    assert tt.size() == torch.Size([3, 2])
+    assert tt[0, 0] == 1
+    assert tt[0, 1] == 4
+    assert tt[2, 1] == 6
+
+
+def test_torch_function_with_foreign_subclass():
+    """__torch_function__ should unwrap MyTorchTensor when mixed with foreign subclasses."""
+    qd.init(qd.python)
+
+    class ForeignTensor(torch.Tensor):
+        pass
+
+    a = MyTorchTensor([1.0, 2.0, 3.0])
+    b = ForeignTensor([10.0, 20.0, 30.0])
+    result = a + b
+    assert not isinstance(result, MyTorchTensor)
+    assert torch.equal(result, torch.tensor([11.0, 22.0, 33.0]))
+
+
+def test_getattr_delegation_norm():
+    """MyTorchTensor should delegate .norm() to matrix_ops."""
+    qd.init(qd.python)
+    v = MyTorchTensor([3.0, 4.0])
+    n = v.norm()
+    assert abs(n - 5.0) < 1e-5
+
+
+def test_getattr_delegation_dot():
+    """MyTorchTensor should delegate .dot() to matrix_ops."""
+    qd.init(qd.python)
+    a = MyTorchTensor([1.0, 2.0, 3.0])
+    b = MyTorchTensor([4.0, 5.0, 6.0])
+    d = a.dot(b)
+    assert abs(d - 32.0) < 1e-5
+
+
+def test_sync_noop():
+    """qd.sync() should not crash on the python backend."""
+    qd.init(qd.python)
+    a = qd.field(qd.f32, shape=(4,))
+    a[0] = 1.0
+    qd.sync()
+    assert a[0] == 1.0
