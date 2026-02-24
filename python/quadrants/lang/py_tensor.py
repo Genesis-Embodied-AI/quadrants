@@ -63,6 +63,12 @@ class MyTorchTensor(torch.Tensor):
         except Exception as e:
             raise type(e)(f"MyTorchTensor.__setitem__({key!r}, {v!r} (type={type(v).__name__}))") from e
 
+    def transpose(self, *args):
+        if len(args) == 0:
+            assert self.ndim == 2, f"transpose() with no args requires a 2D tensor, got {self.ndim}D"
+            return super().transpose(0, 1)
+        return super().transpose(*args)
+
     def get_shape(self):
         return self.shape
 
