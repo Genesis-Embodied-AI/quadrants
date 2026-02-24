@@ -9,9 +9,10 @@ try:
 except Exception:
     pass
 
-from quadrants import lang
-from quadrants.lang import matrix, ops
+from quadrants.lang import ops
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
+from quadrants.lang.expr import Expr
+from quadrants.lang.matrix import Matrix
 from quadrants.types.utils import is_integral
 
 
@@ -36,7 +37,7 @@ class _Ndrange:
         for arg in args:
             for bound in arg:
                 if not isinstance(bound, (int, np.integer)) and not (
-                    isinstance(bound, lang.expr.Expr) and is_integral(bound.ptr.get_rvalue_type())
+                    isinstance(bound, Expr) and is_integral(bound.ptr.get_rvalue_type())
                 ):
                     raise QuadrantsTypeError(
                         "Every argument of ndrange should be an integer scalar or a tuple/list of (int, int)"
@@ -156,7 +157,7 @@ class GroupedNDRange:
 
     def __iter__(self):
         for ind in self.r:
-            yield matrix.Matrix(list(ind))
+            yield Matrix(list(ind))
 
 
 __all__ = ["ndrange"]
