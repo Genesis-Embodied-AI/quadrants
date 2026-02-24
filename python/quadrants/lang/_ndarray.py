@@ -294,7 +294,7 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        if impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        if impl.is_python_backend():
             assert torch_is_available
             np_dtype = dtype_to_numpy_dtype(dtype)
             self.arr = torch.zeros(shape=arr_shape, dtype=np_dtype)

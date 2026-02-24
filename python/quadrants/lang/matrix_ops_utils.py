@@ -10,7 +10,7 @@ from quadrants._lib import core
 
 
 def do_check(checker_fns, *args, **kwargs):
-    if impl.get_runtime().prog.config().arch == core.Arch.python:
+    if impl.is_python_backend():
         return True, None
     for f in checker_fns:
         ok, msg = f(*args, **kwargs)

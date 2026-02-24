@@ -655,8 +655,7 @@ def loop_config(
             for i, j in x:
                 y[i, j] = x[i, j]
     """
-    if get_runtime().prog.config().arch == _ti_core.Arch.python:
-        # do nothing
+    if impl.is_python_backend():
         return
 
     if block_dim is not None:

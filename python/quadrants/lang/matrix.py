@@ -259,7 +259,7 @@ class Matrix(QuadrantsOperations):
     __array_priority__ = 1000
 
     def __new__(cls, arr, dt=None):
-        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+        if impl.is_python_backend():
             assert torch is not None
             arr = [v.item() if isinstance(v, (torch.Tensor, py_tensor.MyTorchTensor)) and v.shape == () else v for v in arr]
             return py_tensor.MyTorchTensor(arr)
@@ -983,7 +983,7 @@ class Matrix(QuadrantsOperations):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+        if impl.is_python_backend():
             shape = (*shape, m, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
@@ -1160,7 +1160,7 @@ class Vector(Matrix):
         """
         if isinstance(shape, numbers.Number):
             shape = (shape,)
-        if impl.get_runtime().prog.config().arch == _ti_python_core.Arch.python:
+        if impl.is_python_backend():
             shape = (*shape, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None

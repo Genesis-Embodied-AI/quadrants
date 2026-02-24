@@ -43,7 +43,7 @@ def writeback_binary(foo):
     @functools.wraps(foo)
     def wrapped(a, b):
         # Python backend is single-threaded, so atomics are just plain ops.
-        if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+        if lang.impl.is_python_backend():
             return foo(a, b)
         if isinstance(a, Field) or isinstance(b, Field):
             return NotImplemented
@@ -1168,7 +1168,7 @@ def atomic_add(x, y):
         >>>
         >>>     ti.atomic_add(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x += y
         return x
     return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
@@ -1201,7 +1201,7 @@ def atomic_mul(x, y):
         >>>
         >>>     ti.atomic_mul(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x *= y
         return x
     return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
@@ -1234,7 +1234,7 @@ def atomic_sub(x, y):
         >>>
         >>>     ti.atomic_sub(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x -= y
         return x
     return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
@@ -1267,7 +1267,7 @@ def atomic_min(x, y):
         >>>
         >>>     ti.atomic_min(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x[()] = min(x[()], y)
         return x
     return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
@@ -1300,7 +1300,7 @@ def atomic_max(x, y):
         >>>
         >>>     ti.atomic_max(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x[()] = max(x[()], y)
         return x
     return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
@@ -1333,7 +1333,7 @@ def atomic_and(x, y):
         >>>
         >>>     ti.atomic_and(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x &= y
         return x
     return lang.impl.expr_init(
@@ -1368,7 +1368,7 @@ def atomic_or(x, y):
         >>>
         >>>     ti.atomic_or(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x |= y
         return x
     return lang.impl.expr_init(
@@ -1403,7 +1403,7 @@ def atomic_xor(x, y):
         >>>
         >>>     ti.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
     """
-    if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if lang.impl.is_python_backend():
         x ^= y
         return x
 

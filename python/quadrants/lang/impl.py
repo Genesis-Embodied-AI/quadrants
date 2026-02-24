@@ -866,22 +866,14 @@ def field(dtype, shape, *args, **kwargs):
     """
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if is_python_backend():
         assert torch is not None
         if isinstance(dtype, MatrixType):
-            # if isinstance(dtype, torch.Tensor):
-            print("got matrix")
             if dtype.ndim == 1:
                 shape = (*shape, dtype.n)
             else:
                 shape = (*shape, dtype.n, dtype.m)
-            # shape = (*shape, *dtype.shape)
-            # if len(dtype.shape) == 1:
-            #     shape = (*shape, dtype.n, dtype.m)
-            # else:
-            #     shape = (*shape, dtype.n)
             dtype = dtype.dtype
-        # else:
         dtype = dtype_to_torch_dtype(dtype)
         return py_tensor.create_tensor(shape, dtype)
     if isinstance(dtype, MatrixType):
@@ -911,7 +903,7 @@ def ndarray(dtype, shape, needs_grad=False):
     # primal
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if is_python_backend():
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
             dtype = dtype.dtype
@@ -1247,8 +1239,7 @@ def grouped(x):
     """
     if isinstance(x, lang._ndrange._Ndrange):
         return x.grouped()
-    # print('returning x', x)
-    if get_runtime().prog.config().arch == _ti_core.Arch.python:
+    if is_python_backend():
         return [[i] for i in range(x.shape[0])]
     #     for idx in range(x.shape[0]):
     #         yield [idx]
@@ -1269,6 +1260,10 @@ def stop_grad(x):
 
 def current_cfg():
     return get_runtime().prog.config()
+
+
+def is_python_backend() -> bool:
+    return get_runtime().prog.config().arch == _ti_core.Arch.python
 
 
 def default_cfg():
