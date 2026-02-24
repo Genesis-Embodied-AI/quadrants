@@ -42,6 +42,7 @@ def _read_matrix_or_scalar(x):
 def writeback_binary(foo):
     @functools.wraps(foo)
     def wrapped(a, b):
+        # Python backend is single-threaded, so atomics are just plain ops.
         if lang.impl.get_runtime().prog.config().arch == _ti_core.Arch.python:
             return foo(a, b)
         if isinstance(a, Field) or isinstance(b, Field):
