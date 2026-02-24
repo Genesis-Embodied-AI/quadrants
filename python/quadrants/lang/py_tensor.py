@@ -14,12 +14,12 @@ except Exception:
 
 
 class MyTorchTensor(torch.Tensor):
-    # Expose zero-copy torch views of self so that downstream code
-    # (e.g. Genesis qd_to_torch) can access the data without conversion.
-    _tc = property(lambda self: self)
-    _T_tc = property(lambda self: self)
-    _np = property(lambda self: self.numpy())
-    _T_np = property(lambda self: self.numpy())
+
+    @property
+    def shape(self):
+        real = self.size()
+        batch = getattr(self, '_batch_shape', None)
+        return batch if batch is not None else real
 
     @classmethod
     def zeros(cls, *args, **kwargs):
@@ -47,7 +47,7 @@ class MyTorchTensor(torch.Tensor):
         return super().__getitem__(2)
 
     def __getitem__(self, key):
-        if key == 0 and self.shape == ():
+        if key == 0 and self.size() == ():
             return self.item()
         if isinstance(key, list) and len(key) == 1:
             key = key[0]
@@ -65,16 +65,17 @@ class MyTorchTensor(torch.Tensor):
 
     def transpose(self, *args):
         if len(args) == 0:
-            assert self.ndim == 2, f"transpose() with no args requires a 2D tensor, got {self.ndim}D"
+            ndim = len(self.size())
+            assert ndim == 2, f"transpose() with no args requires a 2D tensor, got {ndim}D"
             return super().transpose(0, 1)
         return super().transpose(*args)
 
     def get_shape(self):
-        return self.shape
+        return self.size()
 
     def outer_product(self, other):
-        shape_x = self.shape
-        shape_y = other.shape
+        shape_x = self.size()
+        shape_y = other.size()
         res = [[(self[i] * other[j]).item() for j in range(shape_y[0])] for i in range(shape_x[0])]
         return MyTorchTensor(res)
 
@@ -87,5 +88,18 @@ class MyTorchTensor(torch.Tensor):
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
 
-def create_tensor(shape, dtype):
-    return MyTorchTensor.zeros(size=shape, dtype=dtype)
+def create_tensor(shape, dtype, batch_ndim=None):
+    res = MyTorchTensor.zeros(size=shape, dtype=dtype)
+    if batch_ndim is None:
+        batch_ndim = len(shape)
+    _setup_views(res, batch_ndim)
+    return res
+
+
+def _setup_views(tensor, batch_ndim):
+    """Set _tc/_T_tc/_np/_T_np instance attributes matching the qd.Field/Ndarray convention."""
+    tensor._tc = tensor
+    tensor._T_tc = tensor.movedim(batch_ndim - 1, 0) if batch_ndim > 1 else tensor
+    tensor._np = tensor.numpy()
+    tensor._T_np = tensor._T_tc.numpy()
+    tensor._batch_shape = tensor.size()[:batch_ndim]

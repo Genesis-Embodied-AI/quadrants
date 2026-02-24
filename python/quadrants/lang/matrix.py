@@ -993,10 +993,11 @@ class Matrix(QuadrantsOperations):
         if isinstance(shape, numbers.Number):
             shape = (shape,)
         if impl.is_python_backend():
+            batch_ndim = len(shape)
             shape = (*shape, m, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
-            return py_tensor.create_tensor(shape, dtype)
+            return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
         return MatrixNdarray(n, m, dtype, shape)
 
     @staticmethod
@@ -1170,10 +1171,11 @@ class Vector(Matrix):
         if isinstance(shape, numbers.Number):
             shape = (shape,)
         if impl.is_python_backend():
+            batch_ndim = len(shape)
             shape = (*shape, n)
             dtype = dtype_to_torch_dtype(dtype)
             assert torch is not None
-            return py_tensor.create_tensor(shape, dtype)
+            return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
         return VectorNdarray(n, dtype, shape)
 
 

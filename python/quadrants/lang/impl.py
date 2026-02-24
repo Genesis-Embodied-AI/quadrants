@@ -868,6 +868,7 @@ def field(dtype, shape, *args, **kwargs):
         shape = (shape,)
     if is_python_backend():
         assert torch is not None
+        batch_ndim = len(shape)
         if isinstance(dtype, MatrixType):
             if dtype.ndim == 1:
                 shape = (*shape, dtype.n)
@@ -875,7 +876,7 @@ def field(dtype, shape, *args, **kwargs):
                 shape = (*shape, dtype.n, dtype.m)
             dtype = dtype.dtype
         dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype)
+        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
             return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
@@ -904,6 +905,7 @@ def ndarray(dtype, shape, needs_grad=False):
     if isinstance(shape, numbers.Number):
         shape = (shape,)
     if is_python_backend():
+        batch_ndim = len(shape)
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
             dtype = dtype.dtype
@@ -914,7 +916,7 @@ def ndarray(dtype, shape, needs_grad=False):
         if type(shape) == int:
             shape = (shape,)
         dtype = dtype_to_torch_dtype(dtype)
-        return py_tensor.create_tensor(shape, dtype)
+        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
