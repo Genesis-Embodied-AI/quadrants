@@ -111,12 +111,6 @@ class MyTorchTensor(torch.Tensor):
     def get_shape(self):
         return self.size()
 
-    def outer_product(self, other):
-        shape_x = self.size()
-        shape_y = other.size()
-        res = [[(self[i] * other[j]).item() for j in range(shape_y[0])] for i in range(shape_x[0])]
-        return MyTorchTensor(res)
-
     def __getattr__(self, name):
         from . import matrix_ops  # pylint: disable=C0415
 
