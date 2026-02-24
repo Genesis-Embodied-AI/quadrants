@@ -73,7 +73,7 @@ from quadrants.types.primitive_types import (
     u64,
 )
 
-from . import py_tensor
+from . import _py_tensor as py_tensor
 
 torch = None
 try:

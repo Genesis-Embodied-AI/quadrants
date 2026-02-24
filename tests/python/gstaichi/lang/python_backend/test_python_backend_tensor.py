@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 import quadrants as qd
-from quadrants.lang.py_tensor import MyTorchTensor, create_tensor, _setup_views
+from quadrants.lang._py_tensor import MyTorchTensor, create_tensor, _setup_views
 
 
 def test_create_tensor_scalar_1d():

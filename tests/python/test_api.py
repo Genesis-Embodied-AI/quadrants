@@ -190,6 +190,7 @@ user_api[ti] = [
     "profiler",
     "pure",
     "pyfunc",
+    "python",
     "randn",
     "random",
     "raw_div",

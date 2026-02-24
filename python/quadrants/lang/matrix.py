@@ -37,7 +37,7 @@ from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-from . import py_tensor
+from . import _py_tensor as py_tensor
 
 torch = None
 try:
