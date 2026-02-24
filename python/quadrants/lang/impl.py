@@ -866,6 +866,8 @@ def field(dtype, shape, *args, **kwargs):
     """
     if isinstance(shape, numbers.Number):
         shape = (shape,)
+    if shape is None:
+        shape = ()
     if is_python_backend():
         assert torch is not None
         batch_ndim = len(shape)
