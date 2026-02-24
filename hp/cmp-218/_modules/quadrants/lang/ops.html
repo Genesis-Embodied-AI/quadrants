@@ -1,0 +1,1982 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.ops &#8212; Quadrants 0.4.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../_static/documentation_options.js?v=ff822928"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/ops';</script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.4.2" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.4.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ops</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.ops</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">builtins</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">operator</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_bt_ops_mod</span>  <span class="c1"># bt for builtin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">cook_dtype</span><span class="p">,</span>
+    <span class="n">is_matrix_class</span><span class="p">,</span>
+    <span class="n">is_quadrants_class</span><span class="p">,</span>
+    <span class="n">quadrants_scope</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">stack_info</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">wrap_if_not_expr</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="k">else</span> <span class="n">a</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">is_matrix_class</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">writeback_binary</span><span class="p">(</span><span class="n">foo</span><span class="p">):</span>
+    <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">wrapped</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">and</span> <span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot use a non-writable target as the first operand of &#39;</span><span class="si">{</span><span class="n">foo</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">wrapped</span>
+
+
+<div class="viewcode-block" id="cast">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.cast">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">cast</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy and cast a scalar or a matrix to a specified data type.</span>
+<span class="sd">    Must be called in Quadrants scope.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        obj (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">        dtype (:mod:`~quadrants.types.primitive_types`): A primitive type defined in :mod:`~quadrants.types.primitive_types`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A copy of `obj`, casted to the specified data type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([0, 1, 2], qd.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.cast(x, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [0.0, 1.0, 2.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_quadrants_class</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+        <span class="c1"># TODO: unify with element_wise_unary</span>
+        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">value_cast</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="bit_cast">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.bit_cast">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_cast</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy and cast a scalar to a specified data type with its underlying</span>
+<span class="sd">    bits preserved. Must be called in quadrants scope.</span>
+
+<span class="sd">    This function is equivalent to `reinterpret_cast` in C++.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        obj (:mod:`~quadrants.types.primitive_types`): Input scalar.</span>
+
+<span class="sd">        dtype (:mod:`~quadrants.types.primitive_types`): Target data type, must have \</span>
+<span class="sd">            the same precision bits as the input (hence `f32` -&gt; `f64` is not allowed).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A copy of `obj`, casted to the specified data type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 3.14</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.bit_cast(x, qd.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)  # 1078523331</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.bit_cast(y, qd.f32)</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # 3.14</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_quadrants_class</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot apply bit_cast on Quadrants classes&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">bits_cast</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">))</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_unary_operation</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">,</span> <span class="n">python_op</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="k">if</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span>  <span class="c1"># pylint: disable-msg=C0415</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span><span class="n">python_op</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()))</span>
+    <span class="k">return</span> <span class="n">python_op</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_binary_operation</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">,</span> <span class="n">python_op</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="k">if</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span>  <span class="c1"># pylint: disable-msg=C0415</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span><span class="n">python_op</span><span class="p">(</span><span class="n">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">b</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">python_op</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ternary_operation</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">,</span> <span class="n">python_op</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+    <span class="k">if</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">c</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">b</span><span class="p">),</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">quadrants_op</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span>  <span class="c1"># pylint: disable-msg=C0415</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Matrix</span><span class="p">(</span>
+            <span class="n">python_op</span><span class="p">(</span>
+                <span class="n">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>
+                <span class="n">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">b</span><span class="p">),</span>
+                <span class="n">_read_matrix_or_scalar</span><span class="p">(</span><span class="n">c</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">python_op</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">neg</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Numerical negative, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Matrix or scalar `y`, so that `y = -x`. `y` has the same type as `x`.</span>
+
+<span class="sd">    Example::</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([1, -1])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.neg(a)</span>
+<span class="sd">        &gt;&gt;&gt; y</span>
+<span class="sd">        [-1, 1]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_neg</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="sin">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.sin">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sin</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric sine, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Angle, in radians.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The sine of each element of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([-pi/2., 0, pi/2.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.sin(x)</span>
+<span class="sd">        [-1., 0., 1.]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_sin</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="cos">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.cos">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">cos</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric cosine, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.type.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Angle, in radians.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The cosine of each element of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([-pi, 0, pi/2.])</span>
+<span class="sd">        &gt;&gt;&gt; qd.cos(x)</span>
+<span class="sd">        [-1., 1., 0.]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cos</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="asin">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.asin">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">asin</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric inverse sine, element-wise.</span>
+
+<span class="sd">    The inverse of `sin` so that, if `y = sin(x)`, then `x = asin(y)`.</span>
+
+<span class="sd">    For input `x` not in the domain `[-1, 1]`, this function returns `nan` if \</span>
+<span class="sd">        it&#39;s called in quadrants scope, or raises exception if it&#39;s called in python scope.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            A scalar or a matrix with elements in [-1, 1].</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The inverse sine of each element in `x`, in radians and in the closed \</span>
+<span class="sd">            interval `[-pi/2, pi/2]`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; qd.asin(qd.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
+<span class="sd">        [-90., 0., 90.]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_asin</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="acos">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.acos">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">acos</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric inverse cosine, element-wise.</span>
+
+<span class="sd">    The inverse of `cos` so that, if `y = cos(x)`, then `x = acos(y)`.</span>
+
+<span class="sd">    For input `x` not in the domain `[-1, 1]`, this function returns `nan` if \</span>
+<span class="sd">        it&#39;s called in quadrants scope, or raises exception if it&#39;s called in python scope.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            A scalar or a matrix with elements in [-1, 1].</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The inverse cosine of each element in `x`, in radians and in the closed \</span>
+<span class="sd">            interval `[0, pi]`. This is a scalar if `x` is a scalar.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; qd.acos(qd.Matrix([-1.0, 0.0, 1.0])) * 180 / pi</span>
+<span class="sd">        [180., 90., 0.]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_acos</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="sqrt">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.sqrt">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the non-negative square-root of a scalar or a matrix,</span>
+<span class="sd">    element wise. If `x &lt; 0` an exception is raised.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The scalar or matrix whose square-roots are required.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The square-root `y` so that `y &gt;= 0` and `y^2 = x`. `y` has the same type as `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = qd.Matrix([1., 4., 9.])</span>
+<span class="sd">        &gt;&gt;&gt; y = qd.sqrt(x)</span>
+<span class="sd">        &gt;&gt;&gt; y</span>
+<span class="sd">        [1.0, 2.0, 3.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_sqrt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="rsqrt">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.rsqrt">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">rsqrt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The reciprocal of the square root function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            A scalar or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The reciprocal of `sqrt(x)`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_rsqrt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_rsqrt</span><span class="p">,</span> <span class="n">_rsqrt</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_round</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_round</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="round">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.round">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">round</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>  <span class="c1"># pylint: disable=redefined-builtin</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Round to the nearest integer, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            A scalar or a matrix.</span>
+
+<span class="sd">        dtype: (:mod:`~quadrants.types.primitive_types`): the returned type, default to `None`. If \</span>
+<span class="sd">            set to `None` the retuned value will have the same type with `x`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The nearest integer of `x`, with return value type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.5, 1.2, 2.7])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.round(x))</span>
+<span class="sd">        [-2., 1., 3.]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_floor</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_floor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="floor">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.floor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">floor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the floor of the input, element-wise.</span>
+<span class="sd">    The floor of the scalar `x` is the largest integer `k`, such that `k &lt;= x`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">        dtype: (:mod:`~quadrants.types.primitive_types`): the returned type, default to `None`. If \</span>
+<span class="sd">            set to `None` the retuned value will have the same type with `x`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The floor of each element in `x`, with return value type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.1, 2.2, 3.])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.floor(x, qd.f64)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)  # [-2.000000000000, 2.000000000000, 3.000000000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_floor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ceil</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_ceil</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ceil">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.ceil">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ceil</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the ceiling of the input, element-wise.</span>
+
+<span class="sd">    The ceil of the scalar `x` is the smallest integer `k`, such that `k &gt;= x`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">        dtype: (:mod:`~quadrants.types.primitive_types`): the returned type, default to `None`. If \</span>
+<span class="sd">            set to `None` the retuned value will have the same type with `x`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The ceiling of each element in `x`, with return value type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([3.14, -1.5])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.ceil(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)  # [4.0, -1.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_ceil</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<div class="viewcode-block" id="frexp">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.frexp">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">frexp</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_frexp</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">frexp</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="tan">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.tan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tan</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Trigonometric tangent function, element-wise.</span>
+
+<span class="sd">    Equivalent to `qd.sin(x)/qd.cos(x)` element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The tangent values of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-pi, pi/2, pi])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.tan(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [-0.0, -22877334.0, 0.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_tan</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">tan</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="tanh">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.tanh">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the hyperbolic tangent of `x`, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The corresponding hyperbolic tangent values.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.tanh(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [-0.761594, 0.000000, 0.761594]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_tanh</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="exp">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.exp">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exp</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the exponential of all elements in `x`, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Element-wise exponential of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.exp(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [0.367879, 1.000000, 2.718282]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_exp</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.log">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">log</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the natural logarithm, element-wise.</span>
+
+<span class="sd">    The natural logarithm `log` is the inverse of the exponential function,</span>
+<span class="sd">    so that `log(exp(x)) = x`. The natural logarithm is logarithm in base `e`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The natural logarithm of `x`, element-wise.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.log(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [-nan, -inf, 0.000000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_log</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="abs">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.abs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">abs</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>  <span class="c1"># pylint: disable=W0622</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the absolute value :math:`|x|` of `x`, element-wise.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input scalar or matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The absolute value of each element in `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1.0, 0.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.abs(x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [1.0, 0.0, 1.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_abs</span><span class="p">,</span> <span class="n">builtins</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_not</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The bit not function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Bitwise not of `a`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_not</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">invert</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">popcnt</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_popcnt</span><span class="p">,</span> <span class="n">_popcnt</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">logical_not</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The logical not function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        `1` iff `a=0`, otherwise `0`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_logic_not</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_not</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="random">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.random">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">random</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a single random float/integer according to the specified data type.</span>
+<span class="sd">    Must be called in quadrants scope.</span>
+
+<span class="sd">    If the required `dtype` is float type, this function returns a random number</span>
+<span class="sd">    sampled from the uniform distribution in the half-open interval [0, 1).</span>
+
+<span class="sd">    For integer types this function returns a random integer in the</span>
+<span class="sd">    half-open interval [0, 2^32) if a 32-bit integer is required,</span>
+<span class="sd">    or a random integer in the half-open interval [0, 2^64) if a</span>
+<span class="sd">    64-bit integer is required.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        dtype (:mod:`~quadrants.types.primitive_types`): Type of the required random value.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A random value with type `dtype`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.random(float)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # 0.090257</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.random(qd.f64)</span>
+<span class="sd">        &gt;&gt;&gt;     print(y)  # 0.716101627301</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     i = qd.random(qd.i32)</span>
+<span class="sd">        &gt;&gt;&gt;     print(i)  # -963722261</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     j = qd.random(qd.i64)</span>
+<span class="sd">        &gt;&gt;&gt;     print(j)  # 73412986184350777</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">make_rand_expr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())))</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># NEXT: add matpow(self, power)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The add function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        sum of `a` and `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_add</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">sub</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The sub function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        `a` subtract `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_sub</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">sub</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">mul</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The multiply function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        `a` multiplied by `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_mul</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">mul</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">mod</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the element-wise remainder of division.</span>
+
+<span class="sd">    This is equivalent to the Python modulus operator `x1 % x2` and</span>
+<span class="sd">    has the same sign as the divisor x2.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x1 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Dividend scalar or matrix.</span>
+
+<span class="sd">        x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Divisor scalar or matrix. When both `x1` and `x2` are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The element-wise remainder of the quotient `floordiv(x1, x2)`. This is a scalar \</span>
+<span class="sd">            if both `x1` and `x2` are scalars.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([3.0, 4.0, 5.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = 3</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.mod(y, x)</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [1.0, 0.0, 4.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">expr_python_mod</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="c1"># a % b = a - (a // b) * b</span>
+        <span class="n">quotient</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_floordiv</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>
+        <span class="n">multiply</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_mul</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">quotient</span><span class="o">.</span><span class="n">ptr</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_sub</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">multiply</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">expr_python_mod</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">mod</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="pow">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.pow">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">pow</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">exponent</span><span class="p">):</span>  <span class="c1"># pylint: disable=W0622</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;First array elements raised to second array elements :math:`{base}^{exponent}`, element-wise.</span>
+
+<span class="sd">    The result type of two scalar operands is determined as follows:</span>
+<span class="sd">    - If the exponent is an integral value, then the result type takes the type of the base.</span>
+<span class="sd">    - Otherwise, the result type follows</span>
+<span class="sd">      [Implicit type casting in binary operations](https://docs.taichi-lang.org/docs/type#implicit-type-casting-in-binary-operations).</span>
+
+<span class="sd">    With the above rules, an integral value raised to a negative integral value cannot have a</span>
+<span class="sd">    feasible type. Therefore, an exception will be raised if debug mode or optimization passes</span>
+<span class="sd">    are on; otherwise 1 will be returned.</span>
+
+<span class="sd">    In the following situations, the result is undefined:</span>
+<span class="sd">    - A negative value raised to a non-integral value.</span>
+<span class="sd">    - A zero value raised to a non-positive value.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        base (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The bases.</span>
+<span class="sd">        exponent (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The exponents.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        `base` raised to `exponent`. This is a scalar if both `base` and `exponent` are scalars.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-2.0, 2.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = -3</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.pow(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [-0.125000, 0.125000]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_pow</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">pow</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">exponent</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">floordiv</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The floor division function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The floor function of `a` divided by `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_floordiv</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">floordiv</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">truediv</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True division function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix with elements not equal to zero.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The true value of `a` divided by `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_truediv</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">truediv</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">max_impl</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The maxnimum function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The maxnimum of `a` and `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_max</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">min_impl</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The minimum function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): A number or a matrix.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The minimum of `a` and `b`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_min</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="atan2">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atan2">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atan2</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Element-wise arc tangent of `x1/x2`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x1 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            y-coordinates.</span>
+<span class="sd">        x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            x-coordinates.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Angles in radians, in the range `[-pi, pi]`.</span>
+<span class="sd">        This is a scalar if both `x1` and `x2` are scalars.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; from math import pi</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([-1.0, 1.0, -1.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([-1.0, -1.0, 1.0, 1.0])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atan2(y, x) * 180 / pi</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; test()</span>
+<span class="sd">        [-135.0, -45.0, 135.0, 45.0]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atan2</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="raw_div">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.raw_div">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">raw_div</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return `x1 // x2` if both `x1`, `x2` are integers, otherwise return `x1/x2`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x1 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): Dividend.</span>
+<span class="sd">        x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): Divisor.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Return `x1 // x2` if both `x1`, `x2` are integers, otherwise return `x1/x2`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def main():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 5</span>
+<span class="sd">        &gt;&gt;&gt;     y = 3</span>
+<span class="sd">        &gt;&gt;&gt;     print(raw_div(x, y))  # 1</span>
+<span class="sd">        &gt;&gt;&gt;     z = 4.0</span>
+<span class="sd">        &gt;&gt;&gt;     print(raw_div(x, z))  # 1.25</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">c_div</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">a</span> <span class="o">//</span> <span class="n">b</span>
+        <span class="k">return</span> <span class="n">a</span> <span class="o">/</span> <span class="n">b</span>
+
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_div</span><span class="p">,</span> <span class="n">c_div</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="raw_mod">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.raw_mod">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">raw_mod</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the remainder of `x1/x2`, element-wise.</span>
+<span class="sd">    This is the C-style `mod` function.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x1 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The dividend.</span>
+<span class="sd">        x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The divisor.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The remainder of `x1` divided by `x2`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def main():</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.mod(-4, 3))  # 2</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.raw_mod(-4, 3))  # -1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">c_mod</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">y</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">y</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_mod</span><span class="p">,</span> <span class="n">c_mod</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_lt</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (less than)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly smaller than RHS, False otherwise</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_lt</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">lt</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_le</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (less than or equal to)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is smaller than or equal to RHS, False otherwise</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_le</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">le</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_gt</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (greater than)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is strictly larger than RHS, False otherwise</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_gt</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">gt</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_ge</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (greater than or equal to)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if LHS is greater than or equal to RHS, False otherwise</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_ge</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">ge</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_eq</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (equal to)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is equal to RHS, False otherwise.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_eq</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">eq</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">cmp_ne</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare two values (not equal to)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: True if LHS is not equal to RHS, False otherwise</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_cmp_ne</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">ne</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_or</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes bitwise-or</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-or with RHS</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_or</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">or_</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_and</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute bitwise-and</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-and with RHS</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_and</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">and_</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_xor</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute bitwise-xor</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS bitwise-xor with RHS</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_xor</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">xor</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_shl</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute bitwise shift left</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS &lt;&lt; RHS</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_shl</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">lshift</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_sar</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute bitwise shift right</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, int]: LHS &gt;&gt; RHS</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_sar</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">rshift</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="nd">@quadrants_scope</span>
+<div class="viewcode-block" id="bit_shr">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.bit_shr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bit_shr</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Elements in `x1` shifted to the right by number of bits in `x2`.</span>
+<span class="sd">    Both `x1`, `x2` must have integer type.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x1 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Input data.</span>
+<span class="sd">        x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            Number of bits to remove at the right of `x1`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Return `x1` with bits shifted `x2` times to the right.</span>
+<span class="sd">        This is a scalar if both `x1` and `x2` are scalars.</span>
+
+<span class="sd">    Example::</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def main():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([7, 8])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.bit_shr(x, y))</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; main()</span>
+<span class="sd">        [3, 2]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_bit_shr</span><span class="p">,</span> <span class="n">_bt_ops_mod</span><span class="o">.</span><span class="n">rshift</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">logical_and</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute logical_and</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-and RHS (with short-circuit semantics)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_logical_and</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="ow">and</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">logical_or</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute logical_or</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        a (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value LHS</span>
+<span class="sd">        b (Union[:class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`]): value RHS</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[:class:`~quadrants.lang.expr.Expr`, bool]: LHS logical-or RHS (with short-circuit semantics)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_binary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_logical_or</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="ow">or</span> <span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="select">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.select">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">select</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return an array drawn from elements in `x1` or `x2`,</span>
+<span class="sd">    depending on the conditions in `cond`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        cond (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The array of conditions.</span>
+<span class="sd">        x1, x2 (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The arrays where the output elements are taken from.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The output at position `k` is the k-th element of `x1` if the k-th element</span>
+<span class="sd">        in `cond` is `True`, otherwise it&#39;s the k-th element of `x2`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def main():</span>
+<span class="sd">        &gt;&gt;&gt;     cond = qd.Matrix([0, 1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Matrix([1, 2, 3, 4])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Matrix([-1, -2, -3, -4])</span>
+<span class="sd">        &gt;&gt;&gt;     print(qd.select(cond, x, y))</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; main()</span>
+<span class="sd">        [-1, 2, -3, 4]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: systematically resolve `-1 = True` problem by introducing u1:</span>
+    <span class="n">cond</span> <span class="o">=</span> <span class="n">logical_not</span><span class="p">(</span><span class="n">logical_not</span><span class="p">(</span><span class="n">cond</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">py_select</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x1</span> <span class="o">*</span> <span class="n">cond</span> <span class="o">+</span> <span class="n">x2</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">cond</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_ternary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_select</span><span class="p">,</span> <span class="n">py_select</span><span class="p">,</span> <span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">ifte</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Evaluate and return `x1` if `cond` is true; otherwise evaluate and return `x2`. This operator guarantees</span>
+<span class="sd">    short-circuit semantics: exactly one of `x1` or `x2` will be evaluated.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        cond (:mod:`~quadrants.types.primitive_types`): \</span>
+<span class="sd">            The condition.</span>
+<span class="sd">        x1, x2 (:mod:`~quadrants.types.primitive_types`): \</span>
+<span class="sd">            The outputs.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        `x1` if `cond` is true and `x2` otherwise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: systematically resolve `-1 = True` problem by introducing u1:</span>
+    <span class="n">cond</span> <span class="o">=</span> <span class="n">logical_not</span><span class="p">(</span><span class="n">logical_not</span><span class="p">(</span><span class="n">cond</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">py_ifte</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x1</span> <span class="k">if</span> <span class="n">cond</span> <span class="k">else</span> <span class="n">x2</span>
+
+    <span class="k">return</span> <span class="n">_ternary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_ifte</span><span class="p">,</span> <span class="n">py_ifte</span><span class="p">,</span> <span class="n">cond</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">clz</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zeros for a 32bit integer&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+            <span class="k">if</span> <span class="mi">2</span><span class="o">**</span><span class="n">i</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">:</span>
+                <span class="k">return</span> <span class="mi">32</span> <span class="o">-</span> <span class="n">i</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_clz</span><span class="p">,</span> <span class="n">_clz</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_add">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_add</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute `x + y`, store the result in `x`,</span>
+<span class="sd">    and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_add(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 2, 3]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 0, 0], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_add(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_add</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_mul">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_mul">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute `x * y`, store the result in `x`,</span>
+<span class="sd">    and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([4, 5, 6])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_mul(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 2, 3]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [4, 10, 18], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_mul(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_sub">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_sub">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically subtract `x` by `y`, store the result in `x`,</span>
+<span class="sd">    and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 0, 0])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_sub(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [-1, -2, -3]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 0, 0], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_sub(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_min">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute the minimum of `x` and `y`, element-wise.</span>
+<span class="sd">    Store the result in `x`, and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 2</span>
+<span class="sd">        &gt;&gt;&gt;     y = 1</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_min(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # 1  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # 2, the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_min(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_min</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_max">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute the maximum of `x` and `y`, element-wise.</span>
+<span class="sd">    Store the result in `x`, and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 1</span>
+<span class="sd">        &gt;&gt;&gt;     y = 2</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_max(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # 2  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # 1, the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_max(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_and">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_and">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_and</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute the bit-wise AND of `x` and `y`, element-wise.</span>
+<span class="sd">    Store the result in `x`, and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input. When both are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_and(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [1, 0, 1]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_and(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_and</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_or">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_or">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_or</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute the bit-wise OR of `x` and `y`, element-wise.</span>
+<span class="sd">    Store the result in `x`, and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input. When both are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_or(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [-1, 2, 3]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_or(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_or</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_xor">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_xor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_xor</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compute the bit-wise XOR of `x` and `y`, element-wise.</span>
+<span class="sd">    Store the result in `x`, and return the old value of `x`.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars</span>
+<span class="sd">    are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input. When both are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([-1, 0, 1])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_xor(x, y)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # [-2, 2, 2]  the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [-1, 0, 1], the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_xor</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_assign</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
+    <span class="k">return</span> <span class="n">a</span>
+
+
+<div class="viewcode-block" id="max">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">max</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>  <span class="c1"># pylint: disable=W0622</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the maximum of the arguments, element-wise.</span>
+
+<span class="sd">    This function takes no effect on a single argument, even it&#39;s array-like.</span>
+<span class="sd">    When there are both scalar and matrix arguments in `args`, the matrices</span>
+<span class="sd">    must have the same shape, and scalars will be broadcasted to the same shape as the matrix.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        args: (List[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Maximum of the inputs.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def foo():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([3, 4, 5])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.max(x, y, 4)</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [4, 4, 5]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">num_args</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">num_args</span> <span class="o">&gt;=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">num_args</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">num_args</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">max_impl</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">max_impl</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">max</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span></div>
+
+
+
+<div class="viewcode-block" id="min">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">min</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>  <span class="c1"># pylint: disable=W0622</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the minimum of the arguments, element-wise.</span>
+
+<span class="sd">    This function takes no effect on a single argument, even it&#39;s array-like.</span>
+<span class="sd">    When there are both scalar and matrix arguments in `args`, the matrices</span>
+<span class="sd">    must have the same shape, and scalars will be broadcasted to the same shape as the matrix.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        args: (List[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Minimum of the inputs.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def foo():</span>
+<span class="sd">        &gt;&gt;&gt;     x = qd.Vector([0, 1, 2])</span>
+<span class="sd">        &gt;&gt;&gt;     y = qd.Vector([3, 4, 5])</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.min(x, y, 1)</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # [0, 1, 1]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">num_args</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">num_args</span> <span class="o">&gt;=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">num_args</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">num_args</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">min_impl</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">min_impl</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">min</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;acos&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;asin&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atan2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_and&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_or&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_xor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_max&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_sub&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_min&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_add&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_mul&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;cast&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ceil&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;cos&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;exp&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;floor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;frexp&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;log&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;random&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;raw_mod&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;raw_div&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;round&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;rsqrt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sin&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sqrt&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tan&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tanh&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;min&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;select&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;abs&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;pow&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

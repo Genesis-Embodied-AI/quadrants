@@ -1,0 +1,723 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.kernel_impl &#8212; Quadrants 0.4.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../_static/documentation_options.js?v=ff822928"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/kernel_impl';</script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.4.2" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.4.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.kernel_impl</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.kernel_impl</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">update_wrapper</span><span class="p">,</span> <span class="n">wraps</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">cast</span><span class="p">,</span> <span class="n">overload</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">QuadrantsCompilationError</span><span class="p">,</span>
+    <span class="n">QuadrantsRuntimeError</span><span class="p">,</span>
+    <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutodiffMode</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._test_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">warnings_helper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._quadrants_callable</span><span class="w"> </span><span class="kn">import</span> <span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.func</span><span class="w"> </span><span class="kn">import</span> <span class="n">Func</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">Kernel</span>
+
+<span class="c1"># Define proxies for fast lookup</span>
+<span class="n">_NONE</span><span class="p">,</span> <span class="n">_REVERSE</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span>
+    <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">REVERSE</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;F&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="func">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.func">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in Quadrants-scope.</span>
+
+<span class="sd">    This decorator transforms a Python function into a Quadrants one. Quadrants</span>
+<span class="sd">    will JIT compile it into native instructions.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fn (Callable): The Python function to be decorated</span>
+<span class="sd">        is_real_function (bool): Whether the function is a real function</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Callable: The decorated function</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.func</span>
+<span class="sd">        &gt;&gt;&gt; def foo(x):</span>
+<span class="sd">        &gt;&gt;&gt;     return x + 2</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def run():</span>
+<span class="sd">        &gt;&gt;&gt;     print(foo(40))  # 42</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="mi">3</span> <span class="o">+</span> <span class="n">is_real_function</span><span class="p">)</span>
+
+    <span class="n">fun</span> <span class="o">=</span> <span class="n">Func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_classfunc</span><span class="o">=</span><span class="n">is_classfunc</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="n">is_real_function</span><span class="p">)</span>
+    <span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
+    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_quadrants_function</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span>
+
+    <span class="n">update_wrapper</span><span class="p">(</span><span class="n">quadrants_callable</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">quadrants_callable</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="real_func">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.real_func">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">real_func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+
+
+
+<div class="viewcode-block" id="pyfunc">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.pyfunc">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">pyfunc</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in both Quadrants and Python scopes.</span>
+
+<span class="sd">    When called inside the Quadrants scope, Quadrants will JIT compile it into</span>
+<span class="sd">    native instructions. Otherwise it will be invoked directly as a</span>
+<span class="sd">    Python function.</span>
+
+<span class="sd">    See also :func:`~quadrants.lang.kernel_impl.func`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fn (Callable): The Python function to be decorated</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Callable: The decorated function</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">fun</span> <span class="o">=</span> <span class="n">Func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_classfunc</span><span class="o">=</span><span class="n">is_classfunc</span><span class="p">,</span> <span class="n">_pyfunc</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
+    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_quadrants_function</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_real_function</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="n">quadrants_callable</span></div>
+
+
+
+<span class="c1"># For a Quadrants class definition like below:</span>
+<span class="c1">#</span>
+<span class="c1"># @qd.data_oriented</span>
+<span class="c1"># class X:</span>
+<span class="c1">#   @qd.kernel</span>
+<span class="c1">#   def foo(self):</span>
+<span class="c1">#     ...</span>
+<span class="c1">#</span>
+<span class="c1"># When qd.kernel runs, the stackframe&#39;s |code_context| of Python 3.8(+) is</span>
+<span class="c1"># different from that of Python 3.7 and below. In 3.8+, it is &#39;class X:&#39;,</span>
+<span class="c1"># whereas in &lt;=3.7, it is &#39;@qd.data_oriented&#39;. More interestingly, if the class</span>
+<span class="c1"># inherits, i.e. class X(object):, then in both versions, |code_context| is</span>
+<span class="c1"># &#39;class X(object):&#39;...</span>
+<span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;@(\w+\.)?data_oriented&quot;</span><span class="p">),</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;class &quot;</span><span class="p">),</span>
+<span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">maybe_class_frame</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="p">)</span>
+        <span class="n">statement_list</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getframeinfo</span><span class="p">(</span><span class="n">maybe_class_frame</span><span class="p">)[</span><span class="mi">3</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">statement_list</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">first_statment</span> <span class="o">=</span> <span class="n">statement_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">pat</span> <span class="ow">in</span> <span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pat</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">first_statment</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_kernel_impl</span><span class="p">(</span><span class="n">_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
+    <span class="c1"># Can decorators determine if a function is being defined inside a class?</span>
+    <span class="c1"># https://stackoverflow.com/a/8793684/12003165</span>
+    <span class="n">is_classkernel</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;kernel=</span><span class="si">{</span><span class="n">_func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is_classkernel=</span><span class="si">{</span><span class="n">is_classkernel</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">primal</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_NONE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
+    <span class="n">adjoint</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_REVERSE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
+    <span class="c1"># Having |primal| contains |grad| makes the tape work.</span>
+    <span class="n">primal</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">adjoint</span>
+
+    <span class="nd">@wraps</span><span class="p">(</span><span class="n">_func</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">wrapped_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">primal</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">QuadrantsCompilationError</span><span class="p">,</span> <span class="n">QuadrantsRuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+    <span class="n">wrapped</span><span class="p">:</span> <span class="n">QuadrantsCallable</span>
+    <span class="k">if</span> <span class="n">is_classkernel</span><span class="p">:</span>
+        <span class="c1"># For class kernels, their primal/adjoint callables are constructed when the kernel is accessed via the</span>
+        <span class="c1"># instance inside _BoundedDifferentiableMethod.</span>
+        <span class="c1"># This is because we need to bind the kernel or |grad| to the instance owning the kernel, which is not known</span>
+        <span class="c1"># until the kernel is accessed.</span>
+        <span class="c1"># See also: _BoundedDifferentiableMethod, data_oriented.</span>
+        <span class="nd">@wraps</span><span class="p">(</span><span class="n">_func</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">wrapped_classkernel</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">args</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">wrapped_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">wrapped_classkernel</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">wrapped_func</span><span class="p">)</span>
+        <span class="n">wrapped</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">adjoint</span>
+
+    <span class="n">wrapped</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">wrapped</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="o">=</span> <span class="n">is_classkernel</span>
+    <span class="n">wrapped</span><span class="o">.</span><span class="n">_primal</span> <span class="o">=</span> <span class="n">primal</span>
+    <span class="n">wrapped</span><span class="o">.</span><span class="n">_adjoint</span> <span class="o">=</span> <span class="n">adjoint</span>
+    <span class="n">primal</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">wrapped</span>
+    <span class="k">return</span> <span class="n">wrapped</span>
+
+
+<span class="nd">@overload</span>
+<div class="viewcode-block" id="kernel">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.kernel">[docs]</a>
+<span class="c1"># TODO: This callable should be Callable[[F], F].</span>
+<span class="c1"># See comments below.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
+
+
+
+<span class="c1"># TODO: This next overload should return F, but currently that will cause issues</span>
+<span class="c1"># with ndarray type. We need to migrate ndarray type to be basically</span>
+<span class="c1"># the actual Ndarray, with Generic types, rather than some other</span>
+<span class="c1"># NdarrayType class. The _fn should also be F by the way.</span>
+<span class="c1"># However, by making it return Any, we can make the pure parameter</span>
+<span class="c1"># change now, without breaking pyright.</span>
+<span class="nd">@overload</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fastcache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Marks a function as a Quadrants kernel.</span>
+
+<span class="sd">    A Quadrants kernel is a function written in Python, and gets JIT compiled by</span>
+<span class="sd">    Quadrants into native CPU/GPU instructions (e.g. a series of CUDA kernels).</span>
+<span class="sd">    The top-level ``for`` loops are automatically parallelized, and distributed</span>
+<span class="sd">    to either a CPU thread pool or massively parallel GPUs.</span>
+
+<span class="sd">    Kernel&#39;s gradient kernel would be generated automatically by the AutoDiff system.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; x = qd.field(qd.i32, shape=(4, 8))</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def run():</span>
+<span class="sd">        &gt;&gt;&gt;     # Assigns all the elements of `x` in parallel.</span>
+<span class="sd">        &gt;&gt;&gt;     for i in x:</span>
+<span class="sd">        &gt;&gt;&gt;         x[i] = i</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">has_kernel_params</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
+        <span class="c1"># Adjust stack frame: +1 if called via decorator factory (@kernel()), else as-is (@kernel)</span>
+        <span class="k">if</span> <span class="n">has_kernel_params</span><span class="p">:</span>
+            <span class="n">level</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">level</span> <span class="o">=</span> <span class="mi">4</span>
+
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">)</span>
+        <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
+        <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
+                <span class="s2">&quot;@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. &quot;</span>
+                <span class="s2">&quot;`pure` parameter is intended to be removed in 4.0.0&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">update_wrapper</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">wrapped</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">_fn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Called with @kernel() or @kernel(foo=&quot;bar&quot;)</span>
+        <span class="k">return</span> <span class="n">decorator</span>
+
+    <span class="k">return</span> <span class="n">decorator</span><span class="p">(</span><span class="n">_fn</span><span class="p">,</span> <span class="n">has_kernel_params</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_BoundedDifferentiableMethod</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_owner</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">wrapped_kernel_func</span><span class="p">:</span> <span class="n">QuadrantsCallable</span> <span class="o">|</span> <span class="n">BoundQuadrantsCallable</span><span class="p">):</span>
+        <span class="n">clsobj</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">kernel_owner</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">clsobj</span><span class="p">,</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="n">clsobj</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span> <span class="o">=</span> <span class="n">kernel_owner</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_primal</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_primal</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_adjoint</span>
+        <span class="bp">self</span><span class="o">.</span><span class="vm">__name__</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_primal</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_primal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">QuadrantsCompilationError</span><span class="p">,</span> <span class="n">QuadrantsRuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Kernel&quot;</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="data_oriented">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.data_oriented">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a class as Quadrants compatible.</span>
+
+<span class="sd">    To allow for modularized code, Quadrants provides this decorator so that</span>
+<span class="sd">    Quadrants kernels can be defined inside a class.</span>
+
+<span class="sd">    See also https://docs.taichi-lang.org/docs/odop</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.data_oriented</span>
+<span class="sd">        &gt;&gt;&gt; class TiArray:</span>
+<span class="sd">        &gt;&gt;&gt;     def __init__(self, n):</span>
+<span class="sd">        &gt;&gt;&gt;         self.x = qd.field(qd.f32, shape=n)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt;     def inc(self):</span>
+<span class="sd">        &gt;&gt;&gt;         for i in self.x:</span>
+<span class="sd">        &gt;&gt;&gt;             self.x[i] += 1.0</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; a = TiArray(32)</span>
+<span class="sd">        &gt;&gt;&gt; a.inc()</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        cls (Class): the class to be decorated</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The decorated class.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">):</span>
+        <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_indirect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">nonlocal</span> <span class="n">fun</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">_BoundedDifferentiableMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
+            <span class="n">ret</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="vm">__name__</span>  <span class="c1"># type: ignore</span>
+            <span class="k">return</span> <span class="n">ret</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret</span>
+
+    <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called</span>
+    <span class="c1"># through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the</span>
+    <span class="c1"># owning instance to the primal function and its adjoint for auto-differentiation gradient computation.</span>
+    <span class="c1"># There is a special treatment for properties, as they may actually hide kernels under the hood. In such a case,</span>
+    <span class="c1"># the underlying function is extracted, wrapped as any member function, then wrapped again as a new property.</span>
+    <span class="c1"># Note that all the other attributes can be left untouched.</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+        <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>
+        <span class="n">fun</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">fget</span> <span class="k">if</span> <span class="n">is_property</span> <span class="k">else</span> <span class="n">attr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="p">(</span><span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">staticmethod</span><span class="p">:</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">))</span>
+    <span class="bp">cls</span><span class="o">.</span><span class="n">_data_oriented</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">return</span> <span class="bp">cls</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;data_oriented&quot;</span><span class="p">,</span> <span class="s2">&quot;func&quot;</span><span class="p">,</span> <span class="s2">&quot;kernel&quot;</span><span class="p">,</span> <span class="s2">&quot;pyfunc&quot;</span><span class="p">,</span> <span class="s2">&quot;real_func&quot;</span><span class="p">]</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
