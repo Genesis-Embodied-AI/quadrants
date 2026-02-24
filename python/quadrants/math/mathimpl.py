@@ -757,6 +757,7 @@ def isinf(x):
     """
     if static(impl.is_python_backend()):
         import math
+
         return math.isinf(float(x))
     ftype = impl.get_runtime().default_fp
     fx = ops.cast(x, ftype)
@@ -786,6 +787,7 @@ def isnan(x):
     """
     if static(impl.is_python_backend()):
         import math
+
         return math.isnan(float(x))
     ftype = impl.get_runtime().default_fp
     fx = ops.cast(x, ftype)

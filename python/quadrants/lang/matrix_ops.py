@@ -1,6 +1,5 @@
 import quadrants.lang.ops as ops_mod
-from quadrants.lang import impl
-from quadrants.lang import kernel_impl
+from quadrants.lang import impl, kernel_impl
 from quadrants.lang.matrix import Matrix, Vector
 from quadrants.lang.matrix_ops_utils import (
     arg_at,
@@ -332,7 +331,9 @@ def cross(vec_x, vec_y):
 def outer_product(vec_x, vec_y):
     shape_x = impl.static(vec_x.get_shape())
     shape_y = impl.static(vec_y.get_shape())
-    return Matrix([[vec_x[i] * vec_y[j] for j in impl.static(range(shape_y[0]))] for i in impl.static(range(shape_x[0]))])
+    return Matrix(
+        [[vec_x[i] * vec_y[j] for j in impl.static(range(shape_y[0]))] for i in impl.static(range(shape_x[0]))]
+    )
 
 
 @preconditions(assert_tensor)

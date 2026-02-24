@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 import quadrants as qd
-from quadrants.lang._py_tensor import MyTorchTensor, create_tensor, _setup_views
+from quadrants.lang._py_tensor import MyTorchTensor, create_tensor
 
 
 def test_create_tensor_scalar_1d():
@@ -211,6 +211,7 @@ def test_tensor_star_unpack_in_tuple():
     """*J unpacking in tuple should yield ints for numpy indexing."""
     qd.init(qd.python)
     import numpy as np
+
     arr = np.zeros((3, 4, 5))
     arr[1, 2, 3] = 42.0
     J = MyTorchTensor(torch.tensor([2, 3]))

@@ -5,8 +5,8 @@ import functools
 from quadrants.lang.exception import QuadrantsCompilationError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix
+
 from . import impl
-from quadrants._lib import core
 
 
 def do_check(checker_fns, *args, **kwargs):

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 import numpy as np
 
+from quadrants import lang
 from quadrants._lib import core as _ti_core
 from quadrants._lib.core.quadrants_python import (
     DataTypeCxx,
@@ -15,7 +16,6 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._snode import fields_builder
 from quadrants.lang._ndarray import ScalarNdarray
-from quadrants import lang
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.exception import (
     QuadrantsCompilationError,

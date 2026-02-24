@@ -170,7 +170,7 @@ def to_pytorch_type(dt):
         raise RuntimeError(f"PyTorch doesn't support {dt.to_string()} data type before version 2.3.0.")
 
     if dt in {torch.float32, torch.int32, torch.bool}:
-       return dt
+        return dt
     raise RuntimeError(f"PyTorch doesn't support {dt.to_string()} data type.")
 
 

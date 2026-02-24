@@ -9,10 +9,9 @@ try:
 except Exception:
     pass
 
-from quadrants.lang import ops
-from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 from quadrants import lang
-from quadrants.lang import matrix
+from quadrants.lang import matrix, ops
+from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 from quadrants.types.utils import is_integral
 
 

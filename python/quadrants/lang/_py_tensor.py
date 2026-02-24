@@ -21,8 +21,10 @@ class MyTorchTensor(torch.Tensor):
             kwargs = {}
         has_foreign = any(not issubclass(t, MyTorchTensor) and t is not torch.Tensor for t in types)
         if has_foreign:
+
             def unwrap(o):
                 return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
+
             args = torch.utils._pytree.tree_map(unwrap, args)
             kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)
             return func(*args, **kwargs)
@@ -31,7 +33,7 @@ class MyTorchTensor(torch.Tensor):
     @property
     def shape(self):
         real = self.size()
-        batch = getattr(self, '_batch_shape', None)
+        batch = getattr(self, "_batch_shape", None)
         return batch if batch is not None else real
 
     @classmethod
@@ -68,6 +70,7 @@ class MyTorchTensor(torch.Tensor):
             return key[0]
         if isinstance(key, tuple):
             import torch as _torch
+
             if any(isinstance(k, _torch.Tensor) for k in key):
                 return tuple(int(k) if isinstance(k, _torch.Tensor) and k.ndim == 0 else k for k in key)
         return key

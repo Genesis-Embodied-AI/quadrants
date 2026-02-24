@@ -5,8 +5,8 @@ from typing import Union
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
 from quadrants import lang
+from quadrants._lib import core as _ti_core
 from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.lang.field import Field
 from quadrants.lang.util import (
@@ -83,11 +83,15 @@ def cast(obj, dtype):
         # TODO: unify with element_wise_unary
         return obj.cast(dtype)
     if lang.impl.is_python_backend():
-        from quadrants.lang.impl import dtype_to_torch_dtype
         import torch as _torch
+
+        from quadrants.lang.impl import dtype_to_torch_dtype
+
         if isinstance(obj, _torch.Tensor):
             return obj.to(dtype_to_torch_dtype(dtype))
-        py_type = float if "float" in str(dtype) or "f16" in str(dtype) or "f32" in str(dtype) or "f64" in str(dtype) else int
+        py_type = (
+            float if "float" in str(dtype) or "f16" in str(dtype) or "f32" in str(dtype) or "f64" in str(dtype) else int
+        )
         return py_type(obj)
     return lang.expr.Expr(_ti_core.value_cast(lang.expr.Expr(obj).ptr, dtype))
 
@@ -607,7 +611,9 @@ def random(dtype=float) -> Union[float, int]:
         >>>     print(j)  # 73412986184350777
     """
     dtype = cook_dtype(dtype)
-    x = lang.expr.Expr(_ti_core.make_rand_expr(dtype, _ti_core.DebugInfo(lang.impl.get_runtime().get_current_src_info())))
+    x = lang.expr.Expr(
+        _ti_core.make_rand_expr(dtype, _ti_core.DebugInfo(lang.impl.get_runtime().get_current_src_info()))
+    )
     return lang.impl.expr_init(x)
 
 
@@ -1178,7 +1184,9 @@ def atomic_add(x, y):
     if lang.impl.is_python_backend():
         x += y
         return x
-    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    )
 
 
 @writeback_binary
@@ -1211,7 +1219,9 @@ def atomic_mul(x, y):
     if lang.impl.is_python_backend():
         x *= y
         return x
-    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    )
 
 
 @writeback_binary
@@ -1244,7 +1254,9 @@ def atomic_sub(x, y):
     if lang.impl.is_python_backend():
         x -= y
         return x
-    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    )
 
 
 @writeback_binary
@@ -1277,7 +1289,9 @@ def atomic_min(x, y):
     if lang.impl.is_python_backend():
         x[()] = min(x[()], y)
         return x
-    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    )
 
 
 @writeback_binary
@@ -1310,7 +1324,9 @@ def atomic_max(x, y):
     if lang.impl.is_python_backend():
         x[()] = max(x[()], y)
         return x
-    return lang.impl.expr_init(lang.expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info())))
+    return lang.impl.expr_init(
+        lang.expr.Expr(_ti_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_ti_core.DebugInfo(stack_info()))
+    )
 
 
 @writeback_binary
