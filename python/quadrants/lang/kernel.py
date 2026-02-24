@@ -543,9 +543,9 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
-        config = impl.current_cfg()
-        if config.arch == _ARCH_PYTHON:
+        if impl.get_runtime()._arch == _ARCH_PYTHON:
             return self.func(*py_args, **kwargs)
+        config = impl.current_cfg()
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)

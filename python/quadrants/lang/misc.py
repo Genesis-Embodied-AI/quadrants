@@ -461,9 +461,11 @@ def init(
 
     get_default_kernel_profiler().set_kernel_profiler_mode(cfg.kernel_profiler)
 
-    # create a new program:
-    impl.get_runtime().create_program()
+    impl.get_runtime()._arch = cfg.arch
+
+    # create a new program (skip for python backend — no C++ runtime needed):
     if cfg.arch != _ti_core.python:
+        impl.get_runtime().create_program()
         _logging.trace("Materializing runtime...")
         impl.get_runtime().prog.materialize_runtime()
 

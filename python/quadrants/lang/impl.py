@@ -353,6 +353,7 @@ class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
         self._prog: Program | None = None
+        self._arch = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
@@ -828,7 +829,7 @@ def _field(
 
 
 @python_scope
-def field(dtype, shape, *args, **kwargs):
+def field(dtype, shape=None, *args, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
@@ -868,9 +869,9 @@ def field(dtype, shape, *args, **kwargs):
     """
     if isinstance(shape, numbers.Number):
         shape = (shape,)
-    if shape is None:
-        shape = ()
     if is_python_backend():
+        if shape is None:
+            shape = ()
         assert torch is not None
         batch_ndim = len(shape)
         if isinstance(dtype, MatrixType):
@@ -1269,7 +1270,7 @@ def current_cfg():
 
 
 def is_python_backend() -> bool:
-    return get_runtime().prog.config().arch == _ti_core.Arch.python
+    return get_runtime()._arch == _ti_core.Arch.python
 
 
 def default_cfg():
