@@ -15,6 +15,19 @@ except Exception:
 
 class MyTorchTensor(torch.Tensor):
 
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        has_foreign = any(not issubclass(t, MyTorchTensor) and t is not torch.Tensor for t in types)
+        if has_foreign:
+            def unwrap(o):
+                return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
+            args = torch.utils._pytree.tree_map(unwrap, args)
+            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)
+            return func(*args, **kwargs)
+        return super().__torch_function__(func, types, args, kwargs)
+
     @property
     def shape(self):
         real = self.size()
@@ -46,14 +59,38 @@ class MyTorchTensor(torch.Tensor):
     def z(self):
         return super().__getitem__(2)
 
-    def __getitem__(self, key):
-        if key == 0 and self.size() == ():
-            return self.item()
+    @staticmethod
+    def _unpack_key(key):
+        """Unpack MyTorchTensor indices into plain ints for multi-dim indexing."""
+        if isinstance(key, MyTorchTensor) and len(key.size()) == 1:
+            return tuple(int(key[i]) for i in range(key.size()[0]))
         if isinstance(key, list) and len(key) == 1:
-            key = key[0]
+            return key[0]
+        if isinstance(key, tuple):
+            import torch as _torch
+            if any(isinstance(k, _torch.Tensor) for k in key):
+                return tuple(int(k) if isinstance(k, _torch.Tensor) and k.ndim == 0 else k for k in key)
+        return key
+
+    def __iter__(self):
+        for i in range(self.size()[0]):
+            val = super().__getitem__(i)
+            if isinstance(val, torch.Tensor) and val.ndim == 0:
+                item = val.item()
+                if isinstance(item, float) and item.is_integer():
+                    item = int(item)
+                yield item
+            else:
+                yield val
+
+    def __getitem__(self, key):
+        key = MyTorchTensor._unpack_key(key)
+        if not isinstance(key, tuple) and key == 0 and self.size() == ():
+            return self.item()
         return super().__getitem__(key)
 
     def __setitem__(self, key, v):
+        key = MyTorchTensor._unpack_key(key)
         if type(v) is np.ndarray:
             v = torch.from_numpy(v)
         elif isinstance(v, np.generic):
