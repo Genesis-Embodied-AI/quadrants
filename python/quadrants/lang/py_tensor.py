@@ -103,3 +103,5 @@ def _setup_views(tensor, batch_ndim):
     tensor._np = tensor.numpy()
     tensor._T_np = tensor._T_tc.numpy()
     tensor._batch_shape = tensor.size()[:batch_ndim]
+    tensor.grad = None
+    tensor.dual = None

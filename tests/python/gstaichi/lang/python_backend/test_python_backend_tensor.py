@@ -169,6 +169,30 @@ def test_field_none_shape():
     assert f.shape == torch.Size([])
 
 
+def test_struct_field():
+    """Struct fields should create tensors for each member with the correct shape."""
+    qd.init(qd.python)
+    my_struct = qd.types.struct(x=qd.f32, y=qd.f32, z=qd.f32)
+    sf = my_struct.field(shape=(4,))
+    assert sf.field_dict["x"].size() == torch.Size([4])
+    assert sf.field_dict["y"].size() == torch.Size([4])
+    assert sf.field_dict["z"].size() == torch.Size([4])
+    sf.field_dict["x"][2] = 42.0
+    assert sf.field_dict["x"][2] == 42.0
+
+
+def test_struct_field_with_vec():
+    """Struct fields with vector members."""
+    qd.init(qd.python)
+    my_struct = qd.types.struct(pos=qd.math.vec3, mass=qd.f32)
+    sf = my_struct.field(shape=(5,))
+    assert sf.field_dict["pos"].size() == torch.Size([5, 3])
+    assert sf.field_dict["pos"].shape == torch.Size([5])
+    assert sf.field_dict["mass"].size() == torch.Size([5])
+    sf.field_dict["pos"][2] = torch.tensor([1.0, 2.0, 3.0])
+    assert sf.field_dict["pos"][2, 1].item() == 2.0
+
+
 def test_size_in_kernel():
     """Kernel code uses .shape[0] which should return the first batch dim."""
     qd.init(qd.python)
