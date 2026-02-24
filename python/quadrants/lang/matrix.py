@@ -873,6 +873,14 @@ class Matrix(QuadrantsOperations):
         Returns:
             :class:`~quadrants.Matrix`: A matrix.
         """
+        if impl.is_python_backend():
+            if isinstance(shape, numbers.Number):
+                shape = (shape,)
+            if shape is None:
+                shape = ()
+            mat_type = MatrixType(n, m, ndim=ndim if ndim is not None else 2, dtype=dtype)
+            return impl.field(mat_type, shape=shape)
+
         entries = []
         element_dim = ndim if ndim is not None else 2
         if isinstance(dtype, (list, tuple, np.ndarray)):
