@@ -48,6 +48,15 @@ except Exception:
 _type_factory = _ti_python_core.get_type_factory_instance()
 
 
+def _scalar_tensors_to_items(arr):
+    """Recursively convert 0-d tensors to Python scalars in a nested list."""
+    if isinstance(arr, (list, tuple)):
+        return [_scalar_tensors_to_items(v) for v in arr]
+    if torch is not None and isinstance(arr, torch.Tensor) and arr.shape == ():
+        return arr.item()
+    return arr
+
+
 def _generate_swizzle_patterns(key_group: str, required_length=4):
     """Generate vector swizzle patterns from a given set of characters.
 
@@ -261,7 +270,7 @@ class Matrix(QuadrantsOperations):
     def __new__(cls, arr, dt=None):
         if impl.is_python_backend():
             assert torch is not None
-            arr = [v.item() if isinstance(v, (torch.Tensor, py_tensor.MyTorchTensor)) and v.shape == () else v for v in arr]
+            arr = _scalar_tensors_to_items(arr)
             return py_tensor.MyTorchTensor(arr)
         return super().__new__(cls)
 
