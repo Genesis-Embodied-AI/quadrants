@@ -70,10 +70,9 @@ class MyTorchTensor(torch.Tensor):
         return super().__getitem__(key)
 
     def __setitem__(self, key, v):
-        # if isinstance(v, np.NDArray):
         if type(v) is np.ndarray:
             v = torch.from_numpy(v)
-        elif type(v) in {np.float32, np.bool}:
+        elif isinstance(v, np.generic):
             v = v.item()
         # else:
         try:
