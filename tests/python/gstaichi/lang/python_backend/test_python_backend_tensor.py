@@ -193,6 +193,100 @@ def test_struct_field_with_vec():
     assert sf.field_dict["pos"][2, 1].item() == 2.0
 
 
+def test_tensor_iter_yields_scalars():
+    """Iterating a 1-D MyTorchTensor should yield Python scalars, not 0-d tensors."""
+    qd.init(qd.python)
+    t = MyTorchTensor(torch.tensor([10, 20, 30]))
+    items = list(t)
+    assert all(isinstance(x, int) for x in items)
+    assert items == [10, 20, 30]
+
+    t2 = MyTorchTensor(torch.tensor([1.5, 2.5]))
+    items2 = list(t2)
+    assert all(isinstance(x, float) for x in items2)
+    assert items2 == [1.5, 2.5]
+
+
+def test_tensor_star_unpack_in_tuple():
+    """*J unpacking in tuple should yield ints for numpy indexing."""
+    qd.init(qd.python)
+    import numpy as np
+    arr = np.zeros((3, 4, 5))
+    arr[1, 2, 3] = 42.0
+    J = MyTorchTensor(torch.tensor([2, 3]))
+    assert arr[(1, *J)] == 42.0
+
+
+def test_grouped_vector_index():
+    """MyTorchTensor used as a vector index should unpack to multi-dim indexing."""
+    qd.init(qd.python)
+    f = qd.field(qd.math.vec3, shape=(3, 2))
+    f[1, 0] = torch.tensor([10.0, 20.0, 30.0])
+    idx = MyTorchTensor(torch.tensor([1, 0]))
+    result = f[idx]
+    assert result[0].item() == 10.0
+    assert result[1].item() == 20.0
+    f[idx] = torch.tensor([99.0, 88.0, 77.0])
+    assert f[1, 0, 0].item() == 99.0
+
+
+def test_isnan():
+    qd.init(qd.python)
+
+    @qd.kernel
+    def check_nan(a: qd.types.ndarray(dtype=qd.f32, ndim=1), out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            out[i] = 1 if qd.math.isnan(a[i]) else 0
+
+    a = qd.ndarray(qd.f32, shape=(3,))
+    out = qd.ndarray(qd.i32, shape=(3,))
+    a[0] = 1.0
+    a[1] = float("nan")
+    a[2] = float("inf")
+    check_nan(a, out)
+    assert out[0] == 0
+    assert out[1] == 1
+    assert out[2] == 0
+
+
+def test_isinf():
+    qd.init(qd.python)
+
+    @qd.kernel
+    def check_inf(a: qd.types.ndarray(dtype=qd.f32, ndim=1), out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            out[i] = 1 if qd.math.isinf(a[i]) else 0
+
+    a = qd.ndarray(qd.f32, shape=(3,))
+    out = qd.ndarray(qd.i32, shape=(3,))
+    a[0] = 1.0
+    a[1] = float("nan")
+    a[2] = float("inf")
+    check_inf(a, out)
+    assert out[0] == 0
+    assert out[1] == 0
+    assert out[2] == 1
+
+
+def test_cast():
+    qd.init(qd.python)
+
+    @qd.kernel
+    def do_cast(a: qd.types.ndarray(dtype=qd.f32, ndim=1), out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            out[i] = qd.cast(a[i], qd.i32)
+
+    a = qd.ndarray(qd.f32, shape=(3,))
+    out = qd.ndarray(qd.i32, shape=(3,))
+    a[0] = 1.7
+    a[1] = 2.3
+    a[2] = -0.9
+    do_cast(a, out)
+    assert out[0] == 1
+    assert out[1] == 2
+    assert out[2] == 0
+
+
 def test_size_in_kernel():
     """Kernel code uses .shape[0] which should return the first batch dim."""
     qd.init(qd.python)
