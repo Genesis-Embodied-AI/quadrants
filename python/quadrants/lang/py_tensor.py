@@ -1,9 +1,8 @@
 """
-handle initializatin torhc tensor for python backend
+Torch tensor wrapper for the python backend.
 """
 
 from functools import partial
-from typing import Callable
 
 import numpy as np
 
@@ -14,41 +13,19 @@ except Exception:
     pass
 
 
-def from_numpy(self: torch.Tensor, numpy_tensor):
-    assert torch is not None
-    self.copy_(torch.from_numpy(numpy_tensor))
-
-
-def getitem_wrapper(self: torch.Tensor, key):
-    print("get_item wrapper", self, key)
-    if key == 0 and len(self.shape) == 0:
-        return self.item()
-    return self.super().__getitem__(key)
-
-
-def init_py_tensor(t: torch.Tensor) -> None:
-    t.fill = t.fill_  # type: ignore
-    t.from_numpy = partial(from_numpy, t)
-    t.to_numpy = t.numpy
-    t.old_getter = t.__getitem__
-
-    from . import matrix_ops
-    for k, v in matrix_ops.__dict__.items():
-        if not k.startswith("_") and isinstance(v, Callable):
-            print(k, v)
-            setattr(t, k, partial(v, t))
-    # t.__getitem__ = None
-    # t.__getitem__ = partial(getitem_wrapper, t)
-
-
 class MyTorchTensor(torch.Tensor):
     @classmethod
     def zeros(cls, *args, **kwargs):
-        print("args", args, "kwargs", kwargs)
         return cls(torch.zeros(*args, **kwargs))
 
     def fill(self, v):
         super().fill_(v)
+
+    def from_numpy(self, numpy_tensor):
+        self.copy_(torch.from_numpy(numpy_tensor))
+
+    def to_numpy(self):
+        return self.numpy()
 
     @property
     def x(self):
@@ -74,31 +51,28 @@ class MyTorchTensor(torch.Tensor):
             v = torch.from_numpy(v)
         elif isinstance(v, np.generic):
             v = v.item()
-        # else:
         try:
             super().__setitem__(key, v)
         except Exception as e:
-            print("setitem", key, v)
-            print("type(v)", type(v))
-            raise e
-    
+            raise type(e)(f"MyTorchTensor.__setitem__({key!r}, {v!r} (type={type(v).__name__}))") from e
+
     def get_shape(self):
         return self.shape
-        
+
     def outer_product(self, other):
-        # from . import matrix_ops
-        # return matrix_ops.outer_product(self, other)
         shape_x = self.shape
         shape_y = other.shape
-        vec_x = self
-        vec_y = other
-        print('self.shape', self.shape, 'other.shape', other.shape)
-        res = [[(vec_x[i] * vec_y[j]).item() for j in range(shape_y[0])] for i in range(shape_x[0])]
-        print('res', res)
+        res = [[(self[i] * other[j]).item() for j in range(shape_y[0])] for i in range(shape_x[0])]
         return MyTorchTensor(res)
+
+    def __getattr__(self, name):
+        from . import matrix_ops
+
+        fn = getattr(matrix_ops, name, None)
+        if fn is not None and callable(fn):
+            return partial(fn, self)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
 
 def create_tensor(shape, dtype):
-    res = MyTorchTensor.zeros(size=shape, dtype=dtype)
-    init_py_tensor(res)
-    return res
+    return MyTorchTensor.zeros(size=shape, dtype=dtype)
