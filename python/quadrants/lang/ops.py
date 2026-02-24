@@ -82,6 +82,13 @@ def cast(obj, dtype):
     if is_quadrants_class(obj):
         # TODO: unify with element_wise_unary
         return obj.cast(dtype)
+    if lang.impl.is_python_backend():
+        from quadrants.lang.impl import dtype_to_torch_dtype
+        import torch as _torch
+        if isinstance(obj, _torch.Tensor):
+            return obj.to(dtype_to_torch_dtype(dtype))
+        py_type = float if "float" in str(dtype) or "f16" in str(dtype) or "f32" in str(dtype) or "f64" in str(dtype) else int
+        return py_type(obj)
     return lang.expr.Expr(_ti_core.value_cast(lang.expr.Expr(obj).ptr, dtype))
 
 
