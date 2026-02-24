@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 import numpy as np
 
-from quadrants import lang
 from quadrants._lib import core as _ti_core
 from quadrants._lib.core.quadrants_python import (
     DataTypeCxx,
@@ -16,6 +15,7 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._snode import fields_builder
 from quadrants.lang._ndarray import ScalarNdarray
+from quadrants.lang._ndrange import GroupedNDRange, _Ndrange
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.exception import (
     QuadrantsCompilationError,
@@ -119,7 +119,7 @@ def expr_init(rhs):
         return rhs
     if isinstance(rhs, _ti_core.Arch):
         return rhs
-    if isinstance(rhs, lang._ndrange._Ndrange):
+    if isinstance(rhs, _Ndrange):
         return rhs
     if isinstance(rhs, MeshElementFieldProxy):
         return rhs
@@ -1197,8 +1197,8 @@ def static(x, *xs) -> Any:
                 list,
                 tuple,
                 enumerate,
-                lang._ndrange.GroupedNDRange,
-                lang._ndrange._Ndrange,
+                GroupedNDRange,
+                _Ndrange,
                 zip,
                 filter,
                 map,
@@ -1244,7 +1244,7 @@ def grouped(x):
         >>>     print(I)
         prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]
     """
-    if isinstance(x, lang._ndrange._Ndrange):
+    if isinstance(x, _Ndrange):
         return x.grouped()
     if is_python_backend():
         return [[i] for i in range(x.shape[0])]
