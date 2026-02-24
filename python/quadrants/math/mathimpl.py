@@ -756,8 +756,6 @@ def isinf(x):
         For each element i of the result, returns 1 if x[i] is posititve or negative floating point infinity and 0 otherwise.
     """
     if static(impl.is_python_backend()):
-        import math
-
         return math.isinf(float(x))
     ftype = impl.get_runtime().default_fp
     fx = ops.cast(x, ftype)
@@ -786,8 +784,6 @@ def isnan(x):
         For each element i of the result, returns 1 if x[i] is posititve or negative floating point NaN (Not a Number) and 0 otherwise.
     """
     if static(impl.is_python_backend()):
-        import math
-
         return math.isnan(float(x))
     ftype = impl.get_runtime().default_fp
     fx = ops.cast(x, ftype)

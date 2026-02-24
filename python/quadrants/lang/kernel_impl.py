@@ -137,13 +137,12 @@ def _kernel_impl(_func: Callable, level_of_class_stackframe: int, verbose: bool 
 
     @wraps(_func)
     def wrapped_func(*args, **kwargs):
-        # try:
-        if True:
+        try:
             return primal(*args, **kwargs)
-        # except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
-        #     if impl.get_runtime().print_full_traceback:
-        #         raise e
-        #     raise type(e)("\n" + str(e)) from None
+        except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
+            if impl.get_runtime().print_full_traceback:
+                raise e
+            raise type(e)("\n" + str(e)) from None
 
     wrapped: QuadrantsCallable
     if is_classkernel:

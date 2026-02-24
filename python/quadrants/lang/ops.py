@@ -83,9 +83,9 @@ def cast(obj, dtype):
         # TODO: unify with element_wise_unary
         return obj.cast(dtype)
     if lang.impl.is_python_backend():
-        import torch as _torch
+        import torch as _torch  # pylint: disable=C0415
 
-        from quadrants.lang.impl import dtype_to_torch_dtype
+        from quadrants.lang.impl import dtype_to_torch_dtype  # pylint: disable=C0415
 
         if isinstance(obj, _torch.Tensor):
             return obj.to(dtype_to_torch_dtype(dtype))

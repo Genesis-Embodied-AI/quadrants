@@ -69,10 +69,8 @@ class MyTorchTensor(torch.Tensor):
         if isinstance(key, list) and len(key) == 1:
             return key[0]
         if isinstance(key, tuple):
-            import torch as _torch
-
-            if any(isinstance(k, _torch.Tensor) for k in key):
-                return tuple(int(k) if isinstance(k, _torch.Tensor) and k.ndim == 0 else k for k in key)
+            if any(isinstance(k, torch.Tensor) for k in key):
+                return tuple(int(k) if isinstance(k, torch.Tensor) and k.ndim == 0 else k for k in key)
         return key
 
     def __iter__(self):
@@ -120,7 +118,7 @@ class MyTorchTensor(torch.Tensor):
         return MyTorchTensor(res)
 
     def __getattr__(self, name):
-        from . import matrix_ops
+        from . import matrix_ops  # pylint: disable=C0415
 
         fn = getattr(matrix_ops, name, None)
         if fn is not None and callable(fn):
