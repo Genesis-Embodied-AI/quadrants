@@ -3,6 +3,12 @@ from typing import Iterable
 
 import numpy as np
 
+torch = None
+try:
+    import torch
+except Exception:
+    pass
+
 from quadrants.lang import ops
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 from quadrants import lang
@@ -10,17 +16,24 @@ from quadrants.lang import matrix
 from quadrants.types.utils import is_integral
 
 
+def _coerce_to_int(v):
+    """Convert 0-d tensors to int for ndrange bounds in python backend."""
+    if torch is not None and isinstance(v, torch.Tensor) and v.ndim == 0:
+        return int(v.item())
+    return v
+
+
 class _Ndrange:
     def __init__(self, *args):
         args = list(args)
         for i, arg in enumerate(args):
             if not isinstance(arg, collections.abc.Sequence):
-                args[i] = (0, arg)
+                args[i] = (0, _coerce_to_int(arg))
             if len(args[i]) != 2:
                 raise QuadrantsSyntaxError(
                     "Every argument of ndrange should be a scalar or a tuple/list like (begin, end)"
                 )
-            args[i] = (args[i][0], ops.max(args[i][0], args[i][1]))
+            args[i] = (_coerce_to_int(args[i][0]), _coerce_to_int(ops.max(args[i][0], args[i][1])))
         for arg in args:
             for bound in arg:
                 if not isinstance(bound, (int, np.integer)) and not (
