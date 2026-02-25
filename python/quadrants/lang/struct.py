@@ -510,9 +510,10 @@ class StructField(Field):
             v.fill(val)
 
     def _initialize_host_accessors(self):
+        if impl.is_python_backend():
+            return
         for v in self._members:
-            if hasattr(v, "_initialize_host_accessors"):
-                v._initialize_host_accessors()
+            v._initialize_host_accessors()
 
     def get_member_field(self, key):
         """Creates a ScalarField using a specific field member.
