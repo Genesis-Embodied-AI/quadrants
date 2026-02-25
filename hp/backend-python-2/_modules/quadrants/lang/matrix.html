@@ -579,7 +579,7 @@
             <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">arr</span> <span class="o">=</span> <span class="n">_scalar_tensors_to_items</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">MyTorchTensor</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">py_tensor</span><span class="o">.</span><span class="n">PyTensor</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
