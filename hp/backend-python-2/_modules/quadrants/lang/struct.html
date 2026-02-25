@@ -869,9 +869,10 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_initialize_host_accessors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+            <span class="k">return</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">&quot;_initialize_host_accessors&quot;</span><span class="p">):</span>
-                <span class="n">v</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
+            <span class="n">v</span><span class="o">.</span><span class="n">_initialize_host_accessors</span><span class="p">()</span>
 
 <div class="viewcode-block" id="StructField.get_member_field">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.get_member_field">[docs]</a>

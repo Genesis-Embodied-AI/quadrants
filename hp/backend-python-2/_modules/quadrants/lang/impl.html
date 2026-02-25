@@ -365,7 +365,6 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">Struct</span><span class="p">,</span> <span class="n">StructField</span><span class="p">,</span> <span class="n">_IntermediateStruct</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">cook_dtype</span><span class="p">,</span>
-    <span class="n">dtype_to_torch_dtype</span><span class="p">,</span>
     <span class="n">get_traceback</span><span class="p">,</span>
     <span class="n">is_quadrants_class</span><span class="p">,</span>
     <span class="n">python_scope</span><span class="p">,</span>
@@ -385,14 +384,6 @@
     <span class="n">u32</span><span class="p">,</span>
     <span class="n">u64</span><span class="p">,</span>
 <span class="p">)</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>
-
-<span class="n">torch</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="k">try</span><span class="p">:</span>
-    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-    <span class="k">pass</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>
@@ -1199,7 +1190,9 @@
     <span class="k">if</span> <span class="n">is_python_backend</span><span class="p">():</span>
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">()</span>
-        <span class="k">assert</span> <span class="n">torch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dtype_to_torch_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
+
         <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">dtype</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -1240,6 +1233,9 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
     <span class="k">if</span> <span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_py_tensor</span> <span class="k">as</span> <span class="n">py_tensor</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dtype_to_torch_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
+
         <span class="n">batch_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="ow">is</span> <span class="n">VectorType</span><span class="p">:</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
@@ -1247,7 +1243,6 @@
         <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="ow">is</span> <span class="n">MatrixType</span><span class="p">:</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
             <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span>
-        <span class="k">assert</span> <span class="n">torch</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="nb">int</span><span class="p">:</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
         <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype_to_torch_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
@@ -1615,8 +1610,11 @@
     <span class="k">return</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
 
 
+<span class="n">_ARCH_PYTHON</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">python</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">is_python_backend</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Arch</span><span class="o">.</span><span class="n">python</span>
+    <span class="k">return</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">==</span> <span class="n">_ARCH_PYTHON</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">default_cfg</span><span class="p">():</span>

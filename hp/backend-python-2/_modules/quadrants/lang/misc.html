@@ -321,7 +321,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">Extension</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_os_name</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">axes</span><span class="p">,</span> <span class="n">get_runtime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_profiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_kernel_profiler</span>
@@ -1162,7 +1162,7 @@
         <span class="n">metal</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_metal</span><span class="p">,</span>
         <span class="n">vulkan</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_vulkan</span><span class="p">,</span>
         <span class="n">cpu</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">python</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">python</span><span class="p">:</span> <span class="n">util</span><span class="o">.</span><span class="n">has_pytorch</span><span class="p">,</span>
     <span class="p">}</span>
     <span class="n">with_arch</span> <span class="o">=</span> <span class="n">arch_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">False</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
