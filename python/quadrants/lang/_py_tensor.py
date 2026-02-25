@@ -83,6 +83,8 @@ class MyTorchTensor(torch.Tensor):
 
     def __getitem__(self, key):  # type: ignore[override]
         key = MyTorchTensor._unpack_key(key)
+        # Scalar fields (shape ()) are still indexed with field[0] in kernels;
+        # torch would raise IndexError on a 0-d tensor, so return the scalar.
         if not isinstance(key, tuple) and key == 0 and self.size() == ():
             return self.item()
         return super().__getitem__(key)
