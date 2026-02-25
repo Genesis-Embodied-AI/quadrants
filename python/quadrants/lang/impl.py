@@ -1267,7 +1267,7 @@ def current_cfg():
 
 
 def is_python_backend() -> bool:
-    return get_runtime()._arch == _ti_core.Arch.python
+    return get_runtime()._arch == _qd_core.Arch.python
 
 
 def default_cfg():
