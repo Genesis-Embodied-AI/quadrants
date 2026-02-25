@@ -434,7 +434,7 @@
     <span class="c1"># origin input: &#39;qwerty {1} {} {1:.3f} {k:.4f} {k:}&#39;.format(1.0, 2.0, k=k)</span>
     <span class="c1"># raw_string: &#39;qwerty {1} {} {1:.3f} {k:.4f} {k:}&#39;</span>
     <span class="c1"># raw_args: [1.0, 2.0]</span>
-    <span class="c1"># raw_keywords: {&#39;k&#39;: &lt;ti.Expr&gt;}</span>
+    <span class="c1"># raw_keywords: {&#39;k&#39;: &lt;qd.Expr&gt;}</span>
     <span class="c1"># return value: [&#39;qwerty {} {} {} {} {}&#39;, 2.0, 1.0, [&#39;__qd_fmt_value__&#39;, 2.0, &#39;.3f&#39;], [&#39;__qd_fmt_value__&#39;, &lt;qd.Expr&gt;, &#39;.4f&#39;], &lt;qd.Expr&gt;]</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_canonicalize_formatted_string</span><span class="p">(</span><span class="n">raw_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">raw_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="o">**</span><span class="n">raw_keywords</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="n">raw_brackets</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;{(.*?)}&quot;</span><span class="p">,</span> <span class="n">raw_string</span><span class="p">)</span>
