@@ -464,7 +464,7 @@ def init(
     impl.get_runtime()._arch = cfg.arch
 
     # create a new program (skip for python backend — no C++ runtime needed):
-    if cfg.arch != _ti_core.python:
+    if cfg.arch != _qd_core.python:
         impl.get_runtime().create_program()
         _logging.trace("Materializing runtime...")
         impl.get_runtime().prog.materialize_runtime()
