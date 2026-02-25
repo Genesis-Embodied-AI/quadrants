@@ -29,12 +29,6 @@ from quadrants.types.primitive_types import (
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
 
-torch = None
-try:
-    import torch
-except Exception:
-    pass
-
 
 def has_pytorch():
     """Whether has pytorch in the current Python environment.
@@ -47,8 +41,10 @@ def has_pytorch():
     _env_torch = os.environ.get("QD_ENABLE_TORCH", "1")
     if not _env_torch or int(_env_torch):
         try:
-            _has_pytorch = torch is not None
-        except:
+            import torch  # noqa: F401 pylint: disable=C0415
+
+            _has_pytorch = True
+        except ImportError:
             pass
     return _has_pytorch
 
@@ -137,7 +133,7 @@ def to_pytorch_type(dt):
         DataType: The counterpart data type in torch.
 
     """
-    assert torch is not None
+    import torch  # pylint: disable=C0415
 
     # pylint: disable=E1101
     if dt == f32:
@@ -217,7 +213,7 @@ def to_quadrants_type(dt):
         return f16
 
     if has_pytorch():
-        assert torch is not None
+        import torch  # pylint: disable=C0415
 
         # pylint: disable=E1101
         if dt == torch.float32:
@@ -284,7 +280,8 @@ def cook_dtype(dtype: Any) -> _qd_core.DataTypeCxx:
 
 
 def dtype_to_torch_dtype(dtype: Any):
-    assert torch is not None
+    import torch  # pylint: disable=C0415
+
     return {
         float: torch.float32,
         int: torch.int32,

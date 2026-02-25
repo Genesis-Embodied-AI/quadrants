@@ -53,7 +53,6 @@ from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
     cook_dtype,
-    dtype_to_torch_dtype,
     get_traceback,
     is_quadrants_class,
     python_scope,
@@ -73,14 +72,6 @@ from quadrants.types.primitive_types import (
     u32,
     u64,
 )
-
-from . import _py_tensor as py_tensor
-
-torch = None
-try:
-    import torch
-except Exception:
-    pass
 
 if TYPE_CHECKING:
     from quadrants.lang._ndarray import Ndarray
@@ -873,7 +864,9 @@ def field(dtype, shape=None, *args, **kwargs):
     if is_python_backend():
         if shape is None:
             shape = ()
-        assert torch is not None
+        from . import _py_tensor as py_tensor  # pylint: disable=C0415
+        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
         batch_ndim = len(shape)
         if isinstance(dtype, MatrixType):
             if dtype.ndim == 1:
@@ -911,6 +904,9 @@ def ndarray(dtype, shape, needs_grad=False):
     if isinstance(shape, numbers.Number):
         shape = (shape,)
     if is_python_backend():
+        from . import _py_tensor as py_tensor  # pylint: disable=C0415
+        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
         batch_ndim = len(shape)
         if type(dtype) is VectorType:
             shape = (*shape, dtype.n)
@@ -918,7 +914,6 @@ def ndarray(dtype, shape, needs_grad=False):
         elif type(dtype) is MatrixType:
             shape = (*shape, dtype.n, dtype.m)
             dtype = dtype.dtype
-        assert torch is not None
         if type(shape) == int:
             shape = (shape,)
         dtype = dtype_to_torch_dtype(dtype)
@@ -1267,8 +1262,11 @@ def current_cfg():
     return get_runtime().prog.config()
 
 
+_ARCH_PYTHON = _qd_core.Arch.python
+
+
 def is_python_backend() -> bool:
-    return get_runtime()._arch == _qd_core.Arch.python
+    return get_runtime()._arch == _ARCH_PYTHON
 
 
 def default_cfg():

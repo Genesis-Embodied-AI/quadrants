@@ -23,7 +23,6 @@ from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.util import (
     DataTypeCxxWrapper,
     cook_dtype,
-    dtype_to_torch_dtype,
     get_traceback,
     in_python_scope,
     python_scope,
@@ -37,22 +36,16 @@ from quadrants.types.compound_types import CompoundType
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-from . import _py_tensor as py_tensor
-
-torch = None
-try:
-    import torch
-except Exception:
-    pass
-
 _type_factory = _qd_python_core.get_type_factory_instance()
 
 
 def _scalar_tensors_to_items(arr):
     """Recursively convert 0-d tensors to Python scalars in a nested list."""
+    import torch  # pylint: disable=C0415
+
     if isinstance(arr, (list, tuple)):
         return [_scalar_tensors_to_items(v) for v in arr]
-    if torch is not None and isinstance(arr, torch.Tensor) and arr.shape == ():
+    if isinstance(arr, torch.Tensor) and arr.shape == ():
         return arr.item()
     return arr
 
@@ -269,7 +262,8 @@ class Matrix(QuadrantsOperations):
 
     def __new__(cls, arr, dt=None):
         if impl.is_python_backend():
-            assert torch is not None
+            from . import _py_tensor as py_tensor  # pylint: disable=C0415
+
             arr = _scalar_tensors_to_items(arr)
             return py_tensor.MyTorchTensor(arr)
         return super().__new__(cls)
@@ -1001,11 +995,12 @@ class Matrix(QuadrantsOperations):
         if isinstance(shape, numbers.Number):
             shape = (shape,)
         if impl.is_python_backend():
+            from . import _py_tensor as py_tensor  # pylint: disable=C0415
+            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
             batch_ndim = len(shape)
             shape = (*shape, m, n)
-            dtype = dtype_to_torch_dtype(dtype)
-            assert torch is not None
-            return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
+            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         return MatrixNdarray(n, m, dtype, shape)
 
     @staticmethod
@@ -1179,11 +1174,12 @@ class Vector(Matrix):
         if isinstance(shape, numbers.Number):
             shape = (shape,)
         if impl.is_python_backend():
+            from . import _py_tensor as py_tensor  # pylint: disable=C0415
+            from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
             batch_ndim = len(shape)
             shape = (*shape, n)
-            dtype = dtype_to_torch_dtype(dtype)
-            assert torch is not None
-            return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
+            return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
         return VectorNdarray(n, dtype, shape)
 
 
@@ -1342,7 +1338,7 @@ class MatrixField(Field):
         Returns:
             torch.tensor: The result torch tensor.
         """
-        assert torch is not None
+        import torch  # pylint: disable=C0415
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)

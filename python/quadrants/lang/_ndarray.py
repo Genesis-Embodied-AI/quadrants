@@ -9,7 +9,6 @@ from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import (
     cook_dtype,
-    dtype_to_torch_dtype,
     get_traceback,
     python_scope,
     to_numpy_type,
@@ -18,14 +17,6 @@ from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
 from quadrants.types.utils import is_real, is_signed
-
-torch_is_available = False
-try:
-    import torch
-
-    torch_is_available = True
-except Exception:
-    pass
 
 if TYPE_CHECKING:
     from quadrants.lang.matrix import MatrixNdarray, VectorNdarray
@@ -295,9 +286,13 @@ class ScalarNdarray(Ndarray):
         super().__init__()
         self.dtype = cook_dtype(dtype)
         if impl.is_python_backend():
-            assert torch_is_available
-            torch_dtype = dtype_to_torch_dtype(dtype)
-            self.arr = torch.zeros(shape=arr_shape, dtype=torch_dtype)
+            import torch  # pylint: disable=C0415
+
+            from quadrants.lang.util import (  # pylint: disable=C0415
+                dtype_to_torch_dtype,
+            )
+
+            self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
         else:
             self.arr = impl.get_runtime().prog.create_ndarray(
                 self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())

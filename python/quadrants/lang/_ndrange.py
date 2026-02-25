@@ -5,12 +5,6 @@ from typing import Iterable
 
 import numpy as np
 
-torch = None
-try:
-    import torch
-except Exception:
-    pass
-
 from quadrants.lang import ops
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 from quadrants.lang.expr import Expr
@@ -19,8 +13,17 @@ from quadrants.types.utils import is_integral
 
 
 def _coerce_to_int(v):
-    """Convert 0-d tensors to int for ndrange bounds in python backend."""
-    if torch is not None and isinstance(v, torch.Tensor) and v.ndim == 0:
+    """Convert 0-d tensors to int for ndrange bounds in python backend.
+
+    On the python backend, ndrange bounds like a.shape[0] arrive as
+    0-d torch tensors rather than plain ints. This unwraps them.
+    """
+    if isinstance(v, (int, float, np.integer)):
+        return v
+    # Only reached on python backend, where torch is guaranteed available
+    import torch  # pylint: disable=C0415
+
+    if isinstance(v, torch.Tensor) and v.ndim == 0:
         return int(v.item())
     return v
 
