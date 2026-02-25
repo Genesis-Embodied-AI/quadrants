@@ -304,7 +304,6 @@ class Kernel(FuncBase):
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
-        self.arch_is_python: bool | None = None
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
