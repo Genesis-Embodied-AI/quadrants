@@ -202,6 +202,8 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<const Stmt *, BufferInfo> ptr_to_buffers_;
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;
+
+  bool use_volatile_buffer_access_{false};
 };
 }  // namespace detail
 }  // namespace spirv
