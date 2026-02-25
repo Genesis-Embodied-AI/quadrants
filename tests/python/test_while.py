@@ -1,17 +1,17 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_while():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     N = 1
 
-    ti.root.dense(ti.i, N).place(x)
+    qd.root.dense(qd.i, N).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         i = 0
         s = 0
@@ -26,9 +26,9 @@ def test_while():
 
 @test_utils.test()
 def test_break():
-    ret = ti.field(ti.i32, shape=())
+    ret = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         i = 0
         s = 0

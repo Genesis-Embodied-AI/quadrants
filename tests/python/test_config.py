@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -19,11 +19,11 @@ def config_debug_dump_path_child(args: list[str]) -> None:
     specify_path = args[2].lower() == "true"
     print("tmp_path", tmp_path)
     if specify_path:
-        ti.init(debug_dump_path=tmp_path, arch=getattr(ti, arch), offline_cache=False)
+        qd.init(debug_dump_path=tmp_path, arch=getattr(qd, arch), offline_cache=False)
     else:
-        ti.init(arch=getattr(ti, arch), offline_cache=False)
+        qd.init(arch=getattr(qd, arch), offline_cache=False)
 
-    @ti.kernel(pure=True)
+    @qd.kernel(pure=True)
     def k1():
         print("hello")
 
@@ -37,8 +37,8 @@ def test_config_debug_dump_path(specify_path: bool, tmp_path: pathlib.Path):
     if not specify_path and sys.platform == "win32":
         pytest.skip("Default debug_dump_path for windows not supported")
     tmp_path.mkdir(exist_ok=True)
-    assert ti.lang is not None
-    arch = ti.lang.impl.current_cfg().arch.name
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
     cmd_line = [sys.executable, __file__, config_debug_dump_path_child.__name__, arch, str(tmp_path), str(specify_path)]
     print(cmd_line)
     env = dict(os.environ)

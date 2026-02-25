@@ -13,9 +13,9 @@ from typing import Any, Generator, Sequence, Type
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
-from quadrants.lang import ops as ti_ops
+from quadrants.lang import ops as qd_ops
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -43,7 +43,7 @@ from quadrants.lang.struct import Struct, StructType
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
-AutodiffMode = _ti_core.AutodiffMode
+AutodiffMode = _qd_core.AutodiffMode
 
 
 def reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]:
@@ -77,11 +77,11 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_Name(ctx: ASTTransformerFuncContext, node: ast.Name):
         pruning = ctx.global_context.pruning
-        if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__ti_"):
+        if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
-            node.ptr.dbg_info = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
             if isinstance(node.ptr, (float, int, Field)):
@@ -130,7 +130,7 @@ class ASTTransformer(Builder):
         if is_static_assign:
             raise QuadrantsSyntaxError("Static assign cannot be used on annotated assignment")
         if is_local and not ctx.is_var_declared(target.id):
-            var = ti_ops.cast(value, anno)
+            var = qd_ops.cast(value, anno)
             var = impl.expr_init(var)
             ctx.create_variable(target.id, var)
         else:
@@ -177,7 +177,7 @@ class ASTTransformer(Builder):
                 raise ValueError("Matrices with more than one columns cannot be unpacked")
             values = values.entries
 
-        # Unpack: a, b, c = ti.Vector([1., 2., 3.])
+        # Unpack: a, b, c = qd.Vector([1., 2., 3.])
         if isinstance(values, impl.Expr) and values.ptr.is_tensor():
             if len(values.get_shape()) > 1:
                 raise ValueError("Matrices with more than one columns cannot be unpacked")
@@ -405,7 +405,7 @@ class ASTTransformer(Builder):
         format_str = values[0].s
         assert format_str is not None
         # distinguished from normal list
-        return ["__ti_fmt_value__", node.ptr, format_str]
+        return ["__qd_fmt_value__", node.ptr, format_str]
 
     @staticmethod
     def build_JoinedStr(ctx: ASTTransformerFuncContext, node: ast.JoinedStr):
@@ -423,7 +423,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError("Invalid value for fstring.")
 
         args.insert(0, str_spec)
-        node.ptr = impl.ti_format(*args)
+        node.ptr = impl.qd_format(*args)
         return node.ptr
 
     @staticmethod
@@ -451,7 +451,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(
                     f'A {"kernel" if ctx.is_kernel else "function"} '
                     "with a return value must be annotated "
-                    "with a return type, e.g. def func() -> ti.f32"
+                    "with a return type, e.g. def func() -> qd.f32"
                 )
             return_exprs = []
             if len(ctx.func.return_type) == 1:
@@ -464,7 +464,7 @@ class ASTTransformer(Builder):
                             raise QuadrantsRuntimeTypeError.get_ret(str(return_type), ptr)
                     elif not isinstance(ptr, (float, int, np.floating, np.integer)):
                         raise QuadrantsRuntimeTypeError.get_ret(str(return_type), ptr)
-                    return_exprs += [ti_ops.cast(expr.Expr(ptr), return_type).ptr]
+                    return_exprs += [qd_ops.cast(expr.Expr(ptr), return_type).ptr]
                 elif isinstance(return_type, MatrixType):
                     values = ptr
                     if isinstance(values, Matrix):
@@ -528,7 +528,7 @@ class ASTTransformer(Builder):
                                 f"Return matrix shape mismatch, expecting={return_type.get_shape()}, got={shape}."
                             )
                         values = [values]
-                    return_exprs += [ti_ops.cast(exp, return_type.dtype) for exp in values]
+                    return_exprs += [qd_ops.cast(exp, return_type.dtype) for exp in values]
                 elif isinstance(return_type, StructType):
                     if not isinstance(ptr, Struct) or not isinstance(ptr, return_type):
                         raise QuadrantsRuntimeTypeError.get_ret(str(return_type), ptr)
@@ -538,7 +538,7 @@ class ASTTransformer(Builder):
                 else:
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
-                expr.make_expr_group(return_exprs), _ti_core.DebugInfo(ctx.get_pos_info(node))
+                expr.make_expr_group(return_exprs), _qd_core.DebugInfo(ctx.get_pos_info(node))
             )
         else:
             ctx.return_data = node.value.ptr
@@ -547,7 +547,7 @@ class ASTTransformer(Builder):
                     ctx.return_data = [ctx.return_data]
                 for i, return_type in enumerate(ctx.func.return_type):
                     if id(return_type) in primitive_types.type_ids:
-                        ctx.return_data[i] = ti_ops.cast(ctx.return_data[i], return_type)
+                        ctx.return_data[i] = qd_ops.cast(ctx.return_data[i], return_type)
                 if len(ctx.func.return_type) == 1:
                     ctx.return_data = ctx.return_data[0]
         if not ctx.is_real_function:
@@ -577,7 +577,7 @@ class ASTTransformer(Builder):
             indices = []
         if not isinstance(x, Field):
             return False
-        if not x.parent().ptr.type == _ti_core.SNodeType.dynamic:
+        if not x.parent().ptr.type == _qd_core.SNodeType.dynamic:
             return False
         field_dim = x.snode.ptr.num_active_indices()
         indices_expr_group = make_expr_group(*indices)
@@ -614,7 +614,7 @@ class ASTTransformer(Builder):
         # whether it is a method of Dynamic SNode and build the expression if it is by calling
         # build_attribute_if_is_dynamic_snode_method. If we find that it is not a method of Dynamic SNode,
         # we continue to process it as a normal attribute node.
-        from quadrants import math as ti_math  # pylint: disable=import-outside-toplevel
+        from quadrants import math as qd_math  # pylint: disable=import-outside-toplevel
 
         try:
             build_stmt(ctx, node.value)
@@ -641,16 +641,16 @@ class ASTTransformer(Builder):
                         .expr_subscript(
                             node.value.ptr.ptr,
                             make_expr_group(keygroup.index(node.attr)),
-                            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                         )
                     )
                 else:
                     node.ptr = Expr(
-                        _ti_core.subscript_with_multiple_indices(
+                        _qd_core.subscript_with_multiple_indices(
                             node.value.ptr.ptr,
                             [make_expr_group(keygroup.index(ch)) for ch in node.attr],
                             (attr_len,),
-                            _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                            _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
                         )
                     )
             else:
@@ -672,7 +672,7 @@ class ASTTransformer(Builder):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
-                    if violation and node.value.ptr in [ti_math, math, np]:
+                    if violation and node.value.ptr in [qd_math, math, np]:
                         # ignore this built-in module
                         violation = False
                     if violation:
@@ -729,7 +729,7 @@ class ASTTransformer(Builder):
         op = {
             ast.UAdd: lambda l: l,
             ast.USub: lambda l: -l,
-            ast.Not: ti_ops.logical_not,
+            ast.Not: qd_ops.logical_not,
             ast.Invert: lambda l: ~l,
         }.get(type(node.op))
         node.ptr = op(node.operand.ptr)
@@ -768,13 +768,13 @@ class ASTTransformer(Builder):
             }
         elif impl.get_runtime().short_circuit_operators:
             ops = {
-                ast.And: ASTTransformer.build_bool_op(ti_ops.logical_and),
-                ast.Or: ASTTransformer.build_bool_op(ti_ops.logical_or),
+                ast.And: ASTTransformer.build_bool_op(qd_ops.logical_and),
+                ast.Or: ASTTransformer.build_bool_op(qd_ops.logical_or),
             }
         else:
             ops = {
-                ast.And: ASTTransformer.build_bool_op(ti_ops.bit_and),
-                ast.Or: ASTTransformer.build_bool_op(ti_ops.bit_or),
+                ast.And: ASTTransformer.build_bool_op(qd_ops.bit_and),
+                ast.Or: ASTTransformer.build_bool_op(qd_ops.bit_or),
             }
         op = ops.get(type(node.op))
         node.ptr = op(node.values)
@@ -810,12 +810,12 @@ class ASTTransformer(Builder):
 
             if op is None:
                 if type(node_op) in ops_static:
-                    raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is only supported inside `ti.static`.')
+                    raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is only supported inside `qd.static`.')
                 else:
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is not supported in Quadrants kernels.')
-            val = ti_ops.logical_and(val, op(l, r))
+            val = qd_ops.logical_and(val, op(l, r))
         if not isinstance(val, (bool, np.bool_)):
-            val = ti_ops.cast(val, primitive_types.u1)
+            val = qd_ops.cast(val, primitive_types.u1)
         node.ptr = val
         return node.ptr
 
@@ -832,12 +832,12 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_static_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
-        ti_unroll_limit = impl.get_runtime().unrolling_limit
+        qd_unroll_limit = impl.get_runtime().unrolling_limit
         if is_grouped:
             assert len(node.iter.args[0].args) == 1
             ndrange_arg = build_stmt(ctx, node.iter.args[0].args[0])
             if not isinstance(ndrange_arg, _Ndrange):
-                raise QuadrantsSyntaxError("Only 'ti.ndrange' is allowed in 'ti.static(ti.grouped(...))'.")
+                raise QuadrantsSyntaxError("Only 'qd.ndrange' is allowed in 'qd.static(qd.grouped(...))'.")
             targets = ASTTransformer.get_for_loop_targets(node)
             if len(targets) != 1:
                 raise QuadrantsSyntaxError(f"Group for should have 1 loop target, found {len(targets)}")
@@ -847,13 +847,13 @@ class ASTTransformer(Builder):
 
             for value in impl.grouped(ndrange_arg):
                 iter_time += 1
-                if not alert_already and ti_unroll_limit and iter_time > ti_unroll_limit:
+                if not alert_already and qd_unroll_limit and iter_time > qd_unroll_limit:
                     alert_already = True
                     warnings.warn_explicit(
                         f"""You are unrolling more than
-                        {ti_unroll_limit} iterations, so the compile time may be extremely long.
+                        {qd_unroll_limit} iterations, so the compile time may be extremely long.
                         You can use a non-static for loop if you want to decrease the compile time.
-                        You can disable this warning by setting ti.init(unrolling_limit=0).""",
+                        You can disable this warning by setting qd.init(unrolling_limit=0).""",
                         SyntaxWarning,
                         ctx.file,
                         node.lineno + ctx.lineno_offset,
@@ -879,13 +879,13 @@ class ASTTransformer(Builder):
                     target_values = [target_values]
 
                 iter_time += 1
-                if not alert_already and ti_unroll_limit and iter_time > ti_unroll_limit:
+                if not alert_already and qd_unroll_limit and iter_time > qd_unroll_limit:
                     alert_already = True
                     warnings.warn_explicit(
                         f"""You are unrolling more than
-                        {ti_unroll_limit} iterations, so the compile time may be extremely long.
+                        {qd_unroll_limit} iterations, so the compile time may be extremely long.
                         You can use a non-static for loop if you want to decrease the compile time.
-                        You can disable this warning by setting ti.init(unrolling_limit=0).""",
+                        You can disable this warning by setting qd.init(unrolling_limit=0).""",
                         SyntaxWarning,
                         ctx.file,
                         node.lineno + ctx.lineno_offset,
@@ -920,8 +920,8 @@ class ASTTransformer(Builder):
                 boundary_type_cast_warning(begin_expr)
                 boundary_type_cast_warning(end_expr)
 
-                begin = ti_ops.cast(begin_expr, primitive_types.i32)
-                end = ti_ops.cast(end_expr, primitive_types.i32)
+                begin = qd_ops.cast(begin_expr, primitive_types.i32)
+                end = qd_ops.cast(end_expr, primitive_types.i32)
 
             else:
                 end_expr = expr.Expr(build_stmt(ctx, node.iter.args[0]))
@@ -929,10 +929,10 @@ class ASTTransformer(Builder):
                 # Warning for implicit dtype conversion
                 boundary_type_cast_warning(end_expr)
 
-                begin = ti_ops.cast(expr.Expr(0), primitive_types.i32)
-                end = ti_ops.cast(end_expr, primitive_types.i32)
+                begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
+                end = qd_ops.cast(end_expr, primitive_types.i32)
 
-            for_di = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -944,13 +944,13 @@ class ASTTransformer(Builder):
     def build_ndrange_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
         with ctx.variable_scope_guard():
             ndrange_var = impl.expr_init(build_stmt(ctx, node.iter))
-            ndrange_begin = ti_ops.cast(expr.Expr(0), primitive_types.i32)
-            ndrange_end = ti_ops.cast(
+            ndrange_begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
+            ndrange_end = qd_ops.cast(
                 expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
             I = impl.expr_init(ndrange_loop_var)
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -958,7 +958,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(
                     "Ndrange for loop with number of the loop variables not equal to "
                     "the dimension of the ndrange is not supported. "
-                    "Please check if the number of arguments of ti.ndrange() is equal to "
+                    "Please check if the number of arguments of qd.ndrange() is equal to "
                     "the number of the loop variables."
                 )
             for i, target in enumerate(targets):
@@ -989,13 +989,13 @@ class ASTTransformer(Builder):
     def build_grouped_ndrange_for(ctx: ASTTransformerFuncContext, node: ast.For) -> None:
         with ctx.variable_scope_guard():
             ndrange_var = impl.expr_init(build_stmt(ctx, node.iter.args[0]))
-            ndrange_begin = ti_ops.cast(expr.Expr(0), primitive_types.i32)
-            ndrange_end = ti_ops.cast(
+            ndrange_begin = qd_ops.cast(expr.Expr(0), primitive_types.i32)
+            ndrange_end = qd_ops.cast(
                 expr.Expr(impl.subscript(ctx.ast_builder, ndrange_var.acc_dimensions, 0)),
                 primitive_types.i32,
             )
             ndrange_loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
-            for_di = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(ndrange_loop_var.ptr, ndrange_begin.ptr, ndrange_end.ptr, for_di)
 
             targets = ASTTransformer.get_for_loop_targets(node)
@@ -1024,7 +1024,7 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_struct_for(ctx: ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None:
         # for i, j in x
-        # for I in ti.grouped(x)
+        # for I in qd.grouped(x)
         targets = ASTTransformer.get_for_loop_targets(node)
 
         for target in targets:
@@ -1074,7 +1074,7 @@ class ASTTransformer(Builder):
                 mesh_idx.ptr,
                 ctx.mesh.mesh_ptr,
                 node.iter.ptr._type,
-                _ti_core.DebugInfo(impl.get_runtime().get_current_src_info()),
+                _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
@@ -1097,10 +1097,10 @@ class ASTTransformer(Builder):
             loop_var = expr.Expr(ctx.ast_builder.make_id_expr(""))
             ctx.create_variable(loop_name, loop_var)
             begin = expr.Expr(0)
-            end = ti_ops.cast(node.iter.ptr.size, primitive_types.i32)
-            for_di = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            end = qd_ops.cast(node.iter.ptr.size, primitive_types.i32)
+            for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
-            entry_expr = _ti_core.get_relation_access(
+            entry_expr = _qd_core.get_relation_access(
                 ctx.mesh.mesh_ptr,
                 node.iter.ptr.from_index.ptr,
                 node.iter.ptr.to_element_type,
@@ -1127,21 +1127,21 @@ class ASTTransformer(Builder):
 
         if decorator == "static":
             if double_decorator == "static":
-                raise QuadrantsSyntaxError("'ti.static' cannot be nested")
+                raise QuadrantsSyntaxError("'qd.static' cannot be nested")
             with ctx.loop_scope_guard(is_static=True):
                 return ASTTransformer.build_static_for(ctx, node, double_decorator == "grouped")
         with ctx.loop_scope_guard():
             if decorator == "ndrange":
                 if double_decorator != "":
-                    raise QuadrantsSyntaxError("No decorator is allowed inside 'ti.ndrange")
+                    raise QuadrantsSyntaxError("No decorator is allowed inside 'qd.ndrange")
                 return ASTTransformer.build_ndrange_for(ctx, node)
             if decorator == "grouped":
                 if double_decorator == "static":
-                    raise QuadrantsSyntaxError("'ti.static' is not allowed inside 'ti.grouped'")
+                    raise QuadrantsSyntaxError("'qd.static' is not allowed inside 'qd.grouped'")
                 elif double_decorator == "ndrange":
                     return ASTTransformer.build_grouped_ndrange_for(ctx, node)
                 elif double_decorator == "grouped":
-                    raise QuadrantsSyntaxError("'ti.grouped' cannot be nested")
+                    raise QuadrantsSyntaxError("'qd.grouped' cannot be nested")
                 else:
                     return ASTTransformer.build_struct_for(ctx, node, is_grouped=True)
             elif (
@@ -1155,7 +1155,7 @@ class ASTTransformer(Builder):
             elif isinstance(node.iter, ast.IfExp):
                 # Handle inline if expression as the top level iterator expression, e.g.:
                 #
-                #   for i in range(foo) if ti.static(some_flag) else ti.static(range(bar))
+                #   for i in range(foo) if qd.static(some_flag) else qd.static(range(bar))
                 #
                 # Empirically, this appears to generalize to:
                 # - being an inner loop
@@ -1183,7 +1183,7 @@ class ASTTransformer(Builder):
             else:
                 build_stmt(ctx, node.iter)
                 if isinstance(node.iter.ptr, mesh.MeshElementField):
-                    if not _ti_core.is_extension_supported(impl.default_cfg().arch, _ti_core.Extension.mesh):
+                    if not _qd_core.is_extension_supported(impl.default_cfg().arch, _qd_core.Extension.mesh):
                         raise Exception(
                             "Backend " + str(impl.default_cfg().arch) + " doesn't support MeshQuadrants extension"
                         )
@@ -1199,7 +1199,7 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
 
         with ctx.loop_scope_guard():
-            stmt_dbg_info = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_while(expr.Expr(1, dtype=primitive_types.i32).ptr, stmt_dbg_info)
             while_cond = build_stmt(ctx, node.test)
             impl.begin_frontend_if(ctx.ast_builder, while_cond, stmt_dbg_info)
@@ -1225,7 +1225,7 @@ class ASTTransformer(Builder):
             return node
 
         with ctx.non_static_if_guard(node):
-            stmt_dbg_info = _ti_core.DebugInfo(ctx.get_pos_info(node))
+            stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             impl.begin_frontend_if(ctx.ast_builder, node.test.ptr, stmt_dbg_info)
             ctx.ast_builder.begin_frontend_if_true()
             build_stmts(ctx, node.body)
@@ -1259,9 +1259,9 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(
                     "Using conditional expression for element-wise select operation on "
                     "Quadrants vectors/matrices is deprecated and removed starting from Quadrants v1.5.0 "
-                    'Please use "ti.select" instead.'
+                    'Please use "qd.select" instead.'
                 )
-            node.ptr = ti_ops.select(node.test.ptr, node.body.ptr, node.orelse.ptr)
+            node.ptr = qd_ops.select(node.test.ptr, node.body.ptr, node.orelse.ptr)
             return node.ptr
 
         is_static_if = get_decorator(ctx, node.test) == "static"
@@ -1273,7 +1273,7 @@ class ASTTransformer(Builder):
                 node.ptr = build_stmt(ctx, node.orelse)
             return node.ptr
 
-        node.ptr = ti_ops.ifte(node.test.ptr, node.body.ptr, node.orelse.ptr)
+        node.ptr = qd_ops.ifte(node.test.ptr, node.body.ptr, node.orelse.ptr)
         return node.ptr
 
     @staticmethod
@@ -1301,15 +1301,15 @@ class ASTTransformer(Builder):
         return msg, args
 
     @staticmethod
-    def ti_format_list_to_assert_msg(raw) -> tuple[str, list]:
+    def qd_format_list_to_assert_msg(raw) -> tuple[str, list]:
         # TODO: ignore formats here for now
-        entries, _ = impl.ti_format_list_to_content_entries([raw])
+        entries, _ = impl.qd_format_list_to_content_entries([raw])
         msg = ""
         args = []
         for entry in entries:
             if isinstance(entry, str):
                 msg += entry
-            elif isinstance(entry, _ti_core.ExprCxx):
+            elif isinstance(entry, _qd_core.ExprCxx):
                 ty = entry.get_rvalue_type()
                 if ty in primitive_types.real_types:
                     msg += "%f"
@@ -1339,14 +1339,14 @@ class ASTTransformer(Builder):
                     msg = str(msg)
                 elif isinstance(node.msg, ast.Str):
                     pass
-                elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__ti_format__":
-                    msg, extra_args = ASTTransformer.ti_format_list_to_assert_msg(msg)
+                elif isinstance(msg, collections.abc.Sequence) and len(msg) > 0 and msg[0] == "__qd_format__":
+                    msg, extra_args = ASTTransformer.qd_format_list_to_assert_msg(msg)
                 else:
                     raise QuadrantsSyntaxError(f"assert info must be constant or formatted string, not {type(msg)}")
         else:
             msg = unparse(node.test)
         test = build_stmt(ctx, node.test)
-        impl.ti_assert(test, msg.strip(), extra_args, _ti_core.DebugInfo(ctx.get_pos_info(node)))
+        impl.qd_assert(test, msg.strip(), extra_args, _qd_core.DebugInfo(ctx.get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1362,7 +1362,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Break)
         else:
-            ctx.ast_builder.insert_break_stmt(_ti_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_break_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
         return None
 
     @staticmethod
@@ -1378,7 +1378,7 @@ class ASTTransformer(Builder):
                 raise QuadrantsSyntaxError(msg)
             ctx.set_loop_status(LoopStatus.Continue)
         else:
-            ctx.ast_builder.insert_continue_stmt(_ti_core.DebugInfo(ctx.get_pos_info(node)))
+            ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
         return None
 
     @staticmethod

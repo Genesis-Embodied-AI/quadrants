@@ -1,6 +1,6 @@
-import quadrants as ti
+import quadrants as qd
 
-__version__ = ".".join([str(v) for v in ti.__version__])
+__version__ = ".".join([str(v) for v in qd.__version__])
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:

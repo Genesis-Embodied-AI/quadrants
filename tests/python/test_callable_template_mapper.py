@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang._template_mapper import TemplateMapper
 from quadrants.lang.kernel_arguments import ArgMetadata
 
@@ -7,16 +7,16 @@ from tests import test_utils
 
 @test_utils.test()
 def test_callable_template_mapper():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32)
 
-    ti.root.place(x, y)
+    qd.root.place(x, y)
 
     mapper = TemplateMapper(
         (
-            ArgMetadata(ti.template(), ti.template()),
-            ArgMetadata(ti.template(), ti.template()),
-            ArgMetadata(ti.template(), ti.template()),
+            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.template(), qd.template()),
         ),
         template_slot_locations=(0, 1, 2),
     )
@@ -28,9 +28,9 @@ def test_callable_template_mapper():
 
     mapper = TemplateMapper(
         (
-            ArgMetadata(ti.i32, ti.i32),
-            ArgMetadata(ti.i32, ti.i32),
-            ArgMetadata(ti.i32, ti.i32),
+            ArgMetadata(qd.i32, qd.i32),
+            ArgMetadata(qd.i32, qd.i32),
+            ArgMetadata(qd.i32, qd.i32),
         ),
         (),
     )
@@ -42,9 +42,9 @@ def test_callable_template_mapper():
 
     mapper = TemplateMapper(
         (
-            ArgMetadata(ti.i32, ti.i32),
-            ArgMetadata(ti.template(), ti.template()),
-            ArgMetadata(ti.i32, ti.i32),
+            ArgMetadata(qd.i32, qd.i32),
+            ArgMetadata(qd.template(), qd.template()),
+            ArgMetadata(qd.i32, qd.i32),
         ),
         (1,),
     )
@@ -55,15 +55,15 @@ def test_callable_template_mapper():
 
 @test_utils.test()
 def test_callable_template_mapper_numpy():
-    x = ti.field(ti.i32)
-    y = ti.field(ti.f32)
+    x = qd.field(qd.i32)
+    y = qd.field(qd.f32)
 
-    ti.root.place(x, y)
+    qd.root.place(x, y)
 
     annotations = (
-        ArgMetadata(ti.template(), ti.template()),
-        ArgMetadata(ti.template(), ti.template()),
-        ArgMetadata(ti.types.ndarray(), ti.types.ndarray()),
+        ArgMetadata(qd.template(), qd.template()),
+        ArgMetadata(qd.template(), qd.template()),
+        ArgMetadata(qd.types.ndarray(), qd.types.ndarray()),
     )
 
     import numpy as np

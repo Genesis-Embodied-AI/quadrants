@@ -3,7 +3,7 @@ import dataclasses
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang._func_base import FuncBase
 from quadrants.lang._pruning import Pruning
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -17,21 +17,21 @@ from tests import test_utils
 
 @dataclasses.dataclass
 class MyStructAB:
-    a: ti.types.NDArray[ti.i32, 1]
-    b: ti.types.NDArray[ti.i32, 1]
+    a: qd.types.NDArray[qd.i32, 1]
+    b: qd.types.NDArray[qd.i32, 1]
 
 
 @dataclasses.dataclass
 class MyStructCD:
-    c: ti.types.NDArray[ti.i32, 1]
-    d: ti.types.NDArray[ti.i32, 1]
+    c: qd.types.NDArray[qd.i32, 1]
+    d: qd.types.NDArray[qd.i32, 1]
     my_struct_ab: MyStructAB
 
 
 @dataclasses.dataclass
 class MyStructEF:
-    e: ti.types.NDArray[ti.i32, 1]
-    f: ti.types.NDArray[ti.i32, 1]
+    e: qd.types.NDArray[qd.i32, 1]
+    f: qd.types.NDArray[qd.i32, 1]
     my_struct_cd: MyStructCD
 
 
@@ -48,28 +48,28 @@ def dump_ast_list(nodes: tuple[ast.stmt, ...]) -> str:
         (
             [ast.Name(id="my_struct_ab", ctx=ast.Load(), ptr=MyStructAB)],
             [
-                ast.Name(id="__ti_my_struct_ab__ti_a", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ab__ti_b", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ab__qd_a", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ab__qd_b", ctx=ast.Load()),
             ],
         ),
         (
             [ast.Name(id="my_struct_cd", ctx=ast.Load(), ptr=MyStructCD)],
             [
-                ast.Name(id="__ti_my_struct_cd__ti_c", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_cd__ti_d", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_cd__ti_my_struct_ab__ti_a", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_cd__ti_my_struct_ab__ti_b", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_cd__qd_c", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_cd__qd_d", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_cd__qd_my_struct_ab__qd_a", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_cd__qd_my_struct_ab__qd_b", ctx=ast.Load()),
             ],
         ),
         (
             [ast.Name(id="my_struct_ef", ctx=ast.Load(), ptr=MyStructEF)],
             (
-                ast.Name(id="__ti_my_struct_ef__ti_e", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ef__ti_f", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ef__ti_my_struct_cd__ti_c", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ef__ti_my_struct_cd__ti_d", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_a", ctx=ast.Load()),
-                ast.Name(id="__ti_my_struct_ef__ti_my_struct_cd__ti_my_struct_ab__ti_b", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_e", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_f", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_my_struct_cd__qd_c", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_my_struct_cd__qd_d", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_a", ctx=ast.Load()),
+                ast.Name(id="__qd_my_struct_ef__qd_my_struct_cd__qd_my_struct_ab__qd_b", ctx=ast.Load()),
             ),
         ),
     ],

@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
@@ -95,20 +95,20 @@ class Func(FuncBase):
         # Skip the template args, e.g., |self|
         assert self.is_real_function
         non_template_args = []
-        dbg_info = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+        dbg_info = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
         for i, kernel_arg in enumerate(self.arg_metas):
             anno = kernel_arg.annotation
             if not isinstance(anno, template):
                 if id(anno) in primitive_types.type_ids:
                     non_template_args.append(ops.cast(args[i], anno))
                 elif isinstance(anno, primitive_types.RefType):
-                    non_template_args.append(_ti_core.make_reference(args[i].ptr, dbg_info))
+                    non_template_args.append(_qd_core.make_reference(args[i].ptr, dbg_info))
                 elif isinstance(anno, ndarray_type.NdarrayType):
                     if not isinstance(args[i], AnyArray):
                         raise QuadrantsTypeError(
                             f"Expected ndarray in the kernel argument for argument {kernel_arg.name}, got {args[i]}"
                         )
-                    non_template_args += _ti_core.get_external_tensor_real_func_args(args[i].ptr, dbg_info)
+                    non_template_args += _qd_core.get_external_tensor_real_func_args(args[i].ptr, dbg_info)
                 else:
                     non_template_args.append(args[i])
         non_template_args = impl.make_expr_group(non_template_args)
@@ -124,7 +124,7 @@ class Func(FuncBase):
 
         for i, return_type in enumerate(self.return_type):
             if id(return_type) in primitive_types.type_ids:
-                ret.append(Expr(_ti_core.make_get_element_expr(func_call.ptr, (i,), dbg_info)))
+                ret.append(Expr(_qd_core.make_get_element_expr(func_call.ptr, (i,), dbg_info)))
             elif isinstance(return_type, (StructType, MatrixType)):
                 ret.append(return_type.from_quadrants_object(func_call, (i,)))
             else:

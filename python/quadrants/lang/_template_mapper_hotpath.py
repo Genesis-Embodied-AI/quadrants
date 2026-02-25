@@ -32,7 +32,7 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
@@ -56,7 +56,7 @@ AnnotationType = Union[
 ]
 
 
-_ExprCxx = _ti_core.ExprCxx
+_ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
 
@@ -75,7 +75,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             return tuple([_extract_arg(raise_on_templated_floats, item, annotation, arg_name) for item in arg])
         if issubclass(arg_type, Ndarray):
             raise QuadrantsRuntimeTypeError(
-                "Ndarray shouldn't be passed in via `ti.template()`, please annotate your kernel using `ti.types.ndarray(...)` instead"
+                "Ndarray shouldn't be passed in via `qd.template()`, please annotate your kernel using `qd.types.ndarray(...)` instead"
             )
         if arg_type in _composite_mutable_types or is_data_oriented(arg):
             # [Composite arguments] Return weak reference to the object
@@ -88,7 +88,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
             return weakref.ref(arg)
 
-        # Return value directly for other types, i.e. primitive types and all ti.Field-derived classes
+        # Return value directly for other types, i.e. primitive types and all qd.Field-derived classes
         if raise_on_templated_floats and arg_type is float:
             raise ValueError("Floats not allowed as templated types.")
         return arg
@@ -153,7 +153,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                 )
         needs_grad = getattr(arg, "requires_grad", False) if annotation.needs_grad is None else annotation.needs_grad
         if element_shape:
-            element_type = _ti_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
+            element_type = _qd_core.get_type_factory_instance().get_tensor_type(element_shape, dtype)
         else:
             element_type = arg.dtype
         return element_type, len(shape) - len(element_shape), needs_grad, annotation.boundary

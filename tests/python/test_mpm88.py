@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -23,28 +23,28 @@ def test_mpm88():
     p_mass = p_vol * p_rho
     E = 400
 
-    x = ti.Vector.field(dim, dtype=ti.f32, shape=n_particles)
-    v = ti.Vector.field(dim, dtype=ti.f32, shape=n_particles)
-    C = ti.Matrix.field(dim, dim, dtype=ti.f32, shape=n_particles)
-    J = ti.field(dtype=ti.f32, shape=n_particles)
-    grid_v = ti.Vector.field(dim, dtype=ti.f32, shape=(n_grid, n_grid))
-    grid_m = ti.field(dtype=ti.f32, shape=(n_grid, n_grid))
+    x = qd.Vector.field(dim, dtype=qd.f32, shape=n_particles)
+    v = qd.Vector.field(dim, dtype=qd.f32, shape=n_particles)
+    C = qd.Matrix.field(dim, dim, dtype=qd.f32, shape=n_particles)
+    J = qd.field(dtype=qd.f32, shape=n_particles)
+    grid_v = qd.Vector.field(dim, dtype=qd.f32, shape=(n_grid, n_grid))
+    grid_m = qd.field(dtype=qd.f32, shape=(n_grid, n_grid))
 
-    @ti.kernel
+    @qd.kernel
     def substep():
         for p in x:
             base = (x[p] * inv_dx - 0.5).cast(int)
             fx = x[p] * inv_dx - base.cast(float)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
             stress = -dt * p_vol * (J[p] - 1) * 4 * inv_dx * inv_dx * E
-            affine = ti.Matrix([[stress, 0], [0, stress]]) + p_mass * C[p]
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    offset = ti.Vector([i, j])
+            affine = qd.Matrix([[stress, 0], [0, stress]]) + p_mass * C[p]
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    offset = qd.Vector([i, j])
                     dpos = (offset.cast(float) - fx) * dx
                     weight = w[i][0] * w[j][1]
-                    ti.atomic_add(grid_v[base + offset], weight * (p_mass * v[p] + affine @ dpos))
-                    ti.atomic_add(grid_m[base + offset], weight * p_mass)
+                    qd.atomic_add(grid_v[base + offset], weight * (p_mass * v[p] + affine @ dpos))
+                    qd.atomic_add(grid_m[base + offset], weight * p_mass)
 
         for i, j in grid_m:
             if grid_m[i, j] > 0:
@@ -65,12 +65,12 @@ def test_mpm88():
             base = (x[p] * inv_dx - 0.5).cast(int)
             fx = x[p] * inv_dx - base.cast(float)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
-            new_v = ti.Vector.zero(ti.f32, 2)
-            new_C = ti.Matrix.zero(ti.f32, 2, 2)
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    dpos = ti.Vector([i, j]).cast(float) - fx
-                    g_v = grid_v[base + ti.Vector([i, j])]
+            new_v = qd.Vector.zero(qd.f32, 2)
+            new_C = qd.Matrix.zero(qd.f32, 2, 2)
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    dpos = qd.Vector([i, j]).cast(float) - fx
+                    g_v = grid_v[base + qd.Vector([i, j])]
                     weight = w[i][0] * w[j][1]
                     new_v += weight * g_v
                     new_C += 4 * weight * g_v.outer_product(dpos) * inv_dx
@@ -110,7 +110,7 @@ def _is_appveyor():
 
 @pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_mpm88_numpy_and_ndarray():
     import numpy as np
 
@@ -126,28 +126,28 @@ def test_mpm88_numpy_and_ndarray():
     p_mass = p_vol * p_rho
     E = 400
 
-    @ti.kernel
+    @qd.kernel
     def substep(
-        x: ti.types.ndarray(dtype=ti.math.vec2),
-        v: ti.types.ndarray(dtype=ti.math.vec2),
-        C: ti.types.ndarray(dtype=ti.math.mat2),
-        J: ti.types.ndarray(),
-        grid_v: ti.types.ndarray(dtype=ti.math.vec2),
-        grid_m: ti.types.ndarray(),
+        x: qd.types.ndarray(dtype=qd.math.vec2),
+        v: qd.types.ndarray(dtype=qd.math.vec2),
+        C: qd.types.ndarray(dtype=qd.math.mat2),
+        J: qd.types.ndarray(),
+        grid_v: qd.types.ndarray(dtype=qd.math.vec2),
+        grid_m: qd.types.ndarray(),
     ):
         for p in x:
             base = (x[p] * inv_dx - 0.5).cast(int)
             fx = x[p] * inv_dx - base.cast(float)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
             stress = -dt * p_vol * (J[p] - 1) * 4 * inv_dx * inv_dx * E
-            affine = ti.Matrix([[stress, 0], [0, stress]]) + p_mass * C[p]
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    offset = ti.Vector([i, j])
+            affine = qd.Matrix([[stress, 0], [0, stress]]) + p_mass * C[p]
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    offset = qd.Vector([i, j])
                     dpos = (offset.cast(float) - fx) * dx
                     weight = w[i][0] * w[j][1]
-                    ti.atomic_add(grid_v[base + offset], weight * (p_mass * v[p] + affine @ dpos))
-                    ti.atomic_add(grid_m[base + offset], weight * p_mass)
+                    qd.atomic_add(grid_v[base + offset], weight * (p_mass * v[p] + affine @ dpos))
+                    qd.atomic_add(grid_m[base + offset], weight * p_mass)
 
         for i, j in grid_m:
             if grid_m[i, j] > 0:
@@ -168,12 +168,12 @@ def test_mpm88_numpy_and_ndarray():
             base = (x[p] * inv_dx - 0.5).cast(int)
             fx = x[p] * inv_dx - base.cast(float)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
-            new_v = ti.Vector.zero(ti.f32, 2)
-            new_C = ti.Matrix.zero(ti.f32, 2, 2)
-            for i in ti.static(range(3)):
-                for j in ti.static(range(3)):
-                    dpos = ti.Vector([i, j]).cast(float) - fx
-                    g_v = grid_v[base + ti.Vector([i, j])]
+            new_v = qd.Vector.zero(qd.f32, 2)
+            new_C = qd.Matrix.zero(qd.f32, 2, 2)
+            for i in qd.static(range(3)):
+                for j in qd.static(range(3)):
+                    dpos = qd.Vector([i, j]).cast(float) - fx
+                    g_v = grid_v[base + qd.Vector([i, j])]
                     weight = w[i][0] * w[j][1]
                     new_v += weight * g_v
                     new_C += 4 * weight * g_v.outer_product(dpos) * inv_dx
@@ -215,12 +215,12 @@ def test_mpm88_numpy_and_ndarray():
         run_test(x, v, C, J, grid_v, grid_m)
 
     def test_ndarray():
-        x = ti.Vector.ndarray(dim, ti.f32, n_particles)
-        v = ti.Vector.ndarray(dim, ti.f32, n_particles)
-        C = ti.Matrix.ndarray(dim, dim, ti.f32, n_particles)
-        J = ti.ndarray(ti.f32, n_particles)
-        grid_v = ti.Vector.ndarray(dim, ti.f32, (n_grid, n_grid))
-        grid_m = ti.ndarray(ti.f32, (n_grid, n_grid))
+        x = qd.Vector.ndarray(dim, qd.f32, n_particles)
+        v = qd.Vector.ndarray(dim, qd.f32, n_particles)
+        C = qd.Matrix.ndarray(dim, dim, qd.f32, n_particles)
+        J = qd.ndarray(qd.f32, n_particles)
+        grid_v = qd.Vector.ndarray(dim, qd.f32, (n_grid, n_grid))
+        grid_m = qd.ndarray(qd.f32, (n_grid, n_grid))
         run_test(x, v, C, J, grid_v, grid_m)
 
     test_numpy()

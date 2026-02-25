@@ -1,13 +1,13 @@
 import test_utils
 
-import quadrants as ti
+import quadrants as qd
 
 
 @test_utils.test()
 def test_typing_kernel_return_none():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def some_kernel() -> None:
         x[None] += 1
 
@@ -16,13 +16,13 @@ def test_typing_kernel_return_none():
 
 @test_utils.test()
 def test_typing_func_return_none():
-    x = ti.field(ti.i32, shape=())
+    x = qd.field(qd.i32, shape=())
 
-    @ti.func
+    @qd.func
     def some_func() -> None:
         x[None] += 1
 
-    @ti.kernel
+    @qd.kernel
     def some_kernel() -> None:
         some_func()
 

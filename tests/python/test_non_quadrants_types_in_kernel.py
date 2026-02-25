@@ -1,9 +1,9 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(exclude=ti.amdgpu)
+@test_utils.test(exclude=qd.amdgpu)
 def test_subscript_user_classes_in_kernel():
     class MyList:
         def __init__(self, elements):
@@ -12,9 +12,9 @@ def test_subscript_user_classes_in_kernel():
         def __getitem__(self, index):
             return self.elements[index]
 
-    @ti.kernel
+    @qd.kernel
     def func():
-        for i in ti.static(range(3)):
+        for i in qd.static(range(3)):
             print(a[i])
 
     a = MyList([1, 2, 3])

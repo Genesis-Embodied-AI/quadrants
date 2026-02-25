@@ -1,18 +1,18 @@
 # https://forum.quadrants.graphics/t/quadrants/1003
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.cpu)
+qd.init(arch=qd.cpu)
 
 N = 3
 
-x = ti.field(ti.i32, N)
+x = qd.field(qd.i32, N)
 
 
-@ti.kernel
+@qd.kernel
 def test():
     for i in x:
         x[i] = 1000 + i
-    for i in ti.static(range(-N, 2 * N)):
+    for i in qd.static(range(-N, 2 * N)):
         print(i, x[i])
 
 

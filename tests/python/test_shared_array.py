@@ -1,16 +1,16 @@
 import numpy as np
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.math import vec4
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[ti.cuda], print_full_traceback=False)
+@test_utils.test(arch=[qd.cuda], print_full_traceback=False)
 def test_large_shared_array():
     # Skip the GPUs prior to Ampere which doesn't have large dynamical shared memory.
-    if ti.lang.impl.get_cuda_compute_capability() < 86:
+    if qd.lang.impl.get_cuda_compute_capability() < 86:
         pytest.skip("Skip the GPUs prior to Ampere")
 
     block_dim = 128
@@ -21,11 +21,11 @@ def test_large_shared_array():
     a_arr = np.zeros(N).astype(np.float32)
     reference = np.zeros(N).astype(np.float32)
 
-    @ti.kernel
+    @qd.kernel
     def calc(
-        v: ti.types.ndarray(ndim=1),
-        d: ti.types.ndarray(ndim=1),
-        a: ti.types.ndarray(ndim=1),
+        v: qd.types.ndarray(ndim=1),
+        d: qd.types.ndarray(ndim=1),
+        a: qd.types.ndarray(ndim=1),
     ):
         for i in range(N):
             acc = 0.0
@@ -34,24 +34,24 @@ def test_large_shared_array():
                 acc += v_val * d[j]
             a[i] = acc
 
-    @ti.kernel
+    @qd.kernel
     def calc_shared_array(
-        v: ti.types.ndarray(ndim=1),
-        d: ti.types.ndarray(ndim=1),
-        a: ti.types.ndarray(ndim=1),
+        v: qd.types.ndarray(ndim=1),
+        d: qd.types.ndarray(ndim=1),
+        a: qd.types.ndarray(ndim=1),
     ):
-        ti.loop_config(block_dim=block_dim)
+        qd.loop_config(block_dim=block_dim)
         for i in range(nBlocks * block_dim):
             tid = i % block_dim
-            pad = ti.simt.block.SharedArray((65536 // 4,), ti.f32)
+            pad = qd.simt.block.SharedArray((65536 // 4,), qd.f32)
             acc = 0.0
             v_val = v[i]
             for k in range(nBlocks):
                 pad[tid] = d[k * block_dim + tid]
-                ti.simt.block.sync()
+                qd.simt.block.sync()
                 for j in range(block_dim):
                     acc += v_val * pad[j]
-                ti.simt.block.sync()
+                qd.simt.block.sync()
             a[i] = acc
 
     calc(v_arr, d_arr, reference)
@@ -59,10 +59,10 @@ def test_large_shared_array():
     assert np.allclose(reference, a_arr)
 
 
-@test_utils.test(arch=[ti.cuda, ti.vulkan, ti.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
 def test_multiple_shared_array():
-    assert ti.cfg is not None
-    if ti.cfg.arch == ti.amdgpu:
+    assert qd.cfg is not None
+    if qd.cfg.arch == qd.amdgpu:
         pytest.xfail("failing on amd currently")
     block_dim = 128
     nBlocks = 64
@@ -72,11 +72,11 @@ def test_multiple_shared_array():
     a_arr = np.zeros(N).astype(np.float32)
     reference = np.zeros(N).astype(np.float32)
 
-    @ti.kernel
+    @qd.kernel
     def calc(
-        v: ti.types.ndarray(ndim=1),
-        d: ti.types.ndarray(ndim=1),
-        a: ti.types.ndarray(ndim=1),
+        v: qd.types.ndarray(ndim=1),
+        d: qd.types.ndarray(ndim=1),
+        a: qd.types.ndarray(ndim=1),
     ):
         for i in range(N):
             acc = 0.0
@@ -85,19 +85,19 @@ def test_multiple_shared_array():
                 acc += v_val * d[j]
             a[i] = acc
 
-    @ti.kernel
+    @qd.kernel
     def calc_shared_array(
-        v: ti.types.ndarray(ndim=1),
-        d: ti.types.ndarray(ndim=1),
-        a: ti.types.ndarray(ndim=1),
+        v: qd.types.ndarray(ndim=1),
+        d: qd.types.ndarray(ndim=1),
+        a: qd.types.ndarray(ndim=1),
     ):
-        ti.loop_config(block_dim=block_dim)
+        qd.loop_config(block_dim=block_dim)
         for i in range(nBlocks * block_dim * 4):
             tid = i % block_dim
-            pad0 = ti.simt.block.SharedArray((block_dim,), ti.f32)
-            pad1 = ti.simt.block.SharedArray((block_dim,), ti.f32)
-            pad2 = ti.simt.block.SharedArray((block_dim,), ti.f32)
-            pad3 = ti.simt.block.SharedArray((block_dim,), ti.f32)
+            pad0 = qd.simt.block.SharedArray((block_dim,), qd.f32)
+            pad1 = qd.simt.block.SharedArray((block_dim,), qd.f32)
+            pad2 = qd.simt.block.SharedArray((block_dim,), qd.f32)
+            pad3 = qd.simt.block.SharedArray((block_dim,), qd.f32)
             acc = 0.0
             v_val = v[i]
             for k in range(nBlocks):
@@ -105,13 +105,13 @@ def test_multiple_shared_array():
                 pad1[tid] = d[k * block_dim * 4 + block_dim + tid]
                 pad2[tid] = d[k * block_dim * 4 + 2 * block_dim + tid]
                 pad3[tid] = d[k * block_dim * 4 + 3 * block_dim + tid]
-                ti.simt.block.sync()
+                qd.simt.block.sync()
                 for j in range(block_dim):
                     acc += v_val * pad0[j]
                     acc += v_val * pad1[j]
                     acc += v_val * pad2[j]
                     acc += v_val * pad3[j]
-                ti.simt.block.sync()
+                qd.simt.block.sync()
             a[i] = acc
 
     calc(v_arr, d_arr, reference)
@@ -119,27 +119,27 @@ def test_multiple_shared_array():
     assert np.allclose(reference, a_arr, rtol=1e-4)
 
 
-@test_utils.test(arch=[ti.cuda, ti.vulkan, ti.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
 
-    @ti.kernel
-    def atomic_test(out: ti.types.ndarray()):
-        ti.loop_config(block_dim=block_dim)
+    @qd.kernel
+    def atomic_test(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
         for i in range(N):
             tid = i % block_dim
             val = tid
-            sharr = ti.simt.block.SharedArray((block_dim,), ti.i32)
+            sharr = qd.simt.block.SharedArray((block_dim,), qd.i32)
             sharr[tid] = val
-            ti.simt.block.sync()
+            qd.simt.block.sync()
             sharr[0] += val
-            ti.simt.block.sync()
+            qd.simt.block.sync()
             out[i] = sharr[tid]
 
-    arr = ti.ndarray(ti.i32, (N))
+    arr = qd.ndarray(qd.i32, (N))
     atomic_test(arr)
-    ti.sync()
+    qd.sync()
     sum = block_dim * (block_dim - 1) // 2
     assert arr[0] == sum
     assert arr[32] == sum
@@ -147,24 +147,24 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
-@test_utils.test(arch=[ti.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_shared_array_tensor_type():
     data_type = vec4
     block_dim = 16
     N = 64
 
-    y = ti.Vector.field(4, dtype=ti.f32, shape=(block_dim))
+    y = qd.Vector.field(4, dtype=qd.f32, shape=(block_dim))
 
-    @ti.kernel
+    @qd.kernel
     def test():
-        ti.loop_config(block_dim=block_dim)
+        qd.loop_config(block_dim=block_dim)
         for i in range(N):
             tid = i % block_dim
-            val = ti.Vector([1.0, 2.0, 3.0, 4.0])
+            val = qd.Vector([1.0, 2.0, 3.0, 4.0])
 
-            shared_mem = ti.simt.block.SharedArray((block_dim), data_type)
+            shared_mem = qd.simt.block.SharedArray((block_dim), data_type)
             shared_mem[tid] = val
-            ti.simt.block.sync()
+            qd.simt.block.sync()
 
             y[tid] += shared_mem[tid]
 
@@ -172,15 +172,15 @@ def test_shared_array_tensor_type():
     assert (y.to_numpy()[0] == [4.0, 8.0, 12.0, 16.0]).all()
 
 
-@test_utils.test(arch=[ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cuda], debug=True)
 def test_shared_array_matrix():
-    @ti.kernel
+    @qd.kernel
     def foo():
         for x in range(10):
-            shared = ti.simt.block.SharedArray((10,), dtype=ti.math.vec3)
-            shared[x] = ti.Vector([x + 1, x + 2, x + 3])
+            shared = qd.simt.block.SharedArray((10,), dtype=qd.math.vec3)
+            shared[x] = qd.Vector([x + 1, x + 2, x + 3])
             assert shared[x].z == x + 3
-            assert (shared[x] == ti.Vector([x + 1, x + 2, x + 3])).all()
+            assert (shared[x] == qd.Vector([x + 1, x + 2, x + 3])).all()
 
             print(shared[x].z)
             print(shared[x])

@@ -1,18 +1,18 @@
-import quadrants as ti
+import quadrants as qd
 
-ti.init(arch=ti.x64)
+qd.init(arch=qd.x64)
 
 n = 8
 
-K = ti.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100, dtype=ti.f32, storage_format="col_major")
-f = ti.linalg.SparseMatrixBuilder(n, 1, max_num_triplets=100, dtype=ti.f32, storage_format="col_major")
+K = qd.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100, dtype=qd.f32, storage_format="col_major")
+f = qd.linalg.SparseMatrixBuilder(n, 1, max_num_triplets=100, dtype=qd.f32, storage_format="col_major")
 
 
-@ti.kernel
+@qd.kernel
 def fill(
-    A: ti.types.sparse_matrix_builder(),
-    b: ti.types.sparse_matrix_builder(),
-    interval: ti.i32,
+    A: qd.types.sparse_matrix_builder(),
+    b: qd.types.sparse_matrix_builder(),
+    interval: qd.i32,
 ):
     for i in range(n):
         if i > 0:

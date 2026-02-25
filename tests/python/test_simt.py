@@ -2,22 +2,22 @@ import numpy as np
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang.simt import subgroup
 
 from tests import test_utils
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_all_nonzero():
-    a = ti.field(dtype=ti.i32, shape=32)
-    b = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.all_nonzero(ti.u32(0xFFFFFFFF), b[i])
+            a[i] = qd.simt.warp.all_nonzero(qd.u32(0xFFFFFFFF), b[i])
 
     for i in range(32):
         b[i] = 1
@@ -36,16 +36,16 @@ def test_all_nonzero():
         assert a[i] == 0
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_sync_all_nonzero():
-    a = ti.field(dtype=ti.i32, shape=256)
-    b = ti.field(dtype=ti.i32, shape=256)
+    a = qd.field(dtype=qd.i32, shape=256)
+    b = qd.field(dtype=qd.i32, shape=256)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=256)
+        qd.loop_config(block_dim=256)
         for i in range(256):
-            a[i] = ti.simt.block.sync_all_nonzero(b[i])
+            a[i] = qd.simt.block.sync_all_nonzero(b[i])
 
     for i in range(256):
         b[i] = 1
@@ -64,16 +64,16 @@ def test_sync_all_nonzero():
         assert a[i] == 0
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_any_nonzero():
-    a = ti.field(dtype=ti.i32, shape=32)
-    b = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.any_nonzero(ti.u32(0xFFFFFFFF), b[i])
+            a[i] = qd.simt.warp.any_nonzero(qd.u32(0xFFFFFFFF), b[i])
 
     for i in range(32):
         b[i] = 0
@@ -92,16 +92,16 @@ def test_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_sync_any_nonzero():
-    a = ti.field(dtype=ti.i32, shape=256)
-    b = ti.field(dtype=ti.i32, shape=256)
+    a = qd.field(dtype=qd.i32, shape=256)
+    b = qd.field(dtype=qd.i32, shape=256)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=256)
+        qd.loop_config(block_dim=256)
         for i in range(256):
-            a[i] = ti.simt.block.sync_any_nonzero(b[i])
+            a[i] = qd.simt.block.sync_any_nonzero(b[i])
 
     for i in range(256):
         b[i] = 0
@@ -120,16 +120,16 @@ def test_sync_any_nonzero():
         assert a[i] == 1
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_sync_count_nonzero():
-    a = ti.field(dtype=ti.i32, shape=256)
-    b = ti.field(dtype=ti.i32, shape=256)
+    a = qd.field(dtype=qd.i32, shape=256)
+    b = qd.field(dtype=qd.i32, shape=256)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=256)
+        qd.loop_config(block_dim=256)
         for i in range(256):
-            a[i] = ti.simt.block.sync_count_nonzero(b[i])
+            a[i] = qd.simt.block.sync_count_nonzero(b[i])
 
     for i in range(256):
         b[i] = 0
@@ -151,16 +151,16 @@ def test_sync_count_nonzero():
         assert a[i] == random_idx_count
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_unique():
-    a = ti.field(dtype=ti.u32, shape=32)
-    b = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.u32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def check():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.unique(ti.u32(0xFFFFFFFF), b[i])
+            a[i] = qd.simt.warp.unique(qd.u32(0xFFFFFFFF), b[i])
 
     for i in range(32):
         b[i] = 0
@@ -187,16 +187,16 @@ def test_unique():
         assert a[i] == 0
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_ballot():
-    a = ti.field(dtype=ti.u32, shape=32)
-    b = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.u32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.ballot(b[i])
+            a[i] = qd.simt.warp.ballot(b[i])
 
     key = 0
     for i in range(32):
@@ -209,15 +209,15 @@ def test_ballot():
         assert a[i] == key
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_sync_i32():
-    a = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_sync_i32(ti.u32(0xFFFFFFFF), a[i], 0)
+            a[i] = qd.simt.warp.shfl_sync_i32(qd.u32(0xFFFFFFFF), a[i], 0)
 
     for i in range(32):
         a[i] = i + 1
@@ -228,15 +228,15 @@ def test_shfl_sync_i32():
         assert a[i] == 1
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_sync_f32():
-    a = ti.field(dtype=ti.f32, shape=32)
+    a = qd.field(dtype=qd.f32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_sync_f32(ti.u32(0xFFFFFFFF), a[i], 0)
+            a[i] = qd.simt.warp.shfl_sync_f32(qd.u32(0xFFFFFFFF), a[i], 0)
 
     for i in range(32):
         a[i] = i + 1.0
@@ -247,23 +247,23 @@ def test_shfl_sync_f32():
         assert a[i] == approx(1.0, abs=1e-4)
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_up_i32():
     # TODO
     pass
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_xor_i32():
-    a = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
             for j in range(5):
                 offset = 1 << j
-                a[i] += ti.simt.warp.shfl_xor_i32(ti.u32(0xFFFFFFFF), a[i], offset)
+                a[i] += qd.simt.warp.shfl_xor_i32(qd.u32(0xFFFFFFFF), a[i], offset)
 
     value = 0
     for i in range(32):
@@ -276,16 +276,16 @@ def test_shfl_xor_i32():
         assert a[i] == value
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_down_i32():
-    a = ti.field(dtype=ti.i32, shape=32)
-    b = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_down_i32(ti.u32(0xFFFFFFFF), b[i], 1)
+            a[i] = qd.simt.warp.shfl_down_i32(qd.u32(0xFFFFFFFF), b[i], 1)
 
     for i in range(32):
         b[i] = i * i
@@ -298,15 +298,15 @@ def test_shfl_down_i32():
     # TODO: make this test case stronger
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_up_i32():
-    a = ti.field(dtype=ti.i32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_up_i32(ti.u32(0xFFFFFFFF), a[i], 1)
+            a[i] = qd.simt.warp.shfl_up_i32(qd.u32(0xFFFFFFFF), a[i], 1)
 
     for i in range(32):
         a[i] = i * i
@@ -317,15 +317,15 @@ def test_shfl_up_i32():
         assert a[i] == (i - 1) * (i - 1)
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_up_f32():
-    a = ti.field(dtype=ti.f32, shape=32)
+    a = qd.field(dtype=qd.f32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_up_f32(ti.u32(0xFFFFFFFF), a[i], 1)
+            a[i] = qd.simt.warp.shfl_up_f32(qd.u32(0xFFFFFFFF), a[i], 1)
 
     for i in range(32):
         a[i] = i * i * 0.9
@@ -336,15 +336,15 @@ def test_shfl_up_f32():
         assert a[i] == approx((i - 1) * (i - 1) * 0.9, abs=1e-4)
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_shfl_down_f32():
-    a = ti.field(dtype=ti.f32, shape=32)
+    a = qd.field(dtype=qd.f32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
-            a[i] = ti.simt.warp.shfl_down_f32(ti.u32(0xFFFFFFFF), a[i], 1)
+            a[i] = qd.simt.warp.shfl_down_f32(qd.u32(0xFFFFFFFF), a[i], 1)
 
     for i in range(32):
         a[i] = i * i * 0.9
@@ -355,24 +355,24 @@ def test_shfl_down_f32():
         assert a[i] == approx((i + 1) * (i + 1) * 0.9, abs=1e-4)
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_match_any():
     # Skip match_any test for Pascal
-    if ti.lang.impl.get_cuda_compute_capability() < 70:
+    if qd.lang.impl.get_cuda_compute_capability() < 70:
         pytest.skip("match_any not supported on Pascal")
 
-    a = ti.field(dtype=ti.i32, shape=32)
-    b = ti.field(dtype=ti.u32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.u32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(16):
             a[i] = 0
             a[i + 16] = 1
 
         for i in range(32):
-            b[i] = ti.simt.warp.match_any(ti.u32(0xFFFFFFFF), a[i])
+            b[i] = qd.simt.warp.match_any(qd.u32(0xFFFFFFFF), a[i])
 
     foo()
 
@@ -382,27 +382,27 @@ def test_match_any():
         assert b[i + 16] == (2**32 - 2**16)
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_match_all():
     # Skip match_all test for Pascal
-    if ti.lang.impl.get_cuda_compute_capability() < 70:
+    if qd.lang.impl.get_cuda_compute_capability() < 70:
         pytest.skip("match_all not supported on Pascal")
 
-    a = ti.field(dtype=ti.i32, shape=32)
-    b = ti.field(dtype=ti.u32, shape=32)
-    c = ti.field(dtype=ti.u32, shape=32)
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.u32, shape=32)
+    c = qd.field(dtype=qd.u32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
             a[i] = 1
         for i in range(32):
-            b[i] = ti.simt.warp.match_all(ti.u32(0xFFFFFFFF), a[i])
+            b[i] = qd.simt.warp.match_all(qd.u32(0xFFFFFFFF), a[i])
 
         a[0] = 2
         for i in range(32):
-            c[i] = ti.simt.warp.match_all(ti.u32(0xFFFFFFFF), a[i])
+            c[i] = qd.simt.warp.match_all(qd.u32(0xFFFFFFFF), a[i])
 
     foo()
 
@@ -413,15 +413,15 @@ def test_match_all():
         assert c[i] == 0
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_active_mask():
-    a = ti.field(dtype=ti.u32, shape=32)
+    a = qd.field(dtype=qd.u32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=16)
+        qd.loop_config(block_dim=16)
         for i in range(32):
-            a[i] = ti.simt.warp.active_mask()
+            a[i] = qd.simt.warp.active_mask()
 
     foo()
 
@@ -429,16 +429,16 @@ def test_active_mask():
         assert a[i] == 65535
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_warp_sync():
-    a = ti.field(dtype=ti.u32, shape=32)
+    a = qd.field(dtype=qd.u32, shape=32)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=32)
+        qd.loop_config(block_dim=32)
         for i in range(32):
             a[i] = i
-        ti.simt.warp.sync(ti.u32(0xFFFFFFFF))
+        qd.simt.warp.sync(qd.u32(0xFFFFFFFF))
         for i in range(16):
             a[i] = a[i + 16]
 
@@ -448,19 +448,19 @@ def test_warp_sync():
         assert a[i] == i % 16 + 16
 
 
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_block_sync():
     N = 1024
-    a = ti.field(dtype=ti.u32, shape=N)
+    a = qd.field(dtype=qd.u32, shape=N)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
-        ti.loop_config(block_dim=N)
+        qd.loop_config(block_dim=N)
         for i in range(N):
             # Make the 0-th thread runs slower intentionally
             for j in range(N - i):
                 a[i] = j
-            ti.simt.block.sync()
+            qd.simt.block.sync()
             if i > 0:
                 a[i] = a[0]
 
@@ -471,22 +471,22 @@ def test_block_sync():
 
 
 # TODO: replace this with a stronger test case
-@test_utils.test(arch=ti.cuda)
+@test_utils.test(arch=qd.cuda)
 def test_grid_memfence():
     N = 1000
     BLOCK_SIZE = 1
-    a = ti.field(dtype=ti.u32, shape=N)
+    a = qd.field(dtype=qd.u32, shape=N)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         block_counter = 0
-        ti.loop_config(block_dim=BLOCK_SIZE)
+        qd.loop_config(block_dim=BLOCK_SIZE)
         for i in range(N):
             a[i] = 1
-            ti.simt.grid.memfence()
+            qd.simt.grid.memfence()
 
             # Execute a prefix sum after all blocks finish
-            actual_order_of_block = ti.atomic_add(block_counter, 1)
+            actual_order_of_block = qd.atomic_add(block_counter, 1)
             if actual_order_of_block == N - 1:
                 for j in range(1, N):
                     a[j] += a[j - 1]
@@ -499,17 +499,17 @@ def test_grid_memfence():
 
 # Higher level primitives test
 def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
-    field = ti.field(dtype, (size))
-    if dtype == ti.i32 or dtype == ti.i64:
+    field = qd.field(dtype, (size))
+    if dtype == qd.i32 or dtype == qd.i64:
         rand_values = np.random.randint(1, 100, size=(size))
         field.from_numpy(rand_values)
-    if dtype == ti.f32 or dtype == ti.f64:
+    if dtype == qd.f32 or dtype == qd.f64:
         rand_values = np.random.random(size=(size)).astype(np.float32)
         field.from_numpy(rand_values)
 
-    @ti.kernel
+    @qd.kernel
     def reduce_all() -> dtype:
-        sum = ti.cast(initial_value, dtype)
+        sum = qd.cast(initial_value, dtype)
         for i in field:
             value = field[i]
             reduce_value = group_op(value)
@@ -517,7 +517,7 @@ def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
                 op(sum, reduce_value)
         return sum
 
-    if dtype == ti.i32 or dtype == ti.i64:
+    if dtype == qd.i32 or dtype == qd.i64:
         assert reduce_all() == np_op(rand_values)
     else:
         assert reduce_all() == approx(np_op(rand_values), 3e-4)
@@ -527,31 +527,31 @@ def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
 # i.e. any device other than a subgroup size of 1 should have one non active group
 
 
-@test_utils.test(arch=ti.vulkan, exclude=[(ti.vulkan, "Darwin")])
+@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
 def test_subgroup_reduction_add_i32():
-    _test_subgroup_reduce(ti.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, ti.i32)
+    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.i32)
 
 
-@test_utils.test(arch=ti.vulkan)
+@test_utils.test(arch=qd.vulkan)
 def test_subgroup_reduction_add_f32():
-    _test_subgroup_reduce(ti.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, ti.f32)
+    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.f32)
 
 
-# @test_utils.test(arch=ti.vulkan)
+# @test_utils.test(arch=qd.vulkan)
 # def test_subgroup_reduction_mul_i32():
-#     _test_subgroup_reduce(ti.atomic_add, subgroup.reduce_mul, np.prod, 8, 1, ti.f32)
+#     _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_mul, np.prod, 8, 1, qd.f32)
 
 
-@test_utils.test(arch=ti.vulkan, exclude=[(ti.vulkan, "Darwin")])
+@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
 def test_subgroup_reduction_max_i32():
-    _test_subgroup_reduce(ti.atomic_max, subgroup.reduce_max, np.max, 2677, 0, ti.i32)
+    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.i32)
 
 
-@test_utils.test(arch=ti.vulkan)
+@test_utils.test(arch=qd.vulkan)
 def test_subgroup_reduction_max_f32():
-    _test_subgroup_reduce(ti.atomic_max, subgroup.reduce_max, np.max, 2677, 0, ti.f32)
+    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
 
 
-@test_utils.test(arch=ti.vulkan)
+@test_utils.test(arch=qd.vulkan)
 def test_subgroup_reduction_min_f32():
-    _test_subgroup_reduce(ti.atomic_max, subgroup.reduce_max, np.max, 2677, 0, ti.f32)
+    _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)

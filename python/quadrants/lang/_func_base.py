@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
@@ -40,6 +40,7 @@ from quadrants.types import (
     template,
 )
 
+from ._exceptions import raise_exception
 from .ast.ast_transformer_utils import ASTTransformerGlobalContext
 
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ MAX_ARG_NUM = 512
 # Define proxies for fast lookup
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
-_arch_cuda = _ti_core.Arch.cuda
+_arch_cuda = _qd_core.Arch.cuda
 
 
 class FuncBase:
@@ -91,8 +92,16 @@ class FuncBase:
         and self.orig_arguments (both are identical after this call)
         - they just contain the original parameter annotations after this call, unexpanded
         - this function mostly just does checking
+
+        Note: NOT in the hot path. Just run once, on function registration
         """
         sig = inspect.signature(self.func)
+        if hasattr(self.func, "__wrapped__"):
+            raise_exception(
+                QuadrantsSyntaxError,
+                msg="Cant put kernel in front of other annotations",
+                err_code="KERNEL_ANNOTATION_ORDER",
+            )
         if sig.return_annotation not in {inspect._empty, None}:
             self.return_type = sig.return_annotation
             if (
@@ -134,7 +143,7 @@ class FuncBase:
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
                 elif annotation is ndarray_type.NdarrayType:
-                    # convert from ti.types.NDArray into ti.types.NDArray()
+                    # convert from qd.types.NDArray into qd.types.NDArray()
                     annotation = annotation()
                 elif id(annotation) in primitive_types.type_ids:
                     pass
@@ -427,7 +436,7 @@ class FuncBase:
         if actual_argument_slot >= MAX_ARG_NUM:
             raise QuadrantsRuntimeError(
                 f"The number of elements in kernel arguments is too big! Do not exceed {MAX_ARG_NUM} on "
-                f"{_ti_core.arch_name(impl.current_cfg().arch)} backend."
+                f"{_qd_core.arch_name(impl.current_cfg().arch)} backend."
             )
         actual_argument_slot += 1
 
@@ -613,7 +622,7 @@ class FuncBase:
         if needed_arg_type is template or needed_arg_basetype is template:
             return 0, True
         if needed_arg_basetype is sparse_matrix_builder:
-            # Pass only the base pointer of the ti.types.sparse_matrix_builder() argument
+            # Pass only the base pointer of the qd.types.sparse_matrix_builder() argument
             launch_ctx_buffer[_UINT].append((index, v._get_ndarray_addr()))
             return 1, True
         raise ValueError(f"Argument type mismatch. Expecting {needed_arg_type}, got {type(v)}.")

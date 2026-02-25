@@ -3,7 +3,7 @@
 import inspect
 
 import quadrants.lang
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
     DataTypeCxx,
@@ -69,8 +69,8 @@ def decl_scalar_arg(dtype, name):
     else:
         arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(dtype, name)
 
-    argload_di = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    return Expr(_ti_core.make_arg_load_expr(arg_id, dtype, is_ref, create_load=True, dbg_info=argload_di))
+    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    return Expr(_qd_core.make_arg_load_expr(arg_id, dtype, is_ref, create_load=True, dbg_info=argload_di))
 
 
 def get_type_for_kernel_args(dtype, name):
@@ -80,7 +80,7 @@ def get_type_for_kernel_args(dtype, name):
             elements = [(dtype.dtype, f"{name}_{i}") for i in range(dtype.n)]
         else:
             elements = [(dtype.dtype, f"{name}_{i}_{j}") for i in range(dtype.n) for j in range(dtype.m)]
-        return _ti_core.get_type_factory_instance().get_struct_type(elements)
+        return _qd_core.get_type_factory_instance().get_struct_type(elements)
     if isinstance(dtype, StructType):
         elements = []
         for k, element_type in dtype.members.items():
@@ -89,7 +89,7 @@ def get_type_for_kernel_args(dtype, name):
                 elements.append([new_dtype, k])
             else:
                 elements.append([element_type, k])
-        return _ti_core.get_type_factory_instance().get_struct_type(elements)
+        return _qd_core.get_type_factory_instance().get_struct_type(elements)
     # Assuming dtype is a primitive type
     return dtype
 
@@ -97,16 +97,16 @@ def get_type_for_kernel_args(dtype, name):
 def decl_matrix_arg(matrixtype, name):
     arg_type = get_type_for_kernel_args(matrixtype, name)
     arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(arg_type, name)
-    argload_di = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    arg_load = Expr(_ti_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
+    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    arg_load = Expr(_qd_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
     return matrixtype.from_quadrants_object(arg_load)
 
 
 def decl_struct_arg(structtype, name):
     arg_type = get_type_for_kernel_args(structtype, name)
     arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(arg_type, name)
-    argload_di = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    arg_load = Expr(_ti_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
+    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    arg_load = Expr(_qd_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
     return structtype.from_quadrants_object(arg_load)
 
 
@@ -115,9 +115,9 @@ def decl_sparse_matrix(dtype, name):
     ptr_type = cook_dtype(u64)
     # Treat the sparse matrix argument as a scalar since we only need to pass in the base pointer
     arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(ptr_type, name)
-    argload_di = _ti_core.DebugInfo(impl.get_runtime().get_current_src_info())
+    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     return SparseMatrixProxy(
-        _ti_core.make_arg_load_expr(arg_id, ptr_type, is_ptr=False, dbg_info=argload_di), value_type
+        _qd_core.make_arg_load_expr(arg_id, ptr_type, is_ptr=False, dbg_info=argload_di), value_type
     )
 
 
@@ -125,14 +125,14 @@ def decl_ndarray_arg(
     element_type: DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: BoundaryMode
 ) -> AnyArray:
     arg_id = impl.get_runtime().compiling_callable.insert_ndarray_param(element_type, ndim, name, needs_grad)
-    return AnyArray(_ti_core.make_external_tensor_expr(element_type, ndim, arg_id, needs_grad, boundary))
+    return AnyArray(_qd_core.make_external_tensor_expr(element_type, ndim, arg_id, needs_grad, boundary))
 
 
 def decl_ret(dtype):
     if isinstance(dtype, StructType):
         dtype = dtype.dtype
     if isinstance(dtype, MatrixType):
-        dtype = _ti_core.get_type_factory_instance().get_tensor_type([dtype.n, dtype.m], dtype.dtype)
+        dtype = _qd_core.get_type_factory_instance().get_tensor_type([dtype.n, dtype.m], dtype.dtype)
     else:
         dtype = cook_dtype(dtype)
     impl.get_runtime().compiling_callable.insert_ret(dtype)

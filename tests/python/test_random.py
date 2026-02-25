@@ -1,20 +1,20 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_random_float():
-    for precision in [ti.f32, ti.f64]:
-        ti.init()
+    for precision in [qd.f32, qd.f64]:
+        qd.init()
         n = 1024
-        x = ti.field(ti.f32, shape=(n, n))
+        x = qd.field(qd.f32, shape=(n, n))
 
-        @ti.kernel
+        @qd.kernel
         def fill():
             for i in range(n):
                 for j in range(n):
-                    x[i, j] = ti.random(precision)
+                    x[i, j] = qd.random(precision)
 
         fill()
         X = x.to_numpy()
@@ -24,17 +24,17 @@ def test_random_float():
 
 @test_utils.test()
 def test_random_int():
-    for precision in [ti.i32, ti.i64]:
-        ti.init()
+    for precision in [qd.i32, qd.i64]:
+        qd.init()
         n = 1024
-        x = ti.field(ti.f32, shape=(n, n))
+        x = qd.field(qd.f32, shape=(n, n))
 
-        @ti.kernel
+        @qd.kernel
         def fill():
             for i in range(n):
                 for j in range(n):
-                    v = ti.random(precision)
-                    if precision == ti.i32:
+                    v = qd.random(precision)
+                    if precision == qd.i32:
                         x[i, j] = (float(v) + float(2**31)) / float(2**32)
                     else:
                         x[i, j] = (float(v) + float(2**63)) / float(2**64)
@@ -48,13 +48,13 @@ def test_random_int():
 @test_utils.test()
 def test_random_independent_product():
     n = 1024
-    x = ti.field(ti.f32, shape=n * n)
+    x = qd.field(qd.f32, shape=n * n)
 
-    @ti.kernel
+    @qd.kernel
     def fill():
         for i in range(n * n):
-            a = ti.random()
-            b = ti.random()
+            a = qd.random()
+            b = qd.random()
             x[i] = a * b
 
     fill()
@@ -67,12 +67,12 @@ def test_random_independent_product():
 def test_random_2d_dist():
     n = 8192
 
-    x = ti.Vector.field(2, dtype=ti.f32, shape=n)
+    x = qd.Vector.field(2, dtype=qd.f32, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def gen():
         for i in range(n):
-            x[i] = ti.Vector([ti.random(), ti.random()])
+            x[i] = qd.Vector([qd.random(), qd.random()])
 
     gen()
 
@@ -89,11 +89,11 @@ def test_random_2d_dist():
 @test_utils.test()
 def test_random_seed_per_launch():
     n = 10
-    x = ti.field(ti.f32, shape=n)
+    x = qd.field(qd.f32, shape=n)
 
-    @ti.kernel
-    def gen(i: ti.i32):
-        x[i] = ti.random()
+    @qd.kernel
+    def gen(i: qd.i32):
+        x[i] = qd.random()
 
     count = 0
     gen(0)
@@ -104,29 +104,29 @@ def test_random_seed_per_launch():
     assert count <= n * 0.15
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda, ti.metal])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.metal])
 def test_random_seed_per_program():
     import numpy as np
 
     n = 10
     result = []
     for s in [0, 1]:
-        ti.init(random_seed=s)
-        x = ti.field(ti.f32, shape=n)
+        qd.init(random_seed=s)
+        x = qd.field(qd.f32, shape=n)
 
-        @ti.kernel
+        @qd.kernel
         def gen():
             for i in x:
-                x[i] = ti.random()
+                x[i] = qd.random()
 
         gen()
         result.append(x.to_numpy())
-        ti.reset()
+        qd.reset()
 
     assert not np.allclose(result[0], result[1])
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_random_f64():
     """
     Tests the granularity of float64 random numbers.
@@ -135,12 +135,12 @@ def test_random_f64():
     import numpy as np
 
     n = int(2**23)
-    x = ti.field(ti.f64, shape=n)
+    x = qd.field(qd.f64, shape=n)
 
-    @ti.kernel
+    @qd.kernel
     def foo():
         for i in x:
-            x[i] = ti.random(dtype=ti.f64)
+            x[i] = qd.random(dtype=qd.f64)
 
     foo()
     frac, _ = np.modf(x.to_numpy() * 4294967296)
@@ -152,16 +152,16 @@ def test_randn():
     """
     Tests the generation of Gaussian random numbers.
     """
-    for precision in [ti.f32, ti.f64]:
-        ti.init()
+    for precision in [qd.f32, qd.f64]:
+        qd.init()
         n = 1024
-        x = ti.field(ti.f32, shape=(n, n))
+        x = qd.field(qd.f32, shape=(n, n))
 
-        @ti.kernel
+        @qd.kernel
         def fill():
             for i in range(n):
                 for j in range(n):
-                    x[i, j] = ti.randn(precision)
+                    x[i, j] = qd.randn(precision)
 
         fill()
         X = x.to_numpy()

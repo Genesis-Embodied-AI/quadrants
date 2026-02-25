@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import QuadrantsCompilationError, QuadrantsTypeError
@@ -24,7 +24,7 @@ class Expr(QuadrantsOperations):
         self.ptr_type_checked = False
         self.declaration_tb: str = ""
         if len(args) == 1:
-            if isinstance(args[0], _ti_core.ExprCxx):
+            if isinstance(args[0], _qd_core.ExprCxx):
                 self.ptr = args[0]
             elif isinstance(args[0], Expr):
                 self.ptr = args[0].ptr
@@ -86,10 +86,10 @@ class Expr(QuadrantsOperations):
         return self.ptr.get_raw_address()
 
     def __str__(self):
-        return "<ti.Expr>"
+        return "<qd.Expr>"
 
     def __repr__(self):
-        return "<ti.Expr>"
+        return "<qd.Expr>"
 
 
 def _check_in_range(npty, val):
@@ -111,27 +111,27 @@ def _clamp_unsigned_to_range(npty, val: np.integer | int) -> np.integer | int:
 def make_constant_expr(val, dtype):
     if isinstance(val, (bool, np.bool_)):
         constant_dtype = primitive_types.u1
-        return Expr(_ti_core.make_const_expr_bool(constant_dtype, val))
+        return Expr(_qd_core.make_const_expr_bool(constant_dtype, val))
 
     if isinstance(val, (float, np.floating)):
         constant_dtype = impl.get_runtime().default_fp if dtype is None else dtype
         if constant_dtype not in real_types:
             raise QuadrantsTypeError(
-                "Floating-point literals must be annotated with a floating-point type. For type casting, use `ti.cast`."
+                "Floating-point literals must be annotated with a floating-point type. For type casting, use `qd.cast`."
             )
-        return Expr(_ti_core.make_const_expr_fp(constant_dtype, val))
+        return Expr(_qd_core.make_const_expr_fp(constant_dtype, val))
 
     if isinstance(val, (int, np.integer)):
         constant_dtype = impl.get_runtime().default_ip if dtype is None else dtype
         if constant_dtype not in integer_types:
             raise QuadrantsTypeError(
-                "Integer literals must be annotated with a integer type. For type casting, use `ti.cast`."
+                "Integer literals must be annotated with a integer type. For type casting, use `qd.cast`."
             )
         if _check_in_range(to_numpy_type(constant_dtype), val):
-            return Expr(_ti_core.make_const_expr_int(constant_dtype, _clamp_unsigned_to_range(np.int64, val)))
+            return Expr(_qd_core.make_const_expr_int(constant_dtype, _clamp_unsigned_to_range(np.int64, val)))
         if dtype is None:
             raise QuadrantsTypeError(
-                f"Integer literal {val} exceeded the range of default_ip: {impl.get_runtime().default_ip}, please specify the dtype via e.g. `ti.u64({val})` or set a different `default_ip` in `ti.init()`"
+                f"Integer literal {val} exceeded the range of default_ip: {impl.get_runtime().default_ip}, please specify the dtype via e.g. `qd.u64({val})` or set a different `default_ip` in `qd.init()`"
             )
         else:
             raise QuadrantsTypeError(f"Integer literal {val} exceeded the range of specified dtype: {dtype}")
@@ -160,7 +160,7 @@ def make_expr_group(*exprs):
             mat = exprs[0]
             assert mat.m == 1
             exprs = mat.entries
-    expr_group = _ti_core.ExprGroup()
+    expr_group = _qd_core.ExprGroup()
     for i in exprs:
         flattened = _get_flattened_ptrs(i)
         for item in flattened:

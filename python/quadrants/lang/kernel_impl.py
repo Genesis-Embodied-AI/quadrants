@@ -43,11 +43,11 @@ def func(fn: F, is_real_function: bool = False) -> F:
 
     Example::
 
-        >>> @ti.func
+        >>> @qd.func
         >>> def foo(x):
         >>>     return x + 2
         >>>
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def run():
         >>>     print(foo(40))  # 42
     """
@@ -91,15 +91,15 @@ def pyfunc(fn: Callable) -> QuadrantsCallable:
 
 # For a Quadrants class definition like below:
 #
-# @ti.data_oriented
+# @qd.data_oriented
 # class X:
-#   @ti.kernel
+#   @qd.kernel
 #   def foo(self):
 #     ...
 #
-# When ti.kernel runs, the stackframe's |code_context| of Python 3.8(+) is
+# When qd.kernel runs, the stackframe's |code_context| of Python 3.8(+) is
 # different from that of Python 3.7 and below. In 3.8+, it is 'class X:',
-# whereas in <=3.7, it is '@ti.data_oriented'. More interestingly, if the class
+# whereas in <=3.7, it is '@qd.data_oriented'. More interestingly, if the class
 # inherits, i.e. class X(object):, then in both versions, |code_context| is
 # 'class X(object):'...
 _KERNEL_CLASS_STACKFRAME_STMT_RES = [
@@ -154,7 +154,7 @@ def _kernel_impl(_func: Callable, level_of_class_stackframe: int, verbose: bool 
         @wraps(_func)
         def wrapped_classkernel(*args, **kwargs):
             if args and not getattr(args[0], "_data_oriented", False):
-                raise QuadrantsSyntaxError(f"Please decorate class {type(args[0]).__name__} with @ti.data_oriented")
+                raise QuadrantsSyntaxError(f"Please decorate class {type(args[0]).__name__} with @qd.data_oriented")
             return wrapped_func(*args, **kwargs)
 
         wrapped = QuadrantsCallable(_func, wrapped_classkernel)
@@ -199,9 +199,9 @@ def kernel(_fn: Callable[..., typing.Any] | None = None, *, pure: bool | None = 
 
     Example::
 
-        >>> x = ti.field(ti.i32, shape=(4, 8))
+        >>> x = qd.field(qd.i32, shape=(4, 8))
         >>>
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def run():
         >>>     # Assigns all the elements of `x` in parallel.
         >>>     for i in x:
@@ -219,7 +219,7 @@ def kernel(_fn: Callable[..., typing.Any] | None = None, *, pure: bool | None = 
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(
-                "@ti.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. "
+                "@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. "
                 "`pure` parameter is intended to be removed in 4.0.0"
             )
 
@@ -237,7 +237,7 @@ class _BoundedDifferentiableMethod:
     def __init__(self, kernel_owner: Any, wrapped_kernel_func: QuadrantsCallable | BoundQuadrantsCallable):
         clsobj = type(kernel_owner)
         if not getattr(clsobj, "_data_oriented", False):
-            raise QuadrantsSyntaxError(f"Please decorate class {clsobj.__name__} with @ti.data_oriented")
+            raise QuadrantsSyntaxError(f"Please decorate class {clsobj.__name__} with @qd.data_oriented")
         self._kernel_owner = kernel_owner
         self._primal = wrapped_kernel_func._primal
         self._adjoint = wrapped_kernel_func._adjoint
@@ -267,12 +267,12 @@ def data_oriented(cls):
 
     Example::
 
-        >>> @ti.data_oriented
+        >>> @qd.data_oriented
         >>> class TiArray:
         >>>     def __init__(self, n):
-        >>>         self.x = ti.field(ti.f32, shape=n)
+        >>>         self.x = qd.field(qd.f32, shape=n)
         >>>
-        >>>     @ti.kernel
+        >>>     @qd.kernel
         >>>     def inc(self):
         >>>         for i in self.x:
         >>>             self.x[i] += 1.0

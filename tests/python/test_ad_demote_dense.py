@@ -1,13 +1,13 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(exclude=[ti.metal])
+@test_utils.test(exclude=[qd.metal])
 def test_ad_demote_dense():
-    a = ti.field(ti.f32, shape=(7, 3, 19))
+    a = qd.field(qd.f32, shape=(7, 3, 19))
 
-    @ti.kernel
+    @qd.kernel
     def inc():
         for i, j, k in a:
             a[i, j, k] += 1

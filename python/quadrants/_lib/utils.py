@@ -36,7 +36,7 @@ def get_os_name():
     assert False, f"Unknown platform name {name}"
 
 
-def import_ti_python_core():
+def import_qd_python_core():
     if get_os_name() != "win":
         # pylint: disable=E1101
         old_flags = sys.getdlopenflags()
@@ -117,13 +117,13 @@ def check_exists(src):
         raise FileNotFoundError(f'File "{src}" not exist. Installation corrupted or build incomplete?')
 
 
-ti_python_core = import_ti_python_core()
+qd_python_core = import_qd_python_core()
 
-ti_python_core.set_python_package_dir(package_root)
+qd_python_core.set_python_package_dir(package_root)
 
 log_level = os.environ.get("QD_LOG_LEVEL", "")
 if log_level:
-    ti_python_core.set_logging_level(log_level)
+    qd_python_core.set_logging_level(log_level)
 
 
 def get_dll_name(name):
@@ -137,7 +137,7 @@ def get_dll_name(name):
 
 
 def at_startup():
-    ti_python_core.set_core_state_python_imported(True)
+    qd_python_core.set_core_state_python_imported(True)
 
 
 at_startup()
@@ -151,23 +151,23 @@ def compare_version(latest, current):
 
 def _print_quadrants_header():
     header = "[Quadrants] "
-    header += f"version {ti_python_core.get_version_string()}, "
+    header += f"version {qd_python_core.get_version_string()}, "
 
     try:
-        timestamp_path = os.path.join(ti_python_core.get_repo_dir(), "timestamp")
+        timestamp_path = os.path.join(qd_python_core.get_repo_dir(), "timestamp")
         if os.path.exists(timestamp_path):
             latest_version = ""
             with open(timestamp_path, "r") as f:
                 latest_version = f.readlines()[1].rstrip()
-            if compare_version(latest_version, ti_python_core.get_version_string()):
+            if compare_version(latest_version, qd_python_core.get_version_string()):
                 header += f"latest version {latest_version}, "
     except:
         pass
 
-    llvm_target_support = ti_python_core.get_llvm_target_support()
+    llvm_target_support = qd_python_core.get_llvm_target_support()
     header += f"llvm {llvm_target_support}, "
 
-    commit_hash = ti_python_core.get_commit_hash()
+    commit_hash = qd_python_core.get_commit_hash()
     commit_hash = commit_hash[:8]
     header += f"commit {commit_hash}, "
 
@@ -226,7 +226,6 @@ def warn_restricted_version():
 
     if get_os_name() == "linux":
         try:
-            import quadrants as ti  # pylint: disable=import-outside-toplevel
 
             wheel_tag = try_get_wheel_tag(ti)
             if wheel_tag and "manylinux" in wheel_tag:

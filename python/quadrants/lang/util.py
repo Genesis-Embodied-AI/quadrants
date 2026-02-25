@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from colorama import Fore, Style
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._logging import is_logging_effective
 from quadrants.lang import impl
 from quadrants.types import Template
@@ -182,7 +182,7 @@ def to_quadrants_type(dt):
     if _type is int:
         return MAP_TYPE_IDS[dt]
 
-    if issubclass(_type, _ti_core.DataTypeCxx):
+    if issubclass(_type, _qd_core.DataTypeCxx):
         return dt
 
     if dt == np.float32:
@@ -246,10 +246,10 @@ def to_quadrants_type(dt):
     raise AssertionError(f"Unknown type {dt}")
 
 
-class DataTypeCxxWrapper(_ti_core.DataTypeCxx):
+class DataTypeCxxWrapper(_qd_core.DataTypeCxx):
     __slots__ = ("_hash",)
 
-    def __init__(self, dtype: _ti_core.Type):
+    def __init__(self, dtype: _qd_core.Type):
         super().__init__(dtype)
         try:
             self._hash = super().__hash__()
@@ -261,12 +261,12 @@ class DataTypeCxxWrapper(_ti_core.DataTypeCxx):
         return self._hash
 
 
-def cook_dtype(dtype: Any) -> _ti_core.DataTypeCxx:
+def cook_dtype(dtype: Any) -> _qd_core.DataTypeCxx:
     # Convert Python dtype to CPP dtype
     _type = type(dtype)
-    if issubclass(_type, _ti_core.DataTypeCxx):
+    if issubclass(_type, _qd_core.DataTypeCxx):
         return dtype
-    if issubclass(_type, _ti_core.Type):
+    if issubclass(_type, _qd_core.Type):
         return DataTypeCxxWrapper(dtype)
     if dtype is float:
         return impl.get_runtime().default_fp
@@ -331,7 +331,7 @@ def is_data_oriented(obj: Any) -> bool:
     return getattr(type(obj), "_data_oriented", False)
 
 
-def is_ti_template(annotation: Any) -> bool:
+def is_qd_template(annotation: Any) -> bool:
     return annotation is Template or type(annotation) is Template
 
 

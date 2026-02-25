@@ -1,11 +1,12 @@
 import numbers
+import threading
 import weakref
 from types import FunctionType, MethodType
 from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     DataTypeCxx,
     Function,
@@ -79,7 +80,7 @@ if TYPE_CHECKING:
 @quadrants_scope
 def expr_init_shared_array(shape, element_type):
     ast_builder = get_runtime().compiling_callable.ast_builder()
-    debug_info = _ti_core.DebugInfo(get_runtime().get_current_src_info())
+    debug_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     return ast_builder.expr_alloca_shared_array(shape, element_type, debug_info)
 
 
@@ -88,7 +89,7 @@ def expr_init(rhs):
     compiling_callable = get_runtime().compiling_callable
     if rhs is None:
         return Expr(
-            compiling_callable.ast_builder().expr_alloca(_ti_core.DebugInfo(get_runtime().get_current_src_info()))
+            compiling_callable.ast_builder().expr_alloca(_qd_core.DebugInfo(get_runtime().get_current_src_info()))
         )
     if isinstance(rhs, Matrix) and (hasattr(rhs, "_DIM")):
         return Matrix(*rhs.to_list(), ndim=rhs.ndim)  # type: ignore
@@ -104,9 +105,9 @@ def expr_init(rhs):
         return tuple(expr_init(e) for e in rhs)
     if isinstance(rhs, dict):
         return dict((key, expr_init(val)) for key, val in rhs.items())
-    if isinstance(rhs, _ti_core.DataTypeCxx):
+    if isinstance(rhs, _qd_core.DataTypeCxx):
         return rhs
-    if isinstance(rhs, _ti_core.Arch):
+    if isinstance(rhs, _qd_core.Arch):
         return rhs
     if isinstance(rhs, _Ndrange):
         return rhs
@@ -118,7 +119,7 @@ def expr_init(rhs):
         return rhs
     return Expr(
         compiling_callable.ast_builder().expr_var(
-            Expr(rhs).ptr, _ti_core.DebugInfo(get_runtime().get_current_src_info())
+            Expr(rhs).ptr, _qd_core.DebugInfo(get_runtime().get_current_src_info())
         )
     )
 
@@ -139,9 +140,9 @@ def begin_frontend_struct_for(ast_builder, group, loop_range):
         raise IndexError(
             "Number of struct-for indices does not match loop variable dimensionality "
             f"({group.size()} != {len(loop_range.shape)}). Maybe you wanted to "
-            'use "for I in ti.grouped(x)" to group all indices into a single vector I?'
+            'use "for I in qd.grouped(x)" to group all indices into a single vector I?'
         )
-    dbg_info = _ti_core.DebugInfo(get_runtime().get_current_src_info())
+    dbg_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     if isinstance(loop_range, AnyArray):
         ast_builder.begin_frontend_struct_for_on_external_tensor(group, loop_range._loop_range(), dbg_info)
     else:
@@ -198,7 +199,7 @@ def validate_subscript_index(value, index):
 
 @quadrants_scope
 def subscript(ast_builder, value, *_indices, skip_reordered=False):
-    dbg_info = _ti_core.DebugInfo(get_runtime().get_current_src_info())
+    dbg_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     ast_builder = get_runtime().compiling_callable.ast_builder()
     # Directly evaluate in Python for non-Quadrants types
     if not isinstance(
@@ -316,7 +317,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 multiple_indices = [make_expr_group(indices[0], j) for j in indices[1]]
                 return_shape = (len(indices[1]),)
         return Expr(
-            _ti_core.subscript_with_multiple_indices(
+            _qd_core.subscript_with_multiple_indices(
                 value.ptr,
                 multiple_indices,
                 return_shape,
@@ -344,6 +345,7 @@ class PyQuadrants:
         self._prog: Program | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
+        self.compilation_lock = threading.RLock()
         self._compiling_callable: KernelCxx | Kernel | Function | None = None
         self._current_global_context: "ASTTransformerGlobalContext | None" = None
         self.global_vars = []
@@ -370,14 +372,14 @@ class PyQuadrants:
     def compiling_callable(self) -> KernelCxx | Kernel | Function:
         if self._compiling_callable is None:
             raise QuadrantsRuntimeError(
-                "_compiling_callable attribute not initialized. Maybe you forgot to call `ti.init()` first?"
+                "_compiling_callable attribute not initialized. Maybe you forgot to call `qd.init()` first?"
             )
         return self._compiling_callable
 
     @property
     def prog(self) -> Program:
         if self._prog is None:
-            raise QuadrantsRuntimeError("_prog attribute not initialized. Maybe you forgot to call `ti.init()` first?")
+            raise QuadrantsRuntimeError("_prog attribute not initialized. Maybe you forgot to call `qd.init()` first?")
         return self._prog
 
     def initialize_fields_builder(self, builder):
@@ -425,7 +427,7 @@ class PyQuadrants:
 
     def create_program(self):
         if self._prog is None:
-            self._prog = _ti_core.Program()
+            self._prog = _qd_core.Program()
 
     @staticmethod
     def materialize_root_fb(is_first_call):
@@ -463,7 +465,7 @@ class PyQuadrants:
                 f"These field(s) are not placed:\n{bar}"
                 + f"{bar}".join(not_placed)
                 + f"{bar}Please consider specifying a shape for them. E.g.,"
-                + "\n\n  x = ti.field(float, shape=(2, 3))"
+                + "\n\n  x = qd.field(float, shape=(2, 3))"
             )
 
     def _check_gradient_field_not_placed(self, gradient_type):
@@ -485,9 +487,9 @@ class PyQuadrants:
                 f"These field(s) requrie `needs_{gradient_type}=True`, however their {gradient_type} field(s) are not placed:\n{bar}"
                 + f"{bar}".join(not_placed)
                 + f"{bar}Please consider place the {gradient_type} field(s). E.g.,"
-                + "\n\n  ti.root.dense(ti.i, 1).place(x.{gradient_type})"
+                + "\n\n  qd.root.dense(qd.i, 1).place(x.{gradient_type})"
                 + "\n\n Or specify a shape for the field(s). E.g.,"
-                + "\n\n  x = ti.field(float, shape=(2, 3), needs_{gradient_type}=True)"
+                + "\n\n  x = qd.field(float, shape=(2, 3), needs_{gradient_type}=True)"
             )
 
     def _check_matrix_field_member_shape(self):
@@ -521,7 +523,7 @@ class PyQuadrants:
 
     def _register_signal_handlers(self):
         if self._signal_handler_registry is None:
-            self._signal_handler_registry = _ti_core.HackedSignalRegister()
+            self._signal_handler_registry = _qd_core.HackedSignalRegister()
 
     def clear(self):
         if self._prog:
@@ -553,7 +555,7 @@ def reset():
         nd._reset()
     for k in old_kernels:
         k.reset()
-    _ti_core.reset_default_compile_config()
+    _qd_core.reset_default_compile_config()
 
 
 @quadrants_scope
@@ -565,7 +567,7 @@ def static_print(*args, __p=print, **kwargs):
     __p(*args, **kwargs)
 
 
-# we don't add @quadrants_scope decorator for @ti.pyfunc to work
+# we don't add @quadrants_scope decorator for @qd.pyfunc to work
 def static_assert(cond, msg=None):
     """Throw AssertionError when `cond` is False.
 
@@ -579,9 +581,9 @@ def static_assert(cond, msg=None):
     Example::
 
         >>> year = 2001
-        >>> @ti.kernel
+        >>> @qd.kernel
         >>> def test():
-        >>>     ti.static_assert(year % 4 == 0, "the year must be a lunar year")
+        >>>     qd.static_assert(year % 4 == 0, "the year must be a lunar year")
         AssertionError: the year must be a lunar year
     """
     if isinstance(cond, Expr):
@@ -650,10 +652,10 @@ class _Root:
         assert isinstance(_root_fb, fields_builder.FieldsBuilder)
         return _root_fb.root._get_children()
 
-    # TODO: Record all of the SNodeTrees that finalized under 'ti.root'
+    # TODO: Record all of the SNodeTrees that finalized under 'qd.root'
     @staticmethod
     def deactivate_all():
-        warning("""'ti.root.deactivate_all()' would deactivate all finalized snodes.""")
+        warning("""'qd.root.deactivate_all()' would deactivate all finalized snodes.""")
         deactivate_all_snodes()
 
     @property
@@ -671,7 +673,7 @@ class _Root:
         return getattr(_root_fb, item)
 
     def __repr__(self):
-        return "ti.root"
+        return "qd.root"
 
 
 root = _Root()
@@ -681,8 +683,8 @@ See also https://docs.taichi-lang.org/docs/layout
 
 Example::
 
-    >>> x = ti.field(ti.f32)
-    >>> ti.root.pointer(ti.ij, 4).dense(ti.ij, 8).place(x)
+    >>> x = qd.field(qd.f32)
+    >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
 """
 
 
@@ -707,7 +709,7 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
 
     x = Expr(prog.make_id_expr(""))
     x.declaration_tb = get_traceback(stacklevel=4)
-    x.ptr = _ti_core.expr_field(x.ptr, dtype)
+    x.ptr = _qd_core.expr_field(x.ptr, dtype)
     x.ptr.set_name(name)
     x.ptr.set_grad_type(SNodeGradType.PRIMAL)
     pyquadrants.global_vars.append(x)
@@ -716,11 +718,11 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
     x_dual = None
     # The x_grad_checkbit is used for global data access rule checker
     x_grad_checkbit = None
-    if _ti_core.is_real(dtype):
+    if _qd_core.is_real(dtype):
         # adjoint
         x_grad = Expr(prog.make_id_expr(""))
         x_grad.declaration_tb = get_traceback(stacklevel=4)
-        x_grad.ptr = _ti_core.expr_field(x_grad.ptr, dtype)
+        x_grad.ptr = _qd_core.expr_field(x_grad.ptr, dtype)
         x_grad.ptr.set_name(name + ".grad")
         x_grad.ptr.set_grad_type(SNodeGradType.ADJOINT)
         x.ptr.set_adjoint(x_grad.ptr)
@@ -731,16 +733,16 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
             # adjoint checkbit
             x_grad_checkbit = Expr(prog.make_id_expr(""))
             dtype = u8
-            if prog.config().arch == _ti_core.vulkan:
+            if prog.config().arch == _qd_core.vulkan:
                 dtype = i32
-            x_grad_checkbit.ptr = _ti_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
+            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
             x_grad_checkbit.ptr.set_name(name + ".grad_checkbit")
             x_grad_checkbit.ptr.set_grad_type(SNodeGradType.ADJOINT_CHECKBIT)
             x.ptr.set_adjoint_checkbit(x_grad_checkbit.ptr)
 
         # dual
         x_dual = Expr(prog.make_id_expr(""))
-        x_dual.ptr = _ti_core.expr_field(x_dual.ptr, dtype)
+        x_dual.ptr = _qd_core.expr_field(x_dual.ptr, dtype)
         x_dual.ptr.set_name(name + ".dual")
         x_dual.ptr.set_grad_type(SNodeGradType.DUAL)
         x.ptr.set_dual(x_dual.ptr)
@@ -839,17 +841,17 @@ def field(dtype, *args, **kwargs):
 
         The code below shows how a Quadrants field can be declared and defined::
 
-            >>> x1 = ti.field(ti.f32, shape=(16, 8))
+            >>> x1 = qd.field(qd.f32, shape=(16, 8))
             >>> # Equivalently
-            >>> x2 = ti.field(ti.f32)
-            >>> ti.root.dense(ti.ij, shape=(16, 8)).place(x2)
+            >>> x2 = qd.field(qd.f32)
+            >>> qd.root.dense(qd.ij, shape=(16, 8)).place(x2)
             >>>
-            >>> x3 = ti.field(ti.f32, shape=(16, 8), order='ji')
+            >>> x3 = qd.field(qd.f32, shape=(16, 8), order='ji')
             >>> # Equivalently
-            >>> x4 = ti.field(ti.f32)
-            >>> ti.root.dense(ti.j, shape=8).dense(ti.i, shape=16).place(x4)
+            >>> x4 = qd.field(qd.f32)
+            >>> qd.root.dense(qd.j, shape=8).dense(qd.i, shape=16).place(x4)
             >>>
-            >>> x5 = ti.field(ti.math.vec3, shape=(16, 8))
+            >>> x5 = qd.field(qd.math.vec3, shape=(16, 8))
 
     """
     if isinstance(dtype, MatrixType):
@@ -864,17 +866,17 @@ def ndarray(dtype, shape, needs_grad=False):
     """Defines a Quadrants ndarray with scalar elements.
 
     Args:
-        dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like ti.f32 or a compound type like ti.types.vector(3, ti.i32).
+        dtype (Union[DataType, MatrixType]): Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
         shape (Union[int, tuple[int]]): Shape of the ndarray.
 
     Example:
         The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
 
-            >>> x = ti.ndarray(ti.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is ti.f32 scalar.
-            >>> vec3 = ti.types.vector(3, ti.i32)
-            >>> y = ti.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 ti.i32 scalars.
-            >>> matrix_ty = ti.types.matrix(3, 4, float)
-            >>> z = ti.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) ti.float scalars.
+            >>> x = qd.ndarray(qd.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is qd.f32 scalar.
+            >>> vec3 = qd.types.vector(3, qd.i32)
+            >>> y = qd.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 qd.i32 scalars.
+            >>> matrix_ty = qd.types.matrix(3, 4, float)
+            >>> z = qd.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) qd.float scalars.
     """
     # primal
     if isinstance(shape, numbers.Number):
@@ -894,7 +896,7 @@ def ndarray(dtype, shape, needs_grad=False):
         raise QuadrantsRuntimeError(f"{dtype} is not supported as ndarray element type")
     if needs_grad:
         assert isinstance(dt, DataTypeCxx)
-        if not _ti_core.is_real(dt):
+        if not _qd_core.is_real(dt):
             raise QuadrantsRuntimeError(
                 f"{dt} is not supported for ndarray with `needs_grad=True` or `needs_dual=True`."
             )
@@ -904,7 +906,7 @@ def ndarray(dtype, shape, needs_grad=False):
 
 
 @quadrants_scope
-def ti_format_list_to_content_entries(raw):
+def qd_format_list_to_content_entries(raw):
     # return a pair of [content, format]
     def entry2content(_var):
         if isinstance(_var, str):
@@ -915,7 +917,7 @@ def ti_format_list_to_content_entries(raw):
             return _var
         return [Expr(_var).ptr, None]
 
-    def list_ti_repr(_var):
+    def list_qd_repr(_var):
         yield "["  # distinguishing tuple & list will increase maintenance cost
         for i, v in enumerate(_var):
             if i:
@@ -925,19 +927,19 @@ def ti_format_list_to_content_entries(raw):
 
     def vars2entries(_vars):
         for _var in _vars:
-            # If the first element is '__ti_fmt_value__', this list is an Expr and its format.
-            if isinstance(_var, list) and len(_var) == 3 and isinstance(_var[0], str) and _var[0] == "__ti_fmt_value__":
+            # If the first element is '__qd_fmt_value__', this list is an Expr and its format.
+            if isinstance(_var, list) and len(_var) == 3 and isinstance(_var[0], str) and _var[0] == "__qd_fmt_value__":
                 # yield [Expr, format] as a whole and don't pass it to vars2entries() again
                 yield _var[1:]
                 continue
-            elif hasattr(_var, "__ti_repr__"):
-                res = _var.__ti_repr__()  # type: ignore
+            elif hasattr(_var, "__qd_repr__"):
+                res = _var.__qd_repr__()  # type: ignore
             elif isinstance(_var, (list, tuple)):
-                # If the first element is '__ti_format__', this list is the result of ti_format.
-                if len(_var) > 0 and isinstance(_var[0], str) and _var[0] == "__ti_format__":
+                # If the first element is '__qd_format__', this list is the result of qd_format.
+                if len(_var) > 0 and isinstance(_var[0], str) and _var[0] == "__qd_format__":
                     res = _var[1:]
                 else:
-                    res = list_ti_repr(_var)
+                    res = list_qd_repr(_var)
             else:
                 yield _var
                 continue
@@ -969,7 +971,7 @@ def ti_format_list_to_content_entries(raw):
 
 
 @quadrants_scope
-def ti_print(*_vars, sep=" ", end="\n"):
+def qd_print(*_vars, sep=" ", end="\n"):
     def add_separators(_vars):
         for i, _var in enumerate(_vars):
             if i:
@@ -978,21 +980,21 @@ def ti_print(*_vars, sep=" ", end="\n"):
         yield end
 
     _vars = add_separators(_vars)
-    contents, formats = ti_format_list_to_content_entries(_vars)
+    contents, formats = qd_format_list_to_content_entries(_vars)
     ast_builder = get_runtime().compiling_callable.ast_builder()
-    debug_info = _ti_core.DebugInfo(get_runtime().get_current_src_info())
+    debug_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
     ast_builder.create_print(contents, formats, debug_info)
 
 
 @quadrants_scope
-def ti_format(*args):
+def qd_format(*args):
     content = args[0]
     mixed = args[1:]
     new_mixed = []
     args = []
     for x in mixed:
         # x is a (formatted) Expr
-        if isinstance(x, Expr) or (isinstance(x, list) and len(x) == 3 and x[0] == "__ti_fmt_value__"):
+        if isinstance(x, Expr) or (isinstance(x, list) and len(x) == 3 and x[0] == "__qd_fmt_value__"):
             new_mixed.append("{}")
             args.append(x)
         else:
@@ -1003,36 +1005,36 @@ def ti_format(*args):
 
     for i, arg in enumerate(args):
         res.insert(i * 2 + 1, arg)
-    res.insert(0, "__ti_format__")
+    res.insert(0, "__qd_format__")
     return res
 
 
 @quadrants_scope
-def ti_assert(cond, msg, extra_args, dbg_info):
+def qd_assert(cond, msg, extra_args, dbg_info):
     # Mostly a wrapper to help us convert from Expr (defined in Python) to
-    # _ti_core.Expr (defined in C++)
+    # _qd_core.Expr (defined in C++)
     ast_builder = get_runtime().compiling_callable.ast_builder()
     ast_builder.create_assert_stmt(Expr(cond).ptr, msg, extra_args, dbg_info)
 
 
 @quadrants_scope
-def ti_int(_var):
-    if hasattr(_var, "__ti_int__"):
-        return _var.__ti_int__()
+def qd_int(_var):
+    if hasattr(_var, "__qd_int__"):
+        return _var.__qd_int__()
     return int(_var)
 
 
 @quadrants_scope
-def ti_bool(_var):
-    if hasattr(_var, "__ti_bool__"):
-        return _var.__ti_bool__()
+def qd_bool(_var):
+    if hasattr(_var, "__qd_bool__"):
+        return _var.__qd_bool__()
     return bool(_var)
 
 
 @quadrants_scope
-def ti_float(_var):
-    if hasattr(_var, "__ti_float__"):
-        return _var.__ti_float__()
+def qd_float(_var):
+    if hasattr(_var, "__qd_float__"):
+        return _var.__qd_float__()
     return float(_var)
 
 
@@ -1050,10 +1052,10 @@ def zero(x):
 
     Example::
 
-        >>> x = ti.Vector([1, 1])
-        >>> @ti.kernel
+        >>> x = qd.Vector([1, 1])
+        >>> @qd.kernel
         >>> def test():
-        >>>     y = ti.zero(x)
+        >>>     y = qd.zero(x)
         >>>     print(y)
         [0, 0]
     """
@@ -1073,10 +1075,10 @@ def one(x):
 
     Example::
 
-        >>> x = ti.Vector([0, 0])
-        >>> @ti.kernel
+        >>> x = qd.Vector([0, 0])
+        >>> @qd.kernel
         >>> def test():
-        >>>     y = ti.one(x)
+        >>>     y = qd.one(x)
         >>>     print(y)
         [1, 1]
     """
@@ -1090,12 +1092,12 @@ def axes(*x: int):
         *x: A list of axes to be activated
 
     Note that Quadrants has already provided a set of commonly used axes. For example,
-    `ti.ij` is just `axes(0, 1)` under the hood.
+    `qd.ij` is just `axes(0, 1)` under the hood.
     """
-    return [_ti_core.Axis(i) for i in x]
+    return [_qd_core.Axis(i) for i in x]
 
 
-Axis = _ti_core.Axis
+Axis = _qd_core.Axis
 
 
 def static(x, *xs) -> Any:
@@ -1115,9 +1117,9 @@ def static(x, *xs) -> Any:
 
             >>> cond = False
             >>>
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def run():
-            >>>     if ti.static(cond):
+            >>>     if qd.static(cond):
             >>>         do_a()
             >>>     else:
             >>>         do_b()
@@ -1128,19 +1130,19 @@ def static(x, *xs) -> Any:
 
         Another common usage is for compile-time loop unrolling::
 
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def run():
-            >>>     for i in ti.static(range(3)):
+            >>>     for i in qd.static(range(3)):
             >>>         print(i)
             >>>
             >>> # The above will be unrolled to:
-            >>> @ti.kernel
+            >>> @qd.kernel
             >>> def run():
             >>>     print(0)
             >>>     print(1)
             >>>     print(2)
     """
-    if len(xs):  # for python-ish pointer assign: x, y = ti.static(y, x)
+    if len(xs):  # for python-ish pointer assign: x, y = qd.static(y, x)
         return [static(x)] + [static(x) for x in xs]
 
     if (
@@ -1177,7 +1179,7 @@ def static(x, *xs) -> Any:
     if isinstance(x, (FunctionType, MethodType, BoundQuadrantsCallable, QuadrantsCallable)):
         return x
 
-    raise ValueError(f"Input to ti.static must be compile-time constants or global pointers, instead of {type(x)}")
+    raise ValueError(f"Input to qd.static must be compile-time constants or global pointers, instead of {type(x)}")
 
 
 @quadrants_scope
@@ -1188,16 +1190,16 @@ def grouped(x):
     in one `for` loop and a single index.
 
     Args:
-        x (:func:`~quadrants.ndrange`): an iterator object returned by `ti.ndrange`.
+        x (:func:`~quadrants.ndrange`): an iterator object returned by `qd.ndrange`.
 
     Example::
-        >>> # without ti.grouped
-        >>> for I in ti.ndrange(2, 3):
+        >>> # without qd.grouped
+        >>> for I in qd.ndrange(2, 3):
         >>>     print(I)
         prints 0, 1, 2, 3, 4, 5
 
-        >>> # with ti.grouped
-        >>> for I in ti.grouped(ti.ndrange(2, 3)):
+        >>> # with qd.grouped
+        >>> for I in qd.grouped(qd.ndrange(2, 3)):
         >>>     print(I)
         prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]
     """
@@ -1222,20 +1224,20 @@ def current_cfg():
 
 
 def default_cfg():
-    return _ti_core.default_compile_config()
+    return _qd_core.default_compile_config()
 
 
 def call_internal(name, *args, with_runtime_context=True):
-    return expr_init(_ti_core.insert_internal_func_call(getattr(_ti_core.InternalOp, name), make_expr_group(args)))
+    return expr_init(_qd_core.insert_internal_func_call(getattr(_qd_core.InternalOp, name), make_expr_group(args)))
 
 
 def get_cuda_compute_capability():
-    return _ti_core.query_int64("cuda_compute_capability")
+    return _qd_core.query_int64("cuda_compute_capability")
 
 
 @quadrants_scope
 def mesh_relation_access(mesh, from_index, to_element_type):
-    # to support ti.mesh_local and access mesh attribute as field
+    # to support qd.mesh_local and access mesh attribute as field
     if isinstance(from_index, MeshInstance):
         return getattr(from_index, element_type_name(to_element_type))
     if isinstance(mesh, MeshInstance):

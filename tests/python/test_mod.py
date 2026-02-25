@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -16,10 +16,10 @@ from tests import test_utils
 )
 @test_utils.test()
 def test_py_style_mod(a, b):
-    z = ti.field(ti.i32, shape=())
+    z = qd.field(qd.i32, shape=())
 
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32):
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32):
         z[None] = x % y
 
     func(a, b)
@@ -37,11 +37,11 @@ def test_py_style_mod(a, b):
 )
 @test_utils.test()
 def test_c_style_mod(a, b):
-    z = ti.field(ti.i32, shape=())
+    z = qd.field(qd.i32, shape=())
 
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32):
-        z[None] = ti.raw_mod(x, y)
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32):
+        z[None] = qd.raw_mod(x, y)
 
     func(a, b)
     assert z[None] == _c_mod(a, b)
@@ -53,13 +53,13 @@ def _c_mod(a, b):
 
 @test_utils.test()
 def test_mod_scan():
-    z = ti.field(ti.i32, shape=())
-    w = ti.field(ti.i32, shape=())
+    z = qd.field(qd.i32, shape=())
+    w = qd.field(qd.i32, shape=())
 
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32):
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32):
         z[None] = x % y
-        w[None] = ti.raw_mod(x, y)
+        w[None] = qd.raw_mod(x, y)
 
     for i in range(-10, 11):
         for j in range(-10, 11):
@@ -71,8 +71,8 @@ def test_mod_scan():
 
 @test_utils.test()
 def test_py_style_float_const_mod_one():
-    @ti.kernel
-    def func() -> ti.f32:
+    @qd.kernel
+    def func() -> qd.f32:
         a = 0.5
         return a % 1
 
@@ -81,8 +81,8 @@ def test_py_style_float_const_mod_one():
 
 @test_utils.test()
 def test_py_style_unsigned_mod():
-    @ti.kernel
-    def func() -> ti.u32:
-        return ti.u32(3583196299) % ti.u32(524288)
+    @qd.kernel
+    def func() -> qd.u32:
+        return qd.u32(3583196299) % qd.u32(524288)
 
     assert func() == 212107

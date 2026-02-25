@@ -2,7 +2,7 @@ from inspect import currentframe, getframeinfo
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -10,9 +10,9 @@ from tests import test_utils
 @test_utils.test(print_full_traceback=False)
 def test_exception_multiline():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.QuadrantsNameError) as e:
+    with pytest.raises(qd.QuadrantsNameError) as e:
         # yapf: disable
-        @ti.kernel
+        @qd.kernel
         def foo():
             aaaa(111,
                  1211222,
@@ -31,17 +31,17 @@ File "{frameinfo.filename}", line {frameinfo.lineno + 5}, in foo:
 @test_utils.test(print_full_traceback=False)
 def test_exception_from_func():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.QuadrantsNameError) as e:
+    with pytest.raises(qd.QuadrantsNameError) as e:
 
-        @ti.func
+        @qd.func
         def baz():
             t()
 
-        @ti.func
+        @qd.func
         def bar():
             baz()
 
-        @ti.kernel
+        @qd.kernel
         def foo():
             bar()
 
@@ -66,9 +66,9 @@ def test_exception_from_func():
 @test_utils.test(print_full_traceback=False)
 def test_tab():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.QuadrantsNameError) as e:
+    with pytest.raises(qd.QuadrantsNameError) as e:
         # yapf: disable
-        @ti.kernel
+        @qd.kernel
         def foo():
             a(11,	22,	3)
         foo()
@@ -85,9 +85,9 @@ File "{file}", line {lineno + 5}, in foo:
 @test_utils.test(print_full_traceback=False)
 def test_super_long_line():
     frameinfo = getframeinfo(currentframe())
-    with pytest.raises(ti.QuadrantsNameError) as e:
+    with pytest.raises(qd.QuadrantsNameError) as e:
         # yapf: disable
-        @ti.kernel
+        @qd.kernel
         def foo():
             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(111)
         foo()
@@ -108,7 +108,7 @@ bbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(111)
 @test_utils.test(print_full_traceback=False)
 def test_exception_in_node_with_body():
     frameinfo = getframeinfo(currentframe())
-    @ti.kernel
+    @qd.kernel
     def foo():
         for i in range(1, 2, 3):
             a = 1
@@ -116,7 +116,7 @@ def test_exception_in_node_with_body():
             c = 1
             d = 1
 
-    with pytest.raises(ti.QuadrantsCompilationError) as e:
+    with pytest.raises(qd.QuadrantsCompilationError) as e:
         foo()
     lineno = frameinfo.lineno
     file = frameinfo.filename

@@ -4,7 +4,7 @@ from functools import reduce
 
 import numpy as np
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
@@ -158,7 +158,7 @@ class SparseMatrix:
             self.matrix.spmv(get_runtime().prog, other.arr, res.arr)
             return res
         raise QuadrantsRuntimeError(
-            f"Sparse matrix-matrix/vector multiplication does not support {type(other)} for now. Supported types are SparseMatrix, ti.field, and numpy ndarray."
+            f"Sparse matrix-matrix/vector multiplication does not support {type(other)} for now. Supported types are SparseMatrix, qd.field, and numpy ndarray."
         )
 
     def __getitem__(self, indices):
@@ -183,20 +183,20 @@ class SparseMatrix:
         """Build the sparse matrix from a ndarray.
 
         Args:
-            ndarray (Union[ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]): the ndarray to build the sparse matrix from.
+            ndarray (Union[qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]): the ndarray to build the sparse matrix from.
 
         Raises:
             QuadrantsRuntimeError: If the input is not a ndarray or the length is not divisible by 3.
 
         Example::
             >>> N = 5
-            >>> triplets = ti.Vector.ndarray(n=3, dtype=ti.f32, shape=10, layout=ti.Layout.AOS)
-            >>> @ti.kernel
-            >>> def fill(triplets: ti.types.ndarray()):
+            >>> triplets = qd.Vector.ndarray(n=3, dtype=qd.f32, shape=10, layout=qd.Layout.AOS)
+            >>> @qd.kernel
+            >>> def fill(triplets: qd.types.ndarray()):
             >>>     for i in range(N):
-            >>>        triplets[i] = ti.Vector([i, (i + 1) % N, i+1], dt=ti.f32)
+            >>>        triplets[i] = qd.Vector([i, (i + 1) % N, i+1], dt=qd.f32)
             >>> fill(triplets)
-            >>> A = ti.linalg.SparseMatrix(n=N, m=N, dtype=ti.f32)
+            >>> A = qd.linalg.SparseMatrix(n=N, m=N, dtype=qd.f32)
             >>> A.build_from_ndarray(triplets)
             >>> print(A)
             [0, 1, 0, 0, 0]
@@ -212,7 +212,7 @@ class SparseMatrix:
             get_runtime().prog.make_sparse_matrix_from_ndarray(self.matrix, ndarray.arr)
         else:
             raise QuadrantsRuntimeError(
-                "Sparse matrix only supports building from [ti.ndarray, ti.Vector.ndarray, ti.Matrix.ndarray]"
+                "Sparse matrix only supports building from [qd.ndarray, qd.Vector.ndarray, qd.Matrix.ndarray]"
             )
 
     def mmwrite(self, filename):
@@ -233,7 +233,7 @@ class SparseMatrixBuilder:
         num_rows (int): the first dimension of a sparse matrix.
         num_cols (int): the second dimension of a sparse matrix.
         max_num_triplets (int): the maximum number of triplets.
-        dtype (ti.dtype): the data type of the sparse matrix.
+        dtype (qd.dtype): the data type of the sparse matrix.
         storage_format (str): the storage format of the sparse matrix.
     """
 
@@ -251,11 +251,11 @@ class SparseMatrixBuilder:
         if num_rows is not None:
             quadrants_arch = get_runtime().prog.config().arch
             if quadrants_arch in [
-                _ti_core.Arch.x64,
-                _ti_core.Arch.arm64,
-                _ti_core.Arch.cuda,
+                _qd_core.Arch.x64,
+                _qd_core.Arch.arm64,
+                _qd_core.Arch.cuda,
             ]:
-                self.ptr = _ti_core.SparseMatrixBuilder(
+                self.ptr = _qd_core.SparseMatrixBuilder(
                     num_rows,
                     num_cols,
                     max_num_triplets,
@@ -277,18 +277,18 @@ class SparseMatrixBuilder:
     def print_triplets(self):
         """Print the triplets stored in the builder"""
         quadrants_arch = get_runtime().prog.config().arch
-        if quadrants_arch in [_ti_core.Arch.x64, _ti_core.Arch.arm64]:
+        if quadrants_arch in [_qd_core.Arch.x64, _qd_core.Arch.arm64]:
             self.ptr.print_triplets_eigen()
-        elif quadrants_arch == _ti_core.Arch.cuda:
+        elif quadrants_arch == _qd_core.Arch.cuda:
             self.ptr.print_triplets_cuda()
 
     def build(self, dtype=f32, _format="CSR"):
         """Create a sparse matrix using the triplets"""
         quadrants_arch = get_runtime().prog.config().arch
-        if quadrants_arch in [_ti_core.Arch.x64, _ti_core.Arch.arm64]:
+        if quadrants_arch in [_qd_core.Arch.x64, _qd_core.Arch.arm64]:
             sm = self.ptr.build()
             return SparseMatrix(sm=sm, dtype=self.dtype)
-        if quadrants_arch == _ti_core.Arch.cuda:
+        if quadrants_arch == _qd_core.Arch.cuda:
             if self.dtype != f32:
                 raise QuadrantsRuntimeError("CUDA sparse matrix only supports f32.")
             sm = self.ptr.build_cuda()

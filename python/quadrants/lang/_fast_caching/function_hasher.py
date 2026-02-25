@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 def pure(fn: "QuadrantsCallable") -> "QuadrantsCallable":
     warnings_helper.warn_once(
-        "Use of @ti.pure is deprecated. Please use @ti.kernel(fastcache=True). @ti.pure is intended to be removed in v4.0.0"
+        "Use of @qd.pure is deprecated. Please use @qd.kernel(fastcache=True). @qd.pure is intended to be removed in v4.0.0"
     )
     fn.is_pure = True
     return fn

@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -6,12 +6,12 @@ from tests import test_utils
 @test_utils.test()
 def test_ad_sum_fwd():
     N = 10
-    a = ti.field(ti.f32, shape=N)
-    b = ti.field(ti.i32, shape=N)
-    p = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=N)
+    b = qd.field(qd.i32, shape=N)
+    p = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def compute_sum():
         for i in range(N):
             ret = 1.0
@@ -28,14 +28,14 @@ def test_ad_sum_fwd():
     for i in range(N):
         assert p[i] == a[i] * b[i] + 1
 
-    with ti.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
         compute_sum()
 
     for i in range(N):
         assert p.dual[i] == b[i]
         assert a.dual[i] == 0
 
-    with ti.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)], clear_gradients=False):
+    with qd.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)], clear_gradients=False):
         pass
 
     for i in range(N):
@@ -45,12 +45,12 @@ def test_ad_sum_fwd():
 @test_utils.test()
 def test_ad_sum_local_atomic_fwd():
     N = 10
-    a = ti.field(ti.f32, shape=N)
-    b = ti.field(ti.i32, shape=N)
-    p = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=N)
+    b = qd.field(qd.i32, shape=N)
+    p = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def compute_sum():
         for i in range(N):
             ret = 1.0
@@ -62,7 +62,7 @@ def test_ad_sum_local_atomic_fwd():
         a[i] = 3
         b[i] = i
 
-    with ti.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
         compute_sum()
 
     for i in range(N):
@@ -75,12 +75,12 @@ def test_ad_sum_local_atomic_fwd():
 @test_utils.test()
 def test_ad_power_fwd():
     N = 10
-    a = ti.field(ti.f32, shape=N)
-    b = ti.field(ti.i32, shape=N)
-    p = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=N)
+    b = qd.field(qd.i32, shape=N)
+    p = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def power():
         for i in range(N):
             ret = 1.0
@@ -92,7 +92,7 @@ def test_ad_power_fwd():
         a[i] = 3
         b[i] = i
 
-    with ti.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=p, param=a, seed=[1.0 for _ in range(N)]):
         power()
 
     for i in range(N):
@@ -105,13 +105,13 @@ def test_ad_power_fwd():
 @test_utils.test()
 def test_ad_fibonacci_fwd():
     N = 15
-    a = ti.field(ti.f32, shape=N)
-    b = ti.field(ti.f32, shape=N)
-    c = ti.field(ti.i32, shape=N)
-    f = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=N)
+    b = qd.field(qd.f32, shape=N)
+    c = qd.field(qd.i32, shape=N)
+    f = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def fib():
         for i in range(N):
             p = a[i]
@@ -126,7 +126,7 @@ def test_ad_fibonacci_fwd():
         c[i] = i
 
     fib()
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
         fib()
 
     for i in range(N):
@@ -135,7 +135,7 @@ def test_ad_fibonacci_fwd():
         else:
             assert f.dual[i] == f[i - 1]
 
-    with ti.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
         fib()
     for i in range(N):
         assert f.dual[i] == f[i]
@@ -145,12 +145,12 @@ def test_ad_fibonacci_fwd():
 def test_ad_fibonacci_index_fwd():
     N = 5
     M = 10
-    a = ti.field(ti.f32, shape=M)
-    b = ti.field(ti.f32, shape=M)
-    f = ti.field(ti.f32, shape=M)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=M)
+    b = qd.field(qd.f32, shape=M)
+    f = qd.field(qd.f32, shape=M)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def fib():
         for i in range(N):
             p = 0
@@ -164,7 +164,7 @@ def test_ad_fibonacci_index_fwd():
 
     a.fill(1)
 
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(M)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(M)]):
         fib()
 
     for i in range(M):
@@ -176,13 +176,13 @@ def test_ad_fibonacci_index_fwd():
 @test_utils.test()
 def test_double_for_loops():
     N = 5
-    a = ti.field(ti.f32, shape=N)
-    b = ti.field(ti.f32, shape=N)
-    c = ti.field(ti.i32, shape=N)
-    f = ti.field(ti.f32, shape=N)
-    ti.root.lazy_dual()
+    a = qd.field(qd.f32, shape=N)
+    b = qd.field(qd.f32, shape=N)
+    c = qd.field(qd.i32, shape=N)
+    f = qd.field(qd.f32, shape=N)
+    qd.root.lazy_dual()
 
-    @ti.kernel
+    @qd.kernel
     def double_for():
         for i in range(N):
             weight = 1.0
@@ -199,13 +199,13 @@ def test_double_for_loops():
     for i in range(N):
         c[i] = i
 
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
         double_for()
 
     for i in range(N):
         assert f.dual[i] == 2 * i * i * 2 ** (i - 1)
 
-    with ti.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
         double_for()
 
     for i in range(N):
@@ -215,12 +215,12 @@ def test_double_for_loops():
 @test_utils.test()
 def test_double_for_loops_more_nests():
     N = 6
-    a = ti.field(ti.f32, shape=N, needs_dual=True)
-    b = ti.field(ti.f32, shape=N, needs_dual=True)
-    c = ti.field(ti.i32, shape=(N, N // 2))
-    f = ti.field(ti.f32, shape=(N, N // 2), needs_dual=True)
+    a = qd.field(qd.f32, shape=N, needs_dual=True)
+    b = qd.field(qd.f32, shape=N, needs_dual=True)
+    c = qd.field(qd.i32, shape=(N, N // 2))
+    f = qd.field(qd.f32, shape=(N, N // 2), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def double_for():
         for i in range(N):
             for k in range(N // 2):
@@ -245,7 +245,7 @@ def test_double_for_loops_more_nests():
         for k in range(N // 2):
             assert f[i, k] == 2 * (i + k) * (1 + 2 ** (i + k))
 
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
         double_for()
 
     for i in range(N):
@@ -254,7 +254,7 @@ def test_double_for_loops_more_nests():
             total_grad_a = 2 * (i + k) ** 2 * 2 ** (i + k - 1)
             assert f.dual[i, k] == total_grad_a
 
-    with ti.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(N)]):
         double_for()
 
     for i in range(N):
@@ -267,13 +267,13 @@ def test_double_for_loops_more_nests():
 @test_utils.test()
 def test_complex_body():
     N = 5
-    a = ti.field(ti.f32, shape=N, needs_dual=True)
-    b = ti.field(ti.f32, shape=N, needs_dual=True)
-    c = ti.field(ti.i32, shape=N)
-    f = ti.field(ti.f32, shape=N, needs_dual=True)
-    g = ti.field(ti.f32, shape=N, needs_dual=False)
+    a = qd.field(qd.f32, shape=N, needs_dual=True)
+    b = qd.field(qd.f32, shape=N, needs_dual=True)
+    c = qd.field(qd.i32, shape=N)
+    f = qd.field(qd.f32, shape=N, needs_dual=True)
+    g = qd.field(qd.f32, shape=N, needs_dual=False)
 
-    @ti.kernel
+    @qd.kernel
     def complex():
         for i in range(N):
             weight = 2.0
@@ -284,8 +284,8 @@ def test_complex_body():
                 tot += (weight + 1) * a[i]
                 weight = weight + 1
                 weight = weight * 4
-                weight = ti.cast(weight, ti.f64)
-                weight = ti.cast(weight, ti.f32)
+                weight = qd.cast(weight, qd.f64)
+                weight = qd.cast(weight, qd.f32)
 
             g[i] = tot_weight
             f[i] = tot
@@ -296,7 +296,7 @@ def test_complex_body():
     for i in range(N):
         c[i] = i
 
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
         complex()
 
     for i in range(N):
@@ -307,14 +307,14 @@ def test_complex_body():
 def test_triple_for_loops_bls():
     N = 8
     M = 3
-    a = ti.field(ti.f32, shape=N, needs_dual=True)
-    b = ti.field(ti.f32, shape=2 * N, needs_dual=True)
-    f = ti.field(ti.f32, shape=(N - M, N), needs_dual=True)
+    a = qd.field(qd.f32, shape=N, needs_dual=True)
+    b = qd.field(qd.f32, shape=2 * N, needs_dual=True)
+    f = qd.field(qd.f32, shape=(N - M, N), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def triple_for():
-        ti.block_local(a)
-        ti.block_local(b)
+        qd.block_local(a)
+        qd.block_local(b)
         for i in range(N - M):
             for k in range(N):
                 weight = 1.0
@@ -336,14 +336,14 @@ def test_triple_for_loops_bls():
         for k in range(N):
             assert f[i, k] == 2 * M * 2**M + (4 * i + 2 * M - 1) * M
 
-    with ti.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=f, param=a, seed=[1.0 for _ in range(N)]):
         triple_for()
 
     for i in range(N - M):
         for k in range(N):
             assert f.dual[i, k] == 2 * M * M * 2 ** (M - 1)
 
-    with ti.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(2 * N)]):
+    with qd.ad.FwdMode(loss=f, param=b, seed=[1.0 for _ in range(2 * N)]):
         triple_for()
 
     for i in range(N - M):
@@ -353,19 +353,19 @@ def test_triple_for_loops_bls():
 
 @test_utils.test()
 def test_mixed_inner_loops():
-    x = ti.field(dtype=ti.f32, shape=(), needs_dual=True)
-    arr = ti.field(dtype=ti.f32, shape=(5))
-    loss = ti.field(dtype=ti.f32, shape=(), needs_dual=True)
+    x = qd.field(dtype=qd.f32, shape=(), needs_dual=True)
+    arr = qd.field(dtype=qd.f32, shape=(5))
+    loss = qd.field(dtype=qd.f32, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def mixed_inner_loops():
         for i in arr:
-            loss[None] += ti.sin(x[None])
+            loss[None] += qd.sin(x[None])
             for j in range(2):
-                loss[None] += ti.sin(x[None]) + 1.0
+                loss[None] += qd.sin(x[None]) + 1.0
 
     x[None] = 0.0
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         mixed_inner_loops()
 
     assert loss[None] == 10.0
@@ -374,23 +374,23 @@ def test_mixed_inner_loops():
 
 @test_utils.test()
 def test_inner_loops_local_variable():
-    x = ti.field(dtype=float, shape=(), needs_dual=True)
-    arr = ti.field(dtype=float, shape=(2), needs_dual=True)
-    loss = ti.field(dtype=float, shape=(), needs_dual=True)
+    x = qd.field(dtype=float, shape=(), needs_dual=True)
+    arr = qd.field(dtype=float, shape=(2), needs_dual=True)
+    loss = qd.field(dtype=float, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def inner_loops_local_variable():
         for i in arr:
             for j in range(3):
                 s = 0.0
                 t = 0.0
                 for k in range(3):
-                    s += ti.sin(x[None]) + 1.0
-                    t += ti.sin(x[None])
+                    s += qd.sin(x[None]) + 1.0
+                    t += qd.sin(x[None])
                 loss[None] += s + t
 
     x[None] = 0.0
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         inner_loops_local_variable()
 
     assert loss[None] == 18.0
@@ -399,25 +399,25 @@ def test_inner_loops_local_variable():
 
 @test_utils.test()
 def test_more_inner_loops_local_variable():
-    x = ti.field(dtype=float, shape=(), needs_dual=True)
-    arr = ti.field(dtype=float, shape=(2), needs_dual=True)
-    loss = ti.field(dtype=float, shape=(), needs_dual=True)
+    x = qd.field(dtype=float, shape=(), needs_dual=True)
+    arr = qd.field(dtype=float, shape=(2), needs_dual=True)
+    loss = qd.field(dtype=float, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def more_inner_loops_local_variable():
         for i in arr:
             for j in range(2):
                 s = 0.0
                 for k in range(3):
                     u = 0.0
-                    s += ti.sin(x[None]) + 1.0
+                    s += qd.sin(x[None]) + 1.0
                     for l in range(2):
-                        u += ti.sin(x[None])
+                        u += qd.sin(x[None])
                     loss[None] += u
                 loss[None] += s
 
     x[None] = 0.0
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         more_inner_loops_local_variable()
 
     assert loss[None] == 12.0
@@ -426,27 +426,27 @@ def test_more_inner_loops_local_variable():
 
 @test_utils.test()
 def test_stacked_inner_loops_local_variable():
-    x = ti.field(dtype=float, shape=(), needs_dual=True)
-    arr = ti.field(dtype=float, shape=(2), needs_dual=True)
-    loss = ti.field(dtype=float, shape=(), needs_dual=True)
+    x = qd.field(dtype=float, shape=(), needs_dual=True)
+    arr = qd.field(dtype=float, shape=(2), needs_dual=True)
+    loss = qd.field(dtype=float, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def stacked_inner_loops_local_variable():
         for i in arr:
-            loss[None] += ti.sin(x[None])
+            loss[None] += qd.sin(x[None])
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += ti.sin(x[None]) + 1.0
+                    s += qd.sin(x[None]) + 1.0
                 loss[None] += s
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += ti.sin(x[None]) + 1.0
+                    s += qd.sin(x[None]) + 1.0
                 loss[None] += s
 
     x[None] = 0.0
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         stacked_inner_loops_local_variable()
 
     assert loss[None] == 36.0
@@ -455,28 +455,28 @@ def test_stacked_inner_loops_local_variable():
 
 @test_utils.test()
 def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
-    x = ti.field(dtype=float, shape=(), needs_dual=True)
-    arr = ti.field(dtype=float, shape=(2), needs_dual=True)
-    loss = ti.field(dtype=float, shape=(), needs_dual=True)
+    x = qd.field(dtype=float, shape=(), needs_dual=True)
+    arr = qd.field(dtype=float, shape=(2), needs_dual=True)
+    loss = qd.field(dtype=float, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
         for i in arr:
-            loss[None] += ti.sin(x[None])
+            loss[None] += qd.sin(x[None])
             for j in range(3):
                 for k in range(3):
-                    loss[None] += ti.sin(x[None]) + 1.0
+                    loss[None] += qd.sin(x[None]) + 1.0
             for j in range(3):
                 s = 0.0
                 for k in range(3):
-                    s += ti.sin(x[None]) + 1.0
+                    s += qd.sin(x[None]) + 1.0
                 loss[None] += s
             for j in range(3):
                 for k in range(3):
-                    loss[None] += ti.sin(x[None]) + 1.0
+                    loss[None] += qd.sin(x[None]) + 1.0
 
     x[None] = 0.0
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         stacked_mixed_ib_and_non_ib_inner_loops_local_variable()
 
     assert loss[None] == 54.0
@@ -485,18 +485,18 @@ def test_stacked_mixed_ib_and_non_ib_inner_loops_local_variable():
 
 @test_utils.test()
 def test_large_for_loops():
-    x = ti.field(dtype=float, shape=(), needs_dual=True)
-    arr = ti.field(dtype=float, shape=(2), needs_dual=True)
-    loss = ti.field(dtype=float, shape=(), needs_dual=True)
+    x = qd.field(dtype=float, shape=(), needs_dual=True)
+    arr = qd.field(dtype=float, shape=(2), needs_dual=True)
+    loss = qd.field(dtype=float, shape=(), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def large_for_loop():
         for i in range(2000):
             for j in range(100):
                 for k in range(5):
-                    loss[None] += ti.sin(x[None]) + 1.0
+                    loss[None] += qd.sin(x[None]) + 1.0
 
-    with ti.ad.FwdMode(loss=loss, param=x):
+    with qd.ad.FwdMode(loss=loss, param=x):
         large_for_loop()
 
     assert loss[None] == 1e6
@@ -505,10 +505,10 @@ def test_large_for_loops():
 
 @test_utils.test()
 def test_multiple_ib():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -517,7 +517,7 @@ def test_multiple_ib():
                 y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 12.0
@@ -526,10 +526,10 @@ def test_multiple_ib():
 
 @test_utils.test()
 def test_multiple_ib_multiple_outermost():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -543,7 +543,7 @@ def test_multiple_ib_multiple_outermost():
                 y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 24.0
@@ -552,10 +552,10 @@ def test_multiple_ib_multiple_outermost():
 
 @test_utils.test()
 def test_multiple_ib_multiple_outermost_mixed():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -571,7 +571,7 @@ def test_multiple_ib_multiple_outermost_mixed():
                     y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 42.0
@@ -580,10 +580,10 @@ def test_multiple_ib_multiple_outermost_mixed():
 
 @test_utils.test()
 def test_multiple_ib_mixed():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -596,7 +596,7 @@ def test_multiple_ib_mixed():
                 y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 30.0
@@ -605,10 +605,10 @@ def test_multiple_ib_mixed():
 
 @test_utils.test()
 def test_multiple_ib_deeper():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -622,7 +622,7 @@ def test_multiple_ib_deeper():
                         y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 42.0
@@ -632,10 +632,10 @@ def test_multiple_ib_deeper():
 @test_utils.test()
 def test_multiple_ib_deeper_non_scalar():
     N = 10
-    x = ti.field(float, shape=N, needs_dual=True)
-    y = ti.field(float, shape=N, needs_dual=True)
+    x = qd.field(float, shape=N, needs_dual=True)
+    y = qd.field(float, shape=N, needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(N):
             for i in range(j):
@@ -649,7 +649,7 @@ def test_multiple_ib_deeper_non_scalar():
                         y[j] += x[j]
 
     x.fill(1.0)
-    with ti.ad.FwdMode(loss=y, param=x, seed=[1.0 for _ in range(N)]):
+    with qd.ad.FwdMode(loss=y, param=x, seed=[1.0 for _ in range(N)]):
         compute_y()
     for i in range(N):
         assert y[i] == i * 10.0
@@ -658,10 +658,10 @@ def test_multiple_ib_deeper_non_scalar():
 
 @test_utils.test()
 def test_multiple_ib_inner_mixed():
-    x = ti.field(float, (), needs_dual=True)
-    y = ti.field(float, (), needs_dual=True)
+    x = qd.field(float, (), needs_dual=True)
+    y = qd.field(float, (), needs_dual=True)
 
-    @ti.kernel
+    @qd.kernel
     def compute_y():
         for j in range(2):
             for i in range(3):
@@ -679,7 +679,7 @@ def test_multiple_ib_inner_mixed():
                         y[None] += x[None]
 
     x[None] = 1.0
-    with ti.ad.FwdMode(loss=y, param=x):
+    with qd.ad.FwdMode(loss=y, param=x):
         compute_y()
 
     assert y[None] == 78.0

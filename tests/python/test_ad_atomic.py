@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -7,10 +7,10 @@ from tests import test_utils
 def test_ad_reduce():
     N = 16
 
-    x = ti.field(dtype=ti.f32, shape=N, needs_grad=True)
-    loss = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+    x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in x:
             loss[None] += x[i] ** 2

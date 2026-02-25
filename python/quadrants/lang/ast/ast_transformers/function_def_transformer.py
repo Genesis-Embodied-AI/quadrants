@@ -16,7 +16,7 @@ from quadrants.lang import (
     kernel_arguments,
     matrix,
 )
-from quadrants.lang import ops as ti_ops
+from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -239,7 +239,7 @@ class FunctionDefTransformer:
             return None
 
         if id(argument_type) in primitive_types.type_ids:
-            ctx.create_variable(argument_name, impl.expr_init_func(ti_ops.cast(data, argument_type)))
+            ctx.create_variable(argument_name, impl.expr_init_func(qd_ops.cast(data, argument_type)))
             return None
         # Create a copy for non-template arguments,
         # so that they are passed by value.
@@ -271,7 +271,7 @@ class FunctionDefTransformer:
     ) -> None:
         if ctx.visited_funcdef:
             raise QuadrantsSyntaxError(
-                f"Function definition is not allowed in 'ti.{'kernel' if ctx.is_kernel else 'func'}'."
+                f"Function definition is not allowed in 'qd.{'kernel' if ctx.is_kernel else 'func'}'."
             )
         ctx.visited_funcdef = True
 
@@ -281,13 +281,13 @@ class FunctionDefTransformer:
         assert args.kw_defaults == []
         assert args.kwarg is None
 
-        if ctx.is_kernel:  # ti.kernel
+        if ctx.is_kernel:  # qd.kernel
             FunctionDefTransformer._transform_as_kernel(ctx, node, args)
 
         if ctx.only_parse_function_def:
             return None
 
-        if not ctx.is_kernel:  # ti.func
+        if not ctx.is_kernel:  # qd.func
             assert ctx.py_args is not None
             assert ctx.func is not None
             if ctx.is_real_function:

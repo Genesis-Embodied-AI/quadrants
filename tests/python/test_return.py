@@ -4,31 +4,31 @@ from typing import Tuple
 import pytest
 from pytest import approx
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test()
 def test_return_without_type_hint():
-    @ti.kernel
+    @qd.kernel
     def kernel():
         return 1
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         kernel()
 
 
 def test_const_func_ret():
-    ti.init()
+    qd.init()
 
-    @ti.kernel
-    def func1() -> ti.f32:
+    @qd.kernel
+    def func1() -> qd.f32:
         return 3
 
-    @ti.kernel
-    def func2() -> ti.i32:
-        return 3.3  # return type mismatch, will be auto-casted into ti.i32
+    @qd.kernel
+    def func2() -> qd.i32:
+        return 3.3  # return type mismatch, will be auto-casted into qd.i32
 
     assert func1() == test_utils.approx(3)
     assert func2() == 3
@@ -37,24 +37,24 @@ def test_const_func_ret():
 @pytest.mark.parametrize(
     "dt1,dt2,dt3,castor",
     [
-        (ti.i32, ti.f32, ti.f32, float),
-        (ti.f32, ti.i32, ti.f32, float),
-        (ti.i32, ti.f32, ti.i32, int),
-        (ti.f32, ti.i32, ti.i32, int),
+        (qd.i32, qd.f32, qd.f32, float),
+        (qd.f32, qd.i32, qd.f32, float),
+        (qd.i32, qd.f32, qd.i32, int),
+        (qd.f32, qd.i32, qd.i32, int),
     ],
 )
 @test_utils.test()
 def test_binary_func_ret(dt1, dt2, dt3, castor):
-    @ti.kernel
+    @qd.kernel
     def func(a: dt1, b: dt2) -> dt3:
         return a * b
 
-    if ti.types.is_integral(dt1):
+    if qd.types.is_integral(dt1):
         xs = list(range(4))
     else:
         xs = [0.2, 0.4, 0.8, 1.0]
 
-    if ti.types.is_integral(dt2):
+    if qd.types.is_integral(dt2):
         ys = list(range(4))
     else:
         ys = [0.2, 0.4, 0.8, 1.0]
@@ -65,11 +65,11 @@ def test_binary_func_ret(dt1, dt2, dt3, castor):
 
 @test_utils.test()
 def test_return_in_static_if():
-    @ti.kernel
-    def foo(a: ti.template()) -> ti.i32:
-        if ti.static(a == 1):
+    @qd.kernel
+    def foo(a: qd.template()) -> qd.i32:
+        if qd.static(a == 1):
             return 1
-        elif ti.static(a == 2):
+        elif qd.static(a == 2):
             return 2
         return 3
 
@@ -80,19 +80,19 @@ def test_return_in_static_if():
 
 @test_utils.test()
 def test_func_multiple_return():
-    @ti.func
+    @qd.func
     def safe_sqrt(a):
         if a > 0:
-            return ti.sqrt(a)
+            return qd.sqrt(a)
         else:
             return 0.0
 
-    @ti.kernel
+    @qd.kernel
     def kern(a: float):
         print(safe_sqrt(a))
 
     with pytest.raises(
-        ti.QuadrantsCompilationError,
+        qd.QuadrantsCompilationError,
         match="Return inside non-static if/for is not supported",
     ):
         kern(-233)
@@ -100,12 +100,12 @@ def test_func_multiple_return():
 
 @test_utils.test()
 def test_return_inside_static_for():
-    @ti.kernel
-    def foo() -> ti.i32:
+    @qd.kernel
+    def foo() -> qd.i32:
         a = 0
-        for i in ti.static(range(10)):
+        for i in qd.static(range(10)):
             a += i * i
-            if ti.static(i == 8):
+            if qd.static(i == 8):
                 return a
 
     assert foo() == 204
@@ -114,12 +114,12 @@ def test_return_inside_static_for():
 @test_utils.test()
 def test_return_inside_non_static_for():
     with pytest.raises(
-        ti.QuadrantsCompilationError,
+        qd.QuadrantsCompilationError,
         match="Return inside non-static if/for is not supported",
     ):
 
-        @ti.kernel
-        def foo() -> ti.i32:
+        @qd.kernel
+        def foo() -> qd.i32:
             for i in range(10):
                 return i
 
@@ -129,12 +129,12 @@ def test_return_inside_non_static_for():
 @test_utils.test()
 def test_kernel_no_return():
     with pytest.raises(
-        ti.QuadrantsSyntaxError,
+        qd.QuadrantsSyntaxError,
         match="Kernel has a return type but does not have a return statement",
     ):
 
-        @ti.kernel
-        def foo() -> ti.i32:
+        @qd.kernel
+        def foo() -> qd.i32:
             pass
 
         foo()
@@ -143,16 +143,16 @@ def test_kernel_no_return():
 @test_utils.test()
 def test_func_no_return():
     with pytest.raises(
-        ti.QuadrantsCompilationError,
+        qd.QuadrantsCompilationError,
         match="Function has a return type but does not have a return statement",
     ):
 
-        @ti.func
-        def bar() -> ti.i32:
+        @qd.func
+        def bar() -> qd.i32:
             pass
 
-        @ti.kernel
-        def foo() -> ti.i32:
+        @qd.kernel
+        def foo() -> qd.i32:
             return bar()
 
         foo()
@@ -160,7 +160,7 @@ def test_func_no_return():
 
 @test_utils.test()
 def test_void_return():
-    @ti.kernel
+    @qd.kernel
     def foo():
         return
 
@@ -169,39 +169,39 @@ def test_void_return():
 
 @test_utils.test()
 def test_return_none():
-    @ti.kernel
+    @qd.kernel
     def foo():
         return None
 
     foo()
 
 
-@test_utils.test(exclude=[ti.metal, ti.vulkan])
+@test_utils.test(exclude=[qd.metal, qd.vulkan])
 def test_return_uint64():
-    @ti.kernel
-    def foo() -> ti.u64:
-        return ti.u64(2**64 - 1)
+    @qd.kernel
+    def foo() -> qd.u64:
+        return qd.u64(2**64 - 1)
 
     assert foo() == 2**64 - 1
 
 
-@test_utils.test(exclude=[ti.metal, ti.vulkan])
+@test_utils.test(exclude=[qd.metal, qd.vulkan])
 def test_return_uint64_vec():
-    @ti.kernel
-    def foo() -> ti.types.vector(2, ti.u64):
-        return ti.Vector([ti.u64(2**64 - 1), ti.u64(2**64 - 1)])
+    @qd.kernel
+    def foo() -> qd.types.vector(2, qd.u64):
+        return qd.Vector([qd.u64(2**64 - 1), qd.u64(2**64 - 1)])
 
     assert foo()[0] == 2**64 - 1
 
 
 @test_utils.test()
 def test_struct_ret_with_matrix():
-    s0 = ti.types.struct(a=ti.math.vec3, b=ti.i16)
-    s1 = ti.types.struct(a=ti.f32, b=s0)
+    s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
+    s1 = qd.types.struct(a=qd.f32, b=s0)
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> s1:
-        return s1(a=1, b=s0(a=ti.math.vec3([100, 0.2, 3]), b=65537))
+        return s1(a=1, b=s0(a=qd.math.vec3([100, 0.2, 3]), b=65537))
 
     ret = foo()
     assert ret.a == approx(1)
@@ -212,16 +212,16 @@ def test_struct_ret_with_matrix():
 
 
 @pytest.mark.skipif(sys.version_info < (3, 9), reason="requires python3.9 or higher")
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_tuple_ret_39():
-    s0 = ti.types.struct(a=ti.math.vec3, b=ti.i16)
+    s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 
-    @ti.real_func
-    def foo() -> tuple[ti.f32, s0]:
-        return 1, s0(a=ti.math.vec3([100, 0.2, 3]), b=65537)
+    @qd.real_func
+    def foo() -> tuple[qd.f32, s0]:
+        return 1, s0(a=qd.math.vec3([100, 0.2, 3]), b=65537)
 
-    @ti.kernel
-    def bar() -> tuple[ti.f32, s0]:
+    @qd.kernel
+    def bar() -> tuple[qd.f32, s0]:
         return foo()
 
     ret_a, ret_b = bar()
@@ -232,16 +232,16 @@ def test_real_func_tuple_ret_39():
     assert ret_b.b == 1
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_real_func_tuple_ret_typing_tuple():
-    s0 = ti.types.struct(a=ti.math.vec3, b=ti.i16)
+    s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 
-    @ti.real_func
-    def foo() -> Tuple[ti.f32, s0]:
-        return 1, s0(a=ti.math.vec3([100, 0.2, 3]), b=65537)
+    @qd.real_func
+    def foo() -> Tuple[qd.f32, s0]:
+        return 1, s0(a=qd.math.vec3([100, 0.2, 3]), b=65537)
 
-    @ti.kernel
-    def bar() -> Tuple[ti.f32, s0]:
+    @qd.kernel
+    def bar() -> Tuple[qd.f32, s0]:
         return foo()
 
     ret_a, ret_b = bar()
@@ -252,16 +252,16 @@ def test_real_func_tuple_ret_typing_tuple():
     assert ret_b.b == 1
 
 
-@test_utils.test(arch=[ti.cpu, ti.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
 def test_real_func_tuple_ret():
-    s0 = ti.types.struct(a=ti.math.vec3, b=ti.i16)
+    s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 
-    @ti.real_func
-    def foo() -> (ti.f32, s0):
-        return 1, s0(a=ti.math.vec3([100, 0.2, 3]), b=65537)
+    @qd.real_func
+    def foo() -> (qd.f32, s0):
+        return 1, s0(a=qd.math.vec3([100, 0.2, 3]), b=65537)
 
-    @ti.kernel
-    def bar() -> (ti.f32, s0):
+    @qd.kernel
+    def bar() -> (qd.f32, s0):
         return foo()
 
     # bar()
@@ -275,55 +275,55 @@ def test_real_func_tuple_ret():
 
 @test_utils.test(print_full_traceback=False)
 def test_return_type_mismatch_1():
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
 
-        @ti.kernel
-        def foo() -> ti.i32:
-            return ti.math.vec3([1, 2, 3])
+        @qd.kernel
+        def foo() -> qd.i32:
+            return qd.math.vec3([1, 2, 3])
 
         foo()
 
 
 @test_utils.test(print_full_traceback=False)
 def test_return_type_mismatch_2():
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
 
-        @ti.kernel
-        def foo() -> ti.math.vec4:
-            return ti.math.vec3([1, 2, 3])
+        @qd.kernel
+        def foo() -> qd.math.vec4:
+            return qd.math.vec3([1, 2, 3])
 
         foo()
 
 
 @test_utils.test(print_full_traceback=False)
 def test_return_type_mismatch_3():
-    sphere_type = ti.types.struct(center=ti.math.vec3, radius=float)
-    circle_type = ti.types.struct(center=ti.math.vec2, radius=float)
-    sphere_type_ = ti.types.struct(center=ti.math.vec3, radius=int)
+    sphere_type = qd.types.struct(center=qd.math.vec3, radius=float)
+    circle_type = qd.types.struct(center=qd.math.vec2, radius=float)
+    sphere_type_ = qd.types.struct(center=qd.math.vec3, radius=int)
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> sphere_type:
-        return circle_type(center=ti.math.vec2([1, 2]), radius=2)
+        return circle_type(center=qd.math.vec2([1, 2]), radius=2)
 
-    @ti.kernel
+    @qd.kernel
     def bar() -> sphere_type:
-        return sphere_type_(center=ti.math.vec3([1, 2, 3]), radius=2)
+        return sphere_type_(center=qd.math.vec3([1, 2, 3]), radius=2)
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         foo()
 
-    with pytest.raises(ti.QuadrantsCompilationError):
+    with pytest.raises(qd.QuadrantsCompilationError):
         bar()
 
 
 @test_utils.test()
 def test_func_scalar_return_cast():
-    @ti.func
-    def bar(a: ti.f32) -> ti.i32:
+    @qd.func
+    def bar(a: qd.f32) -> qd.i32:
         return a
 
-    @ti.kernel
-    def foo(a: ti.f32) -> ti.f32:
+    @qd.kernel
+    def foo(a: qd.f32) -> qd.f32:
         return bar(a)
 
     assert foo(1.5) == 1.0
@@ -331,26 +331,26 @@ def test_func_scalar_return_cast():
 
 @test_utils.test()
 def test_return_struct_field():
-    tp = ti.types.struct(a=ti.i32)
+    tp = qd.types.struct(a=qd.i32)
 
     f = tp.field(shape=1)
 
-    @ti.func
+    @qd.func
     def bar() -> tp:
         return f[0]
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> tp:
         return bar()
 
     assert foo().a == 0
 
 
-@test_utils.test(exclude=[ti.amdgpu])
+@test_utils.test(exclude=[qd.amdgpu])
 def test_ret_4k():
-    vec1024 = ti.types.vector(1024, ti.i32)
+    vec1024 = qd.types.vector(1024, qd.i32)
 
-    @ti.kernel
+    @qd.kernel
     def foo() -> vec1024:
         ret = vec1024(0)
         for i in range(1024):

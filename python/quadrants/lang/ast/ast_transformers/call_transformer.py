@@ -16,7 +16,7 @@ from quadrants.lang import (
     impl,
     matrix,
 )
-from quadrants.lang import ops as ti_ops
+from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
@@ -41,12 +41,12 @@ class CallTransformer:
 
         func = node.func.ptr
         replace_func = {
-            id(print): impl.ti_print,
-            id(min): ti_ops.min,
-            id(max): ti_ops.max,
-            id(int): impl.ti_int,
-            id(bool): impl.ti_bool,
-            id(float): impl.ti_float,
+            id(print): impl.qd_print,
+            id(min): qd_ops.min,
+            id(max): qd_ops.max,
+            id(int): impl.qd_int,
+            id(bool): impl.qd_bool,
+            id(float): impl.qd_float,
             id(any): matrix_ops.any,
             id(all): matrix_ops.all,
             id(abs): abs,
@@ -77,7 +77,7 @@ class CallTransformer:
             if isinstance(args[0], expr.Expr):
                 if args[0].ptr.is_tensor():
                     raise QuadrantsSyntaxError("A primitive type cannot decorate an expression with a compound type.")
-                node.ptr = ti_ops.cast(args[0], func)
+                node.ptr = qd_ops.cast(args[0], func)
             else:
                 node.ptr = expr.Expr(args[0], dtype=func)
             return True
@@ -104,7 +104,7 @@ class CallTransformer:
             f'Calling non-quadrants function "{name}". '
             f"Scope inside the function is not processed by the Quadrants AST transformer. "
             f"The function may not work as expected. Proceed with caution! "
-            f"Maybe you can consider turning it into a @ti.func?"
+            f"Maybe you can consider turning it into a @qd.func?"
             f"\x1b[0m",  # Reset
             SyntaxWarning,
             ctx.file,
@@ -121,7 +121,7 @@ class CallTransformer:
     # raw_string: 'qwerty {1} {} {1:.3f} {k:.4f} {k:}'
     # raw_args: [1.0, 2.0]
     # raw_keywords: {'k': <ti.Expr>}
-    # return value: ['qwerty {} {} {} {} {}', 2.0, 1.0, ['__ti_fmt_value__', 2.0, '.3f'], ['__ti_fmt_value__', <ti.Expr>, '.4f'], <ti.Expr>]
+    # return value: ['qwerty {} {} {} {} {}', 2.0, 1.0, ['__qd_fmt_value__', 2.0, '.3f'], ['__qd_fmt_value__', <qd.Expr>, '.4f'], <qd.Expr>]
     def _canonicalize_formatted_string(raw_string: str, *raw_args: list, **raw_keywords: dict):
         raw_brackets = re.findall(r"{(.*?)}", raw_string)
         brackets = []
@@ -158,7 +158,7 @@ class CallTransformer:
         for item, spec in brackets:
             new_arg = raw_args[item] if isinstance(item, int) else raw_keywords[item]
             if spec is not None:
-                args.append(["__ti_fmt_value__", new_arg, spec])
+                args.append(["__qd_fmt_value__", new_arg, spec])
             else:
                 args.append(new_arg)
         args.insert(0, re.sub(r"{.*?}", "{}", raw_string))
@@ -337,13 +337,13 @@ class CallTransformer:
                 py_args.append(arg.ptr)
         py_kwargs = dict(ChainMap(*[keyword.ptr for keyword in node_keywords]))
 
-        if id(func) in [id(print), id(impl.ti_print)]:
+        if id(func) in [id(print), id(impl.qd_print)]:
             ctx.func.has_print = True
 
         if isinstance(node.func, ast.Attribute) and isinstance(node.func.value.ptr, str) and node.func.attr == "format":
             raw_string = node.func.value.ptr
             py_args = CallTransformer._canonicalize_formatted_string(raw_string, *py_args, **py_kwargs)
-            node.ptr = impl.ti_format(*py_args)
+            node.ptr = impl.qd_format(*py_args)
             return node.ptr
 
         if id(func) == id(Matrix) or id(func) == id(Vector):
@@ -384,7 +384,7 @@ class CallTransformer:
                     except:
                         pass
                     else:
-                        msg += f"\nDid you mean to use `ti.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
+                        msg += f"\nDid you mean to use `qd.{func.__name__}` instead of `{module.__name__}.{func.__name__}`?"
             raise QuadrantsTypeError(msg)
 
         if getattr(func, "_is_quadrants_function", False):

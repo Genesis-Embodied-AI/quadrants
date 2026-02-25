@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._utils import size2tag
 
 
@@ -31,10 +31,10 @@ class DataType(BenchmarkItem):
 
     def __init__(self):
         self._items = {
-            str(ti.i32): ti.i32,
-            str(ti.i64): ti.i64,
-            str(ti.f32): ti.f32,
-            str(ti.f64): ti.f64,
+            str(qd.i32): qd.i32,
+            str(qd.i64): qd.i64,
+            str(qd.f32): qd.f32,
+            str(qd.f64): qd.f64,
         }
 
     def remove_integer(self):
@@ -60,7 +60,7 @@ class Container(BenchmarkItem):
     name = "container"
 
     def __init__(self):
-        self._items = {"field": ti.field, "ndarray": ti.ndarray}
+        self._items = {"field": qd.field, "ndarray": qd.ndarray}
 
 
 class MathOps(BenchmarkItem):
@@ -70,21 +70,21 @@ class MathOps(BenchmarkItem):
     def __init__(self):
         self._items = {
             # Trigonometric
-            "sin": ti.sin,
-            "cos": ti.cos,
-            "tan": ti.tan,
-            "asin": ti.asin,
-            "acos": ti.acos,
-            "tanh": ti.tanh,
+            "sin": qd.sin,
+            "cos": qd.cos,
+            "tan": qd.tan,
+            "asin": qd.asin,
+            "acos": qd.acos,
+            "tanh": qd.tanh,
             # Other arithmetic
-            "sqrt": ti.sqrt,
-            "rsqrt": ti.rsqrt,  # A fast version for `1 / ti.sqrt(x)`.
-            "exp": ti.exp,
-            "log": ti.log,
-            "round": ti.round,
-            "floor": ti.floor,
-            "ceil": ti.ceil,
-            "abs": ti.abs,
+            "sqrt": qd.sqrt,
+            "rsqrt": qd.rsqrt,  # A fast version for `1 / qd.sqrt(x)`.
+            "exp": qd.exp,
+            "log": qd.log,
+            "round": qd.round,
+            "floor": qd.floor,
+            "ceil": qd.ceil,
+            "abs": qd.abs,
         }
 
 
@@ -93,13 +93,13 @@ class AtomicOps(BenchmarkItem):
 
     def __init__(self):
         self._items = {
-            "atomic_add": ti.atomic_add,
-            "atomic_sub": ti.atomic_sub,
-            "atomic_and": ti.atomic_and,
-            "atomic_or": ti.atomic_or,
-            "atomic_xor": ti.atomic_xor,
-            "atomic_max": ti.atomic_max,
-            "atomic_min": ti.atomic_min,
+            "atomic_add": qd.atomic_add,
+            "atomic_sub": qd.atomic_sub,
+            "atomic_and": qd.atomic_and,
+            "atomic_or": qd.atomic_or,
+            "atomic_xor": qd.atomic_xor,
+            "atomic_max": qd.atomic_max,
+            "atomic_min": qd.atomic_min,
         }
 
     @staticmethod

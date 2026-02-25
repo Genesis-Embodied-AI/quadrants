@@ -1,6 +1,6 @@
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 from quadrants.lang import impl
 
 from tests import test_utils
@@ -9,25 +9,25 @@ from tests import test_utils
 @pytest.mark.parametrize(
     "arg1,a,arg2,b,arg3,c",
     [
-        (ti.i32, 10, ti.i32, 3, ti.f32, 3),
-        (ti.f32, 10, ti.f32, 3, ti.f32, 3),
-        (ti.i32, 10, ti.f32, 3, ti.f32, 3),
-        (ti.f32, 10, ti.i32, 3, ti.f32, 3),
-        (ti.i32, -10, ti.i32, 3, ti.f32, -4),
-        (ti.f32, -10, ti.f32, 3, ti.f32, -4),
-        (ti.i32, -10, ti.f32, 3, ti.f32, -4),
-        (ti.f32, -10, ti.i32, 3, ti.f32, -4),
-        (ti.i32, 10, ti.i32, -3, ti.f32, -4),
-        (ti.f32, 10, ti.f32, -3, ti.f32, -4),
-        (ti.i32, 10, ti.f32, -3, ti.f32, -4),
-        (ti.f32, 10, ti.i32, -3, ti.f32, -4),
+        (qd.i32, 10, qd.i32, 3, qd.f32, 3),
+        (qd.f32, 10, qd.f32, 3, qd.f32, 3),
+        (qd.i32, 10, qd.f32, 3, qd.f32, 3),
+        (qd.f32, 10, qd.i32, 3, qd.f32, 3),
+        (qd.i32, -10, qd.i32, 3, qd.f32, -4),
+        (qd.f32, -10, qd.f32, 3, qd.f32, -4),
+        (qd.i32, -10, qd.f32, 3, qd.f32, -4),
+        (qd.f32, -10, qd.i32, 3, qd.f32, -4),
+        (qd.i32, 10, qd.i32, -3, qd.f32, -4),
+        (qd.f32, 10, qd.f32, -3, qd.f32, -4),
+        (qd.i32, 10, qd.f32, -3, qd.f32, -4),
+        (qd.f32, 10, qd.i32, -3, qd.f32, -4),
     ],
 )
 @test_utils.test()
 def test_floor_div(arg1, a, arg2, b, arg3, c):
-    z = ti.field(arg3, shape=())
+    z = qd.field(arg3, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func(x: arg1, y: arg2):
         z[None] = x // y
 
@@ -38,23 +38,23 @@ def test_floor_div(arg1, a, arg2, b, arg3, c):
 @pytest.mark.parametrize(
     "arg1,a,arg2,b,arg3,c",
     [
-        (ti.i32, 3, ti.i32, 2, ti.f32, 1.5),
-        (ti.f32, 3, ti.f32, 2, ti.f32, 1.5),
-        (ti.i32, 3, ti.f32, 2, ti.f32, 1.5),
-        (ti.f32, 3, ti.i32, 2, ti.f32, 1.5),
-        (ti.f32, 3, ti.i32, 2, ti.i32, 1),
-        (ti.i32, -3, ti.i32, 2, ti.f32, -1.5),
-        (ti.f32, -3, ti.f32, 2, ti.f32, -1.5),
-        (ti.i32, -3, ti.f32, 2, ti.f32, -1.5),
-        (ti.f32, -3, ti.i32, 2, ti.f32, -1.5),
-        (ti.f32, -3, ti.i32, 2, ti.i32, -1),
+        (qd.i32, 3, qd.i32, 2, qd.f32, 1.5),
+        (qd.f32, 3, qd.f32, 2, qd.f32, 1.5),
+        (qd.i32, 3, qd.f32, 2, qd.f32, 1.5),
+        (qd.f32, 3, qd.i32, 2, qd.f32, 1.5),
+        (qd.f32, 3, qd.i32, 2, qd.i32, 1),
+        (qd.i32, -3, qd.i32, 2, qd.f32, -1.5),
+        (qd.f32, -3, qd.f32, 2, qd.f32, -1.5),
+        (qd.i32, -3, qd.f32, 2, qd.f32, -1.5),
+        (qd.f32, -3, qd.i32, 2, qd.f32, -1.5),
+        (qd.f32, -3, qd.i32, 2, qd.i32, -1),
     ],
 )
 @test_utils.test()
 def test_true_div(arg1, a, arg2, b, arg3, c):
-    z = ti.field(arg3, shape=())
+    z = qd.field(arg3, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func(x: arg1, y: arg2):
         z[None] = x / y
 
@@ -64,10 +64,10 @@ def test_true_div(arg1, a, arg2, b, arg3, c):
 
 @test_utils.test()
 def test_div_default_ip():
-    impl.get_runtime().set_default_ip(ti.i64)
-    z = ti.field(ti.f32, shape=())
+    impl.get_runtime().set_default_ip(qd.i64)
+    z = qd.field(qd.f32, shape=())
 
-    @ti.kernel
+    @qd.kernel
     def func():
         a = 1e15 + 1e9
         z[None] = a // 1e10
@@ -78,10 +78,10 @@ def test_div_default_ip():
 
 @test_utils.test()
 def test_floor_div_pythonic():
-    z = ti.field(ti.i32, shape=())
+    z = qd.field(qd.i32, shape=())
 
-    @ti.kernel
-    def func(x: ti.i32, y: ti.i32):
+    @qd.kernel
+    def func(x: qd.i32, y: qd.i32):
         z[None] = x // y
 
     for i in range(-10, 11):

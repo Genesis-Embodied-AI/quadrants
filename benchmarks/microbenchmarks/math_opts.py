@@ -1,4 +1,4 @@
-import quadrants as ti
+import quadrants as qd
 from microbenchmarks._items import BenchmarkItem, DataType, MathOps
 from microbenchmarks._metric import MetricType
 from microbenchmarks._plan import BenchmarkPlan
@@ -6,24 +6,24 @@ from microbenchmarks._plan import BenchmarkPlan
 
 def unary_ops_throughput_default(arch, repeat, math_op, dtype, element_num, thread_for_loop, get_metric):
     local_data_num = 16  # enough data to fill the instruction pipeline
-    global_vector = ti.Vector.field(local_data_num, dtype, element_num)
+    global_vector = qd.Vector.field(local_data_num, dtype, element_num)
 
-    @ti.kernel
+    @qd.kernel
     def op_throughput():
         for e in global_vector:
             local_vector = global_vector[e]
             # loop
             for j in range(thread_for_loop):
-                for k in ti.static(range(local_data_num)):
+                for k in qd.static(range(local_data_num)):
                     local_vector[k] = math_op(local_vector[k])
             # epilogue
             global_vector[e] = local_vector
 
-    @ti.kernel
+    @qd.kernel
     def fill_random():
         for e in global_vector:
-            for i in ti.static(range(local_data_num)):
-                global_vector[e][i] = ti.random()
+            for i in qd.static(range(local_data_num)):
+                global_vector[e][i] = qd.random()
 
     fill_random()
     return get_metric(repeat, op_throughput)

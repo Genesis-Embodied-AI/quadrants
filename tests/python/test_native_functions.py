@@ -1,24 +1,24 @@
 import numpy as np
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(exclude=[ti.amdgpu])
+@test_utils.test(exclude=[qd.amdgpu])
 def test_abs():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     N = 16
 
-    ti.root.dense(ti.i, N).place(x)
+    qd.root.dense(qd.i, N).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             x[i] = abs(-i)
             print(x[i])
-            ti.static_print(x[i])
+            qd.static_print(x[i])
 
     func()
 
@@ -28,13 +28,13 @@ def test_abs():
 
 @test_utils.test()
 def test_int():
-    x = ti.field(ti.f32)
+    x = qd.field(qd.f32)
 
     N = 16
 
-    ti.root.dense(ti.i, N).place(x)
+    qd.root.dense(qd.i, N).place(x)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             x[i] = int(x[i])
@@ -51,17 +51,17 @@ def test_int():
 
 @test_utils.test()
 def test_minmax():
-    x = ti.field(ti.f32)
-    y = ti.field(ti.f32)
-    z = ti.field(ti.f32)
-    minimum = ti.field(ti.f32)
-    maximum = ti.field(ti.f32)
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    z = qd.field(qd.f32)
+    minimum = qd.field(qd.f32)
+    maximum = qd.field(qd.f32)
 
     N = 16
 
-    ti.root.dense(ti.i, N).place(x, y, z, minimum, maximum)
+    qd.root.dense(qd.i, N).place(x, y, z, minimum, maximum)
 
-    @ti.kernel
+    @qd.kernel
     def func():
         for i in range(N):
             minimum[i] = min(x[i], y[i], z[i])

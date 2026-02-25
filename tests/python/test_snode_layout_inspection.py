@@ -1,25 +1,25 @@
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_primitives():
-    x = ti.field(dtype=ti.i16)
-    y = ti.field(dtype=ti.f32)
-    z = ti.field(dtype=ti.f64)
+    x = qd.field(dtype=qd.i16)
+    y = qd.field(dtype=qd.f32)
+    z = qd.field(dtype=qd.f64)
 
-    p = ti.field(dtype=ti.f32)
-    q = ti.field(dtype=ti.f32)
-    r = ti.field(dtype=ti.f64)
+    p = qd.field(dtype=qd.f32)
+    q = qd.field(dtype=qd.f32)
+    r = qd.field(dtype=qd.f64)
 
-    n1 = ti.root.dense(ti.i, 32)
+    n1 = qd.root.dense(qd.i, 32)
     n1.place(x)
 
-    n2 = ti.root.dense(ti.i, 32)
+    n2 = qd.root.dense(qd.i, 32)
     n2.place(y, z)
 
-    n3 = ti.root.dense(ti.i, 1)
+    n3 = qd.root.dense(qd.i, 1)
     n3.place(p, q, r)
 
     assert n1._cell_size_bytes == 2
@@ -38,19 +38,19 @@ def test_primitives():
     assert r.snode._offset_bytes_in_parent_cell == 8
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_bitpacked_fields():
-    x = ti.field(dtype=ti.types.quant.int(16, False))
-    y = ti.field(dtype=ti.types.quant.fixed(16, False))
-    z = ti.field(dtype=ti.f32)
+    x = qd.field(dtype=qd.types.quant.int(16, False))
+    y = qd.field(dtype=qd.types.quant.fixed(16, False))
+    z = qd.field(dtype=qd.f32)
 
-    n1 = ti.root.dense(ti.i, 32)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    n1 = qd.root.dense(qd.i, 32)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(x)
     n1.place(bitpack)
 
-    n2 = ti.root.dense(ti.i, 4)
-    bitpack = ti.BitpackedFields(max_num_bits=32)
+    n2 = qd.root.dense(qd.i, 4)
+    bitpack = qd.BitpackedFields(max_num_bits=32)
     bitpack.place(y)
     n2.place(bitpack)
     n2.place(z)

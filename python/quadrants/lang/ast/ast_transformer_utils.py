@@ -8,7 +8,7 @@ from enum import Enum
 from textwrap import TextWrapper
 from typing import TYPE_CHECKING, Any, List
 
-from quadrants._lib import core as _ti_core
+from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
 from quadrants.lang import impl
 from quadrants.lang._ndrange import ndrange
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .._func_base import FuncBase
     from .._pruning import Pruning
 
-AutodiffMode = _ti_core.AutodiffMode
+AutodiffMode = _qd_core.AutodiffMode
 
 
 class Builder:
@@ -245,7 +245,7 @@ class ASTTransformerFuncContext:
         self.expanding_dataclass_call_parameters: bool = False
 
         self.adstack_enabled: bool = (
-            _ti_core.is_extension_supported(
+            _qd_core.is_extension_supported(
                 impl.current_cfg().arch,
                 extension.adstack,
             )

@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 import pytest
 
-import quadrants as ti
+import quadrants as qd
 
 from tests import test_utils
 
@@ -91,8 +91,8 @@ def test_xdg_basedir(tmpdir):
         # environment to the native C++ code.
         os.putenv("XDG_CACHE_HOME", str(tmpdir))
 
-        ti_python_core = ti._lib.utils.import_ti_python_core()
-        repo_dir = ti_python_core.get_repo_dir()
+        qd_python_core = qd._lib.utils.import_qd_python_core()
+        repo_dir = qd_python_core.get_repo_dir()
 
         repo_path = pathlib.Path(repo_dir).resolve()
         expected_path = pathlib.Path(tmpdir / "quadrants").resolve()
@@ -114,11 +114,11 @@ def test_init_arg(key, values):
     # helper function:
     def test_arg(key, value, kwargs={}):
         if key in special_init_cfgs:
-            spec_cfg = ti.init(_test_mode=True, **kwargs)
+            spec_cfg = qd.init(_test_mode=True, **kwargs)
             cfg = spec_cfg
         else:
-            ti.init(**kwargs)
-            cfg = ti.lang.impl.current_cfg()
+            qd.init(**kwargs)
+            cfg = qd.lang.impl.current_cfg()
         assert getattr(cfg, key) == value
 
     with patch_os_environ_helper({}, excludes=env_configs):
@@ -142,49 +142,49 @@ def test_init_arg(key, values):
 @pytest.mark.parametrize("arch", test_utils.expected_archs())
 def test_init_arch(arch):
     with patch_os_environ_helper({}, excludes=["QD_ARCH"]):
-        ti.init(arch=arch)
-        assert ti.lang.impl.current_cfg().arch == arch
+        qd.init(arch=arch)
+        assert qd.lang.impl.current_cfg().arch == arch
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_init_bad_arg():
     with pytest.raises(KeyError):
-        ti.init(_test_mode=True, debug=True, foo_bar=233)
+        qd.init(_test_mode=True, debug=True, foo_bar=233)
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_init_require_version():
-    ti_python_core = ti._lib.utils.import_ti_python_core()
+    qd_python_core = qd._lib.utils.import_qd_python_core()
     require_version = "{}.{}.{}".format(
-        ti_python_core.get_version_major(),
-        ti_python_core.get_version_minor(),
-        ti_python_core.get_version_patch(),
+        qd_python_core.get_version_major(),
+        qd_python_core.get_version_minor(),
+        qd_python_core.get_version_patch(),
     )
-    ti.init(_test_mode=True, debug=True, require_version=require_version)
+    qd.init(_test_mode=True, debug=True, require_version=require_version)
 
 
-@test_utils.test(arch=ti.cpu)
+@test_utils.test(arch=qd.cpu)
 def test_init_bad_require_version():
     with pytest.raises(Exception):
-        ti_python_core = ti._lib.utils.import_ti_python_core()
+        qd_python_core = qd._lib.utils.import_qd_python_core()
         bad_require_version = "{}.{}.{}".format(
-            ti_python_core.get_version_major(),
-            ti_python_core.get_version_minor(),
-            ti_python_core.get_version_patch() + 1,
+            qd_python_core.get_version_major(),
+            qd_python_core.get_version_minor(),
+            qd_python_core.get_version_patch() + 1,
         )
-        ti.init(_test_mode=True, debug=True, require_version=bad_require_version)
+        qd.init(_test_mode=True, debug=True, require_version=bad_require_version)
 
 
-@pytest.mark.parametrize("level", [ti.DEBUG, ti.TRACE, ti.INFO, ti.WARN, ti.ERROR, ti.CRITICAL])
-@test_utils.test(arch=ti.cpu)
+@pytest.mark.parametrize("level", [qd.DEBUG, qd.TRACE, qd.INFO, qd.WARN, qd.ERROR, qd.CRITICAL])
+@test_utils.test(arch=qd.cpu)
 def test_supported_log_levels(level):
-    spec_cfg = ti.init(_test_mode=True, log_level=level)
+    spec_cfg = qd.init(_test_mode=True, log_level=level)
     assert spec_cfg.log_level == level
 
 
-@pytest.mark.parametrize("level", [ti.DEBUG, ti.TRACE, ti.INFO, ti.WARN, ti.ERROR, ti.CRITICAL])
-@test_utils.test(arch=ti.cpu)
+@pytest.mark.parametrize("level", [qd.DEBUG, qd.TRACE, qd.INFO, qd.WARN, qd.ERROR, qd.CRITICAL])
+@test_utils.test(arch=qd.cpu)
 def test_supported_log_levels(level):
-    spec_cfg = ti.init(_test_mode=True)
-    ti.set_logging_level(level)
-    assert ti._logging.is_logging_effective(level)
+    spec_cfg = qd.init(_test_mode=True)
+    qd.set_logging_level(level)
+    assert qd._logging.is_logging_effective(level)
