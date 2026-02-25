@@ -283,19 +283,6 @@ def cook_dtype(dtype: Any) -> _qd_core.DataTypeCxx:
     raise ValueError(f"Invalid data type {dtype}")
 
 
-def dtype_to_numpy_dtype(dtype: Any):
-    return {
-        float: np.float32,
-        int: np.int32,
-        i32: np.int32,
-        f32: np.float32,
-        i64: np.int64,
-        f64: np.float64,
-        bool: np.bool_,
-        u1: np.bool_,
-    }[dtype]
-
-
 def dtype_to_torch_dtype(dtype: Any):
     assert torch is not None
     return {

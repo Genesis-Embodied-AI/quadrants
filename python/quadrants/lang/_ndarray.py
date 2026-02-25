@@ -9,7 +9,7 @@ from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import (
     cook_dtype,
-    dtype_to_numpy_dtype,
+    dtype_to_torch_dtype,
     get_traceback,
     python_scope,
     to_numpy_type,
@@ -296,8 +296,8 @@ class ScalarNdarray(Ndarray):
         self.dtype = cook_dtype(dtype)
         if impl.is_python_backend():
             assert torch_is_available
-            np_dtype = dtype_to_numpy_dtype(dtype)
-            self.arr = torch.zeros(shape=arr_shape, dtype=np_dtype)
+            torch_dtype = dtype_to_torch_dtype(dtype)
+            self.arr = torch.zeros(shape=arr_shape, dtype=torch_dtype)
         else:
             self.arr = impl.get_runtime().prog.create_ndarray(
                 self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
