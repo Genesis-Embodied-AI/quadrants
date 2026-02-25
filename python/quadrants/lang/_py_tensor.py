@@ -10,17 +10,17 @@ import numpy as np
 import torch
 
 
-class MyTorchTensor(torch.Tensor):
+class PyTensor(torch.Tensor):
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}
-        has_foreign = any(not issubclass(t, MyTorchTensor) and t is not torch.Tensor for t in types)
+        has_foreign = any(not issubclass(t, PyTensor) and t is not torch.Tensor for t in types)
         if has_foreign:
 
             def unwrap(o):
-                return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
+                return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, PyTensor) else o
 
             args = torch.utils._pytree.tree_map(unwrap, args)  # type: ignore[attr-defined]
             kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)  # type: ignore[attr-defined]
@@ -60,8 +60,8 @@ class MyTorchTensor(torch.Tensor):
 
     @staticmethod
     def _unpack_key(key):
-        """Unpack MyTorchTensor indices into plain ints for multi-dim indexing."""
-        if isinstance(key, MyTorchTensor) and len(key.size()) == 1:
+        """Unpack PyTensor indices into plain ints for multi-dim indexing."""
+        if isinstance(key, PyTensor) and len(key.size()) == 1:
             return tuple(int(key[i]) for i in range(key.size()[0]))
         if isinstance(key, list) and len(key) == 1:
             return key[0]
@@ -82,7 +82,7 @@ class MyTorchTensor(torch.Tensor):
                 yield val
 
     def __getitem__(self, key):  # type: ignore[override]
-        key = MyTorchTensor._unpack_key(key)
+        key = PyTensor._unpack_key(key)
         # Scalar fields (shape ()) are still indexed with field[0] in kernels;
         # torch would raise IndexError on a 0-d tensor, so return the scalar.
         if not isinstance(key, tuple) and key == 0 and self.size() == ():
@@ -90,7 +90,7 @@ class MyTorchTensor(torch.Tensor):
         return super().__getitem__(key)
 
     def __setitem__(self, key, v):
-        key = MyTorchTensor._unpack_key(key)
+        key = PyTensor._unpack_key(key)
         if type(v) is np.ndarray:
             v = torch.from_numpy(v)
         elif isinstance(v, np.generic):
@@ -98,7 +98,7 @@ class MyTorchTensor(torch.Tensor):
         try:
             super().__setitem__(key, v)
         except Exception as e:
-            raise type(e)(f"MyTorchTensor.__setitem__({key!r}, {v!r} (type={type(v).__name__}))") from e
+            raise type(e)(f"PyTensor.__setitem__({key!r}, {v!r} (type={type(v).__name__}))") from e
 
     def transpose(self, *args):  # type: ignore[override]
         if len(args) == 0:
@@ -120,7 +120,7 @@ class MyTorchTensor(torch.Tensor):
 
 
 def create_tensor(shape, dtype, batch_ndim=None):
-    res = MyTorchTensor.zeros(size=shape, dtype=dtype)
+    res = PyTensor.zeros(size=shape, dtype=dtype)
     if batch_ndim is None:
         batch_ndim = len(shape)
     _setup_views(res, batch_ndim)

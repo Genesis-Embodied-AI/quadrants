@@ -1,16 +1,16 @@
-"""Tests for MyTorchTensor batch_ndim, shape property, and _tc/_T_tc views."""
+"""Tests for PyTensor batch_ndim, shape property, and _tc/_T_tc views."""
 
 import numpy as np
 import torch
 
 import quadrants as qd
-from quadrants.lang._py_tensor import MyTorchTensor, create_tensor
+from quadrants.lang._py_tensor import PyTensor, create_tensor
 
 
 def test_create_tensor_scalar_1d():
     qd.init(qd.python)
     t = create_tensor((5,), torch.float32, batch_ndim=1)
-    assert isinstance(t, MyTorchTensor)
+    assert isinstance(t, PyTensor)
     assert t.size() == torch.Size([5])
     assert t.shape == torch.Size([5])
     assert t._batch_shape == torch.Size([5])
@@ -194,14 +194,14 @@ def test_struct_field_with_vec():
 
 
 def test_tensor_iter_yields_scalars():
-    """Iterating a 1-D MyTorchTensor should yield Python scalars, not 0-d tensors."""
+    """Iterating a 1-D PyTensor should yield Python scalars, not 0-d tensors."""
     qd.init(qd.python)
-    t = MyTorchTensor(torch.tensor([10, 20, 30]))
+    t = PyTensor(torch.tensor([10, 20, 30]))
     items = list(t)
     assert all(isinstance(x, int) for x in items)
     assert items == [10, 20, 30]
 
-    t2 = MyTorchTensor(torch.tensor([1.5, 2.5]))
+    t2 = PyTensor(torch.tensor([1.5, 2.5]))
     items2 = list(t2)
     assert all(isinstance(x, float) for x in items2)
     assert items2 == [1.5, 2.5]
@@ -214,16 +214,16 @@ def test_tensor_star_unpack_in_tuple():
 
     arr = np.zeros((3, 4, 5))
     arr[1, 2, 3] = 42.0
-    J = MyTorchTensor(torch.tensor([2, 3]))
+    J = PyTensor(torch.tensor([2, 3]))
     assert arr[(1, *J)] == 42.0
 
 
 def test_grouped_vector_index():
-    """MyTorchTensor used as a vector index should unpack to multi-dim indexing."""
+    """PyTensor used as a vector index should unpack to multi-dim indexing."""
     qd.init(qd.python)
     f = qd.field(qd.math.vec3, shape=(3, 2))
     f[1, 0] = torch.tensor([10.0, 20.0, 30.0])
-    idx = MyTorchTensor(torch.tensor([1, 0]))
+    idx = PyTensor(torch.tensor([1, 0]))
     result = f[idx]
     assert result[0].item() == 10.0
     assert result[1].item() == 20.0
@@ -375,9 +375,9 @@ def test_ndrange_with_tensor_bounds():
 
 
 def test_transpose_no_args():
-    """MyTorchTensor.transpose() with no args should transpose a 2D matrix."""
+    """PyTensor.transpose() with no args should transpose a 2D matrix."""
     qd.init(qd.python)
-    t = MyTorchTensor([[1, 2, 3], [4, 5, 6]])
+    t = PyTensor([[1, 2, 3], [4, 5, 6]])
     tt = t.transpose()
     assert tt.size() == torch.Size([3, 2])
     assert tt[0, 0] == 1
@@ -386,32 +386,32 @@ def test_transpose_no_args():
 
 
 def test_torch_function_with_foreign_subclass():
-    """__torch_function__ should unwrap MyTorchTensor when mixed with foreign subclasses."""
+    """__torch_function__ should unwrap PyTensor when mixed with foreign subclasses."""
     qd.init(qd.python)
 
     class ForeignTensor(torch.Tensor):
         pass
 
-    a = MyTorchTensor([1.0, 2.0, 3.0])
+    a = PyTensor([1.0, 2.0, 3.0])
     b = ForeignTensor([10.0, 20.0, 30.0])
     result = a + b
-    assert not isinstance(result, MyTorchTensor)
+    assert not isinstance(result, PyTensor)
     assert torch.equal(result, torch.tensor([11.0, 22.0, 33.0]))
 
 
 def test_getattr_delegation_norm():
-    """MyTorchTensor should delegate .norm() to matrix_ops."""
+    """PyTensor should delegate .norm() to matrix_ops."""
     qd.init(qd.python)
-    v = MyTorchTensor([3.0, 4.0])
+    v = PyTensor([3.0, 4.0])
     n = v.norm()
     assert abs(n - 5.0) < 1e-5
 
 
 def test_getattr_delegation_dot():
-    """MyTorchTensor should delegate .dot() to matrix_ops."""
+    """PyTensor should delegate .dot() to matrix_ops."""
     qd.init(qd.python)
-    a = MyTorchTensor([1.0, 2.0, 3.0])
-    b = MyTorchTensor([4.0, 5.0, 6.0])
+    a = PyTensor([1.0, 2.0, 3.0])
+    b = PyTensor([4.0, 5.0, 6.0])
     d = a.dot(b)
     assert abs(d - 32.0) < 1e-5
 

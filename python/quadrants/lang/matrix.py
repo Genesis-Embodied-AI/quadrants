@@ -265,7 +265,7 @@ class Matrix(QuadrantsOperations):
             from . import _py_tensor as py_tensor  # pylint: disable=C0415
 
             arr = _scalar_tensors_to_items(arr)
-            return py_tensor.MyTorchTensor(arr)
+            return py_tensor.PyTensor(arr)
         return super().__new__(cls)
 
     def __init__(self, arr, dt=None):
