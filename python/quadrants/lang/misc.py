@@ -9,7 +9,7 @@ from quadrants import _logging, _snode
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
-from quadrants.lang import impl
+from quadrants.lang import impl, util
 from quadrants.lang.expr import Expr
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
@@ -742,7 +742,7 @@ def is_arch_supported(arch):
         metal: _qd_core.with_metal,
         vulkan: _qd_core.with_vulkan,
         cpu: lambda: True,
-        python: lambda: True,
+        python: util.has_pytorch,
     }
     with_arch = arch_table.get(arch, lambda: False)
     try:
