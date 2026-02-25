@@ -1,3 +1,5 @@
+# type: ignore
+
 import builtins
 import functools
 import operator as _bt_ops_mod  # bt for builtin

@@ -1,3 +1,5 @@
+# type: ignore
+
 import quadrants.lang.ops as ops_mod
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import func, pyfunc

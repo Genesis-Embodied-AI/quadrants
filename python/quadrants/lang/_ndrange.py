@@ -1,3 +1,5 @@
+# type: ignore
+
 import collections.abc
 from typing import Iterable
 

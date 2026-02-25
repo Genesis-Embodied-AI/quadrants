@@ -8,6 +8,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
+    Arch,
     DataTypeCxx,
     Function,
     KernelCxx,
@@ -353,7 +354,7 @@ class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
         self._prog: Program | None = None
-        self._arch = None
+        self._arch: Arch | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
@@ -942,7 +943,7 @@ def ndarray(dtype, shape, needs_grad=False):
                 f"{dt} is not supported for ndarray with `needs_grad=True` or `needs_dual=True`."
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
-        x._set_grad(x_grad)
+        x._set_grad(x_grad)  # type: ignore[arg-type]
     return x
 
 

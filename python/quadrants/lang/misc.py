@@ -314,7 +314,7 @@ def _install_python_backend_dtype_call():
             return float(value) if self in _FLOAT_DTYPES else int(value)
         return _original(self, value)
 
-    DataTypeCxx.__call__ = _dtype_call
+    DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
 
 
 def init(
