@@ -22,8 +22,8 @@ class MyTorchTensor(torch.Tensor):
             def unwrap(o):
                 return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
 
-            args = torch.utils._pytree.tree_map(unwrap, args)
-            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)
+            args = torch.utils._pytree.tree_map(unwrap, args)  # type: ignore[attr-defined]
+            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)  # type: ignore[attr-defined]
             return func(*args, **kwargs)
         return super().__torch_function__(func, types, args, kwargs)
 
@@ -48,15 +48,15 @@ class MyTorchTensor(torch.Tensor):
 
     @property
     def x(self):
-        return super().__getitem__(0)
+        return super()[0]
 
     @property
     def y(self):
-        return super().__getitem__(1)
+        return super()[1]
 
     @property
     def z(self):
-        return super().__getitem__(2)
+        return super()[2]
 
     @staticmethod
     def _unpack_key(key):
