@@ -134,7 +134,7 @@ vulkan = _qd_core.vulkan
 # ----------------------
 
 """The python backend"""
-python = _ti_core.python
+python = _qd_core.python
 
 gpu = [cuda, metal, vulkan, amdgpu]
 """A list of GPU backends supported on the current system.
