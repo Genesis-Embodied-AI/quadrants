@@ -2,21 +2,28 @@
 Torch tensor wrapper for the python backend.
 """
 
+from __future__ import annotations
+
 from functools import partial
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-torch = None
-try:
+if TYPE_CHECKING:
     import torch
-except Exception:
-    pass
 
-
-if torch is not None:
     _TensorBase = torch.Tensor
 else:
-    _TensorBase = object
+    torch = None
+    try:
+        import torch
+    except Exception:
+        pass
+
+    if torch is not None:
+        _TensorBase = torch.Tensor
+    else:
+        _TensorBase = object
 
 
 class MyTorchTensor(_TensorBase):
@@ -31,13 +38,13 @@ class MyTorchTensor(_TensorBase):
             def unwrap(o):
                 return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
 
-            args = torch.utils._pytree.tree_map(unwrap, args)
-            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)
+            args = torch.utils._pytree.tree_map(unwrap, args)  # type: ignore[union-attr]
+            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)  # type: ignore[union-attr]
             return func(*args, **kwargs)
         return super().__torch_function__(func, types, args, kwargs)
 
     @property
-    def shape(self):
+    def shape(self):  # type: ignore[override]
         real = self.size()
         batch = getattr(self, "_batch_shape", None)
         return batch if batch is not None else real
@@ -79,7 +86,7 @@ class MyTorchTensor(_TensorBase):
                 return tuple(int(k) if isinstance(k, torch.Tensor) and k.ndim == 0 else k for k in key)
         return key
 
-    def __iter__(self):
+    def __iter__(self):  # type: ignore[override]
         for i in range(self.size()[0]):
             val = super().__getitem__(i)
             if isinstance(val, torch.Tensor) and val.ndim == 0:
@@ -90,7 +97,7 @@ class MyTorchTensor(_TensorBase):
             else:
                 yield val
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # type: ignore[override]
         key = MyTorchTensor._unpack_key(key)
         if not isinstance(key, tuple) and key == 0 and self.size() == ():
             return self.item()
@@ -107,7 +114,7 @@ class MyTorchTensor(_TensorBase):
         except Exception as e:
             raise type(e)(f"MyTorchTensor.__setitem__({key!r}, {v!r} (type={type(v).__name__}))") from e
 
-    def transpose(self, *args):
+    def transpose(self, *args):  # type: ignore[override]
         if len(args) == 0:
             ndim = len(self.size())
             assert ndim == 2, f"transpose() with no args requires a 2D tensor, got {ndim}D"
