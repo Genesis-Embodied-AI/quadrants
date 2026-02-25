@@ -13,7 +13,13 @@ except Exception:
     pass
 
 
-class MyTorchTensor(torch.Tensor):
+if torch is not None:
+    _TensorBase = torch.Tensor
+else:
+    _TensorBase = object
+
+
+class MyTorchTensor(_TensorBase):
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
