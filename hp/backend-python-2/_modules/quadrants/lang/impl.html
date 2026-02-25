@@ -320,6 +320,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Arch</span><span class="p">,</span>
     <span class="n">DataTypeCxx</span><span class="p">,</span>
     <span class="n">Function</span><span class="p">,</span>
     <span class="n">KernelCxx</span><span class="p">,</span>
@@ -665,7 +666,7 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernels</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialized</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">:</span> <span class="n">Program</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_arch</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_arch</span><span class="p">:</span> <span class="n">Arch</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">src_info_stack</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">compilation_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">RLock</span><span class="p">()</span>
@@ -1271,7 +1272,7 @@
                 <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dt</span><span class="si">}</span><span class="s2"> is not supported for ndarray with `needs_grad=True` or `needs_dual=True`.&quot;</span>
             <span class="p">)</span>
         <span class="n">x_grad</span> <span class="o">=</span> <span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-        <span class="n">x</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="n">x_grad</span><span class="p">)</span>
+        <span class="n">x</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="n">x_grad</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
     <span class="k">return</span> <span class="n">x</span></div>
 
 
