@@ -32,6 +32,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       transfers;
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
+  // Allocated unconditionally — must be freed unconditionally at the end of
+  // this function (not only when result_buffer_size > 0).
   char *device_result_buffer{nullptr};
   AMDGPUDriver::get_instance().malloc(
       (void **)&device_result_buffer,
@@ -116,6 +118,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     AMDGPUDriver::get_instance().memcpy_device_to_host(
         host_result_buffer, device_result_buffer, ctx.result_buffer_size);
   }
+  // Free unconditionally: device_result_buffer is always allocated at the top
+  // of this function regardless of result_buffer_size.
   AMDGPUDriver::get_instance().mem_free(device_result_buffer);
   if (transfers.size()) {
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
