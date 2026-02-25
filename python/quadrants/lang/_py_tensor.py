@@ -5,28 +5,12 @@ Torch tensor wrapper for the python backend.
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING
 
 import numpy as np
-
-if TYPE_CHECKING:
-    import torch
-
-    _TensorBase = torch.Tensor
-else:
-    torch = None
-    try:
-        import torch
-    except Exception:
-        pass
-
-    if torch is not None:
-        _TensorBase = torch.Tensor
-    else:
-        _TensorBase = object
+import torch
 
 
-class MyTorchTensor(_TensorBase):
+class MyTorchTensor(torch.Tensor):
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -38,8 +22,8 @@ class MyTorchTensor(_TensorBase):
             def unwrap(o):
                 return torch.Tensor._make_subclass(torch.Tensor, o) if isinstance(o, MyTorchTensor) else o
 
-            args = torch.utils._pytree.tree_map(unwrap, args)  # type: ignore[union-attr]
-            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)  # type: ignore[union-attr]
+            args = torch.utils._pytree.tree_map(unwrap, args)
+            kwargs = torch.utils._pytree.tree_map(unwrap, kwargs)
             return func(*args, **kwargs)
         return super().__torch_function__(func, types, args, kwargs)
 
