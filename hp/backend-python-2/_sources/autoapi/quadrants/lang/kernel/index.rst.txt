@@ -1,0 +1,154 @@
+quadrants.lang.kernel
+=====================
+
+.. py:module:: quadrants.lang.kernel
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel.LaunchContextBufferCache
+   quadrants.lang.kernel.ASTGenerator
+   quadrants.lang.kernel.Kernel
+
+
+Module Contents
+---------------
+
+.. py:class:: LaunchContextBufferCache
+
+   .. py:method:: cache(t_kernel, args_hash: quadrants.lang._kernel_types.ArgsHash, launch_ctx: quadrants._lib.core.quadrants_python.KernelLaunchContext, launch_ctx_buffer: dict[quadrants.lang._kernel_types.KernelBatchedArgType, list[tuple]]) -> None
+
+
+   .. py:method:: populate_launch_ctx_from_cache(args_hash: quadrants.lang._kernel_types.ArgsHash, launch_ctx: quadrants._lib.core.quadrants_python.KernelLaunchContext) -> bool
+
+
+.. py:class:: ASTGenerator(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, kernel_name: str, current_kernel: Kernel, only_parse_function_def: bool, tree: ast.Module, dump_ast: bool)
+
+   .. py:attribute:: runtime
+
+
+   .. py:attribute:: current_kernel
+
+
+   .. py:attribute:: ctx
+
+
+   .. py:attribute:: kernel_name
+
+
+   .. py:attribute:: tree
+
+
+   .. py:attribute:: only_parse_function_def
+
+
+   .. py:attribute:: dump_ast
+
+
+.. py:class:: Kernel(_func: Callable, autodiff_mode: quadrants.types.enums.AutodiffMode, _is_classkernel=False)
+
+   Bases: :py:obj:`quadrants.lang._func_base.FuncBase`
+
+
+   Base class for Kernels and Funcs
+
+
+   .. py:attribute:: counter
+      :value: 0
+
+
+
+   .. py:attribute:: kernel_counter
+      :value: 0
+
+
+
+   .. py:attribute:: autodiff_mode
+
+
+   .. py:attribute:: grad
+      :type:  Kernel | None
+      :value: None
+
+
+
+   .. py:attribute:: kernel_cpp
+      :type:  None | quadrants._lib.core.quadrants_python.KernelCxx
+      :value: None
+
+
+
+   .. py:attribute:: materialized_kernels
+      :type:  dict[quadrants.lang._kernel_types.CompiledKernelKeyType, quadrants._lib.core.quadrants_python.KernelCxx]
+
+
+   .. py:attribute:: has_print
+      :value: False
+
+
+
+   .. py:attribute:: quadrants_callable
+      :type:  quadrants.lang._quadrants_callable.QuadrantsCallable | None
+      :value: None
+
+
+
+   .. py:attribute:: visited_functions
+      :type:  set[quadrants.lang._wrap_inspect.FunctionSourceInfo]
+
+
+   .. py:attribute:: kernel_function_info
+      :type:  quadrants.lang._wrap_inspect.FunctionSourceInfo | None
+      :value: None
+
+
+
+   .. py:attribute:: compiled_kernel_data_by_key
+      :type:  dict[quadrants.lang._kernel_types.CompiledKernelKeyType, quadrants._lib.core.quadrants_python.CompiledKernelData]
+
+
+   .. py:attribute:: used_py_dataclass_parameters_by_key_enforcing
+      :type:  dict[quadrants.lang._kernel_types.CompiledKernelKeyType, set[str]]
+
+
+   .. py:attribute:: src_ll_cache_observations
+      :type:  quadrants.lang._kernel_types.SrcLlCacheObservations
+
+
+   .. py:attribute:: fe_ll_cache_observations
+      :type:  quadrants.lang._kernel_types.FeLlCacheObservations
+
+
+   .. py:attribute:: launch_observations
+
+
+   .. py:attribute:: launch_context_buffer_cache
+
+
+   .. py:attribute:: arch_is_python
+      :type:  bool | None
+      :value: None
+
+
+
+   .. py:method:: ast_builder() -> quadrants._lib.core.quadrants_python.ASTBuilder
+
+
+   .. py:method:: reset() -> None
+
+
+   .. py:method:: materialize(key: CompiledKernelKeyType | None, py_args: tuple[Any, Ellipsis], arg_features=None)
+
+
+   .. py:method:: launch_kernel(key, t_kernel: quadrants._lib.core.quadrants_python.KernelCxx, compiled_kernel_data: quadrants._lib.core.quadrants_python.CompiledKernelData | None, *args) -> Any
+
+
+   .. py:method:: construct_kernel_ret(launch_ctx: quadrants._lib.core.quadrants_python.KernelLaunchContext, ret_type: Any, indices: tuple[int, Ellipsis])
+
+
+   .. py:method:: ensure_compiled(*py_args: tuple[Any, Ellipsis]) -> tuple[Callable, int, quadrants.types.enums.AutodiffMode]
+
+
