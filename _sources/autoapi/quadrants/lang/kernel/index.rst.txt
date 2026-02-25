@@ -128,12 +128,6 @@ Module Contents
    .. py:attribute:: launch_context_buffer_cache
 
 
-   .. py:attribute:: arch_is_python
-      :type:  bool | None
-      :value: None
-
-
-
    .. py:method:: ast_builder() -> quadrants._lib.core.quadrants_python.ASTBuilder
 
 

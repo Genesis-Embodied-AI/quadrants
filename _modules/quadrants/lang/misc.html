@@ -511,12 +511,6 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="c1"># ----------------------</span>
 
-<span class="sd">&quot;&quot;&quot;The python backend&quot;&quot;&quot;</span>
-<div class="viewcode-block" id="python">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.python">[docs]</a>
-<span class="n">python</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">python</span></div>
-
-
 <div class="viewcode-block" id="gpu">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.gpu">[docs]</a>
 <span class="n">gpu</span> <span class="o">=</span> <span class="p">[</span><span class="n">cuda</span><span class="p">,</span> <span class="n">metal</span><span class="p">,</span> <span class="n">vulkan</span><span class="p">,</span> <span class="n">amdgpu</span><span class="p">]</span></div>
@@ -694,22 +688,6 @@
         <span class="p">)</span>
 
 
-<span class="n">_FLOAT_DTYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">})</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_install_python_backend_dtype_call</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0).&quot;&quot;&quot;</span>
-    <span class="n">DataTypeCxx</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">f32</span><span class="p">)</span>
-    <span class="n">_original</span> <span class="o">=</span> <span class="n">DataTypeCxx</span><span class="o">.</span><span class="fm">__call__</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_dtype_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span> <span class="ow">in</span> <span class="n">_FLOAT_DTYPES</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_original</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-
-    <span class="n">DataTypeCxx</span><span class="o">.</span><span class="fm">__call__</span> <span class="o">=</span> <span class="n">_dtype_call</span>  <span class="c1"># type: ignore[assignment]</span>
-
-
 <div class="viewcode-block" id="init">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.init">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span>
@@ -856,20 +834,16 @@
 
     <span class="n">get_default_kernel_profiler</span><span class="p">()</span><span class="o">.</span><span class="n">set_kernel_profiler_mode</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">kernel_profiler</span><span class="p">)</span>
 
-    <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span>
+    <span class="c1"># create a new program:</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">create_program</span><span class="p">()</span>
 
-    <span class="c1"># create a new program (skip for python backend — no C++ runtime needed):</span>
-    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">!=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">python</span><span class="p">:</span>
-        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">create_program</span><span class="p">()</span>
-        <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="s2">&quot;Materializing runtime...&quot;</span><span class="p">)</span>
-        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">materialize_runtime</span><span class="p">()</span>
+    <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="s2">&quot;Materializing runtime...&quot;</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">materialize_runtime</span><span class="p">()</span>
 
-        <span class="n">impl</span><span class="o">.</span><span class="n">_root_fb</span> <span class="o">=</span> <span class="n">_snode</span><span class="o">.</span><span class="n">FieldsBuilder</span><span class="p">()</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">_root_fb</span> <span class="o">=</span> <span class="n">_snode</span><span class="o">.</span><span class="n">FieldsBuilder</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
-            <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_register_signal_handlers</span><span class="p">()</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">_install_python_backend_dtype_call</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_register_signal_handlers</span><span class="p">()</span>
 
     <span class="c1"># Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">current_dir</span><span class="p">)</span>
@@ -1088,9 +1062,6 @@
 <span class="sd">            for i, j in x:</span>
 <span class="sd">                y[i, j] = x[i, j]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="k">return</span>
-
     <span class="k">if</span> <span class="n">block_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">_block_dim</span><span class="p">(</span><span class="n">block_dim</span><span class="p">)</span>
 
@@ -1162,7 +1133,6 @@
         <span class="n">metal</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_metal</span><span class="p">,</span>
         <span class="n">vulkan</span><span class="p">:</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">with_vulkan</span><span class="p">,</span>
         <span class="n">cpu</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">python</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">}</span>
     <span class="n">with_arch</span> <span class="o">=</span> <span class="n">arch_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="k">lambda</span><span class="p">:</span> <span class="kc">False</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
@@ -1252,7 +1222,6 @@
     <span class="s2">&quot;amdgpu&quot;</span><span class="p">,</span>
     <span class="s2">&quot;gpu&quot;</span><span class="p">,</span>
     <span class="s2">&quot;metal&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;python&quot;</span><span class="p">,</span>
     <span class="s2">&quot;vulkan&quot;</span><span class="p">,</span>
     <span class="s2">&quot;extension&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>

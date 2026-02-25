@@ -77,7 +77,7 @@ Module Contents
        >>> x = qd.field(qd.f32)
        >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
 
-.. py:function:: field(dtype, shape=None, *args, **kwargs)
+.. py:function:: field(dtype, *args, **kwargs)
 
    Defines a Quadrants field.
 

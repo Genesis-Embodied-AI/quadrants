@@ -326,7 +326,6 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_logging</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">Arch</span><span class="p">,</span>
     <span class="n">ASTBuilder</span><span class="p">,</span>
     <span class="n">CompiledKernelData</span><span class="p">,</span>
     <span class="n">CompileResult</span><span class="p">,</span>
@@ -376,7 +375,6 @@
 <span class="c1"># Define proxies for fast lookup</span>
 <span class="n">_NONE</span><span class="p">,</span> <span class="n">_VALIDATION</span> <span class="o">=</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">VALIDATION</span>
 <span class="n">_FLOAT</span><span class="p">,</span> <span class="n">_INT</span><span class="p">,</span> <span class="n">_UINT</span><span class="p">,</span> <span class="n">_QD_ARRAY</span><span class="p">,</span> <span class="n">_QD_ARRAY_WITH_GRAD</span> <span class="o">=</span> <span class="n">KernelBatchedArgType</span>
-<span class="n">_ARCH_PYTHON</span> <span class="o">=</span> <span class="n">Arch</span><span class="o">.</span><span class="n">python</span>
 
 
 <div class="viewcode-block" id="LaunchContextBufferCache">
@@ -699,10 +697,6 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_context_buffer_cache">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span> <span class="o">=</span> <span class="n">LaunchContextBufferCache</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Kernel.arch_is_python">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.arch_is_python">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">arch_is_python</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
-
 
 <div class="viewcode-block" id="Kernel.ast_builder">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.ast_builder">[docs]</a>
@@ -959,11 +953,7 @@
     <span class="c1"># Thus this part needs to be fast. (i.e. &lt; 3us on a 4 GHz x64 CPU)</span>
     <span class="nd">@_shell_pop_print</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">==</span> <span class="n">_ARCH_PYTHON</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="n">config</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 
         <span class="c1"># Transform the primal kernel to forward mode grad kernel</span>

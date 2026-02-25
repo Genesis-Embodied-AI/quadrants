@@ -31,7 +31,6 @@ Attributes
    quadrants.lang.misc.amdgpu
    quadrants.lang.misc.metal
    quadrants.lang.misc.vulkan
-   quadrants.lang.misc.python
    quadrants.lang.misc.gpu
    quadrants.lang.misc.cpu
    quadrants.lang.misc.extension
@@ -149,8 +148,6 @@ Module Contents
 .. py:data:: vulkan
 
    The Vulkan backend.
-
-.. py:data:: python
 
 .. py:data:: gpu
 
