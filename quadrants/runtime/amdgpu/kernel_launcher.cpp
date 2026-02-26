@@ -35,10 +35,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   char *device_result_buffer{nullptr};
   // Here we have to guarantee the result_result_buffer isn't nullptr
   // It is interesting - The code following
-  // L60:           DeviceAllocation devalloc = executor->allocate_memory_on_device(
-  // call another kernel and it will result in 
-  //   Memory access fault by GPU node-1 (Agent handle: 0xeda5ca0) on address (nil). Reason: Page not present or supervisor privilege.
-  // if you don't allocate it. 
+  // L60:           DeviceAllocation devalloc =
+  // executor->allocate_memory_on_device( call another kernel and it will result
+  // in
+  //   Memory access fault by GPU node-1 (Agent handle: 0xeda5ca0) on address
+  //   (nil). Reason: Page not present or supervisor privilege.
+  // if you don't allocate it.
   AMDGPUDriver::get_instance().malloc(
       (void **)&device_result_buffer,
       std::max(ctx.result_buffer_size, sizeof(uint64)));
