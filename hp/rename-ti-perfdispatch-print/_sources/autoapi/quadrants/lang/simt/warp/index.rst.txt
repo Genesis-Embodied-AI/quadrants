@@ -1,0 +1,61 @@
+quadrants.lang.simt.warp
+========================
+
+.. py:module:: quadrants.lang.simt.warp
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.warp.all_nonzero
+   quadrants.lang.simt.warp.any_nonzero
+   quadrants.lang.simt.warp.unique
+   quadrants.lang.simt.warp.ballot
+   quadrants.lang.simt.warp.shfl_sync_i32
+   quadrants.lang.simt.warp.shfl_sync_f32
+   quadrants.lang.simt.warp.shfl_up_i32
+   quadrants.lang.simt.warp.shfl_up_f32
+   quadrants.lang.simt.warp.shfl_down_i32
+   quadrants.lang.simt.warp.shfl_down_f32
+   quadrants.lang.simt.warp.shfl_xor_i32
+   quadrants.lang.simt.warp.match_any
+   quadrants.lang.simt.warp.match_all
+   quadrants.lang.simt.warp.active_mask
+   quadrants.lang.simt.warp.sync
+
+
+Module Contents
+---------------
+
+.. py:function:: all_nonzero(mask, predicate)
+
+.. py:function:: any_nonzero(mask, predicate)
+
+.. py:function:: unique(mask, predicate)
+
+.. py:function:: ballot(predicate)
+
+.. py:function:: shfl_sync_i32(mask, val, offset)
+
+.. py:function:: shfl_sync_f32(mask, val, offset)
+
+.. py:function:: shfl_up_i32(mask, val, offset)
+
+.. py:function:: shfl_up_f32(mask, val, offset)
+
+.. py:function:: shfl_down_i32(mask, val, offset)
+
+.. py:function:: shfl_down_f32(mask, val, offset)
+
+.. py:function:: shfl_xor_i32(mask, val, offset)
+
+.. py:function:: match_any(mask, value)
+
+.. py:function:: match_all(mask, val)
+
+.. py:function:: active_mask()
+
+.. py:function:: sync(mask)
+
