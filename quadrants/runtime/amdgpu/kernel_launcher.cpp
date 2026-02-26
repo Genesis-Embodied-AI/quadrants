@@ -33,6 +33,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
   char *device_result_buffer{nullptr};
+  // Here we have to guarantee the result_result_buffer isn't nullptr
+  // It is interesting - The code following
+  // L60:           DeviceAllocation devalloc =
+  // executor->allocate_memory_on_device( call another kernel and it will result
+  // in
+  //   Memory access fault by GPU node-1 (Agent handle: 0xeda5ca0) on address
+  //   (nil). Reason: Page not present or supervisor privilege.
+  // if you don't allocate it.
   AMDGPUDriver::get_instance().malloc(
       (void **)&device_result_buffer,
       std::max(ctx.result_buffer_size, sizeof(uint64)));
@@ -83,8 +91,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
   if (ctx.result_buffer_size > 0) {
     // Malloc_Async and Free_Async are available after ROCm 5.4
-    AMDGPUDriver::get_instance().malloc((void **)&device_result_buffer,
-                                        ctx.result_buffer_size);
     ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   }
   char *device_arg_buffer = nullptr;
@@ -117,7 +123,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   if (ctx.result_buffer_size > 0) {
     AMDGPUDriver::get_instance().memcpy_device_to_host(
         host_result_buffer, device_result_buffer, ctx.result_buffer_size);
-    AMDGPUDriver::get_instance().mem_free(device_result_buffer);
   }
   if (transfers.size()) {
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
@@ -129,6 +134,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
+  // Since we always allocating above then we should always free
+  AMDGPUDriver::get_instance().mem_free(device_result_buffer);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
