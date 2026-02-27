@@ -1,0 +1,46 @@
+quadrants.profiler.scoped_profiler
+==================================
+
+.. py:module:: quadrants.profiler.scoped_profiler
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.profiler.scoped_profiler.print_scoped_profiler_info
+   quadrants.profiler.scoped_profiler.clear_scoped_profiler_info
+
+
+Module Contents
+---------------
+
+.. py:function:: print_scoped_profiler_info()
+
+   Print time elapsed on the host tasks in a hierarchical format.
+
+   This profiler is automatically on.
+
+   Call function imports from C++ : _qd_core.print_profile_info()
+
+   Example::
+
+           >>> import quadrants as qd
+           >>> qd.init(arch=qd.cpu)
+           >>> var = qd.field(qd.f32, shape=1)
+           >>> @qd.kernel
+           >>> def compute():
+           >>>     var[0] = 1.0
+           >>>     print("Setting var[0] =", var[0])
+           >>> compute()
+           >>> qd.profiler.print_scoped_profiler_info()
+
+
+.. py:function:: clear_scoped_profiler_info()
+
+   Clear profiler's records about time elapsed on the host tasks.
+
+   Call function imports from C++ : _qd_core.clear_profile_info()
+
+
