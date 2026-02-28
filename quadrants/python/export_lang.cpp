@@ -1291,7 +1291,7 @@ void export_lang(py::module &m) {
 
   py::class_<CUCG>(m, "CUCG").def("solve", &CUCG::solve);
   m.def("make_cucg_solver", make_cucg_solver);
-#endif // QD_WITH_CUDA
+#endif  // QD_WITH_CUDA
 
   // Mesh Class
   // Mesh related.

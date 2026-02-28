@@ -2097,8 +2097,8 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
 
     auto ptr_elem_type = ir_->get_pointer_type(
         elem_type, spv::StorageClassPhysicalStorageBuffer);
-    spirv::Value elem_ptr = ir_->make_value(
-        spv::OpAccessChain, ptr_elem_type, struct_ptr, ir_->const_i32_zero_);
+    spirv::Value elem_ptr = ir_->make_value(spv::OpAccessChain, ptr_elem_type,
+                                            struct_ptr, ir_->const_i32_zero_);
     elem_ptr.flag = ValueKind::kPhysicalPtr;
     return elem_ptr;
   }

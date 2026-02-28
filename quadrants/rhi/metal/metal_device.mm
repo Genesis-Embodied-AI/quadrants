@@ -435,8 +435,7 @@ void MetalCommandList::memory_barrier() noexcept {
   // However, buffers accessed via physical storage buffer pointers bypass
   // Metal's resource tracking and are handled in dispatch() via useResource:.
 }
-void MetalCommandList::track_physical_buffer(
-    DeviceAllocation alloc) noexcept {
+void MetalCommandList::track_physical_buffer(DeviceAllocation alloc) noexcept {
   tracked_physical_buffers_.push_back(alloc);
 }
 
