@@ -9,9 +9,10 @@ verifies we can exceed 31 ndarray fields in a single dataclass on Metal.
 import dataclasses
 
 import numpy as np
-import pytest
 
 import quadrants as qd
+
+from tests import test_utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -103,9 +104,8 @@ def write_and_read_back(s: ThirtyFiveArrays, n: qd.i32):
         s.a34[i] = s.a0[i] + s.a17[i]
 
 
-@pytest.mark.parametrize("arch", [qd.metal])
-def test_dataclass_35_ndarrays_sum(arch):
-    qd.init(arch=arch)
+@test_utils.test(arch=qd.metal)
+def test_dataclass_35_ndarrays_sum():
     n = 16
     arrays = {f"a{i}": qd.ndarray(dtype=qd.f32, shape=(n,)) for i in range(35)}
     for i in range(35):
@@ -120,9 +120,8 @@ def test_dataclass_35_ndarrays_sum(arch):
     np.testing.assert_allclose(result, expected, rtol=1e-5)
 
 
-@pytest.mark.parametrize("arch", [qd.metal])
-def test_dataclass_35_ndarrays_write_read(arch):
-    qd.init(arch=arch)
+@test_utils.test(arch=qd.metal)
+def test_dataclass_35_ndarrays_write_read():
     n = 16
     arrays = {f"a{i}": qd.ndarray(dtype=qd.f32, shape=(n,)) for i in range(35)}
     s = ThirtyFiveArrays(**arrays)
@@ -132,13 +131,3 @@ def test_dataclass_35_ndarrays_write_read(arch):
     np.testing.assert_allclose(s.a0.to_numpy(), 1.0)
     np.testing.assert_allclose(s.a17.to_numpy(), 2.0)
     np.testing.assert_allclose(s.a34.to_numpy(), 3.0)
-
-
-if __name__ == "__main__":
-    test_dataclass_35_ndarrays_sum(qd.metal)
-    print("test_dataclass_35_ndarrays_sum: PASSED")
-
-    test_dataclass_35_ndarrays_write_read(qd.metal)
-    print("test_dataclass_35_ndarrays_write_read: PASSED")
-
-    print("\nAll tests passed! 35 ndarrays exceeds Metal's 31 buffer limit.")
