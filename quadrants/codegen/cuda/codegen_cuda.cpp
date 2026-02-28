@@ -198,8 +198,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       auto type = tlctx->get_data_type(tensor_type);
       auto base = new llvm::GlobalVariable(
           *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
-          fmt::format("shared_array_{}", stmt->id), nullptr,
-          llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
+          fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
+          nullptr, llvm::GlobalVariable::NotThreadLocal,
+          3 /*addrspace=shared*/);
       base->setAlignment(llvm::MaybeAlign(8));
       auto ptr_type = llvm::PointerType::get(type, 0);
       llvm_val[stmt] = builder->CreatePointerCast(base, ptr_type);
