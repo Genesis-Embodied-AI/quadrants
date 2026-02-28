@@ -3,7 +3,7 @@
 import numpy as np
 
 from quadrants._lib import core as _qd_core
-from quadrants.lang._ndarray import Ndarray, ScalarNdarray
+from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.impl import get_runtime
 from quadrants.types import f32, f64
@@ -27,9 +27,7 @@ class SparseCG:
         self.qd_arch = get_runtime().prog.config().arch
         self.matrix = A
         self.b = b
-        if self.qd_arch == _qd_core.Arch.cuda:
-            self.cg_solver = _qd_core.make_cucg_solver(A.matrix, max_iter, atol, True)
-        elif self.qd_arch == _qd_core.Arch.x64 or self.qd_arch == _qd_core.Arch.arm64:
+        if self.qd_arch == _qd_core.Arch.x64 or self.qd_arch == _qd_core.Arch.arm64:
             if self.dtype == f32:
                 self.cg_solver = _qd_core.make_float_cg_solver(A.matrix, max_iter, atol, True)
             elif self.dtype == f64:
@@ -48,12 +46,5 @@ class SparseCG:
             raise QuadrantsRuntimeError(f"Unsupported CG arch: {self.qd_arch}")
 
     def solve(self):
-        if self.qd_arch == _qd_core.Arch.cuda:
-            if isinstance(self.b, Ndarray):
-                x = ScalarNdarray(self.b.dtype, [self.matrix.m])
-                self.cg_solver.solve(get_runtime().prog, x.arr, self.b.arr)
-                return x, True
-            raise QuadrantsRuntimeError(f"Unsupported CG RHS type: {type(self.b)}")
-        else:
-            self.cg_solver.solve()
-            return self.cg_solver.get_x(), self.cg_solver.is_success()
+        self.cg_solver.solve()
+        return self.cg_solver.get_x(), self.cg_solver.is_success()

@@ -78,27 +78,4 @@ std::unique_ptr<CG<EigenT, DT>> make_cg_solver(SparseMatrix &A,
   return std::make_unique<CG<EigenT, DT>>(A, max_iters, tol, verbose);
 }
 
-class CUCG {
- public:
-  CUCG(SparseMatrix &A, int max_iters, float tol, bool verbose)
-      : A_(A), max_iters_(max_iters), tol_(tol), verbose_(verbose) {
-    init_solver();
-  }
-
-  void solve(Program *prog, const Ndarray &x, const Ndarray &b);
-
- private:
-  void init_solver();
-  cublasHandle_t handle_;
-  SparseMatrix &A_;  // NOLINT
-  int max_iters_{0};
-  float tol_{0.0f};
-  bool verbose_{false};
-  bool is_success_{false};
-};
-
-std::unique_ptr<CUCG> make_cucg_solver(SparseMatrix &A,
-                                       int max_iters,
-                                       float tol,
-                                       bool verbose);
 }  // namespace quadrants::lang

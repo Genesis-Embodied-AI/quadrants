@@ -162,49 +162,6 @@ class CUDADriver : protected CUDADriverBase {
   int version_minor_{0};
 };
 
-class CUSPARSEDriver : protected CUDADriverBase {
- public:
-  static CUSPARSEDriver &get_instance();
-
-#define PER_CUSPARSE_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
-#include "quadrants/rhi/cuda/cusparse_functions.inc.h"
-#undef PER_CUSPARSE_FUNCTION
-
-  bool load_cusparse();
-
-  inline bool is_loaded() {
-    return cusparse_loaded_;
-  }
-
- private:
-  CUSPARSEDriver();
-  std::mutex lock_;
-  bool cusparse_loaded_{false};
-};
-
-class CUSOLVERDriver : protected CUDADriverBase {
- public:
-  // TODO: Add cusolver function APIs
-  static CUSOLVERDriver &get_instance();
-
-#define PER_CUSOLVER_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
-#include "quadrants/rhi/cuda/cusolver_functions.inc.h"
-#undef PER_CUSOLVER_FUNCTION
-
-  bool load_cusolver();
-
-  inline bool is_loaded() {
-    return cusolver_loaded_;
-  }
-
- private:
-  CUSOLVERDriver();
-  std::mutex lock_;
-  bool cusolver_loaded_{false};
-};
-
 class CUBLASDriver : protected CUDADriverBase {
  public:
   static CUBLASDriver &get_instance();

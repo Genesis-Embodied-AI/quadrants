@@ -3,7 +3,6 @@
 #include "sparse_matrix.h"
 
 #include "quadrants/ir/type.h"
-#include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/program/program.h"
 
 #define DECLARE_EIGEN_LLT_SOLVER(dt, type, order)                    \
@@ -75,78 +74,7 @@ DECLARE_EIGEN_LLT_SOLVER(float64, LDLT, COLAMD);
 DECLARE_EIGEN_LU_SOLVER(float64, LU, AMD);
 DECLARE_EIGEN_LU_SOLVER(float64, LU, COLAMD);
 
-class CuSparseSolver : public SparseSolver {
- public:
-  enum class SolverType { Cholesky, LU };
-
- private:
-  SolverType solver_type_{SolverType::Cholesky};
-  csrcholInfo_t info_{nullptr};
-  csrluInfoHost_t lu_info_{nullptr};
-  cusolverSpHandle_t cusolver_handle_{nullptr};
-  cusparseHandle_t cusparse_handel_{nullptr};
-  cusparseMatDescr_t descr_{nullptr};
-  void *gpu_buffer_{nullptr};
-  void *cpu_buffer_{nullptr};
-  bool is_analyzed_{false};
-  bool is_factorized_{false};
-
-  // NOLINTBEGIN
-  int *h_Q_{
-      nullptr}; /* <int> n,  B = Q*A*Q' or B = A(Q,Q) by MATLAB notation */
-  int *d_Q_{nullptr};
-  int *h_csr_row_ptr_B_{nullptr}; /* <int> n+1 */
-  int *h_csr_col_ind_B_{nullptr}; /* <int> nnzA */
-  float *h_csr_val_B_{nullptr};   /* <float> nnzA */
-  int *h_map_B_from_A_{nullptr};  /* <int> nnzA */
-  int *d_csr_row_ptr_B_{nullptr}; /* <int> n+1 */
-  int *d_csr_col_ind_B_{nullptr}; /* <int> nnzA */
-  float *d_csr_val_B_{nullptr};   /* <float> nnzA */
-                                  // NOLINTEND
- public:
-  CuSparseSolver();
-  explicit CuSparseSolver(SolverType solver_type) : solver_type_(solver_type) {
-    init_solver();
-  }
-  ~CuSparseSolver() override;
-  bool compute(const SparseMatrix &sm) override {
-    QD_NOT_IMPLEMENTED;
-  };
-  void analyze_pattern(const SparseMatrix &sm) override;
-
-  void factorize(const SparseMatrix &sm) override;
-  void solve_rf(Program *prog,
-                const SparseMatrix &sm,
-                const Ndarray &b,
-                const Ndarray &x);
-
-  bool info() override {
-    QD_NOT_IMPLEMENTED;
-  };
-
- private:
-  void init_solver();
-  void reorder(const CuSparseMatrix &sm);
-  void analyze_pattern_cholesky(const SparseMatrix &sm);
-  void analyze_pattern_lu(const SparseMatrix &sm);
-  void factorize_cholesky(const SparseMatrix &sm);
-  void factorize_lu(const SparseMatrix &sm);
-  void solve_cholesky(Program *prog,
-                      const SparseMatrix &sm,
-                      const Ndarray &b,
-                      const Ndarray &x);
-  void solve_lu(Program *prog,
-                const SparseMatrix &sm,
-                const Ndarray &b,
-                const Ndarray &x);
-};
-
 std::unique_ptr<SparseSolver> make_sparse_solver(DataType dt,
                                                  const std::string &solver_type,
                                                  const std::string &ordering);
-
-std::unique_ptr<SparseSolver> make_cusparse_solver(
-    DataType dt,
-    const std::string &solver_type,
-    const std::string &ordering);
 }  // namespace quadrants::lang
