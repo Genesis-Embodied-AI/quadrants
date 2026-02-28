@@ -1,9 +1,17 @@
-"""Regression test for a code generation bug where changing operand order in
-dead code inside a kernel with SharedArray causes CUDA_ERROR_ILLEGAL_ADDRESS.
+"""Regression test for shared array name collision when multiple @qd.func
+with SharedArray are inlined into the same @qd.kernel.
+
+When each task is compiled independently with re_id resetting statement IDs,
+shared array globals can get the same name (e.g. shared_array_35) across tasks.
+During linking, the smaller declaration wins, causing out-of-bounds shared
+memory access and CUDA_ERROR_ILLEGAL_ADDRESS.
 """
 
 import numpy as np
+
 import quadrants as qd
+
+from tests import test_utils
 
 
 BLOCK_DIM = 64
@@ -14,7 +22,7 @@ _B = 4096
 
 
 @qd.func
-def func_hessian_add(
+def _func_hessian(
     nt_H: qd.template(),
     mass_mat: qd.template(),
     n_constraints: qd.template(),
@@ -74,7 +82,7 @@ def func_hessian_add(
 
 
 @qd.func
-def func_cholesky(
+def _func_cholesky(
     nt_H: qd.template(),
     n_constraints: qd.template(),
     improved: qd.template(),
@@ -127,10 +135,14 @@ def func_cholesky(
             i_pair = i_pair + BLOCK_DIM
 
 
-def test_combined():
-    """Both functions inlined into one kernel — crashes."""
-    qd.init(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda])
+def test_shared_array_name_collision_across_tasks():
+    """Two @qd.func with different-sized SharedArrays inlined into one kernel.
 
+    Before the fix, both tasks got @shared_array_35 during linking — the
+    smaller declaration (2048 floats) won, causing OOB access when the
+    cholesky task used it as 4160 floats.
+    """
     nt_H = qd.field(qd.f32, shape=(_B, N_DOFS, N_DOFS))
     mass_mat = qd.field(qd.f32, shape=(N_DOFS, N_DOFS, _B))
     n_constraints = qd.field(qd.i32, shape=(_B,))
@@ -140,9 +152,8 @@ def test_combined():
 
     @qd.kernel
     def kernel():
-        func_hessian_add(nt_H, mass_mat, n_constraints, improved)
-        func_cholesky(nt_H, n_constraints, improved)
+        _func_hessian(nt_H, mass_mat, n_constraints, improved)
+        _func_cholesky(nt_H, n_constraints, improved)
 
     kernel()
     qd.sync()
-    qd.reset()
