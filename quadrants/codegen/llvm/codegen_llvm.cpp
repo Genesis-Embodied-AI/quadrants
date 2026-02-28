@@ -135,8 +135,9 @@ void TaskCodeGenLLVM::visit(AllocaStmt *stmt) {
     if (stmt->is_shared) {
       auto base = new llvm::GlobalVariable(
           *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
-          fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id), nullptr,
-          llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
+          fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
+          nullptr, llvm::GlobalVariable::NotThreadLocal,
+          3 /*addrspace=shared*/);
       base->setAlignment(llvm::MaybeAlign(8));
       auto ptr_type = llvm::PointerType::get(type, 0);
       llvm_val[stmt] = builder->CreatePointerCast(base, ptr_type);

@@ -13,7 +13,6 @@ import quadrants as qd
 
 from tests import test_utils
 
-
 BLOCK_DIM = 64
 MAX_DOFS = 64
 MAX_CONSTRAINTS = 32
@@ -73,9 +72,7 @@ def _func_hessian(
         if n_c == 0:
             i_pair = tid
             while i_pair < n_lower_tri:
-                i_d1 = qd.cast(
-                    qd.floor((-1.0 + qd.sqrt(1.0 + 8.0 * i_pair)) / 2.0), qd.i32
-                )
+                i_d1 = qd.cast(qd.floor((-1.0 + qd.sqrt(1.0 + 8.0 * i_pair)) / 2.0), qd.i32)
                 i_d2 = i_pair - i_d1 * (i_d1 + 1) // 2
                 nt_H[i_b, i_d1, i_d2] = mass_mat[i_d1, i_d2, i_b]
                 i_pair = i_pair + BLOCK_DIM
