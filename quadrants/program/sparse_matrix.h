@@ -5,7 +5,6 @@
 #include "quadrants/ir/type_utils.h"
 #include "quadrants/program/ndarray.h"
 #include "quadrants/program/program.h"
-#include "quadrants/rhi/cuda/cuda_driver.h"
 
 #include "Eigen/Sparse"
 
@@ -220,130 +219,11 @@ class EigenSparseMatrix : public SparseMatrix {
   EigenMatrix matrix_;
 };
 
-class CuSparseMatrix : public SparseMatrix {
- public:
-  explicit CuSparseMatrix(int rows, int cols, DataType dt)
-      : SparseMatrix(rows, cols, dt) {
-#if defined(QD_WITH_CUDA)
-    if (!CUSPARSEDriver::get_instance().is_loaded()) {
-      bool load_success = CUSPARSEDriver::get_instance().load_cusparse();
-      if (!load_success) {
-        QD_ERROR("Failed to load cusparse library!");
-      }
-    }
-#endif
-  }
-  explicit CuSparseMatrix(cusparseSpMatDescr_t A,
-                          int rows,
-                          int cols,
-                          DataType dt,
-                          void *csr_row_ptr,
-                          void *csr_col_ind,
-                          void *csr_val,
-                          int nnz)
-      : SparseMatrix(rows, cols, dt),
-        matrix_(A),
-        csr_row_ptr_(csr_row_ptr),
-        csr_col_ind_(csr_col_ind),
-        csr_val_(csr_val),
-        nnz_(nnz) {
-  }
-  CuSparseMatrix(const CuSparseMatrix &sm)
-      : SparseMatrix(sm.rows_, sm.cols_, sm.dtype_), matrix_(sm.matrix_) {
-  }
-
-  ~CuSparseMatrix() override;
-
-  // TODO: Overload +=, -= and *=
-  friend std::unique_ptr<SparseMatrix> operator+(const CuSparseMatrix &lhs,
-                                                 const CuSparseMatrix &rhs) {
-    auto m = lhs.addition(rhs, 1.0, 1.0);
-    return m;
-  };
-
-  friend std::unique_ptr<SparseMatrix> operator-(const CuSparseMatrix &lhs,
-                                                 const CuSparseMatrix &rhs) {
-    return lhs.addition(rhs, 1.0, -1.0);
-  };
-
-  friend std::unique_ptr<SparseMatrix> operator*(const CuSparseMatrix &sm,
-                                                 float scale) {
-    return sm.addition(sm, scale, 0.0);
-  }
-
-  friend std::unique_ptr<SparseMatrix> operator*(float scale,
-                                                 const CuSparseMatrix &sm) {
-    return sm.addition(sm, scale, 0.0);
-  }
-
-  std::unique_ptr<SparseMatrix> addition(const CuSparseMatrix &other,
-                                         const float alpha,
-                                         const float beta) const;
-
-  std::unique_ptr<SparseMatrix> matmul(const CuSparseMatrix &other) const;
-
-  std::unique_ptr<SparseMatrix> gemm(const CuSparseMatrix &other,
-                                     const float alpha,
-                                     const float beta) const;
-
-  std::unique_ptr<SparseMatrix> transpose() const;
-
-  void build_csr_from_coo(void *coo_row_ptr,
-                          void *coo_col_ptr,
-                          void *coo_values_ptr,
-                          int nnz) override;
-
-  void nd_spmv(Program *prog, const Ndarray &x, const Ndarray &y);
-
-  void spmv(size_t x, size_t y);
-
-  const void *get_matrix() const override {
-    return &matrix_;
-  };
-
-  float get_element(int row, int col) const;
-
-  const std::string to_string() const override;
-
-  void *get_row_ptr() const {
-    return csr_row_ptr_;
-  }
-  void *get_col_ind() const {
-    return csr_col_ind_;
-  }
-  void *get_val_ptr() const {
-    return csr_val_;
-  }
-  int get_nnz() const {
-    return nnz_;
-  }
-
-  void mmwrite(const std::string &filename) override;
-
- private:
-  cusparseSpMatDescr_t matrix_{nullptr};
-  void *csr_row_ptr_{nullptr};
-  void *csr_col_ind_{nullptr};
-  void *csr_val_{nullptr};
-  int nnz_{0};
-};
-
 std::unique_ptr<SparseMatrix> make_sparse_matrix(
     int rows,
     int cols,
     DataType dt,
     const std::string &storage_format);
-std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(int rows,
-                                                    int cols,
-                                                    DataType dt);
-std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(cusparseSpMatDescr_t mat,
-                                                    int rows,
-                                                    int cols,
-                                                    DataType dt,
-                                                    void *csr_row_ptr,
-                                                    void *csr_col_ind,
-                                                    void *csr_val_,
-                                                    int nnz);
 
 void make_sparse_matrix_from_ndarray(Program *prog,
                                      SparseMatrix &sm,

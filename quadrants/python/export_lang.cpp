@@ -440,19 +440,14 @@ void export_lang(py::module &m) {
       .def("create_sparse_matrix",
            [](Program *program, int n, int m, DataType dtype,
               std::string storage_format) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
-                             !arch_is_cuda(program->compile_config().arch),
-                         "SparseMatrix only supports CPU and CUDA for now.");
-             if (arch_is_cpu(program->compile_config().arch))
-               return make_sparse_matrix(n, m, dtype, storage_format);
-             else
-               return make_cu_sparse_matrix(n, m, dtype);
+             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch),
+                         "SparseMatrix only supports CPU for now.");
+             return make_sparse_matrix(n, m, dtype, storage_format);
            })
       .def("make_sparse_matrix_from_ndarray",
            [](Program *program, SparseMatrix &sm, const Ndarray &ndarray) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
-                             !arch_is_cuda(program->compile_config().arch),
-                         "SparseMatrix only supports CPU and CUDA for now.");
+             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch),
+                         "SparseMatrix only supports CPU for now.");
              return make_sparse_matrix_from_ndarray(program, sm, ndarray);
            })
       .def("make_id_expr",
@@ -1221,19 +1216,6 @@ void export_lang(py::module &m) {
   MAKE_SPARSE_MATRIX(64, ColMajor, d);
   MAKE_SPARSE_MATRIX(64, RowMajor, d);
 
-  py::class_<CuSparseMatrix, SparseMatrix>(m, "CuSparseMatrix")
-      .def(py::init<int, int, DataType>())
-      .def(py::init<const CuSparseMatrix &>())
-      .def("spmv", &CuSparseMatrix::nd_spmv)
-      .def(py::self + py::self)
-      .def(py::self - py::self)
-      .def(py::self * float32())
-      .def(float32() * py::self)
-      .def("matmul", &CuSparseMatrix::matmul)
-      .def("transpose", &CuSparseMatrix::transpose)
-      .def("get_element", &CuSparseMatrix::get_element)
-      .def("to_string", &CuSparseMatrix::to_string);
-
   py::class_<SparseSolver>(m, "SparseSolver")
       .def("compute", &SparseSolver::compute)
       .def("analyze_pattern", &SparseSolver::analyze_pattern)
@@ -1267,15 +1249,7 @@ void export_lang(py::module &m) {
   REGISTER_EIGEN_SOLVER(float64, LU, AMD, d)
   REGISTER_EIGEN_SOLVER(float64, LU, COLAMD, d)
 
-  py::class_<CuSparseSolver, SparseSolver>(m, "CuSparseSolver")
-      .def("compute", &CuSparseSolver::compute)
-      .def("analyze_pattern", &CuSparseSolver::analyze_pattern)
-      .def("factorize", &CuSparseSolver::factorize)
-      .def("solve_rf", &CuSparseSolver::solve_rf)
-      .def("info", &CuSparseSolver::info);
-
   m.def("make_sparse_solver", &make_sparse_solver);
-  m.def("make_cusparse_solver", &make_cusparse_solver);
 
   // Conjugate Gradient solver
   py::class_<CG<Eigen::VectorXf, float>>(m, "CGf")
@@ -1304,9 +1278,6 @@ void export_lang(py::module &m) {
                                     bool verbose) {
     return make_cg_solver<Eigen::VectorXd, double>(A, max_iters, tol, verbose);
   });
-
-  py::class_<CUCG>(m, "CUCG").def("solve", &CUCG::solve);
-  m.def("make_cucg_solver", make_cucg_solver);
 
   // Mesh Class
   // Mesh related.
