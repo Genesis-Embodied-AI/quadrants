@@ -1136,8 +1136,14 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   make_inst(spv::OpLabel, body);
   // while (true)
   {
-    // int old = addr_ptr[0];
-    Value old_val = load_variable(addr_ptr, res_type);
+    // Use OpAtomicLoad so SPIRV-Cross emits a function call expression
+    // (atomic_load_explicit) that it cannot inline.  A plain OpLoad would
+    // be inlined as a device-memory dereference, causing SPIRV-Cross's CAS
+    // emulation loop to re-read (and see the post-CAS value), breaking the
+    // compare-and-swap logic on Metal.
+    Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
+                               /*scope=*/const_i32_one_,
+                               /*semantics=*/const_i32_zero_);
     // int new = dataTypeBitsToInt(atomic_op(intBitsToDataType(old), data));
     Value old_data_value = make_value(spv::OpBitcast, out_type, old_val);
     Value new_data_value = op(old_data_value, data);

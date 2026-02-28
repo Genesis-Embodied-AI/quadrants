@@ -437,24 +437,6 @@ void export_lang(py::module &m) {
           py::return_value_policy::reference)
       .def("create_function", &Program::create_function,
            py::return_value_policy::reference)
-      .def("create_sparse_matrix",
-           [](Program *program, int n, int m, DataType dtype,
-              std::string storage_format) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
-                             !arch_is_cuda(program->compile_config().arch),
-                         "SparseMatrix only supports CPU and CUDA for now.");
-             if (arch_is_cpu(program->compile_config().arch))
-               return make_sparse_matrix(n, m, dtype, storage_format);
-             else
-               return make_cu_sparse_matrix(n, m, dtype);
-           })
-      .def("make_sparse_matrix_from_ndarray",
-           [](Program *program, SparseMatrix &sm, const Ndarray &ndarray) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) &&
-                             !arch_is_cuda(program->compile_config().arch),
-                         "SparseMatrix only supports CPU and CUDA for now.");
-             return make_sparse_matrix_from_ndarray(program, sm, ndarray);
-           })
       .def("make_id_expr",
            [](Program *program, const std::string &name) {
              return Expr::make<IdExpression>(program->get_next_global_id(name));
@@ -1152,7 +1134,9 @@ void export_lang(py::module &m) {
       },
       py::return_value_policy::reference);
 
-  // Sparse Matrix
+  // Sparse Matrix — entire subsystem requires CUDA (sparse_matrix.cpp not
+  // compiled on non-CUDA platforms)
+#if defined(QD_WITH_CUDA)
   py::class_<SparseMatrixBuilder>(m, "SparseMatrixBuilder")
       .def(py::init<int, int, int, DataType, const std::string &>(),
            py::arg("rows"), py::arg("cols"), py::arg("max_num_triplets"),
@@ -1267,15 +1251,15 @@ void export_lang(py::module &m) {
   REGISTER_EIGEN_SOLVER(float64, LU, AMD, d)
   REGISTER_EIGEN_SOLVER(float64, LU, COLAMD, d)
 
+  m.def("make_sparse_solver", &make_sparse_solver);
+  m.def("make_cusparse_solver", &make_cusparse_solver);
+
   py::class_<CuSparseSolver, SparseSolver>(m, "CuSparseSolver")
       .def("compute", &CuSparseSolver::compute)
       .def("analyze_pattern", &CuSparseSolver::analyze_pattern)
       .def("factorize", &CuSparseSolver::factorize)
       .def("solve_rf", &CuSparseSolver::solve_rf)
       .def("info", &CuSparseSolver::info);
-
-  m.def("make_sparse_solver", &make_sparse_solver);
-  m.def("make_cusparse_solver", &make_cusparse_solver);
 
   // Conjugate Gradient solver
   py::class_<CG<Eigen::VectorXf, float>>(m, "CGf")
@@ -1307,6 +1291,7 @@ void export_lang(py::module &m) {
 
   py::class_<CUCG>(m, "CUCG").def("solve", &CUCG::solve);
   m.def("make_cucg_solver", make_cucg_solver);
+#endif // QD_WITH_CUDA
 
   // Mesh Class
   // Mesh related.

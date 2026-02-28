@@ -527,6 +527,8 @@ class MetalDevice final : public GraphicsDevice {
   DeviceAllocation import_mtl_buffer(MTLBuffer_id buffer);
   void dealloc_memory(DeviceAllocation handle) override;
 
+  uint64_t get_memory_physical_pointer(DeviceAllocation handle) override;
+
   DeviceAllocation create_image(const ImageParams &params) override;
   DeviceAllocation import_mtl_texture(MTLTexture_id texture);
   void destroy_image(DeviceAllocation handle) override;

@@ -2082,13 +2082,25 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
   if (ptr_val.stype.dt == PrimitiveType::u64) {
-    spirv::Value paddr_ptr = ir_->make_value(
-        spv::OpConvertUToPtr,
-        ir_->get_pointer_type(ir_->get_primitive_type(dt),
-                              spv::StorageClassPhysicalStorageBuffer),
-        ptr_val);
-    paddr_ptr.flag = ValueKind::kPhysicalPtr;
-    return paddr_ptr;
+    // Wrap the element type in a single-member struct so that OpAccessChain
+    // produces an lvalue (e.g. struct_ptr->_m0) in the generated MSL.
+    // SPIRV-Cross emits &expr for atomic operations; without this wrapper
+    // the bare OpConvertUToPtr rvalue produces invalid MSL on Metal.
+    auto elem_type = ir_->get_primitive_type(dt);
+    std::vector<std::tuple<spirv::SType, std::string, size_t>> members = {
+        {elem_type, "_m0", 0}};
+    auto wrapper_struct = ir_->create_struct_type(members);
+    auto ptr_struct_type = ir_->get_pointer_type(
+        wrapper_struct, spv::StorageClassPhysicalStorageBuffer);
+    spirv::Value struct_ptr =
+        ir_->make_value(spv::OpConvertUToPtr, ptr_struct_type, ptr_val);
+
+    auto ptr_elem_type = ir_->get_pointer_type(
+        elem_type, spv::StorageClassPhysicalStorageBuffer);
+    spirv::Value elem_ptr = ir_->make_value(
+        spv::OpAccessChain, ptr_elem_type, struct_ptr, ir_->const_i32_zero_);
+    elem_ptr.flag = ValueKind::kPhysicalPtr;
+    return elem_ptr;
   }
 
   QD_ERROR_IF(
