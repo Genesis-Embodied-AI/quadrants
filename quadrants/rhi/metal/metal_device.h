@@ -347,6 +347,7 @@ class MetalCommandList final : public CommandList {
   void buffer_barrier(DevicePtr ptr, size_t size) noexcept final;
   void buffer_barrier(DeviceAllocation alloc) noexcept final;
   void memory_barrier() noexcept final;
+  void track_physical_buffer(DeviceAllocation alloc) noexcept final;
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept final;
   void buffer_fill(DevicePtr ptr, size_t size, uint32_t data) noexcept final;
   RhiResult dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1) noexcept final;
@@ -425,6 +426,10 @@ class MetalCommandList final : public CommandList {
   std::vector<std::array<float, 4>> clear_colors_;
   std::vector<MTLTexture_id> render_targets_;
   MTLTexture_id depth_target_;
+
+  // Buffers accessed via physical storage buffer pointers in the next dispatch.
+  // Needed for Metal hazard tracking since these are not explicitly bound.
+  std::vector<DeviceAllocation> tracked_physical_buffers_;
 
   // For renderpass resuming, track whether a renderpass has been started
   // Used to override LoadAction, to prevent uninteded clearing when resuming

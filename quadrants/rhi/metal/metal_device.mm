@@ -432,6 +432,12 @@ void MetalCommandList::memory_barrier() noexcept {
   // NOTE: (penguinliong) Resources created from `MTLDevice` (which is the only
   // available way to allocate resource here) are `MTLHazardTrackingModeTracked`
   // by default. So we don't have to barrier explicitly.
+  // However, buffers accessed via physical storage buffer pointers bypass
+  // Metal's resource tracking and are handled in dispatch() via useResource:.
+}
+void MetalCommandList::track_physical_buffer(
+    DeviceAllocation alloc) noexcept {
+  tracked_physical_buffers_.push_back(alloc);
 }
 
 void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
@@ -520,6 +526,13 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
         RHI_ASSERT(false);
       }
     }
+
+    for (const DeviceAllocation &alloc : tracked_physical_buffers_) {
+      const MetalMemory &mem = device_->get_memory(alloc.alloc_id);
+      [encoder useResource:mem.mtl_buffer()
+                     usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+    }
+    tracked_physical_buffers_.clear();
 
     [encoder setComputePipelineState:mtl_compute_pipeline_state];
     [encoder dispatchThreadgroups:MTLSizeMake(x, y, z)
@@ -1243,7 +1256,11 @@ void MetalDevice::dealloc_memory(DeviceAllocation handle) {
 
 uint64_t MetalDevice::get_memory_physical_pointer(DeviceAllocation handle) {
   const MetalMemory &memory = get_memory(handle.alloc_id);
-  return [memory.mtl_buffer() gpuAddress];
+  if (__builtin_available(macOS 13.0, iOS 16.0, *)) {
+    return [memory.mtl_buffer() gpuAddress];
+  }
+  RHI_LOG_ERROR("gpuAddress requires macOS 13.0+");
+  return 0;
 }
 
 DeviceAllocation MetalDevice::create_image(const ImageParams &params) {
