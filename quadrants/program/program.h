@@ -24,7 +24,6 @@
 #include "quadrants/program/context.h"
 #include "quadrants/struct/snode_tree.h"
 #include "quadrants/system/threading.h"
-#include "quadrants/program/sparse_matrix.h"
 #include "quadrants/ir/mesh.h"
 
 namespace quadrants::lang {

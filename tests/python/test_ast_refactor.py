@@ -944,23 +944,6 @@ def test_ndarray():
             assert a[i, j][0, 0] == i * j + i + j + 1
 
 
-@test_utils.test(arch=qd.cpu)
-def test_sparse_matrix_builder():
-    n = 8
-    Abuilder = qd.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100)
-
-    @qd.kernel
-    def fill(Abuilder: qd.types.sparse_matrix_builder()):
-        for i, j in qd.static(qd.ndrange(n, n)):
-            Abuilder[i, j] += i + j
-
-    fill(Abuilder)
-    A = Abuilder.build()
-    for i in range(n):
-        for j in range(n):
-            assert A[i, j] == i + j
-
-
 @test_utils.test()
 def test_func_default_value():
     @qd.func

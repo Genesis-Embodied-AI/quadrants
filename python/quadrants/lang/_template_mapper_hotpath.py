@@ -44,14 +44,12 @@ from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import (
     ndarray_type,
     primitive_types,
-    sparse_matrix_builder,
     template,
 )
 
 AnnotationType = Union[
     template,
     ndarray_type.NdarrayType,
-    sparse_matrix_builder,
     Any,
 ]
 
@@ -195,7 +193,5 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                 # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
                 pass
         return key
-    if annotation_type is sparse_matrix_builder:
-        return arg.dtype
     # Use '#' as a placeholder because other kinds of arguments are not involved in template instantiation
     return "#"

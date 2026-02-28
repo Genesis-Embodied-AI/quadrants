@@ -36,7 +36,6 @@ from quadrants.lang.util import cook_dtype, has_pytorch
 from quadrants.types import (
     ndarray_type,
     primitive_types,
-    sparse_matrix_builder,
     template,
 )
 
@@ -156,8 +155,6 @@ class FuncBase:
                 elif annotation_type is template or annotation is template:
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
-                    pass
-                elif self.is_kernel and isinstance(annotation, sparse_matrix_builder):
                     pass
                 else:
                     raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
@@ -621,8 +618,4 @@ class FuncBase:
             return 1, False
         if needed_arg_type is template or needed_arg_basetype is template:
             return 0, True
-        if needed_arg_basetype is sparse_matrix_builder:
-            # Pass only the base pointer of the qd.types.sparse_matrix_builder() argument
-            launch_ctx_buffer[_UINT].append((index, v._get_ndarray_addr()))
-            return 1, True
         raise ValueError(f"Argument type mismatch. Expecting {needed_arg_type}, got {type(v)}.")

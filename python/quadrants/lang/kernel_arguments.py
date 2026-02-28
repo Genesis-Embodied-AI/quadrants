@@ -2,20 +2,19 @@
 
 import inspect
 
-import quadrants.lang
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
     DataTypeCxx,
 )
-from quadrants.lang import impl, ops
+from quadrants.lang import impl
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import cook_dtype
 from quadrants.types.compound_types import CompoundType
-from quadrants.types.primitive_types import RefType, u64
+from quadrants.types.primitive_types import RefType
 
 
 class ArgMetadata:
@@ -30,32 +29,6 @@ class ArgMetadata:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(annotation={self.annotation}, name={self.name}, default={self.default})"
-
-
-class SparseMatrixEntry:
-    def __init__(self, ptr, i, j, dtype):
-        self.ptr = ptr
-        self.i = i
-        self.j = j
-        self.dtype = dtype
-
-    def _augassign(self, value, op):
-        call_func = f"insert_triplet_{self.dtype}"
-        if op == "Add":
-            quadrants.lang.impl.call_internal(call_func, self.ptr, self.i, self.j, ops.cast(value, self.dtype))
-        elif op == "Sub":
-            quadrants.lang.impl.call_internal(call_func, self.ptr, self.i, self.j, -ops.cast(value, self.dtype))
-        else:
-            assert False, "Only operations '+=' and '-=' are supported on sparse matrices."
-
-
-class SparseMatrixProxy:
-    def __init__(self, ptr, dtype):
-        self.ptr = ptr
-        self.dtype = dtype
-
-    def subscript(self, i, j):
-        return SparseMatrixEntry(self.ptr, i, j, self.dtype)
 
 
 def decl_scalar_arg(dtype, name):
@@ -108,17 +81,6 @@ def decl_struct_arg(structtype, name):
     argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
     arg_load = Expr(_qd_core.make_arg_load_expr(arg_id, arg_type, create_load=False, dbg_info=argload_di))
     return structtype.from_quadrants_object(arg_load)
-
-
-def decl_sparse_matrix(dtype, name):
-    value_type = cook_dtype(dtype)
-    ptr_type = cook_dtype(u64)
-    # Treat the sparse matrix argument as a scalar since we only need to pass in the base pointer
-    arg_id = impl.get_runtime().compiling_callable.insert_scalar_param(ptr_type, name)
-    argload_di = _qd_core.DebugInfo(impl.get_runtime().get_current_src_info())
-    return SparseMatrixProxy(
-        _qd_core.make_arg_load_expr(arg_id, ptr_type, is_ptr=False, dbg_info=argload_di), value_type
-    )
 
 
 def decl_ndarray_arg(

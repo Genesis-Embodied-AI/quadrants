@@ -26,7 +26,6 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
 from quadrants.lang.kernel import Kernel
-from quadrants.lang.kernel_arguments import SparseMatrixProxy
 from quadrants.lang.kernel_impl import BoundQuadrantsCallable, QuadrantsCallable
 from quadrants.lang.matrix import (
     Matrix,
@@ -208,7 +207,6 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             Expr,
             Field,
             AnyArray,
-            SparseMatrixProxy,
             MeshElementFieldProxy,
             MeshRelationAccessProxy,
             SharedArray,
@@ -265,8 +263,6 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             ]
         )
         return subscript(ast_builder, value, *reordered_index, skip_reordered=True)
-    if isinstance(value, SparseMatrixProxy):
-        return value.subscript(*indices)
     if isinstance(value, Field):
         _var = value._get_field_members()[0].ptr
         snode = _var.snode()

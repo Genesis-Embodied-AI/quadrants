@@ -10,7 +10,6 @@
 
 #include "pybind11/functional.h"
 #include "pybind11/pybind11.h"
-#include "pybind11/eigen.h"
 #include "pybind11/numpy.h"
 
 #include "quadrants/ir/expression_ops.h"
@@ -24,9 +23,6 @@
 #include "quadrants/math/svd.h"
 #include "quadrants/system/timeline.h"
 #include "quadrants/python/snode_registry.h"
-#include "quadrants/program/sparse_matrix.h"
-#include "quadrants/program/sparse_solver.h"
-#include "quadrants/program/conjugate_gradient.h"
 #include "quadrants/ir/mesh.h"
 
 #include "quadrants/program/kernel_profiler.h"
@@ -437,19 +433,6 @@ void export_lang(py::module &m) {
           py::return_value_policy::reference)
       .def("create_function", &Program::create_function,
            py::return_value_policy::reference)
-      .def("create_sparse_matrix",
-           [](Program *program, int n, int m, DataType dtype,
-              std::string storage_format) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch),
-                         "SparseMatrix only supports CPU for now.");
-             return make_sparse_matrix(n, m, dtype, storage_format);
-           })
-      .def("make_sparse_matrix_from_ndarray",
-           [](Program *program, SparseMatrix &sm, const Ndarray &ndarray) {
-             QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch),
-                         "SparseMatrix only supports CPU for now.");
-             return make_sparse_matrix_from_ndarray(program, sm, ndarray);
-           })
       .def("make_id_expr",
            [](Program *program, const std::string &name) {
              return Expr::make<IdExpression>(program->get_next_global_id(name));
@@ -1146,138 +1129,6 @@ void export_lang(py::module &m) {
         return program->add_snode_tree(registry->finalize(root), compile_only);
       },
       py::return_value_policy::reference);
-
-  // Sparse Matrix
-  py::class_<SparseMatrixBuilder>(m, "SparseMatrixBuilder")
-      .def(py::init<int, int, int, DataType, const std::string &>(),
-           py::arg("rows"), py::arg("cols"), py::arg("max_num_triplets"),
-           py::arg("dt") = PrimitiveType::f32,
-           py::arg("storage_format") = "col_major")
-      .def("print_triplets_eigen", &SparseMatrixBuilder::print_triplets_eigen)
-      .def("print_triplets_cuda", &SparseMatrixBuilder::print_triplets_cuda)
-      .def("create_ndarray",
-           [&](SparseMatrixBuilder *builder, Program *prog) {
-             return builder->create_ndarray(prog);
-           })
-      .def("delete_ndarray",
-           [&](SparseMatrixBuilder *builder, Program *prog) {
-             return builder->delete_ndarray(prog);
-           })
-      .def("get_ndarray_data_ptr", &SparseMatrixBuilder::get_ndarray_data_ptr)
-      .def("build", &SparseMatrixBuilder::build)
-      .def("build_cuda", &SparseMatrixBuilder::build_cuda)
-      .def("get_addr", [](SparseMatrixBuilder *mat) { return uint64(mat); });
-
-  py::class_<SparseMatrix>(m, "SparseMatrix")
-      .def(py::init<>())
-      .def(py::init<int, int, DataType>(), py::arg("rows"), py::arg("cols"),
-           py::arg("dt") = PrimitiveType::f32)
-      .def(py::init<SparseMatrix &>())
-      .def("to_string", &SparseMatrix::to_string)
-      .def("get_element", &SparseMatrix::get_element<float32>)
-      .def("set_element", &SparseMatrix::set_element<float32>)
-      .def("mmwrite", &SparseMatrix::mmwrite)
-      .def("num_rows", &SparseMatrix::num_rows)
-      .def("num_cols", &SparseMatrix::num_cols)
-      .def("get_data_type", &SparseMatrix::get_data_type);
-
-#define MAKE_SPARSE_MATRIX(TYPE, STORAGE, VTYPE)                             \
-  using STORAGE##TYPE##EigenMatrix =                                         \
-      Eigen::SparseMatrix<float##TYPE, Eigen::STORAGE>;                      \
-  py::class_<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>, SparseMatrix>(   \
-      m, #VTYPE #STORAGE "_EigenSparseMatrix")                               \
-      .def(py::init<int, int, DataType>())                                   \
-      .def(py::init<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix> &>())      \
-      .def(py::init<const STORAGE##TYPE##EigenMatrix &>())                   \
-      .def(py::self += py::self)                                             \
-      .def(py::self + py::self)                                              \
-      .def(py::self -= py::self)                                             \
-      .def(py::self - py::self)                                              \
-      .def(py::self *= float##TYPE())                                        \
-      .def(py::self *float##TYPE())                                          \
-      .def(float##TYPE() * py::self)                                         \
-      .def(py::self *py::self)                                               \
-      .def("matmul", &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::matmul) \
-      .def("spmv", &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::spmv)     \
-      .def("transpose",                                                      \
-           &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::transpose)        \
-      .def("get_element",                                                    \
-           &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::get_element<      \
-               float##TYPE>)                                                 \
-      .def("set_element",                                                    \
-           &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::set_element<      \
-               float##TYPE>)                                                 \
-      .def("mat_vec_mul",                                                    \
-           &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::mat_vec_mul<      \
-               Eigen::VectorX##VTYPE>);
-
-  MAKE_SPARSE_MATRIX(32, ColMajor, f);
-  MAKE_SPARSE_MATRIX(32, RowMajor, f);
-  MAKE_SPARSE_MATRIX(64, ColMajor, d);
-  MAKE_SPARSE_MATRIX(64, RowMajor, d);
-
-  py::class_<SparseSolver>(m, "SparseSolver")
-      .def("compute", &SparseSolver::compute)
-      .def("analyze_pattern", &SparseSolver::analyze_pattern)
-      .def("factorize", &SparseSolver::factorize)
-      .def("info", &SparseSolver::info);
-
-#define REGISTER_EIGEN_SOLVER(dt, type, order, fd)                           \
-  py::class_<EigenSparseSolver##dt##type##order, SparseSolver>(              \
-      m, "EigenSparseSolver" #dt #type #order)                               \
-      .def("compute", &EigenSparseSolver##dt##type##order::compute)          \
-      .def("analyze_pattern",                                                \
-           &EigenSparseSolver##dt##type##order::analyze_pattern)             \
-      .def("factorize", &EigenSparseSolver##dt##type##order::factorize)      \
-      .def("solve",                                                          \
-           &EigenSparseSolver##dt##type##order::solve<Eigen::VectorX##fd>)   \
-      .def("solve_rf",                                                       \
-           &EigenSparseSolver##dt##type##order::solve_rf<Eigen::VectorX##fd, \
-                                                         dt>)                \
-      .def("info", &EigenSparseSolver##dt##type##order::info);
-
-  REGISTER_EIGEN_SOLVER(float32, LLT, AMD, f)
-  REGISTER_EIGEN_SOLVER(float32, LLT, COLAMD, f)
-  REGISTER_EIGEN_SOLVER(float32, LDLT, AMD, f)
-  REGISTER_EIGEN_SOLVER(float32, LDLT, COLAMD, f)
-  REGISTER_EIGEN_SOLVER(float32, LU, AMD, f)
-  REGISTER_EIGEN_SOLVER(float32, LU, COLAMD, f)
-  REGISTER_EIGEN_SOLVER(float64, LLT, AMD, d)
-  REGISTER_EIGEN_SOLVER(float64, LLT, COLAMD, d)
-  REGISTER_EIGEN_SOLVER(float64, LDLT, AMD, d)
-  REGISTER_EIGEN_SOLVER(float64, LDLT, COLAMD, d)
-  REGISTER_EIGEN_SOLVER(float64, LU, AMD, d)
-  REGISTER_EIGEN_SOLVER(float64, LU, COLAMD, d)
-
-  m.def("make_sparse_solver", &make_sparse_solver);
-
-  // Conjugate Gradient solver
-  py::class_<CG<Eigen::VectorXf, float>>(m, "CGf")
-      .def(py::init<SparseMatrix &, int, float, bool>())
-      .def("solve", &CG<Eigen::VectorXf, float>::solve)
-      .def("set_x", &CG<Eigen::VectorXf, float>::set_x)
-      .def("get_x", &CG<Eigen::VectorXf, float>::get_x)
-      .def("set_x_ndarray", &CG<Eigen::VectorXf, float>::set_x_ndarray)
-      .def("set_b", &CG<Eigen::VectorXf, float>::set_b)
-      .def("set_b_ndarray", &CG<Eigen::VectorXf, float>::set_b_ndarray)
-      .def("is_success", &CG<Eigen::VectorXf, float>::is_success);
-  py::class_<CG<Eigen::VectorXd, double>>(m, "CGd")
-      .def(py::init<SparseMatrix &, int, double, bool>())
-      .def("solve", &CG<Eigen::VectorXd, double>::solve)
-      .def("set_x", &CG<Eigen::VectorXd, double>::set_x)
-      .def("set_x_ndarray", &CG<Eigen::VectorXd, double>::set_x_ndarray)
-      .def("get_x", &CG<Eigen::VectorXd, double>::get_x)
-      .def("set_b_ndarray", &CG<Eigen::VectorXd, double>::set_b_ndarray)
-      .def("set_b", &CG<Eigen::VectorXd, double>::set_b)
-      .def("is_success", &CG<Eigen::VectorXd, double>::is_success);
-  m.def("make_float_cg_solver", [](SparseMatrix &A, int max_iters, float tol,
-                                   bool verbose) {
-    return make_cg_solver<Eigen::VectorXf, float>(A, max_iters, tol, verbose);
-  });
-  m.def("make_double_cg_solver", [](SparseMatrix &A, int max_iters, float tol,
-                                    bool verbose) {
-    return make_cg_solver<Eigen::VectorXd, double>(A, max_iters, tol, verbose);
-  });
 
   // Mesh Class
   // Mesh related.
