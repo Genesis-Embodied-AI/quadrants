@@ -154,7 +154,12 @@ def _write_env(path):
 
 
 def handle_alternate_actions():
-    if misc.options.shell:
+    if misc.options.write_env:
+        cmake_args.writeback()
+        _write_env(misc.options.write_env)
+        misc.info(f"Environment written to {misc.options.write_env}")
+        sys.exit(0)
+    elif misc.options.shell:
         enter_shell()
     else:
         return
