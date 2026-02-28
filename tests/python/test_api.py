@@ -207,7 +207,6 @@ user_api[qd] = [
     "sin",
     "solve",
     "sparse",
-    "sparse_matrix_builder",
     "sqrt",
     "static",
     "static_assert",

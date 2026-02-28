@@ -47,14 +47,6 @@ class FunctionDefTransformer:
                 return True, ctx.template_vars[name]
             assert ctx.global_vars is not None
             return True, ctx.global_vars.get(name)
-        if isinstance(annotation, annotations.sparse_matrix_builder):
-            return False, (
-                kernel_arguments.decl_sparse_matrix,
-                (
-                    to_quadrants_type(this_arg_features),
-                    full_name,
-                ),
-            )
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx
