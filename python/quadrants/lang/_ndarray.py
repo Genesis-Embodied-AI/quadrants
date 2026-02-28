@@ -47,10 +47,7 @@ class Ndarray:
                     prog.delete_ndarray(arr)
 
     def to_dlpack(self):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the ndarray, and
-        reading it.
-        """
+        impl.get_runtime().sync()
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
     def _reset(self):
