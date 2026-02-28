@@ -17,6 +17,7 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
+#include "quadrants/program/program.h"
 #include "quadrants/rhi/device_capability.h"
 #include "quadrants/program/matrix.h"
 #include "quadrants/python/export.h"
