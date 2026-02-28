@@ -1,0 +1,86 @@
+quadrants.lang.kernel_arguments
+===============================
+
+.. py:module:: quadrants.lang.kernel_arguments
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel_arguments.ArgMetadata
+   quadrants.lang.kernel_arguments.SparseMatrixEntry
+   quadrants.lang.kernel_arguments.SparseMatrixProxy
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel_arguments.decl_scalar_arg
+   quadrants.lang.kernel_arguments.get_type_for_kernel_args
+   quadrants.lang.kernel_arguments.decl_matrix_arg
+   quadrants.lang.kernel_arguments.decl_struct_arg
+   quadrants.lang.kernel_arguments.decl_sparse_matrix
+   quadrants.lang.kernel_arguments.decl_ndarray_arg
+   quadrants.lang.kernel_arguments.decl_ret
+
+
+Module Contents
+---------------
+
+.. py:class:: ArgMetadata(annotation, name, default=inspect.Parameter.empty)
+
+   Metadata about an argument to a function
+
+
+   .. py:attribute:: annotation
+
+
+   .. py:attribute:: name
+
+
+   .. py:attribute:: default
+
+
+.. py:class:: SparseMatrixEntry(ptr, i, j, dtype)
+
+   .. py:attribute:: ptr
+
+
+   .. py:attribute:: i
+
+
+   .. py:attribute:: j
+
+
+   .. py:attribute:: dtype
+
+
+.. py:class:: SparseMatrixProxy(ptr, dtype)
+
+   .. py:attribute:: ptr
+
+
+   .. py:attribute:: dtype
+
+
+   .. py:method:: subscript(i, j)
+
+
+.. py:function:: decl_scalar_arg(dtype, name)
+
+.. py:function:: get_type_for_kernel_args(dtype, name)
+
+.. py:function:: decl_matrix_arg(matrixtype, name)
+
+.. py:function:: decl_struct_arg(structtype, name)
+
+.. py:function:: decl_sparse_matrix(dtype, name)
+
+.. py:function:: decl_ndarray_arg(element_type: quadrants._lib.core.quadrants_python.DataTypeCxx, ndim: int, name: str, needs_grad: bool, boundary: quadrants._lib.core.quadrants_python.BoundaryMode) -> quadrants.lang.any_array.AnyArray
+
+.. py:function:: decl_ret(dtype)
+
