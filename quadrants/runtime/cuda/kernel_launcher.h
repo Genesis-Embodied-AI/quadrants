@@ -3,7 +3,6 @@
 #include <unordered_map>
 
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
-#include "quadrants/program/context.h"
 #include "quadrants/runtime/llvm/kernel_launcher.h"
 
 namespace quadrants::lang {
@@ -56,7 +55,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
  private:
   bool on_cuda_device(void *ptr);
-  void launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
+  bool launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
   std::vector<Context> contexts_;
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
   bool use_cuda_graph_{false};
