@@ -62,7 +62,7 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
   return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
 }
 
-void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
+bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
                                               LaunchContextBuilder &ctx) {
   int launch_id = handle.get_launch_id();
   auto it = cuda_graph_cache_.find(launch_id);
@@ -70,7 +70,7 @@ void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   if (it != cuda_graph_cache_.end()) {
     auto *stream = CUDAContext::get_instance().get_stream();
     CUDADriver::get_instance().graph_launch(it->second.graph_exec, stream);
-    return;
+    return true;
   }
 
   auto &launcher_ctx = contexts_[launch_id];
@@ -80,11 +80,29 @@ void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
 
   if (offloaded_tasks.size() < 2) {
-    // Not worth graphing a single kernel — fall through to normal launch.
-    // We signal this by setting it = end and letting the caller handle it.
-    // Actually, just do the normal launch inline for simplicity.
-    // This path should not be reached because launch_llvm_kernel checks.
-    QD_WARN("CUDA graph requested for single-task kernel; falling back.");
+    return false;
+  }
+
+  // Pre-check: bail out if any array argument is a host external array,
+  // since CUDA graphs require stable device pointers.
+  for (int i = 0; i < (int)parameters.size(); i++) {
+    const auto &kv = parameters[i];
+    const auto &arg_id = kv.first;
+    const auto &parameter = kv.second;
+    if (parameter.is_array) {
+      const auto arr_sz = ctx.array_runtime_sizes[arg_id];
+      if (arr_sz == 0)
+        continue;
+      if (ctx.device_allocation_type[arg_id] ==
+          LaunchContextBuilder::DevAllocType::kNone) {
+        ArgArrayPtrKey data_ptr_idx{arg_id,
+                                    TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+        auto data_ptr = ctx.array_ptrs[data_ptr_idx];
+        if (!on_cuda_device(data_ptr)) {
+          return false;
+        }
+      }
+    }
   }
 
   CUDAContext::get_instance().make_current();
@@ -108,8 +126,6 @@ void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
 
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
-        QD_ERROR_IF(!on_cuda_device(data_ptr),
-                    "CUDA graph mode does not support host external arrays");
         ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -189,6 +205,7 @@ void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
            offloaded_tasks.size(), launch_id);
 
   cuda_graph_cache_.emplace(launch_id, std::move(cached));
+  return true;
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
@@ -202,10 +219,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
 
   if (use_cuda_graph_) {
-    auto &offloaded_tasks =
-        contexts_[handle.get_launch_id()].offloaded_tasks;
-    if (offloaded_tasks.size() >= 2) {
-      launch_llvm_kernel_graph(handle, ctx);
+    if (launch_llvm_kernel_graph(handle, ctx)) {
       return;
     }
   }
