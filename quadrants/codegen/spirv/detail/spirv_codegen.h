@@ -203,6 +203,13 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;
 
+  struct PhysicalPtrComponents {
+    spirv::Value base_ptr;
+    spirv::Value element_index;
+  };
+  std::unordered_map<const Stmt *, PhysicalPtrComponents>
+      physical_ptr_components_;
+
   bool use_volatile_buffer_access_{false};
 };
 }  // namespace detail
