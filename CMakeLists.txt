@@ -155,7 +155,7 @@ if (QD_WITH_LLVM)
       set (CLANG_EXECUTABLE ${CMAKE_CXX_COMPILER})
       message("Clang executable using host compiler ${CLANG_EXECUTABLE}")
     else()
-      find_program(CLANG_EXECUTABLE NAMES clang-20 clang)
+      find_program(CLANG_EXECUTABLE NAMES clang-22 clang-20 clang)
       message("Clang executable found at ${CLANG_EXECUTABLE}")
     endif()
 

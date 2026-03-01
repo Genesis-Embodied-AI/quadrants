@@ -33,7 +33,7 @@ def setup_clang(as_compiler=True) -> None:
     """
     u = platform.uname()
     if u.system == "Linux":
-        for v in ("-20", ""):
+        for v in ("-22", "-20", ""):
             clang = shutil.which(f"clang{v}")
             clangpp = shutil.which(f"clang++{v}")
             if clang is not None and clangpp is not None:
@@ -46,11 +46,11 @@ def setup_clang(as_compiler=True) -> None:
         print("brew_config", brew_config)
         brew_prefix = grep("HOMEBREW_PREFIX", brew_config).split()[1]
         print("brew_prefix", brew_prefix)
-        clang = join(brew_prefix, "opt", "llvm@20", "bin", "clang")
-        clangpp = join(brew_prefix, "opt", "llvm@20", "bin", "clang++")
+        clang = join(brew_prefix, "opt", "llvm@22", "bin", "clang")
+        clangpp = join(brew_prefix, "opt", "llvm@22", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
-        out = get_cache_home() / "clang-20-1-0"
-        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-20.1.0-202511141226/taichi-llvm-20.1.0-windows-amd64.zip"
+        out = get_cache_home() / "clang-22-1-0"
+        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-PLACEHOLDER/taichi-llvm-22.1.0-windows-amd64.zip"
         download_dep(url, out, force=True)
         clang = str(out / "bin" / "clang++.exe").replace("\\", "\\\\")
         clangpp = clang

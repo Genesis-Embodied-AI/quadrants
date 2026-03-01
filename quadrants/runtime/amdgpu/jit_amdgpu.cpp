@@ -55,12 +55,10 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   options.MCOptions.AsmVerbose = false;
   if (this->config_.fast_math) {
     options.AllowFPOpFusion = FPOpFusion::Fast;
-    options.UnsafeFPMath = 1;
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
   } else {
     options.AllowFPOpFusion = FPOpFusion::Strict;
-    options.UnsafeFPMath = 0;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
   }

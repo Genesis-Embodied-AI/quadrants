@@ -39,6 +39,7 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
+#include "llvm/TargetParser/Triple.h"
 
 #include "quadrants/util/lang_util.h"
 #include "quadrants/jit/jit_session.h"
@@ -394,7 +395,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     patch_atomic_add("atomic_add_f32", llvm::AtomicRMWInst::FAdd);
 
     if (arch_ == Arch::cuda) {
-      module->setTargetTriple("nvptx64-nvidia-cuda");
+      module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
 
 #if defined(QD_WITH_CUDA)
       auto func = module->getFunction("cuda_compute_capability");
@@ -414,10 +415,40 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       patch_intrinsic("block_idx", Intrinsic::nvvm_read_ptx_sreg_ctaid_x);
       patch_intrinsic("block_dim", Intrinsic::nvvm_read_ptx_sreg_ntid_x);
       patch_intrinsic("grid_dim", Intrinsic::nvvm_read_ptx_sreg_nctaid_x);
-      patch_intrinsic("block_barrier", Intrinsic::nvvm_barrier0, false);
-      patch_intrinsic("block_barrier_and_i32", Intrinsic::nvvm_barrier0_and);
-      patch_intrinsic("block_barrier_or_i32", Intrinsic::nvvm_barrier0_or);
-      patch_intrinsic("block_barrier_count_i32", Intrinsic::nvvm_barrier0_popc);
+      patch_intrinsic("block_barrier",
+                      Intrinsic::nvvm_barrier_cta_sync_aligned_all, false, {},
+                      {get_constant(0)});
+
+      // barrier0_and/or/popc were replaced with barrier_cta_red variants that
+      // take (i32 barrier_id, i1 pred) instead of (i32 pred) and return
+      // i1 (and/or) or i32 (popc) instead of i32.
+      auto patch_barrier_red = [&](std::string name, Intrinsic::ID intrin,
+                                   bool result_is_i1) {
+        auto func = module->getFunction(name);
+        if (!func)
+          return;
+        func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+        auto *arg = &*func->arg_begin();
+        auto *pred = builder.CreateTrunc(arg, builder.getInt1Ty());
+        auto *result = builder.CreateIntrinsic(intrin, {},
+            {get_constant(0), pred});
+        if (result_is_i1)
+          builder.CreateRet(
+              builder.CreateZExt(result, builder.getInt32Ty()));
+        else
+          builder.CreateRet(result);
+        QuadrantsLLVMContext::mark_inline(func);
+      };
+      patch_barrier_red("block_barrier_and_i32",
+                        Intrinsic::nvvm_barrier_cta_red_and_aligned_all, true);
+      patch_barrier_red("block_barrier_or_i32",
+                        Intrinsic::nvvm_barrier_cta_red_or_aligned_all, true);
+      patch_barrier_red("block_barrier_count_i32",
+                        Intrinsic::nvvm_barrier_cta_red_popc_aligned_all,
+                        false);
       patch_intrinsic("warp_barrier", Intrinsic::nvvm_bar_warp_sync, false);
       patch_intrinsic("block_memfence", Intrinsic::nvvm_membar_cta, false);
       patch_intrinsic("grid_memfence", Intrinsic::nvvm_membar_gl, false);
@@ -528,7 +559,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
 #endif
 
     if (arch_ == Arch::amdgpu) {
-      module->setTargetTriple("amdgcn-amd-amdhsa");
+      module->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
 #ifdef QD_WITH_AMDGPU
       llvm::legacy::FunctionPassManager function_pass_manager(module.get());
       function_pass_manager.add(new AMDGPUConvertAllocaInstAddressSpacePass());
@@ -561,8 +592,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       IRBuilder<> builder(*ctx);
       builder.SetInsertPoint(bb);
       // Use readcyclecounter intrinsic (maps to rdtsc on x86, etc.)
-      builder.CreateRet(
-          builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {}));
+      builder.CreateRet(builder.CreateIntrinsic(
+          Intrinsic::readcyclecounter, ArrayRef<llvm::Value *>{}));
       QuadrantsLLVMContext::mark_inline(func);
     }
   }
@@ -604,7 +635,7 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(
     }
   }
 
-  libdevice_module->setTargetTriple("nvptx64-nvidia-cuda");
+  libdevice_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   module->setDataLayout(libdevice_module->getDataLayout());
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
@@ -1043,7 +1074,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::new_module(
 QuadrantsLLVMContext::ThreadLocalData::ThreadLocalData(
     std::unique_ptr<llvm::orc::ThreadSafeContext> ctx)
     : thread_safe_llvm_context(std::move(ctx)),
-      llvm_context(thread_safe_llvm_context->getContext()) {
+      llvm_context(thread_safe_llvm_context->withContextDo(
+          [](llvm::LLVMContext *C) { return C; })) {
 }
 
 QuadrantsLLVMContext::ThreadLocalData::~ThreadLocalData() {
