@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+
 from tests import test_utils
 
 archs_with_physical_storage_buffer = [qd.metal, qd.vulkan]
@@ -65,9 +66,7 @@ def test_ndarray_2d_idx_store_static_ndrange():
     arr = np.zeros((rows, cols), dtype=np.int32)
     fill(arr)
     qd.sync()
-    expected = np.array(
-        [[i * 100 + j for j in range(cols)] for i in range(rows)], dtype=np.int32
-    )
+    expected = np.array([[i * 100 + j for j in range(cols)] for i in range(rows)], dtype=np.int32)
     np.testing.assert_array_equal(arr, expected)
 
 
