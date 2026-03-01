@@ -1,7 +1,3 @@
-import os
-
-os.environ["QD_CUDA_GRAPH"] = "1"
-
 import numpy as np
 
 import quadrants as qd
@@ -15,7 +11,7 @@ def test_cuda_graph_two_loops():
     x = qd.ndarray(qd.f32, shape=(n,))
     y = qd.ndarray(qd.f32, shape=(n,))
 
-    @qd.kernel
+    @qd.kernel(cuda_graph=True)
     def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
                   y: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
@@ -41,7 +37,7 @@ def test_cuda_graph_three_loops():
     b = qd.ndarray(qd.f32, shape=(n,))
     c = qd.ndarray(qd.f32, shape=(n,))
 
-    @qd.kernel
+    @qd.kernel(cuda_graph=True)
     def three_loops(a: qd.types.ndarray(qd.f32, ndim=1),
                     b: qd.types.ndarray(qd.f32, ndim=1),
                     c: qd.types.ndarray(qd.f32, ndim=1)):
@@ -73,11 +69,12 @@ def test_cuda_graph_three_loops():
 
 @test_utils.test(arch=[qd.cuda])
 def test_cuda_graph_single_loop_no_graph():
-    """A kernel with a single for loop should NOT use the graph path."""
+    """A kernel with a single for loop should NOT use the graph path,
+    even with cuda_graph=True (falls back since < 2 tasks)."""
     n = 256
     x = qd.ndarray(qd.f32, shape=(n,))
 
-    @qd.kernel
+    @qd.kernel(cuda_graph=True)
     def single_loop(x: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 5.0
@@ -87,3 +84,27 @@ def test_cuda_graph_single_loop_no_graph():
 
     x_np = x.to_numpy()
     assert np.allclose(x_np, 10.0)
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_no_cuda_graph_annotation():
+    """A kernel WITHOUT cuda_graph=True should never use the graph path."""
+    n = 256
+    x = qd.ndarray(qd.f32, shape=(n,))
+    y = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
+                  y: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    two_loops(x, y)
+    two_loops(x, y)
+
+    x_np = x.to_numpy()
+    y_np = y.to_numpy()
+    assert np.allclose(x_np, 2.0)
+    assert np.allclose(y_np, 4.0)
