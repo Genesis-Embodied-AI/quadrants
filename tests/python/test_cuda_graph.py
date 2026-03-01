@@ -108,3 +108,27 @@ def test_no_cuda_graph_annotation():
     y_np = y.to_numpy()
     assert np.allclose(x_np, 2.0)
     assert np.allclose(y_np, 4.0)
+
+
+@test_utils.test()
+def test_cuda_graph_annotation_cross_platform():
+    """cuda_graph=True should be a harmless no-op on non-CUDA backends."""
+    n = 256
+    x = qd.ndarray(qd.f32, shape=(n,))
+    y = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel(cuda_graph=True)
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
+                  y: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    two_loops(x, y)
+    two_loops(x, y)
+
+    x_np = x.to_numpy()
+    y_np = y.to_numpy()
+    assert np.allclose(x_np, 2.0), f"Expected 2.0, got {x_np[:5]}"
+    assert np.allclose(y_np, 4.0), f"Expected 4.0, got {y_np[:5]}"
