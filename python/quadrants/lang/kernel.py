@@ -285,6 +285,7 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_cuda_graph: bool = False
+        self.graph_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -498,6 +499,15 @@ class Kernel(FuncBase):
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_cuda_graph = self.use_cuda_graph
+            if self.graph_while_arg is not None:
+                non_template_idx = 0
+                for meta in self.arg_metas:
+                    if meta.annotation is template or isinstance(meta.annotation, template):
+                        continue
+                    if meta.name == self.graph_while_arg:
+                        launch_ctx.graph_while_arg_id = non_template_idx
+                        break
+                    non_template_idx += 1
             prog.launch_kernel(compiled_kernel_data, launch_ctx)
         except Exception as e:
             e = handle_exception_from_cpp(e)
