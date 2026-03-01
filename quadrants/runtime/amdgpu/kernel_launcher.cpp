@@ -74,6 +74,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -82,6 +85,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       }
     }
   }
@@ -110,13 +116,22 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
-  for (auto &task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
-                          {(void *)&context_pointer}, {arg_size});
-  }
-  QD_TRACE("Launching kernel");
+  do {
+    for (auto &task : offloaded_tasks) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+                            {(void *)&context_pointer}, {arg_size});
+    }
+    if (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr) {
+      int32_t counter_val = 0;
+      AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+      AMDGPUDriver::get_instance().memcpy_device_to_host(
+          &counter_val, ctx.graph_while_flag_dev_ptr, sizeof(int32_t));
+      if (counter_val == 0)
+        break;
+    }
+  } while (ctx.graph_while_arg_id >= 0);
   if (ctx.arg_buffer_size > 0) {
     AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
   }

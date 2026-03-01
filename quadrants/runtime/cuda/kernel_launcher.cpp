@@ -448,6 +448,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
@@ -461,6 +464,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       }
     }
   }
@@ -481,12 +487,23 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  for (auto task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
-                        {&ctx.get_context()}, {});
-  }
+  do {
+    for (auto task : offloaded_tasks) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+                          {&ctx.get_context()}, {});
+    }
+    if (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr) {
+      int32_t counter_val = 0;
+      auto *stream = CUDAContext::get_instance().get_stream();
+      CUDADriver::get_instance().stream_synchronize(stream);
+      CUDADriver::get_instance().memcpy_device_to_host(
+          &counter_val, ctx.graph_while_flag_dev_ptr, sizeof(int32_t));
+      if (counter_val == 0)
+        break;
+    }
+  } while (ctx.graph_while_arg_id >= 0);
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
   }
