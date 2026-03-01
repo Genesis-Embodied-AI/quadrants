@@ -1,9 +1,10 @@
 """Tests for physical storage buffer pointer correctness on Metal.
 
-Regression tests for a Metal shader compiler bug where stores through
-physical GPU pointers (reinterpret_cast<device T*>(ulong + offset)) are
-silently dropped when the byte offset involves a runtime stride multiply
-and the stored value is row-uniform.
+Regression tests for:
+1. A Metal shader compiler bug where stores through physical GPU pointers
+   are silently dropped when the byte offset involves a runtime stride
+   multiply and the stored value is loop-invariant.
+2. Atomic operations on ndarrays accessed via physical storage buffers.
 
 See doc/metal_physical_ptr_miscompile.md in perso_hugh for full details.
 """
@@ -139,3 +140,123 @@ def test_ndarray_3d_const_store_static_ndrange():
     fill(arr)
     qd.sync()
     np.testing.assert_array_equal(arr, np.full((d0, d1, d2), 123, dtype=np.int32))
+
+
+# --- Atomic operations on ndarrays via physical storage buffers ---
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_add_1d():
+    """atomic_add on a 1D ndarray element from multiple threads."""
+    n = 1024
+
+    @qd.kernel
+    def reduce_sum(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            qd.atomic_add(out[0], arr[i])
+
+    arr = np.ones(n, dtype=np.int32)
+    out = np.zeros(1, dtype=np.int32)
+    reduce_sum(arr, out)
+    qd.sync()
+    assert out[0] == n
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_add_2d():
+    """atomic_add accumulating into each row of a 2D ndarray."""
+    rows, cols = 4, 128
+
+    @qd.kernel
+    def row_sums(src: qd.types.NDArray, dst: qd.types.NDArray) -> None:
+        for i, j in qd.ndrange(rows, cols):
+            qd.atomic_add(dst[i, 0], src[i, j])
+
+    src = np.ones((rows, cols), dtype=np.int32)
+    dst = np.zeros((rows, cols), dtype=np.int32)
+    row_sums(src, dst)
+    qd.sync()
+    for i in range(rows):
+        assert dst[i, 0] == cols, f"row {i}: expected {cols}, got {dst[i, 0]}"
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_add_f32():
+    """atomic_add with float values on a 1D ndarray."""
+    n = 512
+
+    @qd.kernel
+    def reduce_sum(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            qd.atomic_add(out[0], arr[i])
+
+    arr = np.full(n, 0.25, dtype=np.float32)
+    out = np.zeros(1, dtype=np.float32)
+    reduce_sum(arr, out)
+    qd.sync()
+    np.testing.assert_allclose(out[0], n * 0.25, rtol=1e-5)
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_sub():
+    """atomic_sub on an ndarray element."""
+    n = 256
+
+    @qd.kernel
+    def reduce_sub(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            qd.atomic_sub(out[0], arr[i])
+
+    arr = np.ones(n, dtype=np.int32)
+    out = np.zeros(1, dtype=np.int32)
+    reduce_sub(arr, out)
+    qd.sync()
+    assert out[0] == -n
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_min_max():
+    """atomic_min and atomic_max on ndarray elements."""
+    n = 256
+
+    @qd.kernel
+    def find_min(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            qd.atomic_min(out[0], arr[i])
+
+    @qd.kernel
+    def find_max(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i in range(n):
+            qd.atomic_max(out[0], arr[i])
+
+    arr = np.arange(n, dtype=np.int32)
+
+    out_min = np.full(1, 999999, dtype=np.int32)
+    find_min(arr, out_min)
+    qd.sync()
+    assert out_min[0] == 0
+
+    out_max = np.full(1, -999999, dtype=np.int32)
+    find_max(arr, out_max)
+    qd.sync()
+    assert out_max[0] == n - 1
+
+
+@test_utils.test(arch=archs_with_physical_storage_buffer)
+def test_ndarray_atomic_histogram():
+    """Build a histogram via atomic_add — multiple threads write to same ndarray."""
+    n = 1024
+    num_bins = 8
+
+    @qd.kernel
+    def histogram(data: qd.types.NDArray, bins: qd.types.NDArray) -> None:
+        for i in range(n):
+            b = data[i] % num_bins
+            qd.atomic_add(bins[b], 1)
+
+    data = np.arange(n, dtype=np.int32)
+    bins = np.zeros(num_bins, dtype=np.int32)
+    histogram(data, bins)
+    qd.sync()
+    expected = np.array([n // num_bins] * num_bins, dtype=np.int32)
+    np.testing.assert_array_equal(bins, expected)
