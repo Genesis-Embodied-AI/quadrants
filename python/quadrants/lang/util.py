@@ -44,7 +44,7 @@ def has_pytorch():
             import torch  # noqa: F401 pylint: disable=C0415
 
             _has_pytorch = True
-        except:
+        except ImportError:
             pass
     return _has_pytorch
 
@@ -165,6 +165,8 @@ def to_pytorch_type(dt):
                 return torch.uint64
         raise RuntimeError(f"PyTorch doesn't support {dt.to_string()} data type before version 2.3.0.")
 
+    if dt in {torch.float32, torch.int32, torch.bool}:
+        return dt
     raise RuntimeError(f"PyTorch doesn't support {dt.to_string()} data type.")
 
 
@@ -277,6 +279,21 @@ def cook_dtype(dtype: Any) -> _qd_core.DataTypeCxx:
     raise ValueError(f"Invalid data type {dtype}")
 
 
+def dtype_to_torch_dtype(dtype: Any):
+    import torch  # pylint: disable=C0415
+
+    return {
+        float: torch.float32,
+        int: torch.int32,
+        i32: torch.int32,
+        f32: torch.float32,
+        i64: torch.int64,
+        f64: torch.float64,
+        bool: torch.bool,
+        u1: torch.bool,
+    }[dtype]
+
+
 def in_quadrants_scope():
     return impl.inside_kernel()
 
@@ -288,7 +305,8 @@ def in_python_scope():
 def quadrants_scope(func):
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
+        if not impl.is_python_backend():
+            assert in_quadrants_scope(), f"{func.__name__} cannot be called in Python-scope"
         return func(*args, **kwargs)
 
     return wrapped

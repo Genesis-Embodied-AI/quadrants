@@ -7,7 +7,12 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.exception import QuadrantsIndexError
-from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
+from quadrants.lang.util import (
+    cook_dtype,
+    get_traceback,
+    python_scope,
+    to_numpy_type,
+)
 from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
@@ -280,9 +285,18 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        self.arr = impl.get_runtime().prog.create_ndarray(
-            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
-        )
+        if impl.is_python_backend():
+            import torch  # pylint: disable=C0415
+
+            from quadrants.lang.util import (  # pylint: disable=C0415
+                dtype_to_torch_dtype,
+            )
+
+            self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
+        else:
+            self.arr = impl.get_runtime().prog.create_ndarray(
+                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
+            )
         self.shape = tuple(self.arr.shape)
         self.element_type = dtype
 

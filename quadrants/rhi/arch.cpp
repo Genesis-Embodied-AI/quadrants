@@ -40,7 +40,8 @@ Arch arch_from_name(const std::string &arch_name) {
 
 // Assuming a processor is either a CPU or a GPU. DSP/TPUs not considered.
 bool arch_is_cpu(Arch arch) {
-  if (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::js) {
+  if (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::js ||
+      arch == Arch::python) {
     return true;
   } else {
     return false;

@@ -8,6 +8,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import (
+    Arch,
     DataTypeCxx,
     Function,
     KernelCxx,
@@ -35,6 +36,7 @@ from quadrants.lang.matrix import (
     MatrixType,
     Vector,
     VectorNdarray,
+    VectorType,
     make_matrix,
 )
 from quadrants.lang.mesh import (
@@ -343,6 +345,7 @@ class PyQuadrants:
     def __init__(self, kernels=None):
         self.materialized = False
         self._prog: Program | None = None
+        self._arch: Arch | None = None
         self.src_info_stack = []
         self.inside_kernel: bool = False
         self.compilation_lock = threading.RLock()
@@ -533,6 +536,8 @@ class PyQuadrants:
         self.materialized = False
 
     def sync(self):
+        if is_python_backend():
+            return
         self.materialize()
         assert self._prog is not None
         self._prog.synchronize()
@@ -816,7 +821,7 @@ def _field(
 
 
 @python_scope
-def field(dtype, *args, **kwargs):
+def field(dtype, shape=None, *args, **kwargs):
     """Defines a Quadrants field.
 
     A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
@@ -854,11 +859,28 @@ def field(dtype, *args, **kwargs):
             >>> x5 = qd.field(qd.math.vec3, shape=(16, 8))
 
     """
+    if isinstance(shape, numbers.Number):
+        shape = (shape,)
+    if is_python_backend():
+        if shape is None:
+            shape = ()
+        from . import _py_tensor as py_tensor  # pylint: disable=C0415
+        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
+        batch_ndim = len(shape)
+        if isinstance(dtype, MatrixType):
+            if dtype.ndim == 1:
+                shape = (*shape, dtype.n)
+            else:
+                shape = (*shape, dtype.n, dtype.m)
+            dtype = dtype.dtype
+        dtype = dtype_to_torch_dtype(dtype)
+        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if isinstance(dtype, MatrixType):
         if dtype.ndim == 1:
-            return Vector.field(dtype.n, dtype.dtype, *args, **kwargs)
-        return Matrix.field(dtype.n, dtype.m, dtype.dtype, *args, **kwargs)
-    return _field(dtype, *args, **kwargs)
+            return Vector.field(dtype.n, dtype.dtype, shape, *args, **kwargs)
+        return Matrix.field(dtype.n, dtype.m, dtype.dtype, shape, *args, **kwargs)
+    return _field(dtype, shape, *args, **kwargs)
 
 
 @python_scope
@@ -881,6 +903,21 @@ def ndarray(dtype, shape, needs_grad=False):
     # primal
     if isinstance(shape, numbers.Number):
         shape = (shape,)
+    if is_python_backend():
+        from . import _py_tensor as py_tensor  # pylint: disable=C0415
+        from .util import dtype_to_torch_dtype  # pylint: disable=C0415
+
+        batch_ndim = len(shape)
+        if type(dtype) is VectorType:
+            shape = (*shape, dtype.n)
+            dtype = dtype.dtype
+        elif type(dtype) is MatrixType:
+            shape = (*shape, dtype.n, dtype.m)
+            dtype = dtype.dtype
+        if type(shape) == int:
+            shape = (shape,)
+        dtype = dtype_to_torch_dtype(dtype)
+        return py_tensor.create_tensor(shape, dtype, batch_ndim=batch_ndim)
     if not all((isinstance(x, int) or isinstance(x, np.integer)) and x > 0 and x <= 2**31 - 1 for x in shape):
         raise QuadrantsRuntimeError(f"{shape} is not a valid shape for ndarray")
     if dtype in all_types:
@@ -901,7 +938,7 @@ def ndarray(dtype, shape, needs_grad=False):
                 f"{dt} is not supported for ndarray with `needs_grad=True` or `needs_dual=True`."
             )
         x_grad = ndarray(dtype, shape, needs_grad=False)
-        x._set_grad(x_grad)
+        x._set_grad(x_grad)  # type: ignore[arg-type]
     return x
 
 
@@ -1205,6 +1242,8 @@ def grouped(x):
     """
     if isinstance(x, _Ndrange):
         return x.grouped()
+    if is_python_backend():
+        return [[i] for i in range(x.shape[0])]
     return x
 
 
@@ -1221,6 +1260,13 @@ def stop_grad(x):
 
 def current_cfg():
     return get_runtime().prog.config()
+
+
+_ARCH_PYTHON = _qd_core.Arch.python
+
+
+def is_python_backend() -> bool:
+    return get_runtime()._arch == _ARCH_PYTHON
 
 
 def default_cfg():

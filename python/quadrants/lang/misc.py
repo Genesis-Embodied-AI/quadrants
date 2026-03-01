@@ -9,7 +9,7 @@ from quadrants import _logging, _snode
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
-from quadrants.lang import impl
+from quadrants.lang import impl, util
 from quadrants.lang.expr import Expr
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
@@ -132,6 +132,9 @@ vulkan = _qd_core.vulkan
 """The Vulkan backend.
 """
 # ----------------------
+
+"""The python backend"""
+python = _qd_core.python
 
 gpu = [cuda, metal, vulkan, amdgpu]
 """A list of GPU backends supported on the current system.
@@ -298,6 +301,22 @@ def check_require_version(require_version):
         )
 
 
+_FLOAT_DTYPES = frozenset({f32, f64})
+
+
+def _install_python_backend_dtype_call():
+    """Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0)."""
+    DataTypeCxx = type(f32)
+    _original = DataTypeCxx.__call__
+
+    def _dtype_call(self, value):
+        if impl.is_python_backend():
+            return float(value) if self in _FLOAT_DTYPES else int(value)
+        return _original(self, value)
+
+    DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
+
+
 def init(
     arch=None,
     default_fp=None,
@@ -442,16 +461,20 @@ def init(
 
     get_default_kernel_profiler().set_kernel_profiler_mode(cfg.kernel_profiler)
 
-    # create a new program:
-    impl.get_runtime().create_program()
+    impl.get_runtime()._arch = cfg.arch
 
-    _logging.trace("Materializing runtime...")
-    impl.get_runtime().prog.materialize_runtime()
+    # create a new program (skip for python backend — no C++ runtime needed):
+    if cfg.arch != _qd_core.python:
+        impl.get_runtime().create_program()
+        _logging.trace("Materializing runtime...")
+        impl.get_runtime().prog.materialize_runtime()
 
-    impl._root_fb = _snode.FieldsBuilder()
+        impl._root_fb = _snode.FieldsBuilder()
 
-    if cfg.debug:
-        impl.get_runtime()._register_signal_handlers()
+        if cfg.debug:
+            impl.get_runtime()._register_signal_handlers()
+    else:
+        _install_python_backend_dtype_call()
 
     # Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)
     os.chdir(current_dir)
@@ -652,6 +675,9 @@ def loop_config(
             for i, j in x:
                 y[i, j] = x[i, j]
     """
+    if impl.is_python_backend():
+        return
+
     if block_dim is not None:
         _block_dim(block_dim)
 
@@ -716,6 +742,7 @@ def is_arch_supported(arch):
         metal: _qd_core.with_metal,
         vulkan: _qd_core.with_vulkan,
         cpu: lambda: True,
+        python: util.has_pytorch,
     }
     with_arch = arch_table.get(arch, lambda: False)
     try:
@@ -799,6 +826,7 @@ __all__ = [
     "amdgpu",
     "gpu",
     "metal",
+    "python",
     "vulkan",
     "extension",
     "loop_config",

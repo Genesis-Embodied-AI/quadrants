@@ -255,6 +255,8 @@ def fill(mat: template(), val):
     if static(len(shape) == 1):
         for i in static(range(shape[0])):
             mat[i] = val
+    elif static(len(shape) == 0):
+        mat[()] = val
     else:
         for i in static(range(shape[0])):
             for j in static(range(shape[1])):
