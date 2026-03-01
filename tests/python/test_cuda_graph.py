@@ -110,6 +110,46 @@ def test_no_cuda_graph_annotation():
     assert np.allclose(y_np, 4.0)
 
 
+@test_utils.test(arch=[qd.cuda])
+def test_cuda_graph_changed_args():
+    """Graph should produce correct results when called with different ndarrays."""
+    n = 256
+
+    @qd.kernel(cuda_graph=True)
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
+                  y: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    x1 = qd.ndarray(qd.f32, shape=(n,))
+    y1 = qd.ndarray(qd.f32, shape=(n,))
+    two_loops(x1, y1)
+    two_loops(x1, y1)
+
+    x1_np = x1.to_numpy()
+    y1_np = y1.to_numpy()
+    assert np.allclose(x1_np, 2.0), f"Expected 2.0, got {x1_np[:5]}"
+    assert np.allclose(y1_np, 4.0), f"Expected 4.0, got {y1_np[:5]}"
+
+    x2 = qd.ndarray(qd.f32, shape=(n,))
+    y2 = qd.ndarray(qd.f32, shape=(n,))
+    x2.from_numpy(np.full(n, 10.0, dtype=np.float32))
+    y2.from_numpy(np.full(n, 20.0, dtype=np.float32))
+    two_loops(x2, y2)
+
+    x2_np = x2.to_numpy()
+    y2_np = y2.to_numpy()
+    assert np.allclose(x2_np, 11.0), f"Expected 11.0, got {x2_np[:5]}"
+    assert np.allclose(y2_np, 22.0), f"Expected 22.0, got {y2_np[:5]}"
+
+    x1_np = x1.to_numpy()
+    y1_np = y1.to_numpy()
+    assert np.allclose(x1_np, 2.0), f"x1 should be unchanged, got {x1_np[:5]}"
+    assert np.allclose(y1_np, 4.0), f"y1 should be unchanged, got {y1_np[:5]}"
+
+
 @test_utils.test()
 def test_cuda_graph_annotation_cross_platform():
     """cuda_graph=True should be a harmless no-op on non-CUDA backends."""

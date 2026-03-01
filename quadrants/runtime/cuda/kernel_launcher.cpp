@@ -61,54 +61,10 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
   return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
 }
 
-bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
-                                              LaunchContextBuilder &ctx) {
-  int launch_id = handle.get_launch_id();
-  auto it = cuda_graph_cache_.find(launch_id);
-
-  if (it != cuda_graph_cache_.end()) {
-    auto *stream = CUDAContext::get_instance().get_stream();
-    CUDADriver::get_instance().graph_launch(it->second.graph_exec, stream);
-    return true;
-  }
-
-  auto &launcher_ctx = contexts_[launch_id];
+bool KernelLauncher::resolve_ctx_ndarray_ptrs(
+    LaunchContextBuilder &ctx,
+    const std::vector<std::pair<int, Callable::Parameter>> &parameters) {
   auto *executor = get_runtime_executor();
-  auto *cuda_module = launcher_ctx.jit_module;
-  const auto &parameters = *launcher_ctx.parameters;
-  const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
-
-  if (offloaded_tasks.size() < 2) {
-    return false;
-  }
-
-  // Pre-check: bail out if any array argument is a host external array,
-  // since CUDA graphs require stable device pointers.
-  for (int i = 0; i < (int)parameters.size(); i++) {
-    const auto &kv = parameters[i];
-    const auto &arg_id = kv.first;
-    const auto &parameter = kv.second;
-    if (parameter.is_array) {
-      const auto arr_sz = ctx.array_runtime_sizes[arg_id];
-      if (arr_sz == 0)
-        continue;
-      if (ctx.device_allocation_type[arg_id] ==
-          LaunchContextBuilder::DevAllocType::kNone) {
-        ArgArrayPtrKey data_ptr_idx{arg_id,
-                                    TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-        auto data_ptr = ctx.array_ptrs[data_ptr_idx];
-        if (!on_cuda_device(data_ptr)) {
-          return false;
-        }
-      }
-    }
-  }
-
-  CUDAContext::get_instance().make_current();
-
-  CachedCudaGraph cached;
-
-  // --- Resolve ndarray device pointers (same as normal path) ---
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
     const auto &arg_id = kv.first;
@@ -125,6 +81,9 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
 
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
+        if (!on_cuda_device(data_ptr)) {
+          return false;
+        }
         ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -138,6 +97,44 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
       }
     }
   }
+  return true;
+}
+
+bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
+                                              LaunchContextBuilder &ctx) {
+  int launch_id = handle.get_launch_id();
+
+  auto &launcher_ctx = contexts_[launch_id];
+  const auto &parameters = *launcher_ctx.parameters;
+  const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
+
+  if (offloaded_tasks.size() < 2) {
+    return false;
+  }
+
+  if (!resolve_ctx_ndarray_ptrs(ctx, parameters)) {
+    return false;
+  }
+
+  auto it = cuda_graph_cache_.find(launch_id);
+  if (it != cuda_graph_cache_.end()) {
+    auto &cached = it->second;
+    if (ctx.arg_buffer_size > 0) {
+      CUDADriver::get_instance().memcpy_host_to_device(
+          cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+          cached.arg_buffer_size);
+    }
+    auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+    return true;
+  }
+
+  CUDAContext::get_instance().make_current();
+
+  auto *executor = get_runtime_executor();
+  auto *cuda_module = launcher_ctx.jit_module;
+
+  CachedCudaGraph cached;
 
   // --- Allocate persistent buffers ---
   cached.result_buffer_size = std::max(ctx.result_buffer_size, sizeof(uint64));
