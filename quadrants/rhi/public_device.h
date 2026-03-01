@@ -357,6 +357,15 @@ class RHI_DLL_EXPORT CommandList {
   virtual void memory_barrier() noexcept = 0;
 
   /**
+   * Register a buffer that will be accessed via physical storage buffer
+   * pointers during the next dispatch. On Metal, this enables hazard
+   * tracking for buffers that are not explicitly bound to the encoder.
+   * Default implementation is a no-op (Vulkan handles this automatically).
+   */
+  virtual void track_physical_buffer(DeviceAllocation alloc) noexcept {
+  }
+
+  /**
    * Insert a buffer copy operation into the command list.
    * @params[in] src The source Device Pointer
    * @params[in] dst The destination Device Pointer

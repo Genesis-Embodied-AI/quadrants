@@ -1019,8 +1019,15 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
   Value ret = new_value(res_type, ValueKind::kNormal);
   if (pointer.flag == ValueKind::kPhysicalPtr) {
     uint32_t alignment = uint32_t(get_primitive_type_size(res_type.dt));
+    // Volatile prevents SPIRV-Cross from forwarding the load as an inline
+    // pointer dereference.  Without it, SPIRV-Cross may re-read from the
+    // physical pointer at each use site, which produces wrong results when
+    // the pointed-to memory is modified between the load and the use (e.g.
+    // insertion-sort shifting elements in the same array).
     ib_.begin(spv::OpLoad)
-        .add_seq(res_type, ret, pointer, spv::MemoryAccessAlignedMask,
+        .add_seq(res_type, ret, pointer,
+                 spv::MemoryAccessAlignedMask |
+                     spv::MemoryAccessVolatileMask,
                  alignment)
         .commit(&function_);
   } else {
@@ -1136,8 +1143,14 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   make_inst(spv::OpLabel, body);
   // while (true)
   {
-    // int old = addr_ptr[0];
-    Value old_val = load_variable(addr_ptr, res_type);
+    // Use OpAtomicLoad so SPIRV-Cross emits a function call expression
+    // (atomic_load_explicit) that it cannot inline.  A plain OpLoad would
+    // be inlined as a device-memory dereference, causing SPIRV-Cross's CAS
+    // emulation loop to re-read (and see the post-CAS value), breaking the
+    // compare-and-swap logic on Metal.
+    Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
+                               /*scope=*/const_i32_one_,
+                               /*semantics=*/const_i32_zero_);
     // int new = dataTypeBitsToInt(atomic_op(intBitsToDataType(old), data));
     Value old_data_value = make_value(spv::OpBitcast, out_type, old_val);
     Value new_data_value = op(old_data_value, data);
