@@ -124,17 +124,22 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
 
 
 def _kernel_impl(
-    _func: Callable, level_of_class_stackframe: int, verbose: bool = False, cuda_graph: bool = False
+    _func: Callable, level_of_class_stackframe: int, verbose: bool = False,
+    cuda_graph: bool = False, graph_while: str | None = None,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
     is_classkernel = _inside_class(level_of_class_stackframe + 1)
+
+    if graph_while is not None:
+        cuda_graph = True
 
     if verbose:
         print(f"kernel={_func.__name__} is_classkernel={is_classkernel}")
     primal = Kernel(_func, autodiff_mode=_NONE, _is_classkernel=is_classkernel)
     adjoint = Kernel(_func, autodiff_mode=_REVERSE, _is_classkernel=is_classkernel)
     primal.use_cuda_graph = cuda_graph
+    primal.graph_while_arg = graph_while
     # Having |primal| contains |grad| makes the tape work.
     primal.grad = adjoint
 
@@ -176,7 +181,7 @@ def _kernel_impl(
 @overload
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
-def kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False) -> Callable[[Any], Any]: ...
+def kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None) -> Callable[[Any], Any]: ...
 
 
 # TODO: This next overload should return F, but currently that will cause issues
@@ -186,7 +191,7 @@ def kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False) ->
 # However, by making it return Any, we can make the pure parameter
 # change now, without breaking pyright.
 @overload
-def kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False) -> Any: ...
+def kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None) -> Any: ...
 
 
 def kernel(
@@ -195,6 +200,7 @@ def kernel(
     pure: bool | None = None,
     fastcache: bool = False,
     cuda_graph: bool = False,
+    graph_while: str | None = None,
 ):
     """
     Marks a function as a Quadrants kernel.
@@ -224,7 +230,7 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph)
+        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_while=graph_while)
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(
