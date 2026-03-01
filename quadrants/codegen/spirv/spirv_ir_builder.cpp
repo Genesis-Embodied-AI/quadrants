@@ -1019,8 +1019,15 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
   Value ret = new_value(res_type, ValueKind::kNormal);
   if (pointer.flag == ValueKind::kPhysicalPtr) {
     uint32_t alignment = uint32_t(get_primitive_type_size(res_type.dt));
+    // Volatile prevents SPIRV-Cross from forwarding the load as an inline
+    // pointer dereference.  Without it, SPIRV-Cross may re-read from the
+    // physical pointer at each use site, which produces wrong results when
+    // the pointed-to memory is modified between the load and the use (e.g.
+    // insertion-sort shifting elements in the same array).
     ib_.begin(spv::OpLoad)
-        .add_seq(res_type, ret, pointer, spv::MemoryAccessAlignedMask,
+        .add_seq(res_type, ret, pointer,
+                 spv::MemoryAccessAlignedMask |
+                     spv::MemoryAccessVolatileMask,
                  alignment)
         .commit(&function_);
   } else {
