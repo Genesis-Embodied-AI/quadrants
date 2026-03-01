@@ -1,7 +1,6 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
-#include <cstdlib>
 #include <cstring>
 
 namespace quadrants::lang {
@@ -212,13 +211,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
 
-  if (!use_cuda_graph_checked_) {
-    const char *env = std::getenv("QD_CUDA_GRAPH");
-    use_cuda_graph_ = env != nullptr && std::string(env) == "1";
-    use_cuda_graph_checked_ = true;
-  }
-
-  if (use_cuda_graph_) {
+  if (ctx.use_cuda_graph) {
     if (launch_llvm_kernel_graph(handle, ctx)) {
       return;
     }

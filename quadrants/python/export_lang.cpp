@@ -659,7 +659,8 @@ void export_lang(py::module &m) {
            &LaunchContextBuilder::set_args_ndarray_with_grad)
       .def("get_struct_ret_int", &LaunchContextBuilder::get_struct_ret_int)
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
-      .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float);
+      .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
+      .def_readwrite("use_cuda_graph", &LaunchContextBuilder::use_cuda_graph);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)

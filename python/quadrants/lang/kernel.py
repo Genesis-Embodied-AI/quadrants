@@ -284,6 +284,7 @@ class Kernel(FuncBase):
         # and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
+        self.use_cuda_graph: bool = False
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -496,6 +497,7 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
+            launch_ctx.use_cuda_graph = self.use_cuda_graph
             prog.launch_kernel(compiled_kernel_data, launch_ctx)
         except Exception as e:
             e = handle_exception_from_cpp(e)

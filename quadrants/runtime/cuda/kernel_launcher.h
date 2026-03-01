@@ -58,8 +58,6 @@ class KernelLauncher : public LLVM::KernelLauncher {
   bool launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
   std::vector<Context> contexts_;
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
-  bool use_cuda_graph_{false};
-  bool use_cuda_graph_checked_{false};
 };
 
 }  // namespace cuda
