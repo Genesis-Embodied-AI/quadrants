@@ -2123,10 +2123,10 @@ spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
 
   DataType ti_buffer_type = ir_->get_quadrants_uint_type(dt);
 
-  if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = dt;
-  } else if (dt->is_primitive(PrimitiveTypeID::u1)) {
+  if (dt->is_primitive(PrimitiveTypeID::u1)) {
     ti_buffer_type = PrimitiveType::u8;
+  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
+    ti_buffer_type = dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
@@ -2145,10 +2145,10 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
 
   DataType ti_buffer_type = ir_->get_quadrants_uint_type(val.stype.dt);
 
-  if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = val.stype.dt;
-  } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+  if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     ti_buffer_type = PrimitiveType::i8;
+  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
+    ti_buffer_type = val.stype.dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
