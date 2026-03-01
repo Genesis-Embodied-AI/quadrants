@@ -1,8 +1,58 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <cstdlib>
+#include <cstring>
+
 namespace quadrants::lang {
 namespace cuda {
+
+CachedCudaGraph::~CachedCudaGraph() {
+  if (graph_exec) {
+    CUDADriver::get_instance().graph_exec_destroy(graph_exec);
+  }
+  if (persistent_device_arg_buffer) {
+    CUDADriver::get_instance().mem_free(persistent_device_arg_buffer);
+  }
+  if (persistent_device_result_buffer) {
+    CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
+  }
+}
+
+CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
+    : graph_exec(other.graph_exec),
+      persistent_device_arg_buffer(other.persistent_device_arg_buffer),
+      persistent_device_result_buffer(other.persistent_device_result_buffer),
+      persistent_ctx(other.persistent_ctx),
+      arg_buffer_size(other.arg_buffer_size),
+      result_buffer_size(other.result_buffer_size) {
+  other.graph_exec = nullptr;
+  other.persistent_device_arg_buffer = nullptr;
+  other.persistent_device_result_buffer = nullptr;
+}
+
+CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
+  if (this != &other) {
+    if (graph_exec)
+      CUDADriver::get_instance().graph_exec_destroy(graph_exec);
+    if (persistent_device_arg_buffer)
+      CUDADriver::get_instance().mem_free(persistent_device_arg_buffer);
+    if (persistent_device_result_buffer)
+      CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
+
+    graph_exec = other.graph_exec;
+    persistent_device_arg_buffer = other.persistent_device_arg_buffer;
+    persistent_device_result_buffer = other.persistent_device_result_buffer;
+    persistent_ctx = other.persistent_ctx;
+    arg_buffer_size = other.arg_buffer_size;
+    result_buffer_size = other.result_buffer_size;
+
+    other.graph_exec = nullptr;
+    other.persistent_device_arg_buffer = nullptr;
+    other.persistent_device_result_buffer = nullptr;
+  }
+  return *this;
+}
 
 bool KernelLauncher::on_cuda_device(void *ptr) {
   unsigned int attr_val = 0;
@@ -12,9 +62,154 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
   return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
 }
 
+void KernelLauncher::launch_llvm_kernel_graph(Handle handle,
+                                              LaunchContextBuilder &ctx) {
+  int launch_id = handle.get_launch_id();
+  auto it = cuda_graph_cache_.find(launch_id);
+
+  if (it != cuda_graph_cache_.end()) {
+    auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().graph_launch(it->second.graph_exec, stream);
+    return;
+  }
+
+  auto &launcher_ctx = contexts_[launch_id];
+  auto *executor = get_runtime_executor();
+  auto *cuda_module = launcher_ctx.jit_module;
+  const auto &parameters = *launcher_ctx.parameters;
+  const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
+
+  if (offloaded_tasks.size() < 2) {
+    // Not worth graphing a single kernel — fall through to normal launch.
+    // We signal this by setting it = end and letting the caller handle it.
+    // Actually, just do the normal launch inline for simplicity.
+    // This path should not be reached because launch_llvm_kernel checks.
+    QD_WARN("CUDA graph requested for single-task kernel; falling back.");
+  }
+
+  CUDAContext::get_instance().make_current();
+
+  CachedCudaGraph cached;
+
+  // --- Resolve ndarray device pointers (same as normal path) ---
+  for (int i = 0; i < (int)parameters.size(); i++) {
+    const auto &kv = parameters[i];
+    const auto &arg_id = kv.first;
+    const auto &parameter = kv.second;
+    if (parameter.is_array) {
+      const auto arr_sz = ctx.array_runtime_sizes[arg_id];
+      if (arr_sz == 0)
+        continue;
+
+      ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+      ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+      auto data_ptr = ctx.array_ptrs[data_ptr_idx];
+      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
+
+      if (ctx.device_allocation_type[arg_id] ==
+          LaunchContextBuilder::DevAllocType::kNone) {
+        QD_ERROR_IF(!on_cuda_device(data_ptr),
+                    "CUDA graph mode does not support host external arrays");
+        ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+      } else if (arr_sz > 0) {
+        DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
+        void *dev_data = executor->get_device_alloc_info_ptr(*ptr);
+        void *dev_grad = nullptr;
+        if (grad_ptr) {
+          dev_grad = executor->get_device_alloc_info_ptr(
+              *static_cast<DeviceAllocation *>(grad_ptr));
+        }
+        ctx.set_ndarray_ptrs(arg_id, (uint64)dev_data, (uint64)dev_grad);
+      }
+    }
+  }
+
+  // --- Allocate persistent buffers ---
+  cached.result_buffer_size = std::max(ctx.result_buffer_size, sizeof(uint64));
+  CUDADriver::get_instance().malloc(
+      (void **)&cached.persistent_device_result_buffer,
+      cached.result_buffer_size);
+
+  cached.arg_buffer_size = ctx.arg_buffer_size;
+  if (cached.arg_buffer_size > 0) {
+    CUDADriver::get_instance().malloc(
+        (void **)&cached.persistent_device_arg_buffer, cached.arg_buffer_size);
+    CUDADriver::get_instance().memcpy_host_to_device(
+        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+        cached.arg_buffer_size);
+  }
+
+  // --- Build persistent RuntimeContext ---
+  cached.persistent_ctx.runtime = executor->get_llvm_runtime();
+  cached.persistent_ctx.arg_buffer = cached.persistent_device_arg_buffer;
+  cached.persistent_ctx.result_buffer =
+      (uint64 *)cached.persistent_device_result_buffer;
+  cached.persistent_ctx.cpu_thread_id = 0;
+
+  // --- Build CUDA graph ---
+  void *graph = nullptr;
+  CUDADriver::get_instance().graph_create(&graph, 0);
+
+  void *prev_node = nullptr;
+  for (const auto &task : offloaded_tasks) {
+    void *func = cuda_module->lookup_function(task.name);
+
+    void *ctx_ptr = &cached.persistent_ctx;
+    CudaKernelNodeParams node_params{};
+    node_params.func = func;
+    node_params.gridDimX = (unsigned int)task.grid_dim;
+    node_params.gridDimY = 1;
+    node_params.gridDimZ = 1;
+    node_params.blockDimX = (unsigned int)task.block_dim;
+    node_params.blockDimY = 1;
+    node_params.blockDimZ = 1;
+    node_params.sharedMemBytes =
+        (unsigned int)task.dynamic_shared_array_bytes;
+    node_params.kernelParams = &ctx_ptr;
+    node_params.extra = nullptr;
+
+    void *node = nullptr;
+    const void *deps = prev_node;
+    std::size_t num_deps = prev_node ? 1 : 0;
+    CUDADriver::get_instance().graph_add_kernel_node(
+        &node, graph, prev_node ? &deps : nullptr, num_deps, &node_params);
+    prev_node = node;
+  }
+
+  // --- Instantiate and launch ---
+  CUDADriver::get_instance().graph_instantiate(
+      &cached.graph_exec, graph, nullptr, nullptr, 0);
+
+  auto *stream = CUDAContext::get_instance().get_stream();
+  CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+
+  CUDADriver::get_instance().graph_destroy(graph);
+
+  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}",
+           offloaded_tasks.size(), launch_id);
+
+  cuda_graph_cache_.emplace(launch_id, std::move(cached));
+}
+
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
+
+  if (!use_cuda_graph_checked_) {
+    const char *env = std::getenv("QD_CUDA_GRAPH");
+    use_cuda_graph_ = env != nullptr && std::string(env) == "1";
+    use_cuda_graph_checked_ = true;
+  }
+
+  if (use_cuda_graph_) {
+    auto &offloaded_tasks =
+        contexts_[handle.get_launch_id()].offloaded_tasks;
+    if (offloaded_tasks.size() >= 2) {
+      launch_llvm_kernel_graph(handle, ctx);
+      return;
+    }
+  }
+
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
@@ -23,24 +218,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   CUDAContext::get_instance().make_current();
 
-  // |transfers| is only used for external arrays whose data is originally on
-  // host. They are first transferred onto device and that device pointer is
-  // stored in |device_ptrs| below. |transfers| saves its original pointer so
-  // that we can copy the data back once kernel finishes. as well as the
-  // temporary device allocations, which can be freed after kernel finishes. Key
-  // is [arg_id, ptr_pos], where ptr_pos is TypeFactory::DATA_PTR_POS_IN_NDARRAY
-  // for data_ptr and TypeFactory::GRAD_PTR_POS_IN_NDARRAY for grad_ptr. Value
-  // is [host_ptr, temporary_device_alloc]. Invariant: temp_devallocs.size() !=
-  // 0 <==> transfer happened.
   std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>,
                      ArgArrayPtrKeyHasher>
       transfers;
 
-  // |device_ptrs| stores pointers on device for all arrays args, including
-  // external arrays and ndarrays, no matter whether the data is originally on
-  // device or host.
-  // This is the source of truth for us to look for device pointers used in CUDA
-  // kernels.
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
   char *device_result_buffer{nullptr};
@@ -55,9 +236,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     const auto &parameter = kv.second;
     if (parameter.is_array) {
       const auto arr_sz = ctx.array_runtime_sizes[arg_id];
-      // Note: both numpy and PyTorch support arrays/tensors with zeros
-      // in shapes, e.g., shape=(0) or shape=(100, 0, 200). This makes
-      // `arr_sz` zero.
       if (arr_sz == 0) {
         continue;
       }
@@ -69,10 +247,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
-        // External array
-        // Note: assuming both data & grad are on the same device
         if (on_cuda_device(data_ptr)) {
-          // data_ptr is a raw ptr on CUDA device
           device_ptrs[data_ptr_idx] = data_ptr;
           device_ptrs[grad_ptr_idx] = grad_ptr;
         } else {
@@ -102,9 +277,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
       } else if (arr_sz > 0) {
-        // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
-        // Unwrapped raw ptr on device
         device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
 
         if (grad_ptr != nullptr) {
@@ -151,7 +324,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         nullptr);
   }
   CUDADriver::get_instance().mem_free_async(device_result_buffer, nullptr);
-  // copy data back to host
   if (transfers.size() > 0) {
     CUDADriver::get_instance().stream_synchronize(nullptr);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {

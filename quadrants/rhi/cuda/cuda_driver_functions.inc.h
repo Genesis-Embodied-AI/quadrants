@@ -69,4 +69,12 @@ PER_CUDA_FUNCTION(surf_object_create,cuSurfObjectCreate,CUsurfObject *, const CU
 PER_CUDA_FUNCTION(signal_external_semaphore_async,cuSignalExternalSemaphoresAsync,const CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS * , unsigned int  , CUstream)
 PER_CUDA_FUNCTION(wait_external_semaphore_async,cuWaitExternalSemaphoresAsync,const CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS * , unsigned int  , CUstream)
 PER_CUDA_FUNCTION(import_external_semaphore, cuImportExternalSemaphore,CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC *)
+
+// Graph management
+PER_CUDA_FUNCTION(graph_create, cuGraphCreate, void **, uint32);
+PER_CUDA_FUNCTION(graph_add_kernel_node, cuGraphAddKernelNode, void **, void *, const void *, std::size_t, const void *);
+PER_CUDA_FUNCTION(graph_instantiate, cuGraphInstantiate, void **, void *, void *, char *, std::size_t);
+PER_CUDA_FUNCTION(graph_launch, cuGraphLaunch, void *, void *);
+PER_CUDA_FUNCTION(graph_destroy, cuGraphDestroy, void *);
+PER_CUDA_FUNCTION(graph_exec_destroy, cuGraphExecDestroy, void *);
 // clang-format on
