@@ -273,8 +273,8 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   options.GuaranteedTailCallOpt = 0;
 
   std::unique_ptr<TargetMachine> target_machine(target->createTargetMachine(
-      triple.str(), CUDAContext::get_instance().get_mcpu(), cuda_mattrs(),
-      options, llvm::Reloc::PIC_, llvm::CodeModel::Small,
+      triple, CUDAContext::get_instance().get_mcpu(), cuda_mattrs(), options,
+      llvm::Reloc::PIC_, llvm::CodeModel::Small,
       CodeGenOptLevel::Aggressive));
 
   QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
