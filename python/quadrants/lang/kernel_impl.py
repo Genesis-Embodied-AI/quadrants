@@ -124,8 +124,11 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
 
 
 def _kernel_impl(
-    _func: Callable, level_of_class_stackframe: int, verbose: bool = False,
-    cuda_graph: bool = False, graph_while: str | None = None,
+    _func: Callable,
+    level_of_class_stackframe: int,
+    verbose: bool = False,
+    cuda_graph: bool = False,
+    graph_while: str | None = None,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
@@ -183,7 +186,9 @@ def _kernel_impl(
 @overload
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
-def kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None) -> Callable[[Any], Any]: ...
+def kernel(
+    _fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None
+) -> Callable[[Any], Any]: ...
 
 
 # TODO: This next overload should return F, but currently that will cause issues

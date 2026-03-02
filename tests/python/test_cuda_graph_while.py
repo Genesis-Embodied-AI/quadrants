@@ -1,6 +1,7 @@
 import numpy as np
-import pytest
+
 import quadrants as qd
+
 from tests import test_utils
 
 
@@ -9,9 +10,8 @@ def test_graph_while_counter():
     """Test graph_while with a counter that decrements each iteration."""
     N = 64
 
-    @qd.kernel(graph_while='counter')
-    def increment_loop(x: qd.types.ndarray(qd.i32, ndim=1),
-                       counter: qd.types.ndarray(qd.i32, ndim=0)):
+    @qd.kernel(graph_while="counter")
+    def increment_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
@@ -36,9 +36,8 @@ def test_graph_while_boolean_done():
     N = 64
     threshold = 7
 
-    @qd.kernel(graph_while='keep_going')
-    def increment_until_threshold(x: qd.types.ndarray(qd.i32, ndim=1),
-                                  keep_going: qd.types.ndarray(qd.i32, ndim=0)):
+    @qd.kernel(graph_while="keep_going")
+    def increment_until_threshold(x: qd.types.ndarray(qd.i32, ndim=1), keep_going: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
@@ -63,10 +62,12 @@ def test_graph_while_multiple_loops():
     """Test graph_while with multiple top-level loops in the kernel body."""
     N = 32
 
-    @qd.kernel(graph_while='counter')
-    def multi_loop(x: qd.types.ndarray(qd.f32, ndim=1),
-                   y: qd.types.ndarray(qd.f32, ndim=1),
-                   counter: qd.types.ndarray(qd.i32, ndim=0)):
+    @qd.kernel(graph_while="counter")
+    def multi_loop(
+        x: qd.types.ndarray(qd.f32, ndim=1),
+        y: qd.types.ndarray(qd.f32, ndim=1),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+    ):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
@@ -95,9 +96,8 @@ def test_graph_while_replay():
     """Test that graph_while works correctly on subsequent calls (graph replay)."""
     N = 16
 
-    @qd.kernel(graph_while='counter')
-    def inc(x: qd.types.ndarray(qd.i32, ndim=1),
-            counter: qd.types.ndarray(qd.i32, ndim=0)):
+    @qd.kernel(graph_while="counter")
+    def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):

@@ -1,6 +1,7 @@
 import numpy as np
 
 import quadrants as qd
+
 from tests import test_utils
 
 
@@ -12,8 +13,7 @@ def test_cuda_graph_two_loops():
     y = qd.ndarray(qd.f32, shape=(n,))
 
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
-                  y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
@@ -38,9 +38,9 @@ def test_cuda_graph_three_loops():
     c = qd.ndarray(qd.f32, shape=(n,))
 
     @qd.kernel(cuda_graph=True)
-    def three_loops(a: qd.types.ndarray(qd.f32, ndim=1),
-                    b: qd.types.ndarray(qd.f32, ndim=1),
-                    c: qd.types.ndarray(qd.f32, ndim=1)):
+    def three_loops(
+        a: qd.types.ndarray(qd.f32, ndim=1), b: qd.types.ndarray(qd.f32, ndim=1), c: qd.types.ndarray(qd.f32, ndim=1)
+    ):
         for i in range(a.shape[0]):
             a[i] = a[i] + 1.0
         for i in range(b.shape[0]):
@@ -94,8 +94,7 @@ def test_no_cuda_graph_annotation():
     y = qd.ndarray(qd.f32, shape=(n,))
 
     @qd.kernel
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
-                  y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
@@ -116,8 +115,7 @@ def test_cuda_graph_changed_args():
     n = 256
 
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
-                  y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
@@ -158,8 +156,7 @@ def test_cuda_graph_annotation_cross_platform():
     y = qd.ndarray(qd.f32, shape=(n,))
 
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1),
-                  y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):

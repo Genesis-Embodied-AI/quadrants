@@ -501,7 +501,7 @@ class Kernel(FuncBase):
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_cuda_graph = self.use_cuda_graph
-            if self.graph_while_arg is not None and hasattr(self, '_graph_while_cpp_arg_id'):
+            if self.graph_while_arg is not None and hasattr(self, "_graph_while_cpp_arg_id"):
                 launch_ctx.graph_while_arg_id = self._graph_while_cpp_arg_id
             prog.launch_kernel(compiled_kernel_data, launch_ctx)
         except Exception as e:
