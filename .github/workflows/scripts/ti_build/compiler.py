@@ -46,8 +46,8 @@ def setup_clang(as_compiler=True) -> None:
         print("brew_config", brew_config)
         brew_prefix = grep("HOMEBREW_PREFIX", brew_config).split()[1]
         print("brew_prefix", brew_prefix)
-        clang = join(brew_prefix, "opt", "llvm@22", "bin", "clang")
-        clangpp = join(brew_prefix, "opt", "llvm@22", "bin", "clang++")
+        clang = join(brew_prefix, "opt", "llvm", "bin", "clang")
+        clangpp = join(brew_prefix, "opt", "llvm", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
         out = get_cache_home() / "clang-22-1-0"
         url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-gopher-speed-up-windows-build-202603011727/taichi-llvm-22.1.0-windows-amd64.zip"
