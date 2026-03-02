@@ -284,6 +284,8 @@ class Kernel(FuncBase):
         # and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
+        self.use_cuda_graph: bool = False
+        self.graph_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -436,6 +438,8 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
+                if self.graph_while_arg is not None and self.arg_metas[i_in].name == self.graph_while_arg:
+                    self._graph_while_cpp_arg_id = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -496,6 +500,9 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
+            launch_ctx.use_cuda_graph = self.use_cuda_graph
+            if self.graph_while_arg is not None and hasattr(self, "_graph_while_cpp_arg_id"):
+                launch_ctx.graph_while_arg_id = self._graph_while_cpp_arg_id
             prog.launch_kernel(compiled_kernel_data, launch_ctx)
         except Exception as e:
             e = handle_exception_from_cpp(e)

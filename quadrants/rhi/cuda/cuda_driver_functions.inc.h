@@ -69,4 +69,22 @@ PER_CUDA_FUNCTION(surf_object_create,cuSurfObjectCreate,CUsurfObject *, const CU
 PER_CUDA_FUNCTION(signal_external_semaphore_async,cuSignalExternalSemaphoresAsync,const CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS * , unsigned int  , CUstream)
 PER_CUDA_FUNCTION(wait_external_semaphore_async,cuWaitExternalSemaphoresAsync,const CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS * , unsigned int  , CUstream)
 PER_CUDA_FUNCTION(import_external_semaphore, cuImportExternalSemaphore,CUexternalSemaphore * , const CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC *)
+
+// Graph management
+PER_CUDA_FUNCTION(graph_create, cuGraphCreate, void **, uint32);
+PER_CUDA_FUNCTION(graph_add_kernel_node, cuGraphAddKernelNode, void **, void *, const void *, std::size_t, const void *);
+PER_CUDA_FUNCTION(graph_add_node, cuGraphAddNode, void **, void *, const void *, std::size_t, void *);
+PER_CUDA_FUNCTION(graph_instantiate, cuGraphInstantiate, void **, void *, void *, char *, std::size_t);
+PER_CUDA_FUNCTION(graph_launch, cuGraphLaunch, void *, void *);
+PER_CUDA_FUNCTION(graph_destroy, cuGraphDestroy, void *);
+PER_CUDA_FUNCTION(graph_exec_destroy, cuGraphExecDestroy, void *);
+PER_CUDA_FUNCTION(graph_conditional_handle_create, cuGraphConditionalHandleCreate, void *, void *, void *, uint32, uint32);
+
+// JIT linker (for loading condition kernel with cudadevrt)
+PER_CUDA_FUNCTION(link_create, cuLinkCreate_v2, uint32, void *, void *, void **);
+PER_CUDA_FUNCTION(link_add_data, cuLinkAddData_v2, void *, uint32, void *, std::size_t, const char *, uint32, void *, void *);
+PER_CUDA_FUNCTION(link_add_file, cuLinkAddFile_v2, void *, uint32, const char *, uint32, void *, void *);
+PER_CUDA_FUNCTION(link_complete, cuLinkComplete, void *, void **, std::size_t *);
+PER_CUDA_FUNCTION(link_destroy, cuLinkDestroy, void *);
+PER_CUDA_FUNCTION(module_load_data, cuModuleLoadData, void **, const void *);
 // clang-format on
