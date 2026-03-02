@@ -47,6 +47,7 @@ def setup_basic_build_env():
     elif u.system == "Linux":
         setup_clang(as_compiler=False)
     else:
+        # macOS: use system clang as compiler, LLVM clang only for JIT
         setup_clang(as_compiler=False)
 
     setup_llvm()
