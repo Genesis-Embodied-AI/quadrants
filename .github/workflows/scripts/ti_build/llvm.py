@@ -19,8 +19,8 @@ def setup_llvm() -> str:
     """
     u = platform.uname()
 
-    llvm_version = "20.1.0"
-    build_version = "202511141226"
+    llvm_version = "22.1.0"
+    build_version = "gopher-speed-up-windows-build-202603011727"
     release_url_template = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-{llvm_version}-{build_version}/taichi-llvm-{llvm_version}-{platform}.zip".format(
         llvm_version=llvm_version,
         build_version=build_version,

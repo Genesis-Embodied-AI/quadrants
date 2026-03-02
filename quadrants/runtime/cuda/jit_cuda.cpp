@@ -261,15 +261,10 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   TargetOptions options;
   if (this->config_.fast_math) {
     options.AllowFPOpFusion = FPOpFusion::Fast;
-    // See NVPTXISelLowering.cpp
-    // Setting UnsafeFPMath true will result in approximations such as
-    // sqrt.approx in PTX for both f32 and f64
-    options.UnsafeFPMath = 1;
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
   } else {
     options.AllowFPOpFusion = FPOpFusion::Strict;
-    options.UnsafeFPMath = 0;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
   }
