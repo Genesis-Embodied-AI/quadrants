@@ -47,8 +47,7 @@ def setup_basic_build_env():
     elif u.system == "Linux":
         setup_clang(as_compiler=False)
     else:
-        # Use Clang on all other platforms
-        setup_clang()
+        setup_clang(as_compiler=False)
 
     setup_llvm()
     if u.system == "Linux":
