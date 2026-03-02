@@ -434,8 +434,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         auto *arg = &*func->arg_begin();
         auto *pred = builder.CreateTrunc(arg, builder.getInt1Ty());
         llvm::Value *barrier_args[] = {get_constant(0), pred};
-        auto *result = builder.CreateIntrinsic(
-            intrin, ArrayRef<llvm::Type *>{}, barrier_args);
+        auto *result = builder.CreateIntrinsic(intrin, ArrayRef<llvm::Type *>{},
+                                               barrier_args);
         if (result_is_i1)
           builder.CreateRet(builder.CreateZExt(result, builder.getInt32Ty()));
         else
