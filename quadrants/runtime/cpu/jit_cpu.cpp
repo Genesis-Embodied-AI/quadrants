@@ -118,7 +118,7 @@ class JITSessionCPU : public JITSession {
         object_layer_(es_),
 #else
         object_layer_(es_,
-                      [&]() {
+                      [&](const MemoryBuffer &) {
                         auto smgr = std::make_unique<SectionMemoryManager>();
                         memory_manager_ = smgr.get();
                         return smgr;

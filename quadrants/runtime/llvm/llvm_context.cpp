@@ -433,11 +433,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
         builder.SetInsertPoint(bb);
         auto *arg = &*func->arg_begin();
         auto *pred = builder.CreateTrunc(arg, builder.getInt1Ty());
-        auto *result = builder.CreateIntrinsic(intrin, {},
-            {get_constant(0), pred});
+        auto *result =
+            builder.CreateIntrinsic(intrin, {}, {get_constant(0), pred});
         if (result_is_i1)
-          builder.CreateRet(
-              builder.CreateZExt(result, builder.getInt32Ty()));
+          builder.CreateRet(builder.CreateZExt(result, builder.getInt32Ty()));
         else
           builder.CreateRet(result);
         QuadrantsLLVMContext::mark_inline(func);
@@ -592,8 +591,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       IRBuilder<> builder(*ctx);
       builder.SetInsertPoint(bb);
       // Use readcyclecounter intrinsic (maps to rdtsc on x86, etc.)
-      builder.CreateRet(builder.CreateIntrinsic(
-          Intrinsic::readcyclecounter, ArrayRef<llvm::Value *>{}));
+      builder.CreateRet(builder.CreateIntrinsic(Intrinsic::readcyclecounter,
+                                                ArrayRef<llvm::Value *>{}));
       QuadrantsLLVMContext::mark_inline(func);
     }
   }
