@@ -102,7 +102,7 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
         // more details, please ref
         // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
         auto *new_alloca = builder.CreateAlloca(alloca_type, (unsigned)5);
-        auto new_type = llvm::PointerType::get(alloca_type, (unsigned)0);
+        auto *new_type = llvm::PointerType::get(f.getContext(), (unsigned)0);
         new_alloca->setAlignment(Align(allocainst->getAlign().value()));
         auto *addrspacecast = builder.CreateAddrSpaceCast(new_alloca, new_type);
         allocainst->replaceAllUsesWith(addrspacecast);
@@ -164,7 +164,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
     // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
     auto *new_alloca = builder.CreateAlloca(new_type, (unsigned)5);
     new_alloca->setAlignment(Align(8));
-    auto new_ty = llvm::PointerType::get(new_type, unsigned(0));
+    auto *new_ty = llvm::PointerType::get(M.getContext(), unsigned(0));
     auto *new_cast = builder.CreateAddrSpaceCast(new_alloca, new_ty);
     new_alloca->setAlignment(Align(8));
     QD_ASSERT(alloca->hasOneUse());
@@ -205,7 +205,7 @@ struct AMDGPUConvertFunctionBodyAllocsAddressSpacePass : public FunctionPass {
         auto alloca_type = allocainst->getAllocatedType();
         llvm::IRBuilder<> builder(allocainst);
         auto *new_alloca = builder.CreateAlloca(alloca_type, (unsigned)5);
-        auto new_type = llvm::PointerType::get(alloca_type, (unsigned)0);
+        auto *new_type = llvm::PointerType::get(f.getContext(), (unsigned)0);
         new_alloca->setAlignment(Align(allocainst->getAlign().value()));
         auto *addrspacecast = builder.CreateAddrSpaceCast(new_alloca, new_type);
         allocainst->replaceAllUsesWith(addrspacecast);
