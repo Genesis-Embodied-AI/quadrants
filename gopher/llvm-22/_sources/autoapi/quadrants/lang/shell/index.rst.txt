@@ -1,0 +1,24 @@
+quadrants.lang.shell
+====================
+
+.. py:module:: quadrants.lang.shell
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.shell.pybuf_enabled
+   quadrants.lang.shell.pybuf_enabled
+
+
+Module Contents
+---------------
+
+.. py:data:: pybuf_enabled
+   :value: False
+
+
+.. py:data:: pybuf_enabled
+

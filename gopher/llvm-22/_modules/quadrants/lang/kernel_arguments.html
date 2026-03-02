@@ -1,0 +1,584 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.kernel_arguments &#8212; Quadrants 0.4.3 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../_static/documentation_options.js?v=5bfaad31"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/kernel_arguments';</script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.4.3" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 0.4.3 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.kernel_arguments</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.kernel_arguments</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants.lang</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BoundaryMode</span><span class="p">,</span>
+    <span class="n">DataTypeCxx</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">MatrixType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">StructType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.compound_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompoundType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">RefType</span><span class="p">,</span> <span class="n">u64</span>
+
+
+<div class="viewcode-block" id="ArgMetadata">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ArgMetadata</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Metadata about an argument to a function</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">empty</span><span class="p">):</span>
+<div class="viewcode-block" id="ArgMetadata.annotation">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.annotation">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">annotation</span> <span class="o">=</span> <span class="n">annotation</span></div>
+
+<div class="viewcode-block" id="ArgMetadata.name">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.name">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span></div>
+
+<div class="viewcode-block" id="ArgMetadata.default">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.default">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="n">default</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(annotation=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation</span><span class="si">}</span><span class="s2">, name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, default=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">default</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="SparseMatrixEntry">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixEntry">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SparseMatrixEntry</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ptr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+<div class="viewcode-block" id="SparseMatrixEntry.ptr">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixEntry.ptr">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ptr</span></div>
+
+<div class="viewcode-block" id="SparseMatrixEntry.i">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixEntry.i">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">i</span> <span class="o">=</span> <span class="n">i</span></div>
+
+<div class="viewcode-block" id="SparseMatrixEntry.j">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixEntry.j">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">j</span> <span class="o">=</span> <span class="n">j</span></div>
+
+<div class="viewcode-block" id="SparseMatrixEntry.dtype">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixEntry.dtype">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_augassign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
+        <span class="n">call_func</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;insert_triplet_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Add&quot;</span><span class="p">:</span>
+            <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="n">call_func</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Sub&quot;</span><span class="p">:</span>
+            <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="n">call_func</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="o">-</span><span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Only operations &#39;+=&#39; and &#39;-=&#39; are supported on sparse matrices.&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="SparseMatrixProxy">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixProxy">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SparseMatrixProxy</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ptr</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+<div class="viewcode-block" id="SparseMatrixProxy.ptr">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixProxy.ptr">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ptr</span></div>
+
+<div class="viewcode-block" id="SparseMatrixProxy.dtype">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixProxy.dtype">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
+
+
+<div class="viewcode-block" id="SparseMatrixProxy.subscript">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.SparseMatrixProxy.subscript">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">subscript</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">SparseMatrixEntry</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="decl_scalar_arg">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_scalar_arg">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_scalar_arg</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="n">is_ref</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">RefType</span><span class="p">):</span>
+        <span class="n">is_ref</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">tp</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_ref</span><span class="p">:</span>
+        <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_pointer_param</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_scalar_param</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="n">argload_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">is_ref</span><span class="p">,</span> <span class="n">create_load</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="get_type_for_kernel_args">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.get_type_for_kernel_args">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_type_for_kernel_args</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
+        <span class="c1"># Compiling the matrix type to a struct type because the support for the matrix type is not ready yet on SPIR-V based backends.</span>
+        <span class="k">if</span> <span class="n">dtype</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">elements</span> <span class="o">=</span> <span class="p">[(</span><span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">n</span><span class="p">)]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">elements</span> <span class="o">=</span> <span class="p">[(</span><span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">j</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_struct_type</span><span class="p">(</span><span class="n">elements</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
+        <span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">element_type</span> <span class="ow">in</span> <span class="n">dtype</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">CompoundType</span><span class="p">):</span>
+                <span class="n">new_dtype</span> <span class="o">=</span> <span class="n">get_type_for_kernel_args</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+                <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">new_dtype</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">element_type</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_struct_type</span><span class="p">(</span><span class="n">elements</span><span class="p">)</span>
+    <span class="c1"># Assuming dtype is a primitive type</span>
+    <span class="k">return</span> <span class="n">dtype</span></div>
+
+
+
+<div class="viewcode-block" id="decl_matrix_arg">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_matrix_arg">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_matrix_arg</span><span class="p">(</span><span class="n">matrixtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="n">arg_type</span> <span class="o">=</span> <span class="n">get_type_for_kernel_args</span><span class="p">(</span><span class="n">matrixtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_scalar_param</span><span class="p">(</span><span class="n">arg_type</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">argload_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">arg_load</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">arg_type</span><span class="p">,</span> <span class="n">create_load</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">matrixtype</span><span class="o">.</span><span class="n">from_quadrants_object</span><span class="p">(</span><span class="n">arg_load</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="decl_struct_arg">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_struct_arg">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_struct_arg</span><span class="p">(</span><span class="n">structtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="n">arg_type</span> <span class="o">=</span> <span class="n">get_type_for_kernel_args</span><span class="p">(</span><span class="n">structtype</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_scalar_param</span><span class="p">(</span><span class="n">arg_type</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">argload_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="n">arg_load</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">arg_type</span><span class="p">,</span> <span class="n">create_load</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">structtype</span><span class="o">.</span><span class="n">from_quadrants_object</span><span class="p">(</span><span class="n">arg_load</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="decl_sparse_matrix">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_sparse_matrix">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_sparse_matrix</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="n">value_type</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">ptr_type</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">u64</span><span class="p">)</span>
+    <span class="c1"># Treat the sparse matrix argument as a scalar since we only need to pass in the base pointer</span>
+    <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_scalar_param</span><span class="p">(</span><span class="n">ptr_type</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">argload_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">SparseMatrixProxy</span><span class="p">(</span>
+        <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">ptr_type</span><span class="p">,</span> <span class="n">is_ptr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">),</span> <span class="n">value_type</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="decl_ndarray_arg">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_ndarray_arg">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_ndarray_arg</span><span class="p">(</span>
+    <span class="n">element_type</span><span class="p">:</span> <span class="n">DataTypeCxx</span><span class="p">,</span> <span class="n">ndim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">boundary</span><span class="p">:</span> <span class="n">BoundaryMode</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AnyArray</span><span class="p">:</span>
+    <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_ndarray_param</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">AnyArray</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">boundary</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="decl_ret">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.decl_ret">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decl_ret</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_tensor_type</span><span class="p">([</span><span class="n">dtype</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">.</span><span class="n">m</span><span class="p">],</span> <span class="n">dtype</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_ret</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
