@@ -50,7 +50,7 @@ def setup_clang(as_compiler=True) -> None:
         clangpp = join(brew_prefix, "opt", "llvm", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
         out = get_cache_home() / "clang-22-1-0"
-        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-gopher-speed-up-windows-build-202603011727/taichi-llvm-22.1.0-windows-amd64.zip"
+        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-gopher-speed-up-windows-build-202603022028/taichi-llvm-22.1.0-windows-amd64.zip"
         download_dep(url, out, force=True)
         clang = str(out / "bin" / "clang++.exe").replace("\\", "\\\\")
         clangpp = clang
