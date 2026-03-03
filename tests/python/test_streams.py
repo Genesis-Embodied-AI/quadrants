@@ -288,7 +288,7 @@ def test_stream_parallel_multiple_loops_per_stream():
     c = qd.field(qd.f32, shape=(N,))
 
     @qd.kernel
-    def multi_loop_streams():
+    def parallel_phase():
         with qd.stream_parallel():
             for i in range(N):
                 a[i] = 1.0
@@ -297,11 +297,14 @@ def test_stream_parallel_multiple_loops_per_stream():
         with qd.stream_parallel():
             for j in range(N):
                 b[j] = 10.0
-        # implicit barrier
+
+    @qd.kernel
+    def combine():
         for i in range(N):
             c[i] = a[i] + b[i]
 
-    multi_loop_streams()
+    parallel_phase()
+    combine()
     qd.sync()
     assert np.allclose(a.to_numpy(), 2.0)
     assert np.allclose(b.to_numpy(), 10.0)
@@ -387,6 +390,27 @@ def test_stream_parallel_noop_on_cpu():
     qd.sync()
     assert np.allclose(a.to_numpy(), 1.0)
     assert np.allclose(b.to_numpy(), 2.0)
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_stream_parallel_rejects_mixed_top_level():
+    """Mixing stream_parallel and non-stream_parallel at top level is an error."""
+    import pytest
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="all top-level statements"):
+        @qd.kernel
+        def bad_kernel():
+            with qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+            for i in range(N):
+                a[i] = 2.0
+
+        bad_kernel()
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
