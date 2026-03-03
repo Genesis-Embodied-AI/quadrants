@@ -13,7 +13,7 @@ The following compound types are available:
 | type                               | can be passed to qd.kernel? | can be passed to qd.func? | can contain ndarray? | can contain field? | can be mixed with other parameters? | supports differentiation? | can be nested? | caches arguments? | comments |
 |------------------------------------|-----------------------------|---------------------------|----------------------|--------------------|-------------------------------------|---------------------------|----------------|-------------------|----------|
 | `@qd.struct`, `@qd.dataclass`      |                         yes | yes                       |                   no |                yes | yes                                 | yes                       | yes            | no                |          |
-| `@qd.data_oriented`                |yes                          | yes                       | no                   |  yes               |yes                                   | yes                       | no             | no                |          |
+| `@qd.data_oriented`                |yes                          | yes                       | no                   |  yes               |yes                                   | yes                       | yes            | no                |          |
 | `@dataclasses.dataclass`            | yes                         | yes                       | yes                  | yes                | yes                                   | yes                     |yes         | no                | recommended approach |
 
 `@dataclasses.dataclass` is the current recommended approach:
