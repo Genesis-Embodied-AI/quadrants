@@ -258,6 +258,130 @@ def test_concurrent_streams_with_events():
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_stream_parallel_basic():
+    """qd.stream_parallel() runs top-level for loops on separate streams."""
+    N = 1024
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill_parallel():
+        with qd.stream_parallel():
+            for i in range(N):
+                a[i] = 1.0
+            for j in range(N):
+                b[j] = 2.0
+
+    fill_parallel()
+    qd.sync()
+    assert np.allclose(a.to_numpy(), 1.0)
+    assert np.allclose(b.to_numpy(), 2.0)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_stream_parallel_multiple_blocks():
+    """Multiple stream_parallel blocks in one kernel."""
+    N = 1024
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+    c = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def multi_phase():
+        with qd.stream_parallel():
+            for i in range(N):
+                a[i] = 1.0
+            for j in range(N):
+                b[j] = 2.0
+        # Implicit barrier -- a and b are ready
+        for i in range(N):
+            c[i] = a[i] + b[i]
+
+    multi_phase()
+    qd.sync()
+    assert np.allclose(c.to_numpy(), 3.0)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_stream_parallel_timing():
+    """stream_parallel achieves speedup over serial execution."""
+    SPIN_ITERS = 40_000_000
+
+    a = qd.field(qd.i32, shape=(2,))
+    b = qd.field(qd.i32, shape=(2,))
+
+    @qd.kernel
+    def serial_spin():
+        for _ in range(1):
+            x = a[0]
+            for _j in range(SPIN_ITERS):
+                x = (1664525 * x + 1013904223) % 2147483647
+            a[0] = x
+        for _ in range(1):
+            x = a[1]
+            for _j in range(SPIN_ITERS):
+                x = (1664525 * x + 1013904223) % 2147483647
+            a[1] = x
+
+    @qd.kernel
+    def parallel_spin():
+        with qd.stream_parallel():
+            for _ in range(1):
+                x = b[0]
+                for _j in range(SPIN_ITERS):
+                    x = (1664525 * x + 1013904223) % 2147483647
+                b[0] = x
+            for _ in range(1):
+                x = b[1]
+                for _j in range(SPIN_ITERS):
+                    x = (1664525 * x + 1013904223) % 2147483647
+                b[1] = x
+
+    import time
+
+    # Warm up
+    serial_spin()
+    parallel_spin()
+    qd.sync()
+
+    qd.sync()
+    t0 = time.perf_counter()
+    serial_spin()
+    qd.sync()
+    serial_time = time.perf_counter() - t0
+
+    qd.sync()
+    t0 = time.perf_counter()
+    parallel_spin()
+    qd.sync()
+    stream_time = time.perf_counter() - t0
+
+    speedup = serial_time / stream_time
+    assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+
+
+@test_utils.test(arch=[qd.cpu])
+def test_stream_parallel_noop_on_cpu():
+    """stream_parallel is a no-op on CPU without errors."""
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill_parallel():
+        with qd.stream_parallel():
+            for i in range(N):
+                a[i] = 1.0
+            for j in range(N):
+                b[j] = 2.0
+
+    fill_parallel()
+    qd.sync()
+    assert np.allclose(a.to_numpy(), 1.0)
+    assert np.allclose(b.to_numpy(), 2.0)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_stream_with_ndarray():
     N = 1024
 

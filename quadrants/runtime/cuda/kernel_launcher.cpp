@@ -1,5 +1,6 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
+#include "quadrants/rhi/cuda/cuda_driver.h"
 
 namespace quadrants::lang {
 namespace cuda {
@@ -139,11 +140,44 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  for (auto task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
-                        {&ctx.get_context()}, {});
+  for (size_t i = 0; i < offloaded_tasks.size();) {
+    auto &task = offloaded_tasks[i];
+    if (task.stream_parallel_group_id == 0) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+                          {&ctx.get_context()}, {});
+      i++;
+    } else {
+      int gid = task.stream_parallel_group_id;
+      size_t group_start = i;
+      while (i < offloaded_tasks.size() &&
+             offloaded_tasks[i].stream_parallel_group_id == gid) {
+        i++;
+      }
+      size_t group_size = i - group_start;
+
+      std::vector<void *> streams(group_size);
+      for (auto &s : streams) {
+        CUDADriver::get_instance().stream_create(&s, 0);
+      }
+
+      for (size_t j = 0; j < group_size; j++) {
+        auto &t = offloaded_tasks[group_start + j];
+        CUDAContext::get_instance().set_stream(streams[j]);
+        cuda_module->launch(t.name, t.grid_dim, t.block_dim, 0,
+                            {&ctx.get_context()}, {});
+      }
+
+      for (auto s : streams) {
+        CUDADriver::get_instance().stream_synchronize(s);
+      }
+      for (auto s : streams) {
+        CUDADriver::get_instance().stream_destroy(s);
+      }
+
+      CUDAContext::get_instance().set_stream(active_stream);
+    }
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer,

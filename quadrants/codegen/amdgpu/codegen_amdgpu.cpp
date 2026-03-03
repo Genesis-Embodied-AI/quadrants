@@ -396,6 +396,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
+      current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);

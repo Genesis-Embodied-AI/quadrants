@@ -15,6 +15,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
+from quadrants.lang.stream import stream_parallel
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -24,6 +25,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ReturnStatus,
     get_decorator,
 )
+from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
@@ -1379,6 +1381,32 @@ class ASTTransformer(Builder):
             ctx.set_loop_status(LoopStatus.Continue)
         else:
             ctx.ast_builder.insert_continue_stmt(_qd_core.DebugInfo(ctx.get_pos_info(node)))
+        return None
+
+    @staticmethod
+    def build_With(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+        if len(node.items) != 1:
+            raise QuadrantsSyntaxError(
+                "'with' in Quadrants kernels only supports a single context manager"
+            )
+        item = node.items[0]
+        if item.optional_vars is not None:
+            raise QuadrantsSyntaxError(
+                "'with ... as ...' is not supported in Quadrants kernels"
+            )
+        if not isinstance(item.context_expr, ast.Call):
+            raise QuadrantsSyntaxError(
+                "'with' in Quadrants kernels requires a call expression"
+            )
+        if not ASTResolver.resolve_to(
+            item.context_expr.func, stream_parallel, ctx.global_vars
+        ):
+            raise QuadrantsSyntaxError(
+                "'with' in Quadrants kernels only supports qd.stream_parallel()"
+            )
+        ctx.ast_builder.begin_stream_parallel()
+        build_stmts(ctx, node.body)
+        ctx.ast_builder.end_stream_parallel()
         return None
 
     @staticmethod

@@ -1,5 +1,6 @@
 #include "quadrants/runtime/amdgpu/kernel_launcher.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
+#include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/program/launch_context_builder.h"
 
 namespace quadrants::lang {
@@ -110,11 +111,46 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
-  for (auto &task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
-                          {(void *)&context_pointer}, {arg_size});
+  for (size_t i = 0; i < offloaded_tasks.size();) {
+    auto &task = offloaded_tasks[i];
+    if (task.stream_parallel_group_id == 0) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+                            {(void *)&context_pointer}, {arg_size});
+      i++;
+    } else {
+      int gid = task.stream_parallel_group_id;
+      size_t group_start = i;
+      while (i < offloaded_tasks.size() &&
+             offloaded_tasks[i].stream_parallel_group_id == gid) {
+        i++;
+      }
+      size_t group_size = i - group_start;
+
+      std::vector<void *> streams(group_size);
+      for (auto &s : streams) {
+        AMDGPUDriver::get_instance().stream_create(&s, 0);
+      }
+
+      for (size_t j = 0; j < group_size; j++) {
+        auto &t = offloaded_tasks[group_start + j];
+        QD_TRACE("Launching kernel {}<<<{}, {}>>> on stream {}",
+                 t.name, t.grid_dim, t.block_dim, j);
+        AMDGPUContext::get_instance().set_stream(streams[j]);
+        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, 0,
+                              {(void *)&context_pointer}, {arg_size});
+      }
+
+      for (auto s : streams) {
+        AMDGPUDriver::get_instance().stream_synchronize(s);
+      }
+      for (auto s : streams) {
+        AMDGPUDriver::get_instance().stream_destroy(s);
+      }
+
+      AMDGPUContext::get_instance().set_stream(nullptr);
+    }
   }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {

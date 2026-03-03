@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from quadrants.lang import impl
 
 
@@ -93,4 +95,15 @@ def create_event() -> Event:
     return Event(handle)
 
 
-__all__ = ["Stream", "Event", "create_stream", "create_event"]
+@contextmanager
+def stream_parallel():
+    """Run top-level for loops in this block on separate GPU streams.
+
+    Used inside @qd.kernel. At Python runtime (outside kernels), this is a
+    no-op. During kernel compilation, the AST transformer calls into the C++
+    ASTBuilder to tag loops with a stream-parallel group ID.
+    """
+    yield
+
+
+__all__ = ["Stream", "Event", "create_stream", "create_event", "stream_parallel"]
