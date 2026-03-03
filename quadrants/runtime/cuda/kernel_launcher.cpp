@@ -147,7 +147,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     if (task.stream_parallel_group_id == 0) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
                task.block_dim);
-      cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+      cuda_module->launch(task.name, task.grid_dim, task.block_dim,
+                          task.dynamic_shared_array_bytes,
                           {&ctx.get_context()}, {});
       i++;
     } else {
@@ -170,7 +171,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       for (size_t j = group_start; j < i; j++) {
         auto &t = offloaded_tasks[j];
         CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-        cuda_module->launch(t.name, t.grid_dim, t.block_dim, 0,
+        cuda_module->launch(t.name, t.grid_dim, t.block_dim,
+                            t.dynamic_shared_array_bytes,
                             {&ctx.get_context()}, {});
       }
 
