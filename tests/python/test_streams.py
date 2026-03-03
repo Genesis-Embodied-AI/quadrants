@@ -180,10 +180,10 @@ def test_stream_noop_on_cpu():
     e.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_concurrent_streams_with_events():
-    """Two slow kernels on separate streams run concurrently (~1s),
-    then a third kernel waits for both via events."""
+    """Two slow kernels on separate streams run concurrently (~1s on GPU),
+    serial fallback on CPU/Metal."""
     SPIN_ITERS = 40_000_000
 
     @qd.kernel
@@ -249,7 +249,10 @@ def test_concurrent_streams_with_events():
     assert np.isclose(a.to_numpy()[2], 12.0)
 
     speedup = serial_time / stream_time
-    assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x"
+    if qd.lang.impl.current_cfg().arch in (qd.cuda, qd.amdgpu):
+        assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x"
+    else:
+        assert speedup > 0.75, f"Expected >=0.75x (serial fallback), got {speedup:.2f}x"
 
     s1.destroy()
     s2.destroy()
@@ -311,9 +314,9 @@ def test_stream_parallel_multiple_loops_per_stream():
     assert np.allclose(c.to_numpy(), 12.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_stream_parallel_timing():
-    """stream_parallel achieves speedup over serial execution."""
+    """stream_parallel achieves speedup on GPU, serial fallback elsewhere."""
     SPIN_ITERS = 40_000_000
 
     a = qd.field(qd.i32, shape=(2,))
@@ -367,9 +370,15 @@ def test_stream_parallel_timing():
     stream_time = time.perf_counter() - t0
 
     speedup = serial_time / stream_time
-    assert (
-        speedup > 1.5
-    ), f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+    if qd.lang.impl.current_cfg().arch in (qd.cuda, qd.amdgpu):
+        assert speedup > 1.5, (
+            f"Expected >1.5x speedup, got {speedup:.2f}x " f"(serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+        )
+    else:
+        assert speedup > 0.75, (
+            f"Expected >=0.75x (serial fallback), got {speedup:.2f}x "
+            f"(serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+        )
 
 
 @test_utils.test()
