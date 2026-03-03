@@ -1,0 +1,39 @@
+quadrants.lang
+==============
+
+.. py:module:: quadrants.lang
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/lang/any_array/index
+   /autoapi/quadrants/lang/ast/index
+   /autoapi/quadrants/lang/common_ops/index
+   /autoapi/quadrants/lang/exception/index
+   /autoapi/quadrants/lang/expr/index
+   /autoapi/quadrants/lang/field/index
+   /autoapi/quadrants/lang/func/index
+   /autoapi/quadrants/lang/impl/index
+   /autoapi/quadrants/lang/intrinsics/index
+   /autoapi/quadrants/lang/kernel/index
+   /autoapi/quadrants/lang/kernel_arguments/index
+   /autoapi/quadrants/lang/kernel_impl/index
+   /autoapi/quadrants/lang/matrix/index
+   /autoapi/quadrants/lang/matrix_ops/index
+   /autoapi/quadrants/lang/matrix_ops_utils/index
+   /autoapi/quadrants/lang/mesh/index
+   /autoapi/quadrants/lang/misc/index
+   /autoapi/quadrants/lang/ops/index
+   /autoapi/quadrants/lang/runtime_ops/index
+   /autoapi/quadrants/lang/shell/index
+   /autoapi/quadrants/lang/simt/index
+   /autoapi/quadrants/lang/snode/index
+   /autoapi/quadrants/lang/source_builder/index
+   /autoapi/quadrants/lang/struct/index
+   /autoapi/quadrants/lang/util/index
+
+
