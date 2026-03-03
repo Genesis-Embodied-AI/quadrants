@@ -125,14 +125,19 @@ class LaunchContextBufferCache:
         # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument
         # with expired cache entry caused by deallocated argument.
         launch_ctx_cache_tracker_: list[ReferenceType | None] = [None]
-        clear_callback = lambda ref: launch_ctx_cache_tracker_.clear()
+
+        def _evict_callback(ref, _tracker=launch_ctx_cache_tracker_, _self=self, _hash=args_hash):
+            _tracker.clear()
+            _self._launch_ctx_cache.pop(_hash, None)
+            _self._launch_ctx_cache_tracker.pop(_hash, None)
+
         if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY):
             _, arrs = zip(*launch_ctx_args)
-            launch_ctx_cache_tracker_ += [ReferenceType(arr, clear_callback) for arr in arrs]
+            launch_ctx_cache_tracker_ += [ReferenceType(arr, _evict_callback) for arr in arrs]
         if launch_ctx_args := launch_ctx_buffer.get(_QD_ARRAY_WITH_GRAD):
             _, arrs, arrs_grad = zip(*launch_ctx_args)
-            launch_ctx_cache_tracker_ += [ReferenceType(arr, clear_callback) for arr in arrs]
-            launch_ctx_cache_tracker_ += [ReferenceType(arr_grad, clear_callback) for arr_grad in arrs_grad]
+            launch_ctx_cache_tracker_ += [ReferenceType(arr, _evict_callback) for arr in arrs]
+            launch_ctx_cache_tracker_ += [ReferenceType(arr_grad, _evict_callback) for arr_grad in arrs_grad]
         self._launch_ctx_cache_tracker[args_hash] = launch_ctx_cache_tracker_
 
     def populate_launch_ctx_from_cache(self, args_hash: "ArgsHash", launch_ctx: KernelLaunchContext) -> bool:
