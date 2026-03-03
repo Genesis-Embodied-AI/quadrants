@@ -397,6 +397,12 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     if (arch_ == Arch::cuda) {
       module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
 
+      // Strip nvvmir.version from runtime bitcode so LLVM picks a PTX version
+      // compatible with the target SM (e.g. sm_120 requires PTX >= 8.7).
+      if (auto *md = module->getNamedMetadata("nvvmir.version")) {
+        module->eraseNamedMetadata(md);
+      }
+
 #if defined(QD_WITH_CUDA)
       auto func = module->getFunction("cuda_compute_capability");
       if (func) {
@@ -598,6 +604,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     }
   }
 
+  // Final sweep: strip nvvmir.version that may have been reintroduced by
+  // linking libdevice or custom CUDA libraries.
+  if (arch_ == Arch::cuda) {
+    if (auto *md = module->getNamedMetadata("nvvmir.version")) {
+      module->eraseNamedMetadata(md);
+    }
+  }
+
   return module;
 }
 
@@ -636,6 +650,9 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(
   }
 
   libdevice_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
+  if (auto *md = libdevice_module->getNamedMetadata("nvvmir.version")) {
+    libdevice_module->eraseNamedMetadata(md);
+  }
   module->setDataLayout(libdevice_module->getDataLayout());
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
@@ -886,11 +903,13 @@ void QuadrantsLLVMContext::insert_nvvm_annotation(llvm::Function *func,
 
 void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
                                                         int block_dim) {
-  // Mark kernel function as a CUDA __global__ function
-  // Add the nvvm annotation that it is considered a kernel function.
+  // Mark kernel function as a CUDA __global__ function.
+  // Use the ptx_kernel calling convention so the kernel marker survives
+  // optimization passes (nvvm.annotations metadata gets stripped by O3).
+  func->setCallingConv(llvm::CallingConv::PTX_Kernel);
+  // Keep nvvm.annotations for launch bounds (maxntidx, minctasm).
   insert_nvvm_annotation(func, "kernel", 1);
   if (block_dim != 0) {
-    // CUDA launch bounds
     insert_nvvm_annotation(func, "maxntidx", block_dim);
     insert_nvvm_annotation(func, "minctasm", 2);
   }
@@ -993,6 +1012,13 @@ void QuadrantsLLVMContext::init_runtime_module(llvm::Module *runtime_module) {
       if (starts_with(func_name, "runtime_")) {
         mark_function_as_cuda_kernel(&f);
         is_kernel = true;
+        // Kernel functions must not be inlined and must not carry host
+        // (x86) target attributes, otherwise LLVM 22's NVPTX backend
+        // will emit them as .func instead of .entry.
+        f.removeFnAttr(llvm::Attribute::AlwaysInline);
+        f.removeFnAttr("target-cpu");
+        f.removeFnAttr("target-features");
+        f.removeFnAttr("tune-cpu");
       }
 
       if (!is_kernel && !f.isDeclaration())

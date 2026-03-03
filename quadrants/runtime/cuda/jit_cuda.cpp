@@ -188,6 +188,15 @@ llvm::DataLayout JITSessionCUDA::get_data_layout() {
 }
 
 std::string cuda_mattrs() {
+#ifdef QD_WITH_CUDA
+  int cap = CUDAContext::get_instance().get_compute_capability();
+  if (cap >= 120)
+    return "+ptx87";
+  if (cap >= 90)
+    return "+ptx80";
+  if (cap >= 80)
+    return "+ptx70";
+#endif
   return "+ptx63";
 }
 
@@ -282,6 +291,14 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
 
   module->setDataLayout(target_machine->createDataLayout());
+
+  // Remove outdated nvvmir.version metadata inherited from runtime bitcode.
+  // The runtime bitcode may specify an old PTX version (e.g. 6.3) that is
+  // incompatible with newer SM targets (e.g. sm_120 requires PTX 8.7+).
+  // Stripping it lets LLVM pick the appropriate default for the target.
+  if (auto *md = module->getNamedMetadata("nvvmir.version")) {
+    module->eraseNamedMetadata(md);
+  }
 
   // Set up passes
   llvm::SmallString<8> outstr;
