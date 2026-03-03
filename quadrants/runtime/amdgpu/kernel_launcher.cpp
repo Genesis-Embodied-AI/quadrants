@@ -113,7 +113,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   for (auto &task : offloaded_tasks) {
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
              task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                          task.dynamic_shared_array_bytes,
                           {(void *)&context_pointer}, {arg_size});
   }
   QD_TRACE("Launching kernel");

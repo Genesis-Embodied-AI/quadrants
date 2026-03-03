@@ -139,8 +139,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   for (auto task : offloaded_tasks) {
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
              task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim, 0,
-                        {&ctx.get_context()}, {});
+    cuda_module->launch(task.name, task.grid_dim, task.block_dim,
+                        task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                        {});
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
