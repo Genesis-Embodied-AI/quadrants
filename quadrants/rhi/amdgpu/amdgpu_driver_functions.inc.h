@@ -26,6 +26,7 @@ PER_AMDGPU_FUNCTION(context_get_current, hipCtxGetCurrent, void **);
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_create, hipStreamCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(stream_destroy, hipStreamDestroy, void *);
 
 // Memory management
 PER_AMDGPU_FUNCTION(memcpy_host_to_device,
@@ -121,6 +122,7 @@ PER_AMDGPU_FUNCTION(kernel_get_occupancy,
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_synchronize, hipStreamSynchronize, void *);
+PER_AMDGPU_FUNCTION(stream_wait_event, hipStreamWaitEvent, void *, void *, uint32);
 
 // Event management
 PER_AMDGPU_FUNCTION(event_create, hipEventCreateWithFlags, void **, uint32);

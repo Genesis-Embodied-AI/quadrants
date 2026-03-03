@@ -8,7 +8,7 @@ from quadrants.lang.stream import Stream, Event
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_create_and_destroy_stream():
     s = qd.create_stream()
     assert isinstance(s, Stream)
@@ -17,7 +17,7 @@ def test_create_and_destroy_stream():
     assert s.handle == 0
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_create_and_destroy_event():
     e = qd.create_event()
     assert isinstance(e, Event)
@@ -26,7 +26,7 @@ def test_create_and_destroy_event():
     assert e.handle == 0
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_kernel_on_stream():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -43,7 +43,7 @@ def test_kernel_on_stream():
     s.destroy()
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_two_streams():
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
@@ -71,7 +71,7 @@ def test_two_streams():
     s2.destroy()
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_event_synchronization():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -104,7 +104,7 @@ def test_event_synchronization():
     s1.destroy()
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_event_wait_on_stream():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -140,7 +140,7 @@ def test_event_wait_on_stream():
     s2.destroy()
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_default_stream_kernel():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -155,7 +155,32 @@ def test_default_stream_kernel():
     assert np.allclose(x.to_numpy(), 7.0)
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cpu])
+def test_stream_noop_on_cpu():
+    """Streams should be no-ops on CPU without errors."""
+    N = 64
+    x = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill():
+        for i in range(N):
+            x[i] = 3.0
+
+    s = qd.create_stream()
+    assert s.handle == 0
+    fill(qd_stream=s)
+    qd.sync()
+    assert np.allclose(x.to_numpy(), 3.0)
+
+    e = qd.create_event()
+    assert e.handle == 0
+    e.record(s)
+    e.wait()
+    s.destroy()
+    e.destroy()
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_stream_with_ndarray():
     N = 1024
 

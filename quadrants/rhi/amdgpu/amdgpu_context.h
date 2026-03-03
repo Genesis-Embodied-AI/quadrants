@@ -23,6 +23,7 @@ class AMDGPUContext {
   KernelProfilerBase *profiler_{nullptr};
   AMDGPUDriver &driver_;
   bool debug_{false};
+  void *stream_{nullptr};
   std::vector<void *> kernel_arg_pointer_;
 
  public:
@@ -114,6 +115,14 @@ class AMDGPUContext {
 
   std::unique_lock<std::mutex> get_lock_guard() {
     return std::unique_lock<std::mutex>(lock_);
+  }
+
+  void set_stream(void *stream) {
+    stream_ = stream;
+  }
+
+  void *get_stream() const {
+    return stream_;
   }
 
   static AMDGPUContext &get_instance();
