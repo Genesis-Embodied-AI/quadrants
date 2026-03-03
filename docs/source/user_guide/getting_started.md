@@ -8,11 +8,11 @@
 - optionally, a supported GPU, see [Supported systems](./supported_systems.md)
 
 ## Procedure
-```
+```bash
 pip install quadrants
 ```
 ## Sanity checking the installation
-```
+```bash
 python -c 'import quadrants as qd; qd.init(arch=qd.gpu)'
 ```
 (should not show any error messages)
@@ -21,7 +21,7 @@ python -c 'import quadrants as qd; qd.init(arch=qd.gpu)'
 
 Let's use a linear congruential generator - a pseudo-random number generator - since they are not easily possible for a compiler to optimize out. First, in normal python:
 
-```
+```python
 def lcg_np(B: int, lcg_its: int, a: npt.NDArray) -> None:
     for i in range(B):
         x = a[i]
@@ -33,7 +33,7 @@ We are taking in a numpy array, of size B, looping over it. For each value in th
 
 Let's write out the full code, including creating a numpy array, and timing this method:
 
-```
+```python
 import numpy as np
 import numpy.typing as npt
 import time
@@ -55,10 +55,10 @@ end = time.time()
 print("elapsed", end - start)
 ```
 
-You can find the full code also at [lcg_python.py](../../../../python/quadrants/examples/lcg_python.py)
+You can find the full code also at [lcg_python.py](../../../python/quadrants/examples/lcg_python.py)
 
 On a Macbook Air M4, this gives the following output:
-```
+```text
 # elapsed 5.552601099014282
 ```
 
@@ -66,7 +66,7 @@ Now let's convert it to quadrants
 
 Here is the function, written as a Quadrants kernel:
 
-```
+```python
 @qd.kernel
 def lcg_ti(B: int, lcg_its: int, a: qd.types.NDArray[qd.i32, 1]) -> None:
     for i in range(B):
@@ -82,7 +82,7 @@ Yes, it's the same except:
 
 Before we run this we need to import quadrants, and initialize it:
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -91,7 +91,7 @@ The `arch` parameter lets you choose between `gpu`, `cpu`, `metal`, `cuda`, `vul
 - using `qd.gpu` will use the first GPU it finds
 
 We'll also need to create a quadrants ndarray:
-```
+```python
 a = qd.ndarray(qd.i32, (B,))
 ```
 By comparison with numpy array:
@@ -103,21 +103,21 @@ When we time the kernel we have to be careful:
 - ... but it does not wait for it to finish
 
 We'll only wait for it to finish when we access data from the kernel, or we call an explicit synchronization function, like `qd.sync()`. So let's do that:
-```
+```python
 qd.sync()
 end = time.time()
 ```
 
 In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add qd.sync():
 
-```
+```python
 qd.sync()
 start = time.time()
 ```
 
 The full program then becomes:
 
-```
+```python
 import quadrants as qd
 import time
 
@@ -146,7 +146,7 @@ print("elapsed", end - start)
 ```
 
 When run on a Macbook Air M4, the output is something like:
-```
+```text
 # [Quadrants] version 1.8.0, llvm 15.0.7, commit 5afed1c9, osx, python 3.10.16
 # [Quadrants] Starting on arch=metal
 # elapsed 0.04660296440124512
@@ -172,7 +172,7 @@ The kernel above doesn't load or store data except at the start and end: it's ju
 
 We'll do a simple kernel that copies from one tensor to another. To avoid simply measuring the latency to read and write from/to global memory, we'll read and write the same values repeatedly.
 
-```
+```python
 import argparse
 import time
 import quadrants as qd
@@ -216,7 +216,7 @@ print("iteration time", iteration_time, "us")
 ```
 
 Here are the outputs, using a 5090 gpu, on ubuntu:
-```
+```text
 $ python doc/mem_copy.py
 [Quadrants] version 1.8.0, llvm 15.0.4, commit b4755383, linux, python 3.10.15
 [Quadrants] Starting on arch=cuda

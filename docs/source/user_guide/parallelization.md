@@ -56,7 +56,7 @@ If there is a way of partitioning data such that no thread ever needs to read da
 
 A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:
 
-```
+```python
 @qd.kernel
 def k1() -> None:
     for i_b in range(B):  # parallelized across B GPU threads

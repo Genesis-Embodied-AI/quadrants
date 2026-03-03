@@ -49,11 +49,16 @@ Notes:
 
 Example:
 
-```
+```python
 import quadrants as qd
 from dataclasses import dataclass
 
 qd.init(arch=qd.gpu)
+
+@dataclass
+class MyStruct:
+    a: qd.types.NDArray[qd.i32, 1]
+    b: qd.types.NDArray[qd.i32, 1]
 
 a = qd.ndarray(qd.i32, shape=(55,))
 b = qd.ndarray(qd.i32, shape=(57,))
@@ -70,7 +75,7 @@ print("my_struct.b[37]", my_struct.b[37])
 ```
 
 Output:
-```
+```text
 my_struct.a[35] 3
 my_struct.b[37] 5
 ```

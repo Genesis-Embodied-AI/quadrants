@@ -11,7 +11,7 @@ Let's first give an example of using each:
 
 ## NDArray
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -27,7 +27,7 @@ Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensio
 
 ## Global field
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -42,7 +42,7 @@ You can see that we access the global variable referencing the field directly fr
 
 ## Field args
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)

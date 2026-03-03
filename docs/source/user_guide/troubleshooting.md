@@ -6,14 +6,14 @@
 - if running without cache solves the seg fault, then clear the cache
 
 To run without cache:
-```
+```python
 qd.init(offline_cache=False, ...)
 ```
 
 To clear cache:
 - the cache is located by default on linux and mac at `~/.cache/quadrants`
 - simply remove this entire folder:
-```
+```bash
 rm -Rf ~/.cache/quadrants
 ```
 

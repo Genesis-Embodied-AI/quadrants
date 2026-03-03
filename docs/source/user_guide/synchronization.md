@@ -7,7 +7,7 @@ Since running code on GPUs is inherently multi-threaded, synchronization of writ
 - when one thread writes to global memory, the write doesn't take place immediately. It takes 10-150ns for the data to work its way across to global memory, which is not on the GPU die itself, but in other chips, albeit on the same GPU card.
     - think of it like sending a snail mail letter, whilst you work on other things, and lead your life
 - after the store statement has executed, the kernel continues to execute other statements, whilst the data works its way to memory
-```
+```python
 @qd.kernel
 def f1(a: qd.Template) -> None:
      a[0] = 5
@@ -31,7 +31,7 @@ There are a few options:
 
 As an example though, if one submits a batch of tasks, and each task is independent, then parallelizing over the 'batch size' dimension means that threads do not read memory written by other threads
 
-```
+```python
 @qd.kernel
 def f1(batch_size: int, a: qd.Template) -> None:
     for i_b in range(batch_size):
@@ -42,7 +42,7 @@ def f1(batch_size: int, a: qd.Template) -> None:
 
 Sometimes we might have multiple for loops, which, on their own are thread safe, however, one for loop must not begin until the previous one has finished.
 
-```
+```python
 @qd.kernel
 def f1(batch_size: int, a: qd.Template) -> None:
     for i_b in range(batch_size):
@@ -57,7 +57,7 @@ The default behavior of Quadrants for kernels with multiple top-level for loops 
 
 Atomics tend to be the main other approach used by Quadrants engineers for synchronization.
 
-```
+```python
 @qd.kernel
 def f1(a: qd.Template, b: qd.Template) -> None:
     qd.atomic_add(a[0], b[0])
@@ -72,8 +72,8 @@ Barriers and fences only work well for shared memory. Using shared memory is an 
 
 ### Shared memory
 
-```
+```python
 qd.simt.block.SharedArray(data_type, shape)
 qd.simt.block.sync()
 ```
-See [tests/python/test_shared_array.py](../../../../tests/python/test_shared_array.py) for examples.
+See [tests/python/test_shared_array.py](../../../tests/python/test_shared_array.py) for examples.
