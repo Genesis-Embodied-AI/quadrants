@@ -259,7 +259,7 @@ def test_concurrent_streams_with_events():
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_stream_parallel_basic():
-    """qd.stream_parallel() runs top-level for loops on separate streams."""
+    """Each with qd.stream_parallel() block runs on its own stream."""
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
     b = qd.field(qd.f32, shape=(N,))
@@ -269,6 +269,7 @@ def test_stream_parallel_basic():
         with qd.stream_parallel():
             for i in range(N):
                 a[i] = 1.0
+        with qd.stream_parallel():
             for j in range(N):
                 b[j] = 2.0
 
@@ -279,27 +280,32 @@ def test_stream_parallel_basic():
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
-def test_stream_parallel_multiple_blocks():
-    """Multiple stream_parallel blocks in one kernel."""
+def test_stream_parallel_multiple_loops_per_stream():
+    """Multiple for loops inside one stream_parallel block share a stream."""
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
     b = qd.field(qd.f32, shape=(N,))
     c = qd.field(qd.f32, shape=(N,))
 
     @qd.kernel
-    def multi_phase():
+    def multi_loop_streams():
         with qd.stream_parallel():
             for i in range(N):
                 a[i] = 1.0
+            for i in range(N):
+                a[i] = a[i] + 1.0
+        with qd.stream_parallel():
             for j in range(N):
-                b[j] = 2.0
-        # Implicit barrier -- a and b are ready
+                b[j] = 10.0
+        # implicit barrier
         for i in range(N):
             c[i] = a[i] + b[i]
 
-    multi_phase()
+    multi_loop_streams()
     qd.sync()
-    assert np.allclose(c.to_numpy(), 3.0)
+    assert np.allclose(a.to_numpy(), 2.0)
+    assert np.allclose(b.to_numpy(), 10.0)
+    assert np.allclose(c.to_numpy(), 12.0)
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
@@ -331,6 +337,7 @@ def test_stream_parallel_timing():
                 for _j in range(SPIN_ITERS):
                     x = (1664525 * x + 1013904223) % 2147483647
                 b[0] = x
+        with qd.stream_parallel():
             for _ in range(1):
                 x = b[1]
                 for _j in range(SPIN_ITERS):
@@ -372,6 +379,7 @@ def test_stream_parallel_noop_on_cpu():
         with qd.stream_parallel():
             for i in range(N):
                 a[i] = 1.0
+        with qd.stream_parallel():
             for j in range(N):
                 b[j] = 2.0
 

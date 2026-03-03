@@ -1,3 +1,5 @@
+#include <map>
+
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
@@ -149,30 +151,33 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                           {&ctx.get_context()}, {});
       i++;
     } else {
-      int gid = task.stream_parallel_group_id;
       size_t group_start = i;
       while (i < offloaded_tasks.size() &&
-             offloaded_tasks[i].stream_parallel_group_id == gid) {
+             offloaded_tasks[i].stream_parallel_group_id != 0) {
         i++;
       }
-      size_t group_size = i - group_start;
 
-      std::vector<void *> streams(group_size);
-      for (auto &s : streams) {
-        CUDADriver::get_instance().stream_create(&s, 0);
+      std::map<int, void *> stream_by_id;
+      for (size_t j = group_start; j < i; j++) {
+        int sid = offloaded_tasks[j].stream_parallel_group_id;
+        if (stream_by_id.find(sid) == stream_by_id.end()) {
+          void *s = nullptr;
+          CUDADriver::get_instance().stream_create(&s, 0);
+          stream_by_id[sid] = s;
+        }
       }
 
-      for (size_t j = 0; j < group_size; j++) {
-        auto &t = offloaded_tasks[group_start + j];
-        CUDAContext::get_instance().set_stream(streams[j]);
+      for (size_t j = group_start; j < i; j++) {
+        auto &t = offloaded_tasks[j];
+        CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
         cuda_module->launch(t.name, t.grid_dim, t.block_dim, 0,
                             {&ctx.get_context()}, {});
       }
 
-      for (auto s : streams) {
+      for (auto &[sid, s] : stream_by_id) {
         CUDADriver::get_instance().stream_synchronize(s);
       }
-      for (auto s : streams) {
+      for (auto &[sid, s] : stream_by_id) {
         CUDADriver::get_instance().stream_destroy(s);
       }
 
