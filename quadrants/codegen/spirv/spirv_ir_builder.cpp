@@ -1026,8 +1026,7 @@ Value IRBuilder::load_variable(Value pointer, const SType &res_type) {
     // insertion-sort shifting elements in the same array).
     ib_.begin(spv::OpLoad)
         .add_seq(res_type, ret, pointer,
-                 spv::MemoryAccessAlignedMask |
-                     spv::MemoryAccessVolatileMask,
+                 spv::MemoryAccessAlignedMask | spv::MemoryAccessVolatileMask,
                  alignment)
         .commit(&function_);
   } else {
