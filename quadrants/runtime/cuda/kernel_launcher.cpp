@@ -43,10 +43,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   // kernels.
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
+  auto *active_stream = CUDAContext::get_instance().get_stream();
+
   char *device_result_buffer{nullptr};
   CUDADriver::get_instance().malloc_async(
       (void **)&device_result_buffer,
-      std::max(ctx.result_buffer_size, sizeof(uint64)), nullptr);
+      std::max(ctx.result_buffer_size, sizeof(uint64)), active_stream);
   ctx.get_context().runtime = executor->get_llvm_runtime();
 
   for (int i = 0; i < (int)parameters.size(); i++) {
@@ -120,7 +122,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     }
   }
   if (transfers.size() > 0) {
-    CUDADriver::get_instance().stream_synchronize(nullptr);
+    CUDADriver::get_instance().stream_synchronize(active_stream);
   }
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
   if (ctx.result_buffer_size > 0) {
@@ -129,10 +131,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().malloc_async((void **)&device_arg_buffer,
-                                            ctx.arg_buffer_size, nullptr);
+                                            ctx.arg_buffer_size,
+                                            active_stream);
     CUDADriver::get_instance().memcpy_host_to_device_async(
         device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size,
-        nullptr);
+        active_stream);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
@@ -143,17 +146,19 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                         {&ctx.get_context()}, {});
   }
   if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
+    CUDADriver::get_instance().mem_free_async(device_arg_buffer,
+                                              active_stream);
   }
   if (ctx.result_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_device_to_host_async(
         host_result_buffer, device_result_buffer, ctx.result_buffer_size,
-        nullptr);
+        active_stream);
   }
-  CUDADriver::get_instance().mem_free_async(device_result_buffer, nullptr);
+  CUDADriver::get_instance().mem_free_async(device_result_buffer,
+                                            active_stream);
   // copy data back to host
   if (transfers.size() > 0) {
-    CUDADriver::get_instance().stream_synchronize(nullptr);
+    CUDADriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
       CUDADriver::get_instance().memcpy_device_to_host(
