@@ -181,6 +181,83 @@ def test_stream_noop_on_cpu():
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
+def test_concurrent_streams_with_events():
+    """Two slow kernels on separate streams run concurrently (~1s),
+    then a third kernel waits for both via events."""
+    SPIN_ITERS = 40_000_000
+
+    @qd.kernel
+    def slow_fill(
+        a: qd.types.ndarray(dtype=qd.f32, ndim=1),
+        lcg_state: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        index: qd.i32,
+        value: qd.f32,
+    ):
+        qd.loop_config(block_dim=1)
+        for _ in range(1):
+            x = lcg_state[index]
+            for _j in range(SPIN_ITERS):
+                x = (1664525 * x + 1013904223) % 2147483647
+            lcg_state[index] = x
+            a[index] = value
+
+    @qd.kernel
+    def add_first_two(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+        qd.loop_config(block_dim=1)
+        for _ in range(1):
+            a[2] = a[0] + a[1]
+
+    import time
+
+    # Warm up JIT
+    a_warmup = qd.ndarray(qd.f32, shape=(3,))
+    lcg_warmup = qd.ndarray(qd.i32, shape=(3,))
+    slow_fill(a_warmup, lcg_warmup, 0, 0.0)
+    add_first_two(a_warmup)
+    qd.sync()
+
+    # Serial baseline
+    a = qd.ndarray(qd.f32, shape=(3,))
+    lcg = qd.ndarray(qd.i32, shape=(3,))
+    qd.sync()
+    t0 = time.perf_counter()
+    slow_fill(a, lcg, 0, 5.0)
+    slow_fill(a, lcg, 1, 7.0)
+    add_first_two(a)
+    qd.sync()
+    serial_time = time.perf_counter() - t0
+    assert np.isclose(a.to_numpy()[2], 12.0)
+
+    # Streams
+    a = qd.ndarray(qd.f32, shape=(3,))
+    lcg = qd.ndarray(qd.i32, shape=(3,))
+    s1 = qd.create_stream()
+    s2 = qd.create_stream()
+    e1 = qd.create_event()
+    e2 = qd.create_event()
+    qd.sync()
+    t0 = time.perf_counter()
+    slow_fill(a, lcg, 0, 5.0, qd_stream=s1)
+    slow_fill(a, lcg, 1, 7.0, qd_stream=s2)
+    e1.record(s1)
+    e2.record(s2)
+    e1.wait()
+    e2.wait()
+    add_first_two(a)
+    qd.sync()
+    stream_time = time.perf_counter() - t0
+    assert np.isclose(a.to_numpy()[2], 12.0)
+
+    speedup = serial_time / stream_time
+    assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x"
+
+    s1.destroy()
+    s2.destroy()
+    e1.destroy()
+    e2.destroy()
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_stream_with_ndarray():
     N = 1024
 
