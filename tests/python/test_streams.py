@@ -257,9 +257,9 @@ def test_concurrent_streams_with_events():
     e2.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
 def test_stream_parallel_basic():
-    """Each with qd.stream_parallel() block runs on its own stream."""
+    """Each with qd.stream_parallel() block runs on its own stream (serial fallback on CPU/Metal)."""
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
     b = qd.field(qd.f32, shape=(N,))
@@ -279,9 +279,9 @@ def test_stream_parallel_basic():
     assert np.allclose(b.to_numpy(), 2.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
 def test_stream_parallel_multiple_loops_per_stream():
-    """Multiple for loops inside one stream_parallel block share a stream."""
+    """Multiple for loops inside one stream_parallel block share a stream (serial fallback on CPU/Metal)."""
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
     b = qd.field(qd.f32, shape=(N,))
@@ -372,29 +372,7 @@ def test_stream_parallel_timing():
     ), f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
 
 
-@test_utils.test(arch=[qd.cpu])
-def test_stream_parallel_noop_on_cpu():
-    """stream_parallel is a no-op on CPU without errors."""
-    N = 64
-    a = qd.field(qd.f32, shape=(N,))
-    b = qd.field(qd.f32, shape=(N,))
-
-    @qd.kernel
-    def fill_parallel():
-        with qd.stream_parallel():
-            for i in range(N):
-                a[i] = 1.0
-        with qd.stream_parallel():
-            for j in range(N):
-                b[j] = 2.0
-
-    fill_parallel()
-    qd.sync()
-    assert np.allclose(a.to_numpy(), 1.0)
-    assert np.allclose(b.to_numpy(), 2.0)
-
-
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
 def test_stream_parallel_rejects_mixed_top_level():
     """Mixing stream_parallel and non-stream_parallel at top level is an error."""
     import pytest  # noqa: I001
