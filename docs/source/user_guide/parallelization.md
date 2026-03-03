@@ -10,6 +10,46 @@ The top-level for-loop can be encapsulated in one or more of the following, and 
 - if statements where the conditional is `qd.static`
 - inline functions (`@qd.func`)
 
+## Multi-dimensional parallelization with qd.ndrange
+
+Since only top-level for loops are parallelized, nested for loops will run sequentially on each thread. To parallelize over multiple dimensions, use `qd.ndrange()` to flatten them into a single top-level loop:
+
+```python
+@qd.kernel
+def process_image(image: qd.Template) -> None:
+    for row, col, channel in qd.ndrange(height, width, 3):
+        image[row, col, channel] = row + col
+```
+
+This launches `height * width * 3` threads in parallel, rather than only parallelizing the outer loop.
+
+### Syntax
+
+Each argument to `qd.ndrange` is either:
+- an integer `n`, meaning `range(0, n)`
+- a tuple `(start, end)`, meaning `range(start, end)`
+
+```python
+@qd.kernel
+def compute(a: qd.Template) -> None:
+    for i, j in qd.ndrange((2, 10), 5):
+        a[i, j] = i * 10 + j
+    # i ranges over 2..9, j ranges over 0..4
+```
+
+### qd.grouped with qd.ndrange
+
+`qd.grouped()` packs the loop indices into a single vector, which is useful for writing dimension-independent code:
+
+```python
+@qd.kernel
+def fill(a: qd.Template) -> None:
+    for I in qd.grouped(qd.ndrange(4, 8, 16)):
+        a[I] = I[0] + I[1] + I[2]
+```
+
+`I` is a `qd.Vector` with one element per dimension.
+
 ## Does GPU kernel launch latency matter?
 
 Kernel launch can be done in parallel whilst the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.
