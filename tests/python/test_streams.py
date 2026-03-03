@@ -26,7 +26,7 @@ def test_create_and_destroy_event():
     assert e.handle == 0
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_kernel_on_stream():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -43,7 +43,7 @@ def test_kernel_on_stream():
     s.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_two_streams():
     N = 1024
     a = qd.field(qd.f32, shape=(N,))
@@ -71,7 +71,7 @@ def test_two_streams():
     s2.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_event_synchronization():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -104,7 +104,7 @@ def test_event_synchronization():
     s1.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_event_wait_on_stream():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -140,7 +140,7 @@ def test_event_wait_on_stream():
     s2.destroy()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_default_stream_kernel():
     N = 1024
     x = qd.field(qd.f32, shape=(N,))
@@ -257,7 +257,7 @@ def test_concurrent_streams_with_events():
     e2.destroy()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test()
 def test_stream_parallel_basic():
     """Each with qd.stream_parallel() block runs on its own stream (serial fallback on CPU/Metal)."""
     N = 1024
@@ -279,7 +279,7 @@ def test_stream_parallel_basic():
     assert np.allclose(b.to_numpy(), 2.0)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test()
 def test_stream_parallel_multiple_loops_per_stream():
     """Multiple for loops inside one stream_parallel block share a stream (serial fallback on CPU/Metal)."""
     N = 1024
@@ -372,7 +372,7 @@ def test_stream_parallel_timing():
     ), f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+@test_utils.test()
 def test_stream_parallel_rejects_mixed_top_level():
     """Mixing stream_parallel and non-stream_parallel at top level is an error."""
     import pytest  # noqa: I001
@@ -395,7 +395,7 @@ def test_stream_parallel_rejects_mixed_top_level():
         bad_kernel()
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_stream_with_ndarray():
     N = 1024
 
