@@ -188,16 +188,8 @@ llvm::DataLayout JITSessionCUDA::get_data_layout() {
 }
 
 std::string cuda_mattrs() {
-#ifdef QD_WITH_CUDA
-  int cap = CUDAContext::get_instance().get_compute_capability();
-  if (cap >= 120)
-    return "+ptx87";
-  if (cap >= 90)
-    return "+ptx80";
-  if (cap >= 80)
-    return "+ptx70";
-#endif
-  return "+ptx63";
+  // Let LLVM pick the default PTX version for the target SM.
+  return "";
 }
 
 std::string convert(std::string new_name) {
