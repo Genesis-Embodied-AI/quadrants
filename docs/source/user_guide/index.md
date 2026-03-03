@@ -16,6 +16,7 @@ parallelization
 compound_types
 interop
 unsupported_python
+debug
 quirks
 troubleshooting
 ```
