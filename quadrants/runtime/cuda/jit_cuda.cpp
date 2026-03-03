@@ -187,11 +187,6 @@ llvm::DataLayout JITSessionCUDA::get_data_layout() {
   return data_layout;
 }
 
-std::string cuda_mattrs() {
-  // Let LLVM pick the default PTX version for the target SM.
-  return "";
-}
-
 std::string convert(std::string new_name) {
   // Evil C++ mangling on Windows will lead to "unsupported characters in
   // symbol" error in LLVM PTX printer. Convert here.
@@ -277,7 +272,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   options.GuaranteedTailCallOpt = 0;
 
   std::unique_ptr<TargetMachine> target_machine(target->createTargetMachine(
-      triple, CUDAContext::get_instance().get_mcpu(), cuda_mattrs(), options,
+      triple, CUDAContext::get_instance().get_mcpu(), "", options,
       llvm::Reloc::PIC_, llvm::CodeModel::Small, CodeGenOptLevel::Aggressive));
 
   QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
