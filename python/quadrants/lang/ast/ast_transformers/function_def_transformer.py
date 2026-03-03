@@ -21,11 +21,12 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
-from quadrants.lang.stream import stream_parallel
 from quadrants.lang.matrix import MatrixType
+from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import annotations, ndarray_type, primitive_types
@@ -313,7 +314,6 @@ class FunctionDefTransformer:
         item = stmt.items[0]
         if not isinstance(item.context_expr, ast.Call):
             return False
-        from quadrants.lang.ast.symbol_resolver import ASTResolver
         return ASTResolver.resolve_to(item.context_expr.func, stream_parallel, global_vars)
 
     @staticmethod

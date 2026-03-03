@@ -422,7 +422,9 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_global_context = None
 
-    def launch_kernel(self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None) -> Any:
+    def launch_kernel(
+        self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
+    ) -> Any:
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
 
         callbacks: list[Callable[[], None]] = []

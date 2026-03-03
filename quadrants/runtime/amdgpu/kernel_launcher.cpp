@@ -141,7 +141,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
       for (size_t j = group_start; j < i; j++) {
         auto &t = offloaded_tasks[j];
-        AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
+        AMDGPUContext::get_instance().set_stream(
+            stream_by_id[t.stream_parallel_group_id]);
         amdgpu_module->launch(t.name, t.grid_dim, t.block_dim,
                               t.dynamic_shared_array_bytes,
                               {(void *)&context_pointer}, {arg_size});

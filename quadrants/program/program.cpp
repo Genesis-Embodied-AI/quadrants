@@ -548,16 +548,16 @@ uint64 Program::event_create() {
 #ifdef QD_WITH_CUDA
   if (compile_config().arch == Arch::cuda) {
     void *event = nullptr;
-    CUDADriver::get_instance().event_create(
-        &event, 0x02 /*CU_EVENT_DISABLE_TIMING*/);
+    CUDADriver::get_instance().event_create(&event,
+                                            0x02 /*CU_EVENT_DISABLE_TIMING*/);
     return reinterpret_cast<uint64>(event);
   }
 #endif
 #ifdef QD_WITH_AMDGPU
   if (compile_config().arch == Arch::amdgpu) {
     void *event = nullptr;
-    AMDGPUDriver::get_instance().event_create(
-        &event, 0x02 /*hipEventDisableTiming*/);
+    AMDGPUDriver::get_instance().event_create(&event,
+                                              0x02 /*hipEventDisableTiming*/);
     return reinterpret_cast<uint64>(event);
   }
 #endif

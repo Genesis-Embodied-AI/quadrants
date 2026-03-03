@@ -15,7 +15,6 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
-from quadrants.lang.stream import stream_parallel
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -25,11 +24,11 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ReturnStatus,
     get_decorator,
 )
-from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
+from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
     QuadrantsIndexError,
     QuadrantsRuntimeTypeError,
@@ -41,6 +40,7 @@ from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
+from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import Struct, StructType
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
@@ -110,7 +110,11 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_annotated(
-        ctx: ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool, annotation: Type
+        ctx: ASTTransformerFuncContext,
+        target: ast.Name,
+        value,
+        is_static_assign: bool,
+        annotation: Type,
     ):
         """Build an annotated assignment like this: target: annotation = value.
 
@@ -158,7 +162,10 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def build_assign_unpack(
-        ctx: ASTTransformerFuncContext, node_target: list | ast.Tuple, values, is_static_assign: bool
+        ctx: ASTTransformerFuncContext,
+        node_target: list | ast.Tuple,
+        values,
+        is_static_assign: bool,
     ):
         """Build the unpack assignments like this: (target1, target2) = (value1, value2).
         The function should be called only if the node target is a tuple.
@@ -540,7 +547,8 @@ class ASTTransformer(Builder):
                 else:
                     raise QuadrantsSyntaxError("The return type is not supported now!")
             ctx.ast_builder.create_kernel_exprgroup_return(
-                expr.make_expr_group(return_exprs), _qd_core.DebugInfo(ctx.get_pos_info(node))
+                expr.make_expr_group(return_exprs),
+                _qd_core.DebugInfo(ctx.get_pos_info(node)),
             )
         else:
             ctx.return_data = node.value.ptr
@@ -1386,24 +1394,14 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_With(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
         if len(node.items) != 1:
-            raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels only supports a single context manager"
-            )
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports a single context manager")
         item = node.items[0]
         if item.optional_vars is not None:
-            raise QuadrantsSyntaxError(
-                "'with ... as ...' is not supported in Quadrants kernels"
-            )
+            raise QuadrantsSyntaxError("'with ... as ...' is not supported in Quadrants kernels")
         if not isinstance(item.context_expr, ast.Call):
-            raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels requires a call expression"
-            )
-        if not ASTResolver.resolve_to(
-            item.context_expr.func, stream_parallel, ctx.global_vars
-        ):
-            raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels only supports qd.stream_parallel()"
-            )
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
+        if not ASTResolver.resolve_to(item.context_expr.func, stream_parallel, ctx.global_vars):
+            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
         ctx.ast_builder.begin_stream_parallel()
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()

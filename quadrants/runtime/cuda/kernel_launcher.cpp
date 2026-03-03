@@ -134,8 +134,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().malloc_async((void **)&device_arg_buffer,
-                                            ctx.arg_buffer_size,
-                                            active_stream);
+                                            ctx.arg_buffer_size, active_stream);
     CUDADriver::get_instance().memcpy_host_to_device_async(
         device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size,
         active_stream);
@@ -148,8 +147,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
                task.block_dim);
       cuda_module->launch(task.name, task.grid_dim, task.block_dim,
-                          task.dynamic_shared_array_bytes,
-                          {&ctx.get_context()}, {});
+                          task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                          {});
       i++;
     } else {
       size_t group_start = i;
@@ -170,10 +169,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
       for (size_t j = group_start; j < i; j++) {
         auto &t = offloaded_tasks[j];
-        CUDAContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
+        CUDAContext::get_instance().set_stream(
+            stream_by_id[t.stream_parallel_group_id]);
         cuda_module->launch(t.name, t.grid_dim, t.block_dim,
-                            t.dynamic_shared_array_bytes,
-                            {&ctx.get_context()}, {});
+                            t.dynamic_shared_array_bytes, {&ctx.get_context()},
+                            {});
       }
 
       for (auto &[sid, s] : stream_by_id) {
@@ -187,8 +187,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     }
   }
   if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().mem_free_async(device_arg_buffer,
-                                              active_stream);
+    CUDADriver::get_instance().mem_free_async(device_arg_buffer, active_stream);
   }
   if (ctx.result_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_device_to_host_async(

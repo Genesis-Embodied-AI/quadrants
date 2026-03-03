@@ -3,7 +3,7 @@
 import numpy as np
 
 import quadrants as qd
-from quadrants.lang.stream import Stream, Event
+from quadrants.lang.stream import Event, Stream
 
 from tests import test_utils
 
@@ -367,7 +367,9 @@ def test_stream_parallel_timing():
     stream_time = time.perf_counter() - t0
 
     speedup = serial_time / stream_time
-    assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+    assert (
+        speedup > 1.5
+    ), f"Expected >1.5x speedup, got {speedup:.2f}x (serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
 
 
 @test_utils.test(arch=[qd.cpu])
@@ -395,13 +397,15 @@ def test_stream_parallel_noop_on_cpu():
 @test_utils.test(arch=[qd.cuda])
 def test_stream_parallel_rejects_mixed_top_level():
     """Mixing stream_parallel and non-stream_parallel at top level is an error."""
-    import pytest
+    import pytest  # noqa: I001
+
     from quadrants.lang.exception import QuadrantsSyntaxError
 
     N = 64
     a = qd.field(qd.f32, shape=(N,))
 
     with pytest.raises(QuadrantsSyntaxError, match="all top-level statements"):
+
         @qd.kernel
         def bad_kernel():
             with qd.stream_parallel():
