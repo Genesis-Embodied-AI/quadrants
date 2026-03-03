@@ -20,6 +20,7 @@ PER_CUDA_FUNCTION(context_set_limit, cuCtxSetLimit, int, std::size_t);
 
 // Stream management
 PER_CUDA_FUNCTION(stream_create, cuStreamCreate, void **, uint32);
+PER_CUDA_FUNCTION(stream_destroy, cuStreamDestroy_v2, void *);
 
 // Memory management
 PER_CUDA_FUNCTION(memcpy_host_to_device, cuMemcpyHtoD_v2, void *, void *, std::size_t);
@@ -52,6 +53,7 @@ PER_CUDA_FUNCTION(kernel_set_attribute, cuFuncSetAttribute, void *, CUfunction_a
 
 // Stream management
 PER_CUDA_FUNCTION(stream_synchronize, cuStreamSynchronize, void *);
+PER_CUDA_FUNCTION(stream_wait_event, cuStreamWaitEvent, void *, void *, uint32);
 
 // Event management
 PER_CUDA_FUNCTION(event_create, cuEventCreate, void **, uint32)

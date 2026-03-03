@@ -15,6 +15,7 @@ from quadrants.lang.ops import *  # pylint: disable=W0622
 from quadrants.lang.runtime_ops import *
 from quadrants.lang.snode import *
 from quadrants.lang.source_builder import *
+from quadrants.lang.stream import *
 from quadrants.lang.struct import *
 from quadrants.types.enums import DeviceCapability, Format, Layout  # noqa: F401
 
