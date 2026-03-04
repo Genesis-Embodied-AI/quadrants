@@ -46,6 +46,7 @@ __all__ = [
         "shell",
         "snode",
         "source_builder",
+        "stream",
         "struct",
         "util",
     ]
