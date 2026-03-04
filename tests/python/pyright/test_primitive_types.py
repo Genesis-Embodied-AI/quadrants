@@ -45,8 +45,8 @@ def multi_args(
 ) -> None: ...
 
 
-# Top-level NDArray alias
-def top_level(a: qd.NDArray[qd.f32, 2]) -> None: ...
+# Top-level NDArray alias (accessible via qd.types)
+def top_level(a: qd.types.NDArray[qd.f32, 2]) -> None: ...
 
 
 # Return types

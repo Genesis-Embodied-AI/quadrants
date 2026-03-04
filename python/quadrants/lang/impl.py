@@ -373,27 +373,27 @@ class PyQuadrants:
         self.src_ll_cache: bool = True
 
     @property
-    def default_fp(self):
+    def default_fp(self) -> DataTypeCxx:
         return self._default_fp
 
     @default_fp.setter
-    def default_fp(self, value):
+    def default_fp(self, value: Any) -> None:
         self._default_fp = cook_dtype(value)
 
     @property
-    def default_ip(self):
+    def default_ip(self) -> DataTypeCxx:
         return self._default_ip
 
     @default_ip.setter
-    def default_ip(self, value):
+    def default_ip(self, value: Any) -> None:
         self._default_ip = cook_dtype(value)
 
     @property
-    def default_up(self):
+    def default_up(self) -> DataTypeCxx:
         return self._default_up
 
     @default_up.setter
-    def default_up(self, value):
+    def default_up(self, value: Any) -> None:
         self._default_up = cook_dtype(value)
 
     @property

@@ -40,7 +40,7 @@ from quadrants.types.primitive_types import (
     u64_cxx,
 )
 
-MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
+MAP_TYPE_IDS: dict[int, Any] = {id(dtype): dtype for dtype in all_types}
 # Also add DataTypeCxx ids for hot-path element_type lookups from C++
 _all_cxx_objs = (
     f16_cxx,
