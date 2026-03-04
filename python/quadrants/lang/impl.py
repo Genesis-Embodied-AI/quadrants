@@ -356,9 +356,9 @@ class PyQuadrants:
         self.grad_vars = []
         self.dual_vars = []
         self.matrix_fields = []
-        self.default_fp = cook_dtype(f32)
-        self.default_ip = cook_dtype(i32)
-        self.default_up = cook_dtype(u32)
+        self._default_fp = cook_dtype(f32)
+        self._default_ip = cook_dtype(i32)
+        self._default_up = cook_dtype(u32)
         self.print_full_traceback: bool = False
         self.target_tape = None
         self.fwd_mode_manager = None
@@ -371,6 +371,30 @@ class PyQuadrants:
         self.short_circuit_operators: bool = False
         self.unrolling_limit: int = 0
         self.src_ll_cache: bool = True
+
+    @property
+    def default_fp(self):
+        return self._default_fp
+
+    @default_fp.setter
+    def default_fp(self, value):
+        self._default_fp = cook_dtype(value)
+
+    @property
+    def default_ip(self):
+        return self._default_ip
+
+    @default_ip.setter
+    def default_ip(self, value):
+        self._default_ip = cook_dtype(value)
+
+    @property
+    def default_up(self):
+        return self._default_up
+
+    @default_up.setter
+    def default_up(self, value):
+        self._default_up = cook_dtype(value)
 
     @property
     def compiling_callable(self) -> KernelCxx | Kernel | Function:
@@ -419,13 +443,13 @@ class PyQuadrants:
 
     def set_default_fp(self, fp):
         assert fp in [f16, f32, f64]
-        self.default_fp = cook_dtype(fp)
+        self.default_fp = fp
         default_cfg().default_fp = self.default_fp
 
     def set_default_ip(self, ip):
         assert ip in [i32, i64]
-        self.default_ip = cook_dtype(ip)
-        self.default_up = cook_dtype(u32) if ip == i32 else cook_dtype(u64)
+        self.default_ip = ip
+        self.default_up = u32 if ip == i32 else u64
         default_cfg().default_ip = self.default_ip
         default_cfg().default_up = self.default_up
 
@@ -736,10 +760,10 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
         if prog.config().debug:
             # adjoint checkbit
             x_grad_checkbit = Expr(prog.make_id_expr(""))
-            dtype = u8
+            checkbit_dtype = u8
             if prog.config().arch == _qd_core.vulkan:
-                dtype = i32
-            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
+                checkbit_dtype = i32
+            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(checkbit_dtype))
             x_grad_checkbit.ptr.set_name(name + ".grad_checkbit")
             x_grad_checkbit.ptr.set_grad_type(SNodeGradType.ADJOINT_CHECKBIT)
             x.ptr.set_adjoint_checkbit(x_grad_checkbit.ptr)

@@ -40,15 +40,15 @@ class PrimitiveMeta(type):
         if isinstance(other, PrimitiveMeta):
             return cls is other
         if isinstance(other, DataTypeCxx):
-            # D1 phase: backward-compatible cross-type comparison
             return cls.cxx == other
         return NotImplemented
 
     def __ne__(cls, other):
-        result = cls.__eq__(other)
-        if result is NotImplemented:
-            return result
-        return not result
+        if isinstance(other, PrimitiveMeta):
+            return cls is not other
+        if isinstance(other, DataTypeCxx):
+            return cls.cxx != other
+        return NotImplemented
 
     def __hash__(cls):
         return hash(cls.cxx)

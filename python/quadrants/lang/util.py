@@ -41,13 +41,17 @@ from quadrants.types.primitive_types import (
 )
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
+# Also add DataTypeCxx ids for hot-path element_type lookups from C++
+_all_cxx_objs = (f16_cxx, f32_cxx, f64_cxx, i8_cxx, i16_cxx, i32_cxx, i64_cxx, u1_cxx, u8_cxx, u16_cxx, u32_cxx, u64_cxx)
+for _cxx in _all_cxx_objs:
+    MAP_TYPE_IDS[id(_cxx)] = _cxx
 
 # Pre-computed id-based cache for cook_dtype hot path.
 # Maps id(Python class) and id(DataTypeCxx) to the DataTypeCxx result.
 _cook_cache: dict[int, _qd_core.DataTypeCxx] = {}
 for _cls in (f16, f32, f64, i8, i16, i32, i64, u1, u8, u16, u32, u64):
     _cook_cache[id(_cls)] = _cls.cxx
-for _cxx in (f16_cxx, f32_cxx, f64_cxx, i8_cxx, i16_cxx, i32_cxx, i64_cxx, u1_cxx, u8_cxx, u16_cxx, u32_cxx, u64_cxx):
+for _cxx in _all_cxx_objs:
     _cook_cache[id(_cxx)] = _cxx
 
 
