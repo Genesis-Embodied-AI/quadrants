@@ -1016,6 +1016,7 @@ class RangeForStmt : public Stmt {
   int block_dim;
   bool strictly_serialized;
   std::string range_hint;
+  int stream_parallel_group_id{0};
 
   RangeForStmt(Stmt *begin,
                Stmt *end,
@@ -1061,6 +1062,7 @@ class StructForStmt : public Stmt {
   int num_cpu_threads;
   int block_dim;
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
 
   StructForStmt(SNode *snode,
                 std::unique_ptr<Block> &&body,
@@ -1443,6 +1445,7 @@ class OffloadedStmt : public Stmt {
   std::size_t tls_size{1};  // avoid allocating dynamic memory with 0 byte
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
 
   OffloadedStmt(TaskType task_type, Arch arch, Kernel *kernel);
 
