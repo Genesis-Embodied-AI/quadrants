@@ -95,7 +95,10 @@ class FuncBase:
 
         Note: NOT in the hot path. Just run once, on function registration
         """
-        sig = inspect.signature(self.func, eval_str=True)
+        try:
+            sig = inspect.signature(self.func, eval_str=True)
+        except NameError as e:
+            raise QuadrantsSyntaxError(f"Invalid type annotation of Taichi kernel: {e}") from e
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
                 QuadrantsSyntaxError,
