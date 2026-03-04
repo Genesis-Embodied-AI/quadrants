@@ -1181,8 +1181,9 @@ def atomic_add(x, y):
         >>>     qd.atomic_add(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x += y
-        return x
+        old = x.item()
+        x[()] = old + y
+        return old
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_add(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
@@ -1214,8 +1215,9 @@ def atomic_mul(x, y):
         >>>     qd.atomic_mul(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x *= y
-        return x
+        old = x.item()
+        x[()] = old * y
+        return old
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_mul(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
@@ -1247,8 +1249,9 @@ def atomic_sub(x, y):
         >>>     qd.atomic_sub(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x -= y
-        return x
+        old = x.item()
+        x[()] = old - y
+        return old
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_sub(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
@@ -1280,8 +1283,9 @@ def atomic_min(x, y):
         >>>     qd.atomic_min(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x[()] = min(x[()], y)
-        return x
+        old = x.item()
+        x[()] = min(old, y)
+        return old
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_min(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
@@ -1313,8 +1317,9 @@ def atomic_max(x, y):
         >>>     qd.atomic_max(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x[()] = max(x[()], y)
-        return x
+        old = x.item()
+        x[()] = max(old, y)
+        return old
     return impl.expr_init(expr.Expr(_qd_core.expr_atomic_max(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info())))
 
 
@@ -1346,8 +1351,9 @@ def atomic_and(x, y):
         >>>     qd.atomic_and(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x &= y
-        return x
+        old = x.item()
+        x[()] = old & y
+        return old
     return impl.expr_init(
         expr.Expr(_qd_core.expr_atomic_bit_and(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     )
@@ -1381,8 +1387,9 @@ def atomic_or(x, y):
         >>>     qd.atomic_or(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x |= y
-        return x
+        old = x.item()
+        x[()] = old | y
+        return old
     return impl.expr_init(
         expr.Expr(_qd_core.expr_atomic_bit_or(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
     )
@@ -1416,8 +1423,9 @@ def atomic_xor(x, y):
         >>>     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
     """
     if impl.is_python_backend():
-        x ^= y
-        return x
+        old = x.item()
+        x[()] = old ^ y
+        return old
 
     return impl.expr_init(
         expr.Expr(_qd_core.expr_atomic_bit_xor(x.ptr, y.ptr), dbg_info=_qd_core.DebugInfo(stack_info()))
