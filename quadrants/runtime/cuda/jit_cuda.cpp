@@ -187,10 +187,6 @@ llvm::DataLayout JITSessionCUDA::get_data_layout() {
   return data_layout;
 }
 
-std::string cuda_mattrs() {
-  return "+ptx63";
-}
-
 std::string convert(std::string new_name) {
   // Evil C++ mangling on Windows will lead to "unsupported characters in
   // symbol" error in LLVM PTX printer. Convert here.
@@ -261,15 +257,13 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   TargetOptions options;
   if (this->config_.fast_math) {
     options.AllowFPOpFusion = FPOpFusion::Fast;
-    // See NVPTXISelLowering.cpp
-    // Setting UnsafeFPMath true will result in approximations such as
-    // sqrt.approx in PTX for both f32 and f64
-    options.UnsafeFPMath = 1;
+    // UnsafeFPMath was removed in LLVM 22; set the individual flags it implied
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
+    options.NoSignedZerosFPMath = 1;
+    options.NoTrappingFPMath = 1;
   } else {
     options.AllowFPOpFusion = FPOpFusion::Strict;
-    options.UnsafeFPMath = 0;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
   }
@@ -278,13 +272,20 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   options.GuaranteedTailCallOpt = 0;
 
   std::unique_ptr<TargetMachine> target_machine(target->createTargetMachine(
-      triple.str(), CUDAContext::get_instance().get_mcpu(), cuda_mattrs(),
-      options, llvm::Reloc::PIC_, llvm::CodeModel::Small,
-      CodeGenOptLevel::Aggressive));
+      triple, CUDAContext::get_instance().get_mcpu(), "", options,
+      llvm::Reloc::PIC_, llvm::CodeModel::Small, CodeGenOptLevel::Aggressive));
 
   QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
 
   module->setDataLayout(target_machine->createDataLayout());
+
+  // Remove outdated nvvmir.version metadata inherited from runtime bitcode.
+  // The runtime bitcode may specify an old PTX version (e.g. 6.3) that is
+  // incompatible with newer SM targets (e.g. sm_120 requires PTX 8.7+).
+  // Stripping it lets LLVM pick the appropriate default for the target.
+  if (auto *md = module->getNamedMetadata("nvvmir.version")) {
+    module->eraseNamedMetadata(md);
+  }
 
   // Set up passes
   llvm::SmallString<8> outstr;

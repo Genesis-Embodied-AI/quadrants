@@ -18,7 +18,7 @@ pip install --group dev
 pip install scikit-build
 pip install numpy
 
-brew install llvm@20
+brew install llvm
 
 git submodule
 git submodule update --init --recursive
