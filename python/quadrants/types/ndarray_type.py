@@ -94,8 +94,10 @@ class NdarrayType:
         self.boundary = int(to_boundary_enum(boundary))
 
     @classmethod
-    def __class_getitem__(cls, args, **kwargs):
-        return cls(*args, **kwargs)
+    def __class_getitem__(cls, args):
+        if not isinstance(args, tuple):
+            args = (args,)
+        return cls(*args)
 
     def check_matched(self, ndarray_type: NdarrayTypeMetadata, arg_name: str):
         # FIXME(Haidong) Cannot use Vector/MatrixType due to circular import
