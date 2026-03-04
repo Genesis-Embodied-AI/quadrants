@@ -30,10 +30,11 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   llvm::legacy::FunctionPassManager function_pass_manager_addrcast(
       llvm_module.get());
   function_pass_manager_addrcast.add(
-      new AMDGPUConvertFunctionBodyAllocsAddressSpacePass());
+      new AMDGPUConvertAllocaInstAddressSpacePass());
+  function_pass_manager_addrcast.doInitialization();
   for (auto func = llvm_module->begin(); func != llvm_module->end(); ++func)
-    if (func->getName() == "function_body")
-      function_pass_manager_addrcast.run(*func);
+    function_pass_manager_addrcast.run(*func);
+  function_pass_manager_addrcast.doFinalization();
 
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);

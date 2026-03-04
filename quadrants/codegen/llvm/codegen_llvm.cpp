@@ -18,6 +18,7 @@
 #include "llvm/AsmParser/Parser.h"
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
+#include "quadrants/runtime/llvm/llvm_context_pass.h"
 
 namespace quadrants::lang {
 
@@ -2730,6 +2731,14 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
       QD_ASSERT(func);
       tlctx->mark_function_as_amdgpu_kernel(func);
     }
+#if defined(QD_WITH_AMDGPU)
+    llvm::legacy::FunctionPassManager fpm(module.get());
+    fpm.add(new AMDGPUConvertAllocaInstAddressSpacePass());
+    fpm.doInitialization();
+    for (auto &func : *module)
+      fpm.run(func);
+    fpm.doFinalization();
+#endif
   }
   std::filesystem::path ir_dump_dir = compile_config.debug_dump_path;
   if (get_environ_config(DUMP_IR_ENV.data())) {
