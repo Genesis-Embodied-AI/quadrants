@@ -93,6 +93,6 @@ imgui.ini
 !pyrightconfig.json
 *.whl
 *.so
-stubs/
+stubs/quadrants/_lib/
 CHANGELOG.md
 python/quadrants/_version.py
