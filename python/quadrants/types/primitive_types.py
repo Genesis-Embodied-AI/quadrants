@@ -248,8 +248,5 @@ __all__ = [
     "uint64",
     "u64",
     "ref",
-    "PrimitiveBase",
-    "PrimitiveMeta",
-    "cxx_to_py",
     "_python_primitive_types",
 ]
