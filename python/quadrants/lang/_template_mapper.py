@@ -87,13 +87,20 @@ class TemplateMapper:
         # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
         # expired cache entry caused by deallocated argument.
         mapping_cache_tracker_: list[ReferenceType | None] = [None]
-        clear_callback = lambda ref: mapping_cache_tracker_.clear()
+
+        # Clear the tracker (original invalidation) and also remove the stale
+        # dict entries so they do not accumulate indefinitely.
+        def _evict_callback(ref, _tracker=mapping_cache_tracker_, _self=self, _hash=args_hash):
+            _tracker.clear()
+            _self._mapping_cache.pop(_hash, None)
+            _self._mapping_cache_tracker.pop(_hash, None)
+
         try:
             # Note that it is necessary to handle primitive types separately because it does not make sense to use
             # these arguments to track the lifetime of the corresponding cache entry and taking weakref of primitive
             # types if forbidden anyway.
             mapping_cache_tracker_ += [
-                ReferenceType(arg, clear_callback) for arg in args if type(arg) not in _primitive_types
+                ReferenceType(arg, _evict_callback) for arg in args if type(arg) not in _primitive_types
             ]
             self._mapping_cache_tracker[args_hash] = mapping_cache_tracker_
             self._mapping_cache[args_hash] = (count, key)

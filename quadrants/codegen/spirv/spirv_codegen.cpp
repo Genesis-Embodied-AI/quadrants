@@ -748,10 +748,23 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
     spirv::Value addr_ptr = ir_->make_access_chain(
         ir_->get_pointer_type(ir_->u64_type(), spv::StorageClassUniform),
         get_buffer_value(BufferType::Args, PrimitiveType::i32), indices);
-    spirv::Value addr = ir_->load_variable(addr_ptr, ir_->u64_type());
-    addr = ir_->add(
-        addr, ir_->make_value(spv::OpSConvert, ir_->u64_type(), linear_offset));
+    spirv::Value base_addr = ir_->load_variable(addr_ptr, ir_->u64_type());
+    spirv::Value addr = ir_->add(
+        base_addr,
+        ir_->make_value(spv::OpSConvert, ir_->u64_type(), linear_offset));
     ir_->register_value(stmt->raw_name(), addr);
+
+    // Save decomposed base pointer and element index so at_buffer() can
+    // emit OpConvertUToPtr on the base address once and use OpPtrAccessChain
+    // for element access.  This avoids a Metal shader compiler bug where
+    // per-element reinterpret_cast from ulong arithmetic is miscompiled
+    // when the stored value is loop-invariant.
+    size_t type_size =
+        ir_->get_primitive_type_size(stmt->ret_type.ptr_removed());
+    spirv::Value elem_index = ir_->make_value(
+        spv::OpShiftRightLogical, ir_->i32_type(), linear_offset,
+        ir_->int_immediate_number(ir_->i32_type(), log2int(type_size)));
+    physical_ptr_components_[stmt] = {base_addr, elem_index};
   } else {
     ir_->register_value(stmt->raw_name(), linear_offset);
   }
@@ -2082,13 +2095,42 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
   if (ptr_val.stype.dt == PrimitiveType::u64) {
-    spirv::Value paddr_ptr = ir_->make_value(
-        spv::OpConvertUToPtr,
-        ir_->get_pointer_type(ir_->get_primitive_type(dt),
-                              spv::StorageClassPhysicalStorageBuffer),
-        ptr_val);
-    paddr_ptr.flag = ValueKind::kPhysicalPtr;
-    return paddr_ptr;
+    auto elem_type = ir_->get_primitive_type(dt);
+    auto ptr_elem_type = ir_->get_pointer_type(
+        elem_type, spv::StorageClassPhysicalStorageBuffer);
+
+    // Prefer base-pointer + OpPtrAccessChain when we have decomposed
+    // components.  This makes SPIRV-Cross emit  base[index]  instead of
+    // per-element  reinterpret_cast<device T*>(ulong_expr)  which
+    // triggers a Metal shader compiler miscompilation bug when the stored
+    // value is loop-invariant.
+    auto comp_it = physical_ptr_components_.find(ptr);
+    if (comp_it != physical_ptr_components_.end()) {
+      auto &comp = comp_it->second;
+      spirv::Value base_ptr =
+          ir_->make_value(spv::OpConvertUToPtr, ptr_elem_type, comp.base_ptr);
+      spirv::Value elem_ptr = ir_->make_value(
+          spv::OpPtrAccessChain, ptr_elem_type, base_ptr, comp.element_index);
+      elem_ptr.flag = ValueKind::kPhysicalPtr;
+      return elem_ptr;
+    }
+
+    // Fallback: wrap in a single-member struct so that OpAccessChain
+    // produces an lvalue.  SPIRV-Cross emits &expr for atomic operations;
+    // without this wrapper the bare OpConvertUToPtr rvalue produces
+    // invalid MSL on Metal.
+    std::vector<std::tuple<spirv::SType, std::string, size_t>> members = {
+        {elem_type, "_m0", 0}};
+    auto wrapper_struct = ir_->create_struct_type(members);
+    auto ptr_struct_type = ir_->get_pointer_type(
+        wrapper_struct, spv::StorageClassPhysicalStorageBuffer);
+    spirv::Value struct_ptr =
+        ir_->make_value(spv::OpConvertUToPtr, ptr_struct_type, ptr_val);
+
+    spirv::Value elem_ptr = ir_->make_value(spv::OpAccessChain, ptr_elem_type,
+                                            struct_ptr, ir_->const_i32_zero_);
+    elem_ptr.flag = ValueKind::kPhysicalPtr;
+    return elem_ptr;
   }
 
   QD_ERROR_IF(
@@ -2111,10 +2153,10 @@ spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
 
   DataType ti_buffer_type = ir_->get_quadrants_uint_type(dt);
 
-  if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = dt;
-  } else if (dt->is_primitive(PrimitiveTypeID::u1)) {
+  if (dt->is_primitive(PrimitiveTypeID::u1)) {
     ti_buffer_type = PrimitiveType::u8;
+  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
+    ti_buffer_type = dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
@@ -2133,10 +2175,10 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
 
   DataType ti_buffer_type = ir_->get_quadrants_uint_type(val.stype.dt);
 
-  if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = val.stype.dt;
-  } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+  if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     ti_buffer_type = PrimitiveType::i8;
+  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
+    ti_buffer_type = val.stype.dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);

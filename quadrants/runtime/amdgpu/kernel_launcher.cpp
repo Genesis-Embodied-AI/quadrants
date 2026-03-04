@@ -120,7 +120,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     for (auto &task : offloaded_tasks) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
                task.block_dim);
-      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, 0,
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                            task.dynamic_shared_array_bytes,
                             {(void *)&context_pointer}, {arg_size});
     }
     if (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr) {
@@ -132,6 +133,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         break;
     }
   } while (ctx.graph_while_arg_id >= 0);
+  QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
     AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
   }
