@@ -1,23 +1,23 @@
 # Getting started
 
-# Installation
+## Installation
 
-## Pre-requisites
+### Pre-requisites
 - a supported platform (MacOS Arm64, Linux x64, Windows x64), see [Supported systems](./supported_systems.md)
 - a supported Python version installed, see [Supported systems](./supported_systems.md)
 - optionally, a supported GPU, see [Supported systems](./supported_systems.md)
 
-## Procedure
+### Procedure
 ```bash
 pip install quadrants
 ```
-## Sanity checking the installation
+### Sanity checking the installation
 ```bash
 python -c 'import quadrants as qd; qd.init(arch=qd.gpu)'
 ```
 (should not show any error messages)
 
-# A first Quadrants kernel
+## A first Quadrants kernel
 
 Let's use a linear congruential generator - a pseudo-random number generator - since they are not easily possible for a compiler to optimize out. First, in normal python:
 
@@ -158,13 +158,13 @@ On one of our linux boxes with a 5090 GPU, the results are:
 - quadrants: 0.0199 seconds
 - => 346 times faster
 
-## What does Quadrants do with the kernel function?
+### What does Quadrants do with the kernel function?
 
 - any top level for loops are parallelized across the GPU cores (or CPU, if you run on CPU)
     - in our case, there will be 16,000 threads
     - compared to just a single thread in the numpy case
 
-## fields: even faster
+### fields: even faster
 
 Quadrants ndarrays are easy to use, and flexible, but we can increase speed by another ~30% or so (depending on the kernel), by using fields.
 

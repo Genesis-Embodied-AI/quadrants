@@ -110,7 +110,7 @@ def safe_div(a: qd.f32, b: qd.f32) -> qd.f32:
     return a / b
 ```
 
-# Argument unpacking
+## Argument unpacking
 
 Syntax like `some_function(*args)` is supported in a narrow case:
 - `*args` must be the last argument in the function call

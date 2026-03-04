@@ -1,6 +1,6 @@
 # Compound types
 
-# Overview
+## Overview
 
 It can be useful to combine multiple ndarrays or fields together into a single struct-like object that can be passed into kernels, and into @qd.func's.
 
@@ -17,13 +17,13 @@ The following compound types are available:
 
 [*1] automatic differentiation through dataclass members is not supported currently
 
-# Recommendation
+## Recommendation
 
 **Use `dataclasses.dataclass` for new code.** It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.
 
 The other compound types exist for historical reasons or specific use cases described below.
 
-# dataclasses.dataclass
+## dataclasses.dataclass
 
 `dataclasses.dataclass` allows you to create structs containing:
 - ndarrays
@@ -38,7 +38,7 @@ These structs:
 
 The members are read-only. However, ndarrays and fields are stored as references (pointers), so the contents of the ndarrays and fields can be freely mutated by the kernels and `@qd.func`s.
 
-## Example
+### Example
 
 ```python
 import quadrants as qd
@@ -71,7 +71,7 @@ my_struct.a[35] 3
 my_struct.b[37] 5
 ```
 
-## Nesting
+### Nesting
 
 Dataclasses can contain other dataclasses:
 
@@ -91,7 +91,7 @@ def k2(s: Outer) -> None:
     s.y[0] = 2.0
 ```
 
-## Limitations
+### Limitations
 
 - On Mac, can only be used with fields, not with ndarrays [*2]
 - Passing dataclasses to `@qd.real_func` is not supported
@@ -99,7 +99,7 @@ def k2(s: Outer) -> None:
 
 [*2] Technically ndarrays work, but in practice each ndarray is expanded into multiple kernel parameters, which exceeds the Metal backend's parameter limit.
 
-# qd.data_oriented
+## qd.data_oriented
 
 `@qd.data_oriented` is designed for classes that define `@qd.kernel` methods as class members. It wraps these methods to correctly bind `self` during kernel compilation.
 
@@ -122,7 +122,7 @@ If your class only holds data (no `@qd.kernel` methods), you don't need `@qd.dat
 
 `@qd.data_oriented` objects can also be passed as `qd.Template` parameters to kernels defined outside the class, and they support nesting (one `@qd.data_oriented` struct containing another).
 
-# qd.struct / qd.dataclass
+## qd.struct / qd.dataclass
 
 `@qd.struct` (and its alias `@qd.dataclass`) is a Quadrants-native struct type. It can only contain fields and primitive types, not ndarrays.
 
