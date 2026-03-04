@@ -1,159 +1,195 @@
-from typing import Union
+import warnings
+from typing import ClassVar, Union
 
 from quadrants._lib import core as qd_python_core
+from quadrants._lib.core.quadrants_python import DataTypeCxx
 
 # ========================================
-# real types
+# Raw C++ DataType instances (internal use)
+# ========================================
 
-# ----------------------------------------
+f16_cxx = qd_python_core.DataType_f16
+f32_cxx = qd_python_core.DataType_f32
+f64_cxx = qd_python_core.DataType_f64
 
-float16 = qd_python_core.DataType_f16
-"""16-bit precision floating point data type.
-"""
+i8_cxx = qd_python_core.DataType_i8
+i16_cxx = qd_python_core.DataType_i16
+i32_cxx = qd_python_core.DataType_i32
+i64_cxx = qd_python_core.DataType_i64
 
-# ----------------------------------------
+u1_cxx = qd_python_core.DataType_u1
+u8_cxx = qd_python_core.DataType_u8
+u16_cxx = qd_python_core.DataType_u16
+u32_cxx = qd_python_core.DataType_u32
+u64_cxx = qd_python_core.DataType_u64
 
-f16 = float16
-"""Alias for :const:`~quadrants.types.primitive_types.float16`
-"""
-
-# ----------------------------------------
-
-float32 = qd_python_core.DataType_f32
-"""32-bit single precision floating point data type.
-"""
-
-# ----------------------------------------
-
-f32 = float32
-"""Alias for :const:`~quadrants.types.primitive_types.float32`
-"""
-
-# ----------------------------------------
-
-float64 = qd_python_core.DataType_f64
-"""64-bit double precision floating point data type.
-"""
-
-# ----------------------------------------
-
-f64 = float64
-"""Alias for :const:`~quadrants.types.primitive_types.float64`
-"""
-# ----------------------------------------
 
 # ========================================
-# Integer types
+# Metaclass and base class for Python dtype wrappers
+# ========================================
 
-# ----------------------------------------
 
-int8 = qd_python_core.DataType_i8
-"""8-bit signed integer data type.
-"""
+class PrimitiveMeta(type):
+    """Metaclass that makes dtype classes behave like DataTypeCxx objects.
 
-# ----------------------------------------
+    Delegates attribute access and comparisons to the underlying .cxx object,
+    allowing existing code that does e.g. dtype.to_string() to keep working.
+    """
 
-i8 = int8
-"""Alias for :const:`~quadrants.types.primitive_types.int8`
-"""
+    def __eq__(cls, other):
+        if isinstance(other, PrimitiveMeta):
+            return cls is other
+        if isinstance(other, DataTypeCxx):
+            # D1 phase: backward-compatible cross-type comparison
+            return cls.cxx == other
+        return NotImplemented
 
-# ----------------------------------------
+    def __ne__(cls, other):
+        result = cls.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
 
-int16 = qd_python_core.DataType_i16
-"""16-bit signed integer data type.
-"""
+    def __hash__(cls):
+        return hash(cls.cxx)
 
-# ----------------------------------------
+    def __repr__(cls):
+        return cls.cxx.to_string()
 
-i16 = int16
-"""Alias for :const:`~quadrants.types.primitive_types.int16`
-"""
+    def __getattr__(cls, name):
+        # Delegate unknown attributes to the underlying DataTypeCxx
+        try:
+            return getattr(cls.cxx, name)
+        except AttributeError:
+            raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'") from None
 
-# ----------------------------------------
 
-int32 = qd_python_core.DataType_i32
-"""32-bit signed integer data type.
-"""
+class PrimitiveBase(metaclass=PrimitiveMeta):
+    """Base class for all primitive dtype classes.
 
-# ----------------------------------------
+    Each subclass has a `cxx` class variable holding the corresponding DataTypeCxx instance.
+    Subclasses auto-register themselves in the _registry for reverse lookup (DataTypeCxx → Python class).
+    """
 
-i32 = int32
-"""Alias for :const:`~quadrants.types.primitive_types.int32`
-"""
+    cxx: ClassVar[DataTypeCxx]
+    _registry: ClassVar[dict[DataTypeCxx, "type[PrimitiveBase]"]] = {}
 
-# ----------------------------------------
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if hasattr(cls, "cxx"):
+            PrimitiveBase._registry[cls.cxx] = cls
 
-int64 = qd_python_core.DataType_i64
-"""64-bit signed integer data type.
-"""
 
-# ----------------------------------------
+def cxx_to_py(dtype_cxx: DataTypeCxx) -> "type[PrimitiveBase]":
+    """Convert a DataTypeCxx to its corresponding Python dtype class."""
+    return PrimitiveBase._registry[dtype_cxx]
 
-i64 = int64
-"""Alias for :const:`~quadrants.types.primitive_types.int64`
-"""
 
-# ----------------------------------------
+# ========================================
+# Floating point types
+# ========================================
 
-uint8 = qd_python_core.DataType_u8
-"""8-bit unsigned integer data type.
-"""
 
-# ----------------------------------------
+class f16(PrimitiveBase):
+    """16-bit precision floating point data type."""
 
-uint1 = qd_python_core.DataType_u1
-"""1-bit unsigned integer data type. Same as booleans.
-"""
+    cxx = f16_cxx
 
-# ----------------------------------------
 
-u1 = uint1
-"""Alias for :const:`~quadrants.types.primitive_types.uint1`
-"""
+class f32(PrimitiveBase):
+    """32-bit single precision floating point data type."""
 
-# ----------------------------------------
+    cxx = f32_cxx
 
-u8 = uint8
-"""Alias for :const:`~quadrants.types.primitive_types.uint8`
-"""
 
-# ----------------------------------------
+class f64(PrimitiveBase):
+    """64-bit double precision floating point data type."""
 
-uint16 = qd_python_core.DataType_u16
-"""16-bit unsigned integer data type.
-"""
+    cxx = f64_cxx
 
-# ----------------------------------------
 
-u16 = uint16
-"""Alias for :const:`~quadrants.types.primitive_types.uint16`
-"""
+float16 = f16
+float32 = f32
+float64 = f64
 
-# ----------------------------------------
+# ========================================
+# Signed integer types
+# ========================================
 
-uint32 = qd_python_core.DataType_u32
-"""32-bit unsigned integer data type.
-"""
 
-# ----------------------------------------
+class i8(PrimitiveBase):
+    """8-bit signed integer data type."""
 
-u32 = uint32
-"""Alias for :const:`~quadrants.types.primitive_types.uint32`
-"""
+    cxx = i8_cxx
 
-# ----------------------------------------
 
-uint64 = qd_python_core.DataType_u64
-"""64-bit unsigned integer data type.
-"""
+class i16(PrimitiveBase):
+    """16-bit signed integer data type."""
 
-# ----------------------------------------
+    cxx = i16_cxx
 
-u64 = uint64
-"""Alias for :const:`~quadrants.types.primitive_types.uint64`
-"""
 
-# ----------------------------------------
+class i32(PrimitiveBase):
+    """32-bit signed integer data type."""
+
+    cxx = i32_cxx
+
+
+class i64(PrimitiveBase):
+    """64-bit signed integer data type."""
+
+    cxx = i64_cxx
+
+
+int8 = i8
+int16 = i16
+int32 = i32
+int64 = i64
+
+# ========================================
+# Unsigned integer types
+# ========================================
+
+
+class u1(PrimitiveBase):
+    """1-bit unsigned integer data type. Same as booleans."""
+
+    cxx = u1_cxx
+
+
+class u8(PrimitiveBase):
+    """8-bit unsigned integer data type."""
+
+    cxx = u8_cxx
+
+
+class u16(PrimitiveBase):
+    """16-bit unsigned integer data type."""
+
+    cxx = u16_cxx
+
+
+class u32(PrimitiveBase):
+    """32-bit unsigned integer data type."""
+
+    cxx = u32_cxx
+
+
+class u64(PrimitiveBase):
+    """64-bit unsigned integer data type."""
+
+    cxx = u64_cxx
+
+
+uint1 = u1
+uint8 = u8
+uint16 = u16
+uint32 = u32
+uint64 = u64
+
+# ========================================
+# Ref type (unchanged)
+# ========================================
 
 
 class RefType:
@@ -165,6 +201,10 @@ def ref(tp):
     return RefType(tp)
 
 
+# ========================================
+# Type sets for fast lookup
+# ========================================
+
 real_types = {f16, f32, f64, float}
 real_type_ids = {id(t) for t in real_types}
 
@@ -172,7 +212,13 @@ integer_types = {i8, i16, i32, i64, u1, u8, u16, u32, u64, int, bool}
 integer_type_ids = {id(t) for t in integer_types}
 
 all_types = real_types | integer_types
-type_ids = {id(t) for t in all_types}
+_py_type_ids = {id(t) for t in all_types}
+
+_all_cxx = {f16_cxx, f32_cxx, f64_cxx, i8_cxx, i16_cxx, i32_cxx, i64_cxx, u1_cxx, u8_cxx, u16_cxx, u32_cxx, u64_cxx}
+cxx_type_ids = {id(t) for t in _all_cxx}
+
+# Combined set: matches both Python classes and DataTypeCxx instances
+type_ids = _py_type_ids | cxx_type_ids
 
 _python_primitive_types = Union[int, float, bool, str, None]
 
@@ -202,5 +248,8 @@ __all__ = [
     "uint64",
     "u64",
     "ref",
+    "PrimitiveBase",
+    "PrimitiveMeta",
+    "cxx_to_py",
     "_python_primitive_types",
 ]

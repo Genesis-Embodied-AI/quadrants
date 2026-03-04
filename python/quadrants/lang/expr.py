@@ -7,7 +7,7 @@ from quadrants.lang import impl
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import QuadrantsCompilationError, QuadrantsTypeError
 from quadrants.lang.matrix import make_matrix
-from quadrants.lang.util import is_matrix_class, is_quadrants_class, to_numpy_type
+from quadrants.lang.util import cook_dtype, is_matrix_class, is_quadrants_class, to_numpy_type
 from quadrants.types import primitive_types
 from quadrants.types.primitive_types import integer_types, real_types
 
@@ -109,8 +109,11 @@ def _clamp_unsigned_to_range(npty, val: np.integer | int) -> np.integer | int:
 
 
 def make_constant_expr(val, dtype):
+    if dtype is not None:
+        dtype = cook_dtype(dtype)
+
     if isinstance(val, (bool, np.bool_)):
-        constant_dtype = primitive_types.u1
+        constant_dtype = cook_dtype(primitive_types.u1)
         return Expr(_qd_core.make_const_expr_bool(constant_dtype, val))
 
     if isinstance(val, (float, np.floating)):

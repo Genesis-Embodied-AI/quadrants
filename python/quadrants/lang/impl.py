@@ -60,6 +60,7 @@ from quadrants.lang.util import (
 from quadrants.types.enums import SNodeGradType
 from quadrants.types.ndarray_type import NdarrayType
 from quadrants.types.primitive_types import (
+    PrimitiveBase,
     all_types,
     f16,
     f32,
@@ -81,6 +82,7 @@ if TYPE_CHECKING:
 def expr_init_shared_array(shape, element_type):
     ast_builder = get_runtime().compiling_callable.ast_builder()
     debug_info = _qd_core.DebugInfo(get_runtime().get_current_src_info())
+    element_type = cook_dtype(element_type)
     return ast_builder.expr_alloca_shared_array(shape, element_type, debug_info)
 
 
@@ -107,6 +109,8 @@ def expr_init(rhs):
         return dict((key, expr_init(val)) for key, val in rhs.items())
     if isinstance(rhs, _qd_core.DataTypeCxx):
         return rhs
+    if isinstance(rhs, type) and issubclass(rhs, PrimitiveBase):
+        return rhs.cxx
     if isinstance(rhs, _qd_core.Arch):
         return rhs
     if isinstance(rhs, _Ndrange):
@@ -352,9 +356,9 @@ class PyQuadrants:
         self.grad_vars = []
         self.dual_vars = []
         self.matrix_fields = []
-        self.default_fp = f32
-        self.default_ip = i32
-        self.default_up = u32
+        self.default_fp = cook_dtype(f32)
+        self.default_ip = cook_dtype(i32)
+        self.default_up = cook_dtype(u32)
         self.print_full_traceback: bool = False
         self.target_tape = None
         self.fwd_mode_manager = None
@@ -415,13 +419,13 @@ class PyQuadrants:
 
     def set_default_fp(self, fp):
         assert fp in [f16, f32, f64]
-        self.default_fp = fp
+        self.default_fp = cook_dtype(fp)
         default_cfg().default_fp = self.default_fp
 
     def set_default_ip(self, ip):
         assert ip in [i32, i64]
-        self.default_ip = ip
-        self.default_up = u32 if ip == i32 else u64
+        self.default_ip = cook_dtype(ip)
+        self.default_up = cook_dtype(u32) if ip == i32 else cook_dtype(u64)
         default_cfg().default_ip = self.default_ip
         default_cfg().default_up = self.default_up
 
