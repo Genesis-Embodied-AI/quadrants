@@ -6,6 +6,10 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
+
+# Cache enum value at module level for fast lookup in hot paths
+_arch_metal = _qd_core.Arch.metal
+
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
 from quadrants.types import primitive_types
@@ -47,10 +51,8 @@ class Ndarray:
                     prog.delete_ndarray(arr)
 
     def to_dlpack(self):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the ndarray, and
-        reading it.
-        """
+        if impl.current_cfg().arch == _arch_metal:
+            impl.get_runtime().sync()
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
     def _reset(self):
