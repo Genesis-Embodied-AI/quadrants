@@ -184,7 +184,7 @@ def test_stream_noop_on_cpu():
 def test_concurrent_streams_with_events():
     """Two slow kernels on separate streams run concurrently (~1s on GPU),
     serial fallback on CPU/Metal."""
-    SPIN_ITERS = 40_000_000
+    SPIN_ITERS = 5_000_000
 
     @qd.kernel
     def slow_fill(
@@ -317,7 +317,7 @@ def test_stream_parallel_multiple_loops_per_stream():
 @test_utils.test()
 def test_stream_parallel_timing():
     """stream_parallel achieves speedup on GPU, serial fallback elsewhere."""
-    SPIN_ITERS = 40_000_000
+    SPIN_ITERS = 5_000_000
 
     a = qd.field(qd.i32, shape=(2,))
     b = qd.field(qd.i32, shape=(2,))

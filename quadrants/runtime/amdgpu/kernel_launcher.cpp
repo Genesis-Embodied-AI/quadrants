@@ -93,9 +93,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().malloc_async((void **)&device_arg_buffer,
-                                              ctx.arg_buffer_size,
-                                              active_stream);
+    AMDGPUDriver::get_instance().malloc_async(
+        (void **)&device_arg_buffer, ctx.arg_buffer_size, active_stream);
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size,
         active_stream);
@@ -103,9 +102,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
   void *context_pointer;
   int arg_size = sizeof(RuntimeContext *);
-  AMDGPUDriver::get_instance().malloc_async((void **)&context_pointer,
-                                            sizeof(RuntimeContext),
-                                            active_stream);
+  AMDGPUDriver::get_instance().malloc_async(
+      (void **)&context_pointer, sizeof(RuntimeContext), active_stream);
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(
       context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
       active_stream);
