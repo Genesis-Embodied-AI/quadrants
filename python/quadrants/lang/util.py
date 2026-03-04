@@ -42,7 +42,20 @@ from quadrants.types.primitive_types import (
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
 # Also add DataTypeCxx ids for hot-path element_type lookups from C++
-_all_cxx_objs = (f16_cxx, f32_cxx, f64_cxx, i8_cxx, i16_cxx, i32_cxx, i64_cxx, u1_cxx, u8_cxx, u16_cxx, u32_cxx, u64_cxx)
+_all_cxx_objs = (
+    f16_cxx,
+    f32_cxx,
+    f64_cxx,
+    i8_cxx,
+    i16_cxx,
+    i32_cxx,
+    i64_cxx,
+    u1_cxx,
+    u8_cxx,
+    u16_cxx,
+    u32_cxx,
+    u64_cxx,
+)
 for _cxx in _all_cxx_objs:
     MAP_TYPE_IDS[id(_cxx)] = _cxx
 

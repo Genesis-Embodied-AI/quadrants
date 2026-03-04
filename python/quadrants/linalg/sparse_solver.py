@@ -8,6 +8,7 @@ from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
 from quadrants.lang.impl import get_runtime
+from quadrants.lang.util import cook_dtype
 from quadrants.linalg.sparse_matrix import SparseMatrix
 from quadrants.types.primitive_types import f32
 
@@ -23,8 +24,6 @@ class SparseSolver:
     """
 
     def __init__(self, dtype=f32, solver_type="LLT", ordering="AMD"):
-        from quadrants.lang.util import cook_dtype
-
         self.matrix = None
         dtype_cxx = cook_dtype(dtype)
         self.dtype = dtype_cxx

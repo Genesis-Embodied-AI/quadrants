@@ -9,6 +9,7 @@ from quadrants.lang._ndarray import Ndarray, ScalarNdarray
 from quadrants.lang.exception import QuadrantsRuntimeError
 from quadrants.lang.field import Field
 from quadrants.lang.impl import get_runtime
+from quadrants.lang.util import cook_dtype
 from quadrants.types import f32
 
 
@@ -24,8 +25,6 @@ class SparseMatrix:
     """
 
     def __init__(self, n=None, m=None, sm=None, dtype=f32, storage_format="col_major"):
-        from quadrants.lang.util import cook_dtype
-
         dtype_cxx = cook_dtype(dtype)
         self.dtype = dtype_cxx
         if sm is None:
@@ -248,8 +247,6 @@ class SparseMatrixBuilder:
         dtype=f32,
         storage_format="col_major",
     ):
-        from quadrants.lang.util import cook_dtype
-
         self.num_rows = num_rows
         self.num_cols = num_cols if num_cols else num_rows
         dtype_cxx = cook_dtype(dtype)

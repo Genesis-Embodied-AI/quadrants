@@ -3,13 +3,15 @@ This module defines generators of quantized types.
 For more details, read https://yuanming.quadrants.graphics/publication/2021-quanquadrants/quanquadrants.pdf.
 """
 
+from typing import Any
+
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.types.primitive_types import PrimitiveBase, i32
 
 _type_factory = _qd_python_core.get_type_factory_instance()
 
 
-def _to_ptr(compute):
+def _to_ptr(compute: Any) -> Any:
     """Convert a dtype (Python class or DataTypeCxx) to a Type pointer for C++ APIs."""
     if isinstance(compute, type) and issubclass(compute, PrimitiveBase):
         compute = compute.cxx
