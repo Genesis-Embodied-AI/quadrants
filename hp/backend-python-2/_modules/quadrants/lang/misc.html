@@ -697,8 +697,16 @@
 <span class="n">_FLOAT_DTYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">})</span>
 
 
+<span class="n">_dtype_call_installed</span> <span class="o">=</span> <span class="kc">False</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_install_python_backend_dtype_call</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0).&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_dtype_call_installed</span>
+    <span class="k">if</span> <span class="n">_dtype_call_installed</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">_dtype_call_installed</span> <span class="o">=</span> <span class="kc">True</span>
+
     <span class="n">DataTypeCxx</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">f32</span><span class="p">)</span>
     <span class="n">_original</span> <span class="o">=</span> <span class="n">DataTypeCxx</span><span class="o">.</span><span class="fm">__call__</span>
 

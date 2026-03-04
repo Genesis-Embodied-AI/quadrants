@@ -1567,8 +1567,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_add(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">+=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">+</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_add</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1603,8 +1604,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_mul(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">*=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">*</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_mul</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1639,8 +1641,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_sub(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">-=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">-</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_sub</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1675,8 +1678,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_min(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">x</span><span class="p">[()],</span> <span class="n">y</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_min</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1711,8 +1715,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_max(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">x</span><span class="p">[()],</span> <span class="n">y</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
 
 
@@ -1747,8 +1752,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_and(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">&amp;=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">&amp;</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_and</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="p">)</span></div>
@@ -1785,8 +1791,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_or(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">|=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">|</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_or</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="p">)</span></div>
@@ -1823,8 +1830,9 @@
 <span class="sd">        &gt;&gt;&gt;     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="n">x</span> <span class="o">^=</span> <span class="n">y</span>
-        <span class="k">return</span> <span class="n">x</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">old</span> <span class="o">^</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
 
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
         <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_bit_xor</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
