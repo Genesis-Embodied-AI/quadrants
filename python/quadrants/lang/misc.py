@@ -304,8 +304,16 @@ def check_require_version(require_version):
 _FLOAT_DTYPES = frozenset({f32, f64})
 
 
+_dtype_call_installed = False
+
+
 def _install_python_backend_dtype_call():
     """Make DataType callable for the python backend (e.g. qd.f32(0.0) → 0.0)."""
+    global _dtype_call_installed
+    if _dtype_call_installed:
+        return
+    _dtype_call_installed = True
+
     DataTypeCxx = type(f32)
     _original = DataTypeCxx.__call__
 

@@ -199,3 +199,40 @@ def test_python_backend_zero_as_item() -> None:
     t = qd.ndarray(qd.i32, ())
     t[()] = 3
     assert t[0] == 3
+
+
+def test_reinit_python_then_python() -> None:
+    """Re-initializing the python backend should not break dtype calls."""
+    qd.init(qd.python)
+    a = qd.ndarray(qd.f32, (2,))
+
+    @qd.kernel
+    def use_dtype(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+        a[0] = qd.f32(7.5)
+
+    use_dtype(a)
+    assert a[0] == 7.5
+
+    qd.init(qd.python)
+    b = qd.ndarray(qd.f32, (2,))
+
+    @qd.kernel
+    def use_dtype2(b: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+        b[0] = qd.f32(3.0)
+
+    use_dtype2(b)
+    assert b[0] == 3.0
+
+
+def test_dtype_monkey_patch_not_stacked() -> None:
+    """Multiple qd.init(qd.python) calls should not stack wrapper layers."""
+    from quadrants.lang import misc
+
+    misc._dtype_call_installed = False
+    qd.init(qd.python)
+    call_after_first = type(qd.f32).__call__
+
+    qd.init(qd.python)
+    call_after_second = type(qd.f32).__call__
+
+    assert call_after_first is call_after_second
