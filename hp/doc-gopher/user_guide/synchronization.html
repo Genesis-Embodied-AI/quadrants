@@ -267,30 +267,18 @@
   <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
-
-
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-
-
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Synchronization</a></li>
-
-
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -299,7 +287,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -366,9 +353,8 @@
   <section class="tex2jax_ignore mathjax_ignore" id="synchronization">
 <h1>Synchronization<a class="headerlink" href="#synchronization" title="Link to this heading">#</a></h1>
 <p>Since running code on GPUs is inherently multi-threaded, synchronization of writes and reads to memory is important.</p>
-</section>
-<section class="tex2jax_ignore mathjax_ignore" id="why-is-this-an-issue">
-<h1>Why is this an issue?<a class="headerlink" href="#why-is-this-an-issue" title="Link to this heading">#</a></h1>
+<section id="why-is-this-an-issue">
+<h2>Why is this an issue?<a class="headerlink" href="#why-is-this-an-issue" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p>when one thread writes to global memory, the write doesn’t take place immediately. It takes 10-150ns for the data to work its way across to global memory, which is not on the GPU die itself, but in other chips, albeit on the same GPU card.</p>
 <ul>
@@ -387,11 +373,11 @@
 <p>To prevent this issue, we need some kind of synchronization.</p>
 <p>Synchronization of writes and reads for global memory is hard, because it is so far away from the cores; and takes such a long time to write, and read.</p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="possible-approaches">
-<h1>Possible approaches<a class="headerlink" href="#possible-approaches" title="Link to this heading">#</a></h1>
+<section id="possible-approaches">
+<h2>Possible approaches<a class="headerlink" href="#possible-approaches" title="Link to this heading">#</a></h2>
 <p>There are a few options:</p>
 <section id="each-thread-never-reads-memory-written-by-other-threads">
-<h2>Each thread never reads memory written by other threads<a class="headerlink" href="#each-thread-never-reads-memory-written-by-other-threads" title="Link to this heading">#</a></h2>
+<h3>Each thread never reads memory written by other threads<a class="headerlink" href="#each-thread-never-reads-memory-written-by-other-threads" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>this approach is the safest, and the fastest</p></li>
 <li><p>not always possible of course</p></li>
@@ -405,7 +391,7 @@
 </div>
 </section>
 <section id="use-separate-kernels-for-synchronization">
-<h2>Use separate kernels for synchronization<a class="headerlink" href="#use-separate-kernels-for-synchronization" title="Link to this heading">#</a></h2>
+<h3>Use separate kernels for synchronization<a class="headerlink" href="#use-separate-kernels-for-synchronization" title="Link to this heading">#</a></h3>
 <p>Sometimes we might have multiple for loops, which, on their own are thread safe, however, one for loop must not begin until the previous one has finished.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -418,7 +404,7 @@
 <p>The default behavior of Quadrants for kernels with multiple top-level for loops is to run each top level for loop in a separate GPU kernel. And this ensures that writes to global memory from the first for loop are guaranteed to be visible to all threads in the second for loop.</p>
 </section>
 <section id="use-atomics">
-<h2>Use atomics<a class="headerlink" href="#use-atomics" title="Link to this heading">#</a></h2>
+<h3>Use atomics<a class="headerlink" href="#use-atomics" title="Link to this heading">#</a></h3>
 <p>Atomics tend to be the main other approach used by Quadrants engineers for synchronization.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -432,15 +418,16 @@
 </ul>
 </section>
 <section id="use-barriers-and-fences">
-<h2>Use barriers and fences<a class="headerlink" href="#use-barriers-and-fences" title="Link to this heading">#</a></h2>
+<h3>Use barriers and fences<a class="headerlink" href="#use-barriers-and-fences" title="Link to this heading">#</a></h3>
 <p>Barriers and fences only work well for shared memory. Using shared memory is an advanced feature, not typically used by Quadrants users. Can be done though. Quadrants offers:</p>
 <section id="shared-memory">
-<h3>Shared memory<a class="headerlink" href="#shared-memory" title="Link to this heading">#</a></h3>
+<h4>Shared memory<a class="headerlink" href="#shared-memory" title="Link to this heading">#</a></h4>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">(</span><span class="n">data_type</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>See <a class="reference download internal" download="" href="../_downloads/cd2bde4df0fd05526c617a6215fd3b29/test_shared_array.py"><span class="xref download myst">tests/python/test_shared_array.py</span></a> for examples.</p>
+</section>
 </section>
 </section>
 </section>
@@ -492,20 +479,18 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Synchronization</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#why-is-this-an-issue">Why is this an issue?</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#possible-approaches">Possible approaches</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#each-thread-never-reads-memory-written-by-other-threads">Each thread never reads memory written by other threads</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#use-separate-kernels-for-synchronization">Use separate kernels for synchronization</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#use-atomics">Use atomics</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#use-barriers-and-fences">Use barriers and fences</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shared-memory">Shared memory</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#why-is-this-an-issue">Why is this an issue?</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#possible-approaches">Possible approaches</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#each-thread-never-reads-memory-written-by-other-threads">Each thread never reads memory written by other threads</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-separate-kernels-for-synchronization">Use separate kernels for synchronization</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-atomics">Use atomics</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-barriers-and-fences">Use barriers and fences</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#shared-memory">Shared memory</a></li>
 </ul>
 </li>
 </ul>
 </li>
 </ul>
-
   </nav></div>
 
   <div class="sidebar-secondary-item">

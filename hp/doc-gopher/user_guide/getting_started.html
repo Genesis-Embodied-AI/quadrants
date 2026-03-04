@@ -267,30 +267,18 @@
   <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Getting started</a></li>
-
-
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-
-
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
-
-
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -299,7 +287,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -365,11 +352,10 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="getting-started">
 <h1>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading">#</a></h1>
-</section>
-<section class="tex2jax_ignore mathjax_ignore" id="installation">
-<h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h1>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
 <section id="pre-requisites">
-<h2>Pre-requisites<a class="headerlink" href="#pre-requisites" title="Link to this heading">#</a></h2>
+<h3>Pre-requisites<a class="headerlink" href="#pre-requisites" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>a supported platform (MacOS Arm64, Linux x64, Windows x64), see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">Supported systems</span></a></p></li>
 <li><p>a supported Python version installed, see <a class="reference internal" href="supported_systems.html"><span class="std std-doc">Supported systems</span></a></p></li>
@@ -377,21 +363,21 @@
 </ul>
 </section>
 <section id="procedure">
-<h2>Procedure<a class="headerlink" href="#procedure" title="Link to this heading">#</a></h2>
+<h3>Procedure<a class="headerlink" href="#procedure" title="Link to this heading">#</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>quadrants
 </pre></div>
 </div>
 </section>
 <section id="sanity-checking-the-installation">
-<h2>Sanity checking the installation<a class="headerlink" href="#sanity-checking-the-installation" title="Link to this heading">#</a></h2>
+<h3>Sanity checking the installation<a class="headerlink" href="#sanity-checking-the-installation" title="Link to this heading">#</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import quadrants as qd; qd.init(arch=qd.gpu)&#39;</span>
 </pre></div>
 </div>
 <p>(should not show any error messages)</p>
 </section>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="a-first-quadrants-kernel">
-<h1>A first Quadrants kernel<a class="headerlink" href="#a-first-quadrants-kernel" title="Link to this heading">#</a></h1>
+<section id="a-first-quadrants-kernel">
+<h2>A first Quadrants kernel<a class="headerlink" href="#a-first-quadrants-kernel" title="Link to this heading">#</a></h2>
 <p>Let’s use a linear congruential generator - a pseudo-random number generator - since they are not easily possible for a compiler to optimize out. First, in normal python:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">lcg_np</span><span class="p">(</span><span class="n">B</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">lcg_its</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">npt</span><span class="o">.</span><span class="n">NDArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>
@@ -521,7 +507,7 @@
 <li><p>=&gt; 346 times faster</p></li>
 </ul>
 <section id="what-does-quadrants-do-with-the-kernel-function">
-<h2>What does Quadrants do with the kernel function?<a class="headerlink" href="#what-does-quadrants-do-with-the-kernel-function" title="Link to this heading">#</a></h2>
+<h3>What does Quadrants do with the kernel function?<a class="headerlink" href="#what-does-quadrants-do-with-the-kernel-function" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p>any top level for loops are parallelized across the GPU cores (or CPU, if you run on CPU)</p>
 <ul>
@@ -532,7 +518,7 @@
 </ul>
 </section>
 <section id="fields-even-faster">
-<h2>fields: even faster<a class="headerlink" href="#fields-even-faster" title="Link to this heading">#</a></h2>
+<h3>fields: even faster<a class="headerlink" href="#fields-even-faster" title="Link to this heading">#</a></h3>
 <p>Quadrants ndarrays are easy to use, and flexible, but we can increase speed by another ~30% or so (depending on the kernel), by using fields.</p>
 <p>The kernel above doesn’t load or store data except at the start and end: it’s just exercising the GPU ALU. To see the difference between Quadrants ndarray and Quadrants field runtime speed, we need a kernel that does more loads and stores.</p>
 <p>We’ll do a simple kernel that copies from one tensor to another. To avoid simply measuring the latency to read and write from/to global memory, we’ll read and write the same values repeatedly.</p>
@@ -594,6 +580,7 @@ iteration time 21.44002914428711 us
 <p>Technical note: the exact ratio depends on the kernel. In addition it’s possible to construct toy examples like this where ndarray appears to be faster than fields, but in many commonly used kernels, such as Genesis func narrow phase kernel, for collisions, we observe fields are around ~30% faster</p>
 </section>
 </section>
+</section>
 
 
                 </article>
@@ -642,20 +629,18 @@ iteration time 21.44002914428711 us
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Getting started</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-requisites">Pre-requisites</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#procedure">Procedure</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sanity-checking-the-installation">Sanity checking the installation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-requisites">Pre-requisites</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#procedure">Procedure</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sanity-checking-the-installation">Sanity checking the installation</a></li>
 </ul>
 </li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#a-first-quadrants-kernel">A first Quadrants kernel</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-does-quadrants-do-with-the-kernel-function">What does Quadrants do with the kernel function?</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-even-faster">fields: even faster</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#a-first-quadrants-kernel">A first Quadrants kernel</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-does-quadrants-do-with-the-kernel-function">What does Quadrants do with the kernel function?</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-even-faster">fields: even faster</a></li>
 </ul>
 </li>
 </ul>
-
   </nav></div>
 
   <div class="sidebar-secondary-item">

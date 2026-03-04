@@ -267,30 +267,18 @@
   <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
-
-
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
-
-
-
-
-
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
-
-
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -299,7 +287,6 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Python features in kernel scope</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -540,14 +527,14 @@
 </div>
 </section>
 </section>
-</section>
-<section class="tex2jax_ignore mathjax_ignore" id="argument-unpacking">
-<h1>Argument unpacking<a class="headerlink" href="#argument-unpacking" title="Link to this heading">#</a></h1>
+<section id="argument-unpacking">
+<h2>Argument unpacking<a class="headerlink" href="#argument-unpacking" title="Link to this heading">#</a></h2>
 <p>Syntax like <code class="docutils literal notranslate"><span class="pre">some_function(*args)</span></code> is supported in a narrow case:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">*args</span></code> must be the last argument in the function call</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">*args</span></code> must not contain <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> objects</p></li>
 </ul>
+</section>
 </section>
 
 
@@ -597,7 +584,6 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Python features in kernel scope</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported">Supported</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#not-supported">Not supported</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#statements">Statements</a></li>
@@ -612,11 +598,8 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-qd-real-func-for-early-returns">Use <code class="docutils literal notranslate"><span class="pre">@qd.real_func</span></code> for early returns</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#argument-unpacking">Argument unpacking</a></li>
 </ul>
-</li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#argument-unpacking">Argument unpacking</a></li>
-</ul>
-
   </nav></div>
 
   <div class="sidebar-secondary-item">

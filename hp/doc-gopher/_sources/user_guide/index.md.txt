@@ -3,6 +3,7 @@
 ```{toctree}
 :caption: Getting started
 :maxdepth: 1
+:titlesonly:
 
 getting_started
 supported_systems
@@ -11,6 +12,7 @@ supported_systems
 ```{toctree}
 :caption: Core concepts
 :maxdepth: 1
+:titlesonly:
 
 tensor_types
 scalar_tensors
@@ -25,6 +27,7 @@ synchronization
 ```{toctree}
 :caption: Integration
 :maxdepth: 1
+:titlesonly:
 
 interop
 ```
@@ -32,6 +35,7 @@ interop
 ```{toctree}
 :caption: Reference
 :maxdepth: 1
+:titlesonly:
 
 unsupported_python
 debug
