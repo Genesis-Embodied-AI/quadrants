@@ -15,7 +15,7 @@ NUM_ACTIVE: int = 1
 REPEAT_AFTER_COUNT: int = 0
 REPEAT_AFTER_SECONDS: float = 1.0
 
-TI_PERFDISPATCH_PRINT_DEBUG = os.environ.get("TI_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
+QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
 
 class DispatchImpl:
@@ -102,7 +102,7 @@ class PerformanceDispatcher(Generic[P, R]):
             sig = inspect.signature(func)
             log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
             _logging.debug(log_str)
-            if TI_PERFDISPATCH_PRINT_DEBUG:
+            if QD_PERFDISPATCH_PRINT_DEBUG:
                 print(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
@@ -167,7 +167,7 @@ class PerformanceDispatcher(Generic[P, R]):
             f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions."
         )
         _logging.debug(log_str)
-        if TI_PERFDISPATCH_PRINT_DEBUG:
+        if QD_PERFDISPATCH_PRINT_DEBUG:
             print(log_str)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs):
@@ -235,7 +235,7 @@ class PerformanceDispatcher(Generic[P, R]):
                 f"out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
             )
             _logging.debug(log_str)
-            if TI_PERFDISPATCH_PRINT_DEBUG:
+            if QD_PERFDISPATCH_PRINT_DEBUG:
                 print(log_str)
             return dispatch_impl_(*args, **kwargs)
 
