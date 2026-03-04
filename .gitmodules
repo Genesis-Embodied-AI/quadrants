@@ -39,7 +39,7 @@
 	url = https://github.com/KhronosGroup/SPIRV-Tools
 [submodule "external/SPIRV-Cross"]
 	path = external/SPIRV-Cross
-	url = https://github.com/KhronosGroup/SPIRV-Cross
+	url = https://github.com/Genesis-Embodied-AI/SPIRV-Cross
 [submodule "external/Vulkan-Headers"]
 	path = external/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers

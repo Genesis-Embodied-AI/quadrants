@@ -502,6 +502,13 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
     QD_ERROR_IF(status != RhiResult::success,
                 "Resource binding error : RhiResult({})", status);
 
+    if (device_->get_caps().get(
+            DeviceCapability::spirv_has_physical_storage_buffer)) {
+      for (const auto &[arg_id, alloc] : any_arrays) {
+        current_cmdlist_->track_physical_buffer(alloc);
+      }
+    }
+
     if (profiler_) {
       current_cmdlist_->begin_profiler_scope(attribs.name);
     }
