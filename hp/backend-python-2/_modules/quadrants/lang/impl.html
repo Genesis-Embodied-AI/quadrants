@@ -1587,7 +1587,12 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_Ndrange</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">grouped</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">is_python_backend</span><span class="p">():</span>
-        <span class="k">return</span> <span class="p">[[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.matrix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Matrix</span>  <span class="c1"># pylint: disable=C0415</span>
+
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">Matrix</span><span class="p">([])]</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">Matrix</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">idx</span><span class="p">))</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">ndindex</span><span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">)]</span>
     <span class="k">return</span> <span class="n">x</span></div>
 
 
