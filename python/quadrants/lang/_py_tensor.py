@@ -67,7 +67,10 @@ class PyTensor(torch.Tensor):
             return key[0]
         if isinstance(key, tuple):
             if any(isinstance(k, torch.Tensor) for k in key):
-                return tuple(int(k) if isinstance(k, torch.Tensor) and k.ndim == 0 else k for k in key)
+                return tuple(
+                    int(k) if isinstance(k, torch.Tensor) and k.ndim == 0 else k  # type: ignore[union-attr]
+                    for k in key
+                )
         return key
 
     def __iter__(self):  # type: ignore[override]
