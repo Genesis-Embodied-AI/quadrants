@@ -224,6 +224,85 @@ def test_reinit_python_then_python() -> None:
     assert b[0] == 3.0
 
 
+def test_grouped_struct_for_1d() -> None:
+    """qd.grouped(field) should iterate over all indices of a 1D field."""
+    qd.init(qd.python)
+
+    N = 6
+    a = qd.field(qd.i32, shape=(N,))
+    a.fill(0)
+
+    @qd.kernel
+    def fill_grouped(a: qd.template()):
+        for I in qd.grouped(a):
+            a[I] = I[0] * 10
+
+    fill_grouped(a)
+    for i in range(N):
+        assert a[i] == i * 10
+
+
+def test_grouped_struct_for_2d() -> None:
+    """qd.grouped(field) should iterate over all indices of a 2D field."""
+    qd.init(qd.python)
+
+    N, M = 4, 3
+    a = qd.field(qd.i32, shape=(N, M))
+    a.fill(0)
+
+    @qd.kernel
+    def fill_grouped_2d(a: qd.template()):
+        for I in qd.grouped(a):
+            a[I] = I[0] * 10 + I[1]
+
+    fill_grouped_2d(a)
+    for i in range(N):
+        for j in range(M):
+            assert a[i, j] == i * 10 + j
+
+
+def test_grouped_struct_for_3d() -> None:
+    """qd.grouped(field) should iterate over all indices of a 3D field."""
+    qd.init(qd.python)
+
+    N, M, P = 3, 4, 2
+    a = qd.field(qd.i32, shape=(N, M, P))
+    a.fill(0)
+
+    @qd.kernel
+    def fill_grouped_3d(a: qd.template()):
+        for I in qd.grouped(a):
+            a[I] = I[0] + I[1] * 2 + I[2] * 3
+
+    fill_grouped_3d(a)
+    for i in range(N):
+        for j in range(M):
+            for k in range(P):
+                assert a[i, j, k] == i + j * 2 + k * 3
+
+
+def test_grouped_struct_for_vector_field() -> None:
+    """qd.grouped(field) on a vector field should iterate batch dims only."""
+    qd.init(qd.python)
+
+    N, M = 3, 4
+    vec3 = qd.types.vector(3, qd.f32)
+    a = qd.field(vec3, shape=(N, M))
+    a.fill(0)
+
+    @qd.kernel
+    def fill_grouped_vec(a: qd.template()):
+        for I in qd.grouped(a):
+            a[I] = qd.Vector([float(I[0]), float(I[1]), float(I[0] + I[1])])
+
+    fill_grouped_vec(a)
+    for i in range(N):
+        for j in range(M):
+            assert a[i, j, 0].item() == float(i)
+            assert a[i, j, 1].item() == float(j)
+            assert a[i, j, 2].item() == float(i + j)
+
+
 def test_dtype_monkey_patch_not_stacked() -> None:
     """Multiple qd.init(qd.python) calls should not stack wrapper layers."""
     from quadrants.lang import misc

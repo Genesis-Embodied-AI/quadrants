@@ -1243,7 +1243,10 @@ def grouped(x):
     if isinstance(x, _Ndrange):
         return x.grouped()
     if is_python_backend():
-        return [[i] for i in range(x.shape[0])]
+        shape = x.shape
+        if len(shape) == 0:
+            return [Matrix([])]
+        return [Matrix(list(idx)) for idx in np.ndindex(*shape)]
     return x
 
 
