@@ -27,6 +27,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = data_ptr;
+        }
       } else if (ctx.array_runtime_sizes[arg_id] > 0) {
         uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(
             *static_cast<DeviceAllocation *>(data_ptr));
@@ -38,12 +41,18 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                 : (uint64)executor->get_device_alloc_info_ptr(
                       *static_cast<DeviceAllocation *>(grad_ptr));
         ctx.set_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
+        if (arg_id == ctx.graph_while_arg_id) {
+          ctx.graph_while_flag_dev_ptr = (void *)host_ptr;
+        }
       }
     }
   }
-  for (auto task : launcher_ctx.task_funcs) {
-    task(&ctx.get_context());
-  }
+  do {
+    for (auto task : launcher_ctx.task_funcs) {
+      task(&ctx.get_context());
+    }
+  } while (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr &&
+           *static_cast<int32_t *>(ctx.graph_while_flag_dev_ptr) != 0);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(

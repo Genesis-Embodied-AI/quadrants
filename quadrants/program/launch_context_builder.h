@@ -150,6 +150,9 @@ class LaunchContextBuilder {
   size_t arg_buffer_size{0};
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
+  bool use_cuda_graph{false};
+  int graph_while_arg_id{-1};
+  void *graph_while_flag_dev_ptr{nullptr};
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test
