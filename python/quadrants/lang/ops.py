@@ -88,12 +88,10 @@ def cast(obj, dtype):
     if impl.is_python_backend():
         import torch as _torch  # pylint: disable=C0415
 
+        torch_dtype = dtype_to_torch_dtype(dtype)
         if isinstance(obj, _torch.Tensor):
-            return obj.to(dtype_to_torch_dtype(dtype))
-        py_type = (
-            float if "float" in str(dtype) or "f16" in str(dtype) or "f32" in str(dtype) or "f64" in str(dtype) else int
-        )
-        return py_type(obj)
+            return obj.to(torch_dtype)
+        return float(obj) if torch_dtype.is_floating_point else int(obj)
     return expr.Expr(_qd_core.value_cast(expr.Expr(obj).ptr, dtype))
 
 
