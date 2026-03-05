@@ -36,8 +36,9 @@ struct CudaGraphNodeParams {
   char _pad[232 - 8 - 4 - 4 - 8 - 8];
   long long reserved2;
 };
-static_assert(sizeof(CudaGraphNodeParams) == 256,
-              "CudaGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
+static_assert(
+    sizeof(CudaGraphNodeParams) == 256,
+    "CudaGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
 struct CachedCudaGraph {
   void *graph_exec{nullptr};
