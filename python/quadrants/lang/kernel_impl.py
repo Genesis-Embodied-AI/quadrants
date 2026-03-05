@@ -219,6 +219,23 @@ def kernel(
 
     Kernel's gradient kernel would be generated automatically by the AutoDiff system.
 
+    Args:
+        cuda_graph: If True, kernels with 2+ top-level for loops are captured
+            into a CUDA graph on first launch and replayed on subsequent
+            launches, reducing per-kernel launch overhead. On non-CUDA backends
+            this flag is a harmless no-op.
+        graph_while: Name of a scalar ``qd.i32`` ndarray parameter that
+            controls GPU-side iteration. The kernel body repeats while the
+            named argument is non-zero.  Uses CUDA conditional while nodes
+            on SM 9.0+ (Hopper); falls back to a host-side do-while loop
+            on older GPUs and non-CUDA backends.  Implicitly enables
+            ``cuda_graph=True``.
+
+            **Do-while semantics**: the kernel body always executes at least
+            once before the condition is checked. The flag value must be >= 1
+            at launch time. Passing 0 with a kernel that decrements the
+            counter will result in an infinite loop.
+
     Example::
 
         >>> x = qd.field(qd.i32, shape=(4, 8))
