@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.kernel_impl &#8212; Quadrants 0.4.3 documentation</title>
+    <title>quadrants.lang.kernel_impl &#8212; Quadrants 0.4.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../../_static/documentation_options.js?v=5bfaad31"></script>
+    <script src="../../../../_static/documentation_options.js?v=90733dfc"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@
     <link rel="prev" title="quadrants.lang.kernel_arguments" href="../kernel_arguments/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.4.3" />
+  <meta name="docsearch:version" content="0.4.4" />
   </head>
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.4.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.4.4 documentation</p>
   
 </a></div>
     
@@ -510,6 +510,27 @@ Quadrants into native CPU/GPU instructions (e.g. a series of CUDA kernels).
 The top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops are automatically parallelized, and distributed
 to either a CPU thread pool or massively parallel GPUs.</p>
 <p>Kernel’s gradient kernel would be generated automatically by the AutoDiff system.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cuda_graph</strong> – If True, kernels with 2+ top-level for loops are captured
+into a CUDA graph on first launch and replayed on subsequent
+launches, reducing per-kernel launch overhead. On non-CUDA backends
+this flag is a harmless no-op.</p></li>
+<li><p><strong>graph_while</strong> – <p>Name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter that
+controls GPU-side iteration. The kernel body repeats while the
+named argument is non-zero.  Uses CUDA conditional while nodes
+on SM 9.0+ (Hopper); falls back to a host-side do-while loop
+on older GPUs and non-CUDA backends.  Implicitly enables
+<code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code>.</p>
+<p><strong>Do-while semantics</strong>: the kernel body always executes at least
+once before the condition is checked. The flag value must be &gt;= 1
+at launch time. Passing 0 with a kernel that decrements the
+counter will result in an infinite loop.</p>
+</p></li>
+</ul>
+</dd>
+</dl>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt;</span>
