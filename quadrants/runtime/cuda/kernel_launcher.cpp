@@ -1,8 +1,10 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <vector>
 
 namespace quadrants::lang {
 namespace cuda {
@@ -166,12 +168,17 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
 
   auto &driver = CUDADriver::get_instance();
 
-  // Find libcudadevrt.a — required for cudaGraphSetConditional in device code
   std::string cudadevrt_path;
-  for (const auto &candidate : {
-           std::string("/usr/local/cuda/lib64/libcudadevrt.a"),
-           std::string("/usr/lib/x86_64-linux-gnu/libcudadevrt.a"),
-       }) {
+  std::vector<std::string> candidates;
+  for (const char *env_name : {"CUDA_HOME", "CUDA_PATH"}) {
+    if (const char *env_val = std::getenv(env_name)) {
+      candidates.push_back(std::string(env_val) + "/lib64/libcudadevrt.a");
+      candidates.push_back(std::string(env_val) + "/lib/libcudadevrt.a");
+    }
+  }
+  candidates.push_back("/usr/local/cuda/lib64/libcudadevrt.a");
+  candidates.push_back("/usr/lib/x86_64-linux-gnu/libcudadevrt.a");
+  for (const auto &candidate : candidates) {
     if (std::filesystem::exists(candidate)) {
       cudadevrt_path = candidate;
       break;
