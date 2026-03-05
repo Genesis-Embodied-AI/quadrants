@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Supported systems &#8212; Quadrants 0.4.2 documentation</title>
+    <title>Python backend &#8212; Quadrants 0.4.2 documentation</title>
   
   
   
@@ -55,11 +55,11 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/user_guide/supported_systems';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/user_guide/python_backend';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Tensor types" href="tensor_types.html" />
-    <link rel="prev" title="Getting started" href="getting_started.html" />
+    <link rel="next" title="Quirks" href="quirks.html" />
+    <link rel="prev" title="Compound types" href="compound_types.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.4.2" />
@@ -269,7 +269,7 @@
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
 
 
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Supported systems</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
 
 
@@ -283,7 +283,7 @@
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 
 
-<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Python backend</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
@@ -329,7 +329,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Supported systems</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Python backend</span></li>
   </ul>
 </nav>
 </div>
@@ -346,39 +346,91 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="supported-systems">
-<h1>Supported systems<a class="headerlink" href="#supported-systems" title="Link to this heading">#</a></h1>
-<section id="ci-tested-systems">
-<h2>CI Tested systems<a class="headerlink" href="#ci-tested-systems" title="Link to this heading">#</a></h2>
-<p>We test the following systems in our CI servers:</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="python-backend">
+<h1>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h1>
+<p>The Python backend executes Quadrants kernels and functions as plain Python, using PyTorch tensors for storage. No compilation or GPU is required.</p>
+<p>This is useful for:</p>
 <ul class="simple">
-<li><p>Python 3.10-Python 3.13</p></li>
-<li><p>Mac OS X 14 and 15</p></li>
-<li><p>Ubuntu 22.04 and Ubuntu 24.04</p></li>
-<li><p>Windows Server 2025</p></li>
+<li><p>Debugging kernel logic with a standard Python debugger</p></li>
+<li><p>Running on systems without a GPU or native compiler</p></li>
+<li><p>Quick iteration without compilation overhead</p></li>
+</ul>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">#</a></h2>
+<p>PyTorch must be installed. No other dependencies beyond the standard Quadrants install are needed.</p>
+</section>
+<section id="quick-start">
+<h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">python</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">*</span> <span class="mf">2.0</span>
+
+<span class="n">fill</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="supported-features">
+<h2>Supported features<a class="headerlink" href="#supported-features" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> — executed directly as Python functions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.field()</span></code> — scalar, vector, and matrix fields</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray()</span></code> — scalar, vector, and matrix ndarrays</p></li>
+<li><p>Struct fields (<code class="docutils literal notranslate"><span class="pre">qd.types.struct</span></code>)</p></li>
+<li><p>Atomics (<code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.grouped(field)</span></code> — struct-for iteration over field indices</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndrange()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.static()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.cast()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.math.isnan()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.isinf()</span></code></p></li>
+<li><p>Dtype constructors (<code class="docutils literal notranslate"><span class="pre">qd.f32(x)</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i32(x)</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.Vector()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Matrix()</span></code></p></li>
 </ul>
 </section>
-<section id="id1">
-<h2>Supported systems:<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
-<section id="operating-systems">
-<h3>Operating systems<a class="headerlink" href="#operating-systems" title="Link to this heading">#</a></h3>
+<section id="limitations">
+<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>Mac Silicon 14 or 15</p></li>
-<li><p>Ubuntu 22.04 and 24.04 (x86 only)</p></li>
-<li><p>Windows 10 or later (x86 only)</p></li>
+<li><p><strong>Single-threaded.</strong> Kernels run sequentially; there is no parallelism.</p></li>
+<li><p><strong>Atomics are plain sequential ops.</strong> Correct in single-threaded execution but not a test of real atomic semantics.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">loop_config()</span></code> and <code class="docutils literal notranslate"><span class="pre">sync()</span></code> are no-ops.</strong></p></li>
+<li><p><strong>No SNode trees.</strong> Fields are flat PyTorch tensors, not backed by the SNode system.</p></li>
+<li><p><strong>Performance is not representative</strong> of compiled backends. Do not use for benchmarking.</p></li>
+<li><p><strong>GPU-specific features</strong> (shared memory, block-level intrinsics, etc.) are not available.</p></li>
 </ul>
 </section>
-<section id="gpus">
-<h3>GPUs<a class="headerlink" href="#gpus" title="Link to this heading">#</a></h3>
+<section id="storage-model">
+<h2>Storage model<a class="headerlink" href="#storage-model" title="Link to this heading">#</a></h2>
+<p>Fields and ndarrays are instances of <code class="docutils literal notranslate"><span class="pre">PyTensor</span></code>, a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> subclass. You can interoperate with PyTorch directly:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">python</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+
+<span class="c1"># a is a torch.Tensor under the hood</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">size</span><span class="p">()</span> <span class="o">==</span> <span class="n">torch</span><span class="o">.</span><span class="n">Size</span><span class="p">([</span><span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Each tensor has the following attributes matching the standard Quadrants field/ndarray convention:</p>
 <ul class="simple">
-<li><p>CUDA GPUs, Pascal or later (&gt;=sm_60)</p></li>
-<li><p>Metal GPUs</p></li>
-<li><p>Vulkan-compatible GPUs (e.g. Intel Arc)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_tc</span></code> — the tensor itself</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_T_tc</span></code> — transposed view (first batch dim moved to front)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_np</span></code> — numpy view</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_T_np</span></code> — transposed numpy view</p></li>
 </ul>
-</section>
-<section id="python-backend">
-<h3>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h3>
-<p>A pure-Python backend (<code class="docutils literal notranslate"><span class="pre">qd.python</span></code>) is available on any system where PyTorch is installed. See <a class="reference internal" href="python_backend.html"><span class="std std-doc">Python backend</span></a>.</p>
+<section id="batch-shape-vs-real-shape">
+<h3>Batch shape vs real shape<a class="headerlink" href="#batch-shape-vs-real-shape" title="Link to this heading">#</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">.shape</span></code> property returns the <strong>batch dimensions only</strong>, consistent with how Quadrants kernels index fields. For example, a <code class="docutils literal notranslate"><span class="pre">vec3</span></code> field of shape <code class="docutils literal notranslate"><span class="pre">(10,)</span></code> reports <code class="docutils literal notranslate"><span class="pre">.shape</span> <span class="pre">==</span> <span class="pre">(10,)</span></code> even though the underlying tensor has size <code class="docutils literal notranslate"><span class="pre">(10,</span> <span class="pre">3)</span></code>. Use <code class="docutils literal notranslate"><span class="pre">.size()</span></code> to get the full torch shape.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">f</span><span class="o">.</span><span class="n">shape</span>     <span class="c1"># torch.Size([10])    — batch dims, what kernels see</span>
+<span class="n">f</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>    <span class="c1"># torch.Size([10, 3]) — real tensor shape</span>
+</pre></div>
+</div>
 </section>
 </section>
 </section>
@@ -394,20 +446,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="getting_started.html"
+       href="compound_types.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Getting started</p>
+        <p class="prev-next-title">Compound types</p>
       </div>
     </a>
     <a class="right-next"
-       href="tensor_types.html"
+       href="quirks.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Tensor types</p>
+        <p class="prev-next-title">Quirks</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -430,11 +482,12 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-tested-systems">CI Tested systems</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Supported systems:</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#operating-systems">Operating systems</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gpus">GPUs</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-backend">Python backend</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#requirements">Requirements</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick start</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-features">Supported features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#storage-model">Storage model</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-shape-vs-real-shape">Batch shape vs real shape</a></li>
 </ul>
 </li>
 </ul>
@@ -444,7 +497,7 @@
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
-      <li><a href="../../_sources/user_guide/user_guide/supported_systems.md.txt"
+      <li><a href="../../_sources/user_guide/user_guide/python_backend.md.txt"
             rel="nofollow">Show Source</a></li>
     </ul>
    </div></div>
