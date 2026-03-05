@@ -155,6 +155,15 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
   if (cond_kernel_func_)
     return;
 
+  int cc = CUDAContext::get_instance().get_compute_capability();
+  if (cc < 90) {
+    QD_WARN(
+        "graph_while requires SM 9.0+ (Hopper), but this device is SM {}. "
+        "Falling back to non-graph path.",
+        cc);
+    return;
+  }
+
   auto &driver = CUDADriver::get_instance();
 
   // Find libcudadevrt.a — required for cudaGraphSetConditional in device code
