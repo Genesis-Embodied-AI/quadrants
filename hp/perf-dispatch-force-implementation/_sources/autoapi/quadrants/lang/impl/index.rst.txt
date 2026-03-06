@@ -1,0 +1,271 @@
+quadrants.lang.impl
+===================
+
+.. py:module:: quadrants.lang.impl
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.impl.root
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.impl.static_print
+   quadrants.lang.impl.static_assert
+   quadrants.lang.impl.deactivate_all_snodes
+   quadrants.lang.impl.field
+   quadrants.lang.impl.ndarray
+   quadrants.lang.impl.zero
+   quadrants.lang.impl.one
+   quadrants.lang.impl.axes
+   quadrants.lang.impl.static
+   quadrants.lang.impl.grouped
+   quadrants.lang.impl.stop_grad
+
+
+Module Contents
+---------------
+
+.. py:function:: static_print(*args, __p=print, **kwargs)
+
+   The print function in Quadrants scope.
+
+   This function is called at compile time and has no runtime overhead.
+
+
+.. py:function:: static_assert(cond, msg=None)
+
+   Throw AssertionError when `cond` is False.
+
+   This function is called at compile time and has no runtime overhead.
+   The bool value in `cond` must can be determined at compile time.
+
+   :param cond: an expression with a bool value.
+   :type cond: bool
+   :param msg: assertion message.
+   :type msg: str
+
+   Example::
+
+       >>> year = 2001
+       >>> @qd.kernel
+       >>> def test():
+       >>>     qd.static_assert(year % 4 == 0, "the year must be a lunar year")
+       AssertionError: the year must be a lunar year
+
+
+.. py:function:: deactivate_all_snodes()
+
+   Recursively deactivate all SNodes.
+
+
+.. py:data:: root
+
+   Root of the declared Quadrants :func:`~quadrants.lang.impl.field`s.
+
+   See also https://docs.taichi-lang.org/docs/layout
+
+   Example::
+
+       >>> x = qd.field(qd.f32)
+       >>> qd.root.pointer(qd.ij, 4).dense(qd.ij, 8).place(x)
+
+.. py:function:: field(dtype, *args, **kwargs)
+
+   Defines a Quadrants field.
+
+   A Quadrants field can be viewed as an abstract N-dimensional array, hiding away
+   the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are
+   actually defined. The data in a Quadrants field can be directly accessed by
+   a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.
+
+   See also https://docs.taichi-lang.org/docs/field
+
+   :param dtype: data type of the field. Note it can be vector or matrix types as well.
+   :type dtype: DataType
+   :param shape: shape of the field.
+   :type shape: Union[int, tuple[int]], optional
+   :param order: order of the shape laid out in memory.
+   :type order: str, optional
+   :param name: name of the field.
+   :type name: str, optional
+   :param offset: offset of the field domain.
+   :type offset: Union[int, tuple[int]], optional
+   :param needs_grad: whether this field participates in autodiff (reverse mode)
+                      and thus needs an adjoint field to store the gradients.
+   :type needs_grad: bool, optional
+   :param needs_dual: whether this field participates in autodiff (forward mode)
+                      and thus needs an dual field to store the gradients.
+   :type needs_dual: bool, optional
+
+   Example::
+
+       The code below shows how a Quadrants field can be declared and defined::
+
+           >>> x1 = qd.field(qd.f32, shape=(16, 8))
+           >>> # Equivalently
+           >>> x2 = qd.field(qd.f32)
+           >>> qd.root.dense(qd.ij, shape=(16, 8)).place(x2)
+           >>>
+           >>> x3 = qd.field(qd.f32, shape=(16, 8), order='ji')
+           >>> # Equivalently
+           >>> x4 = qd.field(qd.f32)
+           >>> qd.root.dense(qd.j, shape=8).dense(qd.i, shape=16).place(x4)
+           >>>
+           >>> x5 = qd.field(qd.math.vec3, shape=(16, 8))
+
+
+
+.. py:function:: ndarray(dtype, shape, needs_grad=False)
+
+   Defines a Quadrants ndarray with scalar elements.
+
+   :param dtype: Data type of each element. This can be either a scalar type like qd.f32 or a compound type like qd.types.vector(3, qd.i32).
+   :type dtype: Union[DataType, MatrixType]
+   :param shape: Shape of the ndarray.
+   :type shape: Union[int, tuple[int]]
+
+   .. rubric:: Example
+
+   The code below shows how a Quadrants ndarray with scalar elements can be declared and defined::
+
+       >>> x = qd.ndarray(qd.f32, shape=(16, 8))  # ndarray of shape (16, 8), each element is qd.f32 scalar.
+       >>> vec3 = qd.types.vector(3, qd.i32)
+       >>> y = qd.ndarray(vec3, shape=(10, 2))  # ndarray of shape (10, 2), each element is a vector of 3 qd.i32 scalars.
+       >>> matrix_ty = qd.types.matrix(3, 4, float)
+       >>> z = qd.ndarray(matrix_ty, shape=(4, 5))  # ndarray of shape (4, 5), each element is a matrix of (3, 4) qd.float scalars.
+
+
+.. py:function:: zero(x)
+
+   Returns an array of zeros with the same shape and type as the input. It's also a scalar
+   if the input is a scalar.
+
+   :param x: The input.
+   :type x: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+
+   :returns: A new copy of the input but filled with zeros.
+
+   Example::
+
+       >>> x = qd.Vector([1, 1])
+       >>> @qd.kernel
+       >>> def test():
+       >>>     y = qd.zero(x)
+       >>>     print(y)
+       [0, 0]
+
+
+.. py:function:: one(x)
+
+   Returns an array of ones with the same shape and type as the input. It's also a scalar
+   if the input is a scalar.
+
+   :param x: The input.
+   :type x: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+
+   :returns: A new copy of the input but filled with ones.
+
+   Example::
+
+       >>> x = qd.Vector([0, 0])
+       >>> @qd.kernel
+       >>> def test():
+       >>>     y = qd.one(x)
+       >>>     print(y)
+       [1, 1]
+
+
+.. py:function:: axes(*x: int)
+
+   Defines a list of axes to be used by a field.
+
+   :param \*x: A list of axes to be activated
+
+   Note that Quadrants has already provided a set of commonly used axes. For example,
+   `qd.ij` is just `axes(0, 1)` under the hood.
+
+
+.. py:function:: static(x, *xs) -> Any
+
+   Evaluates a Quadrants-scope expression at compile time.
+
+   `static()` is what enables the so-called metaprogramming in Quadrants. It is
+   in many ways similar to ``constexpr`` in C++.
+
+   See also https://docs.taichi-lang.org/docs/meta.
+
+   :param x: an expression to be evaluated
+   :type x: Any
+   :param \*xs: for Python-ish swapping assignment
+   :type \*xs: Any
+
+   .. rubric:: Example
+
+   The most common usage of `static()` is for compile-time evaluation::
+
+       >>> cond = False
+       >>>
+       >>> @qd.kernel
+       >>> def run():
+       >>>     if qd.static(cond):
+       >>>         do_a()
+       >>>     else:
+       >>>         do_b()
+
+   Depending on the value of ``cond``, ``run()`` will be directly compiled
+   into either ``do_a()`` or ``do_b()``. Thus there won't be a runtime
+   condition check.
+
+   Another common usage is for compile-time loop unrolling::
+
+       >>> @qd.kernel
+       >>> def run():
+       >>>     for i in qd.static(range(3)):
+       >>>         print(i)
+       >>>
+       >>> # The above will be unrolled to:
+       >>> @qd.kernel
+       >>> def run():
+       >>>     print(0)
+       >>>     print(1)
+       >>>     print(2)
+
+
+.. py:function:: grouped(x)
+
+   Groups the indices in the iterator returned by `ndrange()` into a 1-D vector.
+
+   This is often used when you want to iterate over all indices returned by `ndrange()`
+   in one `for` loop and a single index.
+
+   :param x: an iterator object returned by `qd.ndrange`.
+   :type x: :func:`~quadrants.ndrange`
+
+   Example::
+       >>> # without qd.grouped
+       >>> for I in qd.ndrange(2, 3):
+       >>>     print(I)
+       prints 0, 1, 2, 3, 4, 5
+
+       >>> # with qd.grouped
+       >>> for I in qd.grouped(qd.ndrange(2, 3)):
+       >>>     print(I)
+       prints [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]
+
+
+.. py:function:: stop_grad(x)
+
+   Stops computing gradients during back propagation.
+
+   :param x: A field.
+   :type x: :class:`~quadrants.Field`
+
+
