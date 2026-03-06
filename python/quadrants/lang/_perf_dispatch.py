@@ -30,7 +30,9 @@ def _parse_force_map(raw: str) -> dict[str, str]:
         if not pair:
             continue
         if ":" not in pair:
-            print(f"[perf_dispatch] WARNING: ignoring malformed QD_PERFDISPATCH_FORCE entry '{pair}' (expected 'dispatcher:impl')")
+            print(
+                f"[perf_dispatch] WARNING: ignoring malformed QD_PERFDISPATCH_FORCE entry '{pair}' (expected 'dispatcher:impl')"
+            )
             continue
         dispatcher_name, impl_name = pair.split(":", 1)
         result[dispatcher_name.strip()] = impl_name.strip()
@@ -219,9 +221,7 @@ class PerformanceDispatcher(Generic[P, R]):
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
         underlying = fastest_dispatch.get_implementation2()
-        log_str = (
-            f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impl_set)} registered functions."
-        )
+        log_str = f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impl_set)} registered functions."
         _logging.debug(log_str)
         if QD_PERFDISPATCH_PRINT_DEBUG:
             print(log_str)

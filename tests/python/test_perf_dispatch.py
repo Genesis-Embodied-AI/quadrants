@@ -296,8 +296,10 @@ def test_perf_dispatch_sanity_check_register_args() -> None:
 @test_utils.test()
 def test_perf_dispatch_force_by_name() -> None:
     """QD_PERFDISPATCH_FORCE=dispatcher:impl forces that specific implementation."""
-    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_b"}), \
-         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+    with (
+        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_b"}),
+        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
+    ):
 
         @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
         def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
@@ -320,8 +322,10 @@ def test_perf_dispatch_force_by_name() -> None:
 @test_utils.test()
 def test_perf_dispatch_force_unmatched_name_falls_back() -> None:
     """When QD_PERFDISPATCH_FORCE names a non-existent impl, falls back to normal benchmarking."""
-    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent_impl"}), \
-         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+    with (
+        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent_impl"}),
+        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
+    ):
 
         @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
         def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
@@ -339,8 +343,10 @@ def test_perf_dispatch_force_unmatched_name_falls_back() -> None:
 @test_utils.test()
 def test_perf_dispatch_force_multiple_dispatchers() -> None:
     """QD_PERFDISPATCH_FORCE can target multiple dispatchers independently."""
-    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"}), \
-         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+    with (
+        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"}),
+        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
+    ):
 
         @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
         def op_a(a: qd.types.NDArray[qd.i32, 1]): ...
