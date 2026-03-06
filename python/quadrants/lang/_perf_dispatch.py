@@ -17,6 +17,31 @@ REPEAT_AFTER_SECONDS: float = 1.0
 
 QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
+_QD_PERFDISPATCH_FORCE_RAW = os.environ.get("QD_PERFDISPATCH_FORCE", "")
+
+
+def _parse_force_map(raw: str) -> dict[str, str]:
+    """Parse 'dispatcher1:impl1,dispatcher2:impl2' into {dispatcher1: impl1, ...}."""
+    if not raw:
+        return {}
+    result: dict[str, str] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        if ":" not in pair:
+            print(
+                f"[perf_dispatch] WARNING: ignoring malformed QD_PERFDISPATCH_FORCE entry '{pair}' (expected 'dispatcher:impl')"
+            )
+            continue
+        dispatcher_name, impl_name = pair.split(":", 1)
+        result[dispatcher_name.strip()] = impl_name.strip()
+    return result
+
+
+_FORCE_MAP: dict[str, str] = _parse_force_map(_QD_PERFDISPATCH_FORCE_RAW)
+_ANY_FORCE_ACTIVE: bool = bool(_FORCE_MAP)
+
 
 class DispatchImpl:
     def __init__(self, implementation1: Callable | QuadrantsCallable, is_compatible: Callable | None) -> None:
@@ -54,6 +79,7 @@ class PerformanceDispatcher(Generic[P, R]):
         repeat_after_count: int | None = None,
         repeat_after_seconds: float | None = None,
     ) -> None:
+        self._name: str = fn.__name__  # type: ignore
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
         self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
@@ -64,6 +90,9 @@ class PerformanceDispatcher(Generic[P, R]):
             self._param_types[param_name] = param.annotation
         self._get_geometry_hash: Callable[P, int] = get_geometry_hash
         self._dispatch_impl_set: set[DispatchImpl] = set()
+        self._dispatch_impl_list: list[DispatchImpl] = []
+        self._forced_impl: DispatchImpl | None = None
+        self._force_resolved: bool = False
         self._trial_count_by_dispatch_impl_by_geometry_hash: dict[int, dict[DispatchImpl, int]] = defaultdict(
             lambda: defaultdict(int)
         )
@@ -100,9 +129,9 @@ class PerformanceDispatcher(Generic[P, R]):
 
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
             sig = inspect.signature(func)
-            log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
+            log_str = f"perf_dispatch '{self._name}': registered '{func.__name__}'"  # type: ignore
             _logging.debug(log_str)
-            if QD_PERFDISPATCH_PRINT_DEBUG:
+            if QD_PERFDISPATCH_PRINT_DEBUG or _ANY_FORCE_ACTIVE:
                 print(log_str)
             for param_name, _param in sig.parameters.items():
                 if param_name not in self._param_types:
@@ -120,11 +149,40 @@ class PerformanceDispatcher(Generic[P, R]):
 
             dispatch_impl = DispatchImpl(implementation1=func, is_compatible=is_compatible)
             dispatch_impl_set.add(dispatch_impl)
+            self._dispatch_impl_list.append(dispatch_impl)
             return dispatch_impl
 
         if implementation is not None:
             return decorator(implementation)
         return decorator
+
+    def _resolve_force(self) -> None:
+        """Resolve forced implementation on first call, when all registrations are complete."""
+        if self._force_resolved:
+            return
+        self._force_resolved = True
+
+        if not _ANY_FORCE_ACTIVE:
+            return
+
+        available = [d.get_implementation2().__name__ for d in self._dispatch_impl_list]
+        avail_str = ", ".join(f"'{n}'" for n in available)
+        log_str = f"perf_dispatch '{self._name}': available implementations: [{avail_str}]"
+        _logging.debug(log_str)
+        print(log_str)
+
+        forced_name = _FORCE_MAP.get(self._name)
+        if forced_name is not None:
+            for d in self._dispatch_impl_list:
+                if d.get_implementation2().__name__ == forced_name:
+                    self._forced_impl = d
+                    print(f"perf_dispatch '{self._name}': forced to '{forced_name}' via QD_PERFDISPATCH_FORCE")
+                    return
+            print(
+                f"[perf_dispatch] WARNING: QD_PERFDISPATCH_FORCE requested '{forced_name}' "
+                f"for '{self._name}', but no such implementation found. Available: [{avail_str}]. "
+                f"Falling back to normal benchmarking."
+            )
 
     def _get_compatible_functions(self, *args, **kwargs) -> set[DispatchImpl]:
         compatible_set = set()
@@ -163,9 +221,7 @@ class PerformanceDispatcher(Generic[P, R]):
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
         underlying = fastest_dispatch.get_implementation2()
-        log_str = (
-            f"perf dispatch chose {underlying.__name__} out of {len(self._dispatch_impl_set)} registered functions."
-        )
+        log_str = f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impl_set)} registered functions."
         _logging.debug(log_str)
         if QD_PERFDISPATCH_PRINT_DEBUG:
             print(log_str)
@@ -198,6 +254,10 @@ class PerformanceDispatcher(Generic[P, R]):
 
         It is not possible for you to control exploration vs exploitation.
         """
+        self._resolve_force()
+        if self._forced_impl is not None:
+            return self._forced_impl(*args, **kwargs)
+
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
@@ -231,7 +291,7 @@ class PerformanceDispatcher(Generic[P, R]):
             dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
             assert dispatch_impl_ is not None
             log_str = (
-                f"perf dispatch chose {dispatch_impl_.get_implementation2().__name__} "
+                f"perf_dispatch '{self._name}': chose '{dispatch_impl_.get_implementation2().__name__}' "
                 f"out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
             )
             _logging.debug(log_str)
