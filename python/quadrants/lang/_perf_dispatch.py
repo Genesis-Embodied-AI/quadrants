@@ -18,7 +18,6 @@ REPEAT_AFTER_SECONDS: float = 1.0
 QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
 _QD_PERFDISPATCH_FORCE_RAW = os.environ.get("QD_PERFDISPATCH_FORCE", "")
-_QD_PERFDISPATCH_FORCE_INDEX_RAW = os.environ.get("QD_PERFDISPATCH_FORCE_INDEX", "")
 
 
 def _parse_force_map(raw: str) -> dict[str, str]:
@@ -38,19 +37,8 @@ def _parse_force_map(raw: str) -> dict[str, str]:
     return result
 
 
-def _parse_force_index(raw: str) -> int | None:
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        print(f"[perf_dispatch] WARNING: ignoring non-integer QD_PERFDISPATCH_FORCE_INDEX='{raw}'")
-        return None
-
-
 _FORCE_MAP: dict[str, str] = _parse_force_map(_QD_PERFDISPATCH_FORCE_RAW)
-_FORCE_INDEX: int | None = _parse_force_index(_QD_PERFDISPATCH_FORCE_INDEX_RAW)
-_ANY_FORCE_ACTIVE: bool = bool(_FORCE_MAP) or _FORCE_INDEX is not None
+_ANY_FORCE_ACTIVE: bool = bool(_FORCE_MAP)
 
 
 class DispatchImpl:
@@ -193,22 +181,6 @@ class PerformanceDispatcher(Generic[P, R]):
                 f"for '{self._name}', but no such implementation found. Available: [{avail_str}]. "
                 f"Falling back to normal benchmarking."
             )
-            return
-
-        if _FORCE_INDEX is not None:
-            if 0 <= _FORCE_INDEX < len(self._dispatch_impl_list):
-                self._forced_impl = self._dispatch_impl_list[_FORCE_INDEX]
-                chosen_name = self._forced_impl.get_implementation2().__name__
-                print(
-                    f"perf_dispatch '{self._name}': forced to '{chosen_name}' "
-                    f"(index {_FORCE_INDEX}) via QD_PERFDISPATCH_FORCE_INDEX"
-                )
-            else:
-                print(
-                    f"[perf_dispatch] WARNING: QD_PERFDISPATCH_FORCE_INDEX={_FORCE_INDEX} "
-                    f"out of range for '{self._name}' (has {len(self._dispatch_impl_list)} implementations). "
-                    f"Falling back to normal benchmarking."
-                )
 
     def _get_compatible_functions(self, *args, **kwargs) -> set[DispatchImpl]:
         compatible_set = set()
