@@ -1,9 +1,11 @@
 from enum import IntEnum
 from typing import cast
+from unittest import mock
 
 import pytest
 
 import quadrants as qd
+from quadrants.lang import _perf_dispatch
 from quadrants.lang._perf_dispatch import NUM_WARMUP, PerformanceDispatcher
 from quadrants.lang.exception import QuadrantsSyntaxError
 
@@ -289,3 +291,157 @@ def test_perf_dispatch_annotation_mismatch() -> None:
 def test_perf_dispatch_sanity_check_register_args() -> None:
     @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=25, active=25)
     def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
+
+
+@test_utils.test()
+def test_perf_dispatch_force_by_name() -> None:
+    """QD_PERFDISPATCH_FORCE=dispatcher:impl forces that specific implementation."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_b"}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", None), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @my_func.register
+        def my_func_impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        @my_func.register
+        def my_func_impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 20
+
+        a = qd.ndarray(qd.i32, (1,))
+        for _ in range(NUM_WARMUP + 5):
+            a.fill(0)
+            my_func(a)
+            assert a[0] == 20
+
+
+@test_utils.test()
+def test_perf_dispatch_force_by_index() -> None:
+    """QD_PERFDISPATCH_FORCE_INDEX=N forces the Nth registered implementation."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", 1), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @my_func.register
+        def my_func_impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        @my_func.register
+        def my_func_impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 20
+
+        a = qd.ndarray(qd.i32, (1,))
+        for _ in range(NUM_WARMUP + 5):
+            a.fill(0)
+            my_func(a)
+            assert a[0] == 20
+
+
+@test_utils.test()
+def test_perf_dispatch_force_name_overrides_index() -> None:
+    """Per-dispatcher QD_PERFDISPATCH_FORCE takes priority over QD_PERFDISPATCH_FORCE_INDEX."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_a"}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", 1), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @my_func.register
+        def my_func_impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        @my_func.register
+        def my_func_impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 20
+
+        a = qd.ndarray(qd.i32, (1,))
+        for _ in range(NUM_WARMUP + 5):
+            a.fill(0)
+            my_func(a)
+            assert a[0] == 10
+
+
+@test_utils.test()
+def test_perf_dispatch_force_unmatched_name_falls_back() -> None:
+    """When QD_PERFDISPATCH_FORCE names a non-existent impl, falls back to normal benchmarking."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent_impl"}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", None), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @my_func.register
+        def my_func_impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        a = qd.ndarray(qd.i32, (1,))
+        a.fill(0)
+        my_func(a)
+        assert a[0] == 10
+
+
+@test_utils.test()
+def test_perf_dispatch_force_index_out_of_range_falls_back() -> None:
+    """When QD_PERFDISPATCH_FORCE_INDEX is out of range, falls back to normal benchmarking."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", 99), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @my_func.register
+        def my_func_impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        a = qd.ndarray(qd.i32, (1,))
+        a.fill(0)
+        my_func(a)
+        assert a[0] == 10
+
+
+@test_utils.test()
+def test_perf_dispatch_force_multiple_dispatchers() -> None:
+    """QD_PERFDISPATCH_FORCE can target multiple dispatchers independently."""
+    with mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"}), \
+         mock.patch.object(_perf_dispatch, "_FORCE_INDEX", None), \
+         mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True):
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def op_a(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @op_a.register
+        def op_a_v1(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 1
+
+        @op_a.register
+        def op_a_v2(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 2
+
+        @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+        def op_b(a: qd.types.NDArray[qd.i32, 1]): ...
+
+        @op_b.register
+        def op_b_v1(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 10
+
+        @op_b.register
+        def op_b_v2(a: qd.types.NDArray[qd.i32, 1]) -> None:
+            a[0] = 20
+
+        a = qd.ndarray(qd.i32, (1,))
+        for _ in range(NUM_WARMUP + 5):
+            a.fill(0)
+            op_a(a)
+            assert a[0] == 2
+            a.fill(0)
+            op_b(a)
+            assert a[0] == 10
