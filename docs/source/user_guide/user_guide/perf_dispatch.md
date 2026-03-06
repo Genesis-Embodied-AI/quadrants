@@ -125,6 +125,45 @@ def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 4. **Steady state**: Subsequent calls with the same geometry go directly to the cached winner with no overhead.
 5. **Re-evaluation** (optional): After `repeat_after_count` calls or `repeat_after_seconds` seconds, the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.
 
+## Forcing a specific implementation
+
+For debugging or profiling, you can bypass the auto-tuning and force a specific implementation using the `QD_PERFDISPATCH_FORCE` environment variable:
+
+```bash
+QD_PERFDISPATCH_FORCE=my_op:my_op_v2 python my_script.py
+```
+
+The format is `dispatcher_name:implementation_name`, where `dispatcher_name` is the name of the meta-function and `implementation_name` is the name of the registered function.
+
+To force implementations for multiple dispatchers, separate entries with commas:
+
+```bash
+QD_PERFDISPATCH_FORCE=my_op:my_op_v2,transform:transform_v1 python my_script.py
+```
+
+Dispatchers not listed in the env var will benchmark normally.
+
+### Discovering available names
+
+When `QD_PERFDISPATCH_FORCE` is set, all dispatchers automatically print their name and registered implementations at startup. To discover valid values, set the env var to any value and run the program:
+
+```bash
+QD_PERFDISPATCH_FORCE=? python my_script.py
+```
+
+This will produce output like:
+
+```
+perf_dispatch 'my_op': registered 'my_op_v1'
+perf_dispatch 'my_op': registered 'my_op_v2'
+perf_dispatch 'my_op': available implementations: ['my_op_v1', 'my_op_v2']
+perf_dispatch 'transform': registered 'transform_v1'
+perf_dispatch 'transform': registered 'transform_v2'
+perf_dispatch 'transform': available implementations: ['transform_v1', 'transform_v2']
+```
+
+If the requested implementation name doesn't match any registered function, a warning is printed and the dispatcher falls back to normal benchmarking.
+
 ## Important notes
 
 - All registered implementations **must produce identical results**, including side effects. `perf_dispatch` does not verify this — incorrect results will be silently returned if implementations disagree.
