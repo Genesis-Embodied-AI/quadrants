@@ -51,6 +51,9 @@ templates_path = ["_templates"]
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "pydata_sphinx_theme"
+html_theme_options = {
+    "navigation_depth": 1,
+}
 html_css_files = [
     "css/custom.css",
 ]

@@ -5,13 +5,13 @@ There are three core tensor types:
 - global field (`qd.field`, referenced as a global variable, from a kernel)
 - field arg (`qd.field`, passed into a kernel as a parameter)
 
-# Example of each tensor type
+## Example of each tensor type
 
 Let's first give an example of using each:
 
-## NDArray
+### NDArray
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -25,9 +25,9 @@ def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
 
 Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`
 
-## Global field
+### Global field
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -40,9 +40,9 @@ def f1() -> None:
 ```
 You can see that we access the global variable referencing the field directly from the kernel. No need to provide the field as a parameter.
 
-## Field args
+### Field args
 
-```
+```python
 import quadrants as qd
 
 qd.init(arch=qd.gpu)
@@ -55,7 +55,7 @@ def f1(p1: qd.Template) -> None:
 ```
 In this case, we provide the field to the kernel via a parameter, with typing type of `qd.Template`.
 
-# Comparison of tensor types
+## Comparison of tensor types
 
 | Tensor type | Launch latency | Runtime speed |Resizable without recompile? [*1]|Encapsulation?[*2]|
 |-------------|----------------|-------------|----------------------------|----------------|
@@ -68,7 +68,7 @@ In this case, we provide the field to the kernel via a parameter, with typing ty
 
 Let's define each of these column headings.
 
-## Under the covers summary
+### Under the covers summary
 
 When running a kernel, two things need to happen:
 - the kernel needs to be compiled
@@ -92,17 +92,17 @@ Each tensor type is bound to the compiled kernel in some way:
          - resizing the ndarray, or
          - passing in a different ndarray, that matches data type and number of dimensions
 
-## Encapsulation
+### Encapsulation
 
 Using global variables provides fairly poor encapsulation and re-use.
 
 Both ndarrays and field args provide better encapsulation, and kernel re-use.
 
-## launch latency vs runtime speed
+### launch latency vs runtime speed
 
 For kernels that run for sufficiently long, the launch latency will be entirely hidden by the kernel runtime. Launch latency only affects performance for very short kernels.
 
-# Recommendations
+## Recommendations
 
 - for maximum flexibility to resize tensors, use ndarrays
 - for maximum runtime speed, with good encapsulation, use field args
