@@ -10,6 +10,7 @@ from quadrants.lang import impl
 # Cache enum value at module level for fast lookup in hot paths
 _arch_metal = _qd_core.Arch.metal
 
+from quadrants.lang import _ndarray_pickle
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
 from quadrants.types import primitive_types
@@ -41,6 +42,9 @@ class Ndarray:
         self.grad: "TensorNdarray | None" = None
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
+
+    def __reduce__(self):
+        return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
         if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:
