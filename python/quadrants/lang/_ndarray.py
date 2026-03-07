@@ -10,10 +10,10 @@ from quadrants.lang import impl
 # Cache enum value at module level for fast lookup in hot paths
 _arch_metal = _qd_core.Arch.metal
 
+from quadrants import types
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
 from quadrants.types import primitive_types
-from quadrants import types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
 from quadrants.types.utils import is_real, is_signed
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
 
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
 
-
-def _uncook_dtype(dtype_str):
-    return getattr(types, dtype_str)
+_DTYPE_NAMES = ["f16", "f32", "f64", "i8", "i16", "i32", "i64", "u1", "u8", "u16", "u32", "u64"]
+_NAME_TO_DTYPE = {name: getattr(primitive_types, name) for name in _DTYPE_NAMES}
+_DTYPE_TO_NAME = {dt: name for name, dt in _NAME_TO_DTYPE.items()}
 
 
 class Ndarray:
@@ -49,7 +49,10 @@ class Ndarray:
 
     @classmethod
     def _unpickle(cls, pkl):
-        dtype = _uncook_dtype(pkl["element_type"])
+        dtype_name = pkl["element_type"]
+        if dtype_name not in _NAME_TO_DTYPE:
+            raise ValueError(f"Unknown dtype '{dtype_name}' during unpickle")
+        dtype = _NAME_TO_DTYPE[dtype_name]
         shape = pkl["shape"]
         element_shape = pkl["element_shape"]
         if len(element_shape) == 0:
@@ -65,11 +68,12 @@ class Ndarray:
         return res
 
     def __reduce__(self):
+        dtype_name = _DTYPE_TO_NAME.get(self.dtype)
+        if dtype_name is None:
+            raise TypeError(f"Cannot pickle ndarray with dtype {self.dtype!r}")
         data_dict = {
-            "classname": self.__class__.__name__,
-            "classtype": "ndarray",
             "shape": self.shape,
-            "element_type": str(self.dtype),
+            "element_type": dtype_name,
             "element_shape": self.element_shape,
             "data": self.to_numpy(),
         }
