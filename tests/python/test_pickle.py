@@ -1,7 +1,6 @@
 import pickle
 
 import numpy as np
-import pytest
 
 import quadrants as qd
 
@@ -65,11 +64,30 @@ def test_pickle_vector_ndarray():
 
 
 @test_utils.test()
-def test_pickle_matrix_ndarray_raises():
-    a = qd.Matrix.ndarray(2, 2, qd.f32, shape=(3,))
+def test_pickle_matrix_ndarray():
+    a = qd.Matrix.ndarray(2, 3, qd.f32, shape=(4,))
+    a[0] = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    a[2] = [[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]
 
-    with pytest.raises(NotImplementedError, match="MatrixNdarray"):
-        _roundtrip(a)
+    b = _roundtrip(a)
+
+    np.testing.assert_allclose(b.to_numpy(), a.to_numpy())
+    assert b.shape == a.shape
+    assert b.dtype == a.dtype
+    assert b.element_shape == a.element_shape
+
+
+@test_utils.test()
+def test_pickle_square_matrix_ndarray():
+    a = qd.Matrix.ndarray(3, 3, qd.f64, shape=(2, 2))
+    a[0, 0] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    b = _roundtrip(a)
+
+    np.testing.assert_allclose(b.to_numpy(), a.to_numpy())
+    assert b.shape == a.shape
+    assert b.dtype == a.dtype
+    assert b.element_shape == (3, 3)
 
 
 @test_utils.test()

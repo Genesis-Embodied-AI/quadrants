@@ -63,7 +63,8 @@ class Ndarray:
             element_type = types.vector(element_shape[0], dtype)
             res = impl.ndarray(element_type, shape=shape)
         elif len(element_shape) == 2:
-            raise NotImplementedError("unpickle not implemented for MatrixNdarray")
+            element_type = types.matrix(element_shape[0], element_shape[1], dtype)
+            res = impl.ndarray(element_type, shape=shape)
         else:
             raise NotImplementedError(f"Unhandled element shape len {len(element_shape)}")
         res.from_numpy(pkl["data"])
