@@ -47,8 +47,10 @@ class Ndarray:
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
 
-    @classmethod
-    def _unpickle(cls, pkl):
+    @staticmethod
+    def _unpickle(pkl):
+        if impl.get_runtime()._prog is None:
+            raise RuntimeError("qd.init() must be called before unpickling ndarrays")
         dtype_name = pkl["element_type"]
         if dtype_name not in _NAME_TO_DTYPE:
             raise ValueError(f"Unknown dtype '{dtype_name}' during unpickle")
