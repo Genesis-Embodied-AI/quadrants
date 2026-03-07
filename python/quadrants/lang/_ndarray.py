@@ -13,6 +13,7 @@ _arch_metal = _qd_core.Arch.metal
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
 from quadrants.types import primitive_types
+from quadrants import types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
 from quadrants.types.utils import is_real, is_signed
@@ -21,6 +22,10 @@ if TYPE_CHECKING:
     from quadrants.lang.matrix import MatrixNdarray, VectorNdarray
 
     TensorNdarray = Union["ScalarNdarray", VectorNdarray, MatrixNdarray]
+
+
+def _uncook_dtype(dtype_str):
+    return getattr(types, dtype_str)
 
 
 class Ndarray:
@@ -41,6 +46,34 @@ class Ndarray:
         self.grad: "TensorNdarray | None" = None
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
+
+    @classmethod
+    def _unpickle(cls, pkl):
+        dtype = _uncook_dtype(pkl["element_type"])
+        shape = pkl["shape"]
+        element_shape = pkl["element_shape"]
+        if len(element_shape) == 0:
+            res = impl.ndarray(dtype=dtype, shape=shape)
+        elif len(element_shape) == 1:
+            element_type = types.vector(element_shape[0], dtype)
+            res = impl.ndarray(element_type, shape=shape)
+        elif len(element_shape) == 2:
+            raise NotImplementedError("unpickle not implemented for MatrixNdarray")
+        else:
+            raise NotImplementedError(f"Unhandled element shape len {len(element_shape)}")
+        res.from_numpy(pkl["data"])
+        return res
+
+    def __reduce__(self):
+        data_dict = {
+            "classname": self.__class__.__name__,
+            "classtype": "ndarray",
+            "shape": self.shape,
+            "element_type": str(self.dtype),
+            "element_shape": self.element_shape,
+            "data": self.to_numpy(),
+        }
+        return Ndarray._unpickle, (data_dict,)
 
     def __del__(self):
         if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:
