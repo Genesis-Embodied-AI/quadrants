@@ -113,6 +113,23 @@ class PyTensor(torch.Tensor):
     def get_shape(self):
         return self.size()
 
+    def _setup_views(self, batch_ndim):
+        """Set _tc/_T_tc/_np/_T_np instance attributes matching the qd.Field/Ndarray convention.
+
+        Not in __init__/__new__ because: (1) torch.Tensor subclass construction
+        goes through C++ __new__, so __init__ is not reliably called by torch
+        internals; (2) PyTensor is also used as a plain wrapper (e.g. in
+        Matrix.__new__) where these attributes are not needed; (3) batch_ndim
+        is a Quadrants concept with no analogue in torch's constructor signature.
+        """
+        self._tc = self
+        self._T_tc = self.movedim(batch_ndim - 1, 0) if batch_ndim > 1 else self
+        self._np = self.numpy()
+        self._T_np = self._T_tc.numpy()
+        self._batch_shape = self.size()[:batch_ndim]
+        self.grad = None
+        self.dual = None
+
     def __getattr__(self, name):
         from . import matrix_ops  # pylint: disable=C0415
 
@@ -121,21 +138,15 @@ class PyTensor(torch.Tensor):
             return partial(fn, self)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
+    @classmethod
+    def create(cls, shape, dtype, batch_ndim=None):
+        """Factory for Quadrants field/ndarray tensors with view attributes."""
+        res = cls.zeros(size=shape, dtype=dtype)
+        if batch_ndim is None:
+            batch_ndim = len(shape)
+        res._setup_views(batch_ndim)
+        return res
 
-def create_tensor(shape, dtype, batch_ndim=None):
-    res = PyTensor.zeros(size=shape, dtype=dtype)
-    if batch_ndim is None:
-        batch_ndim = len(shape)
-    _setup_views(res, batch_ndim)
-    return res
 
-
-def _setup_views(tensor, batch_ndim):
-    """Set _tc/_T_tc/_np/_T_np instance attributes matching the qd.Field/Ndarray convention."""
-    tensor._tc = tensor
-    tensor._T_tc = tensor.movedim(batch_ndim - 1, 0) if batch_ndim > 1 else tensor
-    tensor._np = tensor.numpy()
-    tensor._T_np = tensor._T_tc.numpy()
-    tensor._batch_shape = tensor.size()[:batch_ndim]
-    tensor.grad = None
-    tensor.dual = None
+# Keep module-level alias for existing callers.
+create_tensor = PyTensor.create
