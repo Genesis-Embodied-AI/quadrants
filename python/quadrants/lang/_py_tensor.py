@@ -88,6 +88,8 @@ class PyTensor(torch.Tensor):
         key = PyTensor._unpack_key(key)
         # Scalar fields (shape ()) are still indexed with field[0] in kernels;
         # torch would raise IndexError on a 0-d tensor, so return the scalar.
+        # .item() (not `return self`) so the caller gets a snapshot, not a
+        # mutable alias to the field's storage.
         if not isinstance(key, tuple) and key == 0 and self.size() == ():
             return self.item()
         return super().__getitem__(key)
