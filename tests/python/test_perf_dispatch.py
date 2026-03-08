@@ -289,3 +289,87 @@ def test_perf_dispatch_annotation_mismatch() -> None:
 def test_perf_dispatch_sanity_check_register_args() -> None:
     @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=25, active=25)
     def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
+
+
+@test_utils.test()
+def test_perf_dispatch_multiple_perf_dispatch() -> None:
+    work_multiplier = 1000
+
+    @qd.kernel
+    def linesearch(a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]):
+        B = a.shape[0]
+        for i_b in range(B):
+            do_work(i_b=i_b, amount_work=work_multiplier * 5, state=rand_state)
+
+    @qd.kernel
+    def hessian(a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]):
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            do_work(i_b=i_b, amount_work=work_multiplier * 7, state=rand_state)
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a, rand_state: hash(a.shape), repeat_after_seconds=1)
+    def my_func_init(
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
+
+    @qd.perf_dispatch(get_geometry_hash=lambda iterations_np, a, rand_state: hash(a.shape), repeat_after_seconds=1)
+    def my_func_body(
+        iterations_np: qd.types.NDArray[qd.i32, 0],
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
+
+    @my_func_init.register
+    @qd.kernel
+    def my_func_init_monolith(
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            do_work(i_b=i_b, amount_work=work_multiplier * 1, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_multiplier * 1, state=rand_state)
+
+    @my_func_init.register(is_compatible=lambda a, rand_state: True)
+    def my_func_init_decomp(
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        linesearch(a, rand_state)
+        hessian(a, rand_state)
+
+    @my_func_body.register
+    @qd.kernel
+    def my_func_body_monolith(
+        iterations_np: qd.types.NDArray[qd.i32, 0],
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            do_work(i_b=i_b, amount_work=work_multiplier * 1, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_multiplier * 1, state=rand_state)
+
+    @my_func_body.register(is_compatible=lambda a, rand_state: True)
+    def my_func_body_decomp(
+        iterations_np: qd.types.NDArray[qd.i32, 0],
+        a: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        iterations = iterations_np[()]
+        for it in range(iterations):
+            linesearch(a, rand_state)
+            hessian(a, rand_state)
+
+    def resolve(num_iterations, a_init, a_body, rand_state_init, rand_state_body):
+        my_func_init(a_init, rand_state_init)
+        my_func_body(num_iterations, a_body, rand_state_body)
+
+    num_threads = 10  # should be at least more than 2
+    a_init = qd.ndarray(qd.i32, (num_threads,))
+    a_body = qd.ndarray(qd.i32, (num_threads,))
+    rand_state_init = qd.ndarray(qd.i32, (num_threads,))
+    rand_state_body = qd.ndarray(qd.i32, (num_threads,))
+    num_iterations = qd.ndarray(qd.i32, ())
+    num_iterations[()] = 10
+
+    for it in range(10):
+        a_init.fill(5)
+        a_body.fill(5)
+        resolve(num_iterations, a_init, a_body, rand_state_init, rand_state_body)
