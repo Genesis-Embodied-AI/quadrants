@@ -188,7 +188,7 @@ def test_cache_primitive():
     value = qd.field(qd.i32, shape=())
     value[None] = 1
 
-    for i_arg, offset in enumerate((1, 1000, -1), 1):
+    for i_arg, offset in enumerate((1, 256, -1), 1):
         for i in range(2):
             fun(value, offset)
             assert value[None] == 1 + (offset * (i + 1) if offset > 0 else 0)
@@ -198,7 +198,15 @@ def test_cache_primitive():
             assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == i_arg
             assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == i_arg
         value[None] = 1
-
+    
+    fun(value, 10000)
+    assert value[None] == 10001
+    assert len(fun._primal.compiled_kernel_data_by_key) == i_arg + 1
+    assert len(fun._primal.mapper._mapping_cache) == i_arg + 1
+    assert len(fun._primal.mapper._mapping_cache_tracker) == i_arg + 1
+    # Kernel context is only cached for 'interned' integers, ie in range [-5, 256] for CPython.
+    assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == i_arg
+    assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache_tracker) == i_arg
 
 @test_utils.test(arch=get_host_arch_list())
 def test_fastcache(tmp_path: pathlib.Path, monkeypatch):
