@@ -1,7 +1,7 @@
 import ast
 import inspect
 import math
-import platform
+import sys
 import textwrap
 import types
 import typing
@@ -61,7 +61,7 @@ MAX_ARG_NUM = 512
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
-_is_cpython = platform.python_implementation()
+_is_cpython = sys.implementation.name == "cpython"
 
 
 class FuncBase:
