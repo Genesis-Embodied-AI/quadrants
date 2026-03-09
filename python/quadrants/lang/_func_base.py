@@ -456,7 +456,7 @@ class FuncBase:
                 launch_ctx_buffer[_INT].append((index, int(v)))
             else:
                 launch_ctx_buffer[_UINT].append((index, int(v)))
-            return 1, False
+            return 1, True
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
