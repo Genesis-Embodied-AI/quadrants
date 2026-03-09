@@ -188,7 +188,7 @@ def test_cache_primitive():
     value = qd.field(qd.i32, shape=())
     value[None] = 1
 
-    for i_arg, offset in enumerate((1, 1000), 1, -1):
+    for i_arg, offset in enumerate((1, 1000, -1), 1):
         for i in range(2):
             fun(value, offset)
             assert value[None] == 1 + (offset * (i + 1) if offset > 0 else 0)
