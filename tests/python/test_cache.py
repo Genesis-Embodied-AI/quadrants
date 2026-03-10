@@ -192,7 +192,7 @@ def test_cache_primitive():
         for i in range(2):
             fun(value, offset)
             assert value[None] == 1 + (offset * (i + 1) if offset > 0 else 0)
-            assert len(fun._primal.compiled_kernel_data_by_key) == i_arg
+            assert len(fun._primal.compiled_kernel_data_by_key) == 1
             assert len(fun._primal.mapper._mapping_cache) == i_arg
             assert len(fun._primal.mapper._mapping_cache_tracker) == i_arg
             assert len(fun._primal.launch_context_buffer_cache._launch_ctx_cache) == i_arg
@@ -201,7 +201,7 @@ def test_cache_primitive():
 
     fun(value, 10000)
     assert value[None] == 10001
-    assert len(fun._primal.compiled_kernel_data_by_key) == i_arg + 1
+    assert len(fun._primal.compiled_kernel_data_by_key) == 1
     assert len(fun._primal.mapper._mapping_cache) == i_arg + 1
     assert len(fun._primal.mapper._mapping_cache_tracker) == i_arg + 1
     # Kernel context is only cached for 'interned' integers, ie in range [-5, 256] for CPython.
