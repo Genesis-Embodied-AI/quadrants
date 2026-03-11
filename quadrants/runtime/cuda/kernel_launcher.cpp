@@ -175,8 +175,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     node_params.blockDimX = (unsigned int)task.block_dim;
     node_params.blockDimY = 1;
     node_params.blockDimZ = 1;
-    node_params.sharedMemBytes =
-        (unsigned int)task.dynamic_shared_array_bytes;
+    node_params.sharedMemBytes = (unsigned int)task.dynamic_shared_array_bytes;
     node_params.kernelParams = &ctx_ptr;
     node_params.extra = nullptr;
 
