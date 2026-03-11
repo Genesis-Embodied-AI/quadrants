@@ -112,6 +112,10 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     return false;
   }
 
+  QD_ERROR_IF(ctx.result_buffer_size > 0,
+              "cuda_graph=True is not supported for kernels with struct return "
+              "values; remove cuda_graph=True or avoid returning values");
+
   if (!resolve_ctx_ndarray_ptrs(ctx, parameters)) {
     return false;
   }
