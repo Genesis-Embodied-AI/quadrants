@@ -47,6 +47,7 @@ struct CachedCudaGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
+  void *graph_while_flag_dev_ptr{nullptr};
 
   CachedCudaGraph() = default;
   ~CachedCudaGraph();

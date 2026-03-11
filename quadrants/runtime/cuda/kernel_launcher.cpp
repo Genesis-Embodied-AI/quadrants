@@ -237,14 +237,22 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   auto it = cuda_graph_cache_.find(launch_id);
   if (it != cuda_graph_cache_.end()) {
     auto &cached = it->second;
-    if (ctx.arg_buffer_size > 0) {
-      CUDADriver::get_instance().memcpy_host_to_device(
-          cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
-          cached.arg_buffer_size);
+    if (use_graph_while &&
+        cached.graph_while_flag_dev_ptr != ctx.graph_while_flag_dev_ptr) {
+      QD_TRACE(
+          "graph_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
+          cached.graph_while_flag_dev_ptr, ctx.graph_while_flag_dev_ptr);
+      cuda_graph_cache_.erase(it);
+    } else {
+      if (ctx.arg_buffer_size > 0) {
+        CUDADriver::get_instance().memcpy_host_to_device(
+            cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+            cached.arg_buffer_size);
+      }
+      auto *stream = CUDAContext::get_instance().get_stream();
+      CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+      return true;
     }
-    auto *stream = CUDAContext::get_instance().get_stream();
-    CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
-    return true;
   }
 
   CUDAContext::get_instance().make_current();
@@ -388,6 +396,9 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
       offloaded_tasks.size(), launch_id,
       use_graph_while ? " (with graph_while)" : "");
 
+  if (use_graph_while) {
+    cached.graph_while_flag_dev_ptr = ctx.graph_while_flag_dev_ptr;
+  }
   cuda_graph_cache_.emplace(launch_id, std::move(cached));
   return true;
 }

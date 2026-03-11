@@ -119,3 +119,42 @@ def test_graph_while_replay():
     inc(x, counter)
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_graph_while_replay_new_ndarray():
+    """Test graph_while replay when the counter ndarray is a different allocation.
+
+    Regression test: the condition kernel's flag pointer was baked into the
+    CUDA graph at creation time. Passing a new ndarray (different device
+    address) on replay would cause the condition kernel to read stale memory.
+    The fix invalidates the cached graph when the flag pointer changes.
+    """
+    N = 16
+
+    @qd.kernel(graph_while="counter")
+    def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+        for i in range(1):
+            counter[None] = counter[None] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+
+    # First call with one counter ndarray
+    counter1 = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter1.from_numpy(np.array(3, dtype=np.int32))
+    inc(x, counter1)
+    qd.sync()
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    assert counter1.to_numpy() == 0
+
+    # Second call with a NEW counter ndarray (different device allocation)
+    counter2 = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter2.from_numpy(np.array(5, dtype=np.int32))
+    inc(x, counter2)
+    qd.sync()
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
+    assert counter2.to_numpy() == 0
