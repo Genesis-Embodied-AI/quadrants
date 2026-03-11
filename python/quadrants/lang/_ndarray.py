@@ -6,8 +6,17 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
+
+# Cache enum value at module level for fast lookup in hot paths
+_arch_metal = _qd_core.Arch.metal
+
 from quadrants.lang.exception import QuadrantsIndexError
-from quadrants.lang.util import cook_dtype, get_traceback, python_scope, to_numpy_type
+from quadrants.lang.util import (
+    cook_dtype,
+    get_traceback,
+    python_scope,
+    to_numpy_type,
+)
 from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
 from quadrants.types.ndarray_type import NdarrayTypeMetadata
@@ -47,10 +56,8 @@ class Ndarray:
                     prog.delete_ndarray(arr)
 
     def to_dlpack(self):
-        """
-        Note: caller is responsible for calling qd.sync() between modifying the ndarray, and
-        reading it.
-        """
+        if impl.current_cfg().arch == _arch_metal:
+            impl.get_runtime().sync()
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
     def _reset(self):
@@ -280,9 +287,18 @@ class ScalarNdarray(Ndarray):
     def __init__(self, dtype, arr_shape):
         super().__init__()
         self.dtype = cook_dtype(dtype)
-        self.arr = impl.get_runtime().prog.create_ndarray(
-            self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
-        )
+        if impl.is_python_backend():
+            import torch  # pylint: disable=C0415
+
+            from quadrants.lang.util import (  # pylint: disable=C0415
+                dtype_to_torch_dtype,
+            )
+
+            self.arr = torch.zeros(shape=arr_shape, dtype=dtype_to_torch_dtype(dtype))
+        else:
+            self.arr = impl.get_runtime().prog.create_ndarray(
+                self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
+            )
         self.shape = tuple(self.arr.shape)
         self.element_type = dtype
 

@@ -287,7 +287,18 @@ _
         if shape is None and offset is not None:
             raise QuadrantsSyntaxError("shape cannot be None when offset is being set")
 
+        if isinstance(shape, numbers.Number):
+            shape = (shape,)
+
         field_dict = {}
+
+        if impl.is_python_backend():
+            for key, dtype in members.items():
+                if isinstance(dtype, StructType):
+                    field_dict[key] = dtype.field(shape=shape, name=name + "." + key)
+                else:
+                    field_dict[key] = impl.field(dtype, shape=shape or ())
+            return StructField(field_dict, methods, name=name, is_primal=False)
 
         for key, dtype in members.items():
             field_name = name + "." + key
@@ -320,8 +331,6 @@ _
                 )
 
         if shape is not None:
-            if isinstance(shape, numbers.Number):
-                shape = (shape,)
             if isinstance(offset, numbers.Number):
                 offset = (offset,)
 
@@ -402,7 +411,8 @@ class StructField(Field):
             for k, v in self.field_dict.items():
                 dual_field_dict[k] = v.dual
             self.dual = StructField(dual_field_dict, struct_methods, name + ".dual", is_primal=False)
-        self._register_fields()
+        if all(isinstance(v, Field) for v in field_dict.values()):
+            self._register_fields()
 
     @property
     def keys(self):
@@ -500,6 +510,8 @@ class StructField(Field):
             v.fill(val)
 
     def _initialize_host_accessors(self):
+        if impl.is_python_backend():
+            return
         for v in self._members:
             v._initialize_host_accessors()
 

@@ -147,6 +147,13 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
     return nullptr;
   }
 
+  if (const char *dump = std::getenv("QD_DUMP_MSL")) {
+    if (std::string(dump) == "1") {
+      fprintf(stderr, "=== MSL for kernel '%s' ===\n%s\n=== END MSL ===\n",
+              name.c_str(), msl.c_str());
+    }
+  }
+
   MTLLibrary_id mtl_library = device.get_mtl_library(msl);
 
   MTLFunction_id mtl_function =
@@ -425,6 +432,11 @@ void MetalCommandList::memory_barrier() noexcept {
   // NOTE: (penguinliong) Resources created from `MTLDevice` (which is the only
   // available way to allocate resource here) are `MTLHazardTrackingModeTracked`
   // by default. So we don't have to barrier explicitly.
+  // However, buffers accessed via physical storage buffer pointers bypass
+  // Metal's resource tracking and are handled in dispatch() via useResource:.
+}
+void MetalCommandList::track_physical_buffer(DeviceAllocation alloc) noexcept {
+  tracked_physical_buffers_.push_back(alloc);
 }
 
 void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
@@ -513,6 +525,13 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
         RHI_ASSERT(false);
       }
     }
+
+    for (const DeviceAllocation &alloc : tracked_physical_buffers_) {
+      const MetalMemory &mem = device_->get_memory(alloc.alloc_id);
+      [encoder useResource:mem.mtl_buffer()
+                     usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+    }
+    tracked_physical_buffers_.clear();
 
     [encoder setComputePipelineState:mtl_compute_pipeline_state];
     [encoder dispatchThreadgroups:MTLSizeMake(x, y, z)
@@ -1050,6 +1069,7 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
 
   if (feature_64_bit_integer_math) {
     caps.set(DeviceCapability::spirv_has_int64, 1);
+    caps.set(DeviceCapability::spirv_has_physical_storage_buffer, 1);
   }
   if (feature_floating_point_atomics) {
     // FIXME: (penguinliong) For some reason floating point atomics doesn't
@@ -1231,6 +1251,15 @@ DeviceAllocation MetalDevice::import_mtl_buffer(MTLBuffer_id buffer) {
 void MetalDevice::dealloc_memory(DeviceAllocation handle) {
   RHI_ASSERT(handle.device == this);
   memory_allocs_.release(&get_memory(handle.alloc_id));
+}
+
+uint64_t MetalDevice::get_memory_physical_pointer(DeviceAllocation handle) {
+  const MetalMemory &memory = get_memory(handle.alloc_id);
+  if (__builtin_available(macOS 13.0, iOS 16.0, *)) {
+    return [memory.mtl_buffer() gpuAddress];
+  }
+  RHI_LOG_ERROR("gpuAddress requires macOS 13.0+");
+  return 0;
 }
 
 DeviceAllocation MetalDevice::create_image(const ImageParams &params) {
