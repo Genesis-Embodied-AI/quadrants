@@ -134,6 +134,7 @@ class Offloader {
           offloaded->body->insert(std::move(s->body->statements[j]));
         }
         offloaded->range_hint = s->range_hint;
+        offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
         assemble_serial_statements();
@@ -257,6 +258,8 @@ class Offloader {
     offloaded_struct_for->num_cpu_threads =
         std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
+    offloaded_struct_for->stream_parallel_group_id =
+        for_stmt->stream_parallel_group_id;
 
     root_block->insert(std::move(offloaded_struct_for));
   }

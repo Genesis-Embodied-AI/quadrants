@@ -1,3 +1,5 @@
+#include <map>
+
 #include "quadrants/runtime/cuda/kernel_launcher.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
@@ -139,12 +141,50 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  for (auto task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim,
-                        task.dynamic_shared_array_bytes, {&ctx.get_context()},
-                        {});
+  for (size_t i = 0; i < offloaded_tasks.size();) {
+    auto &task = offloaded_tasks[i];
+    if (task.stream_parallel_group_id == 0) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      cuda_module->launch(task.name, task.grid_dim, task.block_dim,
+                          task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                          {});
+      i++;
+    } else {
+      size_t group_start = i;
+      while (i < offloaded_tasks.size() &&
+             offloaded_tasks[i].stream_parallel_group_id != 0) {
+        i++;
+      }
+
+      std::map<int, void *> stream_by_id;
+      for (size_t j = group_start; j < i; j++) {
+        int sid = offloaded_tasks[j].stream_parallel_group_id;
+        if (stream_by_id.find(sid) == stream_by_id.end()) {
+          void *s = nullptr;
+          CUDADriver::get_instance().stream_create(&s, 0);
+          stream_by_id[sid] = s;
+        }
+      }
+
+      for (size_t j = group_start; j < i; j++) {
+        auto &t = offloaded_tasks[j];
+        CUDAContext::get_instance().set_stream(
+            stream_by_id[t.stream_parallel_group_id]);
+        cuda_module->launch(t.name, t.grid_dim, t.block_dim,
+                            t.dynamic_shared_array_bytes, {&ctx.get_context()},
+                            {});
+      }
+
+      for (auto &[sid, s] : stream_by_id) {
+        CUDADriver::get_instance().stream_synchronize(s);
+      }
+      for (auto &[sid, s] : stream_by_id) {
+        CUDADriver::get_instance().stream_destroy(s);
+      }
+
+      CUDAContext::get_instance().set_stream(active_stream);
+    }
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, active_stream);

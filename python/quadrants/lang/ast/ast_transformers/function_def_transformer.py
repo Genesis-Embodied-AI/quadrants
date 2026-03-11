@@ -21,10 +21,12 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
 from quadrants.lang.matrix import MatrixType
+from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import to_quadrants_type
 from quadrants.types import annotations, ndarray_type, primitive_types
@@ -295,7 +297,34 @@ class FunctionDefTransformer:
             else:
                 FunctionDefTransformer._transform_as_func(ctx, node, args)
 
+        if ctx.is_kernel:
+            FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
 
         return None
+
+    @staticmethod
+    def _is_stream_parallel_with(stmt: ast.stmt, global_vars: dict[str, Any]) -> bool:
+        if not isinstance(stmt, ast.With):
+            return False
+        if len(stmt.items) != 1:
+            return False
+        item = stmt.items[0]
+        if not isinstance(item.context_expr, ast.Call):
+            return False
+        return ASTResolver.resolve_to(item.context_expr.func, stream_parallel, global_vars)
+
+    @staticmethod
+    def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:
+        has_sp = any(FunctionDefTransformer._is_stream_parallel_with(s, global_vars) for s in body)
+        if not has_sp:
+            return
+        for stmt in body:
+            if not FunctionDefTransformer._is_stream_parallel_with(stmt, global_vars):
+                raise QuadrantsSyntaxError(
+                    "When using qd.stream_parallel(), all top-level statements "
+                    "in the kernel must be 'with qd.stream_parallel():' blocks. "
+                    "Move non-parallel code to a separate kernel."
+                )

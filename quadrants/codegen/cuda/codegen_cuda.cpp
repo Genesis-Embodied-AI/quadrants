@@ -692,6 +692,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
+      current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);
