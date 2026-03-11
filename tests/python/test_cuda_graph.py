@@ -148,6 +148,35 @@ def test_cuda_graph_changed_args():
     assert np.allclose(y1_np, 4.0), f"y1 should be unchanged, got {y1_np[:5]}"
 
 
+@test_utils.test(arch=[qd.cuda])
+def test_cuda_graph_different_sizes():
+    """Graph must produce correct results when called with different-sized arrays.
+
+    Catches stale grid dims: if the graph cached from the small call is
+    replayed for the large call, elements beyond the original size stay zero.
+    """
+
+    @qd.kernel(cuda_graph=True)
+    def add_one(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    x1 = qd.ndarray(qd.f32, shape=(256,))
+    y1 = qd.ndarray(qd.f32, shape=(256,))
+    add_one(x1, y1)
+
+    x2 = qd.ndarray(qd.f32, shape=(1024,))
+    y2 = qd.ndarray(qd.f32, shape=(1024,))
+    add_one(x2, y2)
+
+    x2_np = x2.to_numpy()
+    y2_np = y2.to_numpy()
+    assert np.allclose(x2_np, 1.0), f"Expected all 1.0, got {x2_np[250:260]}"
+    assert np.allclose(y2_np, 2.0), f"Expected all 2.0, got {y2_np[250:260]}"
+
+
 @test_utils.test()
 def test_cuda_graph_annotation_cross_platform():
     """cuda_graph=True should be a harmless no-op on non-CUDA backends."""
