@@ -6,8 +6,12 @@ from quadrants.lang.exception import QuadrantsCompilationError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix
 
+from . import impl
+
 
 def do_check(checker_fns, *args, **kwargs):
+    if impl.is_python_backend():
+        return True, None
     for f in checker_fns:
         ok, msg = f(*args, **kwargs)
         if not ok:

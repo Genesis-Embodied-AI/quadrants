@@ -14,6 +14,7 @@ from weakref import ReferenceType
 
 from quadrants import _logging
 from quadrants._lib.core.quadrants_python import (
+    Arch,
     ASTBuilder,
     CompiledKernelData,
     CompileResult,
@@ -63,6 +64,7 @@ from ._quadrants_callable import QuadrantsCallable
 # Define proxies for fast lookup
 _NONE, _VALIDATION = AutodiffMode.NONE, AutodiffMode.VALIDATION
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
+_ARCH_PYTHON = Arch.python
 
 
 class LaunchContextBufferCache:
@@ -555,7 +557,11 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
-        self.raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
+        if impl.get_runtime()._arch == _ARCH_PYTHON:
+            return self.func(*py_args, **kwargs)
+        config = impl.current_cfg()
+
+        self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
 
         # Transform the primal kernel to forward mode grad kernel

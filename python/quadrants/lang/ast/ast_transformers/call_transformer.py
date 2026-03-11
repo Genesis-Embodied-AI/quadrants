@@ -120,7 +120,7 @@ class CallTransformer:
     # origin input: 'qwerty {1} {} {1:.3f} {k:.4f} {k:}'.format(1.0, 2.0, k=k)
     # raw_string: 'qwerty {1} {} {1:.3f} {k:.4f} {k:}'
     # raw_args: [1.0, 2.0]
-    # raw_keywords: {'k': <ti.Expr>}
+    # raw_keywords: {'k': <qd.Expr>}
     # return value: ['qwerty {} {} {} {} {}', 2.0, 1.0, ['__qd_fmt_value__', 2.0, '.3f'], ['__qd_fmt_value__', <qd.Expr>, '.4f'], <qd.Expr>]
     def _canonicalize_formatted_string(raw_string: str, *raw_args: list, **raw_keywords: dict):
         raw_brackets = re.findall(r"{(.*?)}", raw_string)

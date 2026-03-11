@@ -194,6 +194,7 @@ user_api[qd] = [
     "profiler",
     "pure",
     "pyfunc",
+    "python",
     "randn",
     "random",
     "raw_div",
