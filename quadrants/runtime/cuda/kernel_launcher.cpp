@@ -188,8 +188,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   }
 
   // --- Instantiate and launch ---
-  CUDADriver::get_instance().graph_instantiate(
-      &cached.graph_exec, graph, nullptr, nullptr, 0);
+  CUDADriver::get_instance().graph_instantiate(&cached.graph_exec, graph,
+                                               nullptr, nullptr, 0);
 
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
