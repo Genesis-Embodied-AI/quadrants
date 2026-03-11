@@ -495,7 +495,16 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel,
            py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
-      .def("get_device_caps", &Program::get_device_caps);
+      .def("get_device_caps", &Program::get_device_caps)
+      .def("stream_create", &Program::stream_create)
+      .def("stream_destroy", &Program::stream_destroy)
+      .def("stream_synchronize", &Program::stream_synchronize)
+      .def("set_current_cuda_stream", &Program::set_current_cuda_stream)
+      .def("event_create", &Program::event_create)
+      .def("event_destroy", &Program::event_destroy)
+      .def("event_record", &Program::event_record)
+      .def("event_synchronize", &Program::event_synchronize)
+      .def("stream_wait_event", &Program::stream_wait_event);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
