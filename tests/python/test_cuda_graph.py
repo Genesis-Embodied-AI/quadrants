@@ -177,6 +177,37 @@ def test_cuda_graph_different_sizes():
     assert np.allclose(y2_np, 2.0), f"Expected all 2.0, got {y2_np[250:260]}"
 
 
+@test_utils.test(arch=[qd.cuda])
+def test_cuda_graph_after_reset():
+    """cuda_graph=True kernel must work correctly after qd.reset()."""
+
+    @qd.kernel(cuda_graph=True)
+    def add_one(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    n = 256
+    x = qd.ndarray(qd.f32, shape=(n,))
+    y = qd.ndarray(qd.f32, shape=(n,))
+    add_one(x, y)
+    add_one(x, y)
+
+    assert np.allclose(x.to_numpy(), 2.0)
+    assert np.allclose(y.to_numpy(), 4.0)
+
+    qd.reset()
+    qd.init(arch=qd.cuda)
+
+    x2 = qd.ndarray(qd.f32, shape=(n,))
+    y2 = qd.ndarray(qd.f32, shape=(n,))
+    add_one(x2, y2)
+
+    assert np.allclose(x2.to_numpy(), 1.0)
+    assert np.allclose(y2.to_numpy(), 2.0)
+
+
 @test_utils.test()
 def test_cuda_graph_annotation_cross_platform():
     """cuda_graph=True should be a harmless no-op on non-CUDA backends."""
