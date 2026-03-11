@@ -370,18 +370,19 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   }
 
   // --- Instantiate and launch ---
-  CUDADriver::get_instance().graph_instantiate(
-      &cached.graph_exec, graph, nullptr, nullptr, 0);
+  CUDADriver::get_instance().graph_instantiate(&cached.graph_exec, graph,
+                                               nullptr, nullptr, 0);
 
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
 
   CUDADriver::get_instance().graph_destroy(graph);
 
-  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}"
-           "{}",
-           offloaded_tasks.size(), launch_id,
-           use_graph_while ? " (with graph_while)" : "");
+  QD_TRACE(
+      "CUDA graph created with {} kernel nodes for launch_id={}"
+      "{}",
+      offloaded_tasks.size(), launch_id,
+      use_graph_while ? " (with graph_while)" : "");
 
   cuda_graph_cache_.emplace(launch_id, std::move(cached));
   return true;

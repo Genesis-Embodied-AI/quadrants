@@ -51,8 +51,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     for (auto task : launcher_ctx.task_funcs) {
       task(&ctx.get_context());
     }
-  } while (ctx.graph_while_arg_id >= 0 &&
-           ctx.graph_while_flag_dev_ptr &&
+  } while (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr &&
            *static_cast<int32_t *>(ctx.graph_while_flag_dev_ptr) != 0);
 }
 
