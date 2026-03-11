@@ -22,8 +22,9 @@ struct CudaKernelNodeParams {
   void **extra;
 };
 
-// Mirrors CUgraphNodeParams layout for conditional while nodes.
-// See CUDA driver API: CUgraphNodeParams / CUDA_CONDITIONAL_NODE_PARAMS.
+// Mirrors CUDA driver API CUgraphNodeParams / CUDA_CONDITIONAL_NODE_PARAMS.
+// Field order verified against cuda-python bindings (handle, type, size,
+// phGraph_out, ctx). Introduced in CUDA 12.4; layout stable through 13.2+.
 struct CudaGraphNodeParams {
   unsigned int type;  // CU_GRAPH_NODE_TYPE_CONDITIONAL = 13
   int reserved0[3];

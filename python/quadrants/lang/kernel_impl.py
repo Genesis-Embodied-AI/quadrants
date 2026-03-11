@@ -143,6 +143,13 @@ def _kernel_impl(
     adjoint = Kernel(_func, autodiff_mode=_REVERSE, _is_classkernel=is_classkernel)
     primal.use_cuda_graph = cuda_graph
     primal.graph_while_arg = graph_while
+    if graph_while is not None:
+        arg_names = [m.name for m in primal.arg_metas]
+        if graph_while not in arg_names:
+            raise ValueError(
+                f"graph_while={graph_while!r} does not match any parameter of "
+                f"kernel {_func.__name__!r}. Available parameters: {arg_names}"
+            )
     # Having |primal| contains |grad| makes the tape work.
     primal.grad = adjoint
 
