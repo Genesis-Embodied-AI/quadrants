@@ -176,7 +176,7 @@ def make_matrix(arr, dt=None):
     if len(arr) == 0:
         # the only usage of an empty vector is to serve as field indices
         shape = [0]
-        dt = primitive_types.i32
+        dt = cook_dtype(primitive_types.i32)
     else:
         if isinstance(arr[0], Iterable):  # matrix
             shape = [len(arr), len(arr[0])]
