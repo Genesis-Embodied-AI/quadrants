@@ -99,7 +99,7 @@ class PerformanceDispatcher(Generic[P, R]):
         dispatch_impl_set = self._dispatch_impl_set
 
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
-            sig = inspect.signature(func)
+            sig = inspect.signature(func, eval_str=True)
             log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
             _logging.debug(log_str)
             if QD_PERFDISPATCH_PRINT_DEBUG:
