@@ -137,8 +137,8 @@ print(x.grad[0])  # 4.0
 
 ## Summary
 
-| Method | Copies data? | Works with fields? | Works with ndarrays? | Torch support? |
-|--------|-------------|-------------------|---------------------|---------------|
-| `to_numpy()` / `from_numpy()` | yes | yes | yes | n/a |
-| `to_torch()` / `from_torch()` | yes | yes | no | yes |
-| Direct pass-through | no | no | yes (as kernel arg) | yes |
+| Method | Copies data? | Works with fields? | Works with ndarrays? |
+|--------|-------------|-------------------|---------------------|
+| `to_numpy()` / `from_numpy()` | yes | yes | yes |
+| `to_torch()` / `from_torch()` | yes | yes | no |
+| Direct pass-through | no | no | yes (as kernel arg) |

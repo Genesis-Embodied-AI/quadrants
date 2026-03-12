@@ -16,16 +16,11 @@ The following Python features work inside kernels:
 - **`while` loops**
 - **`break` and `continue`** in non-parallelized loops (inner loops, `while` loops)
 - **`assert`** (when `debug=True` is passed to `qd.init()`)
-- **`print`** (for scalar values)
+- **`print`** (for scalar values) (not on Metal)
 - **Local variables** (scalars, vectors, matrices)
 - **Lists and tuples** (as compile-time containers, e.g. `[1, 2, 3]`)
-- **List comprehensions** (evaluated at compile time)
 - **F-strings** (limited: scalar values only)
-- **`qd.Vector`, `qd.Matrix`** construction and operations
-- **Calling `@qd.func`** and **`@qd.real_func`** functions
-- **Type casts**: `qd.cast()`, `int()`, `float()`
-- **Math functions**: `qd.sqrt()`, `qd.sin()`, `qd.cos()`, `qd.abs()`, `qd.max()`, `qd.min()`, etc.
-- **Atomic operations**: `qd.atomic_add()`, `qd.atomic_sub()`, `qd.atomic_min()`, `qd.atomic_max()`
+- **Type casts**: `int()`, `float()`
 
 ## Not supported
 
@@ -96,18 +91,6 @@ def compute(a: qd.Template) -> None:
 def compute(n: int, a: qd.Template) -> None:
     local_n = n  # can now modify local_n
     local_n += 1
-```
-
-### Use `@qd.real_func` for early returns
-
-`@qd.func` does not support `return` inside runtime `if` statements. Use `@qd.real_func` instead (CUDA and CPU only):
-
-```python
-@qd.real_func
-def safe_div(a: qd.f32, b: qd.f32) -> qd.f32:
-    if b == 0.0:
-        return 0.0
-    return a / b
 ```
 
 ## Argument unpacking

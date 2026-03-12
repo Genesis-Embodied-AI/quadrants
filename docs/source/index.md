@@ -20,7 +20,7 @@ hello(a)
 
 - **Simple**: annotate Python functions with `@qd.kernel` to run on GPU
 - **Fast**: automatic parallelization of top-level for loops across GPU threads
-- **Portable**: supports CUDA, Metal, and Vulkan backends
+- **Portable**: supports CUDA, Metal, AMD, and Vulkan backends
 - **Flexible**: ndarrays, fields, structs, atomics, shared memory
 
 ```{toctree}
