@@ -26,11 +26,12 @@ Functions
 Module Contents
 ---------------
 
-.. py:class:: Stream(handle: int)
+.. py:class:: Stream(handle: int, prog_ref: weakref.ref | None = None)
 
    Wraps a backend-specific GPU stream for concurrent kernel execution.
 
    On backends without native streams (e.g. CPU), this is a no-op object.
+   Call destroy() explicitly or use as a context manager to ensure cleanup.
 
 
    .. py:property:: handle
@@ -50,11 +51,12 @@ Module Contents
 
 
 
-.. py:class:: Event(handle: int)
+.. py:class:: Event(handle: int, prog_ref: weakref.ref | None = None)
 
    Wraps a backend-specific GPU event for stream synchronization.
 
    On backends without native events (e.g. CPU), this is a no-op object.
+   Call destroy() explicitly or use as a context manager to ensure cleanup.
 
 
    .. py:property:: handle
@@ -62,7 +64,7 @@ Module Contents
 
 
 
-   .. py:method:: record(stream: Stream | None = None)
+   .. py:method:: record(qd_stream: Stream | None = None)
 
       Record this event on a stream. None means the default stream.
 
