@@ -62,6 +62,20 @@ def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1])
         b[i] = a[i] * 2
 ```
 
+## Return values
+
+Implementations are not limited to returning `None`. The return value of whichever implementation runs is passed through to the caller:
+
+```python
+@my_op.register
+def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> int:
+    for i in range(a.shape[0]):
+        b[i] = a[i] * 2
+    return a.shape[0]
+
+count = my_op(a, b)  # receives the return value from whichever impl runs
+```
+
 ## Compatibility filtering
 
 Some implementations may only work under certain conditions (specific platforms, input shapes, etc.). Use the `is_compatible` parameter to declare when an implementation is eligible:
