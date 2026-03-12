@@ -6,25 +6,25 @@ This enables two main capabilities:
 - **Compile-time branching**: eliminating branches entirely from the compiled kernel
 - **Loop unrolling**: unrolling loops at compile time
 
-Since the expressions are evaluated at compile time, the arguments to `qd.static()` must be known at compile time — they cannot depend on kernel parameters or runtime values.
+Since the expressions are evaluated at compile time, the arguments to `qd.static()` must be known at compile time — they cannot depend on non-templated kernel parameters or other runtime values.
 
 ## Compile-time branching
 
 ```python
-use_fast_path = True
-
 @qd.kernel
-def compute(a: qd.Template) -> None:
+def compute(use_fast_path: qd.Template, a: qd.Template) -> None:
     for i in range(10):
         if qd.static(use_fast_path):
             a[i] = i * 2
         else:
             a[i] = i * 3 + 1
+
+compute(True, my_field)
 ```
 
-Because `use_fast_path` is a Python variable known at compile time, the compiler will eliminate the `if/else` entirely. The compiled kernel will contain only `a[i] = i * 2` — no branch at all.
+Because `use_fast_path` is a templated parameter, it is known at compile time. The compiler will eliminate the `if/else` entirely — the compiled kernel will contain only `a[i] = i * 2`, with no branch at all. Calling `compute(False, my_field)` would trigger a recompilation that keeps only the `else` branch.
 
-Without `qd.static`, the condition would be evaluated at runtime for every thread, which is slower.
+Without `qd.static`, the condition would be evaluated at runtime for every thread, which is slower. In addition, the kernel will contain the code for both branches, which will increase register pressure, and likely reduce occupancy.
 
 ## Loop unrolling
 
@@ -54,10 +54,8 @@ A top-level for loop is normally parallelized across GPU threads. Wrapping it in
 A `qd.static` `if` wrapping a top-level for loop does **not** prevent the for loop from being parallelized — the `if` is resolved at compile time, leaving the for loop as a top-level construct.
 
 ```python
-enable_pass = True
-
 @qd.kernel
-def compute(N: int, a: qd.Template) -> None:
+def compute(enable_pass: qd.Template, N: int, a: qd.Template) -> None:
     if qd.static(enable_pass):
         for i in range(N):  # still parallelized
             a[i] += 1
@@ -65,7 +63,7 @@ def compute(N: int, a: qd.Template) -> None:
 
 ## Compile-time error
 
-If you pass a runtime value (e.g. a kernel parameter) to `qd.static()`, you will get a compilation error:
+If you pass a runtime value (e.g. as a non-templated kernel parameter) to `qd.static()`, you will get a compilation error:
 
 ```python
 @qd.kernel

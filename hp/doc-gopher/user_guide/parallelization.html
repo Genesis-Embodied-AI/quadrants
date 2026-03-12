@@ -58,7 +58,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/parallelization';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Synchronization" href="synchronization.html" />
+    <link rel="next" title="Numpy and Torch interop" href="interop.html" />
     <link rel="prev" title="Sub-functions" href="sub_functions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -278,7 +278,6 @@
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -353,17 +352,13 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="parallelization">
 <h1>Parallelization<a class="headerlink" href="#parallelization" title="Link to this heading">#</a></h1>
-<p>Each top-level for-loop will be parallelized, within a kernel</p>
+<p>Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.</p>
+<p>A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:</p>
 <ul class="simple">
-<li><p>adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop not being parallelized</p></li>
-<li><p>a for-loop inside one or more inlined &#64;qd.func, and/or static <code class="docutils literal notranslate"><span class="pre">if</span></code> will be still be parallelized however</p></li>
-</ul>
-<p>Each top-level for-loop will be launched as a separate GPU kernel, under the hood.</p>
-<p>The top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:</p>
-<ul class="simple">
-<li><p>if statements where the conditional is <code class="docutils literal notranslate"><span class="pre">qd.static</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">if</span></code> statements where the conditional is <code class="docutils literal notranslate"><span class="pre">qd.static</span></code></p></li>
 <li><p>inline functions (<code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>)</p></li>
 </ul>
+<p>Note that adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop NOT being parallelized.</p>
 <section id="multi-dimensional-parallelization-with-qd-ndrange">
 <h2>Multi-dimensional parallelization with qd.ndrange<a class="headerlink" href="#multi-dimensional-parallelization-with-qd-ndrange" title="Link to this heading">#</a></h2>
 <p>Since only top-level for loops are parallelized, nested for loops will run sequentially on each thread. To parallelize over multiple dimensions, use <code class="docutils literal notranslate"><span class="pre">qd.ndrange()</span></code> to flatten them into a single top-level loop:</p>
@@ -410,11 +405,10 @@
 <li><p>getting each kernel to do more work, to increase the relative runtime of the kernel relative to launch time</p></li>
 <li><p>reducing kernel launch time</p></li>
 </ul>
-<p>To reduce kernel launch time, the following options are available:</p>
+<p>Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:</p>
 <ul class="simple">
-<li><p>field args launch more quickly than ndarray args</p></li>
-<li><p>global fields incur no launch latency</p></li>
-<li><p>reducing the number and complexity kernel parameters reduces the kernel launch latency</p></li>
+<li><p>field args incur less launch latency than ndarray args</p></li>
+<li><p>global fields incur no parameter-related launch latency</p></li>
 </ul>
 </section>
 <section id="global-memory">
@@ -436,16 +430,16 @@
 <h2>Thread synchronization<a class="headerlink" href="#thread-synchronization" title="Link to this heading">#</a></h2>
 <p>Typically, Quadrants kernels use <code class="docutils literal notranslate"><span class="pre">atomic_</span></code> operations for synchronization. This is relatively easy and intuitive, and it works perfectly with global memory. The main downside is that <code class="docutils literal notranslate"><span class="pre">atomic</span></code> operations are slow, because they involve both global memory and thread synchronization, both of which are intrinsically slow, and combining them is slower still.</p>
 <p>When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads.</p>
-<p>However, these fences and barriers do not work for global memory, at least, not across all thread blocks.</p>
-<p>To synchronize writes across all threads in a kernel, you’ll need to finish the current kernel, and launch a new kernel.</p>
+<p>However, these fences and barriers do not work for global memory.</p>
+<p>To synchronize writes to global memory, you’ll need to finish the current kernel, and launch a new kernel.</p>
 </section>
 <section id="avoiding-synchronization">
 <h2>Avoiding synchronization<a class="headerlink" href="#avoiding-synchronization" title="Link to this heading">#</a></h2>
-<p>If there is a way of partitioning data such that no thread ever needs to read data written by another thread, then there is no need for synchronization, and the kernels will run quickly.</p>
+<p>If there is a way of partitioning data such that no thread ever needs to read data written by another thread, then there is no need for synchronization.</p>
 </section>
 <section id="maximizing-gpu-core-utilization">
 <h2>Maximizing GPU core utilization<a class="headerlink" href="#maximizing-gpu-core-utilization" title="Link to this heading">#</a></h2>
-<p>A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:</p>
+<p>A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores. In Quadrants, the top level for loop is parallelized over gpu threads:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i_b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">B</span><span class="p">):</span>  <span class="c1"># parallelized across B GPU threads</span>
@@ -485,11 +479,11 @@
       </div>
     </a>
     <a class="right-next"
-       href="synchronization.html"
+       href="interop.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Synchronization</p>
+        <p class="prev-next-title">Numpy and Torch interop</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

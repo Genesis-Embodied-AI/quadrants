@@ -59,7 +59,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Python features in kernel scope" href="unsupported_python.html" />
-    <link rel="prev" title="Synchronization" href="synchronization.html" />
+    <link rel="prev" title="Parallelization" href="parallelization.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.4.5" />
@@ -278,7 +278,6 @@
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="current nav bd-sidenav">
@@ -489,7 +488,6 @@
 <th class="head"><p>Copies data?</p></th>
 <th class="head"><p>Works with fields?</p></th>
 <th class="head"><p>Works with ndarrays?</p></th>
-<th class="head"><p>Torch support?</p></th>
 </tr>
 </thead>
 <tbody>
@@ -497,19 +495,16 @@
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
-<td><p>n/a</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch()</span></code></p></td>
 <td><p>yes</p></td>
 <td><p>yes</p></td>
 <td><p>no</p></td>
-<td><p>yes</p></td>
 </tr>
 <tr class="row-even"><td><p>Direct pass-through</p></td>
 <td><p>no</p></td>
 <td><p>no</p></td>
 <td><p>yes (as kernel arg)</p></td>
-<td><p>yes</p></td>
 </tr>
 </tbody>
 </table>
@@ -528,12 +523,12 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="synchronization.html"
+       href="parallelization.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Synchronization</p>
+        <p class="prev-next-title">Parallelization</p>
       </div>
     </a>
     <a class="right-next"

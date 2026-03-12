@@ -278,7 +278,6 @@
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -368,16 +367,11 @@
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">while</span></code> loops</strong></p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">break</span></code> and <code class="docutils literal notranslate"><span class="pre">continue</span></code></strong> in non-parallelized loops (inner loops, <code class="docutils literal notranslate"><span class="pre">while</span></code> loops)</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">assert</span></code></strong> (when <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> is passed to <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>)</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">print</span></code></strong> (for scalar values)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">print</span></code></strong> (for scalar values) (not on Metal)</p></li>
 <li><p><strong>Local variables</strong> (scalars, vectors, matrices)</p></li>
 <li><p><strong>Lists and tuples</strong> (as compile-time containers, e.g. <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code>)</p></li>
-<li><p><strong>List comprehensions</strong> (evaluated at compile time)</p></li>
 <li><p><strong>F-strings</strong> (limited: scalar values only)</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code></strong> construction and operations</p></li>
-<li><p><strong>Calling <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code></strong> and <strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code></strong> functions</p></li>
-<li><p><strong>Type casts</strong>: <code class="docutils literal notranslate"><span class="pre">qd.cast()</span></code>, <code class="docutils literal notranslate"><span class="pre">int()</span></code>, <code class="docutils literal notranslate"><span class="pre">float()</span></code></p></li>
-<li><p><strong>Math functions</strong>: <code class="docutils literal notranslate"><span class="pre">qd.sqrt()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sin()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.cos()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.abs()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.max()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.min()</span></code>, etc.</p></li>
-<li><p><strong>Atomic operations</strong>: <code class="docutils literal notranslate"><span class="pre">qd.atomic_add()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.atomic_sub()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.atomic_min()</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.atomic_max()</span></code></p></li>
+<li><p><strong>Type casts</strong>: <code class="docutils literal notranslate"><span class="pre">int()</span></code>, <code class="docutils literal notranslate"><span class="pre">float()</span></code></p></li>
 </ul>
 </section>
 <section id="not-supported">
@@ -516,17 +510,6 @@
 </pre></div>
 </div>
 </section>
-<section id="use-qd-real-func-for-early-returns">
-<h3>Use <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> for early returns<a class="headerlink" href="#use-qd-real-func-for-early-returns" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> does not support <code class="docutils literal notranslate"><span class="pre">return</span></code> inside runtime <code class="docutils literal notranslate"><span class="pre">if</span></code> statements. Use <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> instead (CUDA and CPU only):</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">real_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">safe_div</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">:</span>
-    <span class="k">if</span> <span class="n">b</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mf">0.0</span>
-    <span class="k">return</span> <span class="n">a</span> <span class="o">/</span> <span class="n">b</span>
-</pre></div>
-</div>
-</section>
 </section>
 <section id="argument-unpacking">
 <h2>Argument unpacking<a class="headerlink" href="#argument-unpacking" title="Link to this heading">#</a></h2>
@@ -596,7 +579,6 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#common-workarounds">Common workarounds</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-qd-static-for-compile-time-python-logic">Use <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> for compile-time Python logic</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-copy-for-immutable-arguments">Local copy for immutable arguments</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#use-qd-real-func-for-early-returns">Use <code class="docutils literal notranslate"><span class="pre">@qd.real_func</span></code> for early returns</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#argument-unpacking">Argument unpacking</a></li>

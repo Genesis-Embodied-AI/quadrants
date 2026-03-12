@@ -21,7 +21,6 @@ compound_types
 static
 sub_functions
 parallelization
-synchronization
 ```
 
 ```{toctree}

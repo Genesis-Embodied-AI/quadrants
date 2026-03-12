@@ -278,7 +278,6 @@
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -359,22 +358,22 @@
 <li><p><strong>Compile-time branching</strong>: eliminating branches entirely from the compiled kernel</p></li>
 <li><p><strong>Loop unrolling</strong>: unrolling loops at compile time</p></li>
 </ul>
-<p>Since the expressions are evaluated at compile time, the arguments to <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> must be known at compile time — they cannot depend on kernel parameters or runtime values.</p>
+<p>Since the expressions are evaluated at compile time, the arguments to <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> must be known at compile time — they cannot depend on non-templated kernel parameters or other runtime values.</p>
 <section id="compile-time-branching">
 <h2>Compile-time branching<a class="headerlink" href="#compile-time-branching" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">use_fast_path</span> <span class="o">=</span> <span class="kc">True</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">use_fast_path</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">use_fast_path</span><span class="p">):</span>
             <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">2</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">+</span> <span class="mi">1</span>
+
+<span class="n">compute</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">my_field</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Because <code class="docutils literal notranslate"><span class="pre">use_fast_path</span></code> is a Python variable known at compile time, the compiler will eliminate the <code class="docutils literal notranslate"><span class="pre">if/else</span></code> entirely. The compiled kernel will contain only <code class="docutils literal notranslate"><span class="pre">a[i]</span> <span class="pre">=</span> <span class="pre">i</span> <span class="pre">*</span> <span class="pre">2</span></code> — no branch at all.</p>
-<p>Without <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>, the condition would be evaluated at runtime for every thread, which is slower.</p>
+<p>Because <code class="docutils literal notranslate"><span class="pre">use_fast_path</span></code> is a templated parameter, it is known at compile time. The compiler will eliminate the <code class="docutils literal notranslate"><span class="pre">if/else</span></code> entirely — the compiled kernel will contain only <code class="docutils literal notranslate"><span class="pre">a[i]</span> <span class="pre">=</span> <span class="pre">i</span> <span class="pre">*</span> <span class="pre">2</span></code>, with no branch at all. Calling <code class="docutils literal notranslate"><span class="pre">compute(False,</span> <span class="pre">my_field)</span></code> would trigger a recompilation that keeps only the <code class="docutils literal notranslate"><span class="pre">else</span></code> branch.</p>
+<p>Without <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>, the condition would be evaluated at runtime for every thread, which is slower. In addition, the kernel will contain the code for both branches, which will increase register pressure, and likely reduce occupancy.</p>
 </section>
 <section id="loop-unrolling">
 <h2>Loop unrolling<a class="headerlink" href="#loop-unrolling" title="Link to this heading">#</a></h2>
@@ -398,10 +397,8 @@
 <h2>Interaction with parallelization<a class="headerlink" href="#interaction-with-parallelization" title="Link to this heading">#</a></h2>
 <p>A top-level for loop is normally parallelized across GPU threads. Wrapping it in <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> changes the behavior: the loop is unrolled at compile time instead of being parallelized.</p>
 <p>A <code class="docutils literal notranslate"><span class="pre">qd.static</span></code> <code class="docutils literal notranslate"><span class="pre">if</span></code> wrapping a top-level for loop does <strong>not</strong> prevent the for loop from being parallelized — the <code class="docutils literal notranslate"><span class="pre">if</span></code> is resolved at compile time, leaving the for loop as a top-level construct.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">enable_pass</span> <span class="o">=</span> <span class="kc">True</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">N</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">enable_pass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">N</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">enable_pass</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>  <span class="c1"># still parallelized</span>
             <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -410,7 +407,7 @@
 </section>
 <section id="compile-time-error">
 <h2>Compile-time error<a class="headerlink" href="#compile-time-error" title="Link to this heading">#</a></h2>
-<p>If you pass a runtime value (e.g. a kernel parameter) to <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code>, you will get a compilation error:</p>
+<p>If you pass a runtime value (e.g. as a non-templated kernel parameter) to <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code>, you will get a compilation error:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">val</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">val</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">):</span>  <span class="c1"># ERROR: val is a runtime value</span>

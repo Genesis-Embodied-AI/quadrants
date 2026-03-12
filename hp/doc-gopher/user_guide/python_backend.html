@@ -278,7 +278,6 @@
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -408,26 +407,6 @@
 <li><p><strong>Performance is not representative</strong> of compiled backends. Do not use for benchmarking.</p></li>
 <li><p><strong>GPU-specific features</strong> (shared memory, block-level intrinsics, etc.) are not available.</p></li>
 </ul>
-</section>
-<section id="storage-model">
-<h2>Storage model<a class="headerlink" href="#storage-model" title="Link to this heading">#</a></h2>
-<p>Fields and ndarrays are instances of <code class="docutils literal notranslate"><span class="pre">PyTensor</span></code>, a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> subclass. You can interoperate with PyTorch directly:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">python</span><span class="p">)</span>
-<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">math</span><span class="o">.</span><span class="n">vec3</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
-
-<span class="c1"># a is a torch.Tensor under the hood</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
-<span class="k">assert</span> <span class="n">a</span><span class="o">.</span><span class="n">size</span><span class="p">()</span> <span class="o">==</span> <span class="n">torch</span><span class="o">.</span><span class="n">Size</span><span class="p">([</span><span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
-</pre></div>
-</div>
-<p>Each tensor has the following attributes matching the standard Quadrants field/ndarray convention:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">_tc</span></code> — the tensor itself</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_T_tc</span></code> — transposed view (first batch dim moved to front)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_np</span></code> — numpy view</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">_T_np</span></code> — transposed numpy view</p></li>
-</ul>
 <section id="batch-shape-vs-real-shape">
 <h3>Batch shape vs real shape<a class="headerlink" href="#batch-shape-vs-real-shape" title="Link to this heading">#</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">.shape</span></code> property returns the <strong>batch dimensions only</strong>, consistent with how Quadrants kernels index fields. For example, a <code class="docutils literal notranslate"><span class="pre">vec3</span></code> field of shape <code class="docutils literal notranslate"><span class="pre">(10,)</span></code> reports <code class="docutils literal notranslate"><span class="pre">.shape</span> <span class="pre">==</span> <span class="pre">(10,)</span></code> even though the underlying tensor has size <code class="docutils literal notranslate"><span class="pre">(10,</span> <span class="pre">3)</span></code>. Use <code class="docutils literal notranslate"><span class="pre">.size()</span></code> to get the full torch shape.</p>
@@ -490,8 +469,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#requirements">Requirements</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quick-start">Quick start</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-features">Supported features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#storage-model">Storage model</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-shape-vs-real-shape">Batch shape vs real shape</a></li>
 </ul>
 </li>

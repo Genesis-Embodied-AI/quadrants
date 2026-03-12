@@ -278,7 +278,6 @@
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Sub-functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="synchronization.html">Synchronization</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
 <ul class="nav bd-sidenav">
@@ -353,7 +352,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="sub-functions">
 <h1>Sub-functions<a class="headerlink" href="#sub-functions" title="Link to this heading">#</a></h1>
-<p>A <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> can call other functions, as long as those functions have an appropriate Quadrants annotation.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> can call other functions, as long as those functions are annotated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>.</p>
 <section id="qd-func">
 <h2>qd.func<a class="headerlink" href="#qd-func" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> is the standard annotation for a function that can be called from a kernel. <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> functions can also call other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> functions.</p>
@@ -386,52 +385,6 @@
         <span class="n">increment</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
 </pre></div>
 </div>
-</section>
-<section id="passing-by-reference">
-<h3>Passing by reference<a class="headerlink" href="#passing-by-reference" title="Link to this heading">#</a></h3>
-<p>When using <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> type annotations, scalar arguments are passed <strong>by reference</strong> — modifications to the parameter inside the function are visible to the caller:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">set_value</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">())</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="mi">42</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">set_value</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-    <span class="c1"># a is now 42</span>
-</pre></div>
-</div>
-<p>Without the <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> annotation, scalar arguments are passed by value — modifications are not visible to the caller.</p>
-</section>
-</section>
-<section id="qd-real-func">
-<h2>qd.real_func<a class="headerlink" href="#qd-real-func" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> is like <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> but the function is <strong>not inlined</strong>. Instead, it is compiled as a separate function with a real call/return.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">real_func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">factorial</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
-    <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">1</span>
-    <span class="k">return</span> <span class="n">n</span> <span class="o">*</span> <span class="n">factorial</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
-        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">factorial</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Key differences from <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>:</p>
-<ul class="simple">
-<li><p>Supports <strong>recursion</strong></p></li>
-<li><p>Has function call overhead (call/return)</p></li>
-<li><p>The compiler cannot optimize across the call boundary</p></li>
-<li><p>Only supported on <code class="docutils literal notranslate"><span class="pre">cpu</span></code> and <code class="docutils literal notranslate"><span class="pre">cuda</span></code> backends</p></li>
-</ul>
-<section id="limitations">
-<h3>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h3>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> does not support passing <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> arguments</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> is experimental</p></li>
-</ul>
 </section>
 </section>
 </section>
@@ -485,11 +438,6 @@
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-func">qd.func</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-fields-and-ndarrays">Passing fields and ndarrays</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-by-reference">Passing by reference</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-real-func">qd.real_func</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
 </ul>
 </li>
 </ul>
