@@ -16,3 +16,9 @@ def test_ndarray_typing_square_brackets():
     b[1, 1] = 5
     some_kernel(a, b)
     assert a[1, 1] == 5 + 2
+
+
+def test_ndarray_typing_single_arg():
+    t = qd.types.NDArray[qd.i32]
+    assert t.dtype == qd.i32
+    assert t.ndim is None
