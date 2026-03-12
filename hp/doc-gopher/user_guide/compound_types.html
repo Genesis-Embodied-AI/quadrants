@@ -359,7 +359,7 @@
 <p>The following compound types are available:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> — <strong>recommended</strong></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — for classes that define <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods, cannot contain ndarrays</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> — legacy, field-only</p></li>
 </ul>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -401,12 +401,11 @@
 </tbody>
 </table>
 </div>
-<p>[*1] automatic differentiation through dataclass members is not supported currently</p>
 </section>
 <section id="recommendation">
 <h2>Recommendation<a class="headerlink" href="#recommendation" title="Link to this heading">#</a></h2>
 <p><strong>Use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> for new code.</strong> It supports both fields and ndarrays, can be nested, and uses standard Python — no Quadrants-specific decorator needed.</p>
-<p>The other compound types exist for historical reasons or specific use cases described below.</p>
+<p>The other compound types exist for historical reasons.</p>
 </section>
 <section id="dataclasses-dataclass">
 <h2>dataclasses.dataclass<a class="headerlink" href="#dataclasses-dataclass" title="Link to this heading">#</a></h2>
@@ -475,15 +474,6 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 </section>
-<section id="limitations">
-<h3>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h3>
-<ul class="simple">
-<li><p>On Mac, can only be used with fields, not with ndarrays [*2]</p></li>
-<li><p>Passing dataclasses to <code class="docutils literal notranslate"><span class="pre">&#64;qd.real_func</span></code> is not supported</p></li>
-<li><p>Automatic differentiation is not supported</p></li>
-</ul>
-<p>[*2] Technically ndarrays work, but in practice each ndarray is expanded into multiple kernel parameters, which exceeds the Metal backend’s parameter limit.</p>
-</section>
 </section>
 <section id="qd-data-oriented">
 <h2>qd.data_oriented<a class="headerlink" href="#qd-data-oriented" title="Link to this heading">#</a></h2>
@@ -502,7 +492,6 @@ my_struct.b[37] 5
 <span class="n">sim</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>If your class only holds data (no <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> methods), you don’t need <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> — use <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> instead.</p>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects can also be passed as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters to kernels defined outside the class, and they support nesting (one <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> struct containing another).</p>
 </section>
 <section id="qd-struct-qd-dataclass">
@@ -515,7 +504,6 @@ my_struct.b[37] 5
     <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 </pre></div>
 </div>
-<p>These types support automatic differentiation, which <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> does not. Use <code class="docutils literal notranslate"><span class="pre">&#64;qd.struct</span></code> only if you need AD through struct members. Otherwise, prefer <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>.</p>
 </section>
 </section>
 
@@ -571,7 +559,6 @@ my_struct.b[37] 5
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclasses-dataclass">dataclasses.dataclass</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example">Example</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nesting">Nesting</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a></li>
