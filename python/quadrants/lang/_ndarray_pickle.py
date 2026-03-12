@@ -9,6 +9,13 @@ _DTYPE_TO_NAME = {dt: name for name, dt in _NAME_TO_DTYPE.items()}
 
 
 def serialize(ndarray):
+    """Serialize an ndarray to a plain dict for pickling.
+
+    Note: This creates a full NumPy copy of the underlying data via
+    ``ndarray.to_numpy()``, temporarily doubling memory usage for
+    large arrays. This is necessary because the device memory backing
+    the ndarray could change before the pickled bytes are written.
+    """
     dtype_name = _DTYPE_TO_NAME.get(ndarray.dtype)
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
