@@ -69,6 +69,9 @@ def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1])
 Implementations are not limited to returning `None`. The return value of whichever implementation runs is passed through to the caller:
 
 ```python
+@qd.perf_dispatch(get_geometry_hash=lambda a, b: hash(a.shape + b.shape))
+def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> int: ...
+
 @my_op.register
 def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> int:
     for i in range(a.shape[0]):
@@ -77,6 +80,8 @@ def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1])
 
 count = my_op(a, b)  # receives the return value from whichever impl runs
 ```
+
+Note that return types need to match across implementations, and the meta function.
 
 ## Compatibility filtering
 
