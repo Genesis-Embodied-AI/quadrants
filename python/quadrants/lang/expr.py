@@ -122,8 +122,7 @@ def make_constant_expr(val, dtype):
         return Expr(_qd_core.make_const_expr_bool(constant_dtype, val))
 
     if isinstance(val, (float, np.floating)):
-        constant_dtype = impl.get_runtime().default_fp if dtype is None else dtype
-        constant_dtype = cook_dtype(constant_dtype)
+        constant_dtype = dtype if dtype is not None else cook_dtype(impl.get_runtime().default_fp)
         if constant_dtype not in real_types:
             raise QuadrantsTypeError(
                 "Floating-point literals must be annotated with a floating-point type. For type casting, use `qd.cast`."
@@ -131,8 +130,7 @@ def make_constant_expr(val, dtype):
         return Expr(_qd_core.make_const_expr_fp(constant_dtype, val))
 
     if isinstance(val, (int, np.integer)):
-        constant_dtype = impl.get_runtime().default_ip if dtype is None else dtype
-        constant_dtype = cook_dtype(constant_dtype)
+        constant_dtype = dtype if dtype is not None else cook_dtype(impl.get_runtime().default_ip)
         if constant_dtype not in integer_types:
             raise QuadrantsTypeError(
                 "Integer literals must be annotated with a integer type. For type casting, use `qd.cast`."
