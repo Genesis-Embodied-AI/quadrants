@@ -7,7 +7,12 @@ from quadrants.lang import impl
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import QuadrantsCompilationError, QuadrantsTypeError
 from quadrants.lang.matrix import make_matrix
-from quadrants.lang.util import is_matrix_class, is_quadrants_class, to_numpy_type
+from quadrants.lang.util import (
+    cook_dtype,
+    is_matrix_class,
+    is_quadrants_class,
+    to_numpy_type,
+)
 from quadrants.types import primitive_types
 from quadrants.types.primitive_types import integer_types, real_types
 
@@ -109,12 +114,17 @@ def _clamp_unsigned_to_range(npty, val: np.integer | int) -> np.integer | int:
 
 
 def make_constant_expr(val, dtype):
+    # Normalise dtype once up front so the per-branch fallbacks only need to
+    # cook the runtime defaults (default_fp / default_ip).
+    if dtype is not None:
+        dtype = cook_dtype(dtype)
+
     if isinstance(val, (bool, np.bool_)):
-        constant_dtype = primitive_types.u1
+        constant_dtype = cook_dtype(primitive_types.u1)
         return Expr(_qd_core.make_const_expr_bool(constant_dtype, val))
 
     if isinstance(val, (float, np.floating)):
-        constant_dtype = impl.get_runtime().default_fp if dtype is None else dtype
+        constant_dtype = dtype if dtype is not None else cook_dtype(impl.get_runtime().default_fp)
         if constant_dtype not in real_types:
             raise QuadrantsTypeError(
                 "Floating-point literals must be annotated with a floating-point type. For type casting, use `qd.cast`."
@@ -122,7 +132,7 @@ def make_constant_expr(val, dtype):
         return Expr(_qd_core.make_const_expr_fp(constant_dtype, val))
 
     if isinstance(val, (int, np.integer)):
-        constant_dtype = impl.get_runtime().default_ip if dtype is None else dtype
+        constant_dtype = dtype if dtype is not None else cook_dtype(impl.get_runtime().default_ip)
         if constant_dtype not in integer_types:
             raise QuadrantsTypeError(
                 "Integer literals must be annotated with a integer type. For type casting, use `qd.cast`."
