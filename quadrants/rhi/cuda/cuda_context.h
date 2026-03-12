@@ -30,7 +30,7 @@ class CUDAContext {
   int max_shared_memory_bytes_;
   bool debug_;
   bool supports_mem_pool_;
-  void *stream_;
+  static thread_local void *stream_;
 
  public:
   CUDAContext();

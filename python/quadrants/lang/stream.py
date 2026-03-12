@@ -1,16 +1,23 @@
+import weakref
 from contextlib import contextmanager
 
 from quadrants.lang import impl
+
+
+def _get_prog_weakref():
+    return weakref.ref(impl.get_runtime().prog)
 
 
 class Stream:
     """Wraps a backend-specific GPU stream for concurrent kernel execution.
 
     On backends without native streams (e.g. CPU), this is a no-op object.
+    Call destroy() explicitly or use as a context manager to ensure cleanup.
     """
 
-    def __init__(self, handle: int):
+    def __init__(self, handle: int, prog_ref: weakref.ref | None = None):
         self._handle = handle
+        self._prog_ref = prog_ref
 
     @property
     def handle(self) -> int:
@@ -29,30 +36,41 @@ class Stream:
             self._handle = 0
 
     def __del__(self):
-        if self._handle != 0:
-            try:
-                self.destroy()
-            except Exception:
-                pass
+        if self._handle != 0 and self._prog_ref is not None:
+            prog = self._prog_ref()
+            if prog is not None:
+                try:
+                    prog.stream_destroy(self._handle)
+                    self._handle = 0
+                except Exception:
+                    pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.destroy()
 
 
 class Event:
     """Wraps a backend-specific GPU event for stream synchronization.
 
     On backends without native events (e.g. CPU), this is a no-op object.
+    Call destroy() explicitly or use as a context manager to ensure cleanup.
     """
 
-    def __init__(self, handle: int):
+    def __init__(self, handle: int, prog_ref: weakref.ref | None = None):
         self._handle = handle
+        self._prog_ref = prog_ref
 
     @property
     def handle(self) -> int:
         return self._handle
 
-    def record(self, stream: Stream | None = None):
+    def record(self, qd_stream: Stream | None = None):
         """Record this event on a stream. None means the default stream."""
         prog = impl.get_runtime().prog
-        stream_handle = stream.handle if stream is not None else 0
+        stream_handle = qd_stream.handle if qd_stream is not None else 0
         prog.event_record(self._handle, stream_handle)
 
     def wait(self, qd_stream: Stream | None = None):
@@ -74,25 +92,34 @@ class Event:
             self._handle = 0
 
     def __del__(self):
-        if self._handle != 0:
-            try:
-                self.destroy()
-            except Exception:
-                pass
+        if self._handle != 0 and self._prog_ref is not None:
+            prog = self._prog_ref()
+            if prog is not None:
+                try:
+                    prog.event_destroy(self._handle)
+                    self._handle = 0
+                except Exception:
+                    pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.destroy()
 
 
 def create_stream() -> Stream:
     """Create a new GPU stream for concurrent kernel execution."""
     prog = impl.get_runtime().prog
     handle = prog.stream_create()
-    return Stream(handle)
+    return Stream(handle, _get_prog_weakref())
 
 
 def create_event() -> Event:
     """Create a new GPU event for stream synchronization."""
     prog = impl.get_runtime().prog
     handle = prog.event_create()
-    return Event(handle)
+    return Event(handle, _get_prog_weakref())
 
 
 @contextmanager

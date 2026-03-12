@@ -23,7 +23,7 @@ class AMDGPUContext {
   KernelProfilerBase *profiler_{nullptr};
   AMDGPUDriver &driver_;
   bool debug_{false};
-  void *stream_{nullptr};
+  static thread_local void *stream_;
   std::vector<void *> kernel_arg_pointer_;
 
  public:

@@ -70,6 +70,7 @@ PER_AMDGPU_FUNCTION(memcpy_device_to_host_async,
                     std::size_t,
                     void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
+// hipMallocAsync/hipFreeAsync require ROCm >= 5.4
 PER_AMDGPU_FUNCTION(malloc_async, hipMallocAsync, void **, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc_managed,
                     hipMallocManaged,
