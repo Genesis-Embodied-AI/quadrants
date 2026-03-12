@@ -11,7 +11,7 @@ Define a meta-function with `@qd.perf_dispatch`. The function body should be emp
 def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 ```
 
-Then register concrete implementations using `@my_op.register`. Each implementation must have the same parameter names as the prototype. Note that `@my_op.register` replaces the decorated name with a wrapper object — registered implementations can still be called directly (bypassing the dispatcher) if needed.
+Then register concrete implementations using `@my_op.register`. Each implementation must have the same parameter names as the prototype.
 
 ```python
 @my_op.register
