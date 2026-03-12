@@ -1,0 +1,32 @@
+quadrants.types
+===============
+
+.. py:module:: quadrants.types
+
+.. autoapi-nested-parse::
+
+   This module defines data types in Quadrants:
+
+   - primitive: int, float, etc.
+   - compound: matrix, vector, struct.
+   - template: for reference types.
+   - ndarray: for arbitrary arrays.
+   - quant: for quantized types, see "https://yuanming.quadrants.graphics/publication/2021-quanquadrants/quanquadrants.pdf"
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/types/annotations/index
+   /autoapi/quadrants/types/compound_types/index
+   /autoapi/quadrants/types/enums/index
+   /autoapi/quadrants/types/ndarray_type/index
+   /autoapi/quadrants/types/primitive_types/index
+   /autoapi/quadrants/types/quant/index
+   /autoapi/quadrants/types/utils/index
+
+
