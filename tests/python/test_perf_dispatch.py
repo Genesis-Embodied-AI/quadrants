@@ -1,7 +1,5 @@
 from enum import IntEnum
 from typing import cast
-from unittest import mock
-
 import pytest
 
 import quadrants as qd
@@ -294,175 +292,169 @@ def test_perf_dispatch_sanity_check_register_args() -> None:
 
 
 @test_utils.test()
-def test_perf_dispatch_force_by_name() -> None:
+def test_perf_dispatch_force_by_name(monkeypatch) -> None:
     """QD_PERFDISPATCH_FORCE=dispatcher:impl forces that specific implementation."""
 
     class ImplEnum(IntEnum):
         impl_a = 0
         impl_b = 1
 
-    with (
-        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_b"}),
-        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
-    ):
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"my_func": "my_func_impl_b"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
 
-        @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
-        def my_func(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    def my_func(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
 
-        @my_func.register
-        def my_func_impl_a(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.impl_a] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @my_func.register
+    def my_func_impl_a(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.impl_a] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        @my_func.register
-        def my_func_impl_b(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.impl_b] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @my_func.register
+    def my_func_impl_b(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.impl_b] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        num_threads = 10
-        a = qd.ndarray(qd.i32, (num_threads,))
-        c = qd.ndarray(qd.i32, (len(ImplEnum),))
-        rand_state = qd.ndarray(qd.i32, (num_threads,))
+    num_threads = 10
+    a = qd.ndarray(qd.i32, (num_threads,))
+    c = qd.ndarray(qd.i32, (len(ImplEnum),))
+    rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-        for _ in range(NUM_WARMUP + 5):
-            c.fill(0)
-            a.fill(5)
-            my_func(a, c, rand_state=rand_state)
-            assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-            assert c[ImplEnum.impl_a] == 0
-            assert c[ImplEnum.impl_b] == 1
+    for _ in range(NUM_WARMUP + 5):
+        c.fill(0)
+        a.fill(5)
+        my_func(a, c, rand_state=rand_state)
+        assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
+        assert c[ImplEnum.impl_a] == 0
+        assert c[ImplEnum.impl_b] == 1
 
 
 @test_utils.test()
-def test_perf_dispatch_force_unmatched_name_falls_back() -> None:
+def test_perf_dispatch_force_unmatched_name_falls_back(monkeypatch) -> None:
     """When QD_PERFDISPATCH_FORCE names a non-existent impl, falls back to normal benchmarking."""
 
     class ImplEnum(IntEnum):
         impl_a = 0
 
-    with (
-        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent_impl"}),
-        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
-    ):
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent_impl"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
 
-        @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
-        def my_func(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    def my_func(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
 
-        @my_func.register
-        def my_func_impl_a(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.impl_a] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @my_func.register
+    def my_func_impl_a(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.impl_a] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        num_threads = 10
-        a = qd.ndarray(qd.i32, (num_threads,))
-        c = qd.ndarray(qd.i32, (len(ImplEnum),))
-        rand_state = qd.ndarray(qd.i32, (num_threads,))
+    num_threads = 10
+    a = qd.ndarray(qd.i32, (num_threads,))
+    c = qd.ndarray(qd.i32, (len(ImplEnum),))
+    rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-        c.fill(0)
-        a.fill(5)
-        my_func(a, c, rand_state=rand_state)
-        assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        assert c[ImplEnum.impl_a] == 1
+    c.fill(0)
+    a.fill(5)
+    my_func(a, c, rand_state=rand_state)
+    assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
+    assert c[ImplEnum.impl_a] == 1
 
 
 @test_utils.test()
-def test_perf_dispatch_force_multiple_dispatchers() -> None:
+def test_perf_dispatch_force_multiple_dispatchers(monkeypatch) -> None:
     """QD_PERFDISPATCH_FORCE can target multiple dispatchers independently."""
 
     class ImplEnum(IntEnum):
         v1 = 0
         v2 = 1
 
-    with (
-        mock.patch.object(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"}),
-        mock.patch.object(_perf_dispatch, "_ANY_FORCE_ACTIVE", True),
-    ):
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
 
-        @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
-        def op_a(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    def op_a(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
 
-        @op_a.register
-        def op_a_v1(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.v1] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @op_a.register
+    def op_a_v1(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.v1] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        @op_a.register
-        def op_a_v2(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.v2] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @op_a.register
+    def op_a_v2(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.v2] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
-        def op_b(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ): ...
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    def op_b(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ): ...
 
-        @op_b.register
-        def op_b_v1(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.v1] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @op_b.register
+    def op_b_v1(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.v1] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        @op_b.register
-        def op_b_v2(
-            a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
-        ) -> None:
-            B = a.shape[0]
-            for i_b in range(B):
-                a[i_b] = a[i_b] * i_b
-                c[ImplEnum.v2] = 1
-                do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+    @op_b.register
+    def op_b_v2(
+        a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
+    ) -> None:
+        B = a.shape[0]
+        for i_b in range(B):
+            a[i_b] = a[i_b] * i_b
+            c[ImplEnum.v2] = 1
+            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
 
-        num_threads = 10
-        a = qd.ndarray(qd.i32, (num_threads,))
-        c = qd.ndarray(qd.i32, (len(ImplEnum),))
-        rand_state = qd.ndarray(qd.i32, (num_threads,))
+    num_threads = 10
+    a = qd.ndarray(qd.i32, (num_threads,))
+    c = qd.ndarray(qd.i32, (len(ImplEnum),))
+    rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-        for _ in range(NUM_WARMUP + 5):
-            c.fill(0)
-            a.fill(5)
-            op_a(a, c, rand_state=rand_state)
-            assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-            assert c[ImplEnum.v1] == 0
-            assert c[ImplEnum.v2] == 1
+    for _ in range(NUM_WARMUP + 5):
+        c.fill(0)
+        a.fill(5)
+        op_a(a, c, rand_state=rand_state)
+        assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
+        assert c[ImplEnum.v1] == 0
+        assert c[ImplEnum.v2] == 1
 
-            c.fill(0)
-            a.fill(5)
-            op_b(a, c, rand_state=rand_state)
-            assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-            assert c[ImplEnum.v1] == 1
-            assert c[ImplEnum.v2] == 0
+        c.fill(0)
+        a.fill(5)
+        op_b(a, c, rand_state=rand_state)
+        assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
+        assert c[ImplEnum.v1] == 1
+        assert c[ImplEnum.v2] == 0
