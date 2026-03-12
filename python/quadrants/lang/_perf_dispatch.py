@@ -58,7 +58,10 @@ class PerformanceDispatcher(Generic[P, R]):
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
         self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
         self.repeat_after_seconds = repeat_after_seconds if repeat_after_seconds is not None else REPEAT_AFTER_SECONDS
-        sig = inspect.signature(fn, eval_str=True)
+        try:
+            sig = inspect.signature(fn, eval_str=True)
+        except (NameError, AttributeError) as e:
+            raise QuadrantsSyntaxError(f"Invalid type annotation: {e}") from e
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
             self._param_types[param_name] = param.annotation
@@ -99,7 +102,10 @@ class PerformanceDispatcher(Generic[P, R]):
         dispatch_impl_set = self._dispatch_impl_set
 
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
-            sig = inspect.signature(func, eval_str=True)
+            try:
+                sig = inspect.signature(func, eval_str=True)
+            except (NameError, AttributeError) as e:
+                raise QuadrantsSyntaxError(f"Invalid type annotation: {e}") from e
             log_str = f"perf_dispatch registering {func.__name__}"  # type: ignore
             _logging.debug(log_str)
             if QD_PERFDISPATCH_PRINT_DEBUG:

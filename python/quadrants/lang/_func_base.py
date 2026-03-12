@@ -99,7 +99,7 @@ class FuncBase:
         """
         try:
             sig = inspect.signature(self.func, eval_str=True)
-        except NameError as e:
+        except (NameError, AttributeError) as e:
             raise QuadrantsSyntaxError(f"Invalid type annotation of Taichi kernel: {e}") from e
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
@@ -192,7 +192,10 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = inspect.signature(fn, eval_str=True).parameters
+        try:
+            parameters = inspect.signature(fn, eval_str=True).parameters
+        except (NameError, AttributeError) as e:
+            raise QuadrantsSyntaxError(f"Invalid type annotation of Taichi kernel: {e}") from e
         for i, (parameter_name, parameter) in enumerate(parameters.items()):
             if is_dataclass(parameter.annotation):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
