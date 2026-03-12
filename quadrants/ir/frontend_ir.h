@@ -954,6 +954,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.stream_parallel_group_id = 0;
     }
   };
 
