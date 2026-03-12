@@ -419,3 +419,31 @@ def test_stream_with_ndarray():
     s.synchronize()
     assert np.allclose(arr.to_numpy(), 99.0)
     s.destroy()
+
+
+@test_utils.test()
+def test_stream_pool_reuse():
+    """Repeated stream_parallel invocations reuse pooled streams correctly."""
+    N = 128
+    a = qd.ndarray(qd.f32, shape=(N,))
+    b = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def parallel_fill(
+        x: qd.types.ndarray(dtype=qd.f32, ndim=1),
+        y: qd.types.ndarray(dtype=qd.f32, ndim=1),
+        val: qd.f32,
+    ):
+        with qd.stream_parallel():
+            for i in range(N):
+                x[i] = val
+        with qd.stream_parallel():
+            for i in range(N):
+                y[i] = val * 2.0
+
+    for iteration in range(5):
+        v = float(iteration + 1)
+        parallel_fill(a, b, v)
+        qd.sync()
+        assert np.allclose(a.to_numpy(), v), f"iteration {iteration}"
+        assert np.allclose(b.to_numpy(), v * 2.0), f"iteration {iteration}"
