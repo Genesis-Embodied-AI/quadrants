@@ -1,0 +1,213 @@
+quadrants.types.primitive_types
+===============================
+
+.. py:module:: quadrants.types.primitive_types
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.types.primitive_types.float16
+   quadrants.types.primitive_types.float32
+   quadrants.types.primitive_types.float64
+   quadrants.types.primitive_types.int8
+   quadrants.types.primitive_types.int16
+   quadrants.types.primitive_types.int32
+   quadrants.types.primitive_types.int64
+   quadrants.types.primitive_types.uint1
+   quadrants.types.primitive_types.uint8
+   quadrants.types.primitive_types.uint16
+   quadrants.types.primitive_types.uint32
+   quadrants.types.primitive_types.uint64
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.types.primitive_types.f16
+   quadrants.types.primitive_types.f32
+   quadrants.types.primitive_types.f64
+   quadrants.types.primitive_types.i8
+   quadrants.types.primitive_types.i16
+   quadrants.types.primitive_types.i32
+   quadrants.types.primitive_types.i64
+   quadrants.types.primitive_types.u1
+   quadrants.types.primitive_types.u8
+   quadrants.types.primitive_types.u16
+   quadrants.types.primitive_types.u32
+   quadrants.types.primitive_types.u64
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.types.primitive_types.ref
+
+
+Module Contents
+---------------
+
+.. py:class:: f16
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   16-bit precision floating point data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: f32
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   32-bit single precision floating point data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: f64
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   64-bit double precision floating point data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:data:: float16
+
+.. py:data:: float32
+
+.. py:data:: float64
+
+.. py:class:: i8
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   8-bit signed integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: i16
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   16-bit signed integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: i32
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   32-bit signed integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: i64
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   64-bit signed integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:data:: int8
+
+.. py:data:: int16
+
+.. py:data:: int32
+
+.. py:data:: int64
+
+.. py:class:: u1
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   1-bit unsigned integer data type. Same as booleans.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: u8
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   8-bit unsigned integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: u16
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   16-bit unsigned integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: u32
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   32-bit unsigned integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:class:: u64
+
+   Bases: :py:obj:`PrimitiveBase`
+
+
+   64-bit unsigned integer data type.
+
+
+   .. py:attribute:: cxx
+
+
+.. py:data:: uint1
+
+.. py:data:: uint8
+
+.. py:data:: uint16
+
+.. py:data:: uint32
+
+.. py:data:: uint64
+
+.. py:function:: ref(tp)
+
