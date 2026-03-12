@@ -62,6 +62,7 @@ from quadrants.lang.util import (
 from quadrants.types.enums import SNodeGradType
 from quadrants.types.ndarray_type import NdarrayType
 from quadrants.types.primitive_types import (
+    PrimitiveBase,
     all_types,
     f16,
     f32,
@@ -110,6 +111,8 @@ def expr_init(rhs):
         return dict((key, expr_init(val)) for key, val in rhs.items())
     if isinstance(rhs, _qd_core.DataTypeCxx):
         return rhs
+    if isinstance(rhs, type) and issubclass(rhs, PrimitiveBase):
+        return rhs.cxx
     if isinstance(rhs, _qd_core.Arch):
         return rhs
     if isinstance(rhs, _Ndrange):
