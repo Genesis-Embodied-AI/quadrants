@@ -66,8 +66,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
               executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
-          AMDGPUDriver::get_instance().memcpy_host_to_device(
-              (void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async(
+              (void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz,
+              active_stream);
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
