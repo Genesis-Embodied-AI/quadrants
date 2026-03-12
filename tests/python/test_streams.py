@@ -266,9 +266,8 @@ def test_concurrent_streams_with_events():
     assert np.isclose(a.to_numpy()[2], 12.0)
 
     speedup = serial_time / stream_time
-    print(f"serial={serial_time:.4f}s stream={stream_time:.4f}s speedup={speedup:.2f}x")
     if qd.lang.impl.current_cfg().arch in (qd.cuda, qd.amdgpu):
-        assert speedup > 1.3, f"Expected >1.3x speedup, got {speedup:.2f}x"
+        assert speedup > 1.5, f"Expected >1.5x speedup, got {speedup:.2f}x"
     else:
         assert speedup > 0.75, f"Expected >=0.75x (serial fallback), got {speedup:.2f}x"
 
