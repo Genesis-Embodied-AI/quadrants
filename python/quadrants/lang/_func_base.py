@@ -29,6 +29,7 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
+    get_func_signature,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import MatrixType
@@ -97,7 +98,7 @@ class FuncBase:
 
         Note: NOT in the hot path. Just run once, on function registration
         """
-        sig = inspect.signature(self.func)
+        sig = get_func_signature(self.func)
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
                 QuadrantsSyntaxError,
@@ -189,7 +190,7 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = inspect.signature(fn).parameters
+        parameters = get_func_signature(fn).parameters
         for i, (parameter_name, parameter) in enumerate(parameters.items()):
             if is_dataclass(parameter.annotation):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(

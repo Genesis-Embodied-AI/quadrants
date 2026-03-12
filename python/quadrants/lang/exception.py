@@ -57,6 +57,16 @@ class QuadrantsRuntimeTypeError(QuadrantsRuntimeError, TypeError):
         return QuadrantsRuntimeTypeError(f"Return (type={provided}) cannot be converted into required type {needed}")
 
 
+def get_func_signature(func):
+    """Call inspect.signature with eval_str=True, converting annotation errors to QuadrantsSyntaxError."""
+    import inspect
+
+    try:
+        return inspect.signature(func, eval_str=True)
+    except (NameError, AttributeError) as e:
+        raise QuadrantsSyntaxError(f"Invalid type annotation of Taichi kernel: {e}") from e
+
+
 def handle_exception_from_cpp(exc):
     if isinstance(exc, core.QuadrantsTypeError):
         return QuadrantsTypeError(str(exc))
