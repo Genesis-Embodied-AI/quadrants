@@ -53,6 +53,8 @@ class Func(FuncBase):
 
     def __call__(self: "Func", *py_args, **kwargs) -> Any:
         runtime = impl.get_runtime()
+        if impl.is_python_backend():
+            return self.func(*py_args, **kwargs)
         global_context = runtime._current_global_context
         current_kernel = global_context.current_kernel if global_context is not None else None
         py_args = self.fuse_args(
