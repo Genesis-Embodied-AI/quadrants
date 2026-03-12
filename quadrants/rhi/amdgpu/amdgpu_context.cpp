@@ -13,6 +13,8 @@
 namespace quadrants {
 namespace lang {
 
+thread_local void *AMDGPUContext::stream_ = nullptr;
+
 AMDGPUContext::AMDGPUContext()
     : driver_(AMDGPUDriver::get_instance_without_context()) {
   dev_count_ = 0;

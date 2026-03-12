@@ -532,7 +532,7 @@ void Program::stream_synchronize(uint64 stream_handle) {
   }
 #endif
 #ifdef QD_WITH_AMDGPU
-  if (compile_config().arch == Arch::amdgpu) {
+  if (compile_config().arch == Arch::amdgpu && stream_handle != 0) {
     AMDGPUDriver::get_instance().stream_synchronize(
         reinterpret_cast<void *>(stream_handle));
   }
