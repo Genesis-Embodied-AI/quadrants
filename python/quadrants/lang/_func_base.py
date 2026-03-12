@@ -1,6 +1,7 @@
 import ast
 import inspect
 import math
+import sys
 import textwrap
 import types
 import typing
@@ -60,6 +61,7 @@ MAX_ARG_NUM = 512
 _FLOAT, _INT, _UINT, _QD_ARRAY, _QD_ARRAY_WITH_GRAD = KernelBatchedArgType
 _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
+_is_cpython = sys.implementation.name == "cpython"
 
 
 class FuncBase:
@@ -455,11 +457,13 @@ class FuncBase:
         if needed_arg_type_id in primitive_types.integer_type_ids:
             if not isinstance(v, (int, np.integer)):
                 raise QuadrantsRuntimeTypeError.get((index,), needed_arg_type.to_string(), provided_arg_type)
+            v = int(v)
             if is_signed(cook_dtype(needed_arg_type)):
-                launch_ctx_buffer[_INT].append((index, int(v)))
+                launch_ctx_buffer[_INT].append((index, v))
             else:
-                launch_ctx_buffer[_UINT].append((index, int(v)))
-            return 1, False
+                launch_ctx_buffer[_UINT].append((index, v))
+            # See for reference: https://docs.python.org/3/c-api/long.html#c.PyLong_FromLong
+            return 1, _is_cpython and -5 <= v <= 256
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
