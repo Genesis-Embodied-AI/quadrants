@@ -48,6 +48,9 @@ def unpickle(pkl):
         element_type = types.matrix(element_shape[0], element_shape[1], dtype)
         res = impl.ndarray(element_type, shape=shape)
     else:
-        raise NotImplementedError(f"Unhandled element shape len {len(element_shape)}")
+        raise NotImplementedError(
+            f"Unpickling element_shape of length {len(element_shape)} is not supported. "
+            f"Supported shapes: () for scalars, (n,) for vectors, (n, m) for matrices."
+        )
     res.from_numpy(pkl["data"])
     return res
