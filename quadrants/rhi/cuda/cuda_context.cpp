@@ -180,13 +180,10 @@ void CUDAContext::launch(void *func,
 }
 
 CUDAContext::~CUDAContext() {
-  // TODO: restore these?
-  /*
-  CUDADriver::get_instance().cuMemFree(context_buffer);
-  for (auto cudaModule: cudaModules)
-      CUDADriver::get_instance().cuModuleUnload(cudaModule);
-  CUDADriver::get_instance().cuCtxDestroy(context);
-  */
+  for (auto *s : stream_pool_) {
+    driver_.stream_destroy(s);
+  }
+  stream_pool_.clear();
 }
 
 CUDAContext &CUDAContext::get_instance() {

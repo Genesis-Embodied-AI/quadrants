@@ -127,15 +127,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         i++;
       }
 
-      // Create one stream per unique group ID. Streams are created/destroyed
-      // per launch; a stream pool could reduce overhead for hot loops.
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;
         if (stream_by_id.find(sid) == stream_by_id.end()) {
-          void *s = nullptr;
-          AMDGPUDriver::get_instance().stream_create(&s, 0);
-          stream_by_id[sid] = s;
+          stream_by_id[sid] = AMDGPUContext::get_instance().acquire_stream();
         }
       }
 
@@ -155,7 +151,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         AMDGPUDriver::get_instance().stream_synchronize(s);
       }
       for (auto &[sid, s] : stream_by_id) {
-        AMDGPUDriver::get_instance().stream_destroy(s);
+        AMDGPUContext::get_instance().release_stream(s);
       }
 
       AMDGPUContext::get_instance().set_stream(active_stream);
