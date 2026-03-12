@@ -26,6 +26,7 @@ PER_AMDGPU_FUNCTION(context_get_current, hipCtxGetCurrent, void **);
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_create, hipStreamCreate, void **, uint32);
+PER_AMDGPU_FUNCTION(stream_destroy, hipStreamDestroy, void *);
 
 // Memory management
 PER_AMDGPU_FUNCTION(memcpy_host_to_device,
@@ -69,6 +70,8 @@ PER_AMDGPU_FUNCTION(memcpy_device_to_host_async,
                     std::size_t,
                     void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
+// hipMallocAsync/hipFreeAsync require ROCm >= 5.4
+PER_AMDGPU_FUNCTION(malloc_async, hipMallocAsync, void **, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc_managed,
                     hipMallocManaged,
                     void **,
@@ -76,6 +79,7 @@ PER_AMDGPU_FUNCTION(malloc_managed,
                     uint32);
 PER_AMDGPU_FUNCTION(memset, hipMemset, void *, uint8, std::size_t);
 PER_AMDGPU_FUNCTION(mem_free, hipFree, void *);
+PER_AMDGPU_FUNCTION(mem_free_async, hipFreeAsync, void *, void *);
 PER_AMDGPU_FUNCTION(mem_get_info, hipMemGetInfo, std::size_t *, std::size_t *);
 PER_AMDGPU_FUNCTION(mem_get_attribute,
                     hipPointerGetAttribute,
@@ -121,6 +125,11 @@ PER_AMDGPU_FUNCTION(kernel_get_occupancy,
 
 // Stream management
 PER_AMDGPU_FUNCTION(stream_synchronize, hipStreamSynchronize, void *);
+PER_AMDGPU_FUNCTION(stream_wait_event,
+                    hipStreamWaitEvent,
+                    void *,
+                    void *,
+                    uint32);
 
 // Event management
 PER_AMDGPU_FUNCTION(event_create, hipEventCreateWithFlags, void **, uint32);
