@@ -1113,6 +1113,8 @@ class ASTBuilder {
   }
 
   void begin_stream_parallel() {
+    QD_ERROR_IF(current_stream_parallel_group_id_ != 0,
+                "Nested stream_parallel blocks are not supported");
     current_stream_parallel_group_id_ = ++stream_parallel_group_counter_;
   }
 
