@@ -89,8 +89,7 @@ class PerformanceDispatcher(Generic[P, R]):
         for param_name, param in sig.parameters.items():
             self._param_types[param_name] = param.annotation
         self._get_geometry_hash: Callable[P, int] = get_geometry_hash
-        self._dispatch_impl_set: set[DispatchImpl] = set()
-        self._dispatch_impl_list: list[DispatchImpl] = []
+        self._dispatch_impls: list[DispatchImpl] = []
         self._forced_impl: DispatchImpl | None = None
         self._force_resolved: bool = False
         self._trial_count_by_dispatch_impl_by_geometry_hash: dict[int, dict[DispatchImpl, int]] = defaultdict(
@@ -125,8 +124,6 @@ class PerformanceDispatcher(Generic[P, R]):
             - in this case, check the shape of the argument in question, and return False if out of spec for this
               implementation
         """
-        dispatch_impl_set = self._dispatch_impl_set
-
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
             sig = inspect.signature(func)
             log_str = f"perf_dispatch '{self._name}': registered '{func.__name__}'"  # type: ignore
@@ -148,8 +145,7 @@ class PerformanceDispatcher(Generic[P, R]):
                 )
 
             dispatch_impl = DispatchImpl(implementation1=func, is_compatible=is_compatible)
-            dispatch_impl_set.add(dispatch_impl)
-            self._dispatch_impl_list.append(dispatch_impl)
+            self._dispatch_impls.append(dispatch_impl)
             return dispatch_impl
 
         if implementation is not None:
@@ -165,7 +161,7 @@ class PerformanceDispatcher(Generic[P, R]):
         if not _ANY_FORCE_ACTIVE:
             return
 
-        available = [d.get_implementation2().__name__ for d in self._dispatch_impl_list]
+        available = [d.get_implementation2().__name__ for d in self._dispatch_impls]
         avail_str = ", ".join(f"'{n}'" for n in available)
         log_str = f"perf_dispatch '{self._name}': available implementations: [{avail_str}]"
         _logging.debug(log_str)
@@ -173,7 +169,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
         forced_name = _FORCE_MAP.get(self._name)
         if forced_name is not None:
-            for d in self._dispatch_impl_list:
+            for d in self._dispatch_impls:
                 if d.get_implementation2().__name__ == forced_name:
                     self._forced_impl = d
                     print(f"perf_dispatch '{self._name}': forced to '{forced_name}' via QD_PERFDISPATCH_FORCE")
@@ -186,7 +182,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
     def _get_compatible_functions(self, *args, **kwargs) -> set[DispatchImpl]:
         compatible_set = set()
-        for dispatch_impl in self._dispatch_impl_set:
+        for dispatch_impl in self._dispatch_impls:
             if dispatch_impl.is_compatible and not dispatch_impl.is_compatible(*args, **kwargs):
                 continue
             compatible_set.add(dispatch_impl)
@@ -221,7 +217,7 @@ class PerformanceDispatcher(Generic[P, R]):
         fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
         underlying = fastest_dispatch.get_implementation2()
-        log_str = f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impl_set)} registered functions."
+        log_str = f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impls)} registered functions."
         _logging.debug(log_str)
         if QD_PERFDISPATCH_PRINT_DEBUG:
             print(log_str)
@@ -292,7 +288,7 @@ class PerformanceDispatcher(Generic[P, R]):
             assert dispatch_impl_ is not None
             log_str = (
                 f"perf_dispatch '{self._name}': chose '{dispatch_impl_.get_implementation2().__name__}' "
-                f"out of {len(self._dispatch_impl_set)} registered functions. Only 1 was compatible."
+                f"out of {len(self._dispatch_impls)} registered functions. Only 1 was compatible."
             )
             _logging.debug(log_str)
             if QD_PERFDISPATCH_PRINT_DEBUG:
