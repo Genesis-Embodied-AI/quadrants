@@ -49,6 +49,8 @@ class Ndarray:
         impl.get_runtime().ndarrays.add(self)
 
     def __reduce__(self):
+        """Pickle support. Gradients (``.grad``) are not preserved because
+        they are considered transient computation state."""
         return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
