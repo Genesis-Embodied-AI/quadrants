@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Performance Dispatch &#8212; Quadrants 0.4.4 documentation</title>
+    <title>Performance Dispatch &#8212; Quadrants 0.4.5 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=90733dfc"></script>
+    <script src="../../_static/documentation_options.js?v=340bb9e5"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -59,10 +59,10 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Quirks" href="quirks.html" />
-    <link rel="prev" title="Compound types" href="compound_types.html" />
+    <link rel="prev" title="Python backend" href="python_backend.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.4.4" />
+  <meta name="docsearch:version" content="0.4.5" />
   </head>
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.4.4 documentation</p>
+    <p class="title logo__title">Quadrants 0.4.5 documentation</p>
   
 </a></div>
     
@@ -283,6 +283,7 @@
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 
 
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Performance Dispatch</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
@@ -356,7 +357,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">my_op</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">]):</span> <span class="o">...</span>
 </pre></div>
 </div>
-<p>Then register concrete implementations using <code class="docutils literal notranslate"><span class="pre">&#64;my_op.register</span></code>. Each implementation must have the same parameter names as the prototype:</p>
+<p>Then register concrete implementations using <code class="docutils literal notranslate"><span class="pre">&#64;my_op.register</span></code>. Each implementation must have the same parameter names as the prototype. Note that <code class="docutils literal notranslate"><span class="pre">&#64;my_op.register</span></code> replaces the decorated name with a wrapper object — registered implementations can still be called directly (bypassing the dispatcher) if needed.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_op_v1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -366,19 +367,21 @@
 <span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_op_v2</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="c1"># will run the same speed as the other version, but just an example</span>
+    <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>Call the meta-function as usual:</p>
+<p>Call the meta-function as though calling a standard Quadrants kernel:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">my_op</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>On the first several calls, <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used for all subsequent calls.</p>
+<p>On the first several calls, <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used until re-evaluation is triggered (see <a class="reference internal" href="#tuning-parameters">Tuning parameters</a>).</p>
 </section>
 <section id="decorator-order">
 <h2>Decorator order<a class="headerlink" href="#decorator-order" title="Link to this heading">#</a></h2>
-<p>When registering a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, the <code class="docutils literal notranslate"><span class="pre">&#64;my_op.register</span></code> decorator must be the <strong>outermost</strong> (topmost) decorator:</p>
+<p>When registering a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, the <code class="docutils literal notranslate"><span class="pre">&#64;my_op.register</span></code> decorator must be the <strong>topmost</strong> decorator:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Correct</span>
 <span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
@@ -393,11 +396,24 @@
 </section>
 <section id="registering-plain-python-functions">
 <h2>Registering plain Python functions<a class="headerlink" href="#registering-plain-python-functions" title="Link to this heading">#</a></h2>
-<p>Implementations do not have to be <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> — plain Python functions work too, and you can mix kernel and Python implementations under the same meta-function:</p>
+<p>Implementations do not have to be <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. Plain Python functions work too. You can mix kernel and Python implementations under the same meta-function:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_op_python</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
         <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>
+</pre></div>
+</div>
+</section>
+<section id="return-values">
+<h2>Return values<a class="headerlink" href="#return-values" title="Link to this heading">#</a></h2>
+<p>Implementations are not limited to returning <code class="docutils literal notranslate"><span class="pre">None</span></code>. The return value of whichever implementation runs is passed through to the caller:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@my_op</span><span class="o">.</span><span class="n">register</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_op_python</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="n">count</span> <span class="o">=</span> <span class="n">my_op</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># receives the return value from whichever impl runs</span>
 </pre></div>
 </div>
 </section>
@@ -485,6 +501,7 @@
 <ul class="simple">
 <li><p>All registered implementations <strong>must produce identical results</strong>, including side effects. <code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> does not verify this — incorrect results will be silently returned if implementations disagree.</p></li>
 <li><p>Only one implementation runs per call. Implementations do not need to be idempotent.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">perf_dispatch</span></code> is <strong>not thread-safe</strong>. Do not call the same meta-function concurrently from multiple threads.</p></li>
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">QD_PERFDISPATCH_PRINT_DEBUG=1</span></code> to print debug messages showing which implementation was registered and which was selected.</p></li>
 </ul>
 </section>
@@ -502,13 +519,15 @@
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">transform_v1</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">3.0</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>
 
 <span class="nd">@transform</span><span class="o">.</span><span class="n">register</span>
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">transform_v2</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="c1"># will run the same speed as the other version, but just an example</span>
+    <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span>
 
 <span class="n">data</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
@@ -531,12 +550,12 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="compound_types.html"
+       href="python_backend.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Compound types</p>
+        <p class="prev-next-title">Python backend</p>
       </div>
     </a>
     <a class="right-next"
@@ -570,6 +589,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic usage</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#decorator-order">Decorator order</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#registering-plain-python-functions">Registering plain Python functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#return-values">Return values</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compatibility-filtering">Compatibility filtering</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#geometry-hash">Geometry hash</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tuning-parameters">Tuning parameters</a></li>

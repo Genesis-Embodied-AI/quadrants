@@ -11,7 +11,7 @@ Define a meta-function with `@qd.perf_dispatch`. The function body should be emp
 def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 ```
 
-Then register concrete implementations using `@my_op.register`. Each implementation must have the same parameter names as the prototype:
+Then register concrete implementations using `@my_op.register`. Each implementation must have the same parameter names as the prototype. Note that `@my_op.register` replaces the decorated name with a wrapper object — registered implementations can still be called directly (bypassing the dispatcher) if needed.
 
 ```python
 @my_op.register
@@ -23,21 +23,23 @@ def my_op_v1(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> 
 @my_op.register
 @qd.kernel
 def my_op_v2(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(a.shape[0]):
-        b[i] = a[i] + a[i]
+    i = 0
+    # will run the same speed as the other version, but just an example
+    while i < a.shape[0]:
+        b[i] = a[i] << 1
 ```
 
-Call the meta-function as usual:
+Call the meta-function as though calling a standard Quadrants kernel:
 
 ```python
 my_op(a, b)
 ```
 
-On the first several calls, `perf_dispatch` will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used for all subsequent calls.
+On the first several calls, `perf_dispatch` will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used until re-evaluation is triggered (see [Tuning parameters](#tuning-parameters)).
 
 ## Decorator order
 
-When registering a `@qd.kernel`, the `@my_op.register` decorator must be the **outermost** (topmost) decorator:
+When registering a `@qd.kernel`, the `@my_op.register` decorator must be the **topmost** decorator:
 
 ```python
 # Correct
@@ -53,13 +55,27 @@ def impl(...) -> None: ...
 
 ## Registering plain Python functions
 
-Implementations do not have to be `@qd.kernel` — plain Python functions work too, and you can mix kernel and Python implementations under the same meta-function:
+Implementations do not have to be `@qd.kernel`. Plain Python functions work too. You can mix kernel and Python implementations under the same meta-function:
 
 ```python
 @my_op.register
 def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> None:
     for i in range(a.shape[0]):
         b[i] = a[i] * 2
+```
+
+## Return values
+
+Implementations are not limited to returning `None`. The return value of whichever implementation runs is passed through to the caller:
+
+```python
+@my_op.register
+def my_op_python(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> int:
+    for i in range(a.shape[0]):
+        b[i] = a[i] * 2
+    return a.shape[0]
+
+count = my_op(a, b)  # receives the return value from whichever impl runs
 ```
 
 ## Compatibility filtering
@@ -129,6 +145,7 @@ def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 
 - All registered implementations **must produce identical results**, including side effects. `perf_dispatch` does not verify this — incorrect results will be silently returned if implementations disagree.
 - Only one implementation runs per call. Implementations do not need to be idempotent.
+- `perf_dispatch` is **not thread-safe**. Do not call the same meta-function concurrently from multiple threads.
 - Set `QD_PERFDISPATCH_PRINT_DEBUG=1` to print debug messages showing which implementation was registered and which was selected.
 
 ## Complete example
@@ -146,13 +163,15 @@ def transform(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1
 @qd.kernel
 def transform_v1(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]) -> None:
     for i in range(data.shape[0]):
-        out[i] = data[i] * 3.0
+        out[i] = data[i] * 2
 
 @transform.register
 @qd.kernel
 def transform_v2(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(data.shape[0]):
-        out[i] = data[i] + data[i] + data[i]
+    i = 0
+    # will run the same speed as the other version, but just an example
+    while i < data.shape[0]:
+        out[i] = data[i] << 1
 
 data = qd.ndarray(qd.f32, (1024,))
 out = qd.ndarray(qd.f32, (1024,))
