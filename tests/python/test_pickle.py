@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 
 import quadrants as qd
+from quadrants.types.enums import Layout
 
 from tests import test_utils
 
@@ -98,3 +99,15 @@ def test_pickle_scalar_ndarray_preserves_zeros():
 
     np.testing.assert_array_equal(b.to_numpy(), np.zeros((5, 5), dtype=np.float32))
     assert b.shape == a.shape
+
+
+@test_utils.test()
+def test_pickle_preserves_layout():
+    a = qd.ndarray(qd.f32, (3,))
+    a.layout = Layout.SOA
+    a[0] = 1.0
+
+    b = _roundtrip(a)
+
+    assert b.layout == Layout.SOA
+    np.testing.assert_allclose(b.to_numpy(), a.to_numpy())

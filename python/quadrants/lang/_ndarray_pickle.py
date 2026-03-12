@@ -2,10 +2,14 @@
 from quadrants import types
 from quadrants.lang import impl
 from quadrants.types import primitive_types
+from quadrants.types.enums import Layout
 
 _DTYPE_NAMES = ["f16", "f32", "f64", "i8", "i16", "i32", "i64", "u1", "u8", "u16", "u32", "u64"]
 _NAME_TO_DTYPE = {name: getattr(primitive_types, name) for name in _DTYPE_NAMES}
 _DTYPE_TO_NAME = {dt: name for name, dt in _NAME_TO_DTYPE.items()}
+
+_LAYOUT_TO_NAME = {Layout.AOS: "AOS", Layout.SOA: "SOA"}
+_NAME_TO_LAYOUT = {name: layout for name, layout in _LAYOUT_TO_NAME.items()}
 
 
 def serialize(ndarray):
@@ -19,11 +23,15 @@ def serialize(ndarray):
     dtype_name = _DTYPE_TO_NAME.get(ndarray.dtype)
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
+    layout_name = _LAYOUT_TO_NAME.get(ndarray.layout)
+    if layout_name is None:
+        raise TypeError(f"Cannot pickle ndarray with layout {ndarray.layout!r}")
     return {
         "version": 1,
         "shape": ndarray.shape,
         "element_type": dtype_name,
         "element_shape": ndarray.element_shape,
+        "layout": layout_name,
         "data": ndarray.to_numpy(),
     }
 
@@ -59,5 +67,11 @@ def unpickle(pkl):
             f"Unpickling element_shape of length {len(element_shape)} is not supported. "
             f"Supported shapes: () for scalars, (n,) for vectors, (n, m) for matrices."
         )
+    layout_name = pkl.get("layout")
+    if layout_name is not None:
+        layout = _NAME_TO_LAYOUT.get(layout_name)
+        if layout is None:
+            raise ValueError(f"Unknown layout '{layout_name}' during unpickle")
+        res.layout = layout
     res.from_numpy(pkl["data"])
     return res
