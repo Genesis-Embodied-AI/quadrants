@@ -143,6 +143,7 @@ def my_op(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]): ...
 
 - All registered implementations **must produce identical results**, including side effects. `perf_dispatch` does not verify this — incorrect results will be silently returned if implementations disagree.
 - Only one implementation runs per call. Implementations do not need to be idempotent.
+- `perf_dispatch` is **not thread-safe**. Do not call the same meta-function concurrently from multiple threads.
 - Set `QD_PERFDISPATCH_PRINT_DEBUG=1` to print debug messages showing which implementation was registered and which was selected.
 
 ## Complete example
