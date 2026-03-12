@@ -114,6 +114,8 @@ def _clamp_unsigned_to_range(npty, val: np.integer | int) -> np.integer | int:
 
 
 def make_constant_expr(val, dtype):
+    # Normalise dtype once up front so the per-branch fallbacks only need to
+    # cook the runtime defaults (default_fp / default_ip).
     if dtype is not None:
         dtype = cook_dtype(dtype)
 
