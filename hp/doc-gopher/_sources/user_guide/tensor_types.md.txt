@@ -1,11 +1,19 @@
 # Tensor types
 
-There are three core tensor types:
+There are two core tensor types:
 - ndarray (`qd.ndarray`)
-- global field (`qd.field`, referenced as a global variable, from a kernel)
-- field arg (`qd.field`, passed into a kernel as a parameter)
+- field (`qd.field`)
 
-## Example of each tensor type
+In addition, when used from a qd kernel, fields can be:
+- referenced as a global variable
+- passed into the kernel as a parameter
+
+For the remainder of this doc, we will compare three approaches, which we will refer to as:
+- "ndarrays": always passed into kernels as parameters
+- "global fields": referenced from kernel as global variable
+- "field args": passed into the parameter as a kernel
+
+## Example of each tensor approach
 
 Let's first give an example of using each:
 
@@ -55,13 +63,13 @@ def f1(p1: qd.Template) -> None:
 ```
 In this case, we provide the field to the kernel via a parameter, with typing type of `qd.Template`.
 
-## Comparison of tensor types
+## Comparison of tensor approaches
 
-| Tensor type | Launch latency | Runtime speed |Resizable without recompile? [*1]|Encapsulation?[*2]|
+| Tensor approach | Launch latency | Runtime speed |Resizable without recompile? [*1]|Encapsulation?[*2]|
 |-------------|----------------|-------------|----------------------------|----------------|
 | ndarray     | Slowest        | Slower      | yes | Yes |
 | global field | Fastest       | Fast        | no | No |
-| field arg.  | Medium          | Fast       | no | Yes |
+| field arg  | Medium          | Fast       | no | Yes |
 
 - [*1] We'll discuss this in 'Under the covers' below
 - [*2] Will be discussed in 'Encapsulation' below
@@ -70,12 +78,12 @@ Let's define each of these column headings.
 
 ### Under the covers summary
 
-When running a kernel, two things need to happen:
+When running a kernel, three things need to happen:
 - the kernel needs to be compiled
-- the parameters need to be sent to the GPU
-- the kernel launch needs to be sent to the GPU
+- the parameters need to be sent to the GPU (contributes to kernel launch latency)
+- the kernel launch needs to be sent to the GPU (contributes to kernel launch latency)
 
-Compilation speed is not affected by the tensor type. However:
+Looking at kernel launch latency:
 - field args and ndarrays both are passed in to the GPU as parameters, and hence increase launch latency
 - ndarrays have more parameter processing than field args, and have the biggest launch latency
 
@@ -87,10 +95,8 @@ Each tensor type is bound to the compiled kernel in some way:
 - ndarrays are only bound by:
     - the data type (`qd.i32` vs `qd.f32` for example)
     - the number of dimensions
-    - you cannot pass in an ndarray with different data type or number of dimensions into the kernel, however
-    - ... no recompilation is needed for:
-         - resizing the ndarray, or
-         - passing in a different ndarray, that matches data type and number of dimensions
+- Each call with an ndarray of a different data type or number of dimensions, that hasn't already been compiled for, will trigger a recompile.
+- However, no recompilation is needed for passing in a different ndarray, that matches data type and number of dimensions.
 
 ### Encapsulation
 
@@ -106,4 +112,4 @@ For kernels that run for sufficiently long, the launch latency will be entirely 
 
 - for maximum flexibility to resize tensors, use ndarrays
 - for maximum runtime speed, with good encapsulation, use field args
-- if the kernels are very short, for maximum speed you might need to use global fields, but this comes at the expense of good encapsulation
+- if the kernels are very short, for maximum speed you might need to use global fields, but this comes at the expense of poor encapsulation

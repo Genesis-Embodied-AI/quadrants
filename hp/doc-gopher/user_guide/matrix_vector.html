@@ -353,7 +353,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="matrix-and-vector">
 <h1>Matrix and Vector<a class="headerlink" href="#matrix-and-vector" title="Link to this heading">#</a></h1>
-<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small (no more than 32 elements total).</p>
+<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).</p>
 <p><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> is a special case of <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> with one column.</p>
 <section id="creating-vectors-and-matrices-in-kernels">
 <h2>Creating vectors and matrices in kernels<a class="headerlink" href="#creating-vectors-and-matrices-in-kernels" title="Link to this heading">#</a></h2>
@@ -375,11 +375,23 @@
 
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
+<span class="c1"># first define the type</span>
+<span class="n">vec3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+
 <span class="c1"># A field of 100 3D vectors</span>
-<span class="n">positions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+<span class="n">positions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">vec3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># or for ndarray</span>
+<span class="n">positions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">vec3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># first define the type</span>
+<span class="n">mat3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 
 <span class="c1"># A field of 100 3x3 matrices</span>
-<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">mat3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># or for ndarray</span>
+<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">mat3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">initialize</span><span class="p">(</span><span class="n">pos</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">rot</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

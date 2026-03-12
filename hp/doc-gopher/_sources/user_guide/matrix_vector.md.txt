@@ -1,6 +1,6 @@
 # Matrix and Vector
 
-Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small (no more than 32 elements total).
+Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).
 
 `qd.Vector` is a special case of `qd.Matrix` with one column.
 
@@ -26,11 +26,23 @@ import quadrants as qd
 
 qd.init(arch=qd.gpu)
 
+# first define the type
+vec3f = qd.types.vector(3, qd.f32)
+
 # A field of 100 3D vectors
-positions = qd.Vector.field(3, qd.f32, shape=(100,))
+positions = qd.field(vec3f, shape=(100,))
+
+# or for ndarray
+positions = qd.ndarray(vec3f, shape=(100,))
+
+# first define the type
+mat3f = qd.types.matrix(3, 3, qd.f32)
 
 # A field of 100 3x3 matrices
-rotations = qd.Matrix.field(3, 3, qd.f32, shape=(100,))
+rotations = qd.field(mat3f, shape=(100,))
+
+# or for ndarray
+rotations = qd.ndarray(mat3f, shape=(100,))
 
 @qd.kernel
 def initialize(pos: qd.Template, rot: qd.Template) -> None:

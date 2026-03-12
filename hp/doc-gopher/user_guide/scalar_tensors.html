@@ -354,19 +354,23 @@
   <section class="tex2jax_ignore mathjax_ignore" id="scalar-tensors">
 <h1>Scalar tensors<a class="headerlink" href="#scalar-tensors" title="Link to this heading">#</a></h1>
 <p>A scalar tensor is a field with zero dimensions — it holds a single value. This is useful for accumulators, counters, or any kernel that needs to produce a single output value.</p>
-<p>Scalar tensors only work with fields, not ndarrays (an ndarray requires at least one dimension).</p>
+<p>Scalar tensors can be used with both fields and ndarrays.</p>
 <section id="creating-a-scalar-tensor">
 <h2>Creating a scalar tensor<a class="headerlink" href="#creating-a-scalar-tensor" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># field</span>
+<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+
+<span class="c1"># ndarray</span>
+<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
 </pre></div>
 </div>
 </section>
 <section id="accessing-the-value">
 <h2>Accessing the value<a class="headerlink" href="#accessing-the-value" title="Link to this heading">#</a></h2>
-<p>Index a scalar tensor with <code class="docutils literal notranslate"><span class="pre">[None]</span></code>:</p>
+<p>Index a scalar tensor with <code class="docutils literal notranslate"><span class="pre">[()]</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">increment</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">a</span><span class="p">[()]</span> <span class="o">+=</span> <span class="mi">1</span>
 </pre></div>
 </div>
 </section>
@@ -382,19 +386,19 @@
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">sum_range</span><span class="p">(</span><span class="n">N</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[()],</span> <span class="n">i</span><span class="p">)</span>
 
-<span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">total</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="n">sum_range</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;sum:&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">])</span>  <span class="c1"># 4950</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;sum:&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">[()])</span>  <span class="c1"># 4950</span>
 </pre></div>
 </div>
 </section>
 <section id="reading-from-python">
 <h2>Reading from Python<a class="headerlink" href="#reading-from-python" title="Link to this heading">#</a></h2>
-<p>From Python, you can read and write the value using the same <code class="docutils literal notranslate"><span class="pre">[None]</span></code> indexing:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>       <span class="c1"># write</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">total</span><span class="p">[</span><span class="kc">None</span><span class="p">])</span>    <span class="c1"># read</span>
+<p>From Python, you can read and write the value using the same <code class="docutils literal notranslate"><span class="pre">[()]</span></code> indexing:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">total</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>       <span class="c1"># write</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">total</span><span class="p">[()])</span>    <span class="c1"># read</span>
 </pre></div>
 </div>
 </section>

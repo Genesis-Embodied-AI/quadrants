@@ -3,7 +3,7 @@
 ## Installation
 
 ### Pre-requisites
-- a supported platform (MacOS Arm64, Linux x64, Windows x64), see [Supported systems](./supported_systems.md)
+- a supported platform (MacOS ARM64, Linux x64, Windows x64), see [Supported systems](./supported_systems.md)
 - a supported Python version installed, see [Supported systems](./supported_systems.md)
 - optionally, a supported GPU, see [Supported systems](./supported_systems.md)
 
@@ -87,7 +87,7 @@ import quadrants as qd
 
 qd.init(arch=qd.gpu)
 ```
-The `arch` parameter lets you choose between `gpu`, `cpu`, `metal`, `cuda`, `vulkan`.
+The `arch` parameter lets you choose between `gpu`, `cpu`, `metal`, `cuda`, `vulkan`, `amdgpu`, `x64`, `arm64`.
 - using `qd.gpu` will use the first GPU it finds
 
 We'll also need to create a quadrants ndarray:

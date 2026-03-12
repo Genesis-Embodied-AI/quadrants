@@ -353,14 +353,24 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="tensor-types">
 <h1>Tensor types<a class="headerlink" href="#tensor-types" title="Link to this heading">#</a></h1>
-<p>There are three core tensor types:</p>
+<p>There are two core tensor types:</p>
 <ul class="simple">
 <li><p>ndarray (<code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>)</p></li>
-<li><p>global field (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, referenced as a global variable, from a kernel)</p></li>
-<li><p>field arg (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, passed into a kernel as a parameter)</p></li>
+<li><p>field (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>)</p></li>
 </ul>
-<section id="example-of-each-tensor-type">
-<h2>Example of each tensor type<a class="headerlink" href="#example-of-each-tensor-type" title="Link to this heading">#</a></h2>
+<p>In addition, when used from a qd kernel, fields can be:</p>
+<ul class="simple">
+<li><p>referenced as a global variable</p></li>
+<li><p>passed into the kernel as a parameter</p></li>
+</ul>
+<p>For the remainder of this doc, we will compare three approaches, which we will refer to as:</p>
+<ul class="simple">
+<li><p>“ndarrays”: always passed into kernels as parameters</p></li>
+<li><p>“global fields”: referenced from kernel as global variable</p></li>
+<li><p>“field args”: passed into the parameter as a kernel</p></li>
+</ul>
+<section id="example-of-each-tensor-approach">
+<h2>Example of each tensor approach<a class="headerlink" href="#example-of-each-tensor-approach" title="Link to this heading">#</a></h2>
 <p>Let’s first give an example of using each:</p>
 <section id="ndarray">
 <h3>NDArray<a class="headerlink" href="#ndarray" title="Link to this heading">#</a></h3>
@@ -408,11 +418,11 @@
 <p>In this case, we provide the field to the kernel via a parameter, with typing type of <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>.</p>
 </section>
 </section>
-<section id="comparison-of-tensor-types">
-<h2>Comparison of tensor types<a class="headerlink" href="#comparison-of-tensor-types" title="Link to this heading">#</a></h2>
+<section id="comparison-of-tensor-approaches">
+<h2>Comparison of tensor approaches<a class="headerlink" href="#comparison-of-tensor-approaches" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>Tensor type</p></th>
+<tr class="row-odd"><th class="head"><p>Tensor approach</p></th>
 <th class="head"><p>Launch latency</p></th>
 <th class="head"><p>Runtime speed</p></th>
 <th class="head"><p>Resizable without recompile? [*1]</p></th>
@@ -432,7 +442,7 @@
 <td><p>no</p></td>
 <td><p>No</p></td>
 </tr>
-<tr class="row-even"><td><p>field arg.</p></td>
+<tr class="row-even"><td><p>field arg</p></td>
 <td><p>Medium</p></td>
 <td><p>Fast</p></td>
 <td><p>no</p></td>
@@ -448,13 +458,13 @@
 <p>Let’s define each of these column headings.</p>
 <section id="under-the-covers-summary">
 <h3>Under the covers summary<a class="headerlink" href="#under-the-covers-summary" title="Link to this heading">#</a></h3>
-<p>When running a kernel, two things need to happen:</p>
+<p>When running a kernel, three things need to happen:</p>
 <ul class="simple">
 <li><p>the kernel needs to be compiled</p></li>
-<li><p>the parameters need to be sent to the GPU</p></li>
-<li><p>the kernel launch needs to be sent to the GPU</p></li>
+<li><p>the parameters need to be sent to the GPU (contributes to kernel launch latency)</p></li>
+<li><p>the kernel launch needs to be sent to the GPU (contributes to kernel launch latency)</p></li>
 </ul>
-<p>Compilation speed is not affected by the tensor type. However:</p>
+<p>Looking at kernel launch latency:</p>
 <ul class="simple">
 <li><p>field args and ndarrays both are passed in to the GPU as parameters, and hence increase launch latency</p></li>
 <li><p>ndarrays have more parameter processing than field args, and have the biggest launch latency</p></li>
@@ -475,15 +485,10 @@
 <ul>
 <li><p>the data type (<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> vs <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> for example)</p></li>
 <li><p>the number of dimensions</p></li>
-<li><p>you cannot pass in an ndarray with different data type or number of dimensions into the kernel, however</p></li>
-<li><p>… no recompilation is needed for:</p>
-<ul>
-<li><p>resizing the ndarray, or</p></li>
-<li><p>passing in a different ndarray, that matches data type and number of dimensions</p></li>
 </ul>
 </li>
-</ul>
-</li>
+<li><p>Each call with an ndarray of a different data type or number of dimensions, that hasn’t already been compiled for, will trigger a recompile.</p></li>
+<li><p>However, no recompilation is needed for passing in a different ndarray, that matches data type and number of dimensions.</p></li>
 </ul>
 </section>
 <section id="encapsulation">
@@ -501,7 +506,7 @@
 <ul class="simple">
 <li><p>for maximum flexibility to resize tensors, use ndarrays</p></li>
 <li><p>for maximum runtime speed, with good encapsulation, use field args</p></li>
-<li><p>if the kernels are very short, for maximum speed you might need to use global fields, but this comes at the expense of good encapsulation</p></li>
+<li><p>if the kernels are very short, for maximum speed you might need to use global fields, but this comes at the expense of poor encapsulation</p></li>
 </ul>
 </section>
 </section>
@@ -553,13 +558,13 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-of-each-tensor-type">Example of each tensor type</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-of-each-tensor-approach">Example of each tensor approach</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray">NDArray</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#global-field">Global field</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#field-args">Field args</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#comparison-of-tensor-types">Comparison of tensor types</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#comparison-of-tensor-approaches">Comparison of tensor approaches</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-covers-summary">Under the covers summary</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#encapsulation">Encapsulation</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#launch-latency-vs-runtime-speed">launch latency vs runtime speed</a></li>
