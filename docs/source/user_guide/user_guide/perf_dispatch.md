@@ -23,11 +23,13 @@ def my_op_v1(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> 
 @my_op.register
 @qd.kernel
 def my_op_v2(a: qd.types.NDArray[qd.f32, 1], b: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(a.shape[0]):
-        b[i] = a[i] + a[i]
+    i = 0
+    # will run the same speed as the other version, but just an example
+    while i < a.shape[0]:
+        b[i] = a[i] << 1
 ```
 
-Call the meta-function as usual:
+Call the meta-function as though calling a standard Quadrants kernel:
 
 ```python
 my_op(a, b)
@@ -37,7 +39,7 @@ On the first several calls, `perf_dispatch` will cycle through implementations (
 
 ## Decorator order
 
-When registering a `@qd.kernel`, the `@my_op.register` decorator must be the **outermost** (topmost) decorator:
+When registering a `@qd.kernel`, the `@my_op.register` decorator must be the **topmost** decorator:
 
 ```python
 # Correct
@@ -53,7 +55,7 @@ def impl(...) -> None: ...
 
 ## Registering plain Python functions
 
-Implementations do not have to be `@qd.kernel` — plain Python functions work too, and you can mix kernel and Python implementations under the same meta-function:
+Implementations do not have to be `@qd.kernel`. Plain Python functions work too. You can mix kernel and Python implementations under the same meta-function:
 
 ```python
 @my_op.register
@@ -161,13 +163,15 @@ def transform(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1
 @qd.kernel
 def transform_v1(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]) -> None:
     for i in range(data.shape[0]):
-        out[i] = data[i] * 3.0
+        out[i] = data[i] * 2
 
 @transform.register
 @qd.kernel
 def transform_v2(data: qd.types.NDArray[qd.f32, 1], out: qd.types.NDArray[qd.f32, 1]) -> None:
-    for i in range(data.shape[0]):
-        out[i] = data[i] + data[i] + data[i]
+    i = 0
+    # will run the same speed as the other version, but just an example
+    while i < data.shape[0]:
+        out[i] = data[i] << 1
 
 data = qd.ndarray(qd.f32, (1024,))
 out = qd.ndarray(qd.f32, (1024,))
