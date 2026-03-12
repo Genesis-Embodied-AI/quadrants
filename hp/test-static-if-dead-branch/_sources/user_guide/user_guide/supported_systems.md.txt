@@ -20,3 +20,7 @@ We test the following systems in our CI servers:
 - CUDA GPUs, Pascal or later (>=sm_60)
 - Metal GPUs
 - Vulkan-compatible GPUs (e.g. Intel Arc)
+
+### Python backend
+
+A pure-Python backend (`qd.python`) is available on any system where PyTorch is installed. See [Python backend](./python_backend.md).
