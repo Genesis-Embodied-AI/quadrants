@@ -34,7 +34,7 @@ def _parse_force_map(raw: str) -> dict[str, str]:
                 f"[perf_dispatch] WARNING: ignoring malformed QD_PERFDISPATCH_FORCE entry '{pair}' (expected 'dispatcher:impl')"
             )
             continue
-        dispatcher_name, impl_name = pair.split(":", 1)
+        dispatcher_name, impl_name = pair.split(":")
         result[dispatcher_name.strip()] = impl_name.strip()
     return result
 
