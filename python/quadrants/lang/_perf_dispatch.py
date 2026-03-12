@@ -30,9 +30,7 @@ def _parse_force_map(raw: str) -> dict[str, str]:
         if not pair:
             continue
         if ":" not in pair:
-            raise ValueError(
-                f"Malformed QD_PERFDISPATCH_FORCE entry '{pair}'. Expected format: 'dispatcher:impl'."
-            )
+            raise ValueError(f"Malformed QD_PERFDISPATCH_FORCE entry '{pair}'. Expected format: 'dispatcher:impl'.")
         dispatcher_name, impl_name = map(str.strip, pair.split(":"))
         result[dispatcher_name] = impl_name
     return result
@@ -123,6 +121,7 @@ class PerformanceDispatcher(Generic[P, R]):
             - in this case, check the shape of the argument in question, and return False if out of spec for this
               implementation
         """
+
         def decorator(func: Callable | QuadrantsCallable) -> DispatchImpl:
             sig = inspect.signature(func)
             log_str = f"perf_dispatch '{self._name}': registered '{func.__name__}'"  # type: ignore

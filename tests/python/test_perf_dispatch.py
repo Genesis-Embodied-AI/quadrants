@@ -1,5 +1,6 @@
 from enum import IntEnum
 from typing import cast
+
 import pytest
 
 import quadrants as qd
