@@ -33,8 +33,8 @@ def _parse_force_map(raw: str) -> dict[str, str]:
             raise ValueError(
                 f"Malformed QD_PERFDISPATCH_FORCE entry '{pair}'. Expected format: 'dispatcher:impl'."
             )
-        dispatcher_name, impl_name = pair.split(":")
-        result[dispatcher_name.strip()] = impl_name.strip()
+        dispatcher_name, impl_name = map(str.strip, pair.split(":"))
+        result[dispatcher_name] = impl_name
     return result
 
 
