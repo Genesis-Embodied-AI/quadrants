@@ -10,7 +10,6 @@ from quadrants.lang import impl
 # Cache enum value at module level for fast lookup in hot paths
 _arch_metal = _qd_core.Arch.metal
 
-from quadrants.lang import _ndarray_pickle
 from quadrants.lang.exception import QuadrantsIndexError
 from quadrants.lang.util import (
     cook_dtype,
@@ -51,6 +50,8 @@ class Ndarray:
     def __reduce__(self):
         """Pickle support. Gradients (``.grad``) are not preserved because
         they are considered transient computation state."""
+        from quadrants.lang import _ndarray_pickle  # pylint: disable=C0415
+
         return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
