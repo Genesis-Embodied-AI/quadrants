@@ -127,6 +127,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         i++;
       }
 
+      // Create one stream per unique group ID. Streams are created/destroyed
+      // per launch; a stream pool could reduce overhead for hot loops.
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;
@@ -137,6 +139,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         }
       }
 
+      // Launch tasks concurrently on their respective streams. The shared
+      // RuntimeContext is safe here: kernels only read from it (args/runtime
+      // pointers); result_buffer writes are to disjoint offsets per task.
       for (size_t j = group_start; j < i; j++) {
         auto &t = offloaded_tasks[j];
         AMDGPUContext::get_instance().set_stream(
