@@ -13,6 +13,7 @@ def serialize(ndarray):
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
     return {
+        "version": 1,
         "shape": ndarray.shape,
         "element_type": dtype_name,
         "element_shape": ndarray.element_shape,
@@ -20,9 +21,18 @@ def serialize(ndarray):
     }
 
 
+_PICKLE_VERSION = 1
+
+
 def unpickle(pkl):
     if impl.get_runtime()._prog is None:
         raise RuntimeError("qd.init() must be called before unpickling ndarrays")
+    version = pkl.get("version")
+    if version != _PICKLE_VERSION:
+        raise ValueError(
+            f"Unsupported ndarray pickle version {version!r} "
+            f"(expected {_PICKLE_VERSION})"
+        )
     dtype_name = pkl["element_type"]
     if dtype_name not in _NAME_TO_DTYPE:
         raise ValueError(f"Unknown dtype '{dtype_name}' during unpickle")
