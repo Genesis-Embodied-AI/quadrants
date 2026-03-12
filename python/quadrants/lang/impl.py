@@ -760,7 +760,7 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
             pyquadrants.grad_vars.append(x_grad)
 
         if prog.config().debug:
-            # adjoint checkbit
+            # adjoint checkbit — use a separate var to avoid shadowing the outer `dtype`
             x_grad_checkbit = Expr(prog.make_id_expr(""))
             checkbit_dtype = u8
             if prog.config().arch == _qd_core.vulkan:
