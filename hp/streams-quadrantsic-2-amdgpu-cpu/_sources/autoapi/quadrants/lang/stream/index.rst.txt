@@ -1,0 +1,97 @@
+quadrants.lang.stream
+=====================
+
+.. py:module:: quadrants.lang.stream
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.stream.Stream
+   quadrants.lang.stream.Event
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.stream.create_stream
+   quadrants.lang.stream.create_event
+
+
+Module Contents
+---------------
+
+.. py:class:: Stream(handle: int)
+
+   Wraps a backend-specific GPU stream for concurrent kernel execution.
+
+   On backends without native streams (e.g. CPU), this is a no-op object.
+
+
+   .. py:property:: handle
+      :type: int
+
+
+
+   .. py:method:: synchronize()
+
+      Block until all operations on this stream complete.
+
+
+
+   .. py:method:: destroy()
+
+      Explicitly destroy the stream. Safe to call multiple times.
+
+
+
+.. py:class:: Event(handle: int)
+
+   Wraps a backend-specific GPU event for stream synchronization.
+
+   On backends without native events (e.g. CPU), this is a no-op object.
+
+
+   .. py:property:: handle
+      :type: int
+
+
+
+   .. py:method:: record(stream: Stream | None = None)
+
+      Record this event on a stream. None means the default stream.
+
+
+
+   .. py:method:: wait(qd_stream: Stream | None = None)
+
+      Make a stream wait for this event. None means the default stream.
+
+
+
+   .. py:method:: synchronize()
+
+      Block the host until this event has been reached.
+
+
+
+   .. py:method:: destroy()
+
+      Explicitly destroy the event. Safe to call multiple times.
+
+
+
+.. py:function:: create_stream() -> Stream
+
+   Create a new GPU stream for concurrent kernel execution.
+
+
+.. py:function:: create_event() -> Event
+
+   Create a new GPU event for stream synchronization.
+
+
