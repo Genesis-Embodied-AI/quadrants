@@ -12,17 +12,33 @@ from quadrants.lang.matrix import Matrix
 from quadrants.types.utils import is_integral
 
 
+def _coerce_to_int(v):
+    """Convert 0-d tensors to int for ndrange bounds in python backend.
+
+    On the python backend, ndrange bounds like a.shape[0] arrive as
+    0-d torch tensors rather than plain ints. This unwraps them.
+    """
+    if isinstance(v, (int, float, np.integer)):
+        return v
+    # Only reached on python backend, where torch is guaranteed available
+    import torch  # pylint: disable=C0415
+
+    if isinstance(v, torch.Tensor) and v.ndim == 0:
+        return int(v.item())
+    return v
+
+
 class _Ndrange:
     def __init__(self, *args):
         args = list(args)
         for i, arg in enumerate(args):
             if not isinstance(arg, collections.abc.Sequence):
-                args[i] = (0, arg)
+                args[i] = (0, _coerce_to_int(arg))
             if len(args[i]) != 2:
                 raise QuadrantsSyntaxError(
                     "Every argument of ndrange should be a scalar or a tuple/list like (begin, end)"
                 )
-            args[i] = (args[i][0], ops.max(args[i][0], args[i][1]))
+            args[i] = (_coerce_to_int(args[i][0]), _coerce_to_int(ops.max(args[i][0], args[i][1])))
         for arg in args:
             for bound in arg:
                 if not isinstance(bound, (int, np.integer)) and not (
