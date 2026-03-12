@@ -33,7 +33,7 @@ Call the meta-function as usual:
 my_op(a, b)
 ```
 
-On the first several calls, `perf_dispatch` will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used for all subsequent calls.
+On the first several calls, `perf_dispatch` will cycle through implementations (warming up, then timing). Once all implementations have been timed, the fastest is cached and used until re-evaluation is triggered (see [Tuning parameters](#tuning-parameters)).
 
 ## Decorator order
 
