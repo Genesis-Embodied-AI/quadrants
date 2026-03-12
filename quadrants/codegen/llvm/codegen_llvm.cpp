@@ -2611,6 +2611,7 @@ void TaskCodeGenLLVM::initialize_context() {
     fast_flags.setNoInfs();
     fast_flags.setNoSignedZeros();
     fast_flags.setAllowReassoc();
+    fast_flags.setApproxFunc();
     builder->setFastMathFlags(fast_flags);
   }
 }
