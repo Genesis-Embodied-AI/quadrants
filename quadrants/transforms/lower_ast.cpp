@@ -232,6 +232,7 @@ class LowerAST : public IRVisitor {
           snode, std::move(stmt->body), stmt->is_bit_vectorized,
           stmt->num_cpu_threads, stmt->block_dim);
       new_for->index_offsets = offsets;
+      new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
       VecStatement new_statements;
       for (int i = 0; i < (int)stmt->loop_var_ids.size(); i++) {
         Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(
@@ -270,6 +271,7 @@ class LowerAST : public IRVisitor {
           begin, end, std::move(stmt->body), stmt->is_bit_vectorized,
           stmt->num_cpu_threads, stmt->block_dim, stmt->strictly_serialized,
           /*range_hint=*/fmt::format("arg ({})", fmt::join(arg_id, ", ")));
+      new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
       VecStatement new_statements;
       Stmt *loop_index =
           new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
@@ -311,6 +313,7 @@ class LowerAST : public IRVisitor {
             begin_stmt, end_stmt, std::move(stmt->body),
             stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim,
             stmt->strictly_serialized);
+        new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0),
                               0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] =

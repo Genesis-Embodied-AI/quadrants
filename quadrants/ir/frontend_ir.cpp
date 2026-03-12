@@ -119,7 +119,8 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       num_cpu_threads(o.num_cpu_threads),
       strictly_serialized(o.strictly_serialized),
       mem_access_opt(o.mem_access_opt),
-      block_dim(o.block_dim) {
+      block_dim(o.block_dim),
+      stream_parallel_group_id(o.stream_parallel_group_id) {
 }
 
 void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
@@ -127,6 +128,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   strictly_serialized = config.strictly_serialized;
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
+  stream_parallel_group_id = config.stream_parallel_group_id;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
     QD_ASSERT(block_dim <= quadrants_max_gpu_block_dim);
@@ -1542,6 +1544,8 @@ void ASTBuilder::begin_frontend_range_for(const Expr &i,
                                           const Expr &s,
                                           const Expr &e,
                                           const DebugInfo &dbg_info) {
+  for_loop_dec_.config.stream_parallel_group_id =
+      current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(
       i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
@@ -1558,6 +1562,8 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the struct for. "
       "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id =
+      current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(
       loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
@@ -1574,6 +1580,8 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the struct for. "
       "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id =
+      current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(
       loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
@@ -1591,6 +1599,8 @@ void ASTBuilder::begin_frontend_mesh_for(
       for_loop_dec_.config.strictly_serialized,
       "ti.loop_config(serialize=True) does not have effect on the mesh for. "
       "The execution order is not guaranteed.");
+  for_loop_dec_.config.stream_parallel_group_id =
+      current_stream_parallel_group_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type,
                                         arch_, for_loop_dec_.config, dbg_info);

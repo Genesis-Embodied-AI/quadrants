@@ -357,7 +357,9 @@ void export_lang(py::module &m) {
       .def("strictly_serialize", &ASTBuilder::strictly_serialize)
       .def("block_dim", &ASTBuilder::block_dim)
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
-      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag);
+      .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
+      .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig")

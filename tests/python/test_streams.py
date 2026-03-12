@@ -181,23 +181,6 @@ def test_stream_noop_on_cpu():
 
 
 @test_utils.test()
-def test_stream_with_ndarray():
-    N = 1024
-
-    @qd.kernel
-    def fill(arr: qd.types.ndarray(dtype=qd.f32, ndim=1)):
-        for i in range(N):
-            arr[i] = 99.0
-
-    arr = qd.ndarray(qd.f32, shape=(N,))
-    s = qd.create_stream()
-    fill(arr, qd_stream=s)
-    s.synchronize()
-    assert np.allclose(arr.to_numpy(), 99.0)
-    s.destroy()
-
-
-@test_utils.test()
 def test_concurrent_streams_with_events():
     """Two slow kernels on separate streams run concurrently (~1s on GPU),
     serial fallback on CPU/Metal."""
@@ -275,3 +258,164 @@ def test_concurrent_streams_with_events():
     s2.destroy()
     e1.destroy()
     e2.destroy()
+
+
+@test_utils.test()
+def test_stream_parallel_basic():
+    """Each with qd.stream_parallel() block runs on its own stream (serial fallback on CPU/Metal)."""
+    N = 1024
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def fill_parallel():
+        with qd.stream_parallel():
+            for i in range(N):
+                a[i] = 1.0
+        with qd.stream_parallel():
+            for j in range(N):
+                b[j] = 2.0
+
+    fill_parallel()
+    qd.sync()
+    assert np.allclose(a.to_numpy(), 1.0)
+    assert np.allclose(b.to_numpy(), 2.0)
+
+
+@test_utils.test()
+def test_stream_parallel_multiple_loops_per_stream():
+    """Multiple for loops inside one stream_parallel block share a stream (serial fallback on CPU/Metal)."""
+    N = 1024
+    a = qd.field(qd.f32, shape=(N,))
+    b = qd.field(qd.f32, shape=(N,))
+    c = qd.field(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def parallel_phase():
+        with qd.stream_parallel():
+            for i in range(N):
+                a[i] = 1.0
+            for i in range(N):
+                a[i] = a[i] + 1.0
+        with qd.stream_parallel():
+            for j in range(N):
+                b[j] = 10.0
+
+    @qd.kernel
+    def combine():
+        for i in range(N):
+            c[i] = a[i] + b[i]
+
+    parallel_phase()
+    combine()
+    qd.sync()
+    assert np.allclose(a.to_numpy(), 2.0)
+    assert np.allclose(b.to_numpy(), 10.0)
+    assert np.allclose(c.to_numpy(), 12.0)
+
+
+@test_utils.test()
+def test_stream_parallel_timing():
+    """stream_parallel achieves speedup on GPU, serial fallback elsewhere."""
+    SPIN_ITERS = 5_000_000
+
+    a = qd.field(qd.i32, shape=(2,))
+    b = qd.field(qd.i32, shape=(2,))
+
+    @qd.kernel
+    def serial_spin():
+        for _ in range(1):
+            x = a[0]
+            for _j in range(SPIN_ITERS):
+                x = (1664525 * x + 1013904223) % 2147483647
+            a[0] = x
+        for _ in range(1):
+            x = a[1]
+            for _j in range(SPIN_ITERS):
+                x = (1664525 * x + 1013904223) % 2147483647
+            a[1] = x
+
+    @qd.kernel
+    def parallel_spin():
+        with qd.stream_parallel():
+            for _ in range(1):
+                x = b[0]
+                for _j in range(SPIN_ITERS):
+                    x = (1664525 * x + 1013904223) % 2147483647
+                b[0] = x
+        with qd.stream_parallel():
+            for _ in range(1):
+                x = b[1]
+                for _j in range(SPIN_ITERS):
+                    x = (1664525 * x + 1013904223) % 2147483647
+                b[1] = x
+
+    import time
+
+    # Warm up
+    serial_spin()
+    parallel_spin()
+    qd.sync()
+
+    qd.sync()
+    t0 = time.perf_counter()
+    serial_spin()
+    qd.sync()
+    serial_time = time.perf_counter() - t0
+
+    qd.sync()
+    t0 = time.perf_counter()
+    parallel_spin()
+    qd.sync()
+    stream_time = time.perf_counter() - t0
+
+    speedup = serial_time / stream_time
+    if qd.lang.impl.current_cfg().arch in (qd.cuda, qd.amdgpu):
+        assert speedup > 1.5, (
+            f"Expected >1.5x speedup, got {speedup:.2f}x " f"(serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+        )
+    else:
+        assert speedup > 0.75, (
+            f"Expected >=0.75x (serial fallback), got {speedup:.2f}x "
+            f"(serial={serial_time:.3f}s, stream={stream_time:.3f}s)"
+        )
+
+
+@test_utils.test()
+def test_stream_parallel_rejects_mixed_top_level():
+    """Mixing stream_parallel and non-stream_parallel at top level is an error."""
+    import pytest  # noqa: I001
+
+    from quadrants.lang.exception import QuadrantsSyntaxError
+
+    N = 64
+    a = qd.field(qd.f32, shape=(N,))
+
+    with pytest.raises(QuadrantsSyntaxError, match="all top-level statements"):
+
+        @qd.kernel
+        def bad_kernel():
+            with qd.stream_parallel():
+                for i in range(N):
+                    a[i] = 1.0
+            for i in range(N):
+                a[i] = 2.0
+
+        bad_kernel()
+
+
+@test_utils.test()
+def test_stream_with_ndarray():
+    N = 1024
+
+    @qd.kernel
+    def fill(arr: qd.types.ndarray(dtype=qd.f32, ndim=1)):
+        for i in range(N):
+            arr[i] = 99.0
+
+    arr = qd.ndarray(qd.f32, shape=(N,))
+    s = qd.create_stream()
+    fill(arr, qd_stream=s)
+    s.synchronize()
+    assert np.allclose(arr.to_numpy(), 99.0)
+    s.destroy()

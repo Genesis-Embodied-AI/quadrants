@@ -218,6 +218,7 @@ user_api[qd] = [
     "static_assert",
     "static_print",
     "stop_grad",
+    "stream_parallel",
     "svd",
     "sym_eig",
     "sync",
