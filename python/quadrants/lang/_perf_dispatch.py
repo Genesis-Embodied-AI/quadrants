@@ -58,7 +58,7 @@ class PerformanceDispatcher(Generic[P, R]):
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
         self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
         self.repeat_after_seconds = repeat_after_seconds if repeat_after_seconds is not None else REPEAT_AFTER_SECONDS
-        sig = inspect.signature(fn)
+        sig = inspect.signature(fn, eval_str=True)
         self._param_types: dict[str, Any] = {}
         for param_name, param in sig.parameters.items():
             self._param_types[param_name] = param.annotation
