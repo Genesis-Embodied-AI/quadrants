@@ -125,6 +125,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         host_result_buffer, device_result_buffer, ctx.result_buffer_size,
         active_stream);
   }
+  AMDGPUDriver::get_instance().mem_free_async(device_result_buffer,
+                                              active_stream);
   if (transfers.size()) {
     AMDGPUDriver::get_instance().stream_synchronize(active_stream);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
@@ -136,8 +138,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
-  AMDGPUDriver::get_instance().mem_free_async(device_result_buffer,
-                                              active_stream);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
