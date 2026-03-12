@@ -1,0 +1,59 @@
+quadrants.lang.simt.block
+=========================
+
+.. py:module:: quadrants.lang.simt.block
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.block.SharedArray
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.block.arch_uses_spv
+   quadrants.lang.simt.block.sync
+   quadrants.lang.simt.block.sync_all_nonzero
+   quadrants.lang.simt.block.sync_any_nonzero
+   quadrants.lang.simt.block.sync_count_nonzero
+   quadrants.lang.simt.block.mem_sync
+   quadrants.lang.simt.block.thread_idx
+   quadrants.lang.simt.block.global_thread_idx
+
+
+Module Contents
+---------------
+
+.. py:function:: arch_uses_spv(arch)
+
+.. py:function:: sync()
+
+.. py:function:: sync_all_nonzero(predicate)
+
+.. py:function:: sync_any_nonzero(predicate)
+
+.. py:function:: sync_count_nonzero(predicate)
+
+.. py:function:: mem_sync()
+
+.. py:function:: thread_idx()
+
+.. py:function:: global_thread_idx()
+
+.. py:class:: SharedArray(shape, dtype)
+
+   .. py:attribute:: dtype
+
+
+   .. py:attribute:: shared_array_proxy
+
+
+   .. py:method:: subscript(*indices)
+
+
