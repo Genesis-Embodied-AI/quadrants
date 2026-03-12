@@ -124,3 +124,22 @@ def test_clear_all_dual_field():
         with qd.ad.FwdMode(loss=loss, param=x):
             clear_dual_test()
         assert y.dual[None] == 4.0
+
+
+@test_utils.test(debug=True)
+def test_dual_field_dtype_preserved_in_debug_mode():
+    """Regression: debug-mode checkbit must not shadow the outer dtype."""
+    x = qd.field(qd.f64, shape=(), needs_dual=True)
+    loss = qd.field(qd.f64, shape=(), needs_dual=True)
+
+    x[None] = 3.0
+
+    @qd.kernel
+    def compute():
+        loss[None] = x[None] * x[None]
+
+    with qd.ad.FwdMode(loss=loss, param=x):
+        compute()
+
+    assert loss[None] == 9.0
+    assert loss.dual[None] == 6.0
