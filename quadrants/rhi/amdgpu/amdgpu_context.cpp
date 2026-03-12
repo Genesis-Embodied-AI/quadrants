@@ -204,6 +204,10 @@ void AMDGPUContext::launch(void *func,
 }
 
 AMDGPUContext::~AMDGPUContext() {
+  for (auto *s : stream_pool_) {
+    driver_.stream_destroy(s);
+  }
+  stream_pool_.clear();
   if (context_) {
     driver_.device_primary_ctx_release(device_);
   }
