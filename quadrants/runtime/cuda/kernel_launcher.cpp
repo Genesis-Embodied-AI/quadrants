@@ -85,8 +85,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
               executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
-          CUDADriver::get_instance().memcpy_host_to_device(
-              (void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          CUDADriver::get_instance().memcpy_host_to_device_async(
+              (void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz,
+              active_stream);
           if (grad_ptr != nullptr) {
             DeviceAllocation grad_devalloc =
                 executor->allocate_memory_on_device(
@@ -95,8 +96,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                 executor->get_device_alloc_info_ptr(grad_devalloc);
             transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
 
-            CUDADriver::get_instance().memcpy_host_to_device(
-                (void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
+            CUDADriver::get_instance().memcpy_host_to_device_async(
+                (void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz,
+                active_stream);
           } else {
             device_ptrs[grad_ptr_idx] = nullptr;
           }
