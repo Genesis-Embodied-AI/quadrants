@@ -1,31 +1,59 @@
-# CUDA Graphs
+# CUDA Graph
 
-When a Quadrants kernel has multiple top-level `for` loops, each loop is launched as a separate GPU kernel. The per-kernel launch overhead can become significant when kernels are small and numerous. CUDA graphs let you capture these launches once and replay them as a single unit, eliminating the repeated launch overhead.
+CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.
 
-## Per-kernel opt-in with `cuda_graph=True`
+## Basic usage
 
-Annotate a kernel with `cuda_graph=True` to enable graph capture:
+Add `cuda_graph=True` to a `@qd.kernel` decorator:
 
 ```python
 @qd.kernel(cuda_graph=True)
-def step(x: qd.types.ndarray(qd.f32, ndim=1),
-         y: qd.types.ndarray(qd.f32, ndim=1)):
+def my_kernel(
+    x: qd.types.ndarray(qd.f32, ndim=1),
+    y: qd.types.ndarray(qd.f32, ndim=1),
+):
     for i in range(x.shape[0]):
         x[i] = x[i] + 1.0
     for i in range(y.shape[0]):
         y[i] = y[i] + 2.0
-
-step(x, y)  # first call: captures the graph
-step(x, y)  # subsequent calls: replays the cached graph
 ```
 
-On the first call, the kernel's offloaded tasks are captured into a CUDA graph using the explicit node API. Subsequent calls replay the cached graph. The arg buffer is re-uploaded on each replay, so calling the kernel with different ndarrays works correctly.
+The top level for-loops will be compiled into a single CUDA graph. The parallelism is the same as before, but the launch latency much reduced.
 
-**When it applies**: graph capture only activates when there are 2 or more top-level `for` loops (offloaded tasks). A single-loop kernel with `cuda_graph=True` falls back silently to the normal launch path.
+The kernel is used normally — no other API changes are needed:
 
-**Cross-platform**: `cuda_graph=True` is a harmless no-op on non-CUDA backends (CPU, Metal, etc.). You can annotate kernels unconditionally without breaking portability.
+```python
+x = qd.ndarray(qd.f32, shape=(1024,))
+y = qd.ndarray(qd.f32, shape=(1024,))
 
-## GPU-side iteration with `graph_while`
+my_kernel(x, y)  # first call: builds and caches the graph
+my_kernel(x, y)  # subsequent calls: replays the cached graph
+```
+
+### Restrictions
+
+- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use CUDA graphs. An error is raised if `cuda_graph=True` is set on such a kernel.
+- **Primal kernels only.** The `cuda_graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
+
+### Passing different arguments
+
+You can pass different ndarrays to the same kernel on subsequent calls. The cached graph is replayed with the updated arguments — no graph rebuild occurs:
+
+```python
+x1 = qd.ndarray(qd.f32, shape=(1024,))
+y1 = qd.ndarray(qd.f32, shape=(1024,))
+my_kernel(x1, y1)  # builds graph
+
+x2 = qd.ndarray(qd.f32, shape=(1024,))
+y2 = qd.ndarray(qd.f32, shape=(1024,))
+my_kernel(x2, y2)  # replays graph with new array pointers
+```
+
+### Fields as arguments
+
+When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.## GPU-side iteration with `graph_while`
+
+## `graph_while`
 
 For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. The `graph_while` parameter enables this:
 
@@ -82,15 +110,3 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 ### Do-while semantics
 
 `graph_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
-
-## When to use CUDA graphs
-
-CUDA graphs are most beneficial when:
-
-- A kernel has many small top-level `for` loops where launch overhead dominates runtime.
-- An iterative algorithm needs to repeat the kernel body many times without host round-trips (`graph_while`).
-
-They are less useful when:
-
-- Kernels have only a single top-level loop (no graph is created).
-- Individual kernel runtimes are large enough to fully hide launch latency.
