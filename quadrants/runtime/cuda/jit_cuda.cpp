@@ -279,13 +279,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
 
   module->setDataLayout(target_machine->createDataLayout());
 
-  // Remove outdated nvvmir.version metadata inherited from runtime bitcode.
-  // The runtime bitcode may specify an old PTX version (e.g. 6.3) that is
-  // incompatible with newer SM targets (e.g. sm_120 requires PTX 8.7+).
-  // Stripping it lets LLVM pick the appropriate default for the target.
-  if (auto *md = module->getNamedMetadata("nvvmir.version")) {
-    module->eraseNamedMetadata(md);
-  }
+  QuadrantsLLVMContext::strip_nvvmir_version(module.get());
 
   // Set up passes
   llvm::SmallString<8> outstr;

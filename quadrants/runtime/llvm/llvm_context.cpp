@@ -397,11 +397,7 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     if (arch_ == Arch::cuda) {
       module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
 
-      // Strip nvvmir.version from runtime bitcode so LLVM picks a PTX version
-      // compatible with the target SM (e.g. sm_120 requires PTX >= 8.7).
-      if (auto *md = module->getNamedMetadata("nvvmir.version")) {
-        module->eraseNamedMetadata(md);
-      }
+      strip_nvvmir_version(module.get());
 
 #if defined(QD_WITH_CUDA)
       auto func = module->getFunction("cuda_compute_capability");
@@ -604,12 +600,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
     }
   }
 
-  // Final sweep: strip nvvmir.version that may have been reintroduced by
-  // linking libdevice or custom CUDA libraries.
   if (arch_ == Arch::cuda) {
-    if (auto *md = module->getNamedMetadata("nvvmir.version")) {
-      module->eraseNamedMetadata(md);
-    }
+    strip_nvvmir_version(module.get());
   }
 
   return module;
@@ -650,9 +642,7 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(
   }
 
   libdevice_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
-  if (auto *md = libdevice_module->getNamedMetadata("nvvmir.version")) {
-    libdevice_module->eraseNamedMetadata(md);
-  }
+  strip_nvvmir_version(libdevice_module.get());
   module->setDataLayout(libdevice_module->getDataLayout());
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
@@ -829,6 +819,12 @@ std::size_t QuadrantsLLVMContext::get_struct_element_offset(
     llvm::StructType *type,
     int idx) {
   return get_data_layout().getStructLayout(type)->getElementOffset(idx);
+}
+
+void QuadrantsLLVMContext::strip_nvvmir_version(llvm::Module *module) {
+  if (auto *md = module->getNamedMetadata("nvvmir.version")) {
+    module->eraseNamedMetadata(md);
+  }
 }
 
 void QuadrantsLLVMContext::mark_inline(llvm::Function *f) {
