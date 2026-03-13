@@ -3,6 +3,7 @@
 ```{toctree}
 :caption: Getting started
 :maxdepth: 1
+:titlesonly:
 
 user_guide/getting_started
 user_guide/supported_systems

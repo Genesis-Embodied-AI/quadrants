@@ -133,6 +133,15 @@ class QD_DLL_EXPORT Program {
   void launch_kernel(const CompiledKernelData &compiled_kernel_data,
                      LaunchContextBuilder &ctx);
 
+  std::size_t get_cuda_graph_cache_size() {
+    return program_impl_->get_kernel_launcher().get_cuda_graph_cache_size();
+  }
+
+  bool get_cuda_graph_cache_used_on_last_call() {
+    return program_impl_->get_kernel_launcher()
+        .get_cuda_graph_cache_used_on_last_call();
+  }
+
   DeviceCapabilityConfig get_device_caps() {
     return program_impl_->get_device_caps();
   }

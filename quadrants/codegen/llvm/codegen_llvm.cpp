@@ -18,6 +18,7 @@
 #include "llvm/AsmParser/Parser.h"
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
+#include "quadrants/runtime/llvm/llvm_context_pass.h"
 
 namespace quadrants::lang {
 
@@ -520,7 +521,7 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
           llvm_val[stmt->operand], tlctx->get_data_type(stmt->cast_type));
     }
   } else if (op == UnaryOpType::rsqrt) {
-    llvm::Function *sqrt_fn = llvm::Intrinsic::getDeclaration(
+    llvm::Function *sqrt_fn = llvm::Intrinsic::getOrInsertDeclaration(
         module.get(), llvm::Intrinsic::sqrt, input->getType());
     auto intermediate = builder->CreateCall(sqrt_fn, input, "sqrt");
     llvm_val[stmt] = builder->CreateFDiv(
@@ -2610,6 +2611,7 @@ void TaskCodeGenLLVM::initialize_context() {
     fast_flags.setNoInfs();
     fast_flags.setNoSignedZeros();
     fast_flags.setAllowReassoc();
+    fast_flags.setApproxFunc();
     builder->setFastMathFlags(fast_flags);
   }
 }
@@ -2730,6 +2732,14 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
       QD_ASSERT(func);
       tlctx->mark_function_as_amdgpu_kernel(func);
     }
+#if defined(QD_WITH_AMDGPU)
+    llvm::legacy::FunctionPassManager fpm(module.get());
+    fpm.add(new AMDGPUConvertAllocaInstAddressSpacePass());
+    fpm.doInitialization();
+    for (auto &func : *module)
+      fpm.run(func);
+    fpm.doFinalization();
+#endif
   }
   std::filesystem::path ir_dump_dir = compile_config.debug_dump_path;
   if (get_environ_config(DUMP_IR_ENV.data())) {

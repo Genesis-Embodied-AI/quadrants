@@ -104,6 +104,13 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
   return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
 }
 
+// Resolves ndarray parameter handles in the launch context to raw device
+// pointers, writing them into the arg buffer via set_ndarray_ptrs.
+//
+// Unlike the normal launch path, this does not handle host-resident arrays
+// (no temporary device allocation or host-to-device transfer). Returns false
+// if any external array is on the host, signaling the caller to fall back
+// to the non-graph launch path.
 bool KernelLauncher::resolve_ctx_ndarray_ptrs(
     LaunchContextBuilder &ctx,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters) {
@@ -216,10 +223,15 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
                                               LaunchContextBuilder &ctx) {
   int launch_id = handle.get_launch_id();
 
+  // Populated by register_llvm_kernel, which runs before launch_llvm_kernel
+  // for all LLVM kernels regardless of whether the graph path is used.
   auto &launcher_ctx = contexts_[launch_id];
   const auto &parameters = *launcher_ctx.parameters;
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
 
+  // A single-task kernel has no multi-launch overhead to eliminate, so
+  // graphing it provides no benefit — unless graph_while is active, in which
+  // case the graph is needed for the conditional-while loop structure.
   if (offloaded_tasks.size() < 2 && ctx.graph_while_arg_id < 0) {
     return false;
   }
@@ -228,6 +240,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
 
+  // Falls back to the normal path if any external array is host-resident,
+  // since the graph path cannot perform host-to-device transfers.
   if (!resolve_ctx_ndarray_ptrs(ctx, parameters)) {
     return false;
   }
@@ -345,6 +359,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     node_params.blockDimZ = 1;
     node_params.sharedMemBytes = (unsigned int)task.dynamic_shared_array_bytes;
     node_params.kernelParams = &ctx_ptr;
+    // kernelParams and extra are two mutually exclusive ways of passing
+    // arguments to a CUDA kernel; we use kernelParams, so extra is null.
     node_params.extra = nullptr;
 
     void *node = nullptr;
@@ -409,9 +425,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   if (ctx.use_cuda_graph) {
     if (launch_llvm_kernel_graph(handle, ctx)) {
+      cuda_graph_cache_used_on_last_call_ = true;
       return;
     }
   }
+  cuda_graph_cache_used_on_last_call_ = false;
 
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();

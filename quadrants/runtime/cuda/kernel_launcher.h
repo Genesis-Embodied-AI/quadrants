@@ -42,6 +42,8 @@ static_assert(
     "CudaGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
 struct CachedCudaGraph {
+  // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
+  // This is the instantiated, launchable form of the captured CUDA graph.
   void *graph_exec{nullptr};
   char *persistent_device_arg_buffer{nullptr};
   char *persistent_device_result_buffer{nullptr};
@@ -73,6 +75,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
   void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) override;
   Handle register_llvm_kernel(
       const LLVM::CompiledKernelData &compiled) override;
+  std::size_t get_cuda_graph_cache_size() const override {
+    return cuda_graph_cache_.size();
+  }
+  bool get_cuda_graph_cache_used_on_last_call() const override {
+    return cuda_graph_cache_used_on_last_call_;
+  }
 
  private:
   bool on_cuda_device(void *ptr);
@@ -82,7 +90,10 @@ class KernelLauncher : public LLVM::KernelLauncher {
   bool launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
   void ensure_condition_kernel_loaded();
   std::vector<Context> contexts_;
+  // Keyed by launch_id, which uniquely identifies a compiled kernel variant
+  // (each template specialization gets its own launch_id).
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
+  bool cuda_graph_cache_used_on_last_call_{false};
 
   // JIT-compiled condition kernel for graph_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule

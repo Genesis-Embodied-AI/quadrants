@@ -97,6 +97,8 @@ class QuadrantsLLVMContext {
 
   static void mark_inline(llvm::Function *func);
 
+  static void strip_nvvmir_version(llvm::Module *module);
+
   static void print_huge_functions(llvm::Module *module);
 
   // remove all functions that are not (directly & indirectly) used by those
