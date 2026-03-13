@@ -12,13 +12,14 @@ We test the following systems in our CI servers:
 
 ### Operating systems
 - Mac Silicon 14 or 15
-- Ubuntu 22.04 and 24.04 (x86 only)
+- Ubuntu 22.04 and 24.04 (x64 and ARM64)
 - Windows 10 or later (x86 only)
 
 ### GPUs
 
 - CUDA GPUs, Pascal or later (>=sm_60)
 - Metal GPUs
+- AMD GPUs
 - Vulkan-compatible GPUs (e.g. Intel Arc)
 
 ### Python backend
