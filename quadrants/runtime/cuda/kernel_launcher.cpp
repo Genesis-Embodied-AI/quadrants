@@ -127,6 +127,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
 
+  // Falls back to the normal path if any external array is host-resident,
+  // since the graph path cannot perform host-to-device transfers.
   if (!resolve_ctx_ndarray_ptrs(ctx, parameters)) {
     return false;
   }
