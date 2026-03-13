@@ -209,36 +209,45 @@ def test_cuda_graph_changed_args(tensor_type):
     assert np.allclose(y1_np, 4.0), f"y1 should be unchanged, got {y1_np[:5]}"
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_different_sizes():
+def test_cuda_graph_different_sizes(tensor_type):
     """Graph must produce correct results when called with different-sized arrays.
 
     Catches stale grid dims: if the graph cached from the small call is
     replayed for the large call, elements beyond the original size stay zero.
 
-    ndarray-only: fields are template args so different-sized fields would
-    produce separate compiled kernels, not exercise the same graph.
+    For fields, different-sized fields are separate template specializations,
+    so each gets its own graph cache entry.
     """
     platform_supports_graph = _on_cuda()
 
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
+
     @qd.kernel(cuda_graph=True)
-    def add_one(x: qd.types.NDArray[qd.f32, 1], y: qd.types.NDArray[qd.f32, 1]):
+    def add_one(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
 
-    x1 = qd.ndarray(qd.f32, shape=(256,))
-    y1 = qd.ndarray(qd.f32, shape=(256,))
+    x1 = tensor_type(qd.f32, (256,))
+    y1 = tensor_type(qd.f32, (256,))
     assert _cuda_graph_cache_size() == 0
     add_one(x1, y1)
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
-    x2 = qd.ndarray(qd.f32, shape=(1024,))
-    y2 = qd.ndarray(qd.f32, shape=(1024,))
+    x2 = tensor_type(qd.f32, (1024,))
+    y2 = tensor_type(qd.f32, (1024,))
     add_one(x2, y2)
     assert _cuda_graph_used() == platform_supports_graph
+    # Ndarrays reuse the same compiled kernel; fields produce a second
+    # template specialization with its own graph cache entry.
+    if tensor_type == qd.field:
+        assert _cuda_graph_cache_size() == (2 if platform_supports_graph else 0)
+    else:
+        assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
