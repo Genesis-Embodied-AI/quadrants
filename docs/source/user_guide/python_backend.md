@@ -52,26 +52,6 @@ fill(a)
 - **Performance is not representative** of compiled backends. Do not use for benchmarking.
 - **GPU-specific features** (shared memory, block-level intrinsics, etc.) are not available.
 
-## Storage model
-
-Fields and ndarrays are instances of `PyTensor`, a `torch.Tensor` subclass. You can interoperate with PyTorch directly:
-
-```python
-qd.init(qd.python)
-a = qd.field(qd.math.vec3, shape=(10,))
-
-# a is a torch.Tensor under the hood
-import torch
-assert isinstance(a, torch.Tensor)
-assert a.size() == torch.Size([10, 3])
-```
-
-Each tensor has the following attributes matching the standard Quadrants field/ndarray convention:
-- `_tc` — the tensor itself
-- `_T_tc` — transposed view (first batch dim moved to front)
-- `_np` — numpy view
-- `_T_np` — transposed numpy view
-
 ### Batch shape vs real shape
 
 The `.shape` property returns the **batch dimensions only**, consistent with how Quadrants kernels index fields. For example, a `vec3` field of shape `(10,)` reports `.shape == (10,)` even though the underlying tensor has size `(10, 3)`. Use `.size()` to get the full torch shape.
