@@ -102,6 +102,22 @@ def test_pickle_scalar_ndarray_preserves_zeros():
     assert b.shape == a.shape
 
 
+_ALL_DTYPES = [qd.f16, qd.f32, qd.f64, qd.i8, qd.i16, qd.i32, qd.i64, qd.u1, qd.u8, qd.u16, qd.u32, qd.u64]
+_64BIT_DTYPES = {qd.f64, qd.i64, qd.u64}
+
+
+@pytest.mark.parametrize("dtype", _ALL_DTYPES, ids=lambda d: d.to_string())
+@test_utils.test()
+def test_pickle_all_dtypes(dtype):
+    if dtype in _64BIT_DTYPES and qd.cfg.arch == qd.metal:
+        pytest.skip("metal does not support 64-bit types")
+    a = qd.ndarray(dtype, (4,))
+    b = _roundtrip(a)
+    np.testing.assert_array_equal(b.to_numpy(), a.to_numpy())
+    assert b.shape == a.shape
+    assert b.dtype == a.dtype
+
+
 @test_utils.test()
 def test_pickle_soa_raises():
     a = qd.ndarray(qd.f32, (3,))
