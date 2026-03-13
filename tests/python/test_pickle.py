@@ -1,6 +1,7 @@
 import pickle
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 from quadrants.types.enums import Layout
@@ -102,12 +103,9 @@ def test_pickle_scalar_ndarray_preserves_zeros():
 
 
 @test_utils.test()
-def test_pickle_preserves_layout():
+def test_pickle_soa_raises():
     a = qd.ndarray(qd.f32, (3,))
     a.layout = Layout.SOA
-    a[0] = 1.0
 
-    b = _roundtrip(a)
-
-    assert b.layout == Layout.SOA
-    np.testing.assert_allclose(b.to_numpy(), a.to_numpy())
+    with pytest.raises(TypeError, match="SOA layout"):
+        pickle.dumps(a)
