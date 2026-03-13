@@ -20,7 +20,7 @@ QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0")
 _QD_PERFDISPATCH_FORCE_RAW = os.environ.get("QD_PERFDISPATCH_FORCE")
 
 
-def _parse_force_map(raw: str) -> dict[str, str]:
+def _parse_force_map(raw: str | None) -> dict[str, str]:
     """Parse 'dispatcher1:impl1,dispatcher2:impl2' into {dispatcher1: impl1, ...}."""
     if not raw:
         return {}
