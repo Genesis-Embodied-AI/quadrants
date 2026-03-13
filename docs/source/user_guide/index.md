@@ -32,11 +32,19 @@ interop
 ```
 
 ```{toctree}
+:caption: Performance
+:maxdepth: 1
+:titlesonly:
+
+cuda_graph
+perf_dispatch
+```
+
+```{toctree}
 :caption: Reference
 :maxdepth: 1
 :titlesonly:
 
-perf_dispatch
 unsupported_python
 python_backend
 debug
