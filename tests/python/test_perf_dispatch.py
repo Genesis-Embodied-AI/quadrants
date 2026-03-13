@@ -4,7 +4,12 @@ from typing import cast
 import pytest
 
 import quadrants as qd
-from quadrants.lang._perf_dispatch import NUM_WARMUP, PerformanceDispatcher
+from quadrants.lang import _perf_dispatch
+from quadrants.lang._perf_dispatch import (
+    NUM_WARMUP,
+    PerformanceDispatcher,
+    _parse_force_map,
+)
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
@@ -289,3 +294,118 @@ def test_perf_dispatch_annotation_mismatch() -> None:
 def test_perf_dispatch_sanity_check_register_args() -> None:
     @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=25, active=25)
     def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("", {}),
+        ("foo:bar", {"foo": "bar"}),
+        ("foo:bar,baz:qux", {"foo": "bar", "baz": "qux"}),
+        (" foo : bar , baz : qux ", {"foo": "bar", "baz": "qux"}),
+        ("a:b,,c:d", {"a": "b", "c": "d"}),
+    ],
+)
+@test_utils.test()
+def test_parse_force_map(raw, expected) -> None:
+    assert _parse_force_map(raw) == expected
+
+
+@test_utils.test()
+def test_parse_force_map_malformed() -> None:
+    with pytest.raises(ValueError, match="Malformed"):
+        _parse_force_map("no_colon")
+
+
+@test_utils.test()
+def test_perf_dispatch_force_by_name(monkeypatch) -> None:
+    """Forcing a specific implementation bypasses benchmarking."""
+    called = []
+
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"my_func": "impl_b"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("a")
+
+    @my_func.register
+    def impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("b")
+
+    a = qd.ndarray(qd.i32, (4,))
+    for _ in range(NUM_WARMUP * 2 + 3):
+        my_func(a)
+
+    assert len(called) == NUM_WARMUP * 2 + 3
+    assert all(c == "b" for c in called)
+
+
+@test_utils.test()
+def test_perf_dispatch_force_unmatched_falls_back(monkeypatch) -> None:
+    """An unmatched forced name falls back to normal benchmarking."""
+    called = []
+
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"my_func": "nonexistent"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("a")
+
+    @my_func.register
+    def impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("b")
+
+    a = qd.ndarray(qd.i32, (4,))
+    for _ in range(NUM_WARMUP * 2 + 3):
+        my_func(a)
+    assert len(called) == NUM_WARMUP * 2 + 3
+
+
+@test_utils.test()
+def test_perf_dispatch_force_multiple_dispatchers(monkeypatch) -> None:
+    """Multiple dispatchers can each be forced to different implementations."""
+    called_a = []
+    called_b = []
+
+    monkeypatch.setattr(_perf_dispatch, "_FORCE_MAP", {"op_a": "op_a_v2", "op_b": "op_b_v1"})
+    monkeypatch.setattr(_perf_dispatch, "_ANY_FORCE_ACTIVE", True)
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+    def op_a(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @op_a.register
+    def op_a_v1(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called_a.append("v1")
+
+    @op_a.register
+    def op_a_v2(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called_a.append("v2")
+
+    @qd.perf_dispatch(get_geometry_hash=lambda a: hash(a.shape), repeat_after_seconds=0)
+    def op_b(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @op_b.register
+    def op_b_v1(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called_b.append("v1")
+
+    @op_b.register
+    def op_b_v2(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called_b.append("v2")
+
+    a = qd.ndarray(qd.i32, (4,))
+    for _ in range(NUM_WARMUP * 2 + 3):
+        op_a(a)
+        op_b(a)
+
+    assert len(called_a) == NUM_WARMUP * 2 + 3
+    assert len(called_b) == NUM_WARMUP * 2 + 3
+    assert all(c == "v2" for c in called_a)
+    assert all(c == "v1" for c in called_b)
