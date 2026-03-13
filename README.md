@@ -76,7 +76,7 @@ On Genesis simulator (Linux + NVIDIA 5090):
 
 ### Compiler upgrades
 
-* Upgraded to LLVM 20
+* Upgraded to LLVM 22
 * Enabled ARM support
 
 ---
