@@ -3,16 +3,43 @@
 ```{toctree}
 :caption: Getting started
 :maxdepth: 1
+:titlesonly:
 
-user_guide/getting_started
-user_guide/supported_systems
-user_guide/tensor_types
-user_guide/static
-user_guide/sub_functions
-user_guide/scalar_tensors
-user_guide/synchronization
-user_guide/compound_types
-user_guide/python_backend
-user_guide/quirks
-user_guide/troubleshooting
+getting_started
+supported_systems
+```
+
+```{toctree}
+:caption: Core concepts
+:maxdepth: 1
+:titlesonly:
+
+tensor_types
+scalar_tensors
+matrix_vector
+compound_types
+static
+sub_functions
+parallelization
+```
+
+```{toctree}
+:caption: Integration
+:maxdepth: 1
+:titlesonly:
+
+interop
+```
+
+```{toctree}
+:caption: Reference
+:maxdepth: 1
+:titlesonly:
+
+perf_dispatch
+unsupported_python
+python_backend
+debug
+quirks
+troubleshooting
 ```
