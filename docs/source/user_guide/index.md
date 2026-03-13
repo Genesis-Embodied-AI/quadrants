@@ -36,6 +36,7 @@ interop
 :maxdepth: 1
 :titlesonly:
 
+perf_dispatch
 unsupported_python
 python_backend
 debug
