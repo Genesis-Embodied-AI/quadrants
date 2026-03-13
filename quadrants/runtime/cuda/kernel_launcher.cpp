@@ -111,6 +111,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
                                               LaunchContextBuilder &ctx) {
   int launch_id = handle.get_launch_id();
 
+  // Populated by register_llvm_kernel, which runs before launch_llvm_kernel
+  // for all LLVM kernels regardless of whether the graph path is used.
   auto &launcher_ctx = contexts_[launch_id];
   const auto &parameters = *launcher_ctx.parameters;
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
