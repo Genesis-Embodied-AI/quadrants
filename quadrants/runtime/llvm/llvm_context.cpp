@@ -345,6 +345,11 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
   std::unique_ptr<llvm::Module> module = module_from_bitcode_file(
       fmt::format("{}/{}", runtime_lib_dir(), file), ctx);
   if (arch_ == Arch::cuda || arch_ == Arch::amdgpu) {
+    // Replace stub functions in the runtime bitcode with inline wrappers
+    // around LLVM intrinsics. The runtime module is compiled from C++ with
+    // placeholder functions (e.g. thread_idx(), block_dim()) that can't map
+    // to GPU intrinsics in C++. This rewires them at IR level and marks them
+    // always_inline so they disappear after inlining.
     auto patch_intrinsic = [&](std::string name, Intrinsic::ID intrin,
                                bool ret = true,
                                std::vector<llvm::Type *> types = {},
