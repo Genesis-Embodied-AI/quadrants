@@ -17,7 +17,7 @@ REPEAT_AFTER_SECONDS: float = 1.0
 
 QD_PERFDISPATCH_PRINT_DEBUG = os.environ.get("QD_PERFDISPATCH_PRINT_DEBUG", "0") == "1"
 
-_QD_PERFDISPATCH_FORCE_RAW = os.environ.get("QD_PERFDISPATCH_FORCE", "")
+_QD_PERFDISPATCH_FORCE_RAW = os.environ.get("QD_PERFDISPATCH_FORCE")
 
 
 def _parse_force_map(raw: str) -> dict[str, str]:
