@@ -333,10 +333,10 @@ def test_perf_dispatch_force_by_name(monkeypatch) -> None:
         called.append("b")
 
     a = qd.ndarray(qd.i32, (4,))
-    for _ in range(NUM_WARMUP + 3):
+    for _ in range(NUM_WARMUP * 2 + 3):
         my_func(a)
 
-    assert len(called) == NUM_WARMUP + 3
+    assert len(called) == NUM_WARMUP * 2 + 3
     assert all(c == "b" for c in called)
 
 
@@ -401,5 +401,7 @@ def test_perf_dispatch_force_multiple_dispatchers(monkeypatch) -> None:
         op_a(a)
         op_b(a)
 
+    assert len(called_a) == NUM_WARMUP * 2 + 3
+    assert len(called_b) == NUM_WARMUP * 2 + 3
     assert all(c == "v2" for c in called_a)
     assert all(c == "v1" for c in called_b)
