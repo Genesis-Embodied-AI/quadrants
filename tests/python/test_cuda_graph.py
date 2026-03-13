@@ -19,20 +19,24 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_two_loops():
+def test_cuda_graph_two_loops(tensor_type):
     """A kernel with two top-level for loops should be fused into a CUDA graph."""
     platform_supports_graph = _on_cuda()
     n = 1024
-    x = qd.ndarray(qd.f32, shape=(n,))
-    y = qd.ndarray(qd.f32, shape=(n,))
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
+
+    x = tensor_type(qd.f32, (n,))
+    y = tensor_type(qd.f32, (n,))
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
@@ -49,25 +53,27 @@ def test_cuda_graph_two_loops():
     assert np.allclose(y_np, 6.0), f"Expected 6.0, got {y_np[:5]}"
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_three_loops():
+def test_cuda_graph_three_loops(tensor_type):
     """A kernel with three top-level for loops."""
     platform_supports_graph = _on_cuda()
     n = 512
-    a = qd.ndarray(qd.f32, shape=(n,))
-    b = qd.ndarray(qd.f32, shape=(n,))
-    c = qd.ndarray(qd.f32, shape=(n,))
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
     @qd.kernel(cuda_graph=True)
-    def three_loops(
-        a: qd.types.ndarray(qd.f32, ndim=1), b: qd.types.ndarray(qd.f32, ndim=1), c: qd.types.ndarray(qd.f32, ndim=1)
-    ):
+    def three_loops(a: Annotation, b: Annotation, c: Annotation):
         for i in range(a.shape[0]):
             a[i] = a[i] + 1.0
         for i in range(b.shape[0]):
             b[i] = b[i] + 10.0
         for i in range(c.shape[0]):
             c[i] = a[i] + b[i]
+
+    a = tensor_type(qd.f32, (n,))
+    b = tensor_type(qd.f32, (n,))
+    c = tensor_type(qd.f32, (n,))
 
     assert _cuda_graph_cache_size() == 0
     three_loops(a, b, c)
@@ -93,17 +99,21 @@ def test_cuda_graph_three_loops():
     assert np.allclose(c_np, 22.0)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_single_loop_no_graph():
+def test_cuda_graph_single_loop_no_graph(tensor_type):
     """A kernel with a single for loop should NOT use the graph path,
     even with cuda_graph=True (falls back since < 2 tasks)."""
     n = 256
-    x = qd.ndarray(qd.f32, shape=(n,))
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
     @qd.kernel(cuda_graph=True)
-    def single_loop(x: qd.types.ndarray(qd.f32, ndim=1)):
+    def single_loop(x: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 5.0
+
+    x = tensor_type(qd.f32, (n,))
 
     single_loop(x)
     assert not _cuda_graph_used()
@@ -115,19 +125,23 @@ def test_cuda_graph_single_loop_no_graph():
     assert np.allclose(x_np, 10.0)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_no_cuda_graph_annotation():
+def test_no_cuda_graph_annotation(tensor_type):
     """A kernel WITHOUT cuda_graph=True should never use the graph path."""
     n = 256
-    x = qd.ndarray(qd.f32, shape=(n,))
-    y = qd.ndarray(qd.f32, shape=(n,))
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
     @qd.kernel
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
+
+    x = tensor_type(qd.f32, (n,))
+    y = tensor_type(qd.f32, (n,))
 
     two_loops(x, y)
     assert not _cuda_graph_used()
@@ -201,11 +215,14 @@ def test_cuda_graph_different_sizes():
 
     Catches stale grid dims: if the graph cached from the small call is
     replayed for the large call, elements beyond the original size stay zero.
+
+    ndarray-only: fields are template args so different-sized fields would
+    produce separate compiled kernels, not exercise the same graph.
     """
     platform_supports_graph = _on_cuda()
 
     @qd.kernel(cuda_graph=True)
-    def add_one(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def add_one(x: qd.types.NDArray[qd.f32, 1], y: qd.types.NDArray[qd.f32, 1]):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
@@ -229,21 +246,24 @@ def test_cuda_graph_different_sizes():
     assert np.allclose(y2_np, 2.0), f"Expected all 2.0, got {y2_np[250:260]}"
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_after_reset():
+def test_cuda_graph_after_reset(tensor_type):
     """cuda_graph=True kernel must work correctly after qd.reset()."""
     platform_supports_graph = _on_cuda()
 
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
+
     @qd.kernel(cuda_graph=True)
-    def add_one(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def add_one(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
 
     n = 256
-    x = qd.ndarray(qd.f32, shape=(n,))
-    y = qd.ndarray(qd.f32, shape=(n,))
+    x = tensor_type(qd.f32, (n,))
+    y = tensor_type(qd.f32, (n,))
     add_one(x, y)
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
@@ -257,8 +277,8 @@ def test_cuda_graph_after_reset():
     qd.reset()
     qd.init(arch=arch)
 
-    x2 = qd.ndarray(qd.f32, shape=(n,))
-    y2 = qd.ndarray(qd.f32, shape=(n,))
+    x2 = tensor_type(qd.f32, (n,))
+    y2 = tensor_type(qd.f32, (n,))
     assert _cuda_graph_cache_size() == 0
     add_one(x2, y2)
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
@@ -268,20 +288,24 @@ def test_cuda_graph_after_reset():
     assert np.allclose(y2.to_numpy(), 2.0)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_annotation_cross_platform():
+def test_cuda_graph_annotation_cross_platform(tensor_type):
     """cuda_graph=True should be a harmless no-op on non-CUDA backends."""
     platform_supports_graph = _on_cuda()
     n = 256
-    x = qd.ndarray(qd.f32, shape=(n,))
-    y = qd.ndarray(qd.f32, shape=(n,))
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
+
+    x = tensor_type(qd.f32, (n,))
+    y = tensor_type(qd.f32, (n,))
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
