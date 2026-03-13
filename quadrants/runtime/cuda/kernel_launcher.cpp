@@ -117,6 +117,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   const auto &parameters = *launcher_ctx.parameters;
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
 
+  // A single-task kernel has no multi-launch overhead to eliminate, so
+  // graphing it provides no benefit. Return false to use the normal path.
   if (offloaded_tasks.size() < 2) {
     return false;
   }
