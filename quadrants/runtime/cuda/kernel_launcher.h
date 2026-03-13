@@ -52,6 +52,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
   void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) override;
   Handle register_llvm_kernel(
       const LLVM::CompiledKernelData &compiled) override;
+  std::size_t get_cuda_graph_cache_size() const override {
+    return cuda_graph_cache_.size();
+  }
 
  private:
   bool on_cuda_device(void *ptr);

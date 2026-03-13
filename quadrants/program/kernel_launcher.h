@@ -12,6 +12,10 @@ class KernelLauncher {
   virtual void launch_kernel(const CompiledKernelData &compiled_kernel_data,
                              LaunchContextBuilder &ctx) = 0;
 
+  virtual std::size_t get_cuda_graph_cache_size() const {
+    return 0;
+  }
+
   virtual ~KernelLauncher() = default;
 };
 

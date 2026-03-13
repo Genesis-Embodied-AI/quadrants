@@ -1,8 +1,13 @@
 import numpy as np
 
 import quadrants as qd
+from quadrants.lang import impl
 
 from tests import test_utils
+
+
+def _cuda_graph_cache_size():
+    return impl.get_runtime().prog.get_cuda_graph_cache_size()
 
 
 @test_utils.test(arch=[qd.cuda])
@@ -19,9 +24,12 @@ def test_cuda_graph_two_loops():
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
 
+    assert _cuda_graph_cache_size() == 0
+    two_loops(x, y)
+    assert _cuda_graph_cache_size() == 1
     two_loops(x, y)
     two_loops(x, y)
-    two_loops(x, y)
+    assert _cuda_graph_cache_size() == 1
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()
@@ -81,6 +89,7 @@ def test_cuda_graph_single_loop_no_graph():
 
     single_loop(x)
     single_loop(x)
+    assert _cuda_graph_cache_size() == 0
 
     x_np = x.to_numpy()
     assert np.allclose(x_np, 10.0)
@@ -102,6 +111,7 @@ def test_no_cuda_graph_annotation():
 
     two_loops(x, y)
     two_loops(x, y)
+    assert _cuda_graph_cache_size() == 0
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()

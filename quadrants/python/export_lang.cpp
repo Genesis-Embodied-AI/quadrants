@@ -495,7 +495,8 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel,
            py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
-      .def("get_device_caps", &Program::get_device_caps);
+      .def("get_device_caps", &Program::get_device_caps)
+      .def("get_cuda_graph_cache_size", &Program::get_cuda_graph_cache_size);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
