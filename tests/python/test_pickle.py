@@ -8,6 +8,9 @@ from quadrants.types.enums import Layout
 
 from tests import test_utils
 
+_ALL_DTYPES = [qd.f16, qd.f32, qd.f64, qd.i8, qd.i16, qd.i32, qd.i64, qd.u1, qd.u8, qd.u16, qd.u32, qd.u64]
+_64BIT_DTYPES = {qd.f64, qd.i64, qd.u64}
+
 
 def _roundtrip(obj):
     return pickle.loads(pickle.dumps(obj))
@@ -100,10 +103,6 @@ def test_pickle_scalar_ndarray_preserves_zeros():
 
     np.testing.assert_array_equal(b.to_numpy(), np.zeros((5, 5), dtype=np.float32))
     assert b.shape == a.shape
-
-
-_ALL_DTYPES = [qd.f16, qd.f32, qd.f64, qd.i8, qd.i16, qd.i32, qd.i64, qd.u1, qd.u8, qd.u16, qd.u32, qd.u64]
-_64BIT_DTYPES = {qd.f64, qd.i64, qd.u64}
 
 
 @pytest.mark.parametrize("dtype", _ALL_DTYPES, ids=lambda d: d.to_string())
