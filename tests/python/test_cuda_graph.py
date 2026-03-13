@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import quadrants as qd
 from quadrants.lang import impl
@@ -140,21 +141,24 @@ def test_no_cuda_graph_annotation():
     assert np.allclose(y_np, 4.0)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_changed_args():
-    """Graph should produce correct results when called with different ndarrays."""
+def test_cuda_graph_changed_args(tensor_type):
+    """Graph should produce correct results when called with different tensors."""
     platform_supports_graph = _on_cuda()
     n = 256
 
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
+
     @qd.kernel(cuda_graph=True)
-    def two_loops(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+    def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
 
-    x1 = qd.ndarray(qd.f32, shape=(n,))
-    y1 = qd.ndarray(qd.f32, shape=(n,))
+    x1 = tensor_type(qd.f32, (n,))
+    y1 = tensor_type(qd.f32, (n,))
     assert _cuda_graph_cache_size() == 0
     two_loops(x1, y1)
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
@@ -167,13 +171,18 @@ def test_cuda_graph_changed_args():
     assert np.allclose(x1_np, 2.0), f"Expected 2.0, got {x1_np[:5]}"
     assert np.allclose(y1_np, 4.0), f"Expected 4.0, got {y1_np[:5]}"
 
-    x2 = qd.ndarray(qd.f32, shape=(n,))
-    y2 = qd.ndarray(qd.f32, shape=(n,))
+    x2 = tensor_type(qd.f32, (n,))
+    y2 = tensor_type(qd.f32, (n,))
     x2.from_numpy(np.full(n, 10.0, dtype=np.float32))
     y2.from_numpy(np.full(n, 20.0, dtype=np.float32))
     two_loops(x2, y2)
     assert _cuda_graph_used() == platform_supports_graph
-    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
+    # Fields are template args, so different field objects produce a second
+    # compiled kernel and a second graph cache entry.
+    if tensor_type == qd.field:
+        assert _cuda_graph_cache_size() == (2 if platform_supports_graph else 0)
+    else:
+        assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
