@@ -255,22 +255,19 @@ void KernelCodeGenCPU::optimize_module(llvm::Module *module) {
   llvm::TargetOptions options;
   if (compile_config.fast_math) {
     options.AllowFPOpFusion = llvm::FPOpFusion::Fast;
-    options.UnsafeFPMath = 1;
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
   } else {
     options.AllowFPOpFusion = llvm::FPOpFusion::Strict;
-    options.UnsafeFPMath = 0;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
   }
-  options.HonorSignDependentRoundingFPMathOption = false;
   options.NoZerosInBSS = false;
   options.GuaranteedTailCallOpt = false;
 
   llvm::StringRef mcpu = llvm::sys::getHostCPUName();
   std::unique_ptr<llvm::TargetMachine> target_machine(
-      target->createTargetMachine(triple.str(), mcpu.str(), "", options,
+      target->createTargetMachine(triple, mcpu.str(), "", options,
                                   llvm::Reloc::PIC_, llvm::CodeModel::Small,
                                   llvm::CodeGenOptLevel::Aggressive));
 

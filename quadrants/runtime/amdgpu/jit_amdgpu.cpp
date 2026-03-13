@@ -30,10 +30,11 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   llvm::legacy::FunctionPassManager function_pass_manager_addrcast(
       llvm_module.get());
   function_pass_manager_addrcast.add(
-      new AMDGPUConvertFunctionBodyAllocsAddressSpacePass());
+      new AMDGPUConvertAllocaInstAddressSpacePass());
+  function_pass_manager_addrcast.doInitialization();
   for (auto func = llvm_module->begin(); func != llvm_module->end(); ++func)
-    if (func->getName() == "function_body")
-      function_pass_manager_addrcast.run(*func);
+    function_pass_manager_addrcast.run(*func);
+  function_pass_manager_addrcast.doFinalization();
 
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);
@@ -55,14 +56,17 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   options.MCOptions.AsmVerbose = false;
   if (this->config_.fast_math) {
     options.AllowFPOpFusion = FPOpFusion::Fast;
-    options.UnsafeFPMath = 1;
+    // UnsafeFPMath was removed in LLVM 22; set the individual flags it implied
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
+    options.NoSignedZerosFPMath = 1;
+    options.NoTrappingFPMath = 1;
   } else {
     options.AllowFPOpFusion = FPOpFusion::Strict;
-    options.UnsafeFPMath = 0;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
+    options.NoSignedZerosFPMath = 0;
+    options.NoTrappingFPMath = 0;
   }
   options.HonorSignDependentRoundingFPMathOption = 0;
   options.NoZerosInBSS = 0;
