@@ -64,7 +64,7 @@ def solve(x: qd.types.ndarray(qd.f32, ndim=1),
     for i in range(x.shape[0]):
         x[i] = x[i] + 1.0
     for i in range(1):
-        counter[None] = counter[None] - 1
+        counter[()] = counter[()] - 1
 
 x = qd.ndarray(qd.f32, shape=(N,))
 counter = qd.ndarray(qd.i32, shape=())
@@ -90,7 +90,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
     for i in range(x.shape[0]):
         x[i] = x[i] + 1.0
     for i in range(1):
-        counter[None] = counter[None] - 1
+        counter[()] = counter[()] - 1
 ```
 
 **Boolean flag**: set a `keep_going` flag to 1, have the kernel set it to 0 when a convergence criterion is met.
@@ -104,7 +104,7 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
         pass
     for i in range(1):
         if some_condition(x):
-            keep_going[None] = 0
+            keep_going[()] = 0
 ```
 
 ### Do-while semantics
