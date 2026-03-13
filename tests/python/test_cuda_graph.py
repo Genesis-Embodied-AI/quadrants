@@ -270,12 +270,11 @@ def test_cuda_graph_annotation_cross_platform():
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
-    expected_cache_size = 1 if platform_supports_graph else 0
-    assert _cuda_graph_cache_size() == expected_cache_size
+    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
     assert _cuda_graph_used() == platform_supports_graph
-    assert _cuda_graph_cache_size() == expected_cache_size
+    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()
