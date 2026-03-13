@@ -14,6 +14,10 @@ def _cuda_graph_used():
     return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
 
 
+def _on_cuda():
+    return impl.current_cfg().arch == qd.cuda
+
+
 @test_utils.test(arch=[qd.cuda])
 def test_cuda_graph_two_loops():
     """A kernel with two top-level for loops should be fused into a CUDA graph."""
@@ -62,7 +66,10 @@ def test_cuda_graph_three_loops():
         for i in range(c.shape[0]):
             c[i] = a[i] + b[i]
 
+    assert _cuda_graph_cache_size() == 0
     three_loops(a, b, c)
+    assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
 
     a_np = a.to_numpy()
     b_np = b.to_numpy()
@@ -72,6 +79,8 @@ def test_cuda_graph_three_loops():
     assert np.allclose(c_np, 11.0)
 
     three_loops(a, b, c)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
 
     a_np = a.to_numpy()
     b_np = b.to_numpy()
@@ -143,8 +152,12 @@ def test_cuda_graph_changed_args():
 
     x1 = qd.ndarray(qd.f32, shape=(n,))
     y1 = qd.ndarray(qd.f32, shape=(n,))
+    assert _cuda_graph_cache_size() == 0
     two_loops(x1, y1)
+    assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
     two_loops(x1, y1)
+    assert _cuda_graph_used()
 
     x1_np = x1.to_numpy()
     y1_np = y1.to_numpy()
@@ -156,6 +169,8 @@ def test_cuda_graph_changed_args():
     x2.from_numpy(np.full(n, 10.0, dtype=np.float32))
     y2.from_numpy(np.full(n, 20.0, dtype=np.float32))
     two_loops(x2, y2)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
@@ -185,11 +200,15 @@ def test_cuda_graph_different_sizes():
 
     x1 = qd.ndarray(qd.f32, shape=(256,))
     y1 = qd.ndarray(qd.f32, shape=(256,))
+    assert _cuda_graph_cache_size() == 0
     add_one(x1, y1)
+    assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
 
     x2 = qd.ndarray(qd.f32, shape=(1024,))
     y2 = qd.ndarray(qd.f32, shape=(1024,))
     add_one(x2, y2)
+    assert _cuda_graph_used()
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
@@ -212,7 +231,10 @@ def test_cuda_graph_after_reset():
     x = qd.ndarray(qd.f32, shape=(n,))
     y = qd.ndarray(qd.f32, shape=(n,))
     add_one(x, y)
+    assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
     add_one(x, y)
+    assert _cuda_graph_used()
 
     assert np.allclose(x.to_numpy(), 2.0)
     assert np.allclose(y.to_numpy(), 4.0)
@@ -222,7 +244,10 @@ def test_cuda_graph_after_reset():
 
     x2 = qd.ndarray(qd.f32, shape=(n,))
     y2 = qd.ndarray(qd.f32, shape=(n,))
+    assert _cuda_graph_cache_size() == 0
     add_one(x2, y2)
+    assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
 
     assert np.allclose(x2.to_numpy(), 1.0)
     assert np.allclose(y2.to_numpy(), 2.0)
@@ -231,6 +256,7 @@ def test_cuda_graph_after_reset():
 @test_utils.test()
 def test_cuda_graph_annotation_cross_platform():
     """cuda_graph=True should be a harmless no-op on non-CUDA backends."""
+    platform_supports_graph = _on_cuda()
     n = 256
     x = qd.ndarray(qd.f32, shape=(n,))
     y = qd.ndarray(qd.f32, shape=(n,))
@@ -242,8 +268,14 @@ def test_cuda_graph_annotation_cross_platform():
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
 
+    assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
+    expected_cache_size = 1 if platform_supports_graph else 0
+    assert _cuda_graph_cache_size() == expected_cache_size
+    assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
+    assert _cuda_graph_used() == platform_supports_graph
+    assert _cuda_graph_cache_size() == expected_cache_size
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()
