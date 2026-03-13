@@ -22,6 +22,8 @@ struct CudaKernelNodeParams {
 };
 
 struct CachedCudaGraph {
+  // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
+  // This is the instantiated, launchable form of the captured CUDA graph.
   void *graph_exec{nullptr};
   char *persistent_device_arg_buffer{nullptr};
   char *persistent_device_result_buffer{nullptr};
