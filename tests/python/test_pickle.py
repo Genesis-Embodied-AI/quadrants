@@ -108,8 +108,8 @@ def test_pickle_scalar_ndarray_preserves_zeros():
 @pytest.mark.parametrize("dtype", _ALL_DTYPES, ids=lambda d: d.to_string())
 @test_utils.test()
 def test_pickle_all_dtypes(dtype):
-    if dtype in _64BIT_DTYPES and qd.cfg.arch == qd.metal:
-        pytest.skip("metal does not support 64-bit types")
+    if dtype in _64BIT_DTYPES and qd.cfg.arch in (qd.metal, qd.vulkan):
+        pytest.skip(f"{qd.cfg.arch} does not support 64-bit types")
     a = qd.ndarray(dtype, (4,))
     if dtype == qd.u1:
         a[0] = 1
