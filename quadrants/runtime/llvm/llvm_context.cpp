@@ -906,6 +906,7 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
   // Keep nvvm.annotations for launch bounds (maxntidx, minctasm).
   insert_nvvm_annotation(func, "kernel", 1);
   if (block_dim != 0) {
+    // CUDA launch bounds
     insert_nvvm_annotation(func, "maxntidx", block_dim);
     insert_nvvm_annotation(func, "minctasm", 2);
   }

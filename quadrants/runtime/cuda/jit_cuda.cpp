@@ -266,6 +266,8 @@ std::string JITSessionCUDA::compile_module_to_ptx(
     options.AllowFPOpFusion = FPOpFusion::Strict;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
+    options.NoSignedZerosFPMath = 0;
+    options.NoTrappingFPMath = 0;
   }
   options.HonorSignDependentRoundingFPMathOption = 0;
   options.NoZerosInBSS = 0;
