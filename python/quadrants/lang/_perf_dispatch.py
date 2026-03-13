@@ -212,7 +212,7 @@ class PerformanceDispatcher(Generic[P, R]):
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
         times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
-        fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: x[1])
+        fastest_dispatch, _ = min(times_by_dispatch_impl.items(), key=lambda x: sum(x[1]) / len(x[1]))
         self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = fastest_dispatch
         underlying = fastest_dispatch.get_implementation2()
         log_str = f"perf_dispatch '{self._name}': chose '{underlying.__name__}' out of {len(self._dispatch_impls)} registered functions."

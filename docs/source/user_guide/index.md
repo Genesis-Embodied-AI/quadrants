@@ -14,6 +14,7 @@ user_guide/synchronization
 user_guide/compound_types
 user_guide/perf_dispatch
 user_guide/python_backend
+user_guide/perf_dispatch
 user_guide/quirks
 user_guide/troubleshooting
 ```
