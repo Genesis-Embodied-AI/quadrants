@@ -73,10 +73,10 @@ CUDAContext::CUDAContext()
   compute_capability_ = cc_major * 10 + cc_minor;
 
   // from
-  // https://github.com/llvm/llvm-project/blob/llvmorg-20.1.8/clang/lib/Basic/Targets/NVPTX.cpp
-  // looks like up to 120 is ok?
-  if (compute_capability_ > 120) {
-    compute_capability_ = 120;
+  // https://github.com/llvm/llvm-project/blob/llvmorg-22.1.0/llvm/lib/Target/NVPTX/NVPTX.td
+  // looks like up to 121 is ok?
+  if (compute_capability_ > 121) {
+    compute_capability_ = 121;
   }
 
   driver_.device_get_attribute(
