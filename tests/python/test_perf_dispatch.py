@@ -5,7 +5,11 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang import _perf_dispatch
-from quadrants.lang._perf_dispatch import NUM_WARMUP, PerformanceDispatcher, _parse_force_map
+from quadrants.lang._perf_dispatch import (
+    NUM_WARMUP,
+    PerformanceDispatcher,
+    _parse_force_map,
+)
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
