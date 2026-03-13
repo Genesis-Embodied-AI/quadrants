@@ -292,13 +292,57 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="quadrants">
 <h1>Quadrants<a class="headerlink" href="#quadrants" title="Link to this heading">#</a></h1>
+<p>Quadrants is a high-performance parallel programming framework for GPU and CPU computing. Write Python-like code that compiles to optimized GPU kernels for CUDA, Metal, and Vulkan backends.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">hello</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">2</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+<span class="n">hello</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Simple</strong>: annotate Python functions with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> to run on GPU</p></li>
+<li><p><strong>Fast</strong>: automatic parallelization of top-level for loops across GPU threads</p></li>
+<li><p><strong>Portable</strong>: supports CUDA, Metal, AMD, and Vulkan backends</p></li>
+<li><p><strong>Flexible</strong>: ndarrays, fields, structs, atomics, shared memory</p></li>
+</ul>
 <div class="toctree-wrapper compound">
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quadrants</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="user_guide/index.html">User guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="autoapi/index.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/index.html">User guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/getting_started.html">Getting started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/supported_systems.html">Supported systems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/tensor_types.html">Tensor types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/compound_types.html">Compound types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/static.html">qd.static</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/parallelization.html">Parallelization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/python_backend.html">Python backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/debug.html">Debug mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/quirks.html">Quirks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="autoapi/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autoapi/quadrants/index.html">quadrants</a></li>
+</ul>
+</li>
 </ul>
 </div>
+</section>
 </section>
 
 
@@ -330,6 +374,18 @@
                 <dialog id="pst-secondary-sidebar-modal"></dialog>
                 <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
 
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#features">Features</a></li>
+</ul>
+  </nav></div>
 
   <div class="sidebar-secondary-item">
   <div role="note" aria-label="source link">
