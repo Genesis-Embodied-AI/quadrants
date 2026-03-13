@@ -112,6 +112,15 @@ def test_pickle_all_dtypes(dtype):
     if dtype in _64BIT_DTYPES and qd.cfg.arch == qd.metal:
         pytest.skip("metal does not support 64-bit types")
     a = qd.ndarray(dtype, (4,))
+    if dtype == qd.u1:
+        a[0] = 1
+        a[2] = 1
+    elif dtype in (qd.f16, qd.f32, qd.f64):
+        a[0] = 1.5
+        a[2] = -3.25
+    else:
+        a[0] = 7
+        a[2] = 42
     b = _roundtrip(a)
     np.testing.assert_array_equal(b.to_numpy(), a.to_numpy())
     assert b.shape == a.shape
