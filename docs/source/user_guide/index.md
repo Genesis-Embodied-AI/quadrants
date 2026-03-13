@@ -12,7 +12,6 @@ user_guide/sub_functions
 user_guide/scalar_tensors
 user_guide/synchronization
 user_guide/compound_types
-user_guide/perf_dispatch
 user_guide/python_backend
 user_guide/perf_dispatch
 user_guide/quirks
