@@ -68,6 +68,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
       const std::vector<std::pair<int, Callable::Parameter>> &parameters);
   bool launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
   std::vector<Context> contexts_;
+  // Keyed by launch_id, which uniquely identifies a compiled kernel variant
+  // (each template specialization gets its own launch_id).
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
   bool cuda_graph_cache_used_on_last_call_{false};
 };
