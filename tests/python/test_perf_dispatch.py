@@ -292,13 +292,23 @@ def test_perf_dispatch_sanity_check_register_args() -> None:
     def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("", {}),
+        ("foo:bar", {"foo": "bar"}),
+        ("foo:bar,baz:qux", {"foo": "bar", "baz": "qux"}),
+        (" foo : bar , baz : qux ", {"foo": "bar", "baz": "qux"}),
+        ("a:b,,c:d", {"a": "b", "c": "d"}),
+    ],
+)
 @test_utils.test()
-def test_parse_force_map() -> None:
-    assert _parse_force_map("") == {}
-    assert _parse_force_map("foo:bar") == {"foo": "bar"}
-    assert _parse_force_map("foo:bar,baz:qux") == {"foo": "bar", "baz": "qux"}
-    assert _parse_force_map(" foo : bar , baz : qux ") == {"foo": "bar", "baz": "qux"}
-    assert _parse_force_map("a:b,,c:d") == {"a": "b", "c": "d"}
+def test_parse_force_map(raw, expected) -> None:
+    assert _parse_force_map(raw) == expected
+
+
+@test_utils.test()
+def test_parse_force_map_malformed() -> None:
     with pytest.raises(ValueError, match="Malformed"):
         _parse_force_map("no_colon")
 
