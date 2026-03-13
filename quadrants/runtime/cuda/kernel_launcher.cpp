@@ -61,6 +61,13 @@ bool KernelLauncher::on_cuda_device(void *ptr) {
   return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
 }
 
+// Resolves ndarray parameter handles in the launch context to raw device
+// pointers, writing them into the arg buffer via set_ndarray_ptrs.
+//
+// Unlike the normal launch path, this does not handle host-resident arrays
+// (no temporary device allocation or host-to-device transfer). Returns false
+// if any external array is on the host, signaling the caller to fall back
+// to the non-graph launch path.
 bool KernelLauncher::resolve_ctx_ndarray_ptrs(
     LaunchContextBuilder &ctx,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters) {
