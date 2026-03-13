@@ -11,26 +11,19 @@ def test_static_if_dead_branch_not_walked():
     x = qd.field(qd.i32, shape=())
 
     @qd.kernel
-    def true_branch_taken():
-        if qd.static(True):
+    def kern(take_true: qd.template()):
+        if qd.static(take_true):
             x[()] = 1
         else:
             # `import` is unsupported by the AST transformer; if this branch
             # were walked it would raise QuadrantsSyntaxError.
             import os  # noqa: F401
 
-    @qd.kernel
-    def false_branch_taken():
-        if qd.static(False):
-            import os  # noqa: F401
-        else:
-            x[()] = 2
-
-    true_branch_taken()
+    kern(True)
     assert x[()] == 1
 
-    false_branch_taken()
-    assert x[()] == 2
+    with pytest.raises(qd.QuadrantsSyntaxError):
+        kern(False)
 
 
 @pytest.mark.parametrize("val", [0, 1])
