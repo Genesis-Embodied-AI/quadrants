@@ -137,6 +137,11 @@ class QD_DLL_EXPORT Program {
     return program_impl_->get_kernel_launcher().get_cuda_graph_cache_size();
   }
 
+  bool get_cuda_graph_cache_used_on_last_call() {
+    return program_impl_->get_kernel_launcher()
+        .get_cuda_graph_cache_used_on_last_call();
+  }
+
   DeviceCapabilityConfig get_device_caps() {
     return program_impl_->get_device_caps();
   }

@@ -16,6 +16,10 @@ class KernelLauncher {
     return 0;
   }
 
+  virtual bool get_cuda_graph_cache_used_on_last_call() const {
+    return false;
+  }
+
   virtual ~KernelLauncher() = default;
 };
 

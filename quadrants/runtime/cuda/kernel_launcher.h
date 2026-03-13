@@ -55,6 +55,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::size_t get_cuda_graph_cache_size() const override {
     return cuda_graph_cache_.size();
   }
+  bool get_cuda_graph_cache_used_on_last_call() const override {
+    return cuda_graph_cache_used_on_last_call_;
+  }
 
  private:
   bool on_cuda_device(void *ptr);
@@ -64,6 +67,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
   bool launch_llvm_kernel_graph(Handle handle, LaunchContextBuilder &ctx);
   std::vector<Context> contexts_;
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
+  bool cuda_graph_cache_used_on_last_call_{false};
 };
 
 }  // namespace cuda

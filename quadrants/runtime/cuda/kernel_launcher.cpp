@@ -213,9 +213,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   if (ctx.use_cuda_graph) {
     if (launch_llvm_kernel_graph(handle, ctx)) {
+      cuda_graph_cache_used_on_last_call_ = true;
       return;
     }
   }
+  cuda_graph_cache_used_on_last_call_ = false;
 
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();

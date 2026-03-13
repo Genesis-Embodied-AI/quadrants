@@ -10,6 +10,10 @@ def _cuda_graph_cache_size():
     return impl.get_runtime().prog.get_cuda_graph_cache_size()
 
 
+def _cuda_graph_used():
+    return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
+
+
 @test_utils.test(arch=[qd.cuda])
 def test_cuda_graph_two_loops():
     """A kernel with two top-level for loops should be fused into a CUDA graph."""
@@ -27,7 +31,9 @@ def test_cuda_graph_two_loops():
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
     assert _cuda_graph_cache_size() == 1
+    assert _cuda_graph_used()
     two_loops(x, y)
+    assert _cuda_graph_used()
     two_loops(x, y)
     assert _cuda_graph_cache_size() == 1
 
@@ -88,7 +94,9 @@ def test_cuda_graph_single_loop_no_graph():
             x[i] = x[i] + 5.0
 
     single_loop(x)
+    assert not _cuda_graph_used()
     single_loop(x)
+    assert not _cuda_graph_used()
     assert _cuda_graph_cache_size() == 0
 
     x_np = x.to_numpy()
@@ -110,7 +118,9 @@ def test_no_cuda_graph_annotation():
             y[i] = y[i] + 2.0
 
     two_loops(x, y)
+    assert not _cuda_graph_used()
     two_loops(x, y)
+    assert not _cuda_graph_used()
     assert _cuda_graph_cache_size() == 0
 
     x_np = x.to_numpy()
