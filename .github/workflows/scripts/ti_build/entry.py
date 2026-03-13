@@ -40,15 +40,10 @@ def build_wheel(python: Command) -> None:
 
 def setup_basic_build_env():
     u = platform.uname()
+    setup_clang(as_compiler=False)
     if (u.system, u.machine) == ("Windows", "AMD64"):
         # Use MSVC on Windows
-        setup_clang(as_compiler=False)
         setup_msvc()
-    elif u.system == "Linux":
-        setup_clang(as_compiler=False)
-    else:
-        # macOS: use system clang as compiler, LLVM clang only for JIT
-        setup_clang(as_compiler=False)
 
     setup_llvm()
     if u.system == "Linux":
