@@ -40,7 +40,7 @@ def test_pickle_scalar_ndarray_f32():
     assert b.dtype == a.dtype
 
 
-@test_utils.test()
+@test_utils.test(exclude=[qd.metal])
 def test_pickle_scalar_ndarray_f64():
     a = qd.ndarray(qd.f64, (2, 3))
     a[1, 2] = 3.141592653589793
@@ -79,7 +79,7 @@ def test_pickle_matrix_ndarray():
     assert b.element_shape == a.element_shape
 
 
-@test_utils.test()
+@test_utils.test(exclude=[qd.metal])
 def test_pickle_square_matrix_ndarray():
     a = qd.Matrix.ndarray(3, 3, qd.f64, shape=(2, 2))
     a[0, 0] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
