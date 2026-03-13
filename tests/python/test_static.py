@@ -6,6 +6,26 @@ import quadrants as qd
 from tests import test_utils
 
 
+@test_utils.test(qd.cpu)
+def test_static_if_dead_branch_not_walked():
+    x = qd.field(qd.i32, shape=())
+
+    @qd.kernel
+    def kern(take_true: qd.template()):
+        if qd.static(take_true):
+            x[()] = 1
+        else:
+            # `import` is unsupported by the AST transformer; if this branch
+            # were walked it would raise QuadrantsSyntaxError.
+            import os  # noqa: F401
+
+    kern(True)
+    assert x[()] == 1
+
+    with pytest.raises(qd.QuadrantsSyntaxError):
+        kern(False)
+
+
 @pytest.mark.parametrize("val", [0, 1])
 @test_utils.test(qd.cpu)
 def test_static_if(val):
