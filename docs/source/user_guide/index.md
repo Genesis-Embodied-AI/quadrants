@@ -12,7 +12,7 @@ user_guide/static
 user_guide/sub_functions
 user_guide/scalar_tensors
 user_guide/synchronization
-user_guide/cuda_graphs
+user_guide/cuda_graph
 user_guide/compound_types
 user_guide/python_backend
 user_guide/quirks
