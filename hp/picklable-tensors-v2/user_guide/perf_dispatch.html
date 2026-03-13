@@ -504,6 +504,36 @@
 <li><p><strong>Re-evaluation</strong> (optional): After <code class="docutils literal notranslate"><span class="pre">repeat_after_count</span></code> calls or <code class="docutils literal notranslate"><span class="pre">repeat_after_seconds</span></code> seconds, the entire warmup + active cycle restarts from scratch, allowing the dispatcher to adapt if conditions change.</p></li>
 </ol>
 </section>
+<section id="forcing-a-specific-implementation">
+<h2>Forcing a specific implementation<a class="headerlink" href="#forcing-a-specific-implementation" title="Link to this heading">#</a></h2>
+<p>For debugging or profiling, you can bypass the auto-tuning and force a specific implementation using the <code class="docutils literal notranslate"><span class="pre">QD_PERFDISPATCH_FORCE</span></code> environment variable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_PERFDISPATCH_FORCE</span><span class="o">=</span>my_op:my_op_v2<span class="w"> </span>python<span class="w"> </span>my_script.py
+</pre></div>
+</div>
+<p>The format is <code class="docutils literal notranslate"><span class="pre">dispatcher_name:implementation_name</span></code>, where <code class="docutils literal notranslate"><span class="pre">dispatcher_name</span></code> is the name of the meta-function and <code class="docutils literal notranslate"><span class="pre">implementation_name</span></code> is the name of the registered function.</p>
+<p>To force implementations for multiple dispatchers, separate entries with commas:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_PERFDISPATCH_FORCE</span><span class="o">=</span>my_op:my_op_v2,transform:transform_v1<span class="w"> </span>python<span class="w"> </span>my_script.py
+</pre></div>
+</div>
+<p>Dispatchers not listed in the env var will benchmark normally.</p>
+<section id="discovering-available-names">
+<h3>Discovering available names<a class="headerlink" href="#discovering-available-names" title="Link to this heading">#</a></h3>
+<p>When <code class="docutils literal notranslate"><span class="pre">QD_PERFDISPATCH_FORCE</span></code> is set, all dispatchers automatically print their name and registered implementations at startup. To discover valid values, set the env var to any value and run the program:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_PERFDISPATCH_FORCE</span><span class="o">=</span>?<span class="w"> </span>python<span class="w"> </span>my_script.py
+</pre></div>
+</div>
+<p>This will produce output like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v1&#39;</span>
+<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v2&#39;</span>
+<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;my_op_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;my_op_v2&#39;</span><span class="p">]</span>
+<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v1&#39;</span>
+<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v2&#39;</span>
+<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;transform_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;transform_v2&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If the requested implementation name doesn’t match any registered function, a warning is printed and the dispatcher falls back to normal benchmarking.</p>
+</section>
+</section>
 <section id="important-notes">
 <h2>Important notes<a class="headerlink" href="#important-notes" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -602,6 +632,10 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#geometry-hash">Geometry hash</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tuning-parameters">Tuning parameters</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-benchmarking-works">How benchmarking works</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#forcing-a-specific-implementation">Forcing a specific implementation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#discovering-available-names">Discovering available names</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#important-notes">Important notes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#complete-example">Complete example</a></li>
 </ul>
