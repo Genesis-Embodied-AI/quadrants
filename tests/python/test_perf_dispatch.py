@@ -355,9 +355,14 @@ def test_perf_dispatch_force_unmatched_falls_back(monkeypatch) -> None:
     def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
         called.append("a")
 
+    @my_func.register
+    def impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("b")
+
     a = qd.ndarray(qd.i32, (4,))
-    my_func(a)
-    assert called == ["a"]
+    for _ in range(NUM_WARMUP * 2 + 3):
+        my_func(a)
+    assert len(called) == NUM_WARMUP * 2 + 3
 
 
 @test_utils.test()
@@ -392,7 +397,7 @@ def test_perf_dispatch_force_multiple_dispatchers(monkeypatch) -> None:
         called_b.append("v2")
 
     a = qd.ndarray(qd.i32, (4,))
-    for _ in range(NUM_WARMUP + 3):
+    for _ in range(NUM_WARMUP * 2 + 3):
         op_a(a)
         op_b(a)
 
