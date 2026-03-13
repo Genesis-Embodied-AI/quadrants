@@ -194,6 +194,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     node_params.blockDimZ = 1;
     node_params.sharedMemBytes = (unsigned int)task.dynamic_shared_array_bytes;
     node_params.kernelParams = &ctx_ptr;
+    // kernelParams and extra are two mutually exclusive ways of passing
+    // arguments to a CUDA kernel; we use kernelParams, so extra is null.
     node_params.extra = nullptr;
 
     void *node = nullptr;
