@@ -551,13 +551,11 @@
 <span class="sd">    Args:</span>
 <span class="sd">        cuda_graph: If True, kernels with 2+ top-level for loops are captured</span>
 <span class="sd">            into a CUDA graph on first launch and replayed on subsequent</span>
-<span class="sd">            launches, reducing per-kernel launch overhead. On non-CUDA backends</span>
-<span class="sd">            this flag is a harmless no-op.</span>
+<span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends are not supported currently.</span>
 <span class="sd">        graph_do_while: Name of a scalar ``qd.i32`` ndarray parameter that</span>
 <span class="sd">            controls GPU-side iteration. The kernel body repeats while the</span>
 <span class="sd">            named argument is non-zero.  Uses CUDA conditional while nodes</span>
-<span class="sd">            on SM 9.0+ (Hopper); falls back to a host-side do-while loop</span>
-<span class="sd">            on older GPUs and non-CUDA backends.  Implicitly enables</span>
+<span class="sd">            on SM 9.0+ (Hopper).  Implicitly enables</span>
 <span class="sd">            ``cuda_graph=True``.</span>
 
 <span class="sd">            **Do-while semantics**: the kernel body always executes at least</span>
@@ -583,7 +581,9 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">level</span> <span class="o">=</span> <span class="mi">4</span>
 
-        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">cuda_graph</span><span class="o">=</span><span class="n">cuda_graph</span><span class="p">,</span> <span class="n">graph_do_while</span><span class="o">=</span><span class="n">graph_do_while</span><span class="p">)</span>
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span>
+            <span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">cuda_graph</span><span class="o">=</span><span class="n">cuda_graph</span><span class="p">,</span> <span class="n">graph_do_while</span><span class="o">=</span><span class="n">graph_do_while</span>
+        <span class="p">)</span>
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>

@@ -427,7 +427,7 @@
 <p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> value is the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The kernel body repeats while this value is non-zero.</p>
 <ul class="simple">
 <li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
-<li><p>On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.</p></li>
+<li><p>Older CUDA GPUs, and non-CUDA backends not currently supported.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> implicitly enables <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code>.</p></li>
 </ul>
 <section id="patterns">
@@ -466,18 +466,7 @@
 </section>
 <section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
-<p>On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
-<ul class="simple">
-<li><p>wait for GPU async queue to finish processing</p></li>
-<li><p>copy condition value to hostside</p></li>
-<li><p>evaluate condition value on hostside</p></li>
-<li><p>launch new kernels for next loop iteration, if not finished yet</p></li>
-</ul>
-<p>Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:</p>
-<ul class="simple">
-<li><p>fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:</p></li>
-<li><p>make each kernel ‘short-circuit’, exit quickly, if the task has already been completed; to avoid running the GPU more than necessary</p></li>
-</ul>
+<p>Only runs on CUDA. No fallback on non-CUDA platforms currently.</p>
 </section>
 </section>
 </section>
