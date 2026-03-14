@@ -259,7 +259,9 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_do_while=graph_do_while)
+        wrapped = _kernel_impl(
+            fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_do_while=graph_do_while
+        )
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(

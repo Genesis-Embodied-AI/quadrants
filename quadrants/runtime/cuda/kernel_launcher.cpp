@@ -212,7 +212,8 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
                              "_qd_graph_do_while_cond");
   driver.link_destroy(link_state);
 
-  QD_TRACE("Loaded graph_do_while condition kernel ({} bytes cubin)", cubin_size);
+  QD_TRACE("Loaded graph_do_while condition kernel ({} bytes cubin)",
+           cubin_size);
 }
 
 bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
@@ -247,7 +248,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     if (use_graph_do_while &&
         cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
       QD_TRACE(
-          "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
+          "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA "
+          "graph",
           cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
       cuda_graph_cache_.erase(it);
     } else {
