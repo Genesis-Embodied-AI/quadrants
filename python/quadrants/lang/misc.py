@@ -701,6 +701,23 @@ def loop_config(
         _bit_vectorize()
 
 
+def graph_do_while(condition) -> bool:
+    """Marks a while loop as a CUDA graph do-while conditional node.
+
+    Used as ``while qd.graph_do_while(flag):`` inside a
+    ``@qd.kernel(cuda_graph=True)`` kernel. The loop body repeats while
+    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
+
+    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
+    conditional while node. On other backends or older GPUs it falls
+    back to a host-side do-while loop.
+
+    This function should not be called directly at runtime; it is
+    recognised and transformed during AST compilation.
+    """
+    return bool(condition)
+
+
 def global_thread_idx():
     """Returns the global thread id of this running thread,
     only available for cpu and cuda backends.
@@ -837,6 +854,7 @@ __all__ = [
     "python",
     "vulkan",
     "extension",
+    "graph_do_while",
     "loop_config",
     "global_thread_idx",
     "assume_in_range",
