@@ -69,6 +69,8 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
     const auto &parameter = kv.second;
     // Scalar parameters are already in the arg buffer and need no resolution;
     // only array parameters require translating handles to device pointers.
+    // Fields are template parameters, and would never arrive here.
+    // We only need to handle ndarrays and external arrays.
     if (parameter.is_array) {
       const auto arr_sz = ctx.array_runtime_sizes[arg_id];
       if (arr_sz == 0)
