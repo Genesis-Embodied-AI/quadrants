@@ -1,8 +1,17 @@
 import numpy as np
 
 import quadrants as qd
+from quadrants.lang import impl
 
 from tests import test_utils
+
+
+def _cuda_graph_cache_size():
+    return impl.get_runtime().prog.get_cuda_graph_cache_size()
+
+
+def _cuda_graph_used():
+    return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
 
 
 @test_utils.test(arch=[qd.cuda])
@@ -24,6 +33,8 @@ def test_graph_do_while_counter():
     counter.from_numpy(np.array(5, dtype=np.int32))
 
     increment_loop(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
 
     qd.sync()
     assert counter.to_numpy() == 0
@@ -51,6 +62,8 @@ def test_graph_do_while_boolean_done():
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
     increment_until_threshold(x, keep_going)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
 
     qd.sync()
     assert keep_going.to_numpy() == 0
@@ -84,6 +97,8 @@ def test_graph_do_while_multiple_loops():
     counter.from_numpy(np.array(10, dtype=np.int32))
 
     multi_loop(x, y, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
 
     qd.sync()
     assert counter.to_numpy() == 0
@@ -110,6 +125,8 @@ def test_graph_do_while_replay():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(3, dtype=np.int32))
     inc(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
@@ -117,6 +134,8 @@ def test_graph_do_while_replay():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(7, dtype=np.int32))
     inc(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
@@ -146,6 +165,8 @@ def test_graph_do_while_replay_new_ndarray():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter1.from_numpy(np.array(3, dtype=np.int32))
     inc(x, counter1)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
     assert counter1.to_numpy() == 0
@@ -155,6 +176,8 @@ def test_graph_do_while_replay_new_ndarray():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter2.from_numpy(np.array(5, dtype=np.int32))
     inc(x, counter2)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
     assert counter2.to_numpy() == 0

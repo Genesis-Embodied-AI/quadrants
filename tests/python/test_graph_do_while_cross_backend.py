@@ -1,13 +1,22 @@
 import numpy as np
 
 import quadrants as qd
+from quadrants.lang import impl
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+def _cuda_graph_cache_size():
+    return impl.get_runtime().prog.get_cuda_graph_cache_size()
+
+
+def _cuda_graph_used():
+    return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
+
+
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_counter_cross_backend():
-    """graph_do_while with a counter: must work identically on CPU and CUDA."""
+    """graph_do_while with a counter."""
     N = 64
     ITERS = 5
 
@@ -25,13 +34,15 @@ def test_graph_do_while_counter_cross_backend():
     counter.from_numpy(np.array(ITERS, dtype=np.int32))
 
     increment_loop(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
 
     assert counter.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, ITERS, dtype=np.int32))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_boolean_reduction_cross_backend():
     """graph_do_while with per-thread conditions reduced into a single flag.
 
@@ -70,13 +81,15 @@ def test_graph_do_while_boolean_reduction_cross_backend():
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
     increment_until_all_done(x, thresholds, keep_going)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
 
     assert keep_going.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), thresh_np)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_multi_loop_cross_backend():
     """graph_do_while with multiple top-level for loops in the body."""
     N = 16
@@ -104,6 +117,8 @@ def test_graph_do_while_multi_loop_cross_backend():
     counter.from_numpy(np.array(ITERS, dtype=np.int32))
 
     multi_loop(a, b, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
 
     assert counter.to_numpy() == 0
@@ -111,7 +126,7 @@ def test_graph_do_while_multi_loop_cross_backend():
     np.testing.assert_allclose(b.to_numpy(), np.full(N, float(ITERS * 3)))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_replay_cross_backend():
     """graph_do_while replay: second call with different counter value."""
     N = 16
@@ -130,6 +145,8 @@ def test_graph_do_while_replay_cross_backend():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(3, dtype=np.int32))
     inc(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
     assert counter.to_numpy() == 0
@@ -138,12 +155,14 @@ def test_graph_do_while_replay_cross_backend():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(7, dtype=np.int32))
     inc(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
     assert counter.to_numpy() == 0
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_replay_new_ndarray_cross_backend():
     """graph_do_while replay with a different ndarray allocation for the counter.
 
@@ -169,6 +188,8 @@ def test_graph_do_while_replay_new_ndarray_cross_backend():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter1.from_numpy(np.array(4, dtype=np.int32))
     inc(x, counter1)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 4, dtype=np.int32))
     assert counter1.to_numpy() == 0
@@ -178,12 +199,14 @@ def test_graph_do_while_replay_new_ndarray_cross_backend():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter2.from_numpy(np.array(6, dtype=np.int32))
     inc(x, counter2)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 6, dtype=np.int32))
     assert counter2.to_numpy() == 0
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_single_iteration():
     """graph_do_while with counter=1 executes the body exactly once.
 
@@ -206,6 +229,8 @@ def test_graph_do_while_single_iteration():
     counter.from_numpy(np.array(1, dtype=np.int32))
 
     inc(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
     qd.sync()
 
     assert counter.to_numpy() == 0

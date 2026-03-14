@@ -165,13 +165,10 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
     return;
 
   int cc = CUDAContext::get_instance().get_compute_capability();
-  if (cc < 90) {
-    QD_WARN(
-        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
-        "Falling back to non-graph path.",
-        cc);
-    return;
-  }
+  QD_ERROR_IF(cc < 90,
+              "graph_do_while requires SM 9.0+ (Hopper), but this device is "
+              "SM {}.",
+              cc);
 
   auto &driver = CUDADriver::get_instance();
 
@@ -191,10 +188,9 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
       break;
     }
   }
-  if (cudadevrt_path.empty()) {
-    QD_WARN("Cannot find libcudadevrt.a — graph_do_while will not work");
-    return;
-  }
+  QD_ERROR_IF(cudadevrt_path.empty(),
+              "graph_do_while requires libcudadevrt.a but it was not found. "
+              "Install the CUDA toolkit and/or set CUDA_HOME.");
 
   void *link_state = nullptr;
   driver.link_create(0, nullptr, nullptr, &link_state);
@@ -309,11 +305,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
 
   if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
-    if (!cond_kernel_func_) {
-      QD_WARN("Condition kernel not available, falling back to non-graph");
-      CUDADriver::get_instance().graph_destroy(graph);
-      return false;
-    }
+    QD_ASSERT(cond_kernel_func_);
 
     void *cu_ctx = CUDAContext::get_instance().get_context();
 
@@ -517,9 +509,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
-        }
       } else if (arr_sz > 0) {
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -535,9 +524,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
-        }
       }
     }
   }
@@ -558,24 +544,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  do {
-    for (auto task : offloaded_tasks) {
-      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-               task.block_dim);
-      cuda_module->launch(task.name, task.grid_dim, task.block_dim,
-                          task.dynamic_shared_array_bytes, {&ctx.get_context()},
-                          {});
-    }
-    if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
-      int32_t counter_val = 0;
-      auto *stream = CUDAContext::get_instance().get_stream();
-      CUDADriver::get_instance().stream_synchronize(stream);
-      CUDADriver::get_instance().memcpy_device_to_host(
-          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-      if (counter_val == 0)
-        break;
-    }
-  } while (ctx.graph_do_while_arg_id >= 0);
+  for (auto task : offloaded_tasks) {
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+             task.block_dim);
+    cuda_module->launch(task.name, task.grid_dim, task.block_dim,
+                        task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                        {});
+  }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
   }
