@@ -223,7 +223,7 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
   std::size_t ptx_len = std::strlen(kConditionKernelPTX) + 1;
   driver.link_add_data(link_state, /*CU_JIT_INPUT_PTX=*/1,
                        const_cast<char *>(kConditionKernelPTX), ptx_len,
-                       "qd_cond", 0, nullptr, nullptr);
+                       /*name=*/"qd_cond", 0, nullptr, nullptr);
 
   driver.link_add_file(link_state, /*CU_JIT_INPUT_LIBRARY=*/4,
                        cudadevrt_path.c_str(), 0, nullptr, nullptr);
