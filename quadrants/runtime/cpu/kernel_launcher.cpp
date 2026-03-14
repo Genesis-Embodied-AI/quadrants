@@ -63,7 +63,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       }
     }
   }
-  if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+  if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs);
   } else {
     launch_offloaded_tasks(ctx, launcher_ctx.task_funcs);

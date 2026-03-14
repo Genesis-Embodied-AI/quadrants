@@ -147,7 +147,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
-  if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+  if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks,
                                          context_pointer, arg_size);
   } else {

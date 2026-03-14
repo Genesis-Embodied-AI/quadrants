@@ -177,7 +177,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+  if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks);
   } else {
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
