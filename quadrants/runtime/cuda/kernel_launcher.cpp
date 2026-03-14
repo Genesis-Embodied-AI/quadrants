@@ -276,11 +276,9 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     auto &cached = it->second;
     if (use_graph_do_while &&
         cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
-      QD_TRACE(
-          "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA "
-          "graph",
-          cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
-      cuda_graph_cache_.erase(it);
+      QD_ERROR(
+          "graph_do_while condition ndarray changed between calls. "
+          "Reuse the same ndarray for the condition parameter across calls.");
     } else {
       if (ctx.arg_buffer_size > 0) {
         CUDADriver::get_instance().memcpy_host_to_device(
