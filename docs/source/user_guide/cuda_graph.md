@@ -116,3 +116,15 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 The parameter used by `graph_do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.
+
+### Caveats
+
+On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
+- wait for GPU async queue to finish processing
+- copy condition value to hostside
+- evaluate condition value on hostside
+- launch new kernels for next loop iteration, if not finished yet
+
+Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
+- fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
+- make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
