@@ -59,24 +59,22 @@ def test_graph_do_while_boolean_done():
     @qd.kernel(graph_do_while="keep_going")
     def increment_until_threshold(
         x: qd.types.ndarray(qd.i32, ndim=1),
-        threshold: qd.types.ndarray(qd.i32, ndim=0),
+        threshold: qd.i32,
         keep_going: qd.types.ndarray(qd.i32, ndim=0),
     ):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
-            if x[0] >= threshold[None]:
+            if x[0] >= threshold:
                 keep_going[None] = 0
 
     x = qd.ndarray(qd.i32, shape=(N,))
-    threshold = qd.ndarray(qd.i32, shape=())
     keep_going = qd.ndarray(qd.i32, shape=())
 
     x.from_numpy(np.zeros(N, dtype=np.int32))
-    threshold.from_numpy(np.array(7, dtype=np.int32))
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
-    increment_until_threshold(x, threshold, keep_going)
+    increment_until_threshold(x, 7, keep_going)
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
@@ -85,10 +83,9 @@ def test_graph_do_while_boolean_done():
 
     # Second call: different threshold, start from 0
     x.from_numpy(np.zeros(N, dtype=np.int32))
-    threshold.from_numpy(np.array(12, dtype=np.int32))
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
-    increment_until_threshold(x, threshold, keep_going)
+    increment_until_threshold(x, 12, keep_going)
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
