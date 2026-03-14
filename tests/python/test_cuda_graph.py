@@ -114,6 +114,84 @@ def test_cuda_graph_three_loops(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
+def test_cuda_graph_multi_func(tensor_type):
+    """A kernel calling three funcs with 2, 4, and 3 top-level for loops."""
+    platform_supports_graph = _on_cuda()
+    n = 256
+
+    Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
+
+    @qd.func
+    def func_a(x: Annotation, y: Annotation):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 2.0
+
+    @qd.func
+    def func_b(a: Annotation, b: Annotation, c: Annotation, d: Annotation):
+        for i in range(a.shape[0]):
+            a[i] = a[i] + 3.0
+        for i in range(b.shape[0]):
+            b[i] = b[i] + 4.0
+        for i in range(c.shape[0]):
+            c[i] = c[i] + 5.0
+        for i in range(d.shape[0]):
+            d[i] = d[i] + 6.0
+
+    @qd.func
+    def func_c(x: Annotation, y: Annotation, z: Annotation):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 7.0
+        for i in range(y.shape[0]):
+            y[i] = y[i] + 8.0
+        for i in range(z.shape[0]):
+            z[i] = z[i] + 9.0
+
+    @qd.kernel(cuda_graph=True)
+    def multi_func(a: Annotation, b: Annotation, c: Annotation, d: Annotation, e: Annotation, f: Annotation):
+        func_a(a, b)
+        func_b(a, b, c, d)
+        func_c(d, e, f)
+
+    a = tensor_type(qd.f32, (n,))
+    b = tensor_type(qd.f32, (n,))
+    c = tensor_type(qd.f32, (n,))
+    d = tensor_type(qd.f32, (n,))
+    e = tensor_type(qd.f32, (n,))
+    f = tensor_type(qd.f32, (n,))
+
+    assert _cuda_graph_cache_size() == 0
+    multi_func(a, b, c, d, e, f)
+    assert _num_offloaded_tasks() == 9
+    assert _cuda_graph_num_nodes() == (9 if platform_supports_graph else 0)
+    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _cuda_graph_used() == platform_supports_graph
+
+    # func_a: a += 1, b += 2
+    # func_b: a += 3, b += 4, c += 5, d += 6
+    # func_c: d += 7, e += 8, f += 9
+    assert np.allclose(a.to_numpy(), 4.0)  # 1 + 3
+    assert np.allclose(b.to_numpy(), 6.0)  # 2 + 4
+    assert np.allclose(c.to_numpy(), 5.0)
+    assert np.allclose(d.to_numpy(), 13.0)  # 6 + 7
+    assert np.allclose(e.to_numpy(), 8.0)
+    assert np.allclose(f.to_numpy(), 9.0)
+
+    multi_func(a, b, c, d, e, f)
+    assert _cuda_graph_num_nodes() == (9 if platform_supports_graph else 0)
+    assert _cuda_graph_used() == platform_supports_graph
+
+    assert np.allclose(a.to_numpy(), 8.0)
+    assert np.allclose(b.to_numpy(), 12.0)
+    assert np.allclose(c.to_numpy(), 10.0)
+    assert np.allclose(d.to_numpy(), 26.0)
+    assert np.allclose(e.to_numpy(), 16.0)
+    assert np.allclose(f.to_numpy(), 18.0)
+
+
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+@test_utils.test()
 def test_no_cuda_graph_annotation(tensor_type):
     """A kernel WITHOUT cuda_graph=True should never use the graph path."""
     n = 256
