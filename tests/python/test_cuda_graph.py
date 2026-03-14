@@ -101,9 +101,10 @@ def test_cuda_graph_three_loops(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_cuda_graph_single_loop_no_graph(tensor_type):
-    """A kernel with a single for loop should NOT use the graph path,
-    even with cuda_graph=True (falls back since < 2 tasks)."""
+def test_cuda_graph_single_loop(tensor_type):
+    """A kernel with a single for loop should still use the graph path
+    when cuda_graph=True is explicitly requested."""
+    platform_supports_graph = _on_cuda()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -116,10 +117,11 @@ def test_cuda_graph_single_loop_no_graph(tensor_type):
     x = tensor_type(qd.f32, (n,))
 
     single_loop(x)
-    assert not _cuda_graph_used()
+    assert _cuda_graph_used() == platform_supports_graph
+    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     single_loop(x)
-    assert not _cuda_graph_used()
-    assert _cuda_graph_cache_size() == 0
+    assert _cuda_graph_used() == platform_supports_graph
+    assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x_np = x.to_numpy()
     assert np.allclose(x_np, 10.0)
