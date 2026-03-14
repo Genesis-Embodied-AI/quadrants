@@ -25,7 +25,7 @@ def test_graph_do_while_counter():
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
-            counter[None] = counter[None] - 1
+            counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
@@ -66,7 +66,7 @@ def test_graph_do_while_boolean_done():
             x[i] = x[i] + 1
         for i in range(1):
             if x[0] >= threshold:
-                keep_going[None] = 0
+                keep_going[()] = 0
 
     x = qd.ndarray(qd.i32, shape=(N,))
     keep_going = qd.ndarray(qd.i32, shape=())
@@ -108,7 +108,7 @@ def test_graph_do_while_multiple_loops():
         for i in range(y.shape[0]):
             y[i] = y[i] + 2.0
         for i in range(1):
-            counter[None] = counter[None] - 1
+            counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.f32, shape=(N,))
     y = qd.ndarray(qd.f32, shape=(N,))
@@ -148,7 +148,7 @@ def test_graph_do_while_changed_condition_ndarray_raises():
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
-            c[None] = c[None] - 1
+            c[()] = c[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     c1 = qd.ndarray(qd.i32, shape=())
