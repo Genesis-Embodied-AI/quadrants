@@ -225,10 +225,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   const auto &parameters = *launcher_ctx.parameters;
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
 
-  // A single-task kernel has no multi-launch overhead to eliminate, so
-  // graphing it provides no benefit — unless graph_do_while is active, in which
-  // case the graph is needed for the conditional-while loop structure.
-  if (offloaded_tasks.size() < 2 && ctx.graph_do_while_arg_id < 0) {
+  if (offloaded_tasks.empty()) {
     return false;
   }
 
