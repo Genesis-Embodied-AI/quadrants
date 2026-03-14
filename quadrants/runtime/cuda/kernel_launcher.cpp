@@ -445,6 +445,11 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
       use_graph_do_while ? " (with graph_do_while)" : "");
 
   if (use_graph_do_while) {
+    // Save the flag pointer so we can detect if the user passes a different
+    // ndarray on a later call. The flag's device pointer is baked into the
+    // CUDA graph as a condition kernel argument; if the user later calls with
+    // a different ndarray, the graph would still read from the old pointer,
+    // so we error out instead of silently producing wrong results.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
   cuda_graph_cache_.emplace(launch_id, std::move(cached));
