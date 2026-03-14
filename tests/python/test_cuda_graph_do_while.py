@@ -21,7 +21,7 @@ def test_graph_do_while_counter():
     N = 64
 
     @qd.kernel(graph_do_while="counter")
-    def increment_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+    def graph_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
@@ -33,7 +33,7 @@ def test_graph_do_while_counter():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(5, dtype=np.int32))
 
-    increment_loop(x, counter)
+    graph_loop(x, counter)
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
