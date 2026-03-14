@@ -247,6 +247,30 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
            cubin_size);
 }
 
+void *KernelLauncher::add_kernel_node(void *graph, void *prev_node, void *func,
+                                      unsigned int grid_dim,
+                                      unsigned int block_dim,
+                                      unsigned int shared_mem,
+                                      void **kernel_params) {
+  CudaKernelNodeParams params{};
+  params.func = func;
+  params.gridDimX = grid_dim;
+  params.gridDimY = 1;
+  params.gridDimZ = 1;
+  params.blockDimX = block_dim;
+  params.blockDimY = 1;
+  params.blockDimZ = 1;
+  params.sharedMemBytes = shared_mem;
+  params.kernelParams = kernel_params;
+  params.extra = nullptr;
+
+  void *node = nullptr;
+  CUDADriver::get_instance().graph_add_kernel_node(
+      &node, graph, prev_node ? &prev_node : nullptr, prev_node ? 1 : 0,
+      &params);
+  return node;
+}
+
 void *KernelLauncher::add_conditional_while_node(
     void *graph, unsigned long long *cond_handle_out) {
   ensure_condition_kernel_loaded();
@@ -381,30 +405,12 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   // Add work kernel nodes to the target graph
   void *prev_node = nullptr;
   for (const auto &task : offloaded_tasks) {
-    void *func = cuda_module->lookup_function(task.name);
-
     void *ctx_ptr = &cached.persistent_ctx;
-    CudaKernelNodeParams node_params{};
-    node_params.func = func;
-    node_params.gridDimX = (unsigned int)task.grid_dim;
-    node_params.gridDimY = 1;
-    node_params.gridDimZ = 1;
-    node_params.blockDimX = (unsigned int)task.block_dim;
-    node_params.blockDimY = 1;
-    node_params.blockDimZ = 1;
-    node_params.sharedMemBytes = (unsigned int)task.dynamic_shared_array_bytes;
-    node_params.kernelParams = &ctx_ptr;
-    // kernelParams and extra are two mutually exclusive ways of passing
-    // arguments to a CUDA kernel; we use kernelParams, so extra is null.
-    node_params.extra = nullptr;
-
-    void *node = nullptr;
-    const void *deps = prev_node;
-    std::size_t num_deps = prev_node ? 1 : 0;
-    CUDADriver::get_instance().graph_add_kernel_node(
-        &node, kernel_target_graph, prev_node ? &deps : nullptr, num_deps,
-        &node_params);
-    prev_node = node;
+    prev_node = add_kernel_node(
+        kernel_target_graph, prev_node,
+        cuda_module->lookup_function(task.name),
+        (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
+        (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
   }
 
   // For graph_do_while: add condition kernel as the last node in the body graph
@@ -414,22 +420,8 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     void *cond_args[2] = {&cond_handle, &flag_ptr};
 
-    CudaKernelNodeParams cond_kp{};
-    cond_kp.func = cond_kernel_func_;
-    cond_kp.gridDimX = 1;
-    cond_kp.gridDimY = 1;
-    cond_kp.gridDimZ = 1;
-    cond_kp.blockDimX = 1;
-    cond_kp.blockDimY = 1;
-    cond_kp.blockDimZ = 1;
-    cond_kp.sharedMemBytes = 0;
-    cond_kp.kernelParams = cond_args;
-    cond_kp.extra = nullptr;
-
-    void *cond_kernel_node = nullptr;
-    CUDADriver::get_instance().graph_add_kernel_node(
-        &cond_kernel_node, kernel_target_graph,
-        prev_node ? &prev_node : nullptr, prev_node ? 1 : 0, &cond_kp);
+    add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_,
+                    1, 1, 0, cond_args);
   }
 
   // --- Instantiate and launch ---

@@ -91,6 +91,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
   void ensure_condition_kernel_loaded();
   void *add_conditional_while_node(void *graph,
                                    unsigned long long *cond_handle_out);
+  void *add_kernel_node(void *graph, void *prev_node, void *func,
+                        unsigned int grid_dim, unsigned int block_dim,
+                        unsigned int shared_mem, void **kernel_params);
   std::vector<Context> contexts_;
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).
