@@ -406,11 +406,8 @@ bool CudaGraphManager::try_launch(
 
   if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
-    if (!cond_kernel_func_) {
-      QD_WARN("Condition kernel not available, falling back to non-graph");
-      CUDADriver::get_instance().graph_destroy(graph);
-      return false;
-    }
+    QD_ERROR_IF(!cond_kernel_func_,
+                "Condition kernel not available; cannot build graph_do_while");
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
