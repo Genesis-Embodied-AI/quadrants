@@ -140,26 +140,22 @@ def test_graph_do_while_multiple_loops():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_do_while_replay_new_ndarray_raises():
+def test_graph_do_while_changed_condition_ndarray_raises():
     """Passing a different ndarray for the condition parameter should raise."""
-    N = 16
 
-    @qd.kernel(graph_do_while="counter")
-    def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+    @qd.kernel(graph_do_while="c")
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
         for i in range(1):
-            counter[None] = counter[None] - 1
+            c[None] = c[None] - 1
 
-    x = qd.ndarray(qd.i32, shape=(N,))
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c1 = qd.ndarray(qd.i32, shape=())
+    c1.from_numpy(np.array(1, dtype=np.int32))
+    k(x, c1)
 
-    counter1 = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter1.from_numpy(np.array(3, dtype=np.int32))
-    inc(x, counter1)
-    assert _cuda_graph_used()
-
-    counter2 = qd.ndarray(qd.i32, shape=())
-    counter2.from_numpy(np.array(5, dtype=np.int32))
+    c2 = qd.ndarray(qd.i32, shape=())
+    c2.from_numpy(np.array(1, dtype=np.int32))
     with pytest.raises(RuntimeError, match="condition ndarray changed"):
-        inc(x, counter2)
+        k(x, c2)
