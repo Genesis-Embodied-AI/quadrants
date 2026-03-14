@@ -10,8 +10,16 @@ namespace quadrants::lang {
 namespace cuda {
 
 // PTX for a tiny condition kernel that reads a device-side int32 flag and
-// calls cudaGraphSetConditional(handle, flag != 0 ? 1 : 0).
+// Condition kernel for graph_do_while. Reads the user's i32 loop-control flag
+// from GPU memory and tells the CUDA graph's conditional while node whether to
+// run another iteration — all without returning to the host.
+//
+// Parameters:
+//   param_0: conditional node handle (passed to cudaGraphSetConditional)
+//   param_1: pointer to the user's qd.i32 flag ndarray on the GPU
+//
 // Compiled from CUDA C with: nvcc -ptx -arch=sm_90 -rdc=true
+// Requires SM 9.0+ (Hopper) for cudaGraphSetConditional / conditional nodes.
 // Requires JIT linking with libcudadevrt.a at runtime.
 static const char *kConditionKernelPTX = R"PTX(
 .version 8.8
@@ -31,12 +39,16 @@ static const char *kConditionKernelPTX = R"PTX(
     .reg .pred %p<2>;
     .reg .b32 %r<3>;
     .reg .b64 %rd<4>;
+    // Load conditional node handle and flag pointer
     ld.param.u64 %rd1, [_qd_graph_do_while_cond_param_0];
     ld.param.u64 %rd2, [_qd_graph_do_while_cond_param_1];
+    // Read flag value from GPU global memory
     cvta.to.global.u64 %rd3, %rd2;
     ld.global.u32 %r1, [%rd3];
+    // Convert to boolean: 1 if flag != 0, else 0
     setp.ne.s32 %p1, %r1, 0;
     selp.u32 %r2, 1, 0, %p1;
+    // Call cudaGraphSetConditional(handle, should_continue)
     { // callseq 0, 0
     .reg .b32 temp_param_reg;
     .param .b64 param0;
