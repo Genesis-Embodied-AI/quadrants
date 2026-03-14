@@ -110,3 +110,9 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 ### Do-while semantics
 
 `graph_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
+
+### ndarray vs field
+
+The parameter used by `graph_while` MUST be an ndarray.
+
+However, other parameters can be any supported Quadrants kernel parameter type.
