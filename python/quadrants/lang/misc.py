@@ -709,11 +709,12 @@ def graph_do_while(condition) -> bool:
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
-    conditional while node. On other backends or older GPUs it falls
-    back to a host-side do-while loop.
+    conditional while node. Older CUDA GPUs and non-CUDA backends
+    are not currently supported.
 
     This function should not be called directly at runtime; it is
     recognised and transformed during AST compilation.
+    Requires ``@qd.kernel(cuda_graph=True)``.
     """
     return bool(condition)
 
