@@ -166,6 +166,7 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
 
 void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data,
                             LaunchContextBuilder &ctx) {
+  num_offloaded_tasks_on_last_call_ = compiled_kernel_data.num_tasks();
   program_impl_->get_kernel_launcher().launch_kernel(compiled_kernel_data, ctx);
   if (compile_config().debug && arch_uses_llvm(compiled_kernel_data.arch())) {
     program_impl_->check_runtime_error(result_buffer);

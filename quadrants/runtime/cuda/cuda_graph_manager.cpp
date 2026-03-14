@@ -93,7 +93,9 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
       persistent_device_result_buffer(other.persistent_device_result_buffer),
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
-      result_buffer_size(other.result_buffer_size) {
+      result_buffer_size(other.result_buffer_size),
+      graph_do_while_flag_dev_ptr(other.graph_do_while_flag_dev_ptr),
+      num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
@@ -114,6 +116,8 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
     persistent_ctx = other.persistent_ctx;
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
+    graph_do_while_flag_dev_ptr = other.graph_do_while_flag_dev_ptr;
+    num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
     other.persistent_device_arg_buffer = nullptr;
@@ -320,6 +324,7 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
+  num_nodes_on_last_call_ = cached.num_nodes;
   return true;
 }
 
@@ -430,18 +435,17 @@ bool CudaGraphManager::try_launch(
 
   CUDADriver::get_instance().graph_destroy(graph);
 
+  cached.num_nodes = offloaded_tasks.size();
+
   QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}{}",
-           offloaded_tasks.size(), launch_id,
+           cached.num_nodes, launch_id,
            use_graph_do_while ? " (with graph_do_while)" : "");
 
   if (use_graph_do_while) {
-    // Save the flag pointer so we can detect if the user passes a different
-    // ndarray on a later call. The flag's device pointer is baked into the
-    // CUDA graph as a condition kernel argument; if the user later calls with
-    // a different ndarray, the graph would still read from the old pointer,
-    // so we error out instead of silently producing wrong results.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
+
+  num_nodes_on_last_call_ = cached.num_nodes;
   cache_.emplace(launch_id, std::move(cached));
   used_on_last_call_ = true;
   return true;

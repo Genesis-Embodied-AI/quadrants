@@ -31,6 +31,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
   bool get_cuda_graph_cache_used_on_last_call() const override {
     return graph_manager_.used_on_last_call();
   }
+  std::size_t get_cuda_graph_num_nodes_on_last_call() const override {
+    return graph_manager_.num_nodes_on_last_call();
+  }
 
  private:
   std::vector<Context> contexts_;
