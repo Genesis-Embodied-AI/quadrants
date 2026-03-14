@@ -100,7 +100,7 @@ class CudaGraphManager {
   bool launch_cached_graph(CachedCudaGraph &cached,
                            LaunchContextBuilder &ctx,
                            bool use_graph_do_while);
-  bool resolve_ctx_ndarray_ptrs(
+  void resolve_ctx_ndarray_ptrs(
       LaunchContextBuilder &ctx,
       const std::vector<std::pair<int, Callable::Parameter>> &parameters,
       LlvmRuntimeExecutor *executor);
