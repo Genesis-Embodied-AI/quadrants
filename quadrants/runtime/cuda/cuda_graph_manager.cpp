@@ -430,11 +430,9 @@ bool CudaGraphManager::try_launch(
 
   CUDADriver::get_instance().graph_destroy(graph);
 
-  QD_TRACE(
-      "CUDA graph created with {} kernel nodes for launch_id={}"
-      "{}",
-      offloaded_tasks.size(), launch_id,
-      use_graph_do_while ? " (with graph_do_while)" : "");
+  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}{}",
+           offloaded_tasks.size(), launch_id,
+           use_graph_do_while ? " (with graph_do_while)" : "");
 
   if (use_graph_do_while) {
     // Save the flag pointer so we can detect if the user passes a different
