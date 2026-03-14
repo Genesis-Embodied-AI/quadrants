@@ -162,8 +162,7 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
         }
         resolved_data = data_ptr;
       } else if (arr_sz > 0) {
-        DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
-        resolved_data = executor->get_device_alloc_info_ptr(*ptr);
+        resolved_data = resolve_device_alloc_ptr(executor, data_ptr);
       }
 
       if (resolved_data) {
