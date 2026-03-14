@@ -155,8 +155,13 @@ bool KernelLauncher::resolve_ctx_ndarray_ptrs(
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
+      QD_ERROR_IF(grad_ptr != nullptr,
+                  "cuda_graph does not support autograd; "
+                  "ndarray arg {} has a non-null gradient pointer", arg_id);
+
+      // Raw device pointer to the array data, resolved from either an
+      // external array (raw pointer) or a DeviceAllocation handle.
       void *resolved_data = nullptr;
-      void *resolved_grad = nullptr;
 
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
@@ -164,19 +169,13 @@ bool KernelLauncher::resolve_ctx_ndarray_ptrs(
           return false;
         }
         resolved_data = data_ptr;
-        resolved_grad = grad_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         resolved_data = executor->get_device_alloc_info_ptr(*ptr);
-        if (grad_ptr) {
-          resolved_grad = executor->get_device_alloc_info_ptr(
-              *static_cast<DeviceAllocation *>(grad_ptr));
-        }
       }
 
       if (resolved_data) {
-        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data,
-                             (uint64)resolved_grad);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = resolved_data;
         }
