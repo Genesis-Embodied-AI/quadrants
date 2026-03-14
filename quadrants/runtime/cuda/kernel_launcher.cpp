@@ -395,6 +395,11 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   //                 ├── Work kernel 1
   //                 ├── Work kernel 2
   //                 └── Condition kernel (reads flag, calls cudaGraphSetConditional)
+  //
+  // The condition kernel must be the last node in the body graph. It reads the
+  // flag after the work kernels have updated it, so the loop-continue decision
+  // reflects this iteration's result. Putting it first would cause an extra
+  // iteration: the condition would see the flag from before the work ran.
   void *kernel_target_graph = graph;
   unsigned long long cond_handle = 0;
 
@@ -413,7 +418,6 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
         (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
   }
 
-  // For graph_do_while: add condition kernel as the last node in the body graph
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
