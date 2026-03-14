@@ -18,16 +18,15 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(
   auto *device = config_.gfx_runtime_->get_ti_device();
   DeviceAllocation alloc = *(static_cast<DeviceAllocation *>(it->second));
 
+  int32_t flag_val;
   do {
     config_.gfx_runtime_->launch_kernel(handle, ctx);
     config_.gfx_runtime_->synchronize();
     void *mapped = nullptr;
     QD_ASSERT(device->map(alloc, &mapped) == RhiResult::success);
-    int32_t flag_val = *static_cast<int32_t *>(mapped);
+    flag_val = *static_cast<int32_t *>(mapped);
     device->unmap(alloc);
-    if (flag_val == 0)
-      break;
-  } while (true);
+  } while (flag_val != 0);
 }
 
 void KernelLauncher::launch_kernel(

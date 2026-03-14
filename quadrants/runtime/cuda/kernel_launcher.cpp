@@ -24,16 +24,15 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     JITModule *cuda_module,
     const std::vector<OffloadedTask> &offloaded_tasks) {
+  int32_t counter_val;
   do {
     launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
-    int32_t counter_val = 0;
+    counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
     CUDADriver::get_instance().stream_synchronize(stream);
     CUDADriver::get_instance().memcpy_device_to_host(
         &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-    if (counter_val == 0)
-      break;
-  } while (true);
+  } while (counter_val != 0);
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
