@@ -37,7 +37,6 @@ def test_graph_do_while_counter():
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
-    qd.sync()
     assert counter.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
 
@@ -66,7 +65,6 @@ def test_graph_do_while_boolean_done():
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
-    qd.sync()
     assert keep_going.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, threshold, dtype=np.int32))
 
@@ -101,7 +99,6 @@ def test_graph_do_while_multiple_loops():
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
 
-    qd.sync()
     assert counter.to_numpy() == 0
     np.testing.assert_allclose(x.to_numpy(), np.full(N, 10.0))
     np.testing.assert_allclose(y.to_numpy(), np.full(N, 20.0))
@@ -128,7 +125,6 @@ def test_graph_do_while_replay():
     inc(x, counter)
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
-    qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
     # Second call: 7 iterations (graph replay with new counter value)
@@ -137,7 +133,6 @@ def test_graph_do_while_replay():
     inc(x, counter)
     assert _cuda_graph_used()
     assert _cuda_graph_cache_size() == 1
-    qd.sync()
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
 
