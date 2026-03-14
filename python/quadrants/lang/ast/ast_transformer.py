@@ -1223,9 +1223,7 @@ class ASTTransformer(Builder):
                     f"Available parameters: {arg_names}"
                 )
             if not kernel.use_cuda_graph:
-                raise QuadrantsSyntaxError(
-                    "qd.graph_do_while() requires @qd.kernel(cuda_graph=True)"
-                )
+                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(cuda_graph=True)")
             kernel.graph_do_while_arg = graph_do_while_arg
             build_stmts(ctx, node.body)
             return None
