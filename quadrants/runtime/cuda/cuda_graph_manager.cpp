@@ -121,7 +121,7 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
   return *this;
 }
 
-bool CudaGraphManager::on_cuda_device(void *ptr) {
+bool on_cuda_device(void *ptr) {
   unsigned int attr_val = 0;
   uint32_t ret_code = CUDADriver::get_instance().mem_get_attribute.call(
       &attr_val, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (void *)ptr);

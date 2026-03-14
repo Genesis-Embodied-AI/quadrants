@@ -77,10 +77,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
           LaunchContextBuilder::DevAllocType::kNone) {
         // External array
         // Note: assuming both data & grad are on the same device
-        unsigned int attr_val = 0;
-        uint32_t ret_code = CUDADriver::get_instance().mem_get_attribute.call(
-            &attr_val, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (void *)data_ptr);
-        if (ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE) {
+        if (on_cuda_device(data_ptr)) {
           // data_ptr is a raw ptr on CUDA device
           device_ptrs[data_ptr_idx] = data_ptr;
           device_ptrs[grad_ptr_idx] = grad_ptr;
