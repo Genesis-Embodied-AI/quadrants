@@ -74,6 +74,7 @@ class CudaGraphManager {
                   const std::vector<OffloadedTask> &offloaded_tasks,
                   LlvmRuntimeExecutor *executor);
 
+  // cache_size and used_on_last_call used for tests
   void mark_not_used() { used_on_last_call_ = false; }
   std::size_t cache_size() const { return cache_.size(); }
   bool used_on_last_call() const { return used_on_last_call_; }
