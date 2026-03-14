@@ -4,13 +4,19 @@
 namespace quadrants::lang {
 namespace cpu {
 
+void KernelLauncher::launch_task_funcs(
+    LaunchContextBuilder &ctx,
+    const std::vector<TaskFunc> &task_funcs) {
+  for (auto task : task_funcs) {
+    task(&ctx.get_context());
+  }
+}
+
 void KernelLauncher::launch_task_funcs_with_do_while(
     LaunchContextBuilder &ctx,
     const std::vector<TaskFunc> &task_funcs) {
   do {
-    for (auto task : task_funcs) {
-      task(&ctx.get_context());
-    }
+    launch_task_funcs(ctx, task_funcs);
   } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
@@ -60,9 +66,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
     launch_task_funcs_with_do_while(ctx, launcher_ctx.task_funcs);
   } else {
-    for (auto task : launcher_ctx.task_funcs) {
-      task(&ctx.get_context());
-    }
+    launch_task_funcs(ctx, launcher_ctx.task_funcs);
   }
 }
 

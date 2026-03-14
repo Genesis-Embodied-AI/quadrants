@@ -5,6 +5,20 @@
 namespace quadrants::lang {
 namespace amdgpu {
 
+void KernelLauncher::launch_kernels(
+    JITModule *amdgpu_module,
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    void *context_pointer,
+    int arg_size) {
+  for (const auto &task : offloaded_tasks) {
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+             task.block_dim);
+    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                          task.dynamic_shared_array_bytes,
+                          {(void *)&context_pointer}, {arg_size});
+  }
+}
+
 void KernelLauncher::launch_kernels_with_do_while(
     LaunchContextBuilder &ctx,
     JITModule *amdgpu_module,
@@ -12,13 +26,7 @@ void KernelLauncher::launch_kernels_with_do_while(
     void *context_pointer,
     int arg_size) {
   do {
-    for (const auto &task : offloaded_tasks) {
-      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-               task.block_dim);
-      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
-                            task.dynamic_shared_array_bytes,
-                            {(void *)&context_pointer}, {arg_size});
-    }
+    launch_kernels(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     int32_t counter_val = 0;
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     AMDGPUDriver::get_instance().memcpy_device_to_host(
@@ -143,13 +151,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     launch_kernels_with_do_while(ctx, amdgpu_module, offloaded_tasks,
                                  context_pointer, arg_size);
   } else {
-    for (const auto &task : offloaded_tasks) {
-      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-               task.block_dim);
-      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
-                            task.dynamic_shared_array_bytes,
-                            {(void *)&context_pointer}, {arg_size});
-    }
+    launch_kernels(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
   }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
