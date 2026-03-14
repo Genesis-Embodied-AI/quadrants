@@ -191,10 +191,13 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
     return;
 
   int cc = CUDAContext::get_instance().get_compute_capability();
-  QD_ERROR_IF(cc < 90,
-              "graph_do_while requires SM 9.0+ (Hopper), but this device is "
-              "SM {}.",
-              cc);
+  if (cc < 90) {
+    QD_WARN(
+        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
+        "Falling back to non-graph path.",
+        cc);
+    return;
+  }
 
   auto &driver = CUDADriver::get_instance();
 
@@ -214,9 +217,12 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
       break;
     }
   }
-  QD_ERROR_IF(cudadevrt_path.empty(),
-              "graph_do_while requires libcudadevrt.a but it was not found. "
-              "Install the CUDA toolkit and/or set CUDA_HOME.");
+  if (cudadevrt_path.empty()) {
+    QD_WARN(
+        "Cannot find libcudadevrt.a — graph_do_while conditional nodes "
+        "will not work. Install the CUDA toolkit and set CUDA_HOME.");
+    return;
+  }
 
   // CUlinkState handle for the JIT linker session that combines our PTX
   // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
@@ -307,11 +313,13 @@ void *CudaGraphManager::add_conditional_while_node(
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
                                            LaunchContextBuilder &ctx,
                                            bool use_graph_do_while) {
-  QD_ERROR_IF(
-      use_graph_do_while &&
-          cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr,
-      "graph_do_while condition ndarray changed between calls. "
-      "Reuse the same ndarray for the condition parameter across calls.");
+  if (use_graph_do_while &&
+      cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
+    QD_TRACE(
+        "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
+        cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
+    return false;
+  }
 
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
@@ -335,23 +343,25 @@ bool CudaGraphManager::try_launch(
     return false;
   }
 
+  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
+
   QD_ERROR_IF(ctx.result_buffer_size > 0,
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
 
-  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
-
   // Falls back to the normal path if any external array is host-resident,
   // since the graph path cannot perform host-to-device transfers.
   if (!resolve_ctx_ndarray_ptrs(ctx, parameters, executor)) {
-    QD_ERROR_IF(use_graph_do_while,
-                "graph_do_while requires all ndarrays to be device-resident");
     return false;
   }
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
-    return launch_cached_graph(it->second, ctx, use_graph_do_while);
+    if (launch_cached_graph(it->second, ctx, use_graph_do_while)) {
+      return true;
+    }
+    // launch_cached_graph returned false => need to rebuild (e.g. flag pointer changed)
+    cache_.erase(it);
   }
 
   CUDAContext::get_instance().make_current();
@@ -404,6 +414,12 @@ bool CudaGraphManager::try_launch(
   unsigned long long cond_handle = 0;
 
   if (use_graph_do_while) {
+    ensure_condition_kernel_loaded();
+    if (!cond_kernel_func_) {
+      QD_WARN("Condition kernel not available, falling back to non-graph");
+      CUDADriver::get_instance().graph_destroy(graph);
+      return false;
+    }
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
@@ -446,7 +462,7 @@ bool CudaGraphManager::try_launch(
     // ndarray on a later call. The flag's device pointer is baked into the
     // CUDA graph as a condition kernel argument; if the user later calls with
     // a different ndarray, the graph would still read from the old pointer,
-    // so we error out instead of silently producing wrong results.
+    // so we rebuild the graph.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
   cache_.emplace(launch_id, std::move(cached));

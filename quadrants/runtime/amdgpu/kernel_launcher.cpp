@@ -74,6 +74,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -82,6 +85,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       }
     }
   }
@@ -110,16 +116,26 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
-  QD_ERROR_IF(ctx.graph_do_while_arg_id >= 0,
-              "graph_do_while is only supported on the CUDA backend");
-
-  for (auto &task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
-                          task.dynamic_shared_array_bytes,
-                          {(void *)&context_pointer}, {arg_size});
-  }
+  // Host-side do-while fallback for graph_do_while. AMDGPU has no conditional
+  // graph nodes, so we sync and read the flag back to the host each iteration.
+  // Without graph_do_while the loop body executes exactly once.
+  do {
+    for (auto &task : offloaded_tasks) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                            task.dynamic_shared_array_bytes,
+                            {(void *)&context_pointer}, {arg_size});
+    }
+    if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+      int32_t counter_val = 0;
+      AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+      AMDGPUDriver::get_instance().memcpy_device_to_host(
+          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+      if (counter_val == 0)
+        break;
+    }
+  } while (ctx.graph_do_while_arg_id >= 0);
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
     AMDGPUDriver::get_instance().mem_free(device_arg_buffer);
