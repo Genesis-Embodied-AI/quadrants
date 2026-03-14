@@ -48,12 +48,14 @@ def test_cuda_graph_two_loops(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
-    assert _num_offloaded_tasks() >= 2
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 2
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
@@ -88,8 +90,10 @@ def test_cuda_graph_three_loops(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     three_loops(a, b, c)
-    assert _num_offloaded_tasks() >= 3
-    assert _cuda_graph_num_nodes() == (3 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 3
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
@@ -163,8 +167,10 @@ def test_cuda_graph_multi_func(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     multi_func(a, b, c, d, e, f)
-    assert _num_offloaded_tasks() >= 9
-    assert _cuda_graph_num_nodes() == (9 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 9
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
@@ -179,7 +185,7 @@ def test_cuda_graph_multi_func(tensor_type):
     assert np.allclose(f.to_numpy(), 9.0)
 
     multi_func(a, b, c, d, e, f)
-    assert _cuda_graph_num_nodes() == (9 if platform_supports_graph else 0)
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_used() == platform_supports_graph
 
     assert np.allclose(a.to_numpy(), 8.0)
@@ -242,8 +248,10 @@ def test_cuda_graph_changed_args(tensor_type):
     y1 = tensor_type(qd.f32, (n,))
     assert _cuda_graph_cache_size() == 0
     two_loops(x1, y1)
-    assert _num_offloaded_tasks() >= 2
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 2
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x1, y1)
@@ -304,8 +312,10 @@ def test_cuda_graph_different_sizes(tensor_type):
     y1 = tensor_type(qd.f32, (256,))
     assert _cuda_graph_cache_size() == 0
     add_one(x1, y1)
-    assert _num_offloaded_tasks() >= 2
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 2
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
@@ -345,8 +355,10 @@ def test_cuda_graph_after_reset(tensor_type):
     x = tensor_type(qd.f32, (n,))
     y = tensor_type(qd.f32, (n,))
     add_one(x, y)
-    assert _num_offloaded_tasks() >= 2
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 2
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     add_one(x, y)
@@ -391,8 +403,10 @@ def test_cuda_graph_annotation_cross_platform(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
-    assert _num_offloaded_tasks() >= 2
-    assert _cuda_graph_num_nodes() == (2 if platform_supports_graph else 0)
+    num_tasks = _num_offloaded_tasks()
+    assert num_tasks >= 2
+    expected_nodes = num_tasks if platform_supports_graph else 0
+    assert _cuda_graph_num_nodes() == expected_nodes
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
