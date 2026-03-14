@@ -77,21 +77,25 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
+      QD_ERROR_IF(grad_ptr != nullptr,
+                  "cuda_graph does not support autograd; "
+                  "ndarray arg {} has a non-null gradient pointer", arg_id);
+
+      void *resolved_data = nullptr;
+
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         if (!on_cuda_device(data_ptr)) {
           return false;
         }
-        ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+        resolved_data = data_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
-        void *dev_data = executor->get_device_alloc_info_ptr(*ptr);
-        void *dev_grad = nullptr;
-        if (grad_ptr) {
-          dev_grad = executor->get_device_alloc_info_ptr(
-              *static_cast<DeviceAllocation *>(grad_ptr));
-        }
-        ctx.set_ndarray_ptrs(arg_id, (uint64)dev_data, (uint64)dev_grad);
+        resolved_data = executor->get_device_alloc_info_ptr(*ptr);
+      }
+
+      if (resolved_data) {
+        ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
       }
     }
   }
