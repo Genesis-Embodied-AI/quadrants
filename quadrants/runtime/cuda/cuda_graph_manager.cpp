@@ -84,12 +84,10 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
       } else if (arr_sz > 0) {
-        DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
-        void *dev_data = executor->get_device_alloc_info_ptr(*ptr);
+        void *dev_data = resolve_device_alloc_ptr(executor, data_ptr);
         void *dev_grad = nullptr;
         if (grad_ptr) {
-          dev_grad = executor->get_device_alloc_info_ptr(
-              *static_cast<DeviceAllocation *>(grad_ptr));
+          dev_grad = resolve_device_alloc_ptr(executor, grad_ptr);
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)dev_data, (uint64)dev_grad);
       }
