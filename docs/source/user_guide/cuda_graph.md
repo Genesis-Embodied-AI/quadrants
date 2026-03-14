@@ -75,9 +75,10 @@ solve(x, counter)
 
 The `graph_do_while` value is the name of a scalar `qd.i32` ndarray parameter. The kernel body repeats while this value is non-zero.
 
-- On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
-- Older CUDA GPUs, and non-CUDA backends not currently supported.
-- `graph_do_while` implicitly enables `cuda_graph=True`.
+- On SM 9.0+ (Hopper) with CUDA, this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
+- On older CUDA GPUs (< SM 9.0), or when the CUDA toolkit is not available, `graph_do_while` falls back to a host-side do-while loop that synchronizes the GPU and reads the condition flag back after each iteration.
+- On non-CUDA backends (CPU, AMDGPU, Vulkan, Metal), `graph_do_while` uses a host-side do-while loop fallback. The kernel runs correctly, but with a host round-trip per iteration.
+- `graph_do_while` implicitly enables `cuda_graph=True` on CUDA.
 
 ### Patterns
 
@@ -119,10 +120,10 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 ### Restrictions
 
-- The same physical ndarray must be used for the counter parameter on every
-  call. Passing a different ndarray raises an error, because the counter's
-  device pointer is baked into the CUDA graph at creation time.
-
-### Caveats
-
-Only runs on CUDA. No fallback on non-CUDA platforms currently.
+- On CUDA with conditional nodes (SM 9.0+), the same physical ndarray must be
+  used for the counter parameter on every call. Passing a different ndarray
+  triggers a graph rebuild, because the counter's device pointer is baked into
+  the CUDA graph at creation time.
+- On non-CUDA backends, there are no restrictions on changing the counter
+  ndarray between calls, since the host-side fallback loop does not cache
+  the pointer.
