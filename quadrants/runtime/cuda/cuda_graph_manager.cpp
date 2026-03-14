@@ -93,9 +93,9 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
-                  "cuda_graph requires all ndarrays to be device-resident; "
-                  "ndarray arg {} is host-resident",
-                  arg_id);
+                    "cuda_graph requires all ndarrays to be device-resident; "
+                    "ndarray arg {} is host-resident",
+                    arg_id);
         resolved_data = data_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
