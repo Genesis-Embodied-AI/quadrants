@@ -25,12 +25,19 @@ static const char *kConditionKernelPTX = R"PTX(
 .version 8.8
 .target sm_90
 .address_size 64
+
+// Declare the device-side cudaGraphSetConditional function (from libcudadevrt).
+// Takes a conditional node handle (u64) and a boolean (u32: 1=continue, 0=stop).
 .extern .func cudaGraphSetConditional
 (
     .param .b64 cudaGraphSetConditional_param_0,
     .param .b32 cudaGraphSetConditional_param_1
 )
 ;
+
+// Entry point: called by the CUDA graph's conditional while node each iteration.
+//   param_0 (u64): conditional node handle
+//   param_1 (u64): pointer to the user's qd.i32 flag in GPU global memory
 .visible .entry _qd_graph_do_while_cond(
     .param .u64 _qd_graph_do_while_cond_param_0,
     .param .u64 _qd_graph_do_while_cond_param_1
@@ -39,16 +46,23 @@ static const char *kConditionKernelPTX = R"PTX(
     .reg .pred %p<2>;
     .reg .b32 %r<3>;
     .reg .b64 %rd<4>;
-    // Load conditional node handle and flag pointer
+
+    // Load the two kernel parameters into registers:
+    //   %rd1 = conditional node handle
+    //   %rd2 = pointer to user's i32 flag
     ld.param.u64 %rd1, [_qd_graph_do_while_cond_param_0];
     ld.param.u64 %rd2, [_qd_graph_do_while_cond_param_1];
-    // Read flag value from GPU global memory
+
+    // Convert generic pointer to global address space, then read the flag value
     cvta.to.global.u64 %rd3, %rd2;
     ld.global.u32 %r1, [%rd3];
-    // Convert to boolean: 1 if flag != 0, else 0
+
+    // Convert flag to boolean: %r2 = (flag != 0) ? 1 : 0
     setp.ne.s32 %p1, %r1, 0;
     selp.u32 %r2, 1, 0, %p1;
-    // Call cudaGraphSetConditional(handle, should_continue)
+
+    // Tell the conditional while node whether to loop again or stop.
+    // cudaGraphSetConditional(handle, should_continue)
     { // callseq 0, 0
     .reg .b32 temp_param_reg;
     .param .b64 param0;
