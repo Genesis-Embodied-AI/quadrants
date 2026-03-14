@@ -24,10 +24,10 @@ class KernelLauncher : public LLVM::KernelLauncher {
       const LLVM::CompiledKernelData &compiled) override;
 
  private:
-  void launch_task_funcs(
+  void launch_offloaded_tasks(
       LaunchContextBuilder &ctx,
       const std::vector<TaskFunc> &task_funcs);
-  void launch_task_funcs_with_do_while(
+  void launch_offloaded_tasks_with_do_while(
       LaunchContextBuilder &ctx,
       const std::vector<TaskFunc> &task_funcs);
 

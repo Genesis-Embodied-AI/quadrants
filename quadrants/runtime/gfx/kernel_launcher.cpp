@@ -7,7 +7,7 @@ namespace gfx {
 KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 }
 
-void KernelLauncher::launch_kernel_with_do_while(
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
     KernelHandle handle,
     LaunchContextBuilder &ctx) {
   const ArgArrayPtrKey key{ctx.graph_do_while_arg_id,
@@ -36,7 +36,7 @@ void KernelLauncher::launch_kernel(
   auto handle = register_kernel(compiled_kernel_data);
 
   if (ctx.graph_do_while_arg_id >= 0) {
-    launch_kernel_with_do_while(handle, ctx);
+    launch_offloaded_tasks_with_do_while(handle, ctx);
   } else {
     config_.gfx_runtime_->launch_kernel(handle, ctx);
   }

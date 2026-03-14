@@ -7,7 +7,7 @@
 namespace quadrants::lang {
 namespace cuda {
 
-void KernelLauncher::launch_kernels(
+void KernelLauncher::launch_offloaded_tasks(
     LaunchContextBuilder &ctx,
     JITModule *cuda_module,
     const std::vector<OffloadedTask> &offloaded_tasks) {
@@ -20,12 +20,12 @@ void KernelLauncher::launch_kernels(
   }
 }
 
-void KernelLauncher::launch_kernels_with_do_while(
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     JITModule *cuda_module,
     const std::vector<OffloadedTask> &offloaded_tasks) {
   do {
-    launch_kernels(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
     int32_t counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
     CUDADriver::get_instance().stream_synchronize(stream);
@@ -178,9 +178,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
 
   if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
-    launch_kernels_with_do_while(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks);
   } else {
-    launch_kernels(ctx, cuda_module, offloaded_tasks);
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);

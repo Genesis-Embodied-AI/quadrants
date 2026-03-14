@@ -33,11 +33,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
-  void launch_kernels(
+  void launch_offloaded_tasks(
       LaunchContextBuilder &ctx,
       JITModule *cuda_module,
       const std::vector<OffloadedTask> &offloaded_tasks);
-  void launch_kernels_with_do_while(
+  void launch_offloaded_tasks_with_do_while(
       LaunchContextBuilder &ctx,
       JITModule *cuda_module,
       const std::vector<OffloadedTask> &offloaded_tasks);

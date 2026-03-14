@@ -4,7 +4,7 @@
 namespace quadrants::lang {
 namespace cpu {
 
-void KernelLauncher::launch_task_funcs(
+void KernelLauncher::launch_offloaded_tasks(
     LaunchContextBuilder &ctx,
     const std::vector<TaskFunc> &task_funcs) {
   for (auto task : task_funcs) {
@@ -12,11 +12,11 @@ void KernelLauncher::launch_task_funcs(
   }
 }
 
-void KernelLauncher::launch_task_funcs_with_do_while(
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     const std::vector<TaskFunc> &task_funcs) {
   do {
-    launch_task_funcs(ctx, task_funcs);
+    launch_offloaded_tasks(ctx, task_funcs);
   } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
@@ -64,9 +64,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     }
   }
   if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
-    launch_task_funcs_with_do_while(ctx, launcher_ctx.task_funcs);
+    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs);
   } else {
-    launch_task_funcs(ctx, launcher_ctx.task_funcs);
+    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs);
   }
 }
 

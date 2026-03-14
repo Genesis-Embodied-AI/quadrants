@@ -5,7 +5,7 @@
 namespace quadrants::lang {
 namespace amdgpu {
 
-void KernelLauncher::launch_kernels(
+void KernelLauncher::launch_offloaded_tasks(
     JITModule *amdgpu_module,
     const std::vector<OffloadedTask> &offloaded_tasks,
     void *context_pointer,
@@ -19,14 +19,14 @@ void KernelLauncher::launch_kernels(
   }
 }
 
-void KernelLauncher::launch_kernels_with_do_while(
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     JITModule *amdgpu_module,
     const std::vector<OffloadedTask> &offloaded_tasks,
     void *context_pointer,
     int arg_size) {
   do {
-    launch_kernels(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     int32_t counter_val = 0;
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     AMDGPUDriver::get_instance().memcpy_device_to_host(
@@ -148,10 +148,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
   if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
-    launch_kernels_with_do_while(ctx, amdgpu_module, offloaded_tasks,
-                                 context_pointer, arg_size);
+    launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks,
+                                         context_pointer, arg_size);
   } else {
-    launch_kernels(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
   }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
