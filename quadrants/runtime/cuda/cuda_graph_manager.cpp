@@ -56,10 +56,10 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
 // pointers, writing them into the arg buffer via set_ndarray_ptrs.
 //
 // Unlike the normal launch path, this does not handle host-resident arrays
-// (no temporary device allocation or host-to-device transfer). Returns false
-// if any external array is on the host, signaling the caller to fall back
-// to the non-graph launch path.
-bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
+// (no temporary device allocation or host-to-device transfer). Errors if
+// any external array is on the host, since cuda_graph requires all arrays
+// to be device-resident.
+void CudaGraphManager::resolve_ctx_ndarray_ptrs(
     LaunchContextBuilder &ctx,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters,
     LlvmRuntimeExecutor *executor) {
@@ -92,9 +92,10 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
 
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
-        if (!on_cuda_device(data_ptr)) {
-          return false;
-        }
+        QD_ERROR_IF(!on_cuda_device(data_ptr),
+                  "cuda_graph requires all ndarrays to be device-resident; "
+                  "ndarray arg {} is host-resident",
+                  arg_id);
         resolved_data = data_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -106,7 +107,6 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
       }
     }
   }
-  return true;
 }
 
 void *CudaGraphManager::add_kernel_node(void *graph,
@@ -163,11 +163,7 @@ bool CudaGraphManager::try_launch(
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
 
-  // Falls back to the normal path if any external array is host-resident,
-  // since the graph path cannot perform host-to-device transfers.
-  if (!resolve_ctx_ndarray_ptrs(ctx, parameters, executor)) {
-    return false;
-  }
+  resolve_ctx_ndarray_ptrs(ctx, parameters, executor);
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
