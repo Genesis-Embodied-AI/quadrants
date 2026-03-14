@@ -116,15 +116,18 @@ jobs:
           mkdir -p dist
           mv *.whl dist/
           pip install dist/*.whl
-      - name: install torch and requirements_test.txt
+      - name: install test requirements
         run: |
-          pip install torch
           pip install --group test
           pip install -r requirements_test_xdist.txt
-      - name: run tests
+      - name: run tests (without torch)
         run: |
           ls -lh
-          python tests/run_tests.py -r 1 -v --arch cuda
+          python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
+      - name: install torch and run torch tests
+        run: |
+          pip install torch
+          python tests/run_tests.py -r 1 -v --arch cuda -m needs_torch
   test_linux_vulkan:
     name: Test Linux Vulkan
     runs-on: gpu-t4-4-core
@@ -148,14 +151,17 @@ jobs:
           mkdir -p dist
           mv *.whl dist/
           pip install dist/*.whl
-      - name: install torch and requirements_test.txt
+      - name: install test requirements
         run: |
-          pip install torch
           pip install --group test
           pip install -r requirements_test_xdist.txt
-      - name: run tests
+      - name: run tests (without torch)
         run: |
-          python tests/run_tests.py -r 3 -v --arch vulkan
+          python tests/run_tests.py -r 3 -v --arch vulkan -m "not needs_torch"
+      - name: install torch and run torch tests
+        run: |
+          pip install torch
+          python tests/run_tests.py -r 3 -v --arch vulkan -m needs_torch
   test_linux_amdgpu:
     name: Test Linux AMD GPU
     runs-on: amdgpu
@@ -176,14 +182,16 @@ jobs:
           mkdir -p dist
           mv *.whl dist/
           pip install dist/*.whl
-      - name: install torch
-        run: |
-          pip install --upgrade torch --index-url https://download.pytorch.org/whl/rocm6.4
       - name: install test requirements
         run: |
           pip install --group test
           pip install -r requirements_test_xdist.txt
-      - name: run tests
+      - name: run tests (without torch)
         run: |
+          export QD_AMDGPU_V520=1
+          python tests/run_tests.py -t 4 -r 1 -v --arch amdgpu -m "not needs_torch"
+      - name: install torch and run torch tests
+        run: |
+          pip install --upgrade torch --index-url https://download.pytorch.org/whl/rocm6.4
           export QD_AMDGPU_V520=1  # uses .cpu() before running asserts on dlpack torch tensors
-          python tests/run_tests.py -t 4 -r 1 -v --arch amdgpu
+          python tests/run_tests.py -t 4 -r 1 -v --arch amdgpu -m needs_torch

@@ -11,6 +11,8 @@ try:
 except ImportError:
     pytest.skip("PyTorch not installed. Skipping...", allow_module_level=True)
 
+pytestmark = pytest.mark.needs_torch
+
 
 @test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
 def test_simple_demo():

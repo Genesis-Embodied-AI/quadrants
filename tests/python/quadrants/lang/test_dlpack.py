@@ -2,11 +2,17 @@ import os
 
 import numpy as np
 import pytest
-import torch
+
+try:
+    import torch
+except ImportError:
+    pytest.skip("PyTorch not installed", allow_module_level=True)
 
 import quadrants as qd
 
 from tests import test_utils
+
+pytestmark = pytest.mark.needs_torch
 
 dlpack_arch = [qd.cpu, qd.cuda, qd.metal, qd.amdgpu]
 dlpack_ineligible_arch = [qd.vulkan]

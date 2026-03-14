@@ -18,13 +18,15 @@ def _coerce_to_int(v):
     On the python backend, ndrange bounds like a.shape[0] arrive as
     0-d torch tensors rather than plain ints. This unwraps them.
     """
-    if isinstance(v, (int, float, np.integer)):
+    if isinstance(v, (int, float, np.integer, Expr)):
         return v
-    # Only reached on python backend, where torch is guaranteed available
-    import torch  # pylint: disable=C0415
+    try:
+        import torch  # pylint: disable=C0415
 
-    if isinstance(v, torch.Tensor) and v.ndim == 0:
-        return int(v.item())
+        if isinstance(v, torch.Tensor) and v.ndim == 0:
+            return int(v.item())
+    except ImportError:
+        pass
     return v
 
 
