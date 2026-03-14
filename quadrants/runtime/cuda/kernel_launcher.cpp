@@ -109,10 +109,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
       } else if (arr_sz > 0) {
-        device_ptrs[data_ptr_idx] = resolve_device_alloc_ptr(executor, data_ptr);
+        // Ndarray
+        DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
+        // Unwrapped raw ptr on device
+        device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
 
         if (grad_ptr != nullptr) {
-          device_ptrs[grad_ptr_idx] = resolve_device_alloc_ptr(executor, grad_ptr);
+          ptr = static_cast<DeviceAllocation *>(grad_ptr);
+          device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
         } else {
           device_ptrs[grad_ptr_idx] = nullptr;
         }
