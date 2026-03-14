@@ -76,7 +76,7 @@ solve(x, counter)
 The `graph_do_while` value is the name of a scalar `qd.i32` ndarray parameter. The kernel body repeats while this value is non-zero.
 
 - On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
-- Old CUDA GPUs, and non-CUDA backends not currently supported.
+- Older CUDA GPUs, and non-CUDA backends not currently supported.
 - `graph_do_while` implicitly enables `cuda_graph=True`.
 
 ### Patterns
