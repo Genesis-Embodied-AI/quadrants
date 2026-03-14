@@ -18,6 +18,7 @@ class KernelLauncher : public lang::KernelLauncher {
                      LaunchContextBuilder &ctx) override;
 
  private:
+  void launch_kernel_with_do_while(Handle handle, LaunchContextBuilder &ctx);
   Handle register_kernel(const lang::CompiledKernelData &compiled_kernel_data);
 
   Config config_;

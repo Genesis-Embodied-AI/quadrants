@@ -5,6 +5,29 @@
 namespace quadrants::lang {
 namespace amdgpu {
 
+void KernelLauncher::launch_kernels_with_do_while(
+    LaunchContextBuilder &ctx,
+    JITModule *amdgpu_module,
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    void *context_pointer,
+    int arg_size) {
+  do {
+    for (const auto &task : offloaded_tasks) {
+      QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+               task.block_dim);
+      amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                            task.dynamic_shared_array_bytes,
+                            {(void *)&context_pointer}, {arg_size});
+    }
+    int32_t counter_val = 0;
+    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    AMDGPUDriver::get_instance().memcpy_device_to_host(
+        &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+    if (counter_val == 0)
+      break;
+  } while (true);
+}
+
 bool KernelLauncher::on_amdgpu_device(void *ptr) {
   unsigned int attr_val[8];
   // mem_get_attribute doesn't work well on ROCm
@@ -116,26 +139,18 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
-  // Host-side do-while fallback for graph_do_while. AMDGPU has no conditional
-  // graph nodes, so we sync and read the flag back to the host each iteration.
-  // Without graph_do_while the loop body executes exactly once.
-  do {
-    for (auto &task : offloaded_tasks) {
+  if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+    launch_kernels_with_do_while(ctx, amdgpu_module, offloaded_tasks,
+                                 context_pointer, arg_size);
+  } else {
+    for (const auto &task : offloaded_tasks) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
                task.block_dim);
       amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
                             task.dynamic_shared_array_bytes,
                             {(void *)&context_pointer}, {arg_size});
     }
-    if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
-      int32_t counter_val = 0;
-      AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-      AMDGPUDriver::get_instance().memcpy_device_to_host(
-          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-      if (counter_val == 0)
-        break;
-    }
-  } while (ctx.graph_do_while_arg_id >= 0);
+  }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {
     AMDGPUDriver::get_instance().mem_free(device_arg_buffer);

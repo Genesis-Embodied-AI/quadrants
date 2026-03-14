@@ -4,6 +4,16 @@
 namespace quadrants::lang {
 namespace cpu {
 
+void KernelLauncher::launch_task_funcs_with_do_while(
+    LaunchContextBuilder &ctx,
+    const std::vector<TaskFunc> &task_funcs) {
+  do {
+    for (auto task : task_funcs) {
+      task(&ctx.get_context());
+    }
+  } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+}
+
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
@@ -47,12 +57,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       }
     }
   }
-  do {
+  if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
+    launch_task_funcs_with_do_while(ctx, launcher_ctx.task_funcs);
+  } else {
     for (auto task : launcher_ctx.task_funcs) {
       task(&ctx.get_context());
     }
-  } while (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr &&
-           *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+  }
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
@@ -70,8 +81,6 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     auto data = compiled.get_internal_data().compiled_data.clone();
     auto *jit_module = executor->create_jit_module(std::move(data.module));
 
-    // Construct task_funcs
-    using TaskFunc = int32 (*)(void *);
     std::vector<TaskFunc> task_funcs;
     task_funcs.reserve(data.tasks.size());
     for (auto &task : data.tasks) {

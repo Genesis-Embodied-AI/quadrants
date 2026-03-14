@@ -7,34 +7,39 @@ namespace gfx {
 KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 }
 
+void KernelLauncher::launch_kernel_with_do_while(
+    KernelHandle handle,
+    LaunchContextBuilder &ctx) {
+  const ArgArrayPtrKey key{ctx.graph_do_while_arg_id,
+                           TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+  auto it = ctx.array_ptrs.find(key);
+  QD_ASSERT(it != ctx.array_ptrs.end());
+
+  auto *device = config_.gfx_runtime_->get_ti_device();
+  DeviceAllocation alloc = *(static_cast<DeviceAllocation *>(it->second));
+
+  do {
+    config_.gfx_runtime_->launch_kernel(handle, ctx);
+    config_.gfx_runtime_->synchronize();
+    void *mapped = nullptr;
+    QD_ASSERT(device->map(alloc, &mapped) == RhiResult::success);
+    int32_t flag_val = *static_cast<int32_t *>(mapped);
+    device->unmap(alloc);
+    if (flag_val == 0)
+      break;
+  } while (true);
+}
+
 void KernelLauncher::launch_kernel(
     const lang::CompiledKernelData &compiled_kernel_data,
     LaunchContextBuilder &ctx) {
   auto handle = register_kernel(compiled_kernel_data);
 
-  // Host-side do-while fallback for graph_do_while. Vulkan/Metal have no
-  // conditional graph nodes, so we flush, read back the flag, and loop.
-  // Without graph_do_while the loop body executes exactly once.
-  do {
+  if (ctx.graph_do_while_arg_id >= 0) {
+    launch_kernel_with_do_while(handle, ctx);
+  } else {
     config_.gfx_runtime_->launch_kernel(handle, ctx);
-    if (ctx.graph_do_while_arg_id >= 0) {
-      const ArgArrayPtrKey key{ctx.graph_do_while_arg_id,
-                               TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-      auto it = ctx.array_ptrs.find(key);
-      if (it != ctx.array_ptrs.end()) {
-        auto *device = config_.gfx_runtime_->get_ti_device();
-        config_.gfx_runtime_->synchronize();
-        DeviceAllocation alloc =
-            *(static_cast<DeviceAllocation *>(it->second));
-        void *mapped = nullptr;
-        QD_ASSERT(device->map(alloc, &mapped) == RhiResult::success);
-        int32_t flag_val = *static_cast<int32_t *>(mapped);
-        device->unmap(alloc);
-        if (flag_val == 0)
-          break;
-      }
-    }
-  } while (ctx.graph_do_while_arg_id >= 0);
+  }
 }
 
 KernelLauncher::Handle KernelLauncher::register_kernel(
