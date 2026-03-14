@@ -29,6 +29,12 @@ struct CudaKernelNodeParams {
 // rather than linking against it, so we don't have access to those headers.
 // Field order verified against cuda-python bindings (handle, type, size,
 // phGraph_out, ctx). Introduced in CUDA 12.4; layout stable through 13.2+.
+//
+// Used to add the conditional while node via cuGraphAddNode. Normal kernel
+// nodes have a dedicated cuGraphAddKernelNode API with CudaKernelNodeParams,
+// but conditional nodes use the generic cuGraphAddNode which takes this
+// catch-all 256-byte union. The type field selects the variant; we only use
+// the conditional node variant, so most of the bytes are padding.
 struct CudaGraphNodeParams {
   unsigned int type;  // CU_GRAPH_NODE_TYPE_CONDITIONAL = 13
   int reserved0[3];
