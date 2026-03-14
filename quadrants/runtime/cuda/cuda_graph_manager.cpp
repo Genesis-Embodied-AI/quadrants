@@ -313,11 +313,13 @@ void *CudaGraphManager::add_conditional_while_node(
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
                                            LaunchContextBuilder &ctx,
                                            bool use_graph_do_while) {
-  QD_ERROR_IF(
-      use_graph_do_while &&
-          cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr,
-      "graph_do_while condition ndarray changed between calls. "
-      "Reuse the same ndarray for the condition parameter across calls.");
+  if (use_graph_do_while &&
+      cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
+    QD_TRACE(
+        "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
+        cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
+    return false;
+  }
 
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
@@ -351,7 +353,10 @@ bool CudaGraphManager::try_launch(
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
-    return launch_cached_graph(it->second, ctx, use_graph_do_while);
+    if (launch_cached_graph(it->second, ctx, use_graph_do_while)) {
+      return true;
+    }
+    cache_.erase(it);
   }
 
   CUDAContext::get_instance().make_current();
@@ -452,7 +457,7 @@ bool CudaGraphManager::try_launch(
     // ndarray on a later call. The flag's device pointer is baked into the
     // CUDA graph as a condition kernel argument; if the user later calls with
     // a different ndarray, the graph would still read from the old pointer,
-    // so we error out instead of silently producing wrong results.
+    // so we rebuild the graph.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
   cache_.emplace(launch_id, std::move(cached));
