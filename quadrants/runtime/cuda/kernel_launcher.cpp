@@ -245,6 +245,39 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
            cubin_size);
 }
 
+void *KernelLauncher::add_conditional_while_node(
+    void *graph, unsigned long long *cond_handle_out) {
+  ensure_condition_kernel_loaded();
+  QD_ASSERT(cond_kernel_func_);
+
+  void *cu_ctx = CUDAContext::get_instance().get_context();
+
+  CUDADriver::get_instance().graph_conditional_handle_create(
+      cond_handle_out, graph, cu_ctx,
+      /*defaultLaunchValue=*/1,
+      /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
+
+  CudaGraphNodeParams cond_node_params{};
+  cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
+  cond_node_params.handle = *cond_handle_out;
+  cond_node_params.condType = 1;  // CU_GRAPH_COND_TYPE_WHILE
+  cond_node_params.size = 1;
+  cond_node_params.phGraph_out = nullptr;  // CUDA will populate this
+  cond_node_params.ctx = cu_ctx;
+
+  void *cond_node = nullptr;
+  CUDADriver::get_instance().graph_add_node(&cond_node, graph, nullptr, 0,
+                                            &cond_node_params);
+
+  // CUDA replaces phGraph_out with a pointer to its owned array
+  void **body_graphs = (void **)cond_node_params.phGraph_out;
+  QD_ASSERT(body_graphs && body_graphs[0]);
+
+  QD_TRACE("CUDA graph_do_while: conditional node created, body graph={}",
+           body_graphs[0]);
+  return body_graphs[0];
+}
+
 bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
                                               LaunchContextBuilder &ctx) {
   int launch_id = handle.get_launch_id();
@@ -274,21 +307,21 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   auto it = cuda_graph_cache_.find(launch_id);
   if (it != cuda_graph_cache_.end()) {
     auto &cached = it->second;
-    if (use_graph_do_while &&
-        cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
-      QD_ERROR(
-          "graph_do_while condition ndarray changed between calls. "
-          "Reuse the same ndarray for the condition parameter across calls.");
-    } else {
-      if (ctx.arg_buffer_size > 0) {
-        CUDADriver::get_instance().memcpy_host_to_device(
-            cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
-            cached.arg_buffer_size);
-      }
-      auto *stream = CUDAContext::get_instance().get_stream();
-      CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
-      return true;
+    QD_ERROR_IF(
+        use_graph_do_while &&
+            cached.graph_do_while_flag_dev_ptr !=
+                ctx.graph_do_while_flag_dev_ptr,
+        "graph_do_while condition ndarray changed between calls. "
+        "Reuse the same ndarray for the condition parameter across calls.");
+
+    if (ctx.arg_buffer_size > 0) {
+      CUDADriver::get_instance().memcpy_host_to_device(
+          cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+          cached.arg_buffer_size);
     }
+    auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+    return true;
   }
 
   CUDAContext::get_instance().make_current();
@@ -330,35 +363,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   unsigned long long cond_handle = 0;
 
   if (use_graph_do_while) {
-    ensure_condition_kernel_loaded();
-    QD_ASSERT(cond_kernel_func_);
-
-    void *cu_ctx = CUDAContext::get_instance().get_context();
-
-    CUDADriver::get_instance().graph_conditional_handle_create(
-        &cond_handle, graph, cu_ctx,
-        /*defaultLaunchValue=*/1,
-        /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
-
-    CudaGraphNodeParams cond_node_params{};
-    cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
-    cond_node_params.handle = cond_handle;
-    cond_node_params.condType = 1;  // CU_GRAPH_COND_TYPE_WHILE
-    cond_node_params.size = 1;
-    cond_node_params.phGraph_out = nullptr;  // CUDA will populate this
-    cond_node_params.ctx = cu_ctx;
-
-    void *cond_node = nullptr;
-    CUDADriver::get_instance().graph_add_node(&cond_node, graph, nullptr, 0,
-                                              &cond_node_params);
-
-    // CUDA replaces phGraph_out with a pointer to its owned array
-    void **body_graphs = (void **)cond_node_params.phGraph_out;
-    QD_ASSERT(body_graphs && body_graphs[0]);
-    kernel_target_graph = body_graphs[0];
-
-    QD_TRACE("CUDA graph_do_while: conditional node created, body graph={}",
-             kernel_target_graph);
+    kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
   // Add work kernel nodes to the target graph
