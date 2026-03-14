@@ -23,16 +23,16 @@ static const char *kConditionKernelPTX = R"PTX(
     .param .b32 cudaGraphSetConditional_param_1
 )
 ;
-.visible .entry _qd_graph_while_cond(
-    .param .u64 _qd_graph_while_cond_param_0,
-    .param .u64 _qd_graph_while_cond_param_1
+.visible .entry _qd_graph_do_while_cond(
+    .param .u64 _qd_graph_do_while_cond_param_0,
+    .param .u64 _qd_graph_do_while_cond_param_1
 )
 {
     .reg .pred %p<2>;
     .reg .b32 %r<3>;
     .reg .b64 %rd<4>;
-    ld.param.u64 %rd1, [_qd_graph_while_cond_param_0];
-    ld.param.u64 %rd2, [_qd_graph_while_cond_param_1];
+    ld.param.u64 %rd1, [_qd_graph_do_while_cond_param_0];
+    ld.param.u64 %rd2, [_qd_graph_do_while_cond_param_1];
     cvta.to.global.u64 %rd3, %rd2;
     ld.global.u32 %r1, [%rd3];
     setp.ne.s32 %p1, %r1, 0;
@@ -151,8 +151,8 @@ bool KernelLauncher::resolve_ctx_ndarray_ptrs(
       if (resolved_data) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data,
                              (uint64)resolved_grad);
-        if (arg_id == ctx.graph_while_arg_id) {
-          ctx.graph_while_flag_dev_ptr = resolved_data;
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = resolved_data;
         }
       }
     }
@@ -167,7 +167,7 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
   int cc = CUDAContext::get_instance().get_compute_capability();
   if (cc < 90) {
     QD_WARN(
-        "graph_while requires SM 9.0+ (Hopper), but this device is SM {}. "
+        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
         "Falling back to non-graph path.",
         cc);
     return;
@@ -192,7 +192,7 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
     }
   }
   if (cudadevrt_path.empty()) {
-    QD_WARN("Cannot find libcudadevrt.a — graph_while will not work");
+    QD_WARN("Cannot find libcudadevrt.a — graph_do_while will not work");
     return;
   }
 
@@ -213,10 +213,10 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
 
   driver.module_load_data(&cond_kernel_module_, cubin);
   driver.module_get_function(&cond_kernel_func_, cond_kernel_module_,
-                             "_qd_graph_while_cond");
+                             "_qd_graph_do_while_cond");
   driver.link_destroy(link_state);
 
-  QD_TRACE("Loaded graph_while condition kernel ({} bytes cubin)", cubin_size);
+  QD_TRACE("Loaded graph_do_while condition kernel ({} bytes cubin)", cubin_size);
 }
 
 bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
@@ -230,9 +230,9 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   const auto &offloaded_tasks = launcher_ctx.offloaded_tasks;
 
   // A single-task kernel has no multi-launch overhead to eliminate, so
-  // graphing it provides no benefit — unless graph_while is active, in which
+  // graphing it provides no benefit — unless graph_do_while is active, in which
   // case the graph is needed for the conditional-while loop structure.
-  if (offloaded_tasks.size() < 2 && ctx.graph_while_arg_id < 0) {
+  if (offloaded_tasks.size() < 2 && ctx.graph_do_while_arg_id < 0) {
     return false;
   }
 
@@ -246,16 +246,16 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     return false;
   }
 
-  const bool use_graph_while = ctx.graph_while_arg_id >= 0;
+  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
 
   auto it = cuda_graph_cache_.find(launch_id);
   if (it != cuda_graph_cache_.end()) {
     auto &cached = it->second;
-    if (use_graph_while &&
-        cached.graph_while_flag_dev_ptr != ctx.graph_while_flag_dev_ptr) {
+    if (use_graph_do_while &&
+        cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr) {
       QD_TRACE(
-          "graph_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
-          cached.graph_while_flag_dev_ptr, ctx.graph_while_flag_dev_ptr);
+          "graph_do_while flag pointer changed ({} -> {}), rebuilding CUDA graph",
+          cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
       cuda_graph_cache_.erase(it);
     } else {
       if (ctx.arg_buffer_size > 0) {
@@ -303,11 +303,11 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   CUDADriver::get_instance().graph_create(&graph, 0);
 
   // Determine the target graph for kernel nodes.
-  // With graph_while, kernels go into the conditional while body graph.
+  // With graph_do_while, kernels go into the conditional while body graph.
   void *kernel_target_graph = graph;
   unsigned long long cond_handle = 0;
 
-  if (use_graph_while) {
+  if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
     if (!cond_kernel_func_) {
       QD_WARN("Condition kernel not available, falling back to non-graph");
@@ -339,7 +339,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     QD_ASSERT(body_graphs && body_graphs[0]);
     kernel_target_graph = body_graphs[0];
 
-    QD_TRACE("CUDA graph_while: conditional node created, body graph={}",
+    QD_TRACE("CUDA graph_do_while: conditional node created, body graph={}",
              kernel_target_graph);
   }
 
@@ -372,11 +372,11 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
     prev_node = node;
   }
 
-  // For graph_while: add condition kernel as the last node in the body graph
-  if (use_graph_while) {
-    QD_ASSERT(ctx.graph_while_flag_dev_ptr);
+  // For graph_do_while: add condition kernel as the last node in the body graph
+  if (use_graph_do_while) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
-    void *flag_ptr = ctx.graph_while_flag_dev_ptr;
+    void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     void *cond_args[2] = {&cond_handle, &flag_ptr};
 
     CudaKernelNodeParams cond_kp{};
@@ -410,10 +410,10 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
       "CUDA graph created with {} kernel nodes for launch_id={}"
       "{}",
       offloaded_tasks.size(), launch_id,
-      use_graph_while ? " (with graph_while)" : "");
+      use_graph_do_while ? " (with graph_do_while)" : "");
 
-  if (use_graph_while) {
-    cached.graph_while_flag_dev_ptr = ctx.graph_while_flag_dev_ptr;
+  if (use_graph_do_while) {
+    cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
   cuda_graph_cache_.emplace(launch_id, std::move(cached));
   return true;
@@ -517,8 +517,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_while_arg_id) {
-          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
       } else if (arr_sz > 0) {
         // Ndarray
@@ -535,8 +535,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_while_arg_id) {
-          ctx.graph_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
       }
     }
@@ -566,16 +566,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                           task.dynamic_shared_array_bytes, {&ctx.get_context()},
                           {});
     }
-    if (ctx.graph_while_arg_id >= 0 && ctx.graph_while_flag_dev_ptr) {
+    if (ctx.graph_do_while_arg_id >= 0 && ctx.graph_do_while_flag_dev_ptr) {
       int32_t counter_val = 0;
       auto *stream = CUDAContext::get_instance().get_stream();
       CUDADriver::get_instance().stream_synchronize(stream);
       CUDADriver::get_instance().memcpy_device_to_host(
-          &counter_val, ctx.graph_while_flag_dev_ptr, sizeof(int32_t));
+          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
       if (counter_val == 0)
         break;
     }
-  } while (ctx.graph_while_arg_id >= 0);
+  } while (ctx.graph_do_while_arg_id >= 0);
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
   }

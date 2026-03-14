@@ -53,12 +53,12 @@ my_kernel(x2, y2)  # replays graph with new array pointers
 
 When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.
 
-## GPU-side iteration with `graph_while`
+## GPU-side iteration with `graph_do_while`
 
-For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. The `graph_while` parameter enables this:
+For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. The `graph_do_while` parameter enables this:
 
 ```python
-@qd.kernel(graph_while="counter")
+@qd.kernel(graph_do_while="counter")
 def solve(x: qd.types.ndarray(qd.f32, ndim=1),
           counter: qd.types.ndarray(qd.i32, ndim=0)):
     for i in range(x.shape[0]):
@@ -73,18 +73,18 @@ solve(x, counter)
 # x is now incremented 10 times; counter is 0
 ```
 
-The `graph_while` value is the name of a scalar `qd.i32` ndarray parameter. The kernel body repeats while this value is non-zero.
+The `graph_do_while` value is the name of a scalar `qd.i32` ndarray parameter. The kernel body repeats while this value is non-zero.
 
 - On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.
-- `graph_while` implicitly enables `cuda_graph=True`.
+- `graph_do_while` implicitly enables `cuda_graph=True`.
 
 ### Patterns
 
 **Counter-based**: set the counter to N, decrement each iteration. The body runs exactly N times.
 
 ```python
-@qd.kernel(graph_while="counter")
+@qd.kernel(graph_do_while="counter")
 def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
             counter: qd.types.ndarray(qd.i32, ndim=0)):
     for i in range(x.shape[0]):
@@ -96,7 +96,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
 **Boolean flag**: set a `keep_going` flag to 1, have the kernel set it to 0 when a convergence criterion is met.
 
 ```python
-@qd.kernel(graph_while="keep_going")
+@qd.kernel(graph_do_while="keep_going")
 def converge(x: qd.types.ndarray(qd.f32, ndim=1),
              keep_going: qd.types.ndarray(qd.i32, ndim=0)):
     for i in range(x.shape[0]):
@@ -109,10 +109,10 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 ### Do-while semantics
 
-`graph_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
+`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
 ### ndarray vs field
 
-The parameter used by `graph_while` MUST be an ndarray.
+The parameter used by `graph_do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.

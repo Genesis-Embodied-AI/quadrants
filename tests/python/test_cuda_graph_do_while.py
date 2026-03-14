@@ -6,11 +6,11 @@ from tests import test_utils
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_while_counter():
-    """Test graph_while with a counter that decrements each iteration."""
+def test_graph_do_while_counter():
+    """Test graph_do_while with a counter that decrements each iteration."""
     N = 64
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def increment_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -31,12 +31,12 @@ def test_graph_while_counter():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_while_boolean_done():
-    """Test graph_while with a boolean 'continue' flag (non-zero = keep going)."""
+def test_graph_do_while_boolean_done():
+    """Test graph_do_while with a boolean 'continue' flag (non-zero = keep going)."""
     N = 64
     threshold = 7
 
-    @qd.kernel(graph_while="keep_going")
+    @qd.kernel(graph_do_while="keep_going")
     def increment_until_threshold(x: qd.types.ndarray(qd.i32, ndim=1), keep_going: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -58,11 +58,11 @@ def test_graph_while_boolean_done():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_while_multiple_loops():
-    """Test graph_while with multiple top-level loops in the kernel body."""
+def test_graph_do_while_multiple_loops():
+    """Test graph_do_while with multiple top-level loops in the kernel body."""
     N = 32
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def multi_loop(
         x: qd.types.ndarray(qd.f32, ndim=1),
         y: qd.types.ndarray(qd.f32, ndim=1),
@@ -92,11 +92,11 @@ def test_graph_while_multiple_loops():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_while_replay():
-    """Test that graph_while works correctly on subsequent calls (graph replay)."""
+def test_graph_do_while_replay():
+    """Test that graph_do_while works correctly on subsequent calls (graph replay)."""
     N = 16
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -122,8 +122,8 @@ def test_graph_while_replay():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_while_replay_new_ndarray():
-    """Test graph_while replay when the counter ndarray is a different allocation.
+def test_graph_do_while_replay_new_ndarray():
+    """Test graph_do_while replay when the counter ndarray is a different allocation.
 
     Regression test: the condition kernel's flag pointer was baked into the
     CUDA graph at creation time. Passing a new ndarray (different device
@@ -132,7 +132,7 @@ def test_graph_while_replay_new_ndarray():
     """
     N = 16
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1

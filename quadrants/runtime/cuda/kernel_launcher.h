@@ -50,7 +50,7 @@ struct CachedCudaGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
-  void *graph_while_flag_dev_ptr{nullptr};
+  void *graph_do_while_flag_dev_ptr{nullptr};
 
   CachedCudaGraph() = default;
   ~CachedCudaGraph();
@@ -95,7 +95,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::unordered_map<int, CachedCudaGraph> cuda_graph_cache_;
   bool cuda_graph_cache_used_on_last_call_{false};
 
-  // JIT-compiled condition kernel for graph_while conditional nodes
+  // JIT-compiled condition kernel for graph_do_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule
   void *cond_kernel_func_{nullptr};    // CUfunction
 };

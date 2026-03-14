@@ -128,13 +128,13 @@ def _kernel_impl(
     level_of_class_stackframe: int,
     verbose: bool = False,
     cuda_graph: bool = False,
-    graph_while: str | None = None,
+    graph_do_while: str | None = None,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
     is_classkernel = _inside_class(level_of_class_stackframe + 1)
 
-    if graph_while is not None:
+    if graph_do_while is not None:
         cuda_graph = True
 
     if verbose:
@@ -142,12 +142,12 @@ def _kernel_impl(
     primal = Kernel(_func, autodiff_mode=_NONE, _is_classkernel=is_classkernel)
     adjoint = Kernel(_func, autodiff_mode=_REVERSE, _is_classkernel=is_classkernel)
     primal.use_cuda_graph = cuda_graph
-    primal.graph_while_arg = graph_while
-    if graph_while is not None:
+    primal.graph_do_while_arg = graph_do_while
+    if graph_do_while is not None:
         arg_names = [m.name for m in primal.arg_metas]
-        if graph_while not in arg_names:
+        if graph_do_while not in arg_names:
             raise ValueError(
-                f"graph_while={graph_while!r} does not match any parameter of "
+                f"graph_do_while={graph_do_while!r} does not match any parameter of "
                 f"kernel {_func.__name__!r}. Available parameters: {arg_names}"
             )
     # Having |primal| contains |grad| makes the tape work.
@@ -192,7 +192,7 @@ def _kernel_impl(
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
 def kernel(
-    _fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None
+    _fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_do_while: str | None = None
 ) -> Callable[[Any], Any]: ...
 
 
@@ -203,7 +203,7 @@ def kernel(
 # However, by making it return Any, we can make the pure parameter
 # change now, without breaking pyright.
 @overload
-def kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False, graph_while: str | None = None) -> Any: ...
+def kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False, graph_do_while: str | None = None) -> Any: ...
 
 
 def kernel(
@@ -212,7 +212,7 @@ def kernel(
     pure: bool | None = None,
     fastcache: bool = False,
     cuda_graph: bool = False,
-    graph_while: str | None = None,
+    graph_do_while: str | None = None,
 ):
     """
     Marks a function as a Quadrants kernel.
@@ -229,7 +229,7 @@ def kernel(
             into a CUDA graph on first launch and replayed on subsequent
             launches, reducing per-kernel launch overhead. On non-CUDA backends
             this flag is a harmless no-op.
-        graph_while: Name of a scalar ``qd.i32`` ndarray parameter that
+        graph_do_while: Name of a scalar ``qd.i32`` ndarray parameter that
             controls GPU-side iteration. The kernel body repeats while the
             named argument is non-zero.  Uses CUDA conditional while nodes
             on SM 9.0+ (Hopper); falls back to a host-side do-while loop
@@ -259,7 +259,7 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_while=graph_while)
+        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_do_while=graph_do_while)
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(

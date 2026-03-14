@@ -6,12 +6,12 @@ from tests import test_utils
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_counter_cross_backend():
-    """graph_while with a counter: must work identically on CPU and CUDA."""
+def test_graph_do_while_counter_cross_backend():
+    """graph_do_while with a counter: must work identically on CPU and CUDA."""
     N = 64
     ITERS = 5
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def increment_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -32,8 +32,8 @@ def test_graph_while_counter_cross_backend():
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_boolean_reduction_cross_backend():
-    """graph_while with per-thread conditions reduced into a single flag.
+def test_graph_do_while_boolean_reduction_cross_backend():
+    """graph_do_while with per-thread conditions reduced into a single flag.
 
     Each element has a different threshold. The loop continues while ANY element
     hasn't reached its threshold. A reduction kernel (reset flag to 0, then
@@ -41,7 +41,7 @@ def test_graph_while_boolean_reduction_cross_backend():
     """
     N = 32
 
-    @qd.kernel(graph_while="keep_going")
+    @qd.kernel(graph_do_while="keep_going")
     def increment_until_all_done(
         x: qd.types.ndarray(qd.i32, ndim=1),
         thresholds: qd.types.ndarray(qd.i32, ndim=1),
@@ -77,12 +77,12 @@ def test_graph_while_boolean_reduction_cross_backend():
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_multi_loop_cross_backend():
-    """graph_while with multiple top-level for loops in the body."""
+def test_graph_do_while_multi_loop_cross_backend():
+    """graph_do_while with multiple top-level for loops in the body."""
     N = 16
     ITERS = 8
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def multi_loop(
         a: qd.types.ndarray(qd.f32, ndim=1),
         b: qd.types.ndarray(qd.f32, ndim=1),
@@ -112,11 +112,11 @@ def test_graph_while_multi_loop_cross_backend():
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_replay_cross_backend():
-    """graph_while replay: second call with different counter value."""
+def test_graph_do_while_replay_cross_backend():
+    """graph_do_while replay: second call with different counter value."""
     N = 16
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -144,8 +144,8 @@ def test_graph_while_replay_cross_backend():
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_replay_new_ndarray_cross_backend():
-    """graph_while replay with a different ndarray allocation for the counter.
+def test_graph_do_while_replay_new_ndarray_cross_backend():
+    """graph_do_while replay with a different ndarray allocation for the counter.
 
     Regression test: on CUDA, the condition kernel's flag pointer was baked
     into the graph at creation time. Passing a new ndarray on replay would
@@ -155,7 +155,7 @@ def test_graph_while_replay_new_ndarray_cross_backend():
     """
     N = 16
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -184,15 +184,15 @@ def test_graph_while_replay_new_ndarray_cross_backend():
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
-def test_graph_while_single_iteration():
-    """graph_while with counter=1 executes the body exactly once.
+def test_graph_do_while_single_iteration():
+    """graph_do_while with counter=1 executes the body exactly once.
 
-    Note: graph_while has do-while semantics (body executes at least once,
+    Note: graph_do_while has do-while semantics (body executes at least once,
     matching CUDA conditional while node behavior). Counter must be >= 1.
     """
     N = 8
 
-    @qd.kernel(graph_while="counter")
+    @qd.kernel(graph_do_while="counter")
     def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
