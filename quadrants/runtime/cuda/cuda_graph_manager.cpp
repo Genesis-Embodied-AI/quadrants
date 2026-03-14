@@ -303,6 +303,26 @@ void *CudaGraphManager::add_conditional_while_node(
   return body_graphs[0];
 }
 
+bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
+                                            LaunchContextBuilder &ctx,
+                                            bool use_graph_do_while) {
+  QD_ERROR_IF(
+      use_graph_do_while &&
+          cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr,
+      "graph_do_while condition ndarray changed between calls. "
+      "Reuse the same ndarray for the condition parameter across calls.");
+
+  if (ctx.arg_buffer_size > 0) {
+    CUDADriver::get_instance().memcpy_host_to_device(
+        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+        cached.arg_buffer_size);
+  }
+  auto *stream = CUDAContext::get_instance().get_stream();
+  CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+  used_on_last_call_ = true;
+  return true;
+}
+
 bool CudaGraphManager::try_launch(
     int launch_id, LaunchContextBuilder &ctx, JITModule *cuda_module,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters,
@@ -328,23 +348,7 @@ bool CudaGraphManager::try_launch(
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
-    auto &cached = it->second;
-    QD_ERROR_IF(
-        use_graph_do_while &&
-            cached.graph_do_while_flag_dev_ptr !=
-                ctx.graph_do_while_flag_dev_ptr,
-        "graph_do_while condition ndarray changed between calls. "
-        "Reuse the same ndarray for the condition parameter across calls.");
-
-    if (ctx.arg_buffer_size > 0) {
-      CUDADriver::get_instance().memcpy_host_to_device(
-          cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
-          cached.arg_buffer_size);
-    }
-    auto *stream = CUDAContext::get_instance().get_stream();
-    CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
-    used_on_last_call_ = true;
-    return true;
+    return launch_cached_graph(it->second, ctx, use_graph_do_while);
   }
 
   CUDAContext::get_instance().make_current();
