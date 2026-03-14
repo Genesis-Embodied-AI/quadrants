@@ -78,7 +78,6 @@ The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndar
 
 - On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - Older CUDA GPUs, and non-CUDA backends not currently supported.
-- Using `qd.graph_do_while()` implicitly enables `cuda_graph=True` if not already set.
 
 ### Patterns
 
