@@ -85,6 +85,8 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
                   "cuda_graph does not support autograd; "
                   "ndarray arg {} has a non-null gradient pointer", arg_id);
 
+      // Raw device pointer to the array data, resolved from either an
+      // external array (raw pointer) or a DeviceAllocation handle.
       void *resolved_data = nullptr;
 
       if (ctx.device_allocation_type[arg_id] ==
