@@ -83,7 +83,8 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
 
       QD_ERROR_IF(grad_ptr != nullptr,
                   "cuda_graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer", arg_id);
+                  "ndarray arg {} has a non-null gradient pointer",
+                  arg_id);
 
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
@@ -108,8 +109,10 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
   return true;
 }
 
-void *CudaGraphManager::add_kernel_node(void *graph, void *prev_node,
-                                        void *func, unsigned int grid_dim,
+void *CudaGraphManager::add_kernel_node(void *graph,
+                                        void *prev_node,
+                                        void *func,
+                                        unsigned int grid_dim,
                                         unsigned int block_dim,
                                         unsigned int shared_mem,
                                         void **kernel_params) {
@@ -133,7 +136,7 @@ void *CudaGraphManager::add_kernel_node(void *graph, void *prev_node,
 }
 
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
-                                            LaunchContextBuilder &ctx) {
+                                           LaunchContextBuilder &ctx) {
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
@@ -146,7 +149,9 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
 }
 
 bool CudaGraphManager::try_launch(
-    int launch_id, LaunchContextBuilder &ctx, JITModule *cuda_module,
+    int launch_id,
+    LaunchContextBuilder &ctx,
+    JITModule *cuda_module,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters,
     const std::vector<OffloadedTask> &offloaded_tasks,
     LlvmRuntimeExecutor *executor) {
