@@ -357,10 +357,10 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="cuda-graph">
 <h1>CUDA Graph<a class="headerlink" href="#cuda-graph" title="Link to this heading">#</a></h1>
-<p>CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. This is most beneficial for kernels that compile into multiple GPU tasks (e.g. kernels with multiple top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops), where the per-task launch overhead would otherwise dominate.</p>
+<p>CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.</p>
 <section id="usage">
 <h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">#</a></h2>
-<p>Add <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> to the <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
+<p>Add <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">cuda_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span>
     <span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -372,6 +372,7 @@
         <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">2.0</span>
 </pre></div>
 </div>
+<p>The top level for-loops will be compiled into a single CUDA graph. The parallelism is the same as before, but the launch latency much reduced.</p>
 <p>The kernel is used normally — no other API changes are needed:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
 <span class="n">y</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
@@ -380,22 +381,11 @@
 <span class="n">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># subsequent calls: replays the cached graph</span>
 </pre></div>
 </div>
-<section id="when-to-use">
-<h3>When to use<a class="headerlink" href="#when-to-use" title="Link to this heading">#</a></h3>
-<p>Use <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> on kernels that:</p>
-<ul class="simple">
-<li><p>Run on CUDA (<code class="docutils literal notranslate"><span class="pre">arch=qd.cuda</span></code>)</p></li>
-<li><p>Contain <strong>two or more</strong> top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops (i.e. compile into multiple offloaded tasks)</p></li>
-<li><p>Are called repeatedly with arguments of the same shape</p></li>
-</ul>
-<p>Kernels with a single <code class="docutils literal notranslate"><span class="pre">for</span></code> loop compile into a single GPU task, so there is no multi-launch overhead to eliminate. The graph path will gracefully fall back to the normal launch path in this case.</p>
-</section>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use CUDA graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> is set on such a kernel.</p></li>
 <li><p><strong>Primal kernels only.</strong> The <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.</p></li>
-<li><p><strong>Non-CUDA backends.</strong> On non-CUDA backends (CPU, Vulkan, Metal), <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> is silently ignored. This means you can annotate a kernel unconditionally and it will work on all platforms.</p></li>
 </ul>
 </section>
 <section id="passing-different-arguments">
@@ -413,53 +403,7 @@
 </section>
 <section id="fields-as-arguments">
 <h3>Fields as arguments<a class="headerlink" href="#fields-as-arguments" title="Link to this heading">#</a></h3>
-<p>Fields (SNode-backed data created with <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>) are accessed through the global runtime pointer, not through the kernel argument buffer. The graph captures this pointer at build time, so fields work transparently with CUDA graphs.</p>
 <p>When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.</p>
-</section>
-</section>
-<hr class="docutils" />
-<section id="advanced-implementation-details">
-<h2>Advanced: Implementation Details<a class="headerlink" href="#advanced-implementation-details" title="Link to this heading">#</a></h2>
-<section id="graph-build-and-replay">
-<h3>Graph build and replay<a class="headerlink" href="#graph-build-and-replay" title="Link to this heading">#</a></h3>
-<p>On the first call to a <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> kernel, the runtime:</p>
-<ol class="arabic simple">
-<li><p><strong>Allocates persistent device buffers</strong> for the kernel’s argument buffer and result buffer. These live for the lifetime of the runtime (until <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>).</p></li>
-<li><p><strong>Copies the host argument buffer</strong> (containing scalar values and resolved device pointers for ndarrays) into the persistent device argument buffer.</p></li>
-<li><p><strong>Builds a <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code></strong> whose <code class="docutils literal notranslate"><span class="pre">arg_buffer</span></code> and <code class="docutils literal notranslate"><span class="pre">result_buffer</span></code> point at the persistent device buffers, and whose <code class="docutils literal notranslate"><span class="pre">runtime</span></code> pointer points at the <code class="docutils literal notranslate"><span class="pre">LLVMRuntime</span></code>. This <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code> is stored inside the cache entry at a stable address.</p></li>
-<li><p><strong>Constructs a CUDA graph</strong> by iterating over the kernel’s offloaded tasks and adding each as a kernel node. Each node receives a pointer to the persistent <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code> as its sole kernel parameter. Nodes are chained with sequential dependencies.</p></li>
-<li><p><strong>Instantiates</strong> the graph into an executable (<code class="docutils literal notranslate"><span class="pre">cuGraphInstantiate</span></code>) and launches it.</p></li>
-<li><p><strong>Caches</strong> the graph executable, persistent buffers, and <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code> in a map keyed by <code class="docutils literal notranslate"><span class="pre">launch_id</span></code>.</p></li>
-</ol>
-<p>On subsequent calls (cache hit), the runtime:</p>
-<ol class="arabic simple">
-<li><p><strong>Copies the updated host argument buffer</strong> into the persistent device argument buffer via <code class="docutils literal notranslate"><span class="pre">cuMemcpyHtoD</span></code>. This is the only operation needed — the graph’s kernel nodes already point at the persistent <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code>, which already points at the persistent argument buffer.</p></li>
-<li><p><strong>Replays</strong> the cached graph via <code class="docutils literal notranslate"><span class="pre">cuGraphLaunch</span></code>.</p></li>
-</ol>
-</section>
-<section id="how-arguments-reach-the-gpu-kernels">
-<h3>How arguments reach the GPU kernels<a class="headerlink" href="#how-arguments-reach-the-gpu-kernels" title="Link to this heading">#</a></h3>
-<p>Each compiled GPU kernel takes a single parameter: a pointer to <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code>. The <code class="docutils literal notranslate"><span class="pre">RuntimeContext</span></code> contains:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">arg_buffer</span></code>: a device-side buffer holding serialized scalar arguments and resolved ndarray device pointers</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">result_buffer</span></code>: a device-side buffer for return values</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">runtime</span></code>: a pointer to <code class="docutils literal notranslate"><span class="pre">LLVMRuntime</span></code>, which holds field/SNode tree data</p></li>
-</ul>
-<p>For CUDA graphs, these pointers are baked into the graph at capture time. On replay, the <em>contents</em> of the argument buffer are updated (via a host-to-device memcpy), but the <em>pointers</em> themselves remain stable. This is what allows the graph to be replayed without rebuilding.</p>
-<p>Before the argument buffer is copied to the device, <code class="docutils literal notranslate"><span class="pre">resolve_ctx_ndarray_ptrs</span></code> walks all array parameters and resolves <code class="docutils literal notranslate"><span class="pre">DeviceAllocation</span></code> handles into raw device pointers, writing them into the argument buffer. This ensures that even when different ndarrays are passed on subsequent calls, the argument buffer contains the correct device addresses.</p>
-</section>
-<section id="cache-keying-and-template-specialization">
-<h3>Cache keying and template specialization<a class="headerlink" href="#cache-keying-and-template-specialization" title="Link to this heading">#</a></h3>
-<p>The graph cache is keyed by <code class="docutils literal notranslate"><span class="pre">launch_id</span></code>, an integer assigned by <code class="docutils literal notranslate"><span class="pre">register_llvm_kernel</span></code> when a <code class="docutils literal notranslate"><span class="pre">CompiledKernelData</span></code> is first seen. Each unique combination of template arguments (including field arguments) produces a different compiled kernel with a different <code class="docutils literal notranslate"><span class="pre">launch_id</span></code>. This means:</p>
-<ul class="simple">
-<li><p>Calling the same kernel with field A and field B results in two independent compiled kernels, two independent <code class="docutils literal notranslate"><span class="pre">launch_id</span></code> values, and two independent graph cache entries.</p></li>
-<li><p>Each cached graph contains kernel nodes compiled specifically for that field combination’s SNode layout.</p></li>
-<li><p>There is no risk of one template specialization’s graph being replayed for a different specialization.</p></li>
-</ul>
-</section>
-<section id="lifetime-and-cleanup">
-<h3>Lifetime and cleanup<a class="headerlink" href="#lifetime-and-cleanup" title="Link to this heading">#</a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">CachedCudaGraph</span></code> struct owns the graph executable and persistent device buffers via RAII. When the <code class="docutils literal notranslate"><span class="pre">KernelLauncher</span></code> is destroyed (which happens on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>), all cached graphs and their device allocations are freed. After a reset, the next kernel call triggers a fresh graph build against the new runtime.</p>
 </section>
 </section>
 </section>
@@ -512,17 +456,9 @@
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#usage">Usage</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-use">When to use</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-different-arguments">Passing different arguments</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-as-arguments">Fields as arguments</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-implementation-details">Advanced: Implementation Details</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#graph-build-and-replay">Graph build and replay</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#how-arguments-reach-the-gpu-kernels">How arguments reach the GPU kernels</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-keying-and-template-specialization">Cache keying and template specialization</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lifetime-and-cleanup">Lifetime and cleanup</a></li>
 </ul>
 </li>
 </ul>
