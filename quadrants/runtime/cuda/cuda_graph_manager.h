@@ -41,6 +41,8 @@ struct CachedCudaGraph {
   CachedCudaGraph &operator=(CachedCudaGraph &&other) noexcept;
 };
 
+bool on_cuda_device(void *ptr);
+
 class CudaGraphManager {
  public:
   // Attempts to launch the kernel via a cached or newly built CUDA graph.
@@ -58,7 +60,6 @@ class CudaGraphManager {
 
  private:
   bool launch_cached_graph(CachedCudaGraph &cached, LaunchContextBuilder &ctx);
-  bool on_cuda_device(void *ptr);
   bool resolve_ctx_ndarray_ptrs(
       LaunchContextBuilder &ctx,
       const std::vector<std::pair<int, Callable::Parameter>> &parameters,
