@@ -147,14 +147,14 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
         continue;
 
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-      ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
-      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
-                  "cuda_graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer",
-                  arg_id);
+      QD_ERROR_IF(
+          ctx.array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] !=
+              nullptr,
+          "cuda_graph does not support autograd; "
+          "ndarray arg {} has a non-null gradient pointer",
+          arg_id);
 
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
@@ -163,9 +163,9 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
-                  "cuda_graph requires all ndarrays to be device-resident; "
-                  "ndarray arg {} is host-resident",
-                  arg_id);
+                    "cuda_graph requires all ndarrays to be device-resident; "
+                    "ndarray arg {} is host-resident",
+                    arg_id);
         resolved_data = data_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -215,8 +215,8 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
     }
   }
   QD_ERROR_IF(cudadevrt_path.empty(),
-              "graph_do_while requires libcudadevrt.a but it was not found. "
-              "Install the CUDA toolkit and/or set CUDA_HOME.");
+              "Cannot find libcudadevrt.a — required for graph_do_while. "
+              "Install the CUDA toolkit and set CUDA_HOME.");
 
   // CUlinkState handle for the JIT linker session that combines our PTX
   // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
