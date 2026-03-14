@@ -30,12 +30,13 @@ def test_graph_do_while_counter():
     _xfail_if_cuda_without_hopper()
     N = 64
 
-    @qd.kernel(graph_do_while="counter")
+    @qd.kernel(cuda_graph=True)
     def graph_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        while qd.graph_do_while(counter):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
@@ -69,17 +70,18 @@ def test_graph_do_while_boolean_done():
     _xfail_if_cuda_without_hopper()
     N = 64
 
-    @qd.kernel(graph_do_while="keep_going")
+    @qd.kernel(cuda_graph=True)
     def increment_until_threshold(
         x: qd.types.ndarray(qd.i32, ndim=1),
         threshold: qd.i32,
         keep_going: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1
-        for i in range(1):
-            if x[0] >= threshold:
-                keep_going[()] = 0
+        while qd.graph_do_while(keep_going):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                if x[0] >= threshold:
+                    keep_going[()] = 0
 
     x = qd.ndarray(qd.i32, shape=(N,))
     keep_going = qd.ndarray(qd.i32, shape=())
@@ -113,18 +115,19 @@ def test_graph_do_while_multiple_loops():
     _xfail_if_cuda_without_hopper()
     N = 32
 
-    @qd.kernel(graph_do_while="counter")
+    @qd.kernel(cuda_graph=True)
     def multi_loop(
         x: qd.types.ndarray(qd.f32, ndim=1),
         y: qd.types.ndarray(qd.f32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1.0
-        for i in range(y.shape[0]):
-            y[i] = y[i] + 2.0
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        while qd.graph_do_while(counter):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1.0
+            for i in range(y.shape[0]):
+                y[i] = y[i] + 2.0
+            for i in range(1):
+                counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.f32, shape=(N,))
     y = qd.ndarray(qd.f32, shape=(N,))
@@ -162,12 +165,13 @@ def test_graph_do_while_changed_condition_ndarray_raises():
     """Passing a different ndarray for the condition parameter should raise."""
     _xfail_if_cuda_without_hopper()
 
-    @qd.kernel(graph_do_while="c")
+    @qd.kernel(cuda_graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1
-        for i in range(1):
-            c[()] = c[()] - 1
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     c1 = qd.ndarray(qd.i32, shape=())
@@ -178,3 +182,37 @@ def test_graph_do_while_changed_condition_ndarray_raises():
     c2.from_numpy(np.array(1, dtype=np.int32))
     with pytest.raises(RuntimeError, match="condition ndarray changed"):
         k(x, c2)
+
+
+@test_utils.test()
+def test_graph_do_while_without_cuda_graph_raises():
+    """Using qd.graph_do_while without cuda_graph=True should raise."""
+
+    @qd.kernel
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="requires @qd.kernel\\(cuda_graph=True\\)"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_nonexistent_arg_raises():
+    """Using a variable name that isn't a kernel parameter should raise."""
+
+    @qd.kernel(cuda_graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(nonexistent):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
+        k(x, c)
