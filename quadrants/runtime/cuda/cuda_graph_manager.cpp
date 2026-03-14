@@ -335,11 +335,11 @@ bool CudaGraphManager::try_launch(
     return false;
   }
 
+  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
+
   QD_ERROR_IF(ctx.result_buffer_size > 0,
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
-
-  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
 
   resolve_ctx_ndarray_ptrs(ctx, parameters, executor);
 
