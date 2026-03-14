@@ -61,6 +61,7 @@ struct CachedCudaGraph {
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   void *graph_do_while_flag_dev_ptr{nullptr};
+  std::size_t num_nodes{0};
 
   CachedCudaGraph() = default;
   ~CachedCudaGraph();
@@ -88,12 +89,16 @@ class CudaGraphManager {
   // cache_size and used_on_last_call used for tests
   void mark_not_used() {
     used_on_last_call_ = false;
+    num_nodes_on_last_call_ = 0;
   }
   std::size_t cache_size() const {
     return cache_.size();
   }
   bool used_on_last_call() const {
     return used_on_last_call_;
+  }
+  std::size_t num_nodes_on_last_call() const {
+    return num_nodes_on_last_call_;
   }
 
  private:
@@ -119,6 +124,7 @@ class CudaGraphManager {
   // (each template specialization gets its own launch_id).
   std::unordered_map<int, CachedCudaGraph> cache_;
   bool used_on_last_call_{false};
+  std::size_t num_nodes_on_last_call_{0};
 
   // JIT-compiled condition kernel for graph_do_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule

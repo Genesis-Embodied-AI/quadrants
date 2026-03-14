@@ -117,6 +117,12 @@ The parameter used by `graph_do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.
 
+### Restrictions
+
+- The same physical ndarray must be used for the counter parameter on every
+  call. Passing a different ndarray raises an error, because the counter's
+  device pointer is baked into the CUDA graph at creation time.
+
 ### Caveats
 
 On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:

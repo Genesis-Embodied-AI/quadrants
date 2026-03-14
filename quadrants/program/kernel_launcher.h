@@ -20,6 +20,10 @@ class KernelLauncher {
     return false;
   }
 
+  virtual std::size_t get_cuda_graph_num_nodes_on_last_call() const {
+    return 0;
+  }
+
   virtual ~KernelLauncher() = default;
 };
 
