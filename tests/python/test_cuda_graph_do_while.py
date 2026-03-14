@@ -15,9 +15,15 @@ def _cuda_graph_used():
     return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
 
 
+def _on_hopper():
+    return qd.lang.impl.get_cuda_compute_capability() >= 90
+
+
 @test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_counter():
     """Test graph_do_while with a counter that decrements each iteration."""
+    if not _on_hopper():
+        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
     N = 64
 
     @qd.kernel(graph_do_while="counter")
@@ -54,6 +60,8 @@ def test_graph_do_while_counter():
 @test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_boolean_done():
     """Test graph_do_while with a boolean 'continue' flag (non-zero = keep going)."""
+    if not _on_hopper():
+        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
     N = 64
 
     @qd.kernel(graph_do_while="keep_going")
@@ -95,6 +103,8 @@ def test_graph_do_while_boolean_done():
 @test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_multiple_loops():
     """Test graph_do_while with multiple top-level loops in the kernel body."""
+    if not _on_hopper():
+        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
     N = 32
 
     @qd.kernel(graph_do_while="counter")
@@ -142,6 +152,8 @@ def test_graph_do_while_multiple_loops():
 @test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_changed_condition_ndarray_raises():
     """Passing a different ndarray for the condition parameter should raise."""
+    if not _on_hopper():
+        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
 
     @qd.kernel(graph_do_while="c")
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
