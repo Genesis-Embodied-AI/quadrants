@@ -23,11 +23,10 @@ class KernelLauncher : public LLVM::KernelLauncher {
       const LLVM::CompiledKernelData &compiled) override;
 
  private:
-  void launch_offloaded_tasks(
-      JITModule *amdgpu_module,
-      const std::vector<OffloadedTask> &offloaded_tasks,
-      void *context_pointer,
-      int arg_size);
+  void launch_offloaded_tasks(JITModule *amdgpu_module,
+                              const std::vector<OffloadedTask> &offloaded_tasks,
+                              void *context_pointer,
+                              int arg_size);
   void launch_offloaded_tasks_with_do_while(
       LaunchContextBuilder &ctx,
       JITModule *amdgpu_module,

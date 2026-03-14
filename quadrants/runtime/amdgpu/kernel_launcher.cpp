@@ -26,7 +26,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(
     void *context_pointer,
     int arg_size) {
   do {
-    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer,
+                           arg_size);
     int32_t counter_val = 0;
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     AMDGPUDriver::get_instance().memcpy_device_to_host(
@@ -152,7 +153,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks,
                                          context_pointer, arg_size);
   } else {
-    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer,
+                           arg_size);
   }
   QD_TRACE("Launching kernel");
   if (ctx.arg_buffer_size > 0) {

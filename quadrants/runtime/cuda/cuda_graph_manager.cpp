@@ -163,9 +163,9 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
-                  "cuda_graph requires all ndarrays to be device-resident; "
-                  "ndarray arg {} is host-resident",
-                  arg_id);
+                    "cuda_graph requires all ndarrays to be device-resident; "
+                    "ndarray arg {} is host-resident",
+                    arg_id);
         resolved_data = data_ptr;
       } else if (arr_sz > 0) {
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -356,7 +356,8 @@ bool CudaGraphManager::try_launch(
     if (launch_cached_graph(it->second, ctx, use_graph_do_while)) {
       return true;
     }
-    // launch_cached_graph returned false => need to rebuild (e.g. flag pointer changed)
+    // launch_cached_graph returned false => need to rebuild (e.g. flag pointer
+    // changed)
     cache_.erase(it);
   }
 
