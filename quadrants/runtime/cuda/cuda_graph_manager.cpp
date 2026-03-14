@@ -23,7 +23,8 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
       persistent_device_result_buffer(other.persistent_device_result_buffer),
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
-      result_buffer_size(other.result_buffer_size) {
+      result_buffer_size(other.result_buffer_size),
+      num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
@@ -44,6 +45,7 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
     persistent_ctx = other.persistent_ctx;
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
+    num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
     other.persistent_device_arg_buffer = nullptr;
@@ -145,6 +147,7 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
+  num_nodes_on_last_call_ = cached.num_nodes;
   return true;
 }
 
@@ -218,9 +221,12 @@ bool CudaGraphManager::try_launch(
 
   CUDADriver::get_instance().graph_destroy(graph);
 
-  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}",
-           offloaded_tasks.size(), launch_id);
+  cached.num_nodes = offloaded_tasks.size();
 
+  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}",
+           cached.num_nodes, launch_id);
+
+  num_nodes_on_last_call_ = cached.num_nodes;
   cache_.emplace(launch_id, std::move(cached));
   used_on_last_call_ = true;
   return true;

@@ -146,6 +146,11 @@ class QD_DLL_EXPORT Program {
     return num_offloaded_tasks_on_last_call_;
   }
 
+  std::size_t get_cuda_graph_num_nodes_on_last_call() {
+    return program_impl_->get_kernel_launcher()
+        .get_cuda_graph_num_nodes_on_last_call();
+  }
+
   DeviceCapabilityConfig get_device_caps() {
     return program_impl_->get_device_caps();
   }
