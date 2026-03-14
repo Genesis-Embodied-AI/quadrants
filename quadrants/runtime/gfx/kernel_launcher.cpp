@@ -17,15 +17,16 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(
 
   auto *device = config_.gfx_runtime_->get_ti_device();
   DeviceAllocation alloc = *(static_cast<DeviceAllocation *>(it->second));
+  DevicePtr dev_ptr = alloc.get_ptr(0);
 
   int32_t flag_val;
   do {
     config_.gfx_runtime_->launch_kernel(handle, ctx);
     config_.gfx_runtime_->synchronize();
-    void *mapped = nullptr;
-    QD_ASSERT(device->map(alloc, &mapped) == RhiResult::success);
-    flag_val = *static_cast<int32_t *>(mapped);
-    device->unmap(alloc);
+    void *host_ptr = &flag_val;
+    size_t sz = sizeof(int32_t);
+    QD_ASSERT(device->readback_data(&dev_ptr, &host_ptr, &sz, 1) ==
+              RhiResult::success);
   } while (flag_val != 0);
 }
 
