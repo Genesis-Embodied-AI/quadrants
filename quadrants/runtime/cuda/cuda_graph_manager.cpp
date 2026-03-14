@@ -147,14 +147,14 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
         continue;
 
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
-      ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
-      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
-                  "cuda_graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer",
-                  arg_id);
+      QD_ERROR_IF(
+          ctx.array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}] !=
+              nullptr,
+          "cuda_graph does not support autograd; "
+          "ndarray arg {} has a non-null gradient pointer",
+          arg_id);
 
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
