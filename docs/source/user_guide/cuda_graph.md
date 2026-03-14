@@ -76,7 +76,7 @@ solve(x, counter)
 The `graph_do_while` value is the name of a scalar `qd.i32` ndarray parameter. The kernel body repeats while this value is non-zero.
 
 - On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
-- On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.
+- Older CUDA GPUs, and non-CUDA backends not currently supported.
 - `graph_do_while` implicitly enables `cuda_graph=True`.
 
 ### Patterns
@@ -117,14 +117,12 @@ The parameter used by `graph_do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.
 
+### Restrictions
+
+- The same physical ndarray must be used for the counter parameter on every
+  call. Passing a different ndarray raises an error, because the counter's
+  device pointer is baked into the CUDA graph at creation time.
+
 ### Caveats
 
-On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
-- wait for GPU async queue to finish processing
-- copy condition value to hostside
-- evaluate condition value on hostside
-- launch new kernels for next loop iteration, if not finished yet
-
-Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
-- fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
-- make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
+Only runs on CUDA. No fallback on non-CUDA platforms currently.

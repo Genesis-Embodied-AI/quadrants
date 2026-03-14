@@ -227,13 +227,11 @@ def kernel(
     Args:
         cuda_graph: If True, kernels with 2+ top-level for loops are captured
             into a CUDA graph on first launch and replayed on subsequent
-            launches, reducing per-kernel launch overhead. On non-CUDA backends
-            this flag is a harmless no-op.
+            launches, reducing per-kernel launch overhead. Non-CUDA backends are not supported currently.
         graph_do_while: Name of a scalar ``qd.i32`` ndarray parameter that
             controls GPU-side iteration. The kernel body repeats while the
             named argument is non-zero.  Uses CUDA conditional while nodes
-            on SM 9.0+ (Hopper); falls back to a host-side do-while loop
-            on older GPUs and non-CUDA backends.  Implicitly enables
+            on SM 9.0+ (Hopper).  Implicitly enables
             ``cuda_graph=True``.
 
             **Do-while semantics**: the kernel body always executes at least
@@ -259,7 +257,9 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_do_while=graph_do_while)
+        wrapped = _kernel_impl(
+            fn, level_of_class_stackframe=level, cuda_graph=cuda_graph, graph_do_while=graph_do_while
+        )
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(
