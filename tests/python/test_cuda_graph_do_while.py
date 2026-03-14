@@ -81,7 +81,6 @@ def test_graph_do_while_boolean_done():
     assert keep_going.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
-    # Second call: different threshold, start from 0
     x.from_numpy(np.zeros(N, dtype=np.int32))
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
