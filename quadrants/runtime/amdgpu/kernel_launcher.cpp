@@ -74,6 +74,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        // Record the device pointer for the graph_do_while flag so the
+        // host-side fallback loop can read it back after each iteration.
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
@@ -116,6 +118,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
+  // Host-side do-while fallback for graph_do_while. AMDGPU has no conditional
+  // graph nodes, so we sync and read the flag back to the host each iteration.
+  // Without graph_do_while the loop body executes exactly once.
   do {
     for (auto &task : offloaded_tasks) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
