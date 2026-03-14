@@ -464,6 +464,14 @@
 <p>The parameter used by <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> MUST be an ndarray.</p>
 <p>However, other parameters can be any supported Quadrants kernel parameter type.</p>
 </section>
+<section id="id1">
+<h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>The same physical ndarray must be used for the counter parameter on every
+call. Passing a different ndarray raises an error, because the counter’s
+device pointer is baked into the CUDA graph at creation time.</p></li>
+</ul>
+</section>
 <section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
 <p>Only runs on CUDA. No fallback on non-CUDA platforms currently.</p>
@@ -528,6 +536,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#patterns">Patterns</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#do-while-semantics">Do-while semantics</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caveats">Caveats</a></li>
 </ul>
 </li>
