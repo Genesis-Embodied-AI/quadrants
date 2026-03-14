@@ -8,7 +8,7 @@ KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 }
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(
-    KernelHandle handle,
+    Handle handle,
     LaunchContextBuilder &ctx) {
   const ArgArrayPtrKey key{ctx.graph_do_while_arg_id,
                            TypeFactory::DATA_PTR_POS_IN_NDARRAY};
