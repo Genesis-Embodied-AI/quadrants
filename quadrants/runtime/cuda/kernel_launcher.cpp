@@ -221,6 +221,8 @@ void KernelLauncher::ensure_condition_kernel_loaded() {
               "graph_do_while requires libcudadevrt.a but it was not found. "
               "Install the CUDA toolkit and/or set CUDA_HOME.");
 
+  // CUlinkState handle for the JIT linker session that combines our PTX
+  // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
   void *link_state = nullptr;
   driver.link_create(0, nullptr, nullptr, &link_state);
 
@@ -357,8 +359,16 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   void *graph = nullptr;
   CUDADriver::get_instance().graph_create(&graph, 0);
 
-  // Determine the target graph for kernel nodes.
-  // With graph_do_while, kernels go into the conditional while body graph.
+  // Target graph for kernel nodes. Without graph_do_while, work kernels go
+  // directly into the top-level graph. With graph_do_while, they go into
+  // a body graph inside a conditional while node:
+  //
+  //   Top-level graph
+  //     └── Conditional while node (repeats while flag != 0)
+  //           └── Body graph
+  //                 ├── Work kernel 1
+  //                 ├── Work kernel 2
+  //                 └── Condition kernel (reads flag, calls cudaGraphSetConditional)
   void *kernel_target_graph = graph;
   unsigned long long cond_handle = 0;
 
