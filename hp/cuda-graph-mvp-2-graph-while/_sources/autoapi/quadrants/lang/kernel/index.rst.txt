@@ -96,7 +96,7 @@ Module Contents
 
 
 
-   .. py:attribute:: graph_while_arg
+   .. py:attribute:: graph_do_while_arg
       :type:  str | None
       :value: None
 
