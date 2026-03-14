@@ -94,7 +94,9 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
       persistent_device_result_buffer(other.persistent_device_result_buffer),
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
-      result_buffer_size(other.result_buffer_size) {
+      result_buffer_size(other.result_buffer_size),
+      graph_do_while_flag_dev_ptr(other.graph_do_while_flag_dev_ptr),
+      num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
@@ -115,6 +117,8 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
     persistent_ctx = other.persistent_ctx;
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
+    graph_do_while_flag_dev_ptr = other.graph_do_while_flag_dev_ptr;
+    num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
     other.persistent_device_arg_buffer = nullptr;
@@ -150,9 +154,8 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
       ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
-      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(grad_ptr != nullptr,
+      QD_ERROR_IF(ctx.array_ptrs[grad_ptr_idx] != nullptr,
                   "cuda_graph does not support autograd; "
                   "ndarray arg {} has a non-null gradient pointer",
                   arg_id);
@@ -349,6 +352,7 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
+  num_nodes_on_last_call_ = cached.num_nodes;
   return true;
 }
 
@@ -468,8 +472,10 @@ bool CudaGraphManager::try_launch(
 
   CUDADriver::get_instance().graph_destroy(graph);
 
+  cached.num_nodes = offloaded_tasks.size();
+
   QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}{}",
-           offloaded_tasks.size(), launch_id,
+           cached.num_nodes, launch_id,
            use_graph_do_while ? " (with graph_do_while)" : "");
 
   if (use_graph_do_while) {
@@ -480,6 +486,8 @@ bool CudaGraphManager::try_launch(
     // so we rebuild the graph.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
   }
+
+  num_nodes_on_last_call_ = cached.num_nodes;
   cache_.emplace(launch_id, std::move(cached));
   used_on_last_call_ = true;
   return true;

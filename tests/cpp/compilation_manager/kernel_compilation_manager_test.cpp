@@ -29,6 +29,10 @@ class FakeCompiledKernelData : public CompiledKernelData {
     return kFakeArch;
   }
 
+  size_t num_tasks() const override {
+    return 0;
+  }
+
   std::unique_ptr<CompiledKernelData> clone() const override {
     return std::make_unique<FakeCompiledKernelData>(data_);
   }

@@ -25,16 +25,15 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(
     const std::vector<OffloadedTask> &offloaded_tasks,
     void *context_pointer,
     int arg_size) {
+  int32_t counter_val;
   do {
     launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer,
                            arg_size);
-    int32_t counter_val = 0;
+    counter_val = 0;
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     AMDGPUDriver::get_instance().memcpy_device_to_host(
         &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-    if (counter_val == 0)
-      break;
-  } while (true);
+  } while (counter_val != 0);
 }
 
 bool KernelLauncher::on_amdgpu_device(void *ptr) {
