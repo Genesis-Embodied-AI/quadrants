@@ -217,12 +217,9 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
       break;
     }
   }
-  if (cudadevrt_path.empty()) {
-    QD_WARN(
-        "Cannot find libcudadevrt.a — graph_do_while conditional nodes "
-        "will not work. Install the CUDA toolkit and set CUDA_HOME.");
-    return;
-  }
+  QD_ERROR_IF(cudadevrt_path.empty(),
+              "Cannot find libcudadevrt.a — required for graph_do_while. "
+              "Install the CUDA toolkit and set CUDA_HOME.");
 
   // CUlinkState handle for the JIT linker session that combines our PTX
   // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
