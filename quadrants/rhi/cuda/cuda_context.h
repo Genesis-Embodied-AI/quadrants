@@ -122,6 +122,4 @@ class CUDAContext {
   }
 };
 
-bool on_cuda_device(void *ptr);
-
 }  // namespace quadrants::lang

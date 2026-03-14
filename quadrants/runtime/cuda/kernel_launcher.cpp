@@ -1,4 +1,5 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
+#include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
 #include <vector>

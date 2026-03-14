@@ -194,11 +194,4 @@ CUDAContext &CUDAContext::get_instance() {
   return *context;
 }
 
-bool on_cuda_device(void *ptr) {
-  unsigned int attr_val = 0;
-  uint32_t ret_code = CUDADriver::get_instance().mem_get_attribute.call(
-      &attr_val, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (void *)ptr);
-  return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
-}
-
 }  // namespace quadrants::lang
