@@ -40,6 +40,16 @@ def test_graph_do_while_counter():
     assert counter.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
 
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(10, dtype=np.int32))
+
+    graph_loop(x, counter)
+    assert _cuda_graph_used()
+    assert _cuda_graph_cache_size() == 1
+
+    assert counter.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 10, dtype=np.int32))
+
 
 @test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_boolean_done():
