@@ -64,8 +64,8 @@ Module Contents
    :rtype: Callable
 
 
-.. py:function:: kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False, graph_do_while: str | None = None) -> Callable[[Any], Any]
-                 kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False, graph_do_while: str | None = None) -> Any
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False) -> Any
 
    Marks a function as a Quadrants kernel.
 
@@ -78,17 +78,8 @@ Module Contents
 
    :param cuda_graph: If True, kernels with 2+ top-level for loops are captured
                       into a CUDA graph on first launch and replayed on subsequent
-                      launches, reducing per-kernel launch overhead. Non-CUDA backends are not supported currently.
-   :param graph_do_while: Name of a scalar ``qd.i32`` ndarray parameter that
-                          controls GPU-side iteration. The kernel body repeats while the
-                          named argument is non-zero.  Uses CUDA conditional while nodes
-                          on SM 9.0+ (Hopper).  Implicitly enables
-                          ``cuda_graph=True``.
-
-                          **Do-while semantics**: the kernel body always executes at least
-                          once before the condition is checked. The flag value must be >= 1
-                          at launch time. Passing 0 with a kernel that decrements the
-                          counter will result in an infinite loop.
+                      launches, reducing per-kernel launch overhead. Non-CUDA backends
+                      are not supported currently.
 
    Example::
 

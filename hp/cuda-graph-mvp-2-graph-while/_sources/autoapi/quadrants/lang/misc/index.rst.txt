@@ -50,6 +50,7 @@ Functions
    quadrants.lang.misc.cache_read_only
    quadrants.lang.misc.assume_in_range
    quadrants.lang.misc.loop_config
+   quadrants.lang.misc.graph_do_while
    quadrants.lang.misc.global_thread_idx
    quadrants.lang.misc.mesh_patch_idx
    quadrants.lang.misc.is_extension_enabled
@@ -348,6 +349,23 @@ Module Contents
            # 32 bits, instead of 1 bit, will be copied at a time
            for i, j in x:
                y[i, j] = x[i, j]
+
+
+.. py:function:: graph_do_while(condition) -> bool
+
+   Marks a while loop as a CUDA graph do-while conditional node.
+
+   Used as ``while qd.graph_do_while(flag):`` inside a
+   ``@qd.kernel(cuda_graph=True)`` kernel. The loop body repeats while
+   ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
+
+   On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
+   conditional while node. Older CUDA GPUs and non-CUDA backends
+   are not currently supported.
+
+   This function should not be called directly at runtime; it is
+   recognised and transformed during AST compilation.
+   Requires ``@qd.kernel(cuda_graph=True)``.
 
 
 .. py:function:: global_thread_idx()
