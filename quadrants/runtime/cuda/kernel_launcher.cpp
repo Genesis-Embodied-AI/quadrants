@@ -185,6 +185,10 @@ bool KernelLauncher::resolve_ctx_ndarray_ptrs(
   return true;
 }
 
+// Lazily JIT-compiles and loads the graph_do_while condition kernel.
+// Links the PTX (kConditionKernelPTX) with libcudadevrt.a to produce a cubin,
+// then loads the _qd_graph_do_while_cond function for use in conditional
+// while nodes. Only called once; subsequent calls are no-ops.
 void KernelLauncher::ensure_condition_kernel_loaded() {
   if (cond_kernel_func_)
     return;
