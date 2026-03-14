@@ -298,13 +298,15 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
               "cuda_graph=True is not supported for kernels with struct return "
               "values; remove cuda_graph=True or avoid returning values");
 
+  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
+
   // Falls back to the normal path if any external array is host-resident,
   // since the graph path cannot perform host-to-device transfers.
   if (!resolve_ctx_ndarray_ptrs(ctx, parameters)) {
+    QD_ERROR_IF(use_graph_do_while,
+                "graph_do_while requires all ndarrays to be device-resident");
     return false;
   }
-
-  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
 
   auto it = cuda_graph_cache_.find(launch_id);
   if (it != cuda_graph_cache_.end()) {
