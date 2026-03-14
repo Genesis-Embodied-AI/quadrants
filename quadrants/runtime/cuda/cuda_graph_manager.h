@@ -67,20 +67,30 @@ class CudaGraphManager {
   // Attempts to launch the kernel via a cached or newly built CUDA graph.
   // Returns true on success; false if the graph path can't be used (e.g.
   // host-resident ndarrays) and the caller should fall back to normal launch.
-  // Internally tracks whether the graph was used, queryable via used_on_last_call().
-  bool try_launch(int launch_id, LaunchContextBuilder &ctx,
-                  JITModule *cuda_module,
-                  const std::vector<std::pair<int, Callable::Parameter>> &parameters,
-                  const std::vector<OffloadedTask> &offloaded_tasks,
-                  LlvmRuntimeExecutor *executor);
+  // Internally tracks whether the graph was used, queryable via
+  // used_on_last_call().
+  bool try_launch(
+      int launch_id,
+      LaunchContextBuilder &ctx,
+      JITModule *cuda_module,
+      const std::vector<std::pair<int, Callable::Parameter>> &parameters,
+      const std::vector<OffloadedTask> &offloaded_tasks,
+      LlvmRuntimeExecutor *executor);
 
   // cache_size and used_on_last_call used for tests
-  void mark_not_used() { used_on_last_call_ = false; }
-  std::size_t cache_size() const { return cache_.size(); }
-  bool used_on_last_call() const { return used_on_last_call_; }
+  void mark_not_used() {
+    used_on_last_call_ = false;
+  }
+  std::size_t cache_size() const {
+    return cache_.size();
+  }
+  bool used_on_last_call() const {
+    return used_on_last_call_;
+  }
 
  private:
-  bool launch_cached_graph(CachedCudaGraph &cached, LaunchContextBuilder &ctx,
+  bool launch_cached_graph(CachedCudaGraph &cached,
+                           LaunchContextBuilder &ctx,
                            bool use_graph_do_while);
   bool resolve_ctx_ndarray_ptrs(
       LaunchContextBuilder &ctx,
@@ -89,9 +99,13 @@ class CudaGraphManager {
   void ensure_condition_kernel_loaded();
   void *add_conditional_while_node(void *graph,
                                    unsigned long long *cond_handle_out);
-  void *add_kernel_node(void *graph, void *prev_node, void *func,
-                        unsigned int grid_dim, unsigned int block_dim,
-                        unsigned int shared_mem, void **kernel_params);
+  void *add_kernel_node(void *graph,
+                        void *prev_node,
+                        void *func,
+                        unsigned int grid_dim,
+                        unsigned int block_dim,
+                        unsigned int shared_mem,
+                        void **kernel_params);
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).

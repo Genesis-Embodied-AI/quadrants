@@ -13,9 +13,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   if (ctx.use_cuda_graph) {
     auto &lctx = contexts_[handle.get_launch_id()];
-    if (graph_manager_.try_launch(handle.get_launch_id(), ctx,
-                                  lctx.jit_module, *lctx.parameters,
-                                  lctx.offloaded_tasks,
+    if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module,
+                                  *lctx.parameters, lctx.offloaded_tasks,
                                   get_runtime_executor())) {
       return;
     }

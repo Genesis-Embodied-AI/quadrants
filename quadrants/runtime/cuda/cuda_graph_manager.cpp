@@ -153,7 +153,8 @@ bool CudaGraphManager::resolve_ctx_ndarray_ptrs(
 
       QD_ERROR_IF(grad_ptr != nullptr,
                   "cuda_graph does not support autograd; "
-                  "ndarray arg {} has a non-null gradient pointer", arg_id);
+                  "ndarray arg {} has a non-null gradient pointer",
+                  arg_id);
 
       // Raw device pointer to the array data, resolved from either an
       // external array (raw pointer) or a DeviceAllocation handle.
@@ -243,8 +244,10 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
            cubin_size);
 }
 
-void *CudaGraphManager::add_kernel_node(void *graph, void *prev_node,
-                                        void *func, unsigned int grid_dim,
+void *CudaGraphManager::add_kernel_node(void *graph,
+                                        void *prev_node,
+                                        void *func,
+                                        unsigned int grid_dim,
                                         unsigned int block_dim,
                                         unsigned int shared_mem,
                                         void **kernel_params) {
@@ -268,7 +271,8 @@ void *CudaGraphManager::add_kernel_node(void *graph, void *prev_node,
 }
 
 void *CudaGraphManager::add_conditional_while_node(
-    void *graph, unsigned long long *cond_handle_out) {
+    void *graph,
+    unsigned long long *cond_handle_out) {
   ensure_condition_kernel_loaded();
   QD_ASSERT(cond_kernel_func_);
 
@@ -301,8 +305,8 @@ void *CudaGraphManager::add_conditional_while_node(
 }
 
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
-                                            LaunchContextBuilder &ctx,
-                                            bool use_graph_do_while) {
+                                           LaunchContextBuilder &ctx,
+                                           bool use_graph_do_while) {
   QD_ERROR_IF(
       use_graph_do_while &&
           cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr,
@@ -321,7 +325,9 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
 }
 
 bool CudaGraphManager::try_launch(
-    int launch_id, LaunchContextBuilder &ctx, JITModule *cuda_module,
+    int launch_id,
+    LaunchContextBuilder &ctx,
+    JITModule *cuda_module,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters,
     const std::vector<OffloadedTask> &offloaded_tasks,
     LlvmRuntimeExecutor *executor) {
@@ -387,7 +393,8 @@ bool CudaGraphManager::try_launch(
   //           └── Body graph
   //                 ├── Work kernel 1
   //                 ├── Work kernel 2
-  //                 └── Condition kernel (reads flag, calls cudaGraphSetConditional)
+  //                 └── Condition kernel (reads flag, calls
+  //                 cudaGraphSetConditional)
   //
   // The condition kernel must be the last node in the body graph. It reads the
   // flag after the work kernels have updated it, so the loop-continue decision
@@ -405,8 +412,7 @@ bool CudaGraphManager::try_launch(
   for (const auto &task : offloaded_tasks) {
     void *ctx_ptr = &cached.persistent_ctx;
     prev_node = add_kernel_node(
-        kernel_target_graph, prev_node,
-        cuda_module->lookup_function(task.name),
+        kernel_target_graph, prev_node, cuda_module->lookup_function(task.name),
         (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
         (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
   }
@@ -418,8 +424,8 @@ bool CudaGraphManager::try_launch(
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     void *cond_args[2] = {&cond_handle, &flag_ptr};
 
-    add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_,
-                    1, 1, 0, cond_args);
+    add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0,
+                    cond_args);
   }
 
   // --- Instantiate and launch ---
