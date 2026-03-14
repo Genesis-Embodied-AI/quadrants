@@ -142,6 +142,10 @@ class QD_DLL_EXPORT Program {
         .get_cuda_graph_cache_used_on_last_call();
   }
 
+  size_t get_num_offloaded_tasks_on_last_call() const {
+    return num_offloaded_tasks_on_last_call_;
+  }
+
   DeviceCapabilityConfig get_device_caps() {
     return program_impl_->get_device_caps();
   }
@@ -337,6 +341,7 @@ class QD_DLL_EXPORT Program {
   float64 total_compilation_time_{0.0};
   static std::atomic<int> num_instances_;
   bool finalized_{false};
+  size_t num_offloaded_tasks_on_last_call_{0};
 
   // TODO: Move ndarrays_ to be managed by runtime
   std::unordered_map<void *, std::unique_ptr<Ndarray>> ndarrays_;

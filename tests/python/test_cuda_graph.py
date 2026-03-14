@@ -19,6 +19,10 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
+def _num_offloaded_tasks():
+    return impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
+
+
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
 def test_cuda_graph_two_loops(tensor_type):
@@ -40,6 +44,7 @@ def test_cuda_graph_two_loops(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
+    assert _num_offloaded_tasks() == 2
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
@@ -77,6 +82,7 @@ def test_cuda_graph_three_loops(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     three_loops(a, b, c)
+    assert _num_offloaded_tasks() == 3
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
@@ -118,6 +124,7 @@ def test_no_cuda_graph_annotation(tensor_type):
     y = tensor_type(qd.f32, (n,))
 
     two_loops(x, y)
+    assert _num_offloaded_tasks() == 2
     assert not _cuda_graph_used()
     two_loops(x, y)
     assert not _cuda_graph_used()
@@ -149,6 +156,7 @@ def test_cuda_graph_changed_args(tensor_type):
     y1 = tensor_type(qd.f32, (n,))
     assert _cuda_graph_cache_size() == 0
     two_loops(x1, y1)
+    assert _num_offloaded_tasks() == 2
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x1, y1)
@@ -209,6 +217,7 @@ def test_cuda_graph_different_sizes(tensor_type):
     y1 = tensor_type(qd.f32, (256,))
     assert _cuda_graph_cache_size() == 0
     add_one(x1, y1)
+    assert _num_offloaded_tasks() == 2
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
 
@@ -248,6 +257,7 @@ def test_cuda_graph_after_reset(tensor_type):
     x = tensor_type(qd.f32, (n,))
     y = tensor_type(qd.f32, (n,))
     add_one(x, y)
+    assert _num_offloaded_tasks() == 2
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     add_one(x, y)
@@ -292,6 +302,7 @@ def test_cuda_graph_annotation_cross_platform(tensor_type):
 
     assert _cuda_graph_cache_size() == 0
     two_loops(x, y)
+    assert _num_offloaded_tasks() == 2
     assert _cuda_graph_cache_size() == (1 if platform_supports_graph else 0)
     assert _cuda_graph_used() == platform_supports_graph
     two_loops(x, y)
