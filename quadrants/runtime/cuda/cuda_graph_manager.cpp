@@ -1,4 +1,5 @@
 #include "quadrants/runtime/cuda/cuda_graph_manager.h"
+#include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
 #include <cstdlib>
