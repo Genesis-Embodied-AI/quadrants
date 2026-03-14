@@ -419,6 +419,7 @@ bool KernelLauncher::launch_llvm_kernel_graph(Handle handle,
   }
 
   if (use_graph_do_while) {
+    // add conditional node into the body graph
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
