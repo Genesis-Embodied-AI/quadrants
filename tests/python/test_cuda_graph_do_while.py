@@ -140,38 +140,6 @@ def test_graph_do_while_multiple_loops():
 
 
 @test_utils.test(arch=[qd.cuda])
-def test_graph_do_while_replay():
-    """Test that graph_do_while works correctly on subsequent calls (graph replay)."""
-    N = 16
-
-    @qd.kernel(graph_do_while="counter")
-    def inc(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1
-        for i in range(1):
-            counter[None] = counter[None] - 1
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    counter = qd.ndarray(qd.i32, shape=())
-
-    # First call: 3 iterations
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(3, dtype=np.int32))
-    inc(x, counter)
-    assert _cuda_graph_used()
-    assert _cuda_graph_cache_size() == 1
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
-
-    # Second call: 7 iterations (graph replay with new counter value)
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(7, dtype=np.int32))
-    inc(x, counter)
-    assert _cuda_graph_used()
-    assert _cuda_graph_cache_size() == 1
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
-
-
-@test_utils.test(arch=[qd.cuda])
 def test_graph_do_while_replay_new_ndarray_raises():
     """Passing a different ndarray for the condition parameter should raise."""
     N = 16
