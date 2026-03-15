@@ -71,11 +71,9 @@ jobs:
           python-version: '3.10'
       - name: install cuda stuff
         run: |
-          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8
-          sudo apt-get install -y libcusparse-dev-12-8 libcusparse-12-8
+          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
           echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
-          ldconfig -p | grep -E 'cusparse|cusolver'
       - name: install quadrants
         run: |
           set -x
@@ -84,9 +82,7 @@ jobs:
           pip install dist/*.whl
       - name: run tests
         run: |
-          ls -lh
           chmod +x quadrants_cpp_tests
-          ls -lh
           export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
           ./quadrants_cpp_tests --gtest_filter=-AMDGPU.*
   test_linux_cuda:
@@ -105,11 +101,9 @@ jobs:
           python-version: '3.10'
       - name: install cuda stuff
         run: |
-          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8
-          sudo apt-get install -y libcusparse-dev-12-8 libcusparse-12-8
+          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
           echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
-          ldconfig -p | grep -E 'cusparse|cusolver'
       - name: install quadrants
         run: |
           set -x
