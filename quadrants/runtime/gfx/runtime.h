@@ -98,6 +98,27 @@ class QD_DLL_EXPORT GfxRuntime {
 
   void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx);
 
+  void launch_kernel_task_range(KernelHandle handle,
+                                LaunchContextBuilder &host_ctx,
+                                int task_start,
+                                int task_end);
+
+  struct PreparedLaunch {
+    CompiledQuadrantsKernel *ti_kernel{nullptr};
+    std::unique_ptr<DeviceAllocationGuard> args_buffer;
+    std::unique_ptr<DeviceAllocationGuard> ret_buffer;
+    std::unordered_map<int, DeviceAllocation> any_arrays;
+    std::unordered_map<int, size_t> ext_array_size;
+  };
+
+  PreparedLaunch prepare_launch(KernelHandle handle,
+                                LaunchContextBuilder &host_ctx);
+  void dispatch_task_range(PreparedLaunch &prepared,
+                           int task_start,
+                           int task_end);
+  void finalize_launch(PreparedLaunch &prepared,
+                       LaunchContextBuilder &host_ctx);
+
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size);
 
   void synchronize();

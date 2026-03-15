@@ -117,6 +117,8 @@ class QD_DLL_EXPORT CallableBase {
   const StructType *args_type = nullptr;
   size_t args_size{0};
 
+  bool has_graph_do_while{false};
+
   Arch arch;
   std::string name;
 };

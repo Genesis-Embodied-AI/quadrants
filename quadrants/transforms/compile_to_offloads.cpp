@@ -160,7 +160,8 @@ void compile_to_offloads(IRNode *ir,
 
   irpass::full_simplify(ir, config,
                         {false, /*autodiff_enabled*/ false, kernel->get_name(),
-                         verbose, "simplify_III"});
+                         verbose, "simplify_III",
+                         /*skip_cfg_optimization=*/kernel->has_graph_do_while});
   irpass::analysis::verify(ir);
 
   dump_ir("after_simplify_III");
@@ -270,9 +271,10 @@ void offload_to_executable(IRNode *ir,
   irpass::analysis::verify(ir);
 
   if (lower_global_access) {
-    irpass::full_simplify(ir, config,
-                          {false, /*autodiff_enabled*/ false,
-                           kernel->get_name(), verbose, "before_lower_access"});
+    irpass::full_simplify(
+        ir, config,
+        {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose,
+         "before_lower_access", kernel->has_graph_do_while});
     print("Simplified before lower access");
     irpass::lower_access(ir, config, {kernel->no_activate, true});
     print("Access lowered");
@@ -290,9 +292,10 @@ void offload_to_executable(IRNode *ir,
   irpass::demote_operations(ir, config);
   print("Operations demoted");
 
-  irpass::full_simplify(ir, config,
-                        {lower_global_access, /*autodiff_enabled*/ false,
-                         kernel->get_name(), verbose, "simplify_IV"});
+  irpass::full_simplify(
+      ir, config,
+      {lower_global_access, /*autodiff_enabled*/ false, kernel->get_name(),
+       verbose, "simplify_IV", kernel->has_graph_do_while});
   print("Simplified IV");
 
   if (determine_ad_stack_size) {
@@ -313,10 +316,10 @@ void offload_to_executable(IRNode *ir,
       irpass::die(ir);
       print("DIE");
 
-      // Remove redundant MatrixInitStmt inserted during scalarization
-      irpass::full_simplify(ir, config,
-                            {false, /*autodiff_enabled*/ false,
-                             kernel->get_name(), verbose, "scalarize"});
+      irpass::full_simplify(
+          ir, config,
+          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose,
+           "scalarize", kernel->has_graph_do_while});
       print("Scalarized");
     }
   }

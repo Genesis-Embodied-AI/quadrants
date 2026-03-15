@@ -638,6 +638,7 @@ void export_lang(py::module &m) {
       .def("finalize_rets", &Kernel::finalize_rets)
       .def("finalize_params", &Kernel::finalize_params)
       .def("make_launch_context", &Kernel::make_launch_context)
+      .def_readwrite("has_graph_do_while", &Kernel::has_graph_do_while)
       .def(
           "ast_builder",
           [](Kernel *self) -> ASTBuilder * {

@@ -344,11 +344,198 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(
 void GfxRuntime::launch_kernel(KernelHandle handle,
                                LaunchContextBuilder &host_ctx) {
   auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  int num_tasks = ti_kernel->ti_kernel_attribs().tasks_attribs.size();
+  launch_kernel_task_range(handle, host_ctx, 0, num_tasks);
+}
+
+GfxRuntime::PreparedLaunch GfxRuntime::prepare_launch(
+    KernelHandle handle,
+    LaunchContextBuilder &host_ctx) {
+  PreparedLaunch p;
+  p.ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+
+  if (p.ti_kernel->get_args_buffer_size()) {
+    auto [buf, res] = device_->allocate_memory_unique(
+        {p.ti_kernel->get_args_buffer_size(),
+         /*host_write=*/true, /*host_read=*/false,
+         /*export_sharing=*/false, AllocUsage::Uniform});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate args buffer");
+    p.args_buffer = std::move(buf);
+  }
+
+  if (p.ti_kernel->get_ret_buffer_size()) {
+    auto [buf, res] = device_->allocate_memory_unique(
+        {p.ti_kernel->get_ret_buffer_size(),
+         /*host_write=*/false, /*host_read=*/true,
+         /*export_sharing=*/false, AllocUsage::Storage});
+    QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ret buffer");
+    p.ret_buffer = std::move(buf);
+  }
+
+  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(
+      &p.ti_kernel->ti_kernel_attribs().ctx_attribs, host_ctx, device_,
+      p.args_buffer.get(), p.ret_buffer.get());
+
+  if (ctx_blitter) {
+    QD_ASSERT(p.ti_kernel->get_args_buffer_size() ||
+              p.ti_kernel->get_ret_buffer_size());
+
+    const auto &args = p.ti_kernel->ti_kernel_attribs().ctx_attribs.args();
+    for (auto &kv : args) {
+      const auto &indices = kv.first;
+      const auto &arg = kv.second;
+      if (arg.is_array) {
+        QD_ASSERT(indices.size() == 1);
+        int arg_id = indices[0];
+        if (host_ctx.device_allocation_type[arg_id] !=
+            LaunchContextBuilder::DevAllocType::kNone) {
+          DeviceAllocation devalloc = kDeviceNullAllocation;
+          const ArgArrayPtrKey key{arg_id,
+                                   TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+          if (host_ctx.array_ptrs.count(key)) {
+            devalloc = *(DeviceAllocation *)(host_ctx.array_ptrs[key]);
+          }
+          if (host_ctx.device_allocation_type[arg_id] ==
+              LaunchContextBuilder::DevAllocType::kNdarray) {
+            p.any_arrays[arg_id] = devalloc;
+            ndarrays_in_use_.insert(devalloc.alloc_id);
+          } else {
+            QD_NOT_IMPLEMENTED;
+          }
+        } else {
+          p.ext_array_size[arg_id] = host_ctx.array_runtime_sizes[arg_id];
+          auto arr_access =
+              p.ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access;
+          auto access_it = std::find_if(arr_access.begin(), arr_access.end(),
+                                        [indices](const auto &pair) -> bool {
+                                          return pair.first == indices;
+                                        });
+          QD_ASSERT(access_it != arr_access.end());
+          uint32_t access = uint32_t(access_it->second);
+          size_t alloc_size = std::max(size_t(32), p.ext_array_size.at(arg_id));
+          bool host_write = access & uint32_t(irpass::ExternalPtrAccess::READ);
+          auto [allocated, res] = device_->allocate_memory_unique(
+              {alloc_size, host_write, false, /*export_sharing=*/false,
+               AllocUsage::Storage});
+          QD_ASSERT_INFO(res == RhiResult::success,
+                         "Failed to allocate ext arr buffer");
+          p.any_arrays[arg_id] = *allocated.get();
+          ctx_buffers_.push_back(std::move(allocated));
+        }
+      }
+    }
+
+    ctx_blitter->host_to_device(p.any_arrays, p.ext_array_size);
+  }
+
+  return p;
+}
+
+void GfxRuntime::dispatch_task_range(PreparedLaunch &p,
+                                     int task_start,
+                                     int task_end) {
+  ensure_current_cmdlist();
+
+  const auto &task_attribs = p.ti_kernel->ti_kernel_attribs().tasks_attribs;
+
+  for (int i = task_start; i < task_end; ++i) {
+    const auto &attribs = task_attribs[i];
+    auto vp = p.ti_kernel->get_pipeline(i);
+    const int group_x = (attribs.advisory_total_num_threads +
+                         attribs.advisory_num_threads_per_group - 1) /
+                        attribs.advisory_num_threads_per_group;
+    std::unique_ptr<ShaderResourceSet> bindings =
+        device_->create_resource_set_unique();
+    for (auto &bind : attribs.buffer_binds) {
+      if (bind.buffer.type == BufferType::ExtArr) {
+        bindings->rw_buffer(bind.binding, p.any_arrays.at(bind.buffer.root_id));
+      } else if (bind.buffer.type == BufferType::Args) {
+        bindings->buffer(bind.binding, p.args_buffer ? *p.args_buffer
+                                                     : kDeviceNullAllocation);
+      } else if (bind.buffer.type == BufferType::Rets) {
+        bindings->rw_buffer(
+            bind.binding, p.ret_buffer ? *p.ret_buffer : kDeviceNullAllocation);
+      } else {
+        DeviceAllocation *alloc = p.ti_kernel->get_buffer_bind(bind.buffer);
+        bindings->rw_buffer(bind.binding,
+                            alloc ? *alloc : kDeviceNullAllocation);
+      }
+    }
+
+    if (attribs.task_type == OffloadedTaskType::listgen) {
+      for (auto &bind : attribs.buffer_binds) {
+        if (bind.buffer.type == BufferType::ListGen) {
+          current_cmdlist_->buffer_fill(
+              p.ti_kernel->get_buffer_bind(bind.buffer)->get_ptr(0),
+              kBufferSizeEntireSize, /*data=*/0);
+          current_cmdlist_->buffer_barrier(
+              *p.ti_kernel->get_buffer_bind(bind.buffer));
+        }
+      }
+    }
+
+    current_cmdlist_->bind_pipeline(vp);
+    RhiResult status = current_cmdlist_->bind_shader_resources(bindings.get());
+    QD_ERROR_IF(status != RhiResult::success,
+                "Resource binding error : RhiResult({})", status);
+
+    if (device_->get_caps().get(
+            DeviceCapability::spirv_has_physical_storage_buffer)) {
+      for (const auto &[arg_id, alloc] : p.any_arrays) {
+        current_cmdlist_->track_physical_buffer(alloc);
+      }
+    }
+
+    if (profiler_) {
+      current_cmdlist_->begin_profiler_scope(attribs.name);
+    }
+
+    status = current_cmdlist_->dispatch(group_x);
+
+    if (profiler_) {
+      current_cmdlist_->end_profiler_scope();
+    }
+
+    QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})",
+                status);
+    current_cmdlist_->memory_barrier();
+  }
+}
+
+void GfxRuntime::finalize_launch(PreparedLaunch &p,
+                                 LaunchContextBuilder &host_ctx) {
+  if (p.args_buffer) {
+    ctx_buffers_.push_back(std::move(p.args_buffer));
+  }
+  if (p.ret_buffer) {
+    ctx_buffers_.push_back(std::move(p.ret_buffer));
+  }
+
+  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(
+      &p.ti_kernel->ti_kernel_attribs().ctx_attribs, host_ctx, device_, nullptr,
+      nullptr);
+
+  if (ctx_blitter) {
+    if (ctx_blitter->device_to_host(current_cmdlist_.get(), p.any_arrays,
+                                    p.ext_array_size)) {
+      current_cmdlist_ = nullptr;
+      ctx_buffers_.clear();
+    }
+  }
+
+  submit_current_cmdlist_if_timeout();
+}
+
+void GfxRuntime::launch_kernel_task_range(KernelHandle handle,
+                                          LaunchContextBuilder &host_ctx,
+                                          int task_start,
+                                          int task_end) {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
   if (profiler_) {
     const int apple_max_query_pool_count = 32;
-    int task_count = ti_kernel->ti_kernel_attribs().tasks_attribs.size();
+    int task_count = task_end - task_start;
     if (task_count > apple_max_query_pool_count) {
       QD_WARN(
           "Cannot concurrently profile more than 32 tasks in a single "
@@ -457,7 +644,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
-  for (int i = 0; i < task_attribs.size(); ++i) {
+  for (int i = task_start; i < task_end; ++i) {
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
     const int group_x = (attribs.advisory_total_num_threads +

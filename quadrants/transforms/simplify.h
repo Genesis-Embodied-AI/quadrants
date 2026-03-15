@@ -17,6 +17,7 @@ class FullSimplifyPass : public Pass {
     bool verbose = false;
     std::string phase =
         "";  // Phase identifier (e.g., "simplify_I", "simplify_III")
+    bool skip_cfg_optimization = false;
   };
 };
 

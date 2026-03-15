@@ -422,6 +422,8 @@ class Kernel(FuncBase):
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                if self.graph_do_while_levels:
+                    quadrants_kernel.has_graph_do_while = True
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel

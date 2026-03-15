@@ -19,12 +19,6 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
-def _skip_nested_if_gfx():
-    arch = impl.current_cfg().arch
-    if arch in (qd.metal, qd.vulkan):
-        pytest.skip("Nested graph_do_while not supported on gfx backend")
-
-
 def _xfail_if_cuda_without_hopper():
     if _on_cuda() and qd.lang.impl.get_cuda_compute_capability() < 90:
         pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
@@ -169,7 +163,6 @@ def test_graph_do_while_multiple_loops():
 @test_utils.test()
 def test_graph_do_while_nested_2_levels():
     """Test nested graph_do_while: outer iterates 3x, inner iterates 2x per outer."""
-    _skip_nested_if_gfx()
     _xfail_if_cuda_without_hopper()
     N = 16
 
@@ -216,7 +209,6 @@ def test_graph_do_while_nested_2_levels():
 @test_utils.test()
 def test_graph_do_while_nested_3_levels():
     """Test 3 levels of nesting."""
-    _skip_nested_if_gfx()
     _xfail_if_cuda_without_hopper()
 
     @qd.kernel(cuda_graph=True)
