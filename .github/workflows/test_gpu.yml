@@ -73,9 +73,9 @@ jobs:
         run: |
           sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8
           sudo apt-get install -y libcusparse-dev-12-8 libcusparse-12-8
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
-          ls -lhd /usr/local/cuda*
-          find /usr/local/cuda* -name 'libcusparse.so*' -o -name 'libcusolver.so*' 2>/dev/null
+          ldconfig -p | grep -E 'cusparse|cusolver'
       - name: install quadrants
         run: |
           set -x
@@ -107,9 +107,9 @@ jobs:
         run: |
           sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8
           sudo apt-get install -y libcusparse-dev-12-8 libcusparse-12-8
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
           sudo ldconfig
-          ls -lhd /usr/local/cuda*
-          find /usr/local/cuda* -name 'libcusparse.so*' -o -name 'libcusolver.so*' 2>/dev/null
+          ldconfig -p | grep -E 'cusparse|cusolver'
       - name: install quadrants
         run: |
           set -x
@@ -122,8 +122,6 @@ jobs:
           pip install -r requirements_test_xdist.txt
       - name: run tests (without torch)
         run: |
-          ls -lh
-          export LD_LIBRARY_PATH=/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
           python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
