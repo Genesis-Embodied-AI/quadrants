@@ -12,6 +12,7 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/eigen.h"
 #include "pybind11/numpy.h"
+#include "pybind11/stl.h"
 
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
@@ -669,7 +670,26 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
       .def_readwrite("use_cuda_graph", &LaunchContextBuilder::use_cuda_graph)
       .def_readwrite("graph_do_while_arg_id",
-                     &LaunchContextBuilder::graph_do_while_arg_id);
+                     &LaunchContextBuilder::graph_do_while_arg_id)
+      .def_readwrite("graph_do_while_levels",
+                     &LaunchContextBuilder::graph_do_while_levels);
+
+  py::class_<GraphDoWhileLevel>(m, "GraphDoWhileLevel")
+      .def(py::init([](int cond_arg_id, int num_body_tasks, int total_tasks,
+                       int task_offset) {
+             GraphDoWhileLevel lv;
+             lv.cond_arg_id = cond_arg_id;
+             lv.num_body_tasks = num_body_tasks;
+             lv.total_tasks = total_tasks;
+             lv.task_offset = task_offset;
+             return lv;
+           }),
+           py::arg("cond_arg_id"), py::arg("num_body_tasks"),
+           py::arg("total_tasks"), py::arg("task_offset"))
+      .def_readwrite("cond_arg_id", &GraphDoWhileLevel::cond_arg_id)
+      .def_readwrite("num_body_tasks", &GraphDoWhileLevel::num_body_tasks)
+      .def_readwrite("total_tasks", &GraphDoWhileLevel::total_tasks)
+      .def_readwrite("task_offset", &GraphDoWhileLevel::task_offset);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)

@@ -2,6 +2,7 @@
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace quadrants::lang {
@@ -20,19 +21,118 @@ void KernelLauncher::launch_offloaded_tasks(
   }
 }
 
-void KernelLauncher::launch_offloaded_tasks_with_do_while(
+static void launch_task_range(LaunchContextBuilder &ctx,
+                              JITModule *cuda_module,
+                              const std::vector<OffloadedTask> &offloaded_tasks,
+                              int start,
+                              int end) {
+  for (int t = start; t < end; ++t) {
+    const auto &task = offloaded_tasks[t];
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
+             task.block_dim);
+    cuda_module->launch(task.name, task.grid_dim, task.block_dim,
+                        task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                        {});
+  }
+}
+
+// Dispatch a do-while level and all its children recursively.
+// |levels| is sorted innermost-first. |level_idx| indexes from the outermost
+// level (levels.size()-1) down to 0 (innermost).
+// |children| are the direct children of this level (indices into levels[]).
+static void dispatch_do_while_level(
     LaunchContextBuilder &ctx,
     JITModule *cuda_module,
-    const std::vector<OffloadedTask> &offloaded_tasks) {
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    const std::vector<GraphDoWhileLevel> &levels,
+    int level_idx) {
+  const auto &lv = levels[level_idx];
+  int body_start = lv.task_offset;
+  int body_end = lv.task_offset + lv.total_tasks;
+
+  // Collect direct child levels whose task ranges fall within our body.
+  // levels[] is innermost-first; children have lower indices.
+  // A child's full extent is [child.task_offset, child.task_offset +
+  // child.total_tasks).
+  struct ChildInfo {
+    int level_idx;
+    int task_start;
+    int task_end;
+  };
+  std::vector<ChildInfo> children;
+  for (int i = level_idx - 1; i >= 0; --i) {
+    const auto &child = levels[i];
+    int child_start = child.task_offset;
+    int child_end = child.task_offset + child.total_tasks;
+    if (child_start >= body_start && child_end <= body_end) {
+      bool is_grandchild = false;
+      for (const auto &c : children) {
+        if (child_start >= c.task_start && child_start < c.task_end) {
+          is_grandchild = true;
+          break;
+        }
+      }
+      if (!is_grandchild) {
+        children.push_back({i, child_start, child_end});
+      }
+    }
+  }
+
+  // Sort children by their task_offset for correct interleaving
+  std::sort(children.begin(), children.end(),
+            [](const ChildInfo &a, const ChildInfo &b) {
+              return a.task_start < b.task_start;
+            });
+
   int32_t counter_val;
   do {
-    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
+    int cursor = body_start;
+    for (const auto &child : children) {
+      // Run direct tasks before this child
+      if (cursor < child.task_start) {
+        launch_task_range(ctx, cuda_module, offloaded_tasks, cursor,
+                          child.task_start);
+      }
+      // Recurse into child level
+      dispatch_do_while_level(ctx, cuda_module, offloaded_tasks, levels,
+                              child.level_idx);
+      cursor = child.task_end;
+    }
+    // Run remaining direct tasks after last child
+    if (cursor < body_end) {
+      launch_task_range(ctx, cuda_module, offloaded_tasks, cursor, body_end);
+    }
+
     counter_val = 0;
     auto *stream = CUDAContext::get_instance().get_stream();
     CUDADriver::get_instance().stream_synchronize(stream);
     CUDADriver::get_instance().memcpy_device_to_host(
-        &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+        &counter_val, lv.flag_dev_ptr, sizeof(int32_t));
   } while (counter_val != 0);
+}
+
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
+    LaunchContextBuilder &ctx,
+    JITModule *cuda_module,
+    const std::vector<OffloadedTask> &offloaded_tasks) {
+  if (ctx.graph_do_while_levels.empty()) {
+    // Legacy single-level path
+    int32_t counter_val;
+    do {
+      launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
+      counter_val = 0;
+      auto *stream = CUDAContext::get_instance().get_stream();
+      CUDADriver::get_instance().stream_synchronize(stream);
+      CUDADriver::get_instance().memcpy_device_to_host(
+          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+    } while (counter_val != 0);
+  } else {
+    // Nested do-while: levels is innermost-first.
+    // The outermost level is levels.back().
+    int outermost = static_cast<int>(ctx.graph_do_while_levels.size()) - 1;
+    launch_tasks_recursive(ctx, cuda_module, offloaded_tasks,
+                           ctx.graph_do_while_levels, outermost, 0);
+  }
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
@@ -138,6 +238,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id) {
+            lv.flag_dev_ptr = device_ptrs[data_ptr_idx];
+          }
+        }
       } else if (arr_sz > 0) {
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -155,6 +260,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                              (uint64)device_ptrs[grad_ptr_idx]);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id) {
+            lv.flag_dev_ptr = device_ptrs[data_ptr_idx];
+          }
         }
       }
     }

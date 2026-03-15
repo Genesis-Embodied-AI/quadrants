@@ -1,6 +1,8 @@
 #include "quadrants/runtime/cpu/kernel_launcher.h"
 #include "quadrants/rhi/arch.h"
 
+#include <algorithm>
+
 namespace quadrants::lang {
 namespace cpu {
 
@@ -12,12 +14,81 @@ void KernelLauncher::launch_offloaded_tasks(
   }
 }
 
+using TaskFunc_ = int32 (*)(void *);
+
+static void launch_task_range(LaunchContextBuilder &ctx,
+                              const std::vector<TaskFunc_> &task_funcs,
+                              int start,
+                              int end) {
+  for (int t = start; t < end; ++t) {
+    task_funcs[t](&ctx.get_context());
+  }
+}
+
+static void dispatch_do_while_level_cpu(
+    LaunchContextBuilder &ctx,
+    const std::vector<TaskFunc_> &task_funcs,
+    const std::vector<GraphDoWhileLevel> &levels,
+    int level_idx) {
+  const auto &lv = levels[level_idx];
+  int body_start = lv.task_offset;
+  int body_end = lv.task_offset + lv.total_tasks;
+
+  struct ChildInfo {
+    int level_idx;
+    int task_start;
+    int task_end;
+  };
+  std::vector<ChildInfo> children;
+  for (int i = level_idx - 1; i >= 0; --i) {
+    const auto &child = levels[i];
+    int cs = child.task_offset;
+    int ce = child.task_offset + child.total_tasks;
+    if (cs >= body_start && ce <= body_end) {
+      bool is_grandchild = false;
+      for (const auto &c : children) {
+        if (cs >= c.task_start && cs < c.task_end) {
+          is_grandchild = true;
+          break;
+        }
+      }
+      if (!is_grandchild) {
+        children.push_back({i, cs, ce});
+      }
+    }
+  }
+  std::sort(children.begin(), children.end(),
+            [](const ChildInfo &a, const ChildInfo &b) {
+              return a.task_start < b.task_start;
+            });
+
+  do {
+    int cursor = body_start;
+    for (const auto &child : children) {
+      if (cursor < child.task_start) {
+        launch_task_range(ctx, task_funcs, cursor, child.task_start);
+      }
+      dispatch_do_while_level_cpu(ctx, task_funcs, levels, child.level_idx);
+      cursor = child.task_end;
+    }
+    if (cursor < body_end) {
+      launch_task_range(ctx, task_funcs, cursor, body_end);
+    }
+  } while (*static_cast<int32_t *>(lv.flag_dev_ptr) != 0);
+}
+
 void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     const std::vector<TaskFunc> &task_funcs) {
-  do {
-    launch_offloaded_tasks(ctx, task_funcs);
-  } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+  if (ctx.graph_do_while_levels.empty()) {
+    do {
+      launch_offloaded_tasks(ctx, task_funcs);
+    } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+  } else {
+    int outermost = static_cast<int>(ctx.graph_do_while_levels.size()) - 1;
+    dispatch_do_while_level_cpu(ctx, task_funcs, ctx.graph_do_while_levels,
+                                outermost);
+  }
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle,
@@ -46,6 +117,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = data_ptr;
         }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id) {
+            lv.flag_dev_ptr = data_ptr;
+          }
+        }
       } else if (ctx.array_runtime_sizes[arg_id] > 0) {
         uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(
             *static_cast<DeviceAllocation *>(data_ptr));
@@ -59,6 +135,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         ctx.set_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
+        }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id) {
+            lv.flag_dev_ptr = (void *)host_ptr;
+          }
         }
       }
     }

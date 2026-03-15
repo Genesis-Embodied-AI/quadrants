@@ -1,9 +1,19 @@
 #pragma once
+#include <vector>
+
 #include <quadrants/program/callable.h>
 #include "quadrants/program/ndarray.h"
 #include "quadrants/program/matrix.h"
 
 namespace quadrants::lang {
+
+struct GraphDoWhileLevel {
+  int cond_arg_id{-1};
+  int num_body_tasks{0};
+  int total_tasks{0};
+  int task_offset{0};
+  void *flag_dev_ptr{nullptr};
+};
 
 struct RuntimeContext;
 
@@ -153,6 +163,7 @@ class LaunchContextBuilder {
   bool use_cuda_graph{false};
   int graph_do_while_arg_id{-1};
   void *graph_do_while_flag_dev_ptr{nullptr};
+  std::vector<GraphDoWhileLevel> graph_do_while_levels;
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test

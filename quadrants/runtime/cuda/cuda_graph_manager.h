@@ -61,6 +61,7 @@ struct CachedCudaGraph {
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   void *graph_do_while_flag_dev_ptr{nullptr};
+  std::vector<void *> graph_do_while_flag_dev_ptrs;
   std::size_t num_nodes{0};
 
   CachedCudaGraph() = default;
@@ -119,6 +120,13 @@ class CudaGraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         void **kernel_params);
+  void build_graph_level(void *target_graph,
+                         LaunchContextBuilder &ctx,
+                         JITModule *cuda_module,
+                         const std::vector<OffloadedTask> &offloaded_tasks,
+                         CachedCudaGraph &cached,
+                         const std::vector<GraphDoWhileLevel> &levels,
+                         int level_idx);
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).

@@ -36,6 +36,8 @@ void KernelLauncher::launch_kernel(
   auto handle = register_kernel(compiled_kernel_data);
 
   if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ERROR_IF(ctx.graph_do_while_levels.size() > 1,
+                "Nested graph_do_while is not yet supported on gfx backend");
     launch_offloaded_tasks_with_do_while(handle, ctx);
   } else {
     config_.gfx_runtime_->launch_kernel(handle, ctx);

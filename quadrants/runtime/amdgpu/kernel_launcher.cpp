@@ -2,6 +2,8 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/program/launch_context_builder.h"
 
+#include <algorithm>
+
 namespace quadrants::lang {
 namespace amdgpu {
 
@@ -19,21 +21,101 @@ void KernelLauncher::launch_offloaded_tasks(
   }
 }
 
+static void launch_task_range_amdgpu(
+    JITModule *amdgpu_module,
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    void *context_pointer,
+    int arg_size,
+    int start,
+    int end) {
+  for (int t = start; t < end; ++t) {
+    const auto &task = offloaded_tasks[t];
+    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim,
+                          task.dynamic_shared_array_bytes,
+                          {(void *)&context_pointer}, {arg_size});
+  }
+}
+
+static void dispatch_do_while_level_amdgpu(
+    LaunchContextBuilder &ctx,
+    JITModule *amdgpu_module,
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    void *context_pointer,
+    int arg_size,
+    const std::vector<GraphDoWhileLevel> &levels,
+    int level_idx) {
+  const auto &lv = levels[level_idx];
+  int body_start = lv.task_offset;
+  int body_end = lv.task_offset + lv.total_tasks;
+
+  struct ChildInfo {
+    int level_idx, task_start, task_end;
+  };
+  std::vector<ChildInfo> children;
+  for (int i = level_idx - 1; i >= 0; --i) {
+    const auto &child = levels[i];
+    int cs = child.task_offset, ce = cs + child.total_tasks;
+    if (cs >= body_start && ce <= body_end) {
+      bool gc = false;
+      for (const auto &c : children)
+        if (cs >= c.task_start && cs < c.task_end) {
+          gc = true;
+          break;
+        }
+      if (!gc)
+        children.push_back({i, cs, ce});
+    }
+  }
+  std::sort(children.begin(), children.end(),
+            [](const ChildInfo &a, const ChildInfo &b) {
+              return a.task_start < b.task_start;
+            });
+
+  int32_t counter_val;
+  do {
+    int cursor = body_start;
+    for (const auto &child : children) {
+      if (cursor < child.task_start)
+        launch_task_range_amdgpu(amdgpu_module, offloaded_tasks,
+                                 context_pointer, arg_size, cursor,
+                                 child.task_start);
+      dispatch_do_while_level_amdgpu(ctx, amdgpu_module, offloaded_tasks,
+                                     context_pointer, arg_size, levels,
+                                     child.level_idx);
+      cursor = child.task_end;
+    }
+    if (cursor < body_end)
+      launch_task_range_amdgpu(amdgpu_module, offloaded_tasks, context_pointer,
+                               arg_size, cursor, body_end);
+    counter_val = 0;
+    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+    AMDGPUDriver::get_instance().memcpy_device_to_host(
+        &counter_val, lv.flag_dev_ptr, sizeof(int32_t));
+  } while (counter_val != 0);
+}
+
 void KernelLauncher::launch_offloaded_tasks_with_do_while(
     LaunchContextBuilder &ctx,
     JITModule *amdgpu_module,
     const std::vector<OffloadedTask> &offloaded_tasks,
     void *context_pointer,
     int arg_size) {
-  int32_t counter_val;
-  do {
-    launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer,
-                           arg_size);
-    counter_val = 0;
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-    AMDGPUDriver::get_instance().memcpy_device_to_host(
-        &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-  } while (counter_val != 0);
+  if (ctx.graph_do_while_levels.empty()) {
+    int32_t counter_val;
+    do {
+      launch_offloaded_tasks(amdgpu_module, offloaded_tasks, context_pointer,
+                             arg_size);
+      counter_val = 0;
+      AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+      AMDGPUDriver::get_instance().memcpy_device_to_host(
+          &counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+    } while (counter_val != 0);
+  } else {
+    int outermost = static_cast<int>(ctx.graph_do_while_levels.size()) - 1;
+    dispatch_do_while_level_amdgpu(ctx, amdgpu_module, offloaded_tasks,
+                                   context_pointer, arg_size,
+                                   ctx.graph_do_while_levels, outermost);
+  }
 }
 
 bool KernelLauncher::on_amdgpu_device(void *ptr) {
@@ -108,6 +190,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id)
+            lv.flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -118,6 +204,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                              (uint64)ctx.array_ptrs[grad_ptr_idx]);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id)
+            lv.flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
       }
     }

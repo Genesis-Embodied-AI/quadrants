@@ -3,6 +3,7 @@
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -96,6 +97,8 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
       graph_do_while_flag_dev_ptr(other.graph_do_while_flag_dev_ptr),
+      graph_do_while_flag_dev_ptrs(
+          std::move(other.graph_do_while_flag_dev_ptrs)),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
@@ -118,6 +121,8 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
     graph_do_while_flag_dev_ptr = other.graph_do_while_flag_dev_ptr;
+    graph_do_while_flag_dev_ptrs =
+        std::move(other.graph_do_while_flag_dev_ptrs);
     num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
@@ -180,6 +185,11 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = resolved_data;
+        }
+        for (auto &lv : ctx.graph_do_while_levels) {
+          if (arg_id == lv.cond_arg_id) {
+            lv.flag_dev_ptr = resolved_data;
+          }
         }
       }
     }
@@ -343,6 +353,19 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
         cached.graph_do_while_flag_dev_ptr, ctx.graph_do_while_flag_dev_ptr);
     return false;
   }
+  if (!ctx.graph_do_while_levels.empty()) {
+    if (cached.graph_do_while_flag_dev_ptrs.size() !=
+        ctx.graph_do_while_levels.size()) {
+      return false;
+    }
+    for (std::size_t i = 0; i < ctx.graph_do_while_levels.size(); ++i) {
+      if (cached.graph_do_while_flag_dev_ptrs[i] !=
+          ctx.graph_do_while_levels[i].flag_dev_ptr) {
+        QD_TRACE("graph_do_while level {} flag pointer changed, rebuilding", i);
+        return false;
+      }
+    }
+  }
 
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
@@ -354,6 +377,80 @@ bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
   used_on_last_call_ = true;
   num_nodes_on_last_call_ = cached.num_nodes;
   return true;
+}
+
+void CudaGraphManager::build_graph_level(
+    void *target_graph,
+    LaunchContextBuilder &ctx,
+    JITModule *cuda_module,
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    CachedCudaGraph &cached,
+    const std::vector<GraphDoWhileLevel> &levels,
+    int level_idx) {
+  const auto &lv = levels[level_idx];
+  int body_start = lv.task_offset;
+  int body_end = lv.task_offset + lv.total_tasks;
+
+  // Create conditional while node for this level
+  unsigned long long cond_handle = 0;
+  void *body_graph = add_conditional_while_node(target_graph, &cond_handle);
+
+  // Find direct children (same logic as host-side dispatch)
+  struct ChildInfo {
+    int level_idx, task_start, task_end;
+  };
+  std::vector<ChildInfo> children;
+  for (int i = level_idx - 1; i >= 0; --i) {
+    const auto &child = levels[i];
+    int cs = child.task_offset;
+    int ce = cs + child.total_tasks;
+    if (cs >= body_start && ce <= body_end) {
+      bool gc = false;
+      for (const auto &c : children)
+        if (cs >= c.task_start && cs < c.task_end) {
+          gc = true;
+          break;
+        }
+      if (!gc)
+        children.push_back({i, cs, ce});
+    }
+  }
+  std::sort(children.begin(), children.end(),
+            [](const ChildInfo &a, const ChildInfo &b) {
+              return a.task_start < b.task_start;
+            });
+
+  // Add nodes to the body graph: interleave direct tasks with child levels
+  void *prev_node = nullptr;
+  int cursor = body_start;
+  for (const auto &child : children) {
+    for (int t = cursor; t < child.task_start; ++t) {
+      void *ctx_ptr = &cached.persistent_ctx;
+      const auto &task = offloaded_tasks[t];
+      prev_node = add_kernel_node(
+          body_graph, prev_node, cuda_module->lookup_function(task.name),
+          (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
+          (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+    }
+    build_graph_level(body_graph, ctx, cuda_module, offloaded_tasks, cached,
+                      levels, child.level_idx);
+    prev_node = nullptr;  // conditional node has no explicit dependency chain
+    cursor = child.task_end;
+  }
+  for (int t = cursor; t < body_end; ++t) {
+    void *ctx_ptr = &cached.persistent_ctx;
+    const auto &task = offloaded_tasks[t];
+    prev_node = add_kernel_node(
+        body_graph, prev_node, cuda_module->lookup_function(task.name),
+        (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
+        (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+  }
+
+  // Add condition kernel as the last node in the body graph
+  QD_ASSERT(lv.flag_dev_ptr);
+  void *flag_ptr = lv.flag_dev_ptr;
+  void *cond_args[2] = {&cond_handle, &flag_ptr};
+  add_kernel_node(body_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
 }
 
 bool CudaGraphManager::try_launch(
@@ -432,35 +529,53 @@ bool CudaGraphManager::try_launch(
   void *kernel_target_graph = graph;
   unsigned long long cond_handle = 0;
 
-  if (use_graph_do_while) {
+  const bool use_nested_levels = !ctx.graph_do_while_levels.empty();
+
+  if (use_graph_do_while || use_nested_levels) {
     ensure_condition_kernel_loaded();
     if (!cond_kernel_func_) {
       QD_WARN("Condition kernel not available, falling back to non-graph");
       CUDADriver::get_instance().graph_destroy(graph);
       return false;
     }
+  }
+
+  if (use_nested_levels) {
+    // Nested (or single-level via new path): use recursive graph builder.
+    // The outermost level is the last element (innermost-first ordering).
+    int outermost = static_cast<int>(ctx.graph_do_while_levels.size()) - 1;
+    build_graph_level(graph, ctx, cuda_module, offloaded_tasks, cached,
+                      ctx.graph_do_while_levels, outermost);
+  } else if (use_graph_do_while) {
+    // Legacy single-level path
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
-  }
 
-  // Add work kernel nodes to the target graph
-  void *prev_node = nullptr;
-  for (const auto &task : offloaded_tasks) {
-    void *ctx_ptr = &cached.persistent_ctx;
-    prev_node = add_kernel_node(
-        kernel_target_graph, prev_node, cuda_module->lookup_function(task.name),
-        (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
-        (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
-  }
+    void *prev_node = nullptr;
+    for (const auto &task : offloaded_tasks) {
+      void *ctx_ptr = &cached.persistent_ctx;
+      prev_node = add_kernel_node(
+          kernel_target_graph, prev_node,
+          cuda_module->lookup_function(task.name), (unsigned int)task.grid_dim,
+          (unsigned int)task.block_dim,
+          (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+    }
 
-  if (use_graph_do_while) {
-    // add conditional node into the body graph
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     void *cond_args[2] = {&cond_handle, &flag_ptr};
-
     add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0,
                     cond_args);
+  } else {
+    // No do-while: add all tasks directly to the top-level graph
+    void *prev_node = nullptr;
+    for (const auto &task : offloaded_tasks) {
+      void *ctx_ptr = &cached.persistent_ctx;
+      prev_node = add_kernel_node(
+          kernel_target_graph, prev_node,
+          cuda_module->lookup_function(task.name), (unsigned int)task.grid_dim,
+          (unsigned int)task.block_dim,
+          (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+    }
   }
 
   // --- Instantiate and launch ---
@@ -479,12 +594,13 @@ bool CudaGraphManager::try_launch(
            use_graph_do_while ? " (with graph_do_while)" : "");
 
   if (use_graph_do_while) {
-    // Save the flag pointer so we can detect if the user passes a different
-    // ndarray on a later call. The flag's device pointer is baked into the
-    // CUDA graph as a condition kernel argument; if the user later calls with
-    // a different ndarray, the graph would still read from the old pointer,
-    // so we rebuild the graph.
     cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
+  }
+  if (use_nested_levels) {
+    cached.graph_do_while_flag_dev_ptrs.clear();
+    for (const auto &lv : ctx.graph_do_while_levels) {
+      cached.graph_do_while_flag_dev_ptrs.push_back(lv.flag_dev_ptr);
+    }
   }
 
   num_nodes_on_last_call_ = cached.num_nodes;

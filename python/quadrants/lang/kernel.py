@@ -1,4 +1,5 @@
 import ast
+import dataclasses
 import json
 import os
 import pathlib
@@ -20,6 +21,9 @@ from quadrants._lib.core.quadrants_python import (
     CompileResult,
     KernelCxx,
     KernelLaunchContext,
+)
+from quadrants._lib.core.quadrants_python import (
+    GraphDoWhileLevel as GraphDoWhileLevelCxx,
 )
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
@@ -261,6 +265,14 @@ class ASTGenerator:
         return node  # Basic types (str, int, None, etc.)
 
 
+@dataclasses.dataclass
+class GraphDoWhileLevel:
+    arg_name: str
+    num_body_tasks: int
+    total_tasks: int
+    task_offset: int = 0
+
+
 class Kernel(FuncBase):
     counter = 0
 
@@ -293,6 +305,8 @@ class Kernel(FuncBase):
         self.has_print = False
         self.use_cuda_graph: bool = False
         self.graph_do_while_arg: str | None = None
+        self.graph_do_while_levels: list[GraphDoWhileLevel] = []
+        self._do_while_task_counter: int = 0
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -379,6 +393,8 @@ class Kernel(FuncBase):
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
             for _pass in range(range_begin, 2):
+                self.graph_do_while_levels = []
+                self._do_while_task_counter = 0
                 if _pass >= 1:
                     pruning.enforce()
                 tree, ctx = self.get_tree_and_ctx(
@@ -447,6 +463,10 @@ class Kernel(FuncBase):
                     continue
                 if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
                     self._graph_do_while_cpp_arg_id = i_out - template_num
+                arg_name = self.arg_metas[i_in].name
+                for lv in self.graph_do_while_levels:
+                    if lv.arg_name == arg_name:
+                        lv._cpp_arg_id = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -510,6 +530,17 @@ class Kernel(FuncBase):
             launch_ctx.use_cuda_graph = self.use_cuda_graph
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
+            if self.graph_do_while_levels:
+                cpp_levels = []
+                for lv in self.graph_do_while_levels:
+                    cpp_lv = GraphDoWhileLevelCxx(
+                        cond_arg_id=lv._cpp_arg_id,
+                        num_body_tasks=lv.num_body_tasks,
+                        total_tasks=lv.total_tasks,
+                        task_offset=lv.task_offset,
+                    )
+                    cpp_levels.append(cpp_lv)
+                launch_ctx.graph_do_while_levels = cpp_levels
             prog.launch_kernel(compiled_kernel_data, launch_ctx)
         except Exception as e:
             e = handle_exception_from_cpp(e)

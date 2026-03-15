@@ -934,6 +934,8 @@ class ASTTransformer(Builder):
 
             for_di = _qd_core.DebugInfo(ctx.get_pos_info(node))
             ctx.ast_builder.begin_frontend_range_for(loop_var.ptr, begin.ptr, end.ptr, for_di)
+            if ctx.loop_depth == 0:
+                ctx.global_context.current_kernel._do_while_task_counter += 1
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -979,6 +981,8 @@ class ASTTransformer(Builder):
                 )
                 if i + 1 < len(targets):
                     I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+            if ctx.loop_depth == 0:
+                ctx.global_context.current_kernel._do_while_task_counter += 1
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1015,6 +1019,8 @@ class ASTTransformer(Builder):
                 impl.subscript(ctx.ast_builder, target_var, i)._assign(target_tmp + ndrange_var.bounds[i][0])
                 if i + 1 < len(ndrange_var.dimensions):
                     I._assign(I - target_tmp * ndrange_var.acc_dimensions[i + 1])
+            if ctx.loop_depth == 0:
+                ctx.global_context.current_kernel._do_while_task_counter += 1
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1051,6 +1057,8 @@ class ASTTransformer(Builder):
                 loop_var = node.iter.ptr
                 expr_group = expr.make_expr_group(*_vars)
                 impl.begin_frontend_struct_for(ctx.ast_builder, expr_group, loop_var)
+                if ctx.loop_depth == 0:
+                    ctx.global_context.current_kernel._do_while_task_counter += 1
                 ctx.loop_depth += 1
                 build_stmts(ctx, node.body)
                 ctx.loop_depth -= 1
@@ -1076,6 +1084,8 @@ class ASTTransformer(Builder):
                 node.iter.ptr._type,
                 _qd_core.DebugInfo(impl.get_runtime().get_current_src_info()),
             )
+            if ctx.loop_depth == 0:
+                ctx.global_context.current_kernel._do_while_task_counter += 1
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1109,6 +1119,8 @@ class ASTTransformer(Builder):
             entry_expr.type_check(impl.get_runtime().prog.config())
             mesh_idx = mesh.MeshElementFieldProxy(ctx.mesh, node.iter.ptr.to_element_type, entry_expr)
             ctx.create_variable(target, mesh_idx)
+            if ctx.loop_depth == 0:
+                ctx.global_context.current_kernel._do_while_task_counter += 1
             ctx.loop_depth += 1
             build_stmts(ctx, node.body)
             ctx.loop_depth -= 1
@@ -1214,6 +1226,10 @@ class ASTTransformer(Builder):
 
         graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_arg is not None:
+            from quadrants.lang.kernel import (  # pylint: disable=import-outside-toplevel
+                GraphDoWhileLevel,
+            )
+
             kernel = ctx.global_context.current_kernel
             arg_names = [m.name for m in kernel.arg_metas]
             if graph_do_while_arg not in arg_names:
@@ -1222,10 +1238,21 @@ class ASTTransformer(Builder):
                     f"parameter of kernel {kernel.func.__name__!r}. "
                     f"Available parameters: {arg_names}"
                 )
-            kernel.graph_do_while_arg = graph_do_while_arg
             if not kernel.use_cuda_graph:
-                kernel.use_cuda_graph = True
+                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(cuda_graph=True)")
+            kernel.graph_do_while_arg = graph_do_while_arg
+            tasks_before = kernel._do_while_task_counter
+            levels_before = len(kernel.graph_do_while_levels)
             build_stmts(ctx, node.body)
+            total_tasks = kernel._do_while_task_counter - tasks_before
+            child_tasks = sum(lv.total_tasks for lv in kernel.graph_do_while_levels[levels_before:])
+            level = GraphDoWhileLevel(
+                arg_name=graph_do_while_arg,
+                num_body_tasks=total_tasks - child_tasks,
+                total_tasks=total_tasks,
+                task_offset=tasks_before,
+            )
+            kernel.graph_do_while_levels.append(level)
             return None
 
         with ctx.loop_scope_guard():
