@@ -123,7 +123,7 @@ jobs:
       - name: run tests (without torch)
         run: |
           ls -lh
-          export LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+          export LD_LIBRARY_PATH=/usr/local/cuda/targets/x86_64-linux/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
           python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
