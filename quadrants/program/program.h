@@ -300,6 +300,16 @@ class QD_DLL_EXPORT Program {
     return ndarrays_.size();
   }
 
+  uint64 stream_create();
+  void stream_destroy(uint64 stream_handle);
+  void stream_synchronize(uint64 stream_handle);
+  void set_current_cuda_stream(uint64 stream_handle);
+  uint64 event_create();
+  void event_destroy(uint64 event_handle);
+  void event_record(uint64 event_handle, uint64 stream_handle);
+  void event_synchronize(uint64 event_handle);
+  void stream_wait_event(uint64 stream_handle, uint64 event_handle);
+
   // TODO(zhanlue): Move these members and corresponding interfaces to
   // ProgramImpl Ideally, Program should serve as a pure interface class and all
   // the implementations should fall inside ProgramImpl

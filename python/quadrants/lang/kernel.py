@@ -424,7 +424,9 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_global_context = None
 
-    def launch_kernel(self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args) -> Any:
+    def launch_kernel(
+        self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
+    ) -> Any:
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
 
         callbacks: list[Callable[[], None]] = []
@@ -503,7 +505,14 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
-            prog.launch_kernel(compiled_kernel_data, launch_ctx)
+            stream_handle = qd_stream.handle if qd_stream is not None else 0
+            if stream_handle:
+                prog.set_current_cuda_stream(stream_handle)
+            try:
+                prog.launch_kernel(compiled_kernel_data, launch_ctx)
+            finally:
+                if stream_handle:
+                    prog.set_current_cuda_stream(0)
         except Exception as e:
             e = handle_exception_from_cpp(e)
             if impl.get_runtime().print_full_traceback:
@@ -547,6 +556,7 @@ class Kernel(FuncBase):
     # Thus this part needs to be fast. (i.e. < 3us on a 4 GHz x64 CPU)
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
+        qd_stream = kwargs.pop("qd_stream", None)
         if impl.get_runtime()._arch == _ARCH_PYTHON:
             return self.func(*py_args, **kwargs)
         config = impl.current_cfg()
@@ -578,7 +588,7 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
-        ret = self.launch_kernel(key, kernel_cpp, compiled_kernel_data, *py_args)
+        ret = self.launch_kernel(key, kernel_cpp, compiled_kernel_data, *py_args, qd_stream=qd_stream)
         if compiled_kernel_data is None:
             assert self._last_compiled_kernel_data is not None
             self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
