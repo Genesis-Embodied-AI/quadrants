@@ -14,7 +14,6 @@
 #endif
 
 #include <atomic>
-#include <csetjmp>
 #include <cstdint>
 #include <cmath>
 #include <cstdarg>
@@ -366,7 +365,7 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
-STRUCT_FIELD(RuntimeContext, cpu_abort_jmp_buf)
+STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -889,20 +888,23 @@ void quadrants_assert_format(LLVMRuntime *runtime,
 }
 
 // Context-aware variant called by bounds-check assertions in JIT'd code.
-// On CPU, longjmps to the task runner's abort guard when an assertion fails,
-// preventing the subsequent out-of-bounds memory access from segfaulting.
-void quadrants_assert_format_ctx(RuntimeContext *context,
-                                 u1 test,
-                                 const char *format,
-                                 int num_arguments,
-                                 uint64 *arguments) {
+// Returns 1 when the assertion failed (so the codegen can emit an early
+// return), 0 otherwise.  This replaces a previous setjmp/longjmp approach
+// that crashed on Windows because JIT'd frames lack SEH unwind tables.
+i32 quadrants_assert_format_ctx(RuntimeContext *context,
+                                u1 test,
+                                const char *format,
+                                int num_arguments,
+                                uint64 *arguments) {
   quadrants_assert_format(context->runtime, test, format, num_arguments,
                           arguments);
 #if !ARCH_cuda && !ARCH_amdgpu
-  if (enable_assert && test == 0 && context->cpu_abort_jmp_buf) {
-    std::longjmp(*(std::jmp_buf *)context->cpu_abort_jmp_buf, 1);
+  if (enable_assert && test == 0) {
+    context->cpu_assert_failed = 1;
+    return 1;
   }
 #endif
+  return 0;
 }
 
 void quadrants_assert_runtime(LLVMRuntime *runtime, u1 test, const char *msg) {
@@ -1529,19 +1531,12 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
-
-  std::jmp_buf abort_buf;
-  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
-  if (setjmp(abort_buf) != 0) {
-    return;
-  }
+  this_thread_context.cpu_assert_failed = 0;
 
   if (lower < upper) {
     (*ctx->task)(&this_thread_context, tls_buffer,
                  &ctx->list->get<Element>(element_id), lower, upper);
   }
-
-  this_thread_context.cpu_abort_jmp_buf = nullptr;
 }
 
 void parallel_struct_for(RuntimeContext *context,
@@ -1619,29 +1614,27 @@ void cpu_parallel_range_for_task(void *range_context,
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
-
-  std::jmp_buf abort_buf;
-  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
-  if (setjmp(abort_buf) != 0) {
-    return;
-  }
+  this_thread_context.cpu_assert_failed = 0;
 
   if (ctx.step == 1) {
     int block_start = ctx.begin + task_id * ctx.block_size;
     int block_end = std::min(block_start + ctx.block_size, ctx.end);
     for (int i = block_start; i < block_end; i++) {
       ctx.body(&this_thread_context, tls_ptr, i);
+      if (this_thread_context.cpu_assert_failed)
+        break;
     }
   } else if (ctx.step == -1) {
     int block_start = ctx.end - task_id * ctx.block_size;
     int block_end = std::max(ctx.begin, block_start * ctx.block_size);
     for (int i = block_start - 1; i >= block_end; i--) {
       ctx.body(&this_thread_context, tls_ptr, i);
+      if (this_thread_context.cpu_assert_failed)
+        break;
     }
   }
 
-  this_thread_context.cpu_abort_jmp_buf = nullptr;
-  if (ctx.epilogue)
+  if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
     ctx.epilogue(ctx.context, tls_ptr);
 }
 
@@ -1726,12 +1719,7 @@ void cpu_parallel_mesh_for_task(void *range_context,
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
-
-  std::jmp_buf abort_buf;
-  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
-  if (setjmp(abort_buf) != 0) {
-    return;
-  }
+  this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
   int block_end = std::min(block_start + ctx.block_size, ctx.num_patches);
@@ -1740,11 +1728,11 @@ void cpu_parallel_mesh_for_task(void *range_context,
     if (ctx.prologue)
       ctx.prologue(ctx.context, tls_ptr, idx);
     ctx.body(&this_thread_context, tls_ptr, idx);
+    if (this_thread_context.cpu_assert_failed)
+      break;
     if (ctx.epilogue)
       ctx.epilogue(ctx.context, tls_ptr, idx);
   }
-
-  this_thread_context.cpu_abort_jmp_buf = nullptr;
 }
 
 void cpu_parallel_mesh_for(RuntimeContext *context,

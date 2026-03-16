@@ -25,9 +25,11 @@ struct RuntimeContext {
   // RuntimeContext which each function have one.
   uint64_t *result_buffer;
 
-  // On CPU, points to a jmp_buf used to abort kernel execution when a runtime
-  // assertion (e.g. out-of-bounds check) fails. NULL when no guard is active.
-  void *cpu_abort_jmp_buf{nullptr};
+  // Set to 1 by quadrants_assert_format_ctx when a runtime assertion (e.g.
+  // out-of-bounds check) fails on CPU.  The codegen emits an early return
+  // after each assert call when this is set, and the task runner breaks out
+  // of its loop.
+  int32_t cpu_assert_failed{0};
 };
 
 #if defined(QD_RUNTIME_HOST)

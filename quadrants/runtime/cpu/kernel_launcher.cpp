@@ -1,6 +1,5 @@
 #include "quadrants/runtime/cpu/kernel_launcher.h"
 #include "quadrants/rhi/arch.h"
-#include <csetjmp>
 
 namespace quadrants::lang {
 namespace cpu {
@@ -42,15 +41,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       }
     }
   }
-  std::jmp_buf abort_buf;
-  ctx.get_context().cpu_abort_jmp_buf = &abort_buf;
+  ctx.get_context().cpu_assert_failed = 0;
   for (auto task : launcher_ctx.task_funcs) {
-    if (setjmp(abort_buf) != 0) {
-      break;
-    }
     task(&ctx.get_context());
+    if (ctx.get_context().cpu_assert_failed)
+      break;
   }
-  ctx.get_context().cpu_abort_jmp_buf = nullptr;
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
