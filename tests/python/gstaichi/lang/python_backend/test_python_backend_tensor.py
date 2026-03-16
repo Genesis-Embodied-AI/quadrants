@@ -3,10 +3,7 @@
 import numpy as np
 import pytest
 
-try:
-    import torch
-except ImportError:
-    pytest.skip("PyTorch not installed", allow_module_level=True)
+torch = pytest.importorskip("torch")
 
 import quadrants as qd
 from quadrants.lang._py_tensor import PyTensor, create_tensor

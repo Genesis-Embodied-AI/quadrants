@@ -6,10 +6,7 @@ from tests import test_utils
 
 archs_support_ndarray_ad = [qd.cpu, qd.cuda]
 
-try:
-    import torch
-except ImportError:
-    pytest.skip("PyTorch not installed. Skipping...", allow_module_level=True)
+torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.needs_torch
 
