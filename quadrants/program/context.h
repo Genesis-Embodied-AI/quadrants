@@ -24,6 +24,10 @@ struct RuntimeContext {
   // LLVMRuntime is shared among functions. So we moved the pointer to
   // RuntimeContext which each function have one.
   uint64_t *result_buffer;
+
+  // On CPU, points to a jmp_buf used to abort kernel execution when a runtime
+  // assertion (e.g. out-of-bounds check) fails. NULL when no guard is active.
+  void *cpu_abort_jmp_buf{nullptr};
 };
 
 #if defined(QD_RUNTIME_HOST)

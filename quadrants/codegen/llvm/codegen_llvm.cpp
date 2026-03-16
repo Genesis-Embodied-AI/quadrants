@@ -1332,7 +1332,11 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   auto arguments = create_entry_block_alloca(argument_buffer_size);
 
   std::vector<llvm::Value *> args;
-  args.emplace_back(get_runtime());
+  // On CPU, use the context-aware variant that can longjmp to abort the kernel
+  // task, preventing segfaults from subsequent out-of-bounds memory accesses.
+  // On GPU, the original variant suffices because asm("exit;") kills the thread.
+  bool use_ctx_variant = arch_is_cpu(current_arch());
+  args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
   args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
   args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
@@ -1362,7 +1366,10 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
       builder->CreateGEP(argument_buffer_size, arguments,
                          {tlctx->get_constant(0), tlctx->get_constant(0)}));
 
-  llvm_val[stmt] = call("quadrants_assert_format", std::move(args));
+  llvm_val[stmt] = call(
+      use_ctx_variant ? "quadrants_assert_format_ctx"
+                      : "quadrants_assert_format",
+      std::move(args));
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {

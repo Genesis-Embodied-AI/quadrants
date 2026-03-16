@@ -14,6 +14,7 @@
 #endif
 
 #include <atomic>
+#include <csetjmp>
 #include <cstdint>
 #include <cmath>
 #include <cstdarg>
@@ -365,6 +366,7 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
+STRUCT_FIELD(RuntimeContext, cpu_abort_jmp_buf)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -883,6 +885,23 @@ void quadrants_assert_format(LLVMRuntime *runtime,
   // receiving that signal. It is better than nothing when debugging the
   // runtime, since otherwise the whole program may crash if the kernel
   // continues after assertion failure.
+#endif
+}
+
+// Context-aware variant called by bounds-check assertions in JIT'd code.
+// On CPU, longjmps to the task runner's abort guard when an assertion fails,
+// preventing the subsequent out-of-bounds memory access from segfaulting.
+void quadrants_assert_format_ctx(RuntimeContext *context,
+                                 u1 test,
+                                 const char *format,
+                                 int num_arguments,
+                                 uint64 *arguments) {
+  quadrants_assert_format(context->runtime, test, format, num_arguments,
+                          arguments);
+#if !ARCH_cuda && !ARCH_amdgpu
+  if (enable_assert && test == 0 && context->cpu_abort_jmp_buf) {
+    std::longjmp(*(std::jmp_buf *)context->cpu_abort_jmp_buf, 1);
+  }
 #endif
 }
 
@@ -1510,10 +1529,19 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+
+  std::jmp_buf abort_buf;
+  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
+  if (setjmp(abort_buf) != 0) {
+    return;
+  }
+
   if (lower < upper) {
     (*ctx->task)(&this_thread_context, tls_buffer,
                  &ctx->list->get<Element>(element_id), lower, upper);
   }
+
+  this_thread_context.cpu_abort_jmp_buf = nullptr;
 }
 
 void parallel_struct_for(RuntimeContext *context,
@@ -1591,6 +1619,13 @@ void cpu_parallel_range_for_task(void *range_context,
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+
+  std::jmp_buf abort_buf;
+  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
+  if (setjmp(abort_buf) != 0) {
+    return;
+  }
+
   if (ctx.step == 1) {
     int block_start = ctx.begin + task_id * ctx.block_size;
     int block_end = std::min(block_start + ctx.block_size, ctx.end);
@@ -1604,6 +1639,8 @@ void cpu_parallel_range_for_task(void *range_context,
       ctx.body(&this_thread_context, tls_ptr, i);
     }
   }
+
+  this_thread_context.cpu_abort_jmp_buf = nullptr;
   if (ctx.epilogue)
     ctx.epilogue(ctx.context, tls_ptr);
 }
@@ -1690,6 +1727,12 @@ void cpu_parallel_mesh_for_task(void *range_context,
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
 
+  std::jmp_buf abort_buf;
+  this_thread_context.cpu_abort_jmp_buf = &abort_buf;
+  if (setjmp(abort_buf) != 0) {
+    return;
+  }
+
   int block_start = task_id * ctx.block_size;
   int block_end = std::min(block_start + ctx.block_size, ctx.num_patches);
 
@@ -1700,6 +1743,8 @@ void cpu_parallel_mesh_for_task(void *range_context,
     if (ctx.epilogue)
       ctx.epilogue(ctx.context, tls_ptr, idx);
   }
+
+  this_thread_context.cpu_abort_jmp_buf = nullptr;
 }
 
 void cpu_parallel_mesh_for(RuntimeContext *context,
