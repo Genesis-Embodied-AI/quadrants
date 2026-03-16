@@ -162,7 +162,14 @@ def test_graph_do_while_multiple_loops():
 
 @test_utils.test()
 def test_graph_do_while_swap_counter_ndarray():
-    """Swapping the counter ndarray between calls should work correctly."""
+    """Swapping the counter ndarray between calls should work correctly.
+
+    Creates one counter c1, runs the kernel with counter=3, verifies x is all
+    3s. Then creates a new ndarray c2 (different device pointer), runs the same
+    kernel with counter=7, verifies x is all 7s. Confirms cache size stays 1 --
+    the graph wasn't rebuilt, it just updated the indirection slot with c2's
+    pointer.
+    """
     _xfail_if_cuda_without_hopper()
     N = 32
 
@@ -199,7 +206,13 @@ def test_graph_do_while_swap_counter_ndarray():
 
 @test_utils.test()
 def test_graph_do_while_alternate_counter_ndarrays():
-    """Alternating between two counter ndarrays should work correctly."""
+    """Alternating between two counter ndarrays should work correctly.
+
+    Creates c1 and c2 upfront, then alternates between them for 3 rounds (6
+    kernel calls). Each call uses a different iteration count (count and
+    count+10). Confirms the slot update works back and forth, not just as a
+    one-time swap. Cache size is checked once at the end -- still 1.
+    """
     _xfail_if_cuda_without_hopper()
     N = 16
 
