@@ -1,2 +1,0 @@
-export PATH="/home/hugh/.cache/ti-build-cache/vulkan-1.4.321.1/x86_64/bin:/home/hugh/.cache/ti-build-cache/vulkan-1.4.321.1/x86_64/bin:/home/hugh/ais/seagull/quadrants/.venv/bin:/home/hugh/.local/bin:/home/hugh/bin:/home/hugh/.local/bin:/home/hugh/bin:/home/hugh/.local/bin:/home/hugh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-export LD_LIBRARY_PATH="/home/hugh/.cache/ti-build-cache/vulkan-1.4.321.1/x86_64/lib:/home/hugh/.cache/ti-build-cache/vulkan-1.4.321.1/x86_64/lib"
