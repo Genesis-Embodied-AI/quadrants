@@ -50,6 +50,9 @@ class CompiledKernelData : public lang::CompiledKernelData {
   CompiledKernelData(Arch arch, InternalData data);
 
   Arch arch() const override;
+  size_t num_tasks() const override {
+    return data_.compiled_data.tasks.size();
+  }
   std::unique_ptr<lang::CompiledKernelData> clone() const override;
 
   Err check() const override;

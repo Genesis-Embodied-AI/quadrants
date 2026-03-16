@@ -1,20 +1,26 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
+#include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
+
+#include <vector>
 
 namespace quadrants::lang {
 namespace cuda {
 
-bool KernelLauncher::on_cuda_device(void *ptr) {
-  unsigned int attr_val = 0;
-  uint32_t ret_code = CUDADriver::get_instance().mem_get_attribute.call(
-      &attr_val, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (void *)ptr);
-
-  return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
-}
-
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
+
+  if (ctx.use_cuda_graph) {
+    auto &lctx = contexts_[handle.get_launch_id()];
+    if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module,
+                                  *lctx.parameters, lctx.offloaded_tasks,
+                                  get_runtime_executor())) {
+      return;
+    }
+  }
+  graph_manager_.mark_not_used();
+
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
