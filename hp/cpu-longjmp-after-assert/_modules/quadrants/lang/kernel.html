@@ -659,6 +659,10 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.has_print">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">has_print</span> <span class="o">=</span> <span class="kc">False</span></div>
 
+<div class="viewcode-block" id="Kernel.use_cuda_graph">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_cuda_graph">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
 <div class="viewcode-block" id="Kernel.quadrants_callable">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.quadrants_callable">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="p">:</span> <span class="n">QuadrantsCallable</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
@@ -909,6 +913,7 @@
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
+            <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_cuda_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda_graph</span>
             <span class="n">prog</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span><span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">e</span> <span class="o">=</span> <span class="n">handle_exception_from_cpp</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>

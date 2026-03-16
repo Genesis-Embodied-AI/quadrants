@@ -90,6 +90,12 @@ Module Contents
 
 
 
+   .. py:attribute:: use_cuda_graph
+      :type:  bool
+      :value: False
+
+
+
    .. py:attribute:: quadrants_callable
       :type:  quadrants.lang._quadrants_callable.QuadrantsCallable | None
       :value: None
