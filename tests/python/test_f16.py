@@ -67,6 +67,7 @@ def test_from_numpy():
         assert z[i] == i * 3
 
 
+@pytest.mark.needs_torch
 @pytest.mark.sm70
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
 @test_utils.test(arch=archs_support_f16)
@@ -86,6 +87,7 @@ def test_to_torch():
         assert y[i] == 2 * i
 
 
+@pytest.mark.needs_torch
 @pytest.mark.sm70
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
 @test_utils.test(arch=archs_support_f16)

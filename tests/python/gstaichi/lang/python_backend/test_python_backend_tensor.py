@@ -1,10 +1,14 @@
 """Tests for PyTensor batch_ndim, shape property, and _tc/_T_tc views."""
 
 import numpy as np
-import torch
+import pytest
+
+torch = pytest.importorskip("torch")
 
 import quadrants as qd
 from quadrants.lang._py_tensor import PyTensor, create_tensor
+
+pytestmark = pytest.mark.needs_torch
 
 
 def test_create_tensor_scalar_1d():
