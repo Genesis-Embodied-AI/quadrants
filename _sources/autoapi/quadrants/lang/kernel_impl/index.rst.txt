@@ -64,8 +64,8 @@ Module Contents
    :rtype: Callable
 
 
-.. py:function:: kernel(_fn: None = None, *, pure: bool = False) -> Callable[[Any], Any]
-                 kernel(_fn: Any, *, pure: bool = False) -> Any
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, cuda_graph: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, cuda_graph: bool = False) -> Any
 
    Marks a function as a Quadrants kernel.
 
