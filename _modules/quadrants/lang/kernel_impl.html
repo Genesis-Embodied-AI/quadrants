@@ -445,7 +445,10 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_impl</span><span class="p">(</span>
-    <span class="n">_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">cuda_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">cuda_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
     <span class="c1"># Can decorators determine if a function is being defined inside a class?</span>
     <span class="c1"># https://stackoverflow.com/a/8793684/12003165</span>
@@ -529,6 +532,12 @@
 <span class="sd">    to either a CPU thread pool or massively parallel GPUs.</span>
 
 <span class="sd">    Kernel&#39;s gradient kernel would be generated automatically by the AutoDiff system.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        cuda_graph: If True, kernels with 2+ top-level for loops are captured</span>
+<span class="sd">            into a CUDA graph on first launch and replayed on subsequent</span>
+<span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends</span>
+<span class="sd">            are not supported currently.</span>
 
 <span class="sd">    Example::</span>
 
