@@ -67,7 +67,10 @@ struct CachedCudaGraph {
   void *counter_ptr_slot{nullptr};
   std::size_t num_nodes{0};
 
-  CachedCudaGraph() = default;
+  CachedCudaGraph(std::size_t arg_buffer_size,
+                  std::size_t result_buffer_size,
+                  bool needs_counter_ptr_slot,
+                  LlvmRuntimeExecutor *executor);
   ~CachedCudaGraph();
   CachedCudaGraph(const CachedCudaGraph &) = delete;
   CachedCudaGraph &operator=(const CachedCudaGraph &) = delete;

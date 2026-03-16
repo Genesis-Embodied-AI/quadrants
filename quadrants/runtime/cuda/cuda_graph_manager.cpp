@@ -83,6 +83,30 @@ static const char *kConditionKernelPTX = R"PTX(
 }
 )PTX";
 
+CachedCudaGraph::CachedCudaGraph(std::size_t arg_buf_size,
+                                 std::size_t result_buf_size,
+                                 bool needs_counter_ptr_slot,
+                                 LlvmRuntimeExecutor *executor)
+    : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
+  CUDADriver::get_instance().malloc(
+      (void **)&persistent_device_result_buffer,
+      std::max(result_buffer_size, sizeof(uint64)));
+
+  if (arg_buffer_size > 0) {
+    CUDADriver::get_instance().malloc((void **)&persistent_device_arg_buffer,
+                                      arg_buffer_size);
+  }
+
+  if (needs_counter_ptr_slot) {
+    CUDADriver::get_instance().malloc(&counter_ptr_slot, sizeof(void *));
+  }
+
+  persistent_ctx.runtime = executor->get_llvm_runtime();
+  persistent_ctx.arg_buffer = persistent_device_arg_buffer;
+  persistent_ctx.result_buffer = (uint64 *)persistent_device_result_buffer;
+  persistent_ctx.cpu_thread_id = 0;
+}
+
 CachedCudaGraph::~CachedCudaGraph() {
   if (graph_exec) {
     CUDADriver::get_instance().graph_exec_destroy(graph_exec);
@@ -327,8 +351,8 @@ void *CudaGraphManager::add_conditional_while_node(
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
                                            LaunchContextBuilder &ctx,
                                            bool use_graph_do_while) {
-  // TODO: these two memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync)
-  // on the launch stream for better CPU-GPU overlap.
+  // TODO: these two memcpy_host_to_device calls could be async
+  // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
   if (use_graph_do_while && cached.counter_ptr_slot) {
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
@@ -373,29 +397,14 @@ bool CudaGraphManager::try_launch(
 
   CUDAContext::get_instance().make_current();
 
-  CachedCudaGraph cached;
+  CachedCudaGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
+                         use_graph_do_while, executor);
 
-  // --- Allocate persistent buffers ---
-  cached.result_buffer_size = std::max(ctx.result_buffer_size, sizeof(uint64));
-  CUDADriver::get_instance().malloc(
-      (void **)&cached.persistent_device_result_buffer,
-      cached.result_buffer_size);
-
-  cached.arg_buffer_size = ctx.arg_buffer_size;
   if (cached.arg_buffer_size > 0) {
-    CUDADriver::get_instance().malloc(
-        (void **)&cached.persistent_device_arg_buffer, cached.arg_buffer_size);
     CUDADriver::get_instance().memcpy_host_to_device(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
         cached.arg_buffer_size);
   }
-
-  // --- Build persistent RuntimeContext ---
-  cached.persistent_ctx.runtime = executor->get_llvm_runtime();
-  cached.persistent_ctx.arg_buffer = cached.persistent_device_arg_buffer;
-  cached.persistent_ctx.result_buffer =
-      (uint64 *)cached.persistent_device_result_buffer;
-  cached.persistent_ctx.cpu_thread_id = 0;
 
   // --- Build CUDA graph ---
   void *graph = nullptr;
@@ -439,10 +448,9 @@ bool CudaGraphManager::try_launch(
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
-    // Allocate a persistent device-side pointer slot and write the initial
-    // counter address into it. The condition kernel reads through this slot,
-    // so swapping the counter ndarray later only requires updating the slot.
-    CUDADriver::get_instance().malloc(&cached.counter_ptr_slot, sizeof(void *));
+    // Write the initial counter address into the persistent indirection slot
+    // (allocated by the constructor). The condition kernel reads through this
+    // slot, so swapping the counter ndarray later only requires updating it.
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
                                                      &flag_ptr, sizeof(void *));
