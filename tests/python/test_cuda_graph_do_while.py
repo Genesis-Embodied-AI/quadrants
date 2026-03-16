@@ -15,6 +15,10 @@ def _cuda_graph_used():
     return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
 
 
+def _cuda_graph_total_builds():
+    return impl.get_runtime().prog.get_cuda_graph_total_builds()
+
+
 def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
@@ -200,6 +204,7 @@ def test_graph_do_while_swap_counter_ndarray():
     if _on_cuda():
         assert _cuda_graph_used()
         assert _cuda_graph_cache_size() == 1
+        assert _cuda_graph_total_builds() == 1
     assert c2.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
@@ -248,6 +253,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
 
     if _on_cuda():
         assert _cuda_graph_cache_size() == 1
+        assert _cuda_graph_total_builds() == 1
 
 
 @test_utils.test()

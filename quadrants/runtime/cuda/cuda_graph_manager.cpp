@@ -477,6 +477,7 @@ bool CudaGraphManager::try_launch(
            use_graph_do_while ? " (with graph_do_while)" : "");
 
   num_nodes_on_last_call_ = cached.num_nodes;
+  ++total_builds_;
   cache_.emplace(launch_id, std::move(cached));
   used_on_last_call_ = true;
   return true;

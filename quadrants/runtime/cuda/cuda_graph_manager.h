@@ -107,6 +107,9 @@ class CudaGraphManager {
   std::size_t num_nodes_on_last_call() const {
     return num_nodes_on_last_call_;
   }
+  std::size_t total_builds() const {
+    return total_builds_;
+  }
 
  private:
   bool launch_cached_graph(CachedCudaGraph &cached,
@@ -132,6 +135,7 @@ class CudaGraphManager {
   std::unordered_map<int, CachedCudaGraph> cache_;
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
+  std::size_t total_builds_{0};
 
   // JIT-compiled condition kernel for graph_do_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule

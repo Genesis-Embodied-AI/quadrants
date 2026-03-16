@@ -24,6 +24,10 @@ class KernelLauncher {
     return 0;
   }
 
+  virtual std::size_t get_cuda_graph_total_builds() const {
+    return 0;
+  }
+
   virtual ~KernelLauncher() = default;
 };
 

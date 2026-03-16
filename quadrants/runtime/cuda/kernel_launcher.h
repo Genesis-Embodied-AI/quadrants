@@ -34,6 +34,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::size_t get_cuda_graph_num_nodes_on_last_call() const override {
     return graph_manager_.num_nodes_on_last_call();
   }
+  std::size_t get_cuda_graph_total_builds() const override {
+    return graph_manager_.total_builds();
+  }
 
  private:
   void launch_offloaded_tasks(
