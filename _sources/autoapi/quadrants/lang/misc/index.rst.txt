@@ -360,8 +360,8 @@ Module Contents
    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
-   conditional while node. Older CUDA GPUs and non-CUDA backends
-   are not currently supported.
+   conditional while node. On older CUDA GPUs and non-CUDA backends
+   it falls back to a host-side do-while loop.
 
    This function should not be called directly at runtime; it is
    recognised and transformed during AST compilation.
