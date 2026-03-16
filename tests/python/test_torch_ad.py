@@ -12,6 +12,8 @@ from tests import test_utils
 if has_pytorch():
     import torch
 
+pytestmark = pytest.mark.needs_torch
+
 
 def is_v520_amdgpu():
     return os.environ.get("QD_AMDGPU_V520", None) == "1" and qd.cfg.arch == qd.amdgpu
