@@ -358,8 +358,8 @@
   <section class="tex2jax_ignore mathjax_ignore" id="cuda-graph">
 <h1>CUDA Graph<a class="headerlink" href="#cuda-graph" title="Link to this heading">#</a></h1>
 <p>CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch. On non-CUDA platforms, the cuda graph annotation is simply ignored, and code runs normally.</p>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">#</a></h2>
+<section id="basic-usage">
+<h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
 <p>Add <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">cuda_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span>
@@ -404,6 +404,79 @@
 <section id="fields-as-arguments">
 <h3>Fields as arguments<a class="headerlink" href="#fields-as-arguments" title="Link to this heading">#</a></h3>
 <p>When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.</p>
+</section>
+</section>
+<section id="gpu-side-iteration-with-graph-do-while">
+<h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-graph-do-while" title="Link to this heading">#</a></h2>
+<p>For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">cuda_graph=True</span></code> kernel:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">cuda_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+          <span class="n">counter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
+<span class="n">counter</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">))</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">counter</span><span class="p">)</span>
+<span class="c1"># x is now incremented 10 times; counter is 0</span>
+</pre></div>
+</div>
+<p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
+<ul class="simple">
+<li><p>On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>Older CUDA GPUs, and non-CUDA backends not currently supported.</p></li>
+</ul>
+<section id="patterns">
+<h3>Patterns<a class="headerlink" href="#patterns" title="Link to this heading">#</a></h3>
+<p><strong>Counter-based</strong>: set the counter to N, decrement each iteration. The body runs exactly N times.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">cuda_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">iterate</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">counter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p><strong>Boolean flag</strong>: set a <code class="docutils literal notranslate"><span class="pre">keep_going</span></code> flag to 1, have the kernel set it to 0 when a convergence criterion is met.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">cuda_graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">converge</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+             <span class="n">keep_going</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">keep_going</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="c1"># ... do work ...</span>
+            <span class="k">pass</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">some_condition</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                <span class="n">keep_going</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
+</pre></div>
+</div>
+</section>
+<section id="do-while-semantics">
+<h3>Do-while semantics<a class="headerlink" href="#do-while-semantics" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> has <strong>do-while</strong> semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be &gt;= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.</p>
+</section>
+<section id="ndarray-vs-field">
+<h3>ndarray vs field<a class="headerlink" href="#ndarray-vs-field" title="Link to this heading">#</a></h3>
+<p>The parameter used by <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> MUST be an ndarray.</p>
+<p>However, other parameters can be any supported Quadrants kernel parameter type.</p>
+</section>
+<section id="id1">
+<h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>The same physical ndarray must be used for the counter parameter on every
+call. Passing a different ndarray raises an error, because the counter’s
+device pointer is baked into the CUDA graph at creation time.</p></li>
+</ul>
+</section>
+<section id="caveats">
+<h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
+<p>Only runs on CUDA. No fallback on non-CUDA platforms currently.</p>
 </section>
 </section>
 </section>
@@ -455,10 +528,18 @@
   </div>
   <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#usage">Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-different-arguments">Passing different arguments</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-as-arguments">Fields as arguments</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpu-side-iteration-with-graph-do-while">GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#patterns">Patterns</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#do-while-semantics">Do-while semantics</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Restrictions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caveats">Caveats</a></li>
 </ul>
 </li>
 </ul>

@@ -428,6 +428,14 @@ Quadrants into native CPU/GPU instructions (e.g. a series of CUDA kernels).
 The top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops are automatically parallelized, and distributed
 to either a CPU thread pool or massively parallel GPUs.</p>
 <p>Kernel’s gradient kernel would be generated automatically by the AutoDiff system.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>cuda_graph</strong> – If True, kernels with 2+ top-level for loops are captured
+into a CUDA graph on first launch and replayed on subsequent
+launches, reducing per-kernel launch overhead. Non-CUDA backends
+are not supported currently.</p>
+</dd>
+</dl>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt;</span>

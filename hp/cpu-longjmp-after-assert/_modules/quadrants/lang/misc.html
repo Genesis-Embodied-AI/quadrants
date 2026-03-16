@@ -1115,6 +1115,27 @@
 
 
 
+<div class="viewcode-block" id="graph_do_while">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.graph_do_while">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a while loop as a CUDA graph do-while conditional node.</span>
+
+<span class="sd">    Used as ``while qd.graph_do_while(flag):`` inside a</span>
+<span class="sd">    ``@qd.kernel(cuda_graph=True)`` kernel. The loop body repeats while</span>
+<span class="sd">    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.</span>
+
+<span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph</span>
+<span class="sd">    conditional while node. Older CUDA GPUs and non-CUDA backends</span>
+<span class="sd">    are not currently supported.</span>
+
+<span class="sd">    This function should not be called directly at runtime; it is</span>
+<span class="sd">    recognised and transformed during AST compilation.</span>
+<span class="sd">    Requires ``@qd.kernel(cuda_graph=True)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="global_thread_idx">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.global_thread_idx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">global_thread_idx</span><span class="p">():</span>
@@ -1263,6 +1284,7 @@
     <span class="s2">&quot;python&quot;</span><span class="p">,</span>
     <span class="s2">&quot;vulkan&quot;</span><span class="p">,</span>
     <span class="s2">&quot;extension&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_thread_idx&quot;</span><span class="p">,</span>
     <span class="s2">&quot;assume_in_range&quot;</span><span class="p">,</span>

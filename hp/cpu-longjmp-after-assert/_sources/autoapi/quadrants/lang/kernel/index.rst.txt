@@ -96,6 +96,12 @@ Module Contents
 
 
 
+   .. py:attribute:: graph_do_while_arg
+      :type:  str | None
+      :value: None
+
+
+
    .. py:attribute:: quadrants_callable
       :type:  quadrants.lang._quadrants_callable.QuadrantsCallable | None
       :value: None
