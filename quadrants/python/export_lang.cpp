@@ -495,7 +495,14 @@ void export_lang(py::module &m) {
       .def("compile_kernel", &Program::compile_kernel,
            py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
-      .def("get_device_caps", &Program::get_device_caps);
+      .def("get_device_caps", &Program::get_device_caps)
+      .def("get_cuda_graph_cache_size", &Program::get_cuda_graph_cache_size)
+      .def("get_cuda_graph_cache_used_on_last_call",
+           &Program::get_cuda_graph_cache_used_on_last_call)
+      .def("get_num_offloaded_tasks_on_last_call",
+           &Program::get_num_offloaded_tasks_on_last_call)
+      .def("get_cuda_graph_num_nodes_on_last_call",
+           &Program::get_cuda_graph_num_nodes_on_last_call);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
@@ -659,7 +666,8 @@ void export_lang(py::module &m) {
            &LaunchContextBuilder::set_args_ndarray_with_grad)
       .def("get_struct_ret_int", &LaunchContextBuilder::get_struct_ret_int)
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
-      .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float);
+      .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
+      .def_readwrite("use_cuda_graph", &LaunchContextBuilder::use_cuda_graph);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)
