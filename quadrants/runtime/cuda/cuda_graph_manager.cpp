@@ -406,7 +406,6 @@ bool CudaGraphManager::try_launch(
   unsigned long long cond_handle = 0;
 
   if (use_graph_do_while) {
-<<<<<<< HEAD
     ensure_condition_kernel_loaded();
     QD_ERROR_IF(!cond_kernel_func_,
                 "Condition kernel not available; cannot build graph_do_while");
