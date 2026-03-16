@@ -23,6 +23,7 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
+
 def _xfail_if_cuda_without_hopper():
     if _on_cuda() and qd.lang.impl.get_cuda_compute_capability() < 90:
         pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
