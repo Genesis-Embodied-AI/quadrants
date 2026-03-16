@@ -10,6 +10,8 @@ from tests import test_utils
 if has_pytorch():
     import torch
 
+pytestmark = pytest.mark.needs_torch
+
 
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
 @test_utils.test()
