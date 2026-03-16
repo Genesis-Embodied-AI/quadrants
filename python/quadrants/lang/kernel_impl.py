@@ -124,7 +124,10 @@ def _inside_class(level_of_class_stackframe: int) -> bool:
 
 
 def _kernel_impl(
-    _func: Callable, level_of_class_stackframe: int, verbose: bool = False, cuda_graph: bool = False
+    _func: Callable,
+    level_of_class_stackframe: int,
+    verbose: bool = False,
+    cuda_graph: bool = False,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
@@ -205,6 +208,12 @@ def kernel(
     to either a CPU thread pool or massively parallel GPUs.
 
     Kernel's gradient kernel would be generated automatically by the AutoDiff system.
+
+    Args:
+        cuda_graph: If True, kernels with 2+ top-level for loops are captured
+            into a CUDA graph on first launch and replayed on subsequent
+            launches, reducing per-kernel launch overhead. Non-CUDA backends
+            are not supported currently.
 
     Example::
 

@@ -110,6 +110,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
 
   AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
 
+  QD_ERROR_IF(ctx.graph_do_while_arg_id >= 0,
+              "graph_do_while is only supported on the CUDA backend");
+
   for (auto &task : offloaded_tasks) {
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
              task.block_dim);

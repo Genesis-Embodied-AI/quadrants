@@ -1194,9 +1194,39 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
 
     @staticmethod
+    def _is_graph_do_while_call(node: ast.expr) -> str | None:
+        """If *node* is ``qd.graph_do_while(var)`` return the arg name, else None."""
+        if not isinstance(node, ast.Call):
+            return None
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
+            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
+                return node.args[0].id
+        if isinstance(func, ast.Name) and func.id == "graph_do_while":
+            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
+                return node.args[0].id
+        return None
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
+
+        graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
+        if graph_do_while_arg is not None:
+            kernel = ctx.global_context.current_kernel
+            arg_names = [m.name for m in kernel.arg_metas]
+            if graph_do_while_arg not in arg_names:
+                raise QuadrantsSyntaxError(
+                    f"qd.graph_do_while({graph_do_while_arg!r}) does not match any "
+                    f"parameter of kernel {kernel.func.__name__!r}. "
+                    f"Available parameters: {arg_names}"
+                )
+            if not kernel.use_cuda_graph:
+                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(cuda_graph=True)")
+            kernel.graph_do_while_arg = graph_do_while_arg
+            build_stmts(ctx, node.body)
+            return None
 
         with ctx.loop_scope_guard():
             stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
