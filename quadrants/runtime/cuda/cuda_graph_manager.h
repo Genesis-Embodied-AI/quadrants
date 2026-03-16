@@ -51,12 +51,39 @@ static_assert(
     sizeof(CudaGraphNodeParams) == 256,
     "CudaGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
+// RAII wrapper for CUDA device memory allocated via CUDADriver::malloc.
+class CudaDeviceBuffer {
+ public:
+  CudaDeviceBuffer() = default;
+  ~CudaDeviceBuffer();
+  CudaDeviceBuffer(const CudaDeviceBuffer &) = delete;
+  CudaDeviceBuffer &operator=(const CudaDeviceBuffer &) = delete;
+  CudaDeviceBuffer(CudaDeviceBuffer &&other) noexcept;
+  CudaDeviceBuffer &operator=(CudaDeviceBuffer &&other) noexcept;
+
+  void alloc(std::size_t bytes);
+  void *get() const {
+    return ptr_;
+  }
+  explicit operator bool() const {
+    return ptr_ != nullptr;
+  }
+
+ private:
+  void *ptr_{nullptr};
+};
+
 struct CachedCudaGraph {
+  CachedCudaGraph(std::size_t arg_buffer_size,
+                  std::size_t result_buffer_size,
+                  bool needs_counter_ptr_slot,
+                  LlvmRuntimeExecutor *executor);
+
   // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
   // This is the instantiated, launchable form of the captured CUDA graph.
   void *graph_exec{nullptr};
-  char *persistent_device_arg_buffer{nullptr};
-  char *persistent_device_result_buffer{nullptr};
+  CudaDeviceBuffer persistent_device_arg_buffer;
+  CudaDeviceBuffer persistent_device_result_buffer;
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
@@ -64,10 +91,9 @@ struct CachedCudaGraph {
   // of the user's counter ndarray. The condition kernel reads through this
   // slot, allowing the counter ndarray to change between calls without
   // rebuilding.
-  void *counter_ptr_slot{nullptr};
+  CudaDeviceBuffer counter_ptr_slot;
   std::size_t num_nodes{0};
 
-  CachedCudaGraph() = default;
   ~CachedCudaGraph();
   CachedCudaGraph(const CachedCudaGraph &) = delete;
   CachedCudaGraph &operator=(const CachedCudaGraph &) = delete;

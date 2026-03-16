@@ -83,58 +83,98 @@ static const char *kConditionKernelPTX = R"PTX(
 }
 )PTX";
 
+// --- CudaDeviceBuffer ---
+
+CudaDeviceBuffer::~CudaDeviceBuffer() {
+  if (ptr_) {
+    CUDADriver::get_instance().mem_free(ptr_);
+  }
+}
+
+CudaDeviceBuffer::CudaDeviceBuffer(CudaDeviceBuffer &&other) noexcept
+    : ptr_(other.ptr_) {
+  other.ptr_ = nullptr;
+}
+
+CudaDeviceBuffer &CudaDeviceBuffer::operator=(
+    CudaDeviceBuffer &&other) noexcept {
+  if (this != &other) {
+    if (ptr_)
+      CUDADriver::get_instance().mem_free(ptr_);
+    ptr_ = other.ptr_;
+    other.ptr_ = nullptr;
+  }
+  return *this;
+}
+
+void CudaDeviceBuffer::alloc(std::size_t bytes) {
+  QD_ASSERT(!ptr_);
+  CUDADriver::get_instance().malloc(&ptr_, bytes);
+}
+
+// --- CachedCudaGraph ---
+
+CachedCudaGraph::CachedCudaGraph(std::size_t arg_buf_size,
+                                 std::size_t result_buf_size,
+                                 bool needs_counter_ptr_slot,
+                                 LlvmRuntimeExecutor *executor)
+    : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
+  persistent_device_result_buffer.alloc(
+      std::max(result_buffer_size, sizeof(uint64)));
+
+  if (arg_buffer_size > 0) {
+    persistent_device_arg_buffer.alloc(arg_buffer_size);
+  }
+
+  if (needs_counter_ptr_slot) {
+    counter_ptr_slot.alloc(sizeof(void *));
+  }
+
+  persistent_ctx.runtime = executor->get_llvm_runtime();
+  persistent_ctx.arg_buffer =
+      static_cast<char *>(persistent_device_arg_buffer.get());
+  persistent_ctx.result_buffer =
+      static_cast<uint64 *>(persistent_device_result_buffer.get());
+  persistent_ctx.cpu_thread_id = 0;
+}
+
 CachedCudaGraph::~CachedCudaGraph() {
   if (graph_exec) {
     CUDADriver::get_instance().graph_exec_destroy(graph_exec);
-  }
-  if (persistent_device_arg_buffer) {
-    CUDADriver::get_instance().mem_free(persistent_device_arg_buffer);
-  }
-  if (persistent_device_result_buffer) {
-    CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
-  }
-  if (counter_ptr_slot) {
-    CUDADriver::get_instance().mem_free(counter_ptr_slot);
   }
 }
 
 CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
     : graph_exec(other.graph_exec),
-      persistent_device_arg_buffer(other.persistent_device_arg_buffer),
-      persistent_device_result_buffer(other.persistent_device_result_buffer),
+      persistent_device_arg_buffer(
+          std::move(other.persistent_device_arg_buffer)),
+      persistent_device_result_buffer(
+          std::move(other.persistent_device_result_buffer)),
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
-      counter_ptr_slot(other.counter_ptr_slot),
+      counter_ptr_slot(std::move(other.counter_ptr_slot)),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
-  other.persistent_device_arg_buffer = nullptr;
-  other.persistent_device_result_buffer = nullptr;
-  other.counter_ptr_slot = nullptr;
 }
 
 CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
   if (this != &other) {
     if (graph_exec)
       CUDADriver::get_instance().graph_exec_destroy(graph_exec);
-    if (persistent_device_arg_buffer)
-      CUDADriver::get_instance().mem_free(persistent_device_arg_buffer);
-    if (persistent_device_result_buffer)
-      CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
 
     graph_exec = other.graph_exec;
-    persistent_device_arg_buffer = other.persistent_device_arg_buffer;
-    persistent_device_result_buffer = other.persistent_device_result_buffer;
+    persistent_device_arg_buffer =
+        std::move(other.persistent_device_arg_buffer);
+    persistent_device_result_buffer =
+        std::move(other.persistent_device_result_buffer);
     persistent_ctx = other.persistent_ctx;
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
-    counter_ptr_slot = other.counter_ptr_slot;
+    counter_ptr_slot = std::move(other.counter_ptr_slot);
     num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
-    other.persistent_device_arg_buffer = nullptr;
-    other.persistent_device_result_buffer = nullptr;
-    other.counter_ptr_slot = nullptr;
   }
   return *this;
 }
@@ -327,17 +367,17 @@ void *CudaGraphManager::add_conditional_while_node(
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
                                            LaunchContextBuilder &ctx,
                                            bool use_graph_do_while) {
-  // TODO: these two memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync)
-  // on the launch stream for better CPU-GPU overlap.
+  // TODO: these two memcpy_host_to_device calls could be async
+  // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
   if (use_graph_do_while && cached.counter_ptr_slot) {
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
-                                                     &flag_ptr, sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(
+        cached.counter_ptr_slot.get(), &flag_ptr, sizeof(void *));
   }
 
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
-        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+        cached.persistent_device_arg_buffer.get(), ctx.get_context().arg_buffer,
         cached.arg_buffer_size);
   }
   auto *stream = CUDAContext::get_instance().get_stream();
@@ -373,29 +413,14 @@ bool CudaGraphManager::try_launch(
 
   CUDAContext::get_instance().make_current();
 
-  CachedCudaGraph cached;
+  CachedCudaGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
+                         use_graph_do_while, executor);
 
-  // --- Allocate persistent buffers ---
-  cached.result_buffer_size = std::max(ctx.result_buffer_size, sizeof(uint64));
-  CUDADriver::get_instance().malloc(
-      (void **)&cached.persistent_device_result_buffer,
-      cached.result_buffer_size);
-
-  cached.arg_buffer_size = ctx.arg_buffer_size;
   if (cached.arg_buffer_size > 0) {
-    CUDADriver::get_instance().malloc(
-        (void **)&cached.persistent_device_arg_buffer, cached.arg_buffer_size);
     CUDADriver::get_instance().memcpy_host_to_device(
-        cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
+        cached.persistent_device_arg_buffer.get(), ctx.get_context().arg_buffer,
         cached.arg_buffer_size);
   }
-
-  // --- Build persistent RuntimeContext ---
-  cached.persistent_ctx.runtime = executor->get_llvm_runtime();
-  cached.persistent_ctx.arg_buffer = cached.persistent_device_arg_buffer;
-  cached.persistent_ctx.result_buffer =
-      (uint64 *)cached.persistent_device_result_buffer;
-  cached.persistent_ctx.cpu_thread_id = 0;
 
   // --- Build CUDA graph ---
   void *graph = nullptr;
@@ -439,15 +464,15 @@ bool CudaGraphManager::try_launch(
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
-    // Allocate a persistent device-side pointer slot and write the initial
-    // counter address into it. The condition kernel reads through this slot,
-    // so swapping the counter ndarray later only requires updating the slot.
-    CUDADriver::get_instance().malloc(&cached.counter_ptr_slot, sizeof(void *));
+    // Write the initial counter address into the persistent indirection slot.
+    // The condition kernel reads through this slot, so swapping the counter
+    // ndarray later only requires updating the slot contents.
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
-                                                     &flag_ptr, sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(
+        cached.counter_ptr_slot.get(), &flag_ptr, sizeof(void *));
 
-    void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
+    void *slot_ptr = cached.counter_ptr_slot.get();
+    void *cond_args[2] = {&cond_handle, &slot_ptr};
 
     add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0,
                     cond_args);
