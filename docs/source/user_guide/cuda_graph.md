@@ -53,6 +53,7 @@ my_kernel(x2, y2)  # replays graph with new array pointers
 
 When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.
 
+
 ## GPU-side iteration with `graph_do_while`
 
 For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `cuda_graph=True` kernel:

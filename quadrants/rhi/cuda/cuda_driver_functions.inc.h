@@ -81,15 +81,10 @@ PER_CUDA_FUNCTION(graph_exec_destroy, cuGraphExecDestroy, void *);
 PER_CUDA_FUNCTION(graph_conditional_handle_create, cuGraphConditionalHandleCreate, void *, void *, void *, uint32, uint32);
 
 // JIT linker (for loading condition kernel with cudadevrt)
-// Creates a new JIT linker session with options (e.g. optimization level, target arch).
 PER_CUDA_FUNCTION(link_create, cuLinkCreate_v2, uint32, void *, void *, void **);
-// Adds code from memory (PTX source or cubin bytes) to the link session.
 PER_CUDA_FUNCTION(link_add_data, cuLinkAddData_v2, void *, uint32, void *, std::size_t, const char *, uint32, void *, void *);
-// Adds code from a file on disk (PTX or cubin) to the link session.
 PER_CUDA_FUNCTION(link_add_file, cuLinkAddFile_v2, void *, uint32, const char *, uint32, void *, void *);
-// Finalizes linking, producing a cubin image in memory (returns pointer and size).
 PER_CUDA_FUNCTION(link_complete, cuLinkComplete, void *, void **, std::size_t *);
-// Destroys the link state and frees resources.
 PER_CUDA_FUNCTION(link_destroy, cuLinkDestroy, void *);
 PER_CUDA_FUNCTION(module_load_data, cuModuleLoadData, void **, const void *);
 // clang-format on

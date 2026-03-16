@@ -153,8 +153,9 @@ void CudaGraphManager::resolve_ctx_ndarray_ptrs(
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
       ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
+      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      QD_ERROR_IF(ctx.array_ptrs[grad_ptr_idx] != nullptr,
+      QD_ERROR_IF(grad_ptr != nullptr,
                   "cuda_graph does not support autograd; "
                   "ndarray arg {} has a non-null gradient pointer",
                   arg_id);
@@ -405,7 +406,6 @@ bool CudaGraphManager::try_launch(
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
-  // Add work kernel nodes to the target graph
   void *prev_node = nullptr;
   for (const auto &task : offloaded_tasks) {
     void *ctx_ptr = &cached.persistent_ctx;
@@ -416,7 +416,6 @@ bool CudaGraphManager::try_launch(
   }
 
   if (use_graph_do_while) {
-    // add conditional node into the body graph
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
