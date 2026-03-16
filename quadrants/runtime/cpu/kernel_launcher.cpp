@@ -41,6 +41,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       }
     }
   }
+  QD_ERROR_IF(ctx.graph_do_while_arg_id >= 0,
+              "graph_do_while is only supported on the CUDA backend");
+
   for (auto task : launcher_ctx.task_funcs) {
     task(&ctx.get_context());
   }
