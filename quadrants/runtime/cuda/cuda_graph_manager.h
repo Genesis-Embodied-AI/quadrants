@@ -60,7 +60,11 @@ struct CachedCudaGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
-  void *graph_do_while_flag_dev_ptr{nullptr};
+  // Device-side pointer slot for graph_do_while indirection. Holds the address
+  // of the user's counter ndarray. The condition kernel reads through this
+  // slot, allowing the counter ndarray to change between calls without
+  // rebuilding.
+  void *counter_ptr_slot{nullptr};
   std::size_t num_nodes{0};
 
   CachedCudaGraph() = default;

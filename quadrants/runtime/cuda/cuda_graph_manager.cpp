@@ -11,12 +11,17 @@ namespace quadrants::lang {
 namespace cuda {
 
 // Condition kernel for graph_do_while. Reads the user's i32 loop-control flag
-// from GPU memory and tells the CUDA graph's conditional while node whether to
-// run another iteration — all without returning to the host.
+// from GPU memory via an indirection slot, and tells the CUDA graph's
+// conditional while node whether to run another iteration.
+//
+// The indirection allows swapping the counter ndarray between calls without
+// rebuilding the graph: the slot's address is baked into the graph, but the
+// pointer it contains can be updated via memcpy before each launch.
 //
 // Parameters:
 //   param_0: conditional node handle (passed to cudaGraphSetConditional)
-//   param_1: pointer to the user's qd.i32 flag ndarray on the GPU
+//   param_1: pointer to a device-side slot (void**) that holds the address
+//            of the user's qd.i32 flag ndarray
 //
 // Compiled from CUDA C with: nvcc -ptx -arch=sm_90 -rdc=true
 // Requires SM 9.0+ (Hopper) for cudaGraphSetConditional / conditional nodes.
@@ -37,7 +42,7 @@ static const char *kConditionKernelPTX = R"PTX(
 
 // Entry point: called by the CUDA graph's conditional while node each iteration.
 //   param_0 (u64): conditional node handle
-//   param_1 (u64): pointer to the user's qd.i32 flag in GPU global memory
+//   param_1 (u64): pointer to device-side slot holding address of user's i32 flag
 .visible .entry _qd_graph_do_while_cond(
     .param .u64 _qd_graph_do_while_cond_param_0,
     .param .u64 _qd_graph_do_while_cond_param_1
@@ -45,17 +50,20 @@ static const char *kConditionKernelPTX = R"PTX(
 {
     .reg .pred %p<2>;
     .reg .b32 %r<3>;
-    .reg .b64 %rd<4>;
+    .reg .b64 %rd<5>;
 
     // Load the two kernel parameters into registers:
     //   %rd1 = conditional node handle
-    //   %rd2 = pointer to user's i32 flag
+    //   %rd2 = pointer to device-side indirection slot
     ld.param.u64 %rd1, [_qd_graph_do_while_cond_param_0];
     ld.param.u64 %rd2, [_qd_graph_do_while_cond_param_1];
 
-    // Convert generic pointer to global address space, then read the flag value
+    // Dereference the indirection slot to get the actual flag pointer
     cvta.to.global.u64 %rd3, %rd2;
-    ld.global.u32 %r1, [%rd3];
+    ld.global.u64 %rd4, [%rd3];
+
+    // Read the flag value from the actual counter ndarray
+    ld.global.u32 %r1, [%rd4];
 
     // Convert flag to boolean: %r2 = (flag != 0) ? 1 : 0
     setp.ne.s32 %p1, %r1, 0;
@@ -85,6 +93,9 @@ CachedCudaGraph::~CachedCudaGraph() {
   if (persistent_device_result_buffer) {
     CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
   }
+  if (counter_ptr_slot) {
+    CUDADriver::get_instance().mem_free(counter_ptr_slot);
+  }
 }
 
 CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
@@ -94,11 +105,12 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
-      graph_do_while_flag_dev_ptr(other.graph_do_while_flag_dev_ptr),
+      counter_ptr_slot(other.counter_ptr_slot),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
+  other.counter_ptr_slot = nullptr;
 }
 
 CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
@@ -116,12 +128,13 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
     persistent_ctx = other.persistent_ctx;
     arg_buffer_size = other.arg_buffer_size;
     result_buffer_size = other.result_buffer_size;
-    graph_do_while_flag_dev_ptr = other.graph_do_while_flag_dev_ptr;
+    counter_ptr_slot = other.counter_ptr_slot;
     num_nodes = other.num_nodes;
 
     other.graph_exec = nullptr;
     other.persistent_device_arg_buffer = nullptr;
     other.persistent_device_result_buffer = nullptr;
+    other.counter_ptr_slot = nullptr;
   }
   return *this;
 }
@@ -314,11 +327,13 @@ void *CudaGraphManager::add_conditional_while_node(
 bool CudaGraphManager::launch_cached_graph(CachedCudaGraph &cached,
                                            LaunchContextBuilder &ctx,
                                            bool use_graph_do_while) {
-  QD_ERROR_IF(
-      use_graph_do_while &&
-          cached.graph_do_while_flag_dev_ptr != ctx.graph_do_while_flag_dev_ptr,
-      "graph_do_while condition ndarray changed between calls. "
-      "Reuse the same ndarray for the condition parameter across calls.");
+  // TODO: these two memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync)
+  // on the launch stream for better CPU-GPU overlap.
+  if (use_graph_do_while && cached.counter_ptr_slot) {
+    void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
+    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
+                                                     &flag_ptr, sizeof(void *));
+  }
 
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
@@ -424,8 +439,15 @@ bool CudaGraphManager::try_launch(
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
+    // Allocate a persistent device-side pointer slot and write the initial
+    // counter address into it. The condition kernel reads through this slot,
+    // so swapping the counter ndarray later only requires updating the slot.
+    CUDADriver::get_instance().malloc(&cached.counter_ptr_slot, sizeof(void *));
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
-    void *cond_args[2] = {&cond_handle, &flag_ptr};
+    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot,
+                                                     &flag_ptr, sizeof(void *));
+
+    void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
 
     add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0,
                     cond_args);
@@ -445,10 +467,6 @@ bool CudaGraphManager::try_launch(
   QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}{}",
            cached.num_nodes, launch_id,
            use_graph_do_while ? " (with graph_do_while)" : "");
-
-  if (use_graph_do_while) {
-    cached.graph_do_while_flag_dev_ptr = ctx.graph_do_while_flag_dev_ptr;
-  }
 
   num_nodes_on_last_call_ = cached.num_nodes;
   cache_.emplace(launch_id, std::move(cached));
