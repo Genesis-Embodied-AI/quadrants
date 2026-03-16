@@ -195,10 +195,13 @@ void CudaGraphManager::ensure_condition_kernel_loaded() {
     return;
 
   int cc = CUDAContext::get_instance().get_compute_capability();
-  QD_ERROR_IF(cc < 90,
-              "graph_do_while requires SM 9.0+ (Hopper), but this device is "
-              "SM {}.",
-              cc);
+  if (cc < 90) {
+    QD_WARN(
+        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
+        "Falling back to non-graph path.",
+        cc);
+    return;
+  }
 
   auto &driver = CUDADriver::get_instance();
 
@@ -403,6 +406,9 @@ bool CudaGraphManager::try_launch(
   unsigned long long cond_handle = 0;
 
   if (use_graph_do_while) {
+    ensure_condition_kernel_loaded();
+    QD_ERROR_IF(!cond_kernel_func_,
+                "Condition kernel not available; cannot build graph_do_while");
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 

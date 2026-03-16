@@ -78,7 +78,7 @@ solve(x, counter)
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
 - On SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
-- Older CUDA GPUs, and non-CUDA backends not currently supported.
+- On older CUDA GPUs and non-CUDA backends, it falls back to a host-side do-while loop.
 
 ### Patterns
 
@@ -128,4 +128,12 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 ### Caveats
 
-Only runs on CUDA. No fallback on non-CUDA platforms currently.
+On currently unsupported GPU platforms, such as AMDGPU at the time of writing, the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
+- wait for GPU async queue to finish processing
+- copy condition value to hostside
+- evaluate condition value on hostside
+- launch new kernels for next loop iteration, if not finished yet
+
+Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
+- fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
+- make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
