@@ -4,6 +4,25 @@
 namespace quadrants::lang {
 namespace cpu {
 
+void KernelLauncher::launch_offloaded_tasks(
+    LaunchContextBuilder &ctx,
+    const std::vector<TaskFunc> &task_funcs) {
+  ctx.get_context().cpu_assert_failed = 0;
+  for (auto task : task_funcs) {
+    task(&ctx.get_context());
+    if (ctx.get_context().cpu_assert_failed)
+      break;
+  }
+}
+
+void KernelLauncher::launch_offloaded_tasks_with_do_while(
+    LaunchContextBuilder &ctx,
+    const std::vector<TaskFunc> &task_funcs) {
+  do {
+    launch_offloaded_tasks(ctx, task_funcs);
+  } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+}
+
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
@@ -27,6 +46,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = data_ptr;
+        }
       } else if (ctx.array_runtime_sizes[arg_id] > 0) {
         uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(
             *static_cast<DeviceAllocation *>(data_ptr));
@@ -38,17 +60,17 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                 : (uint64)executor->get_device_alloc_info_ptr(
                       *static_cast<DeviceAllocation *>(grad_ptr));
         ctx.set_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
+        }
       }
     }
   }
-  QD_ERROR_IF(ctx.graph_do_while_arg_id >= 0,
-              "graph_do_while is only supported on the CUDA backend");
-
-  ctx.get_context().cpu_assert_failed = 0;
-  for (auto task : launcher_ctx.task_funcs) {
-    task(&ctx.get_context());
-    if (ctx.get_context().cpu_assert_failed)
-      break;
+  if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
+    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs);
+  } else {
+    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs);
   }
 }
 
@@ -67,8 +89,6 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
     auto data = compiled.get_internal_data().compiled_data.clone();
     auto *jit_module = executor->create_jit_module(std::move(data.module));
 
-    // Construct task_funcs
-    using TaskFunc = int32 (*)(void *);
     std::vector<TaskFunc> task_funcs;
     task_funcs.reserve(data.tasks.size());
     for (auto &task : data.tasks) {

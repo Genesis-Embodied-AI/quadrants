@@ -36,6 +36,15 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
+  void launch_offloaded_tasks(
+      LaunchContextBuilder &ctx,
+      JITModule *cuda_module,
+      const std::vector<OffloadedTask> &offloaded_tasks);
+  void launch_offloaded_tasks_with_do_while(
+      LaunchContextBuilder &ctx,
+      JITModule *cuda_module,
+      const std::vector<OffloadedTask> &offloaded_tasks);
+
   std::vector<Context> contexts_;
   CudaGraphManager graph_manager_;
 };
