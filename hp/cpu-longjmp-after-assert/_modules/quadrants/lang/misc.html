@@ -1125,8 +1125,8 @@
 <span class="sd">    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.</span>
 
 <span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph</span>
-<span class="sd">    conditional while node. Older CUDA GPUs and non-CUDA backends</span>
-<span class="sd">    are not currently supported.</span>
+<span class="sd">    conditional while node. On older CUDA GPUs and non-CUDA backends</span>
+<span class="sd">    it falls back to a host-side do-while loop.</span>
 
 <span class="sd">    This function should not be called directly at runtime; it is</span>
 <span class="sd">    recognised and transformed during AST compilation.</span>

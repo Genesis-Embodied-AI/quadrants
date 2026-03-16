@@ -835,8 +835,8 @@ value untouched.</p>
 <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(cuda_graph=True)</span></code> kernel. The loop body repeats while
 <code class="docutils literal notranslate"><span class="pre">flag</span></code> (a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray) is non-zero.</p>
 <p>On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
-conditional while node. Older CUDA GPUs and non-CUDA backends
-are not currently supported.</p>
+conditional while node. On older CUDA GPUs and non-CUDA backends
+it falls back to a host-side do-while loop.</p>
 <p>This function should not be called directly at runtime; it is
 recognised and transformed during AST compilation.
 Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(cuda_graph=True)</span></code>.</p>
