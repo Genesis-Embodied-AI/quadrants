@@ -309,7 +309,7 @@ def test_perf_dispatch_first_warmup_vs_warmup() -> None:
         get_geometry_hash=lambda a: hash(a.shape),
         first_warmup=2,
         warmup=0,
-        repeat_after_count=3,
+        repeat_after_count=5,
         repeat_after_seconds=0,
     )
     def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
@@ -337,22 +337,21 @@ def test_perf_dispatch_first_warmup_vs_warmup() -> None:
     first_eval_calls = list(called)
     assert len(first_eval_calls) == 6
 
-    # --- Now fastest is chosen; 3 calls before re-eval triggers (repeat_after_count=3) ---
+    # --- Now fastest is chosen; repeat_after_count=5, so 4 calls use fastest,
+    # then 5th call triggers re-eval ---
     called.clear()
-    for _ in range(3):
+    for _ in range(4):
         my_func(a)
-    assert len(called) == 3
-    # All 3 should be the fastest impl (no re-eval yet)
-    assert len(set(called)) == 1
+    assert len(called) == 4
+    assert len(set(called)) == 1  # all fastest
 
-    # --- Re-evaluation cycle: warmup=0, active=1 ---
-    # Next call triggers re-eval. With warmup=0, each impl gets 1 active call.
-    # 2 impls × (0 warmup + 1 active) = 2 calls to complete re-eval
+    # --- 5th call triggers re-eval; warmup=0, active=1 ---
+    # Re-eval needs 2 impls × (0 warmup + 1 active) = 2 calls.
+    # The 5th call from above starts re-eval, so we need 2 more calls total.
     called.clear()
     for _ in range(2):
         my_func(a)
     assert len(called) == 2
-    # Both impls should have been called (one each for the active measurement)
     assert set(called) == {"a", "b"}
 
 
@@ -363,7 +362,7 @@ def test_perf_dispatch_default_warmup_values() -> None:
 
     @qd.perf_dispatch(
         get_geometry_hash=lambda a: hash(a.shape),
-        repeat_after_count=2,
+        repeat_after_count=4,
         repeat_after_seconds=0,
     )
     def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
@@ -384,14 +383,14 @@ def test_perf_dispatch_default_warmup_values() -> None:
         my_func(a)
     assert speed_checker._fastest_dispatch_impl_by_geometry_hash
 
-    # 2 calls using fastest, then re-eval triggers
+    # 3 calls using fastest (calls before repeat_after_count=4 triggers on the 4th)
     called.clear()
-    for _ in range(2):
+    for _ in range(3):
         my_func(a)
-    assert len(called) == 2
+    assert len(called) == 3
     assert len(set(called)) == 1  # all same (fastest)
 
-    # Re-eval: 2 impls × (0 warmup + 1 active) = 2 calls
+    # 4th call triggers re-eval; with warmup=0, active=1, needs 2 calls total
     called.clear()
     for _ in range(2):
         my_func(a)

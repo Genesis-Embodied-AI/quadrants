@@ -211,13 +211,13 @@ class PerformanceDispatcher(Generic[P, R]):
     def _get_min_trials_finished(self, geometry_hash: int) -> int:
         return min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
 
-    def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
-        if len(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]) == 0:
+    def _compute_are_trials_finished(self, geometry_hash: int, num_compatible: int) -> bool:
+        trial_counts = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
+        if len(trial_counts) < num_compatible:
             return False
 
-        min_trials = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
-        res = min_trials >= self._get_effective_warmup(geometry_hash) + self.num_active
-        return res
+        min_trials = min(trial_counts.values())
+        return min_trials >= self._get_effective_warmup(geometry_hash) + self.num_active
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
         times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
@@ -319,7 +319,7 @@ class PerformanceDispatcher(Generic[P, R]):
             end = time.time()
             elapsed = end - start
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
-            if self._compute_are_trials_finished(geometry_hash=geometry_hash):
+            if self._compute_are_trials_finished(geometry_hash=geometry_hash, num_compatible=len(compatible_set)):
                 self._compute_and_update_fastest(geometry_hash)
                 self._first_eval_completed.add(geometry_hash)
                 self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
