@@ -7,7 +7,6 @@ import quadrants as qd
 from quadrants.lang import _perf_dispatch
 from quadrants.lang._perf_dispatch import (
     NUM_FIRST_WARMUP,
-    NUM_WARMUP,
     PerformanceDispatcher,
     _parse_force_map,
 )
@@ -40,8 +39,12 @@ def test_perf_dispatch_kernels() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
-                       first_warmup=WARMUP, warmup=WARMUP, repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
@@ -115,8 +118,12 @@ def test_perf_dispatch_python() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
-                       first_warmup=WARMUP, warmup=WARMUP, repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
@@ -187,8 +194,12 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
-                       first_warmup=WARMUP, warmup=WARMUP, repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
