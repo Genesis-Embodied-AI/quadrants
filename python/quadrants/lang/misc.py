@@ -442,6 +442,13 @@ def init(
     if len(unexpected_keys):
         raise KeyError(f'Unrecognized keyword argument(s) for qd.init: {", ".join(unexpected_keys)}')
 
+    if (cfg.print_ir or os.getenv("QD_DUMP_IR") == "1") and cfg.offline_cache:
+        util.warning(
+            "Even with print_ir/QD_DUMP_IR enabled, already cached kernels won't get their IRs shown. "
+            "You might want to disable caching with offline_cache=False. "
+            "[warning_code=DUMP_IR_CACHE_MISMATCH]"
+        )
+
     # dispatch configurations that are not in qd.cfg:
     runtime = impl.get_runtime()
     if not _test_mode:
