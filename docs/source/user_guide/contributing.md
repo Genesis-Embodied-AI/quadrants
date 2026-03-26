@@ -35,6 +35,15 @@ Concerning the extra cmake arguments, the notable ones are:
 
 ## Advanced users
 
+### CI Convention about compilers/LLVM
+
+`quadrants` is by itself somewhat a compiler targeting CPUs and GPUs altogether. There are at least three pieces that need to be compiled or are themselves part
+of a compiler project. We can easily mix things up. So let' explicitly write down the CI convention about the compilers/LLVM that are used for the three pieces:
+
+1. `quadrants` host runtime: compiled using the OS default C/C++ compiler.
+2. `quadrants` device runtime (bitcode): compiled using `clang` from the distribution/OS. Using `clang` is required as it has to support the same targets as `LLVM` (obviously!).
+3. `LLVM` used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
+
 ### Building LLVM for debugging it
 
 Sometimes, it could be useful to have a LLVM version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails).
