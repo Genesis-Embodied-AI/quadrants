@@ -11,10 +11,22 @@ Although using `LLVM` from your Linux distribution is possible, it is better to 
 
 Once it is done, you could use the env variable `LLVM_DIR` to specify where the root of the LLVM binaries are.
 
-There are at least two ways to build a python package:
+## Building the package
+
+There are at least two ways to build the wheel:
 
 * `setup.py bdist_wheel`: The method we currently use
 * Using a package manager such as `pip` (`pip wheel`) or `uv` (`uv build`): Currently not supported, but possible if you disable build isolation.
+
+The important environment variables are:
+
+* `LLVM_DIR`: root directory for `LLVM` binaries
+* `QUADRANTS_CMAKE_ARGS`: extra arguments to `cmake`
+
+Concerning the extra cmake arguments, the notable ones are:
+
+* `CMAKE_CXX_COMPILER`: it should be `clang++`
+* `QD_WITH_CUDA` / `QD_WITH_AMDGPU`: If you want to enable/disable a target because you don't need it.
 
 ## Notes
 
