@@ -1,14 +1,11 @@
 # Contributing to quadrants
 
-## Get the right LLVM
+## Fetching LLVM binaries
 
 `quadrants` relies on `LLVM` to generate machine code. It is obviously a very important dependency which is kept as close as possible to the newest version to support new targets and enjoy new features (new intrinsics, better optimizations, ...).
 
-Although using `LLVM` from your Linux distribution is possible, it is better to be sure you have the right version and rather do one of the following:
-
-* use `download_llvm.py` to get the right binary compiled by us
-* build `LLVM` yourself. You have to be cautious about the version (look at README.md or git history, take a look at CI scripts to get it).
-  You also have to enable RTTI when building `LLVM` (it is disabled by default).
+Although using `LLVM` from your Linux distribution is possible, it is better to be sure you have the right version.
+In order to do so, use `download_llvm.py` to get the right binary compiled by us.
 
 Once it is done, you could use the env variable `LLVM_DIR` to specify where the root of the LLVM binaries are.
 
@@ -35,3 +32,10 @@ Concerning the extra cmake arguments, the notable ones are:
   the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
+
+## Advanced users
+
+### Building LLVM for debugging it
+
+Sometimes, it could be useful to have a LLVM version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails).
+To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
