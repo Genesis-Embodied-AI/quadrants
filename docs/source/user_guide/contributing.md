@@ -7,7 +7,8 @@
 Although using `LLVM` from your Linux distribution is possible, it is better to be sure you have the right version and rather do one of the following:
 
 * use `download_llvm.py` to get the right binary compiled by us
-* build `LLVM` yourself. You have to be cautious about the version (look at README.md or git history, take a look at CI scripts to get it). You also have to enable RTTI when building `LLVM`.
+* build `LLVM` yourself. You have to be cautious about the version (look at README.md or git history, take a look at CI scripts to get it).
+  You also have to enable RTTI when building `LLVM` (it is disabled by default).
 
 Once it is done, you could use the env variable `LLVM_DIR` to specify where the root of the LLVM binaries are.
 
