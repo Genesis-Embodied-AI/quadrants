@@ -138,28 +138,17 @@ CachedCudaGraph::CachedCudaGraph(CachedCudaGraph &&other) noexcept
 }
 
 CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
-  if (this != &other) {
-    if (graph_exec)
-      CUDADriver::get_instance().graph_exec_destroy(graph_exec);
-    if (persistent_device_arg_buffer)
-      CUDADriver::get_instance().mem_free(persistent_device_arg_buffer);
-    if (persistent_device_result_buffer)
-      CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
-
-    graph_exec = other.graph_exec;
-    persistent_device_arg_buffer = other.persistent_device_arg_buffer;
-    persistent_device_result_buffer = other.persistent_device_result_buffer;
-    persistent_ctx = other.persistent_ctx;
-    arg_buffer_size = other.arg_buffer_size;
-    result_buffer_size = other.result_buffer_size;
-    counter_ptr_slot = other.counter_ptr_slot;
-    num_nodes = other.num_nodes;
-
-    other.graph_exec = nullptr;
-    other.persistent_device_arg_buffer = nullptr;
-    other.persistent_device_result_buffer = nullptr;
-    other.counter_ptr_slot = nullptr;
-  }
+  // Move-and-swap: after the swaps, `raii_guard` holds our old resources and
+  // its destructor frees them, so every owned pointer is released uniformly.
+  CachedCudaGraph raii_guard(std::move(other));
+  std::swap(graph_exec, raii_guard.graph_exec);
+  std::swap(persistent_device_arg_buffer, raii_guard.persistent_device_arg_buffer);
+  std::swap(persistent_device_result_buffer, raii_guard.persistent_device_result_buffer);
+  std::swap(persistent_ctx, raii_guard.persistent_ctx);
+  std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
+  std::swap(result_buffer_size, raii_guard.result_buffer_size);
+  std::swap(counter_ptr_slot, raii_guard.counter_ptr_slot);
+  std::swap(num_nodes, raii_guard.num_nodes);
   return *this;
 }
 
