@@ -272,12 +272,12 @@ void GpuGraphManager::ensure_condition_kernel_loaded() {
 }
 
 void *GpuGraphManager::add_kernel_node(void *graph,
-                                        void *prev_node,
-                                        void *func,
-                                        unsigned int grid_dim,
-                                        unsigned int block_dim,
-                                        unsigned int shared_mem,
-                                        void **kernel_params) {
+                                       void *prev_node,
+                                       void *func,
+                                       unsigned int grid_dim,
+                                       unsigned int block_dim,
+                                       unsigned int shared_mem,
+                                       void **kernel_params) {
   CudaKernelNodeParams params{};
   params.func = func;
   params.gridDimX = grid_dim;
@@ -332,8 +332,8 @@ void *GpuGraphManager::add_conditional_while_node(
 }
 
 bool GpuGraphManager::launch_cached_graph(CachedGpuGraph &cached,
-                                           LaunchContextBuilder &ctx,
-                                           bool use_graph_do_while) {
+                                          LaunchContextBuilder &ctx,
+                                          bool use_graph_do_while) {
   // TODO: these two memcpy_host_to_device calls could be async
   // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
   if (use_graph_do_while && cached.counter_ptr_slot) {
