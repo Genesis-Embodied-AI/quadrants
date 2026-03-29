@@ -10,7 +10,8 @@ from ._exceptions import raise_exception
 from ._quadrants_callable import QuadrantsCallable
 from .exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 
-NUM_WARMUP: int = 3
+NUM_FIRST_WARMUP: int = 1
+NUM_WARMUP: int = 0
 NUM_ACTIVE: int = 1
 REPEAT_AFTER_COUNT: int = 0
 REPEAT_AFTER_SECONDS: float = 1.0
@@ -71,12 +72,14 @@ class PerformanceDispatcher(Generic[P, R]):
         self,
         get_geometry_hash: Callable[P, int],
         fn: Callable,
+        num_first_warmup: int | None = None,
         num_warmup: int | None = None,
         num_active: int | None = None,
         repeat_after_count: int | None = None,
         repeat_after_seconds: float | None = None,
     ) -> None:
         self._name: str = fn.__name__  # type: ignore
+        self.num_first_warmup = num_first_warmup if num_first_warmup is not None else NUM_FIRST_WARMUP
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
         self.repeat_after_count = repeat_after_count if repeat_after_count is not None else REPEAT_AFTER_COUNT
@@ -98,6 +101,7 @@ class PerformanceDispatcher(Generic[P, R]):
         )
         self._calls_since_last_update_by_geometry_hash: dict[int, int] = defaultdict(int)
         self._last_check_time_by_geometry_hash: dict[int, float] = defaultdict(float)
+        self._first_eval_completed: set[int] = set()
 
     def register(
         self, implementation: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
@@ -199,16 +203,21 @@ class PerformanceDispatcher(Generic[P, R]):
         assert least_trials_dispatch_impl is not None and least_trials is not None
         return least_trials, least_trials_dispatch_impl
 
+    def _get_effective_warmup(self, geometry_hash: int) -> int:
+        if geometry_hash not in self._first_eval_completed:
+            return self.num_first_warmup
+        return self.num_warmup
+
     def _get_min_trials_finished(self, geometry_hash: int) -> int:
         return min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
 
-    def _compute_are_trials_finished(self, geometry_hash: int) -> bool:
-        if len(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]) == 0:
+    def _compute_are_trials_finished(self, geometry_hash: int, num_compatible: int) -> bool:
+        trial_counts = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
+        if len(trial_counts) < num_compatible:
             return False
 
-        min_trials = min(self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash].values())
-        res = min_trials >= self.num_warmup + self.num_active
-        return res
+        min_trials = min(trial_counts.values())
+        return min_trials >= self._get_effective_warmup(geometry_hash) + self.num_active
 
     def _compute_and_update_fastest(self, geometry_hash: int) -> None:
         times_by_dispatch_impl = self._times_by_dispatch_impl_by_geometry_hash[geometry_hash]
@@ -293,12 +302,13 @@ class PerformanceDispatcher(Generic[P, R]):
                 print(log_str)
             return dispatch_impl_(*args, **kwargs)
 
+        effective_warmup = self._get_effective_warmup(geometry_hash)
         min_trial_count, dispatch_impl = self._get_next_dispatch_impl(
             compatible_set=compatible_set, geometry_hash=geometry_hash
         )
         trial_count_by_dispatch_impl = self._trial_count_by_dispatch_impl_by_geometry_hash[geometry_hash]
         trial_count_by_dispatch_impl[dispatch_impl] += 1
-        in_warmup = min_trial_count < self.num_warmup
+        in_warmup = min_trial_count < effective_warmup
         start = 0
         if not in_warmup:
             runtime.sync()
@@ -309,8 +319,9 @@ class PerformanceDispatcher(Generic[P, R]):
             end = time.time()
             elapsed = end - start
             self._times_by_dispatch_impl_by_geometry_hash[geometry_hash][dispatch_impl].append(elapsed)
-            if self._compute_are_trials_finished(geometry_hash=geometry_hash):
+            if self._compute_are_trials_finished(geometry_hash=geometry_hash, num_compatible=len(compatible_set)):
                 self._compute_and_update_fastest(geometry_hash)
+                self._first_eval_completed.add(geometry_hash)
                 self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
         return res
 
@@ -318,6 +329,7 @@ class PerformanceDispatcher(Generic[P, R]):
 def perf_dispatch(
     *,
     get_geometry_hash: Callable,
+    first_warmup: int = NUM_FIRST_WARMUP,
     warmup: int = NUM_WARMUP,
     active: int = NUM_ACTIVE,
     repeat_after_count: int = REPEAT_AFTER_COUNT,
@@ -333,7 +345,10 @@ def perf_dispatch(
 
     Args:
         get_geometry_hash: A function that returns a geometry hash given the arguments.
-        warmup: Number of warmup iterations to run for each implementation before measuring. Default 3.
+        first_warmup: Number of warmup iterations for the very first evaluation cycle (default: 1).
+            Use a higher value when kernels need initial JIT compilation warmup.
+        warmup: Number of warmup iterations for subsequent re-evaluation cycles (default: 0).
+            After the first evaluation, kernels are already compiled, so less warmup is needed.
         active: Number of active (timed) iterations to run for each implementation. Default 1.
         repeat_after_count: repeats the cycle of warmup and active from scratch after repeat_after_count
         additional calls.
@@ -402,6 +417,7 @@ def perf_dispatch(
         return PerformanceDispatcher(
             get_geometry_hash=get_geometry_hash,
             fn=fn,
+            num_first_warmup=first_warmup,
             num_warmup=warmup,
             num_active=active,
             repeat_after_count=repeat_after_count,
