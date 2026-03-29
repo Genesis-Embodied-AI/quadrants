@@ -673,7 +673,7 @@ for pure kernels (i.e. kernels declared as &#64;qd.pure)</p></li>
 <code class="docutils literal notranslate"><span class="pre">kwargs</span></code>, which allows for fine grained control of Quadrants compiler
 behavior. Below we list some of the most frequently used ones. For a
 complete list, please check out
-<a class="github reference external" href="https://github.com/taichi-dev/quadrants/blob/master/quadrants/program/compile_config.h">taichi-dev/quadrants</a>.</p>
+<a class="github reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h">Genesis-Embodied-AI/quadrants</a>.</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">cpu_max_num_threads</span></code> (int): Sets the number of threads used by the CPU thread pool.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">debug</span></code> (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</p></li>
@@ -713,7 +713,7 @@ for how BLS is used.</p>
 <dd><p>Hints the compiler to cache the mesh attributes
 and to enable the mesh BLS optimization,
 only available for backends supporting <cite>qd.extension.mesh</cite> and to use with mesh-for loop.</p>
-<p>Related to <a class="github reference external" href="https://github.com/taichi-dev/quadrants/issues/3608">taichi-dev/quadrants#3608</a></p>
+<p>Related to <a class="github reference external" href="https://github.com/taichi-dev/taichi/issues/3608">taichi-dev/taichi#3608</a></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>*args</strong> (<em>List</em><em>[</em><em>Attribute</em><em>]</em>) – A list of mesh attributes or fields accessed as attributes.</p>
@@ -866,7 +866,7 @@ For cuda backends this is equal to <cite>block_id * block_dim + thread_id</cite>
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">mesh_patch_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#mesh_patch_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.mesh_patch_idx" title="Link to this definition">#</a></dt>
 <dd><p>Returns the internal mesh patch id of this running thread,
 only available for backends supporting <cite>qd.extension.mesh</cite> and to use within mesh-for loop.</p>
-<p>Related to <a class="github reference external" href="https://github.com/taichi-dev/quadrants/issues/3608">taichi-dev/quadrants#3608</a></p>
+<p>Related to <a class="github reference external" href="https://github.com/taichi-dev/taichi/issues/3608">taichi-dev/taichi#3608</a></p>
 </dd></dl>
 
 <dl class="py function">
