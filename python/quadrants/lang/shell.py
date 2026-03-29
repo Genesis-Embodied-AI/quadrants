@@ -28,7 +28,7 @@ def _shell_pop_print(old_call):
     def new_call(*args, **kwargs):
         ret = old_call(*args, **kwargs)
         # print's in kernel won't take effect until qd.sync(), discussion:
-        # https://github.com/taichi-dev/quadrants/pull/1303#discussion_r444897102
+        # https://github.com/taichi-dev/taichi/pull/1303#discussion_r444897102
         print(_qd_core.pop_python_print_buffer(), end="")
         return ret
 

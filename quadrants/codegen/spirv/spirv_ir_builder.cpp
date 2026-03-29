@@ -1431,7 +1431,7 @@ void IRBuilder::init_random_function(Value global_tmp_) {
     // how RAND_STATE changes, `gl_GlobalInvocationID.x` can still help
     // us to set different seeds for different threads.
     // Discussion:
-    // https://github.com/taichi-dev/quadrants/pull/912#discussion_r419021918
+    // https://github.com/taichi-dev/taichi/pull/912#discussion_r419021918
     Value tmp9 = load_var(rand_gtmp_, t_uint32_);
     Value tmp10 = new_value(t_uint32_, ValueKind::kNormal);
     ib_.begin(spv::Op::OpIAdd)

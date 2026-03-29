@@ -155,7 +155,7 @@ void compile_to_offloads(IRNode *ir,
 
   dump_ir("after_offload");
   // NOTE: There was an additional CFG pass here, removed in
-  // https://github.com/taichi-dev/quadrants/pull/8691
+  // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
 
   irpass::full_simplify(ir, config,
