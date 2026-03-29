@@ -105,7 +105,7 @@ def test_pointer2():
     assert s[None] == 5 * n
 
 
-@pytest.mark.skip(reason="https://github.com/taichi-dev/quadrants/issues/2520")
+@pytest.mark.skip(reason="https://github.com/taichi-dev/taichi/issues/2520")
 @test_utils.test(require=qd.extension.sparse)
 def test_pointer_direct_place():
     x, y = qd.field(qd.i32), qd.field(qd.i32)

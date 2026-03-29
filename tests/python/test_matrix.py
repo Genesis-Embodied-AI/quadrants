@@ -298,7 +298,7 @@ def test_matrix_to_list():
 
 @test_utils.test()
 def test_matrix_needs_grad():
-    # Just make sure the usage doesn't crash, see https://github.com/taichi-dev/quadrants/pull/1545
+    # Just make sure the usage doesn't crash, see https://github.com/taichi-dev/taichi/pull/1545
     n = 8
     m1 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
     m2 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
@@ -1168,7 +1168,7 @@ def test_cross_scope_matrix_atomic_ops():
 
 @test_utils.test(debug=True)
 def test_global_tmp_overwrite():
-    # https://github.com/taichi-dev/quadrants/issues/6663
+    # https://github.com/taichi-dev/taichi/issues/6663
     @qd.kernel
     def foo() -> qd.i32:
         p = qd.Matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])

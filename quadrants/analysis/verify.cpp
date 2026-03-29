@@ -45,16 +45,16 @@ class IRVerifier : public BasicStmtVisitor {
           break;
         }
       }
-      QD_ASSERT_INFO(
-          found,
-          "IR broken: stmt {} {} cannot have operand {} {}."
-          " If you are using autodiff, please check out"
-          " https://docs.taichi-lang.org/docs/"
-          "differences_between_quadrants_and_python_programs"
-          " If it doesn't help, please open an issue at"
-          " https://github.com/taichi-dev/quadrants to help us improve."
-          " Thanks in advance!",
-          stmt->type(), stmt->id, op->type(), op->id);
+      QD_ASSERT_INFO(found,
+                     "IR broken: stmt {} {} cannot have operand {} {}."
+                     " If you are using autodiff, please check out"
+                     " https://genesis-embodied-ai.github.io/quadrants/"
+                     "user_guide/unsupported_python.html"
+                     " If it doesn't help, please open an issue at"
+                     " https://github.com/Genesis-Embodied-AI/quadrants/issues"
+                     " to help us improve."
+                     " Thanks in advance!",
+                     stmt->type(), stmt->id, op->type(), op->id);
     }
     visible_stmts_.back().insert(stmt);
   }

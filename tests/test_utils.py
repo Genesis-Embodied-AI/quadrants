@@ -48,7 +48,7 @@ def get_rel_eps():
     if arch == qd.metal:
         # Debatable, different hardware could yield different precisions
         # On AMD Radeon Pro 5500M, 1e-6 works fine...
-        # https://github.com/taichi-dev/quadrants/pull/1779
+        # https://github.com/taichi-dev/taichi/pull/1779
         return 1e-4
     return 1e-6
 

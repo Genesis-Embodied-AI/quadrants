@@ -77,7 +77,7 @@ def test_print(dt):
         print(qd.cast(123.4, dt))
 
     func()
-    # Discussion: https://github.com/taichi-dev/quadrants/issues/1063#issuecomment-636421904
+    # Discussion: https://github.com/taichi-dev/taichi/issues/1063#issuecomment-636421904
     # Synchronize to prevent cross-test failure of print:
     qd.sync()
 

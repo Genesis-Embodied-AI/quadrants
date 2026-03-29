@@ -441,7 +441,7 @@ class PyQuadrants:
             # if the root itself is empty), so that there is a valid struct
             # llvm::Module, if no field has been declared before the first kernel
             # invocation. Example case:
-            # https://github.com/taichi-dev/quadrants/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266
+            # https://github.com/taichi-dev/taichi/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266
             return
 
         if get_runtime().prog.config().debug:
