@@ -7,8 +7,11 @@ namespace cpu {
 void KernelLauncher::launch_offloaded_tasks(
     LaunchContextBuilder &ctx,
     const std::vector<TaskFunc> &task_funcs) {
+  ctx.get_context().cpu_assert_failed = 0;
   for (auto task : task_funcs) {
     task(&ctx.get_context());
+    if (ctx.get_context().cpu_assert_failed)
+      break;
   }
 }
 
