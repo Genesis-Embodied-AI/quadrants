@@ -60,7 +60,27 @@ As previously mentionned, to build the release package, you can invoke:
 
 We use `cmake` to build the C++ core. The build directory depends on the host architecture and the python version: it could be for instance `_skbuild/linux-x86_64-3.10/cmake-build`.
 
-You can modify the cmake variables to your liking in order to enable or disable some features you need or don't need. 
+You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, use `ccache`:
+
+```
+ccache _skbuild/linux-x86_64-3.10/cmake-build
+```
+
+You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build.
+For instance, if you don't need to have any GPU support, you could use:
+
+```
+export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
+```
+
+To direct `cmake` where to look at for some dependencies, for instance `LLVM, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
+
+```
+# using an env var
+export LLVM_DIR="/path/to/llvm/"
+# or with a cmake option
+export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
+```
 
 ## Advanced usage
 
