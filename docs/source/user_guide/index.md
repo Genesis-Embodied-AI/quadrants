@@ -51,3 +51,11 @@ debug
 quirks
 troubleshooting
 ```
+
+```{toctree}
+:caption: Contributing
+:maxdepth: 1
+:titlesonly:
+
+contributing
+```
