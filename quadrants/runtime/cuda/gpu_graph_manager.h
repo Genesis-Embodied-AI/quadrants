@@ -35,7 +35,7 @@ struct CudaKernelNodeParams {
 // but conditional nodes use the generic cuGraphAddNode which takes this
 // catch-all 256-byte union. The type field selects the variant; we only use
 // the conditional node variant, so most of the bytes are padding.
-struct CudaGraphNodeParams {
+struct GpuGraphNodeParams {
   unsigned int type;  // CU_GRAPH_NODE_TYPE_CONDITIONAL = 13
   int reserved0[3];
   // Union starts at offset 16 (232 bytes total)
@@ -48,10 +48,10 @@ struct CudaGraphNodeParams {
   long long reserved2;
 };
 static_assert(
-    sizeof(CudaGraphNodeParams) == 256,
-    "CudaGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
+    sizeof(GpuGraphNodeParams) == 256,
+    "GpuGraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
-struct CachedCudaGraph {
+struct CachedGpuGraph {
   // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
   // This is the instantiated, launchable form of the captured CUDA graph.
   void *graph_exec{nullptr};
@@ -63,15 +63,15 @@ struct CachedCudaGraph {
   void *graph_do_while_flag_dev_ptr{nullptr};
   std::size_t num_nodes{0};
 
-  CachedCudaGraph() = default;
-  ~CachedCudaGraph();
-  CachedCudaGraph(const CachedCudaGraph &) = delete;
-  CachedCudaGraph &operator=(const CachedCudaGraph &) = delete;
-  CachedCudaGraph(CachedCudaGraph &&other) noexcept;
-  CachedCudaGraph &operator=(CachedCudaGraph &&other) noexcept;
+  CachedGpuGraph() = default;
+  ~CachedGpuGraph();
+  CachedGpuGraph(const CachedGpuGraph &) = delete;
+  CachedGpuGraph &operator=(const CachedGpuGraph &) = delete;
+  CachedGpuGraph(CachedGpuGraph &&other) noexcept;
+  CachedGpuGraph &operator=(CachedGpuGraph &&other) noexcept;
 };
 
-class CudaGraphManager {
+class GpuGraphManager {
  public:
   // Attempts to launch the kernel via a cached or newly built CUDA graph.
   // Returns true on success; false if the graph path can't be used (e.g.
@@ -102,7 +102,7 @@ class CudaGraphManager {
   }
 
  private:
-  bool launch_cached_graph(CachedCudaGraph &cached,
+  bool launch_cached_graph(CachedGpuGraph &cached,
                            LaunchContextBuilder &ctx,
                            bool use_graph_do_while);
   void resolve_ctx_ndarray_ptrs(
@@ -122,7 +122,7 @@ class CudaGraphManager {
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).
-  std::unordered_map<int, CachedCudaGraph> cache_;
+  std::unordered_map<int, CachedGpuGraph> cache_;
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
 
