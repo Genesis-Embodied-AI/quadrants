@@ -502,7 +502,9 @@ void export_lang(py::module &m) {
       .def("get_num_offloaded_tasks_on_last_call",
            &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_cuda_graph_num_nodes_on_last_call",
-           &Program::get_cuda_graph_num_nodes_on_last_call);
+           &Program::get_cuda_graph_num_nodes_on_last_call)
+      .def("get_cuda_graph_total_builds",
+           &Program::get_cuda_graph_total_builds);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(

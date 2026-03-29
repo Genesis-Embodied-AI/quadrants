@@ -15,6 +15,10 @@ def _cuda_graph_used():
     return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
 
 
+def _cuda_graph_total_builds():
+    return impl.get_runtime().prog.get_cuda_graph_total_builds()
+
+
 def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
@@ -160,10 +164,18 @@ def test_graph_do_while_multiple_loops():
     np.testing.assert_allclose(y.to_numpy(), np.full(N, 10.0))
 
 
-@test_utils.test(arch=[qd.cuda])
-def test_graph_do_while_changed_condition_ndarray_raises():
-    """Passing a different ndarray for the condition parameter should raise."""
+@test_utils.test()
+def test_graph_do_while_swap_counter_ndarray():
+    """Swapping the counter ndarray between calls should work correctly.
+
+    Creates one counter c1, runs the kernel with counter=3, verifies x is all
+    3s. Then creates a new ndarray c2 (different device pointer), runs the same
+    kernel with counter=7, verifies x is all 7s. Confirms cache size stays 1 --
+    the graph wasn't rebuilt, it just updated the indirection slot with c2's
+    pointer.
+    """
     _xfail_if_cuda_without_hopper()
+    N = 32
 
     @qd.kernel(cuda_graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
@@ -173,15 +185,75 @@ def test_graph_do_while_changed_condition_ndarray_raises():
             for i in range(1):
                 c[()] = c[()] - 1
 
-    x = qd.ndarray(qd.i32, shape=(4,))
+    x = qd.ndarray(qd.i32, shape=(N,))
     c1 = qd.ndarray(qd.i32, shape=())
-    c1.from_numpy(np.array(1, dtype=np.int32))
+
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c1.from_numpy(np.array(3, dtype=np.int32))
     k(x, c1)
+    if _on_cuda():
+        assert _cuda_graph_used()
+        assert _cuda_graph_cache_size() == 1
+    assert c1.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
     c2 = qd.ndarray(qd.i32, shape=())
-    c2.from_numpy(np.array(1, dtype=np.int32))
-    with pytest.raises(RuntimeError, match="condition ndarray changed"):
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c2.from_numpy(np.array(7, dtype=np.int32))
+    k(x, c2)
+    if _on_cuda():
+        assert _cuda_graph_used()
+        assert _cuda_graph_cache_size() == 1
+        assert _cuda_graph_total_builds() == 1
+    assert c2.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_alternate_counter_ndarrays():
+    """Alternating between two counter ndarrays should work correctly.
+
+    Creates c1 and c2 upfront, then alternates between them for 3 rounds (6
+    kernel calls). Each call uses a different iteration count (count and
+    count+10). Confirms the slot update works back and forth, not just as a
+    one-time swap. Cache size is checked once at the end -- still 1.
+    """
+    _xfail_if_cuda_without_hopper()
+    N = 16
+
+    @qd.kernel(cuda_graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c1 = qd.ndarray(qd.i32, shape=())
+    c2 = qd.ndarray(qd.i32, shape=())
+
+    for iteration in range(3):
+        count = iteration + 2
+        x.from_numpy(np.zeros(N, dtype=np.int32))
+        c1.from_numpy(np.array(count, dtype=np.int32))
+        k(x, c1)
+        if _on_cuda():
+            assert _cuda_graph_used()
+        assert c1.to_numpy() == 0
+        np.testing.assert_array_equal(x.to_numpy(), np.full(N, count, dtype=np.int32))
+
+        x.from_numpy(np.zeros(N, dtype=np.int32))
+        c2.from_numpy(np.array(count + 10, dtype=np.int32))
         k(x, c2)
+        if _on_cuda():
+            assert _cuda_graph_used()
+        assert c2.to_numpy() == 0
+        np.testing.assert_array_equal(x.to_numpy(), np.full(N, count + 10, dtype=np.int32))
+
+    if _on_cuda():
+        assert _cuda_graph_cache_size() == 1
+        assert _cuda_graph_total_builds() == 1
 
 
 @test_utils.test()
