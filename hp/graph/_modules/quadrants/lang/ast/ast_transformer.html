@@ -481,7 +481,7 @@
 
         <span class="c1"># Keep all generated assign statements and compose single one at last.</span>
         <span class="c1"># The variable is introduced to support chained assignments.</span>
-        <span class="c1"># Ref https://github.com/taichi-dev/quadrants/issues/2659.</span>
+        <span class="c1"># Ref https://github.com/taichi-dev/taichi/issues/2659.</span>
         <span class="n">values</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span> <span class="k">if</span> <span class="n">is_static_assign</span> <span class="k">else</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">node_target</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">targets</span><span class="p">:</span>

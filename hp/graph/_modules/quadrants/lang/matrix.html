@@ -1667,7 +1667,7 @@
         <span class="k">return</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_calc_dynamic_index_stride</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="c1"># Algorithm: https://github.com/taichi-dev/quadrants/issues/3810</span>
+        <span class="c1"># Algorithm: https://github.com/taichi-dev/taichi/issues/3810</span>
         <span class="n">paths</span> <span class="o">=</span> <span class="p">[</span><span class="n">ScalarField</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="o">.</span><span class="n">snode</span><span class="o">.</span><span class="n">_path_from_root</span><span class="p">()</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">]</span>
         <span class="n">num_members</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">num_members</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>

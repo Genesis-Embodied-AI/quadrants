@@ -749,7 +749,7 @@
 <span class="sd">            ``kwargs``, which allows for fine grained control of Quadrants compiler</span>
 <span class="sd">            behavior. Below we list some of the most frequently used ones. For a</span>
 <span class="sd">            complete list, please check out</span>
-<span class="sd">            https://github.com/taichi-dev/quadrants/blob/master/quadrants/program/compile_config.h.</span>
+<span class="sd">            https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.</span>
 
 <span class="sd">            * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.</span>
 <span class="sd">            * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</span>
@@ -758,7 +758,7 @@
 <span class="sd">            *``random_seed`` (int): Sets the seed of the random generator. The default is 0.</span>
 <span class="sd">            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># FIXME(https://github.com/taichi-dev/quadrants/issues/4811): save the current working directory since it may be</span>
+    <span class="c1"># FIXME(https://github.com/taichi-dev/taichi/issues/4811): save the current working directory since it may be</span>
     <span class="c1"># changed by the Vulkan backend initialization on OS X.</span>
     <span class="n">current_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span>
 
@@ -886,7 +886,7 @@
     <span class="k">else</span><span class="p">:</span>
         <span class="n">_install_python_backend_dtype_call</span><span class="p">()</span>
 
-    <span class="c1"># Recover the current working directory (https://github.com/taichi-dev/quadrants/issues/4811)</span>
+    <span class="c1"># Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">current_dir</span><span class="p">)</span>
     <span class="k">return</span> <span class="kc">None</span></div>
 
@@ -932,7 +932,7 @@
 <span class="sd">    and to enable the mesh BLS optimization,</span>
 <span class="sd">    only available for backends supporting `qd.extension.mesh` and to use with mesh-for loop.</span>
 
-<span class="sd">    Related to https://github.com/taichi-dev/quadrants/issues/3608</span>
+<span class="sd">    Related to https://github.com/taichi-dev/taichi/issues/3608</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        *args (List[Attribute]): A list of mesh attributes or fields accessed as attributes.</span>
@@ -1172,7 +1172,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the internal mesh patch id of this running thread,</span>
 <span class="sd">    only available for backends supporting `qd.extension.mesh` and to use within mesh-for loop.</span>
 
-<span class="sd">    Related to https://github.com/taichi-dev/quadrants/issues/3608</span>
+<span class="sd">    Related to https://github.com/taichi-dev/taichi/issues/3608</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
