@@ -198,6 +198,7 @@ def test_graph_do_while_swap_counter_ndarray():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
     c2 = qd.ndarray(qd.i32, shape=())
+    assert c1.arr.device_allocation_ptr() != c2.arr.device_allocation_ptr()
     x.from_numpy(np.zeros(N, dtype=np.int32))
     c2.from_numpy(np.array(7, dtype=np.int32))
     k(x, c2)
@@ -232,6 +233,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
     x = qd.ndarray(qd.i32, shape=(N,))
     c1 = qd.ndarray(qd.i32, shape=())
     c2 = qd.ndarray(qd.i32, shape=())
+    assert c1.arr.device_allocation_ptr() != c2.arr.device_allocation_ptr()
 
     for iteration in range(3):
         count = iteration + 2
