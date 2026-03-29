@@ -37,17 +37,14 @@ uv pip install --group dev test
 * `build.py wheel` to build the wheel currently using `setup.py bdist_wheel`
 * `build.py --shell` to enter a shell with environment variables set up as with `build.py wheel` in order to let you invoke yourself the commands.
 
-For instance, if you want to tinker the `quadrants` python runtime without rebuilding every time, you
-can use `setup.py develop` by yourself.
+`python setup.py develop` provides incremental builds:
 
 ```
 ./build.py --shell # run a new shell with environment variables
 python setup.py develop
 ```
 
-If you are interested about the environment variables set up by `build.py`
-(or you need them for one of your scripts), you can write them down to a file
-to source it by yourself:
+To write the environment variables to a file, use `./build.py -w [filename]`. For example:
 
 ```
 ./build.py -w env.sh
@@ -57,18 +54,18 @@ python setup.py develop
 
 ## Building the package for release purposes
 
-As previously mentionned, to build the release package, you can invoke:
+To build the release package:
 
 ```
 ./build.py wheel
 ```
 
-We use `cmake` to build the C++ core. The build directory depends on the host architecture and the python version: it could be for instance `_skbuild/linux-x86_64-3.10/cmake-build`.
+We use `cmake` to build the C++ core. The build directory depends on the host architecture and the python version. For example: `_skbuild/linux-x86_64-3.10/cmake-build`.
 
-You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, use `ccache`:
+You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use `ccmake`:
 
 ```
-ccache _skbuild/linux-x86_64-3.10/cmake-build
+ccmake _skbuild/linux-x86_64-3.10/cmake-build
 ```
 
 You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build.
@@ -94,7 +91,7 @@ export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 Quadrants comprises at least three important parts:
 
 1. `quadrants` host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler. 
-2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang` is required as it has to support the same targets as `LLVM` (obviously!).
+2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
 3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
 
 ### Building LLVM for debugging it
