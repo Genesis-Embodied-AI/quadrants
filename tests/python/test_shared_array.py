@@ -119,7 +119,7 @@ def test_multiple_shared_array():
     assert np.allclose(reference, a_arr, rtol=1e-4)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
@@ -145,6 +145,26 @@ def test_shared_array_atomics():
     assert arr[32] == sum
     assert arr[128] == sum
     assert arr[224] == sum
+
+
+@test_utils.test(arch=[qd.cuda, qd.metal, qd.amdgpu])
+def test_shared_array_float_atomics():
+    @qd.kernel
+    def kern() -> qd.f32:
+        tmp = qd.f32(0.0)
+
+        qd.loop_config()
+        for _ in range(2):
+            sh_val = qd.simt.block.SharedArray((2,), qd.f32)
+            sh_val[1] = 1.0
+            qd.simt.block.sync()
+            qd.atomic_add(sh_val[0], sh_val[1])
+            qd.simt.block.sync()
+            tmp = sh_val[0]
+
+        return tmp
+
+    assert kern() == test_utils.approx(2.0)
 
 
 @test_utils.test(arch=[qd.cuda])
