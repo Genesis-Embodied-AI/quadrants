@@ -9,14 +9,19 @@
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env and the right python version (currently `3.10`). `pre-commit` for instance is configured with a pinned Python version.
+It is recommended to use a virtual env. When developing, you also have to use the right python version (currently `3.10`) as `pre-commit`
+for instance is configured with this pinned Python version. If it only is to build the package, a recent enough Python version should suffice.
 
-To do so, you could use `uv`:
+`uv` could be handy when initializing such an environment:
 
 ```
+# create the venv for development
 uv venv --python 3.10
+
+# activate it
 source .venv/bin/activate
 
+# install deps groups from pyproject.toml
 uv pip install --group dev test
 ```
 
