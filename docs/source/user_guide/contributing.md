@@ -7,7 +7,7 @@
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 
-## Getting the right python version with an isolated dependency tree
+## Creating your build/dev environment
 
 It is recommended to use a virtual env and the right python version (currently `3.10`). `pre-commit` for instance is configured with a pinned Python version.
 
@@ -25,7 +25,7 @@ uv pip install --group dev test
 `build.py` is a python script to automatically set up the build environment for you before invoking the build commands:
 
 * `LLVM libraries`: downloads an archive for `LLVM` libraires, decompress it and set `LLVM_DIR`.
-* `clang`: depending on the platform, download `clang` or just check if available with right version.
+* `clang`: depending on the platform, download `clang` or just check if available with the right version.
 
 `build.py` can be used at least two ways:
 
@@ -41,7 +41,7 @@ python setup.py develop
 ```
 
 If you are interested about the environment variables set up by `build.py`
-(or you need them for one of your script), you can write them down to a file
+(or you need them for one of your scripts), you can write them down to a file
 to source it by yourself:
 
 ```
@@ -73,7 +73,7 @@ For instance, if you don't need to have any GPU support, you could use:
 export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
-To direct `cmake` where to look at for some dependencies, for instance `LLVM, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
+To direct `cmake` where to look at for some dependencies, for example `LLVM, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
 
 ```
 # using an env var
@@ -94,7 +94,7 @@ Quadrants comprises at least three important parts:
 
 ### Building LLVM for debugging it
 
-Sometimes, it could be useful to have a LLVM version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails).
+Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails).
 To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
 
 You can then use `LLVM_DIR` to point to the `LLVM` build directory.
