@@ -142,8 +142,10 @@ CachedCudaGraph &CachedCudaGraph::operator=(CachedCudaGraph &&other) noexcept {
   // its destructor frees them, so every owned pointer is released uniformly.
   CachedCudaGraph raii_guard(std::move(other));
   std::swap(graph_exec, raii_guard.graph_exec);
-  std::swap(persistent_device_arg_buffer, raii_guard.persistent_device_arg_buffer);
-  std::swap(persistent_device_result_buffer, raii_guard.persistent_device_result_buffer);
+  std::swap(persistent_device_arg_buffer,
+            raii_guard.persistent_device_arg_buffer);
+  std::swap(persistent_device_result_buffer,
+            raii_guard.persistent_device_result_buffer);
   std::swap(persistent_ctx, raii_guard.persistent_ctx);
   std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
