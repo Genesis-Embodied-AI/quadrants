@@ -140,7 +140,7 @@ def test_bitmasked_listgen_bounded():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_deactivate():
-    # https://github.com/taichi-dev/quadrants/issues/778
+    # https://github.com/taichi-dev/taichi/issues/778
     a = qd.field(qd.i32)
     a_a = qd.root.bitmasked(qd.i, 4)
     a_b = a_a.dense(qd.i, 4)

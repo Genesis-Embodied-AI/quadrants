@@ -17,7 +17,7 @@ namespace quadrants {
 extern "C" {
 #if defined(QD_PLATFORM_LINUX) && defined(QD_ARCH_x64)
 // Avoid dependency on higher glibc versions such as 2.27 or 2.29
-// Related issue: https://github.com/taichi-dev/quadrants/issues/3174
+// Related issue: https://github.com/taichi-dev/taichi/issues/3174
 // log2f is used by a third party .a file, so we have to define a wrapper.
 // https://stackoverflow.com/questions/8823267/linking-against-older-symbol-version-in-a-so-file
 // The wrapper should be linked using target_link_libraries in
