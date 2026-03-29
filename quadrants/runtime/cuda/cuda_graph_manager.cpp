@@ -23,63 +23,55 @@ namespace cuda {
 //   param_1: pointer to a device-side slot (void**) that holds the address
 //            of the user's qd.i32 flag ndarray
 //
-// Compiled from CUDA C with: nvcc -ptx -arch=sm_90 -rdc=true
+// Generated from graph_do_while_cond.cu — see that file for the CUDA C source
+// and instructions to regenerate this PTX.
 // Requires SM 9.0+ (Hopper) for cudaGraphSetConditional / conditional nodes.
 // Requires JIT linking with libcudadevrt.a at runtime.
 static const char *kConditionKernelPTX = R"PTX(
-.version 8.8
+.version 8.7
 .target sm_90
 .address_size 64
 
-// Declare the device-side cudaGraphSetConditional function (from libcudadevrt).
-// Takes a conditional node handle (u64) and a boolean (u32: 1=continue, 0=stop).
+        // .globl       _qd_graph_do_while_cond
 .extern .func cudaGraphSetConditional
 (
-    .param .b64 cudaGraphSetConditional_param_0,
-    .param .b32 cudaGraphSetConditional_param_1
+        .param .b64 cudaGraphSetConditional_param_0,
+        .param .b32 cudaGraphSetConditional_param_1
 )
 ;
 
-// Entry point: called by the CUDA graph's conditional while node each iteration.
-//   param_0 (u64): conditional node handle
-//   param_1 (u64): pointer to device-side slot holding address of user's i32 flag
 .visible .entry _qd_graph_do_while_cond(
-    .param .u64 _qd_graph_do_while_cond_param_0,
-    .param .u64 _qd_graph_do_while_cond_param_1
+        .param .u64 _qd_graph_do_while_cond_param_0,
+        .param .u64 _qd_graph_do_while_cond_param_1
 )
 {
-    .reg .pred %p<2>;
-    .reg .b32 %r<3>;
-    .reg .b64 %rd<5>;
+        .reg .pred      %p<2>;
+        .reg .b32       %r<3>;
+        .reg .b64       %rd<5>;
 
-    // Load the two kernel parameters into registers:
-    //   %rd1 = conditional node handle
-    //   %rd2 = pointer to device-side indirection slot
-    ld.param.u64 %rd1, [_qd_graph_do_while_cond_param_0];
-    ld.param.u64 %rd2, [_qd_graph_do_while_cond_param_1];
 
-    // Dereference the indirection slot to get the actual flag pointer
-    cvta.to.global.u64 %rd3, %rd2;
-    ld.global.u64 %rd4, [%rd3];
+        ld.param.u64    %rd1, [_qd_graph_do_while_cond_param_0];
+        ld.param.u64    %rd2, [_qd_graph_do_while_cond_param_1];
+        cvta.to.global.u64      %rd3, %rd2;
+        ld.global.u64   %rd4, [%rd3];
+        ld.u32  %r1, [%rd4];
+        setp.ne.s32     %p1, %r1, 0;
+        selp.u32        %r2, 1, 0, %p1;
+        { // callseq 0, 0
+        .reg .b32 temp_param_reg;
+        .param .b64 param0;
+        st.param.b64    [param0+0], %rd1;
+        .param .b32 param1;
+        st.param.b32    [param1+0], %r2;
+        call.uni
+        cudaGraphSetConditional,
+        (
+        param0,
+        param1
+        );
+        } // callseq 0
+        ret;
 
-    // Read the flag value from the actual counter ndarray
-    ld.global.u32 %r1, [%rd4];
-
-    // Convert flag to boolean: %r2 = (flag != 0) ? 1 : 0
-    setp.ne.s32 %p1, %r1, 0;
-    selp.u32 %r2, 1, 0, %p1;
-
-    // Tell the conditional while node whether to loop again or stop.
-    // cudaGraphSetConditional(handle, should_continue)
-    { // callseq 0, 0
-    .reg .b32 temp_param_reg;
-    .param .b64 param0;
-    st.param.b64 [param0+0], %rd1;
-    .param .b32 param1;
-    st.param.b32 [param1+0], %r2;
-    call.uni cudaGraphSetConditional, (param0, param1);
-    } // callseq 0
-    ret;
 }
 )PTX";
 
