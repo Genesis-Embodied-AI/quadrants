@@ -712,7 +712,7 @@ def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
     Used as ``while qd.graph_do_while(flag):`` inside a
-    ``@qd.kernel(cuda_graph=True)`` kernel. The loop body repeats while
+    ``@qd.kernel(gpu_graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
@@ -721,7 +721,7 @@ def graph_do_while(condition) -> bool:
 
     This function should not be called directly at runtime; it is
     recognised and transformed during AST compilation.
-    Requires ``@qd.kernel(cuda_graph=True)``.
+    Requires ``@qd.kernel(gpu_graph=True)``.
     """
     return bool(condition)
 
