@@ -129,7 +129,7 @@ std::string data_type_format(DataType dt, Arch arch) {
     return "%u";
   } else if (dt->is_primitive(PrimitiveTypeID::i64)) {
     // Use %lld on Windows.
-    // Discussion: https://github.com/taichi-dev/quadrants/issues/2522
+    // Discussion: https://github.com/taichi-dev/taichi/issues/2522
     // Vulkan does not support printing 64-bit signed integer
     return "%lld";
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {

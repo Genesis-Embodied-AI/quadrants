@@ -149,7 +149,7 @@ def test_overflow64(dt, n):
 )
 @test_utils.test(require=qd.extension.data64)
 def test_uint_max(dt, val):
-    # https://github.com/taichi-dev/quadrants/issues/2060
+    # https://github.com/taichi-dev/taichi/issues/2060
     impl.get_runtime().default_ip = dt
     N = 16
     f = qd.field(dt, shape=N)

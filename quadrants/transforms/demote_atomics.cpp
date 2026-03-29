@@ -202,7 +202,7 @@ class DemoteAtomics : public BasicStmtVisitor {
       // into ???, because $f is a store stmt that doesn't have a return
       // value. The correct thing is to replace |stmt| $d with the loaded
       // old value $d'.
-      // See also: https://github.com/taichi-dev/quadrants/issues/332
+      // See also: https://github.com/taichi-dev/taichi/issues/332
       stmt->replace_usages_with(load);
       modifier.replace_with(stmt, std::move(new_stmts),
                             /*replace_usages=*/false);

@@ -33,7 +33,7 @@ class ConstantFold : public BasicStmtVisitor {
   static bool is_good_type(DataType dt) {
     // ConstStmt of `bad` types like `i8` is not supported by LLVM.
     // Discussion:
-    // https://github.com/taichi-dev/quadrants/pull/839#issuecomment-625902727
+    // https://github.com/taichi-dev/taichi/pull/839#issuecomment-625902727
     if (dt->is_primitive(PrimitiveTypeID::i32) ||
         dt->is_primitive(PrimitiveTypeID::i64) ||
         dt->is_primitive(PrimitiveTypeID::u1) ||
