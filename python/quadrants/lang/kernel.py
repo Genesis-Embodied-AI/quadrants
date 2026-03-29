@@ -291,7 +291,7 @@ class Kernel(FuncBase):
         # and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
-        self.use_cuda_graph: bool = False
+        self.use_gpu_graph: bool = False
         self.graph_do_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
@@ -507,7 +507,7 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
-            launch_ctx.use_cuda_graph = self.use_cuda_graph
+            launch_ctx.use_gpu_graph = self.use_gpu_graph
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             prog.launch_kernel(compiled_kernel_data, launch_ctx)

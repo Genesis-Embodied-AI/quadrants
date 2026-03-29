@@ -7,16 +7,16 @@ from quadrants.lang import impl
 from tests import test_utils
 
 
-def _cuda_graph_cache_size():
-    return impl.get_runtime().prog.get_cuda_graph_cache_size()
+def _gpu_graph_cache_size():
+    return impl.get_runtime().prog.get_gpu_graph_cache_size()
 
 
-def _cuda_graph_used():
-    return impl.get_runtime().prog.get_cuda_graph_cache_used_on_last_call()
+def _gpu_graph_used():
+    return impl.get_runtime().prog.get_gpu_graph_cache_used_on_last_call()
 
 
-def _cuda_graph_total_builds():
-    return impl.get_runtime().prog.get_cuda_graph_total_builds()
+def _gpu_graph_total_builds():
+    return impl.get_runtime().prog.get_gpu_graph_total_builds()
 
 
 def _on_cuda():
@@ -34,7 +34,7 @@ def test_graph_do_while_counter():
     _xfail_if_cuda_without_hopper()
     N = 64
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def graph_loop(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
         while qd.graph_do_while(counter):
             for i in range(x.shape[0]):
@@ -50,8 +50,8 @@ def test_graph_do_while_counter():
 
     graph_loop(x, counter)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert counter.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
@@ -61,8 +61,8 @@ def test_graph_do_while_counter():
 
     graph_loop(x, counter)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert counter.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 10, dtype=np.int32))
@@ -74,7 +74,7 @@ def test_graph_do_while_boolean_done():
     _xfail_if_cuda_without_hopper()
     N = 64
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def increment_until_threshold(
         x: qd.types.ndarray(qd.i32, ndim=1),
         threshold: qd.i32,
@@ -95,8 +95,8 @@ def test_graph_do_while_boolean_done():
 
     increment_until_threshold(x, 7, keep_going)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert keep_going.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
@@ -106,8 +106,8 @@ def test_graph_do_while_boolean_done():
 
     increment_until_threshold(x, 12, keep_going)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert keep_going.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 12, dtype=np.int32))
@@ -119,7 +119,7 @@ def test_graph_do_while_multiple_loops():
     _xfail_if_cuda_without_hopper()
     N = 32
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def multi_loop(
         x: qd.types.ndarray(qd.f32, ndim=1),
         y: qd.types.ndarray(qd.f32, ndim=1),
@@ -143,8 +143,8 @@ def test_graph_do_while_multiple_loops():
 
     multi_loop(x, y, counter)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert counter.to_numpy() == 0
     np.testing.assert_allclose(x.to_numpy(), np.full(N, 10.0))
@@ -156,8 +156,8 @@ def test_graph_do_while_multiple_loops():
 
     multi_loop(x, y, counter)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
 
     assert counter.to_numpy() == 0
     np.testing.assert_allclose(x.to_numpy(), np.full(N, 5.0))
@@ -177,7 +177,7 @@ def test_graph_do_while_swap_counter_ndarray():
     _xfail_if_cuda_without_hopper()
     N = 32
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         while qd.graph_do_while(c):
             for i in range(x.shape[0]):
@@ -192,8 +192,8 @@ def test_graph_do_while_swap_counter_ndarray():
     c1.from_numpy(np.array(3, dtype=np.int32))
     k(x, c1)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
     assert c1.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
 
@@ -203,9 +203,9 @@ def test_graph_do_while_swap_counter_ndarray():
     c2.from_numpy(np.array(7, dtype=np.int32))
     k(x, c2)
     if _on_cuda():
-        assert _cuda_graph_used()
-        assert _cuda_graph_cache_size() == 1
-        assert _cuda_graph_total_builds() == 1
+        assert _gpu_graph_used()
+        assert _gpu_graph_cache_size() == 1
+        assert _gpu_graph_total_builds() == 1
     assert c2.to_numpy() == 0
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
@@ -222,7 +222,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
     _xfail_if_cuda_without_hopper()
     N = 16
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         while qd.graph_do_while(c):
             for i in range(x.shape[0]):
@@ -241,7 +241,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
         c1.from_numpy(np.array(count, dtype=np.int32))
         k(x, c1)
         if _on_cuda():
-            assert _cuda_graph_used()
+            assert _gpu_graph_used()
         assert c1.to_numpy() == 0
         np.testing.assert_array_equal(x.to_numpy(), np.full(N, count, dtype=np.int32))
 
@@ -249,18 +249,18 @@ def test_graph_do_while_alternate_counter_ndarrays():
         c2.from_numpy(np.array(count + 10, dtype=np.int32))
         k(x, c2)
         if _on_cuda():
-            assert _cuda_graph_used()
+            assert _gpu_graph_used()
         assert c2.to_numpy() == 0
         np.testing.assert_array_equal(x.to_numpy(), np.full(N, count + 10, dtype=np.int32))
 
     if _on_cuda():
-        assert _cuda_graph_cache_size() == 1
-        assert _cuda_graph_total_builds() == 1
+        assert _gpu_graph_cache_size() == 1
+        assert _gpu_graph_total_builds() == 1
 
 
 @test_utils.test()
-def test_graph_do_while_without_cuda_graph_raises():
-    """Using qd.graph_do_while without cuda_graph=True should raise."""
+def test_graph_do_while_without_gpu_graph_raises():
+    """Using qd.graph_do_while without gpu_graph=True should raise."""
 
     @qd.kernel
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
@@ -271,7 +271,7 @@ def test_graph_do_while_without_cuda_graph_raises():
     x = qd.ndarray(qd.i32, shape=(4,))
     c = qd.ndarray(qd.i32, shape=())
     c.from_numpy(np.array(1, dtype=np.int32))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="requires @qd.kernel\\(cuda_graph=True\\)"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="requires @qd.kernel\\(gpu_graph=True\\)"):
         k(x, c)
 
 
@@ -279,7 +279,7 @@ def test_graph_do_while_without_cuda_graph_raises():
 def test_graph_do_while_nonexistent_arg_raises():
     """Using a variable name that isn't a kernel parameter should raise."""
 
-    @qd.kernel(cuda_graph=True)
+    @qd.kernel(gpu_graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
         while qd.graph_do_while(nonexistent):
             for i in range(x.shape[0]):

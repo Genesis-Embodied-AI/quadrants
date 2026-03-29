@@ -496,15 +496,15 @@ void export_lang(py::module &m) {
            py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
-      .def("get_cuda_graph_cache_size", &Program::get_cuda_graph_cache_size)
-      .def("get_cuda_graph_cache_used_on_last_call",
-           &Program::get_cuda_graph_cache_used_on_last_call)
+      .def("get_gpu_graph_cache_size", &Program::get_gpu_graph_cache_size)
+      .def("get_gpu_graph_cache_used_on_last_call",
+           &Program::get_gpu_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call",
            &Program::get_num_offloaded_tasks_on_last_call)
-      .def("get_cuda_graph_num_nodes_on_last_call",
-           &Program::get_cuda_graph_num_nodes_on_last_call)
-      .def("get_cuda_graph_total_builds",
-           &Program::get_cuda_graph_total_builds);
+      .def("get_gpu_graph_num_nodes_on_last_call",
+           &Program::get_gpu_graph_num_nodes_on_last_call)
+      .def("get_gpu_graph_total_builds",
+           &Program::get_gpu_graph_total_builds);
 
   py::class_<CompileResult>(m, "CompileResult")
       .def_property_readonly(
@@ -669,7 +669,7 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_int", &LaunchContextBuilder::get_struct_ret_int)
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
-      .def_readwrite("use_cuda_graph", &LaunchContextBuilder::use_cuda_graph)
+      .def_readwrite("use_gpu_graph", &LaunchContextBuilder::use_gpu_graph)
       .def_readwrite("graph_do_while_arg_id",
                      &LaunchContextBuilder::graph_do_while_arg_id);
 
