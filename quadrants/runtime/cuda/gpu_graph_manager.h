@@ -60,10 +60,17 @@ struct CachedGpuGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
-  void *graph_do_while_flag_dev_ptr{nullptr};
+  // Device-side pointer slot for graph_do_while indirection. Holds the address
+  // of the user's counter ndarray. The condition kernel reads through this
+  // slot, allowing the counter ndarray to change between calls without
+  // rebuilding.
+  void *counter_ptr_slot{nullptr};
   std::size_t num_nodes{0};
 
-  CachedGpuGraph() = default;
+  CachedGpuGraph(std::size_t arg_buffer_size,
+                 std::size_t result_buffer_size,
+                 bool needs_counter_ptr_slot,
+                 LlvmRuntimeExecutor *executor);
   ~CachedGpuGraph();
   CachedGpuGraph(const CachedGpuGraph &) = delete;
   CachedGpuGraph &operator=(const CachedGpuGraph &) = delete;
@@ -100,6 +107,9 @@ class GpuGraphManager {
   std::size_t num_nodes_on_last_call() const {
     return num_nodes_on_last_call_;
   }
+  std::size_t total_builds() const {
+    return total_builds_;
+  }
 
  private:
   bool launch_cached_graph(CachedGpuGraph &cached,
@@ -125,6 +135,7 @@ class GpuGraphManager {
   std::unordered_map<int, CachedGpuGraph> cache_;
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
+  std::size_t total_builds_{0};
 
   // JIT-compiled condition kernel for graph_do_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule
