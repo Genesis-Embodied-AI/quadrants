@@ -332,6 +332,7 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
+            cached_graph_do_while_arg: str | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
                 used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(self.fast_checksum)
