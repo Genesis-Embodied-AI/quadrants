@@ -8,7 +8,6 @@ import pydantic
 import pytest
 
 import quadrants as qd
-
 from quadrants.lang import impl
 
 from tests import test_utils
@@ -303,9 +302,7 @@ def test_graph_do_while_nonexistent_arg_raises():
 
 
 @qd.kernel(gpu_graph=True, fastcache=True)
-def _fastcache_do_while_kernel(
-    x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)
-):
+def _fastcache_do_while_kernel(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
     while qd.graph_do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1
@@ -337,10 +334,13 @@ def _fastcache_do_while_child(args: list[str]) -> None:
 
     _fastcache_do_while_kernel(x, counter)
 
-    assert _fastcache_do_while_kernel._primal.graph_do_while_arg == "counter", (
-        f"graph_do_while_arg should be 'counter', got {_fastcache_do_while_kernel._primal.graph_do_while_arg!r}"
+    assert (
+        _fastcache_do_while_kernel._primal.graph_do_while_arg == "counter"
+    ), f"graph_do_while_arg should be 'counter', got {_fastcache_do_while_kernel._primal.graph_do_while_arg!r}"
+    assert (
+        _fastcache_do_while_kernel._primal.src_ll_cache_observations.cache_loaded
+        == args_obj.expect_loaded_from_fastcache
     )
-    assert _fastcache_do_while_kernel._primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, args_obj.iterations))
     assert counter.to_numpy() == 0
 
