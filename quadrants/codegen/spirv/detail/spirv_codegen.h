@@ -206,6 +206,8 @@ class TaskCodegen : public IRVisitor {
   std::unordered_set<const Stmt *> shared_atomic_allocs_;
   // Propagated from shared_atomic_allocs_ to derived MatrixPtrStmt nodes
   // during codegen, so that load/store/atomic visitors know to bitcast.
+  // Example: if `sharr` (AllocaStmt) is in shared_atomic_allocs_, then
+  // `sharr[0]` (MatrixPtrStmt) is added here during visit(MatrixPtrStmt).
   std::unordered_set<const Stmt *> shared_float_retyped_;
 
   // Pre-scan the IR to find shared float AllocaStmts targeted by atomics.

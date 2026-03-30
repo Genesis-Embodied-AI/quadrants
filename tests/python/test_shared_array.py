@@ -214,7 +214,7 @@ def test_large_shared_array(gpu_graph):
     assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_multiple_shared_array():
     assert qd.cfg is not None
     if qd.cfg.arch == qd.amdgpu:
@@ -274,7 +274,7 @@ def test_multiple_shared_array():
     assert np.allclose(reference, a_arr, rtol=1e-4)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
@@ -303,9 +303,13 @@ def test_shared_array_atomics():
 
 
 @pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
-@pytest.mark.parametrize("dtype", [qd.f16, qd.f32])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_shared_array_float_atomics(op, dtype):
+    if dtype == qd.f64:
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+            pytest.skip("Device does not support f64")
     N = 256
     block_dim = 32
     SCALE = 0.1523  # fractional so values are truly non-integer floats
@@ -339,8 +343,8 @@ def test_shared_array_float_atomics(op, dtype):
     arr = qd.ndarray(qd.f32, (N))
     make_kernel(atomic_op)(arr)
     qd.sync()
-    assert arr[0] == test_utils.approx(expected[op], rel=rtol)
-    assert arr[32] == test_utils.approx(expected[op], rel=rtol)
+    for idx in (0, 31, 32, 255):
+        assert arr[idx] == test_utils.approx(expected[op], rel=rtol)
 
 
 @pytest.mark.parametrize("dtype", [qd.i8, qd.i16, qd.i32, qd.u8, qd.u16, qd.u32])
@@ -367,9 +371,13 @@ def test_shared_array_int_dtypes(dtype):
             assert arr[block_start + tid] == tid
 
 
-@pytest.mark.parametrize("dtype", [qd.f16, qd.f32])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_shared_array_float_dtypes(dtype):
+    if dtype == qd.f64:
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+            pytest.skip("Device does not support f64")
     N = 128
     block_dim = 32
     SCALE = 0.1523
