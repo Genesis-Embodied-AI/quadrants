@@ -420,6 +420,25 @@ DataType IRBuilder::get_atomic_uint_dtype(const DataType &dt) const {
   return uint_dt;
 }
 
+Value IRBuilder::shared_uint_to_float(Value val, const DataType &dt) {
+  SType narrow_uint = get_bitcast_uint_stype(dt);
+  SType atomic_uint = get_primitive_type(get_atomic_uint_dtype(dt));
+  if (atomic_uint.id != narrow_uint.id) {
+    val = make_value(spv::OpUConvert, narrow_uint, val);
+  }
+  return make_value(spv::OpBitcast, get_primitive_type(dt), val);
+}
+
+Value IRBuilder::float_to_shared_uint(Value val, const DataType &dt) {
+  SType narrow_uint = get_bitcast_uint_stype(dt);
+  val = make_value(spv::OpBitcast, narrow_uint, val);
+  SType atomic_uint = get_primitive_type(get_atomic_uint_dtype(dt));
+  if (atomic_uint.id != narrow_uint.id) {
+    val = make_value(spv::OpUConvert, atomic_uint, val);
+  }
+  return val;
+}
+
 SType IRBuilder::get_pointer_type(const SType &value_type,
                                   spv::StorageClass storage_class) {
   auto key = std::make_pair(value_type.id, storage_class);
@@ -1133,12 +1152,9 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
                                   Value data,
                                   std::function<Value(Value, Value)> op,
                                   const DataType &dt) {
-  SType out_type = get_primitive_type(dt);
-  SType narrow_uint = get_bitcast_uint_stype(dt);
   // get_atomic_uint_dtype returns >= u32 so the CAS loop uses atomic ops that
   // Metal/Vulkan actually support (they lack 16-bit atomics).
   SType res_type = get_primitive_type(get_atomic_uint_dtype(dt));
-  bool needs_width_conv = (res_type.id != narrow_uint.id);
   Value ret_val_int = alloca_variable(res_type);
 
   // do-while
@@ -1164,19 +1180,9 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
     Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
                                /*scope=*/const_i32_one_,
                                /*semantics=*/const_i32_zero_);
-    // Convert loaded uint to float: narrow if needed, then bitcast.
-    Value old_narrow = old_val;
-    if (needs_width_conv) {
-      old_narrow = make_value(spv::OpUConvert, narrow_uint, old_val);
-    }
-    Value old_data_value = make_value(spv::OpBitcast, out_type, old_narrow);
+    Value old_data_value = shared_uint_to_float(old_val, dt);
     Value new_data_value = op(old_data_value, data);
-    // Convert float back to uint: bitcast, then widen if needed.
-    Value new_narrow = make_value(spv::OpBitcast, narrow_uint, new_data_value);
-    Value new_val = new_narrow;
-    if (needs_width_conv) {
-      new_val = make_value(spv::OpUConvert, res_type, new_narrow);
-    }
+    Value new_val = float_to_shared_uint(new_data_value, dt);
     // int loaded = atomicCompSwap(vals[0], old, new);
     /*
     * Don't need this part, theoretically
@@ -1212,10 +1218,7 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   start_label(exit);
 
   Value ret_loaded = load_variable(ret_val_int, res_type);
-  if (needs_width_conv) {
-    ret_loaded = make_value(spv::OpUConvert, narrow_uint, ret_loaded);
-  }
-  return make_value(spv::OpBitcast, out_type, ret_loaded);
+  return shared_uint_to_float(ret_loaded, dt);
 }
 
 Value IRBuilder::rand_u32(Value global_tmp_) {

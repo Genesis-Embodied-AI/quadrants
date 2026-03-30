@@ -368,13 +368,7 @@ void TaskCodegen::visit(LocalLoadStmt *stmt) {
     auto shared_type = ir_->get_primitive_type(
         ir_->get_atomic_uint_dtype(stmt->element_type()));
     val = ir_->load_variable(ptr_val, shared_type);
-    // If the backing uint is wider than the float type (e.g. u32 for f16),
-    // truncate before bitcasting.
-    auto narrow_type = ir_->get_bitcast_uint_stype(stmt->element_type());
-    if (shared_type.id != narrow_type.id) {
-      val = ir_->make_value(spv::OpUConvert, narrow_type, val);
-    }
-    val = ir_->make_value(spv::OpBitcast, expected_type, val);
+    val = ir_->shared_uint_to_float(val, stmt->element_type());
   } else {
     val = ir_->load_variable(ptr_val, expected_type);
   }
@@ -385,15 +379,7 @@ void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
   if (shared_float_retyped_.count(stmt->dest)) {
-    // Bitcast float to same-width uint, then widen if the backing type is
-    // larger (e.g. f16 -> u16 -> u32).
-    auto narrow_type = ir_->get_bitcast_uint_stype(stmt->val->element_type());
-    val = ir_->make_value(spv::OpBitcast, narrow_type, val);
-    auto shared_type = ir_->get_primitive_type(
-        ir_->get_atomic_uint_dtype(stmt->val->element_type()));
-    if (shared_type.id != narrow_type.id) {
-      val = ir_->make_value(spv::OpUConvert, shared_type, val);
-    }
+    val = ir_->float_to_shared_uint(val, stmt->val->element_type());
   }
   ir_->store_variable(ptr_val, val);
 }

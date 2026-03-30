@@ -348,6 +348,11 @@ class IRBuilder {
   // Like get_bitcast_uint_dtype but returns at least u32 so that the result
   // is usable with atomic ops (Metal/Vulkan lack 16-bit atomics).
   DataType get_atomic_uint_dtype(const DataType &dt) const;
+  // Convert a value from shared-memory uint backing to float dt. Handles
+  // the width mismatch when the backing type is wider (e.g. u32 for f16).
+  Value shared_uint_to_float(Value val, const DataType &dt);
+  // Convert a value from float dt to shared-memory uint backing.
+  Value float_to_shared_uint(Value val, const DataType &dt);
   // Get the pointer type that points to value_type
   SType get_storage_pointer_type(const SType &value_type);
   // Get the pointer type that points to value_type
