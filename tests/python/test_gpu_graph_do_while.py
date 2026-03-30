@@ -1,7 +1,7 @@
 import importlib
 import importlib.util
 import sys
-import tempfile
+
 from pathlib import Path
 
 import numpy as np
@@ -324,49 +324,48 @@ def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndi
 
 
 @test_utils.test()
-def test_graph_do_while_fastcache_restores_arg():
+def test_graph_do_while_fastcache_restores_arg(tmp_path):
     """After fastcache restore, graph_do_while_arg should be set on the Kernel."""
     N = 16
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
     mod_name = "_test_fastcache_do_while_mod"
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        filepath = Path(temp_dir) / "k.py"
-        filepath.write_text(_FASTCACHE_KERNEL_SRC)
+    filepath = tmp_path / "k.py"
+    filepath.write_text(_FASTCACHE_KERNEL_SRC)
 
-        # First import: compiles and populates the fastcache
-        k1 = _import_kernel(filepath, mod_name, "k")
-        x.from_numpy(np.zeros(N, dtype=np.int32))
-        counter.from_numpy(np.array(5, dtype=np.int32))
-        k1(x, counter)
+    # First import: compiles and populates the fastcache
+    k1 = _import_kernel(filepath, mod_name, "k")
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(5, dtype=np.int32))
+    k1(x, counter)
 
-        primal1 = k1._primal
-        assert primal1.graph_do_while_arg == "counter"
-        assert primal1.src_ll_cache_observations.cache_stored
+    primal1 = k1._primal
+    assert primal1.graph_do_while_arg == "counter"
+    assert primal1.src_ll_cache_observations.cache_stored
 
-        np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5))
-        assert counter.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5))
+    assert counter.to_numpy() == 0
 
-        # Second import: loads from fastcache (same filepath = same cache key).
-        # graph_do_while_arg must be restored from the cached metadata.
-        k2 = _import_kernel(filepath, mod_name, "k")
-        primal2 = k2._primal
+    # Second import: loads from fastcache (same filepath = same cache key).
+    # graph_do_while_arg must be restored from the cached metadata.
+    k2 = _import_kernel(filepath, mod_name, "k")
+    primal2 = k2._primal
 
-        x.from_numpy(np.zeros(N, dtype=np.int32))
-        counter.from_numpy(np.array(3, dtype=np.int32))
-        k2(x, counter)
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(3, dtype=np.int32))
+    k2(x, counter)
 
-        assert primal2.src_ll_cache_observations.cache_loaded, "fastcache should have been loaded"
-        assert primal2.graph_do_while_arg == "counter", (
-            "graph_do_while_arg should be restored from fastcache"
-        )
+    assert primal2.src_ll_cache_observations.cache_loaded, "fastcache should have been loaded"
+    assert primal2.graph_do_while_arg == "counter", (
+        "graph_do_while_arg should be restored from fastcache"
+    )
 
-        np.testing.assert_array_equal(
-            x.to_numpy(), np.full(N, 3),
-            err_msg="graph_do_while counter not restored from fastcache",
-        )
-        assert counter.to_numpy() == 0
+    np.testing.assert_array_equal(
+        x.to_numpy(), np.full(N, 3),
+        err_msg="graph_do_while counter not restored from fastcache",
+    )
+    assert counter.to_numpy() == 0
 
     if mod_name in sys.modules:
         del sys.modules[mod_name]
