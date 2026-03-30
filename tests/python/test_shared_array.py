@@ -149,22 +149,30 @@ def test_shared_array_atomics():
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_shared_array_float_atomics():
+    N = 256
+    block_dim = 32
+
     @qd.kernel
-    def kern() -> qd.f32:
-        tmp = qd.f32(0.0)
-
-        qd.loop_config()
-        for _ in range(2):
-            sh_val = qd.simt.block.SharedArray((2,), qd.f32)
-            sh_val[1] = 1.0
+    def atomic_test(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            val = qd.f32(tid)
+            sharr = qd.simt.block.SharedArray((block_dim,), qd.f32)
+            sharr[tid] = val
             qd.simt.block.sync()
-            qd.atomic_add(sh_val[0], sh_val[1])
+            qd.atomic_add(sharr[0], val)
             qd.simt.block.sync()
-            tmp = sh_val[0]
+            out[i] = sharr[tid]
 
-        return tmp
-
-    assert kern() == test_utils.approx(2.0)
+    arr = qd.ndarray(qd.f32, (N))
+    atomic_test(arr)
+    qd.sync()
+    expected_sum = block_dim * (block_dim - 1) / 2.0
+    assert arr[0] == test_utils.approx(expected_sum)
+    assert arr[32] == test_utils.approx(expected_sum)
+    assert arr[128] == test_utils.approx(expected_sum)
+    assert arr[224] == test_utils.approx(expected_sum)
 
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
