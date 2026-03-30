@@ -273,8 +273,16 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
     auto elem_num = tensor_type->get_num_elements();
-    spirv::SType elem_type =
-        ir_->get_primitive_type(tensor_type->get_element_type());
+    auto elem_dt = tensor_type->get_element_type();
+    spirv::SType elem_type = ir_->get_primitive_type(elem_dt);
+    // Allocate shared float arrays as uint so that CAS-based atomic
+    // emulation uses integer atomics (Metal/MoltenVK lack threadgroup
+    // float atomics).
+    if (alloca->is_shared && is_real(elem_dt)) {
+      elem_type =
+          ir_->get_primitive_type(ir_->get_quadrants_uint_type(elem_dt));
+      shared_float_retyped_.insert(alloca);
+    }
     spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
@@ -298,8 +306,14 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   auto dt = stmt->element_type().ptr_removed();
   if (stmt->offset_used_as_index()) {
     if (stmt->origin->is<AllocaStmt>()) {
+      auto elem_type = ir_->get_primitive_type(dt);
+      if (shared_float_retyped_.count(stmt->origin)) {
+        elem_type =
+            ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+        shared_float_retyped_.insert(stmt);
+      }
       spirv::SType ptr_type = ir_->get_pointer_type(
-          ir_->get_primitive_type(dt), origin_val.stype.storage_class);
+          elem_type, origin_val.stype.storage_class);
       ptr_val =
           ir_->make_value(spv::OpAccessChain, ptr_type, origin_val, offset_val);
       if (stmt->origin->as<AllocaStmt>()->is_shared) {
@@ -324,14 +338,27 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
 void TaskCodegen::visit(LocalLoadStmt *stmt) {
   auto ptr = stmt->src;
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
-  spirv::Value val = ir_->load_variable(
-      ptr_val, ir_->get_primitive_type(stmt->element_type()));
+  auto expected_type = ir_->get_primitive_type(stmt->element_type());
+  spirv::Value val;
+  if (shared_float_retyped_.count(ptr)) {
+    auto uint_type = ir_->get_primitive_type(
+        ir_->get_quadrants_uint_type(stmt->element_type()));
+    val = ir_->load_variable(ptr_val, uint_type);
+    val = ir_->make_value(spv::OpBitcast, expected_type, val);
+  } else {
+    val = ir_->load_variable(ptr_val, expected_type);
+  }
   ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
+  if (shared_float_retyped_.count(stmt->dest)) {
+    auto uint_type = ir_->get_primitive_type(
+        ir_->get_quadrants_uint_type(stmt->val->element_type()));
+    val = ir_->make_value(spv::OpBitcast, uint_type, val);
+  }
   ir_->store_variable(ptr_val, val);
 }
 

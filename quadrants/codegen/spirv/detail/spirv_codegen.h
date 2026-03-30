@@ -200,6 +200,8 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<int, GetRootStmt *>
       root_stmts_;  // maps root id to get root stmt
   std::unordered_map<const Stmt *, BufferInfo> ptr_to_buffers_;
+  // Shared float arrays retyped to uint (Metal lacks threadgroup float atomics)
+  std::unordered_set<const Stmt *> shared_float_retyped_;
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;
 
