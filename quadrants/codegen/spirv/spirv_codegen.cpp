@@ -283,10 +283,9 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
     // Allocate shared float arrays as uint so that CAS-based atomic emulation
     // uses integer atomics (Metal/MoltenVK lack threadgroup float atomics).
     if (alloca->is_shared && is_real(elem_dt)) {
-      // Map to unsigned int of the same bit-width (f32->u32, f16->u16,
-      // f64->u64)
-      elem_type =
-          ir_->get_primitive_type(ir_->get_quadrants_uint_type(elem_dt));
+      // Map to uint >= 32 bits (f32->u32, f16->u32, f64->u64). Sub-32-bit
+      // types are widened because Metal/Vulkan lack 16-bit atomics.
+      elem_type = ir_->get_primitive_type(ir_->get_shared_uint_type(elem_dt));
       shared_float_retyped_.insert(alloca);
     }
     spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
@@ -320,7 +319,7 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   auto get_maybe_retyped_elem = [&]() -> spirv::SType {
     auto elem_type = ir_->get_primitive_type(dt);
     if (shared_float_retyped_.count(stmt->origin)) {
-      elem_type = ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+      elem_type = ir_->get_primitive_type(ir_->get_shared_uint_type(dt));
       shared_float_retyped_.insert(stmt);
     }
     return elem_type;
@@ -367,9 +366,15 @@ void TaskCodegen::visit(LocalLoadStmt *stmt) {
   auto expected_type = ir_->get_primitive_type(stmt->element_type());
   spirv::Value val;
   if (shared_float_retyped_.count(ptr)) {
-    auto uint_type = ir_->get_primitive_type(
-        ir_->get_quadrants_uint_type(stmt->element_type()));
-    val = ir_->load_variable(ptr_val, uint_type);
+    auto shared_type = ir_->get_primitive_type(
+        ir_->get_shared_uint_type(stmt->element_type()));
+    val = ir_->load_variable(ptr_val, shared_type);
+    // If the backing uint is wider than the float type (e.g. u32 for f16),
+    // truncate before bitcasting.
+    auto narrow_type = ir_->get_primitive_uint_type(stmt->element_type());
+    if (shared_type.id != narrow_type.id) {
+      val = ir_->make_value(spv::OpUConvert, narrow_type, val);
+    }
     val = ir_->make_value(spv::OpBitcast, expected_type, val);
   } else {
     val = ir_->load_variable(ptr_val, expected_type);
@@ -381,9 +386,15 @@ void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
   if (shared_float_retyped_.count(stmt->dest)) {
-    auto uint_type = ir_->get_primitive_type(
-        ir_->get_quadrants_uint_type(stmt->val->element_type()));
-    val = ir_->make_value(spv::OpBitcast, uint_type, val);
+    // Bitcast float to same-width uint, then widen if the backing type is
+    // larger (e.g. f16 -> u16 -> u32).
+    auto narrow_type = ir_->get_primitive_uint_type(stmt->val->element_type());
+    val = ir_->make_value(spv::OpBitcast, narrow_type, val);
+    auto shared_type = ir_->get_primitive_type(
+        ir_->get_shared_uint_type(stmt->val->element_type()));
+    if (shared_type.id != narrow_type.id) {
+      val = ir_->make_value(spv::OpUConvert, shared_type, val);
+    }
   }
   ir_->store_variable(ptr_val, val);
 }

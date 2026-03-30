@@ -346,6 +346,9 @@ class IRBuilder {
   // Get the Quadrants uint type with the same size of a given Quadrants data
   // type
   DataType get_quadrants_uint_type(const DataType &dt) const;
+  // Like get_quadrants_uint_type but returns at least u32. Shared memory
+  // atomics need >= 32-bit types (Metal/Vulkan lack 16-bit atomics).
+  DataType get_shared_uint_type(const DataType &dt) const;
   // Get the pointer type that points to value_type
   SType get_storage_pointer_type(const SType &value_type);
   // Get the pointer type that points to value_type

@@ -306,10 +306,6 @@ def test_shared_array_atomics():
 @pytest.mark.parametrize("dtype", [qd.f16, qd.f32])
 @test_utils.test(arch=qd.gpu)
 def test_shared_array_float_atomics(op, dtype):
-    # f16 shared atomics require 16-bit atomic ops (atomic_ushort on Metal,
-    # 16-bit AtomicCompareExchange on Vulkan) which are not widely supported.
-    if dtype == qd.f16 and qd.cfg.arch in (qd.metal, qd.vulkan):
-        pytest.skip("16-bit atomics not supported on Metal/Vulkan")
     N = 256
     block_dim = 32
     SCALE = 0.1523  # fractional so values are truly non-integer floats
@@ -324,9 +320,10 @@ def test_shared_array_float_atomics(op, dtype):
             for i in range(N):
                 tid = i % block_dim
                 sharr = qd.simt.block.SharedArray((block_dim,), dtype)
-                sharr[tid] = qd.cast(tid, dtype) * SCALE
+                val = qd.cast(tid * SCALE, dtype)
+                sharr[tid] = val
                 qd.simt.block.sync()
-                atomic_fn(sharr[0], qd.cast(tid, dtype) * SCALE)
+                atomic_fn(sharr[0], val)
                 qd.simt.block.sync()
                 out[i] = sharr[0]
 
@@ -338,8 +335,7 @@ def test_shared_array_float_atomics(op, dtype):
         "min": 0.0,
         "max": (block_dim - 1) * SCALE,
     }
-    # Use f32 output array and approx with relaxed tolerance for f16
-    rtol = 1e-2 if dtype == qd.f16 else 1e-5
+    rtol = 1e-3 if dtype == qd.f16 else 1e-6
     arr = qd.ndarray(qd.f32, (N))
     make_kernel(atomic_op)(arr)
     qd.sync()

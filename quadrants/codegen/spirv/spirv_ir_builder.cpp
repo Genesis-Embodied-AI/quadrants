@@ -412,6 +412,14 @@ DataType IRBuilder::get_quadrants_uint_type(const DataType &dt) const {
   }
 }
 
+DataType IRBuilder::get_shared_uint_type(const DataType &dt) const {
+  DataType uint_dt = get_quadrants_uint_type(dt);
+  if (uint_dt == PrimitiveType::u16 || uint_dt == PrimitiveType::u8) {
+    return PrimitiveType::u32;
+  }
+  return uint_dt;
+}
+
 SType IRBuilder::get_pointer_type(const SType &value_type,
                                   spv::StorageClass storage_class) {
   auto key = std::make_pair(value_type.id, storage_class);
@@ -1088,17 +1096,19 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
         addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); },
         dt);
   } else if (op_type == AtomicOpType::min) {
+    auto float_type = get_primitive_type(dt);
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMin*/ 37, lhs, rhs);
+          return call_glsl450(float_type, /*FMin*/ 37, lhs, rhs);
         },
         dt);
   } else if (op_type == AtomicOpType::max) {
+    auto float_type = get_primitive_type(dt);
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMax*/ 40, lhs, rhs);
+          return call_glsl450(float_type, /*FMax*/ 40, lhs, rhs);
         },
         dt);
   } else {
@@ -1124,7 +1134,12 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
                                   std::function<Value(Value, Value)> op,
                                   const DataType &dt) {
   SType out_type = get_primitive_type(dt);
-  SType res_type = get_primitive_uint_type(dt);
+  SType narrow_uint = get_primitive_uint_type(dt);
+  // Use the shared-memory-safe uint type for the atomic CAS loop. For f16
+  // this is u32 (since Metal/Vulkan lack 16-bit atomics), matching the
+  // backing type chosen at allocation.
+  SType res_type = get_primitive_type(get_shared_uint_type(dt));
+  bool needs_width_conv = (res_type.id != narrow_uint.id);
   Value ret_val_int = alloca_variable(res_type);
 
   // do-while
@@ -1150,18 +1165,20 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
     Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
                                /*scope=*/const_i32_one_,
                                /*semantics=*/const_i32_zero_);
-    // int new = dataTypeBitsToInt(atomic_op(intBitsToDataType(old), data));
-    Value old_data_value = make_value(spv::OpBitcast, out_type, old_val);
+    // Convert loaded uint to float: narrow if needed, then bitcast.
+    Value old_narrow = old_val;
+    if (needs_width_conv) {
+      old_narrow = make_value(spv::OpUConvert, narrow_uint, old_val);
+    }
+    Value old_data_value = make_value(spv::OpBitcast, out_type, old_narrow);
     Value new_data_value = op(old_data_value, data);
-    Value new_val = make_value(spv::OpBitcast, res_type, new_data_value);
+    // Convert float back to uint: bitcast, then widen if needed.
+    Value new_narrow = make_value(spv::OpBitcast, narrow_uint, new_data_value);
+    Value new_val = new_narrow;
+    if (needs_width_conv) {
+      new_val = make_value(spv::OpUConvert, res_type, new_narrow);
+    }
     // int loaded = atomicCompSwap(vals[0], old, new);
-    /*
-    * Don't need this part, theoretically
-    auto semantics = uint_imm ediate_number(
-        t_uint32_, spv::MemorySemanticsAcquireReleaseMask |
-                       spv::MemorySemanticsUniformMemoryMask);
-    make_inst(spv::OpMemoryBarrier, const_i32_one_, semantics);
-    */
     Value loaded = make_value(
         spv::OpAtomicCompareExchange, res_type, addr_ptr,
         /*scope=*/const_i32_one_, /*semantics if equal=*/const_i32_zero_,
@@ -1188,8 +1205,11 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   }
   start_label(exit);
 
-  return make_value(spv::OpBitcast, out_type,
-                    load_variable(ret_val_int, res_type));
+  Value ret_loaded = load_variable(ret_val_int, res_type);
+  if (needs_width_conv) {
+    ret_loaded = make_value(spv::OpUConvert, narrow_uint, ret_loaded);
+  }
+  return make_value(spv::OpBitcast, out_type, ret_loaded);
 }
 
 Value IRBuilder::rand_u32(Value global_tmp_) {
