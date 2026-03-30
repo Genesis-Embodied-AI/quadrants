@@ -280,10 +280,10 @@ class PerformanceDispatcher(Generic[P, R]):
             raise QuadrantsRuntimeError("No suitable functions were found.")
 
         elif len(compatible_set) == 1:
-            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
+            dispatch_impl_ = next(iter(compatible_set))
+            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = dispatch_impl_
             self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
-            dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
-            assert dispatch_impl_ is not None
+            self._forced_impl = dispatch_impl_
             log_str = (
                 f"perf_dispatch '{self._name}': chose '{dispatch_impl_.get_implementation2().__name__}' "
                 f"out of {len(self._dispatch_impls)} registered functions. Only 1 was compatible."
