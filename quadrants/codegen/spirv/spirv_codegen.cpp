@@ -1674,7 +1674,12 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
     } else {
-      val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
+      // For shared arrays (dest_is_ptr), use get_atomic_uint_dtype which may
+      // widen sub-32-bit types (f16->u32). For device buffers, use same-width.
+      auto atomic_uint_dt = dest_is_ptr ? ir_->get_atomic_uint_dtype(dt)
+                                        : ir_->get_bitcast_uint_dtype(dt);
+      val =
+          ir_->float_atomic(stmt->op_type, addr_ptr, data, dt, atomic_uint_dt);
     }
   } else if (is_integral(dt)) {
     bool use_native_atomics = false;

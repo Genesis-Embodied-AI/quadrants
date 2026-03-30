@@ -1101,19 +1101,20 @@ bool IRBuilder::check_value_existence(const std::string &name) const {
 Value IRBuilder::float_atomic(AtomicOpType op_type,
                               Value addr_ptr,
                               Value data,
-                              const DataType &dt) {
+                              const DataType &dt,
+                              const DataType &atomic_uint_dt) {
   if (op_type == AtomicOpType::add) {
     return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); },
-        dt);
+        addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); }, dt,
+        atomic_uint_dt);
   } else if (op_type == AtomicOpType::sub) {
     return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return sub(lhs, rhs); },
-        dt);
+        addr_ptr, data, [&](Value lhs, Value rhs) { return sub(lhs, rhs); }, dt,
+        atomic_uint_dt);
   } else if (op_type == AtomicOpType::mul) {
     return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); },
-        dt);
+        addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt,
+        atomic_uint_dt);
   } else if (op_type == AtomicOpType::min) {
     auto float_type = get_primitive_type(dt);
     return atomic_operation(
@@ -1121,7 +1122,7 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
         [&](Value lhs, Value rhs) {
           return call_glsl450(float_type, /*FMin*/ 37, lhs, rhs);
         },
-        dt);
+        dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::max) {
     auto float_type = get_primitive_type(dt);
     return atomic_operation(
@@ -1129,7 +1130,7 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
         [&](Value lhs, Value rhs) {
           return call_glsl450(float_type, /*FMax*/ 40, lhs, rhs);
         },
-        dt);
+        dt, atomic_uint_dt);
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -1141,8 +1142,8 @@ Value IRBuilder::integer_atomic(AtomicOpType op_type,
                                 const DataType &dt) {
   if (op_type == AtomicOpType::mul) {
     return atomic_operation(
-        addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); },
-        dt);
+        addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt,
+        get_bitcast_uint_dtype(dt));
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -1151,10 +1152,11 @@ Value IRBuilder::integer_atomic(AtomicOpType op_type,
 Value IRBuilder::atomic_operation(Value addr_ptr,
                                   Value data,
                                   std::function<Value(Value, Value)> op,
-                                  const DataType &dt) {
-  // get_atomic_uint_dtype returns >= u32 so the CAS loop uses atomic ops that
-  // Metal/Vulkan actually support (they lack 16-bit atomics).
-  SType res_type = get_primitive_type(get_atomic_uint_dtype(dt));
+                                  const DataType &dt,
+                                  const DataType &atomic_uint_dt) {
+  SType float_type = get_primitive_type(dt);
+  SType narrow_uint = get_bitcast_uint_stype(dt);
+  SType res_type = get_primitive_type(atomic_uint_dt);
   Value ret_val_int = alloca_variable(res_type);
 
   // do-while
@@ -1180,9 +1182,19 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
     Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
                                /*scope=*/const_i32_one_,
                                /*semantics=*/const_i32_zero_);
-    Value old_data_value = shared_uint_to_float(old_val, dt);
+    // Convert uint to float, narrowing if the atomic type is wider (e.g.
+    // u32 backing for f16 shared arrays).
+    Value old_narrow = old_val;
+    if (res_type.id != narrow_uint.id) {
+      old_narrow = make_value(spv::OpUConvert, narrow_uint, old_val);
+    }
+    Value old_data_value = make_value(spv::OpBitcast, float_type, old_narrow);
     Value new_data_value = op(old_data_value, data);
-    Value new_val = float_to_shared_uint(new_data_value, dt);
+    // Convert float back to uint, widening if needed.
+    Value new_val = make_value(spv::OpBitcast, narrow_uint, new_data_value);
+    if (res_type.id != narrow_uint.id) {
+      new_val = make_value(spv::OpUConvert, res_type, new_val);
+    }
     // int loaded = atomicCompSwap(vals[0], old, new);
     /*
     * Don't need this part, theoretically
@@ -1218,7 +1230,10 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   start_label(exit);
 
   Value ret_loaded = load_variable(ret_val_int, res_type);
-  return shared_uint_to_float(ret_loaded, dt);
+  if (res_type.id != narrow_uint.id) {
+    ret_loaded = make_value(spv::OpUConvert, narrow_uint, ret_loaded);
+  }
+  return make_value(spv::OpBitcast, float_type, ret_loaded);
 }
 
 Value IRBuilder::rand_u32(Value global_tmp_) {

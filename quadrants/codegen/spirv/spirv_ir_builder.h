@@ -549,10 +549,13 @@ class IRBuilder {
   Value const_i32_one_;
 
   // Use force-inline float atomic helper function
+  // CAS-based float atomic. atomic_uint_dt is the uint type for the CAS loop,
+  // which may be wider than dt for shared memory (e.g. u32 for f16).
   Value float_atomic(AtomicOpType op_type,
                      Value addr_ptr,
                      Value data,
-                     const DataType &dt);
+                     const DataType &dt,
+                     const DataType &atomic_uint_dt);
   Value integer_atomic(AtomicOpType op_type,
                        Value addr_ptr,
                        Value data,
@@ -560,7 +563,8 @@ class IRBuilder {
   Value atomic_operation(Value addr_ptr,
                          Value data,
                          std::function<Value(Value, Value)> op,
-                         const DataType &dt);
+                         const DataType &dt,
+                         const DataType &atomic_uint_dt);
   Value rand_u32(Value global_tmp_);
   Value rand_f32(Value global_tmp_);
   Value rand_i32(Value global_tmp_);
