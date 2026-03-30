@@ -378,7 +378,7 @@ size_t IRBuilder::get_primitive_type_size(const DataType &dt) const {
   }
 }
 
-SType IRBuilder::get_primitive_uint_type(const DataType &dt) const {
+SType IRBuilder::get_bitcast_uint_stype(const DataType &dt) const {
   if (dt == PrimitiveType::i64 || dt == PrimitiveType::u64 ||
       dt == PrimitiveType::f64) {
     return t_uint64_;
@@ -395,7 +395,7 @@ SType IRBuilder::get_primitive_uint_type(const DataType &dt) const {
   }
 }
 
-DataType IRBuilder::get_quadrants_uint_type(const DataType &dt) const {
+DataType IRBuilder::get_bitcast_uint_dtype(const DataType &dt) const {
   if (dt == PrimitiveType::i64 || dt == PrimitiveType::u64 ||
       dt == PrimitiveType::f64) {
     return PrimitiveType::u64;
@@ -412,8 +412,8 @@ DataType IRBuilder::get_quadrants_uint_type(const DataType &dt) const {
   }
 }
 
-DataType IRBuilder::get_shared_uint_type(const DataType &dt) const {
-  DataType uint_dt = get_quadrants_uint_type(dt);
+DataType IRBuilder::get_atomic_uint_dtype(const DataType &dt) const {
+  DataType uint_dt = get_bitcast_uint_dtype(dt);
   if (uint_dt == PrimitiveType::u16 || uint_dt == PrimitiveType::u8) {
     return PrimitiveType::u32;
   }
@@ -1134,11 +1134,10 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
                                   std::function<Value(Value, Value)> op,
                                   const DataType &dt) {
   SType out_type = get_primitive_type(dt);
-  SType narrow_uint = get_primitive_uint_type(dt);
-  // Use the shared-memory-safe uint type for the atomic CAS loop. For f16
-  // this is u32 (since Metal/Vulkan lack 16-bit atomics), matching the
-  // backing type chosen at allocation.
-  SType res_type = get_primitive_type(get_shared_uint_type(dt));
+  SType narrow_uint = get_bitcast_uint_stype(dt);
+  // get_atomic_uint_dtype returns >= u32 so the CAS loop uses atomic ops that
+  // Metal/Vulkan actually support (they lack 16-bit atomics).
+  SType res_type = get_primitive_type(get_atomic_uint_dtype(dt));
   bool needs_width_conv = (res_type.id != narrow_uint.id);
   Value ret_val_int = alloca_variable(res_type);
 
@@ -1179,6 +1178,13 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
       new_val = make_value(spv::OpUConvert, res_type, new_narrow);
     }
     // int loaded = atomicCompSwap(vals[0], old, new);
+    /*
+    * Don't need this part, theoretically
+    auto semantics = uint_immediate_number(
+        t_uint32_, spv::MemorySemanticsAcquireReleaseMask |
+                       spv::MemorySemanticsUniformMemoryMask);
+    make_inst(spv::OpMemoryBarrier, const_i32_one_, semantics);
+    */
     Value loaded = make_value(
         spv::OpAtomicCompareExchange, res_type, addr_ptr,
         /*scope=*/const_i32_one_, /*semantics if equal=*/const_i32_zero_,

@@ -341,14 +341,13 @@ class IRBuilder {
   SType from_quadrants_type(const DataType &dt, bool has_buffer_ptr);
   // Get the size in bytes of a given Quadrants data type
   size_t get_primitive_type_size(const DataType &dt) const;
-  // Get the spirv uint type with the same size of a given Quadrants data type
-  SType get_primitive_uint_type(const DataType &dt) const;
-  // Get the Quadrants uint type with the same size of a given Quadrants data
-  // type
-  DataType get_quadrants_uint_type(const DataType &dt) const;
-  // Like get_quadrants_uint_type but returns at least u32. Shared memory
-  // atomics need >= 32-bit types (Metal/Vulkan lack 16-bit atomics).
-  DataType get_shared_uint_type(const DataType &dt) const;
+  // Return the SPIR-V uint type with the same bit-width as dt (e.g. f32->u32).
+  SType get_bitcast_uint_stype(const DataType &dt) const;
+  // Return the Quadrants uint DataType with the same bit-width as dt.
+  DataType get_bitcast_uint_dtype(const DataType &dt) const;
+  // Like get_bitcast_uint_dtype but returns at least u32 so that the result
+  // is usable with atomic ops (Metal/Vulkan lack 16-bit atomics).
+  DataType get_atomic_uint_dtype(const DataType &dt) const;
   // Get the pointer type that points to value_type
   SType get_storage_pointer_type(const SType &value_type);
   // Get the pointer type that points to value_type
