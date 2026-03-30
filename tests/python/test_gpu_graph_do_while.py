@@ -324,7 +324,7 @@ def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndi
 
 
 @test_utils.test()
-def test_graph_do_while_fastcache_restores_arg(tmp_path):
+def test_graph_do_while_fastcache_restores_arg(tmp_path: Path):
     """After fastcache restore, graph_do_while_arg should be set on the Kernel."""
     N = 16
     x = qd.ndarray(qd.i32, shape=(N,))
