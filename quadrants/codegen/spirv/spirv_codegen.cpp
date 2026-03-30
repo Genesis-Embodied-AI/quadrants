@@ -1564,26 +1564,26 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   // Shared arrays have already created an accesschain, use it directly.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
 
-  if (dt->is_primitive(PrimitiveTypeID::f64)) {
+  // Shared arrays already have an access chain pointer; at_buffer() only
+  // handles device buffers and would fail on workgroup pointers.
+  if (dest_is_ptr) {
+    addr_ptr = dest_val;
+  } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
       addr_ptr = at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = dest_is_ptr
-                     ? dest_val
-                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
         stmt->op_type == AtomicOpType::add) {
       addr_ptr = at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = dest_is_ptr
-                     ? dest_val
-                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else {
-    addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
+    addr_ptr = at_buffer(stmt->dest, dt);
   }
 
   auto ret_type = ir_->get_primitive_type(dt);
@@ -1594,22 +1594,26 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       atomic_fp_op = spv::OpAtomicFAddEXT;
     }
 
+    // Shared float arrays are retyped to uint, so native float atomics
+    // (which require a float pointer) cannot be used on them.
     bool use_native_atomics = false;
 
-    if (dt->is_primitive(PrimitiveTypeID::f64)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
-      }
-    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
-      }
-    } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
+    if (!dest_is_ptr) {
+      if (dt->is_primitive(PrimitiveTypeID::f64)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
       }
     }
 
