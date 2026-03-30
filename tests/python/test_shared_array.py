@@ -342,7 +342,6 @@ def test_shared_array_float_atomics(op, dtype):
     rtol = 1e-3 if dtype == qd.f16 else 1e-6
     arr = qd.ndarray(qd.f32, (N))
     make_kernel(atomic_op)(arr)
-    qd.sync()
     for idx in (0, 31, 32, 255):
         assert arr[idx] == test_utils.approx(expected[op], rel=rtol)
 
@@ -365,7 +364,6 @@ def test_shared_array_int_dtypes(dtype):
 
     arr = qd.ndarray(dtype, (N,))
     kern(arr)
-    qd.sync()
     for block_start in (0, 32, 64, 96):
         for tid in range(block_dim):
             assert arr[block_start + tid] == tid
@@ -395,7 +393,6 @@ def test_shared_array_float_dtypes(dtype):
     rtol = 1e-3 if dtype == qd.f16 else 1e-6
     arr = qd.ndarray(qd.f32, (N,))
     kern(arr)
-    qd.sync()
     for block_start in (0, 32, 64, 96):
         for tid in range(block_dim):
             assert arr[block_start + tid] == test_utils.approx(tid * SCALE, rel=rtol)
@@ -418,7 +415,6 @@ def test_shared_array_bool_dtype():
 
     arr = qd.ndarray(qd.i32, (N,))
     kern(arr)
-    qd.sync()
     for block_start in (0, 32, 64, 96):
         for tid in range(block_dim):
             assert arr[block_start + tid] == tid % 2
