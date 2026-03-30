@@ -273,7 +273,12 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
     auto elem_num = tensor_type->get_num_elements();
-    auto elem_dt = tensor_type->get_element_type();
+    DataType elem_dt = tensor_type->get_element_type();
+    // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
+    if (auto nested = elem_dt->cast<TensorType>()) {
+      elem_num *= nested->get_num_elements();
+      elem_dt = nested->get_element_type();
+    }
     spirv::SType elem_type = ir_->get_primitive_type(elem_dt);
     // Allocate shared float arrays as uint so that CAS-based atomic
     // emulation uses integer atomics (Metal/MoltenVK lack threadgroup
@@ -304,16 +309,19 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   spirv::Value origin_val = ir_->query_value(stmt->origin->raw_name());
   spirv::Value offset_val = ir_->query_value(stmt->offset->raw_name());
   auto dt = stmt->element_type().ptr_removed();
+  // Flatten nested tensor types to scalar (e.g., vec3 to f32)
+  if (auto nested = dt->cast<TensorType>()) {
+    dt = nested->get_element_type();
+  }
   if (stmt->offset_used_as_index()) {
     if (stmt->origin->is<AllocaStmt>()) {
       auto elem_type = ir_->get_primitive_type(dt);
       if (shared_float_retyped_.count(stmt->origin)) {
-        elem_type =
-            ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+        elem_type = ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
         shared_float_retyped_.insert(stmt);
       }
-      spirv::SType ptr_type = ir_->get_pointer_type(
-          elem_type, origin_val.stype.storage_class);
+      spirv::SType ptr_type =
+          ir_->get_pointer_type(elem_type, origin_val.stype.storage_class);
       ptr_val =
           ir_->make_value(spv::OpAccessChain, ptr_type, origin_val, offset_val);
       if (stmt->origin->as<AllocaStmt>()->is_shared) {
@@ -325,6 +333,16 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
       spirv::Value offset_bytes = ir_->mul(dt_bytes, offset_val);
       ptr_val = ir_->add(origin_val, offset_bytes);
       ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
+    } else if (origin_val.stype.flag == TypeKind::kPtr) {
+      auto elem_type = ir_->get_primitive_type(dt);
+      if (shared_float_retyped_.count(stmt->origin)) {
+        elem_type = ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+        shared_float_retyped_.insert(stmt);
+      }
+      spirv::SType ptr_type =
+          ir_->get_pointer_type(elem_type, origin_val.stype.storage_class);
+      ptr_val = ir_->make_value(spv::OpPtrAccessChain, ptr_type, origin_val,
+                                offset_val);
     } else {
       QD_NOT_IMPLEMENTED;
     }
