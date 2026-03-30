@@ -351,6 +351,7 @@ def _fastcache_do_while_child(args: list[str]) -> None:
 @test_utils.test()
 def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
     """After fastcache restore in a fresh process, graph_do_while_arg must be set."""
+    _xfail_if_cuda_without_hopper()
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
