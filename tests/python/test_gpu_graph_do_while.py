@@ -326,10 +326,6 @@ def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndi
 @test_utils.test()
 def test_graph_do_while_fastcache_restores_arg():
     """After fastcache restore, graph_do_while_arg should be set on the Kernel."""
-    if not _on_cuda():
-        pytest.skip("gpu_graph requires CUDA")
-    _xfail_if_cuda_without_hopper()
-
     N = 16
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
