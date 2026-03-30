@@ -1,0 +1,18 @@
+quadrants.lang.simt
+===================
+
+.. py:module:: quadrants.lang.simt
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/lang/simt/block/index
+   /autoapi/quadrants/lang/simt/grid/index
+   /autoapi/quadrants/lang/simt/subgroup/index
+   /autoapi/quadrants/lang/simt/warp/index
+
+
