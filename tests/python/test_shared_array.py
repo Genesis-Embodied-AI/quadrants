@@ -59,7 +59,7 @@ def test_large_shared_array():
     assert np.allclose(reference, a_arr)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_multiple_shared_array():
     assert qd.cfg is not None
     if qd.cfg.arch == qd.amdgpu:
@@ -119,7 +119,7 @@ def test_multiple_shared_array():
     assert np.allclose(reference, a_arr, rtol=1e-4)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
@@ -147,7 +147,35 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+def test_shared_array_float_atomics():
+    N = 256
+    block_dim = 32
+
+    @qd.kernel
+    def atomic_test(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            val = qd.f32(tid)
+            sharr = qd.simt.block.SharedArray((block_dim,), qd.f32)
+            sharr[tid] = val
+            qd.simt.block.sync()
+            qd.atomic_add(sharr[0], val)
+            qd.simt.block.sync()
+            out[i] = sharr[tid]
+
+    arr = qd.ndarray(qd.f32, (N))
+    atomic_test(arr)
+    qd.sync()
+    expected_sum = block_dim * (block_dim - 1) / 2.0
+    assert arr[0] == test_utils.approx(expected_sum)
+    assert arr[32] == test_utils.approx(expected_sum)
+    assert arr[128] == test_utils.approx(expected_sum)
+    assert arr[224] == test_utils.approx(expected_sum)
+
+
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
 def test_shared_array_tensor_type():
     data_type = vec4
     block_dim = 16
@@ -172,7 +200,7 @@ def test_shared_array_tensor_type():
     assert (y.to_numpy()[0] == [4.0, 8.0, 12.0, 16.0]).all()
 
 
-@test_utils.test(arch=[qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
 def test_shared_array_matrix():
     @qd.kernel
     def foo():

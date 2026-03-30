@@ -268,8 +268,21 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
     auto elem_num = tensor_type->get_num_elements();
-    spirv::SType elem_type =
-        ir_->get_primitive_type(tensor_type->get_element_type());
+    DataType elem_dt = tensor_type->get_element_type();
+    // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
+    if (auto nested = elem_dt->cast<TensorType>()) {
+      elem_num *= nested->get_num_elements();
+      elem_dt = nested->get_element_type();
+    }
+    spirv::SType elem_type = ir_->get_primitive_type(elem_dt);
+    // Allocate shared float arrays as uint so that CAS-based atomic
+    // emulation uses integer atomics (Metal/MoltenVK lack threadgroup
+    // float atomics).
+    if (alloca->is_shared && is_real(elem_dt)) {
+      elem_type =
+          ir_->get_primitive_type(ir_->get_quadrants_uint_type(elem_dt));
+      shared_float_retyped_.insert(alloca);
+    }
     spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
@@ -291,10 +304,19 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   spirv::Value origin_val = ir_->query_value(stmt->origin->raw_name());
   spirv::Value offset_val = ir_->query_value(stmt->offset->raw_name());
   auto dt = stmt->element_type().ptr_removed();
+  // Flatten nested tensor types to scalar (e.g., vec3 to f32)
+  if (auto nested = dt->cast<TensorType>()) {
+    dt = nested->get_element_type();
+  }
   if (stmt->offset_used_as_index()) {
     if (stmt->origin->is<AllocaStmt>()) {
-      spirv::SType ptr_type = ir_->get_pointer_type(
-          ir_->get_primitive_type(dt), origin_val.stype.storage_class);
+      auto elem_type = ir_->get_primitive_type(dt);
+      if (shared_float_retyped_.count(stmt->origin)) {
+        elem_type = ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+        shared_float_retyped_.insert(stmt);
+      }
+      spirv::SType ptr_type =
+          ir_->get_pointer_type(elem_type, origin_val.stype.storage_class);
       ptr_val =
           ir_->make_value(spv::OpAccessChain, ptr_type, origin_val, offset_val);
       if (stmt->origin->as<AllocaStmt>()->is_shared) {
@@ -306,6 +328,16 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
       spirv::Value offset_bytes = ir_->mul(dt_bytes, offset_val);
       ptr_val = ir_->add(origin_val, offset_bytes);
       ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
+    } else if (origin_val.stype.flag == TypeKind::kPtr) {
+      auto elem_type = ir_->get_primitive_type(dt);
+      if (shared_float_retyped_.count(stmt->origin)) {
+        elem_type = ir_->get_primitive_type(ir_->get_quadrants_uint_type(dt));
+        shared_float_retyped_.insert(stmt);
+      }
+      spirv::SType ptr_type =
+          ir_->get_pointer_type(elem_type, origin_val.stype.storage_class);
+      ptr_val = ir_->make_value(spv::OpPtrAccessChain, ptr_type, origin_val,
+                                offset_val);
     } else {
       QD_NOT_IMPLEMENTED;
     }
@@ -319,14 +351,27 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
 void TaskCodegen::visit(LocalLoadStmt *stmt) {
   auto ptr = stmt->src;
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
-  spirv::Value val = ir_->load_variable(
-      ptr_val, ir_->get_primitive_type(stmt->element_type()));
+  auto expected_type = ir_->get_primitive_type(stmt->element_type());
+  spirv::Value val;
+  if (shared_float_retyped_.count(ptr)) {
+    auto uint_type = ir_->get_primitive_type(
+        ir_->get_quadrants_uint_type(stmt->element_type()));
+    val = ir_->load_variable(ptr_val, uint_type);
+    val = ir_->make_value(spv::OpBitcast, expected_type, val);
+  } else {
+    val = ir_->load_variable(ptr_val, expected_type);
+  }
   ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
+  if (shared_float_retyped_.count(stmt->dest)) {
+    auto uint_type = ir_->get_primitive_type(
+        ir_->get_quadrants_uint_type(stmt->val->element_type()));
+    val = ir_->make_value(spv::OpBitcast, uint_type, val);
+  }
   ir_->store_variable(ptr_val, val);
 }
 
@@ -1519,26 +1564,26 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   // Shared arrays have already created an accesschain, use it directly.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
 
-  if (dt->is_primitive(PrimitiveTypeID::f64)) {
+  // Shared arrays already have an access chain pointer; at_buffer() only
+  // handles device buffers and would fail on workgroup pointers.
+  if (dest_is_ptr) {
+    addr_ptr = dest_val;
+  } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
       addr_ptr = at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = dest_is_ptr
-                     ? dest_val
-                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
         stmt->op_type == AtomicOpType::add) {
       addr_ptr = at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = dest_is_ptr
-                     ? dest_val
-                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else {
-    addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
+    addr_ptr = at_buffer(stmt->dest, dt);
   }
 
   auto ret_type = ir_->get_primitive_type(dt);
@@ -1549,22 +1594,26 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       atomic_fp_op = spv::OpAtomicFAddEXT;
     }
 
+    // Shared float arrays are retyped to uint, so native float atomics
+    // (which require a float pointer) cannot be used on them.
     bool use_native_atomics = false;
 
-    if (dt->is_primitive(PrimitiveTypeID::f64)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
-      }
-    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
-      }
-    } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
-      if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
-          stmt->op_type == AtomicOpType::add) {
-        use_native_atomics = true;
+    if (!dest_is_ptr) {
+      if (dt->is_primitive(PrimitiveTypeID::f64)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
       }
     }
 
