@@ -2135,7 +2135,7 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
 
   QD_ERROR_IF(
       !is_integral(ptr_val.stype.dt),
-      "at_buffer failed, `ptr_val.stype.dt` is not integeral. Stmt = {} : {}",
+      "at_buffer failed, `ptr_val.stype.dt` is not integral. Stmt = {} : {}",
       ptr->name(), ptr->type_hint());
 
   spirv::Value buffer = get_buffer_value(ptr_to_buffers_.at(ptr), dt);
