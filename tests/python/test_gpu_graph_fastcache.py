@@ -28,9 +28,9 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
-def _xfail_if_cuda_without_hopper():
+def _skip_if_cuda_without_hopper():
     if _on_cuda() and qd.lang.impl.get_cuda_compute_capability() < 90:
-        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
+        pytest.skip("graph_do_while requires SM 9.0+ (Hopper)")
 
 
 def _import_kernel(filepath: Path, module_name: str, kernel_name: str):
@@ -63,7 +63,7 @@ def test_gpu_graph_do_while_fastcache_graph_do_while_arg_restored():
     """After fastcache restore, graph_do_while_arg should be set on the Kernel."""
     if not _on_cuda():
         pytest.skip("gpu_graph requires CUDA")
-    _xfail_if_cuda_without_hopper()
+    _skip_if_cuda_without_hopper()
 
     N = 16
     x = qd.ndarray(qd.i32, shape=(N,))
