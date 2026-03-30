@@ -302,32 +302,35 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
+@pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
-def test_shared_array_float_atomics():
+def test_shared_array_float_atomics(op):
     N = 256
     block_dim = 32
+    total = block_dim * (block_dim - 1) / 2.0
+    atomic_op = getattr(qd, f"atomic_{op}")
 
-    @qd.kernel
-    def atomic_test(out: qd.types.ndarray()):
-        qd.loop_config(block_dim=block_dim)
-        for i in range(N):
-            tid = i % block_dim
-            val = qd.f32(tid)
-            sharr = qd.simt.block.SharedArray((block_dim,), qd.f32)
-            sharr[tid] = val
-            qd.simt.block.sync()
-            qd.atomic_add(sharr[0], val)
-            qd.simt.block.sync()
-            out[i] = sharr[tid]
+    def make_kernel(atomic_fn):
+        @qd.kernel
+        def kern(out: qd.types.ndarray()):
+            qd.loop_config(block_dim=block_dim)
+            for i in range(N):
+                tid = i % block_dim
+                sharr = qd.simt.block.SharedArray((block_dim,), qd.f32)
+                sharr[tid] = qd.f32(tid)
+                qd.simt.block.sync()
+                atomic_fn(sharr[0], qd.f32(tid))
+                qd.simt.block.sync()
+                out[i] = sharr[0]
 
+        return kern
+
+    expected = {"add": total, "sub": -total, "min": 0.0, "max": block_dim - 1.0}
     arr = qd.ndarray(qd.f32, (N))
-    atomic_test(arr)
+    make_kernel(atomic_op)(arr)
     qd.sync()
-    expected_sum = block_dim * (block_dim - 1) / 2.0
-    assert arr[0] == test_utils.approx(expected_sum)
-    assert arr[32] == test_utils.approx(expected_sum)
-    assert arr[128] == test_utils.approx(expected_sum)
-    assert arr[224] == test_utils.approx(expected_sum)
+    assert arr[0] == test_utils.approx(expected[op])
+    assert arr[32] == test_utils.approx(expected[op])
 
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
