@@ -214,7 +214,7 @@ def test_large_shared_array(gpu_graph):
     assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_multiple_shared_array():
     assert qd.cfg is not None
     if qd.cfg.arch == qd.amdgpu:
