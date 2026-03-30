@@ -147,7 +147,7 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
-@test_utils.test(arch=[qd.cuda, qd.metal, qd.amdgpu])
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_shared_array_float_atomics():
     @qd.kernel
     def kern() -> qd.f32:
