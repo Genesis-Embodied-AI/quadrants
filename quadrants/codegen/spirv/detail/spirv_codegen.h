@@ -200,7 +200,12 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<int, GetRootStmt *>
       root_stmts_;  // maps root id to get root stmt
   std::unordered_map<const Stmt *, BufferInfo> ptr_to_buffers_;
-  // Shared float arrays retyped to uint (Metal lacks threadgroup float atomics)
+  // Tracks AllocaStmt and derived MatrixPtrStmt nodes whose underlying shared
+  // float arrays were retyped to uint of the same bit-width (f32->u32, etc.).
+  // Metal/MoltenVK lack threadgroup float atomics, so we allocate shared floats
+  // as uint and bitcast at load/store boundaries. The set propagates from
+  // AllocaStmt to derived pointer nodes so that atomic codegen uses CAS
+  // emulation over native float atomics.
   std::unordered_set<const Stmt *> shared_float_retyped_;
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;

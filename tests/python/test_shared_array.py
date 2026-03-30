@@ -303,11 +303,18 @@ def test_shared_array_atomics():
 
 
 @pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
-def test_shared_array_float_atomics(op):
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_float_atomics(op, dtype):
+    # f16 shared atomics require 16-bit atomic ops (atomic_ushort on Metal,
+    # 16-bit AtomicCompareExchange on Vulkan) which are not widely supported.
+    if dtype == qd.f16 and qd.cfg.arch in (qd.metal, qd.vulkan):
+        pytest.skip("16-bit atomics not supported on Metal/Vulkan")
     N = 256
     block_dim = 32
-    total = block_dim * (block_dim - 1) / 2.0
+    SCALE = 0.1523  # fractional so values are truly non-integer floats
+    # Arithmetic sum: SCALE * (0 + 1 + ... + block_dim-1)
+    expected_sum = SCALE * block_dim * (block_dim - 1) / 2.0
     atomic_op = getattr(qd, f"atomic_{op}")
 
     def make_kernel(atomic_fn):
@@ -316,21 +323,28 @@ def test_shared_array_float_atomics(op):
             qd.loop_config(block_dim=block_dim)
             for i in range(N):
                 tid = i % block_dim
-                sharr = qd.simt.block.SharedArray((block_dim,), qd.f32)
-                sharr[tid] = qd.f32(tid)
+                sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+                sharr[tid] = qd.cast(tid, dtype) * SCALE
                 qd.simt.block.sync()
-                atomic_fn(sharr[0], qd.f32(tid))
+                atomic_fn(sharr[0], qd.cast(tid, dtype) * SCALE)
                 qd.simt.block.sync()
                 out[i] = sharr[0]
 
         return kern
 
-    expected = {"add": total, "sub": -total, "min": 0.0, "max": block_dim - 1.0}
+    expected = {
+        "add": expected_sum,
+        "sub": -expected_sum,
+        "min": 0.0,
+        "max": (block_dim - 1) * SCALE,
+    }
+    # Use f32 output array and approx with relaxed tolerance for f16
+    rtol = 1e-2 if dtype == qd.f16 else 1e-5
     arr = qd.ndarray(qd.f32, (N))
     make_kernel(atomic_op)(arr)
     qd.sync()
-    assert arr[0] == test_utils.approx(expected[op])
-    assert arr[32] == test_utils.approx(expected[op])
+    assert arr[0] == test_utils.approx(expected[op], rel=rtol)
+    assert arr[32] == test_utils.approx(expected[op], rel=rtol)
 
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
@@ -358,7 +372,7 @@ def test_shared_array_tensor_type():
     assert (y.to_numpy()[0] == [4.0, 8.0, 12.0, 16.0]).all()
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=qd.gpu, debug=True)
 def test_shared_array_matrix():
     @qd.kernel
     def foo():
