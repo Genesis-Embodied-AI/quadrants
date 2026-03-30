@@ -1,4 +1,3 @@
-import importlib
 import os
 import pathlib
 import subprocess
@@ -303,16 +302,26 @@ def test_graph_do_while_nonexistent_arg_raises():
         k(x, c)
 
 
-class FastcacheDoWhileArgs(pydantic.BaseModel):
+@qd.kernel(gpu_graph=True, fastcache=True)
+def _fastcache_do_while_kernel(
+    x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)
+):
+    while qd.graph_do_while(counter):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+        for i in range(1):
+            counter[()] = counter[()] - 1
+
+
+class _FastcacheDoWhileArgs(pydantic.BaseModel):
     arch: str
     offline_cache_file_path: str
-    module_file_path: str
     iterations: int
     expect_loaded_from_fastcache: bool
 
 
 def _fastcache_do_while_child(args: list[str]) -> None:
-    args_obj = FastcacheDoWhileArgs.model_validate_json(args[0])
+    args_obj = _FastcacheDoWhileArgs.model_validate_json(args[0])
     qd.init(
         arch=getattr(qd, args_obj.arch),
         offline_cache=True,
@@ -320,39 +329,23 @@ def _fastcache_do_while_child(args: list[str]) -> None:
         src_ll_cache=True,
     )
 
-    sys.path.append(args_obj.module_file_path)
-    mod = importlib.import_module("_fastcache_do_while_kernel")
-
     N = 16
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(args_obj.iterations, dtype=np.int32))
 
-    mod.k(x, counter)
+    _fastcache_do_while_kernel(x, counter)
 
-    assert mod.k._primal.graph_do_while_arg == "counter", (
-        f"graph_do_while_arg should be 'counter', got {mod.k._primal.graph_do_while_arg!r}"
+    assert _fastcache_do_while_kernel._primal.graph_do_while_arg == "counter", (
+        f"graph_do_while_arg should be 'counter', got {_fastcache_do_while_kernel._primal.graph_do_while_arg!r}"
     )
-    assert mod.k._primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
+    assert _fastcache_do_while_kernel._primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, args_obj.iterations))
     assert counter.to_numpy() == 0
 
     print(TEST_RAN)
     sys.exit(RET_SUCCESS)
-
-
-_FASTCACHE_KERNEL_SRC = """\
-import quadrants as qd
-
-@qd.kernel(gpu_graph=True, fastcache=True)
-def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-    while qd.graph_do_while(counter):
-        for i in range(x.shape[0]):
-            x[i] = x[i] + 1
-        for i in range(1):
-            counter[()] = counter[()] - 1
-"""
 
 
 @test_utils.test()
@@ -363,17 +356,10 @@ def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
     env = dict(os.environ)
     env["PYTHONPATH"] = "."
 
-    module_dir = tmp_path / "module"
-    module_dir.mkdir()
-    (module_dir / "_fastcache_do_while_kernel.py").write_text(_FASTCACHE_KERNEL_SRC)
-
-    cache_dir = tmp_path / "cache"
-
     for iterations, expect_loaded in [(5, False), (3, True)]:
-        args_obj = FastcacheDoWhileArgs(
+        args_obj = _FastcacheDoWhileArgs(
             arch=arch,
-            offline_cache_file_path=str(cache_dir),
-            module_file_path=str(module_dir),
+            offline_cache_file_path=str(tmp_path / "cache"),
             iterations=iterations,
             expect_loaded_from_fastcache=expect_loaded,
         )
