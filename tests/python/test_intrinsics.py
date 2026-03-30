@@ -50,19 +50,22 @@ def test_clock_monotonic():
 @test_utils.test(arch=qd.cuda)
 def test_clock_accuracy():
     a = qd.field(dtype=qd.i64, shape=32)
+    state = qd.field(dtype=qd.i32, shape=32)
 
     @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=1)
+    def measure_sequence_timings():
         for i in range(32):
-            start = qd.clock_counter()
-            x = qd.random() * 0.5 + 0.5
-            for j in range((i + 1) * 2000):
-                x = qd.sin(x * 1.0001 + j * 1e-6) + 1.2345
-            if x < 10.0:
-                a[i] = qd.clock_counter() - start
+            x = state[i]
+            start = qd.i64(0)
+            for j in range((i + 1) * 50000):
+                x = (1664527 * x + 1013904223) % 2147483647
+                if j == 10:
+                    start = qd.clock_counter()
+                if x > 10:
+                    a[i] = qd.clock_counter() - start
+            state[i] = x
 
-    foo()
+    measure_sequence_timings()
 
     for i in range(1, 31):
         assert a[i - 1] < a[i] < a[i + 1]
