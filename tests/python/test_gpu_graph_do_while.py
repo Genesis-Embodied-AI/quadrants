@@ -1,16 +1,21 @@
 import importlib
-import importlib.util
+import os
+import pathlib
+import subprocess
 import sys
 
-from pathlib import Path
-
 import numpy as np
+import pydantic
 import pytest
 
 import quadrants as qd
+
 from quadrants.lang import impl
 
 from tests import test_utils
+
+TEST_RAN = "test ran"
+RET_SUCCESS = 42
 
 
 def _gpu_graph_cache_size():
@@ -298,16 +303,43 @@ def test_graph_do_while_nonexistent_arg_raises():
         k(x, c)
 
 
-def _import_kernel(filepath: Path, module_name: str, kernel_name: str):
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-    spec = importlib.util.spec_from_file_location(module_name, filepath)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return getattr(module, kernel_name)
+class FastcacheDoWhileArgs(pydantic.BaseModel):
+    arch: str
+    offline_cache_file_path: str
+    module_file_path: str
+    iterations: int
+    expect_loaded_from_fastcache: bool
+
+
+def _fastcache_do_while_child(args: list[str]) -> None:
+    args_obj = FastcacheDoWhileArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
+        offline_cache=True,
+        offline_cache_file_path=args_obj.offline_cache_file_path,
+        src_ll_cache=True,
+    )
+
+    sys.path.append(args_obj.module_file_path)
+    mod = importlib.import_module("_fastcache_do_while_kernel")
+
+    N = 16
+    x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(args_obj.iterations, dtype=np.int32))
+
+    mod.k(x, counter)
+
+    assert mod.k._primal.graph_do_while_arg == "counter", (
+        f"graph_do_while_arg should be 'counter', got {mod.k._primal.graph_do_while_arg!r}"
+    )
+    assert mod.k._primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, args_obj.iterations))
+    assert counter.to_numpy() == 0
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
 
 
 _FASTCACHE_KERNEL_SRC = """\
@@ -324,48 +356,38 @@ def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndi
 
 
 @test_utils.test()
-def test_graph_do_while_fastcache_restores_arg(tmp_path: Path):
-    """After fastcache restore, graph_do_while_arg should be set on the Kernel."""
-    N = 16
-    x = qd.ndarray(qd.i32, shape=(N,))
-    counter = qd.ndarray(qd.i32, shape=())
-    mod_name = "_test_fastcache_do_while_mod"
+def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
+    """After fastcache restore in a fresh process, graph_do_while_arg must be set."""
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
 
-    filepath = tmp_path / "k.py"
-    filepath.write_text(_FASTCACHE_KERNEL_SRC)
+    module_dir = tmp_path / "module"
+    module_dir.mkdir()
+    (module_dir / "_fastcache_do_while_kernel.py").write_text(_FASTCACHE_KERNEL_SRC)
 
-    # First import: compiles and populates the fastcache
-    k1 = _import_kernel(filepath, mod_name, "k")
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(5, dtype=np.int32))
-    k1(x, counter)
+    cache_dir = tmp_path / "cache"
 
-    primal1 = k1._primal
-    assert primal1.graph_do_while_arg == "counter"
-    assert primal1.src_ll_cache_observations.cache_stored
+    for iterations, expect_loaded in [(5, False), (3, True)]:
+        args_obj = FastcacheDoWhileArgs(
+            arch=arch,
+            offline_cache_file_path=str(cache_dir),
+            module_file_path=str(module_dir),
+            iterations=iterations,
+            expect_loaded_from_fastcache=expect_loaded,
+        )
+        args_json = args_obj.model_dump_json()
+        cmd_line = [sys.executable, __file__, _fastcache_do_while_child.__name__, args_json]
+        proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
+        if proc.returncode != RET_SUCCESS:
+            print(" ".join(cmd_line))
+            print(proc.stdout)
+            print("-" * 100)
+            print(proc.stderr)
+        assert TEST_RAN in proc.stdout
+        assert proc.returncode == RET_SUCCESS
 
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5))
-    assert counter.to_numpy() == 0
 
-    # Second import: loads from fastcache (same filepath = same cache key).
-    # graph_do_while_arg must be restored from the cached metadata.
-    k2 = _import_kernel(filepath, mod_name, "k")
-    primal2 = k2._primal
-
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(3, dtype=np.int32))
-    k2(x, counter)
-
-    assert primal2.src_ll_cache_observations.cache_loaded, "fastcache should have been loaded"
-    assert primal2.graph_do_while_arg == "counter", (
-        "graph_do_while_arg should be restored from fastcache"
-    )
-
-    np.testing.assert_array_equal(
-        x.to_numpy(), np.full(N, 3),
-        err_msg="graph_do_while counter not restored from fastcache",
-    )
-    assert counter.to_numpy() == 0
-
-    if mod_name in sys.modules:
-        del sys.modules[mod_name]
+if __name__ == "__main__":
+    globals()[sys.argv[1]](sys.argv[2:])
