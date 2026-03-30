@@ -119,6 +119,8 @@ TaskCodegen::Result TaskCodegen::run() {
   kernel_function_ = ir_->new_function();  // void main();
   ir_->debug_name(spv::OpName, kernel_function_, "main");
 
+  scan_shared_atomic_allocs(task_ir_->body.get());
+
   if (task_ir_->task_type == OffloadedTaskType::serial) {
     generate_serial_kernel(task_ir_);
   } else if (task_ir_->task_type == OffloadedTaskType::range_for) {
@@ -268,6 +270,44 @@ void TaskCodegen::visit(ConstStmt *const_stmt) {
   ir_->register_value(const_stmt->raw_name(), val);
 }
 
+const AllocaStmt *TaskCodegen::trace_to_alloca(const Stmt *s) {
+  if (auto *alloca = s->cast<AllocaStmt>())
+    return alloca;
+  if (auto *mptr = s->cast<MatrixPtrStmt>())
+    return trace_to_alloca(mptr->origin);
+  return nullptr;
+}
+
+void TaskCodegen::scan_shared_atomic_allocs(Block *block) {
+  for (auto &s : block->statements) {
+    if (auto *atomic = s->cast<AtomicOpStmt>()) {
+      if (auto *alloca = trace_to_alloca(atomic->dest)) {
+        if (alloca->is_shared) {
+          auto dt = alloca->ret_type.ptr_removed();
+          if (auto *tt = dt->cast<TensorType>()) {
+            auto elem_dt = tt->get_element_type();
+            if (auto *nested = elem_dt->cast<TensorType>())
+              elem_dt = nested->get_element_type();
+            if (is_real(elem_dt))
+              shared_atomic_allocs_.insert(alloca);
+          }
+        }
+      }
+    }
+    // Recurse into sub-blocks
+    if (auto *if_stmt = s->cast<IfStmt>()) {
+      if (if_stmt->true_statements)
+        scan_shared_atomic_allocs(if_stmt->true_statements.get());
+      if (if_stmt->false_statements)
+        scan_shared_atomic_allocs(if_stmt->false_statements.get());
+    } else if (auto *range = s->cast<RangeForStmt>()) {
+      scan_shared_atomic_allocs(range->body.get());
+    } else if (auto *while_stmt = s->cast<WhileStmt>()) {
+      scan_shared_atomic_allocs(while_stmt->body.get());
+    }
+  }
+}
+
 void TaskCodegen::visit(AllocaStmt *alloca) {
   spirv::Value ptr_val;
   auto alloca_type = alloca->ret_type.ptr_removed();
@@ -280,9 +320,10 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
       scalar_dtype = nested->get_element_type();
     }
     spirv::SType scalar_stype = ir_->get_primitive_type(scalar_dtype);
-    // Allocate shared float arrays as uint so that CAS-based atomic emulation
-    // uses integer atomics (Metal/MoltenVK lack threadgroup float atomics).
-    if (alloca->is_shared && is_real(scalar_dtype)) {
+    // Only retype shared float arrays that are targeted by atomic operations.
+    // Metal/MoltenVK lack threadgroup float atomics, so these arrays use uint
+    // backing with CAS-based atomic emulation.
+    if (shared_atomic_allocs_.count(alloca)) {
       scalar_stype =
           ir_->get_primitive_type(ir_->get_atomic_uint_dtype(scalar_dtype));
       shared_float_retyped_.insert(alloca);
