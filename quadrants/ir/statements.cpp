@@ -225,7 +225,8 @@ RangeForStmt::RangeForStmt(Stmt *begin,
                            int num_cpu_threads,
                            int block_dim,
                            bool strictly_serialized,
-                           std::string range_hint)
+                           std::string range_hint,
+                           std::string loop_name)
     : begin(begin),
       end(end),
       body(std::move(body)),
@@ -233,7 +234,8 @@ RangeForStmt::RangeForStmt(Stmt *begin,
       num_cpu_threads(num_cpu_threads),
       block_dim(block_dim),
       strictly_serialized(strictly_serialized),
-      range_hint(range_hint) {
+      range_hint(range_hint),
+      loop_name(std::move(loop_name)) {
   reversed = false;
   this->body->set_parent_stmt(this);
   QD_STMT_REG_FIELDS;

@@ -64,9 +64,14 @@ TaskCodegen::TaskCodegen(const Params &params)
       task_ir_(params.task_ir),
       compiled_structs_(params.compiled_structs),
       ctx_attribs_(params.ctx_attribs),
-      task_name_(fmt::format("{}_t{:02d}",
-                             params.ti_kernel_name,
-                             params.task_id_in_kernel)) {
+      task_name_(params.task_ir->loop_name.empty()
+                     ? fmt::format("{}_t{:02d}",
+                                   params.ti_kernel_name,
+                                   params.task_id_in_kernel)
+                     : fmt::format("{}_t{:02d}_{}",
+                                   params.ti_kernel_name,
+                                   params.task_id_in_kernel,
+                                   params.task_ir->loop_name)) {
   allow_undefined_visitor = true;
   invoke_default_visitor = true;
 

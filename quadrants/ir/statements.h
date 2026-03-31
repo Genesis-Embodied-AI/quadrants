@@ -1016,6 +1016,7 @@ class RangeForStmt : public Stmt {
   int block_dim;
   bool strictly_serialized;
   std::string range_hint;
+  std::string loop_name;
 
   RangeForStmt(Stmt *begin,
                Stmt *end,
@@ -1024,7 +1025,8 @@ class RangeForStmt : public Stmt {
                int num_cpu_threads,
                int block_dim,
                bool strictly_serialized,
-               std::string range_hint = "");
+               std::string range_hint = "",
+               std::string loop_name = "");
 
   bool is_container_statement() const override {
     return true;
@@ -1061,6 +1063,7 @@ class StructForStmt : public Stmt {
   int num_cpu_threads;
   int block_dim;
   MemoryAccessOptions mem_access_opt;
+  std::string loop_name;
 
   StructForStmt(SNode *snode,
                 std::unique_ptr<Block> &&body,
@@ -1417,6 +1420,7 @@ class OffloadedStmt : public Stmt {
   int num_cpu_threads{1};
   Stmt *end_stmt{nullptr};
   std::string range_hint = "";
+  std::string loop_name;
 
   mesh::Mesh *mesh{nullptr};
   mesh::MeshElementType major_from_type;
