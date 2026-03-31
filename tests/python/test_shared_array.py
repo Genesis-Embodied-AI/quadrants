@@ -13,11 +13,22 @@ def test_shared_array_not_accumulated_across_offloads():
     # the maximum shared memory available on the device to make sure shared
     # memory is properly deallocated and per-task address offset is correctly
     # reset.
+    # Note that in practice, there is a different code path for "statically"
+    # allocated shared memory (which has fixed size 48KB on CUDA) and
+    # "dynamically" allocated shared memory. Some CUDA GPUs support larger
+    # shared memory allocation via dynamic allocation. In such a case, if
+    # some task-level GPU kernel requests more than 48KB, the entire shared
+    # array is dynamically allocated. This requires creating a new LLVM
+    # array type of size 0 with the same dtype as the original tensor (the
+    # actual size is passed at kernel launch time). Creation of this special
+    # type was previously corrupting the original cached tensor type when
+    # several tasks requiring dynamic shared memory were involved.
 
     block_dim = 64
     if qd.cfg.arch == qd.cuda:
-        max_shared_bytes = qd.lang.impl.get_cuda_max_shared_memory_bytes()
+        max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes()
     else:
+        # Metal guarantees 32KB of threadgroup memory
         max_shared_bytes = 32 * 1024
     shared_array_size = int(0.75 * max_shared_bytes) // 4  # 75% of max, in i32 elements
 
@@ -53,7 +64,7 @@ def test_shared_array_not_accumulated_across_offloads():
 @pytest.mark.parametrize("gpu_graph", [False, True])
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
 def test_large_shared_array(gpu_graph):
-    if qd.lang.impl.get_cuda_max_shared_memory_bytes() < 65536:
+    if qd.lang.impl.get_max_shared_memory_bytes() < 65536:
         pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128

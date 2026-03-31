@@ -192,10 +192,15 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
               "Only one single large shared array instance is allowed in "
               "current version.")
         }
-        // Build a zero-sized LLVM array type for dynamic shared memory.
-        // Do NOT mutate tensor_type (via set_shape) as TensorType instances
-        // are cached singletons in TypeFactory and shared across tasks
-        // compiled in parallel.
+        // Build a zero-sized LLVM array type for dynamically allocated
+        // shared memory. The actual size is passed at kernel launch time
+        // via dynamic_shared_array_bytes.
+        // Note: we must NOT mutate tensor_type (e.g. via set_shape())
+        // because TensorType instances are cached singletons in
+        // TypeFactory, shared across tasks compiled in parallel.
+        // Mutating one would zero out get_num_elements() for other
+        // tasks, causing them to skip the dynamic allocation path and
+        // launch with no shared memory at all.
         auto element_type =
             tlctx->get_data_type(tensor_type->get_element_type());
         type = llvm::ArrayType::get(element_type, 0);

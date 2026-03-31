@@ -1284,8 +1284,11 @@ def get_cuda_compute_capability():
     return _qd_core.query_int64("cuda_compute_capability")
 
 
-def get_cuda_max_shared_memory_bytes():
-    return _qd_core.query_int64("cuda_max_shared_memory_bytes")
+def get_max_shared_memory_bytes():
+    arch = current_cfg().arch
+    if arch == _qd_core.cuda:
+        return _qd_core.query_int64("cuda_max_shared_memory_bytes")
+    raise RuntimeError(f"get_max_shared_memory_bytes not implemented for arch {arch.name}")
 
 
 @quadrants_scope
