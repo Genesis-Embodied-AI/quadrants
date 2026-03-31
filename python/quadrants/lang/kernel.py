@@ -332,9 +332,12 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
+            cached_graph_do_while_arg: str | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key = src_hasher.load(self.fast_checksum)
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(
+                    self.fast_checksum
+                )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
                 self.src_ll_cache_observations.cache_validated = True
                 prog = impl.get_runtime().prog
@@ -348,6 +351,8 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
+                    if cached_graph_do_while_arg is not None:
+                        self.graph_do_while_arg = cached_graph_do_while_arg
                     return used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
@@ -504,6 +509,7 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
+                        graph_do_while_arg=self.graph_do_while_arg,
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data

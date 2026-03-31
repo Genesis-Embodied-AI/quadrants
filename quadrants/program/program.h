@@ -151,6 +151,10 @@ class QD_DLL_EXPORT Program {
         .get_gpu_graph_num_nodes_on_last_call();
   }
 
+  std::size_t get_gpu_graph_total_builds() {
+    return program_impl_->get_kernel_launcher().get_gpu_graph_total_builds();
+  }
+
   DeviceCapabilityConfig get_device_caps() {
     return program_impl_->get_device_caps();
   }
