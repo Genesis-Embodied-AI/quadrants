@@ -36,7 +36,7 @@ def _is_gpu_graph_do_while_natively_supported():
     return _on_cuda() and qd.lang.impl.get_cuda_compute_capability() >= 90
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_counter():
     """Test graph_do_while with a counter that decrements each iteration."""
     N = 64
@@ -75,7 +75,7 @@ def test_graph_do_while_counter():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 10, dtype=np.int32))
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_boolean_done():
     """Test graph_do_while with a boolean 'continue' flag (non-zero = keep going)."""
     N = 64
@@ -119,7 +119,7 @@ def test_graph_do_while_boolean_done():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 12, dtype=np.int32))
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_multiple_loops():
     """Test graph_do_while with multiple top-level loops in the kernel body."""
     N = 32
@@ -169,7 +169,7 @@ def test_graph_do_while_multiple_loops():
     np.testing.assert_allclose(y.to_numpy(), np.full(N, 10.0))
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_swap_counter_ndarray():
     """Swapping the counter ndarray between calls should work correctly.
 
@@ -214,7 +214,7 @@ def test_graph_do_while_swap_counter_ndarray():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 7, dtype=np.int32))
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_alternate_counter_ndarrays():
     """Alternating between two counter ndarrays should work correctly.
 
@@ -261,7 +261,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
         assert _gpu_graph_total_builds() == 1
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_without_gpu_graph_raises():
     """Using qd.graph_do_while without gpu_graph=True should raise."""
 
@@ -278,7 +278,7 @@ def test_graph_do_while_without_gpu_graph_raises():
         k(x, c)
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_nonexistent_arg_raises():
     """Using a variable name that isn't a kernel parameter should raise."""
 
@@ -342,7 +342,7 @@ def _fastcache_do_while_child(args: list[str]) -> None:
     sys.exit(RET_SUCCESS)
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test()
 def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
     """After fastcache restore in a fresh process, graph_do_while_arg must be set."""
     assert qd.lang is not None
