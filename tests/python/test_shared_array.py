@@ -57,39 +57,63 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
     shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(dtype1)
     shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + size_offset
 
-    # Each offloaded task cooperatively fills a large shared array, syncs,
-    # then forces genuine cross-thread cooperation by reading value written
-    # by another thread: tid reads buf[(tid+1) % block_dim].
+    # Each offloaded task cooperatively fills a large shared array with an
+    # LCG sequence, syncs, then each thread sums a contiguous chunk written
+    # by other threads. This forces the entire shared array to be materialized
+    # — the compiler cannot short-circuit it.
+    chunk_size = shared_array_size // block_dim
 
     @qd.kernel
     def kern(out: qd.types.ndarray):
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
             buf = qd.simt.block.SharedArray((shared_array_size,), dtype1)
+            # Cooperatively fill with LCG sequence: buf[i] = (i*1103515245 + 12345) % 128
             i = tid
             while i < shared_array_size:
-                buf[i] = qd.cast(i % 127, dtype1)
+                buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = qd.cast(buf[(tid + 1) % block_dim], qd.i32)
+            # Each thread sums a contiguous chunk written by other threads
+            acc = 0
+            j = tid * chunk_size
+            end = j + chunk_size
+            while j < end:
+                acc += qd.cast(buf[j], qd.i32)
+                j += 1
+            out[tid] = acc
 
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
             buf = qd.simt.block.SharedArray((shared_array_size_2,), dtype2)
             i = tid
             while i < shared_array_size_2:
-                buf[i] = qd.cast((i % 127) * 2, dtype2)
+                buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = out[tid] + qd.cast(buf[(tid + 1) % block_dim], qd.i32)
+            chunk_size_2 = shared_array_size_2 // block_dim
+            acc = 0
+            j = tid * chunk_size_2
+            end = j + chunk_size_2
+            while j < end:
+                acc += qd.cast(buf[j], qd.i32)
+                j += 1
+            out[tid] = out[tid] + acc
 
     out = qd.ndarray(dtype=qd.i32, shape=(block_dim,))
     kern(out)
 
-    # tid reads buf[(tid+1) % block_dim]: values are (tid+1)%block_dim for
-    # the first task and ((tid+1)%block_dim)*2 for the second.
-    neighbor = np.arange(1, block_dim + 1, dtype=np.int32) % block_dim
-    expected = 3 * neighbor
+    # Compute expected values on host
+    vals1 = np.array([(i * 1103515245 + 12345) % 128 for i in range(shared_array_size)], dtype=np.int32)
+    vals2 = np.array([(i * 1103515245 + 12345) % 128 for i in range(shared_array_size_2)], dtype=np.int32)
+    chunk2 = shared_array_size_2 // block_dim
+    expected = np.array(
+        [
+            vals1[t * chunk_size : (t + 1) * chunk_size].sum() + vals2[t * chunk2 : (t + 1) * chunk2].sum()
+            for t in range(block_dim)
+        ],
+        dtype=np.int32,
+    )
     assert np.array_equal(out.to_numpy(), expected)
 
 
