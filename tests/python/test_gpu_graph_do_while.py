@@ -1,10 +1,19 @@
+import os
+import pathlib
+import subprocess
+import sys
+
 import numpy as np
+import pydantic
 import pytest
 
 import quadrants as qd
 from quadrants.lang import impl
 
 from tests import test_utils
+
+TEST_RAN = "test ran"
+RET_SUCCESS = 42
 
 
 def _gpu_graph_cache_size():
@@ -290,3 +299,82 @@ def test_graph_do_while_nonexistent_arg_raises():
     c.from_numpy(np.array(1, dtype=np.int32))
     with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
         k(x, c)
+
+
+@qd.kernel(gpu_graph=True, fastcache=True)
+def _fastcache_do_while_kernel(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+    while qd.graph_do_while(counter):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+        for i in range(1):
+            counter[()] = counter[()] - 1
+
+
+class _FastcacheDoWhileArgs(pydantic.BaseModel):
+    arch: str
+    offline_cache_file_path: str
+    iterations: int
+    expect_loaded_from_fastcache: bool
+
+
+def _fastcache_do_while_child(args: list[str]) -> None:
+    args_obj = _FastcacheDoWhileArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
+        offline_cache=True,
+        offline_cache_file_path=args_obj.offline_cache_file_path,
+        src_ll_cache=True,
+    )
+
+    N = 16
+    x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(args_obj.iterations, dtype=np.int32))
+
+    _fastcache_do_while_kernel(x, counter)
+
+    assert (
+        _fastcache_do_while_kernel._primal.graph_do_while_arg == "counter"
+    ), f"graph_do_while_arg should be 'counter', got {_fastcache_do_while_kernel._primal.graph_do_while_arg!r}"
+    assert (
+        _fastcache_do_while_kernel._primal.src_ll_cache_observations.cache_loaded
+        == args_obj.expect_loaded_from_fastcache
+    )
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, args_obj.iterations))
+    assert counter.to_numpy() == 0
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+@test_utils.test()
+def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
+    """After fastcache restore in a fresh process, graph_do_while_arg must be set."""
+    _xfail_if_cuda_without_hopper()
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
+
+    for iterations, expect_loaded in [(5, False), (3, True)]:
+        args_obj = _FastcacheDoWhileArgs(
+            arch=arch,
+            offline_cache_file_path=str(tmp_path / "cache"),
+            iterations=iterations,
+            expect_loaded_from_fastcache=expect_loaded,
+        )
+        args_json = args_obj.model_dump_json()
+        cmd_line = [sys.executable, __file__, _fastcache_do_while_child.__name__, args_json]
+        proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
+        if proc.returncode != RET_SUCCESS:
+            print(" ".join(cmd_line))
+            print(proc.stdout)
+            print("-" * 100)
+            print(proc.stderr)
+        assert TEST_RAN in proc.stdout
+        assert proc.returncode == RET_SUCCESS
+
+
+if __name__ == "__main__":
+    globals()[sys.argv[1]](sys.argv[2:])
