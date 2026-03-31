@@ -7,8 +7,16 @@ from quadrants.math import vec4
 from tests import test_utils
 
 
+@pytest.mark.parametrize(
+    "shape_offset,dtype2",
+    [
+        (0, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (0, qd.f32),  # same shape, different dtype
+        (1, qd.i8),  # different shape, same dtype
+    ],
+)
 @test_utils.test(arch=[qd.cuda, qd.metal])
-def test_shared_array_not_accumulated_across_offloads():
+def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
     # Execute 2 successive offloaded tasks both allocating more than half of
     # the maximum shared memory available on the device to make sure shared
     # memory is properly deallocated and per-task address offset is correctly
@@ -22,37 +30,44 @@ def test_shared_array_not_accumulated_across_offloads():
     # array type of size 0 with the same dtype as the original tensor (the
     # actual size is passed at kernel launch time). Creation of this special
     # type was previously corrupting the original cached tensor type when
-    # several tasks requiring dynamic shared memory were involved.
+    # several tasks using shared arrays with the same shape and dtype were
+    # involved. The cached tensor type is a singleton keyed by (shape, dtype)
+    # in TypeFactory, so the corruption only occurs when multiple offloaded
+    # tasks allocate shared arrays with identical shape and dtype. If either
+    # differs, each task gets a distinct tensor type instance and is
+    # unaffected.
 
-    block_dim = 64
+    block_dim = 32
     if qd.cfg.arch == qd.cuda:
         max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes()
     else:
         # Metal guarantees 32KB of threadgroup memory
         max_shared_bytes = 32 * 1024
-    shared_array_size = int(0.75 * max_shared_bytes) // 4  # 75% of max, in i32 elements
+    # 75% of max shared memory, in i8 elements (1 byte each)
+    shared_array_size = int(0.75 * max_shared_bytes)
+    shared_array_size_2 = shared_array_size + shape_offset
 
     @qd.kernel
     def kern(out: qd.types.ndarray):
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
-            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i32)
+            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i8)
             i = tid
             while i < shared_array_size:
-                buf[i] = i
+                buf[i] = qd.cast(i % 127, qd.i8)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = buf[tid]
+            out[tid] = qd.cast(buf[tid], qd.i32)
 
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
-            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i32)
+            buf = qd.simt.block.SharedArray((shared_array_size_2,), dtype2)
             i = tid
-            while i < shared_array_size:
-                buf[i] = i * 2
+            while i < shared_array_size_2:
+                buf[i] = qd.cast((i % 127) * 2, dtype2)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = out[tid] + buf[tid]
+            out[tid] = out[tid] + qd.cast(buf[tid], qd.i32)
 
     out = qd.ndarray(dtype=qd.i32, shape=(block_dim,))
     kern(out)
