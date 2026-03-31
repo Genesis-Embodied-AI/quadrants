@@ -57,6 +57,10 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
     shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(dtype1)
     shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + size_offset
 
+    # Each offloaded task cooperatively fills a large shared array, syncs,
+    # then forces genuine cross-thread cooperation by reading value written
+    # by another thread: tid reads buf[(tid+1) % block_dim].
+
     @qd.kernel
     def kern(out: qd.types.ndarray):
         qd.loop_config(block_dim=block_dim)
@@ -67,7 +71,7 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
                 buf[i] = qd.cast(i % 127, dtype1)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = qd.cast(buf[tid], qd.i32)
+            out[tid] = qd.cast(buf[(tid + 1) % block_dim], qd.i32)
 
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
@@ -77,12 +81,15 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
                 buf[i] = qd.cast((i % 127) * 2, dtype2)
                 i += block_dim
             qd.simt.block.sync()
-            out[tid] = out[tid] + qd.cast(buf[tid], qd.i32)
+            out[tid] = out[tid] + qd.cast(buf[(tid + 1) % block_dim], qd.i32)
 
     out = qd.ndarray(dtype=qd.i32, shape=(block_dim,))
     kern(out)
 
-    expected = 3 * np.arange(block_dim, dtype=np.int32)
+    # tid reads buf[(tid+1) % block_dim]: values are (tid+1)%block_dim for
+    # the first task and ((tid+1)%block_dim)*2 for the second.
+    neighbor = np.arange(1, block_dim + 1, dtype=np.int32) % block_dim
+    expected = 3 * neighbor
     assert np.array_equal(out.to_numpy(), expected)
 
 
@@ -143,7 +150,8 @@ def test_large_shared_array(gpu_graph):
                 qd.simt.block.sync()
             a[i] = acc
 
-    # gpu_graph requires device-resident ndarrays
+    # gpu_graph requires device-resident arrays (qd.ndarray or CUDA torch
+    # tensors), not host-resident numpy arrays
     v_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
     d_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
     v_arr.from_numpy(v_np)
