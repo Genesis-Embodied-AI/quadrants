@@ -1284,6 +1284,10 @@ def get_cuda_compute_capability():
     return _qd_core.query_int64("cuda_compute_capability")
 
 
+def get_cuda_max_shared_memory_bytes():
+    return _qd_core.query_int64("cuda_max_shared_memory_bytes")
+
+
 @quadrants_scope
 def mesh_relation_access(mesh, from_index, to_element_type):
     # to support qd.mesh_local and access mesh attribute as field

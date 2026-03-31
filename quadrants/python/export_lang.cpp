@@ -1083,6 +1083,13 @@ void export_lang(py::module &m) {
 #else
       QD_NOT_IMPLEMENTED
 #endif
+    } else if (key == "cuda_max_shared_memory_bytes") {
+#if defined(QD_WITH_CUDA)
+      return static_cast<int64_t>(
+          CUDAContext::get_instance().get_max_shared_memory_bytes());
+#else
+      QD_NOT_IMPLEMENTED
+#endif
     } else if (key == "cuda_clock_rate_khz") {
 #if defined(QD_WITH_CUDA)
       return CUDAContext::get_instance().get_clock_rate_khz();

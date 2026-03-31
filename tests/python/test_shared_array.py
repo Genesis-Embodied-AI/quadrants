@@ -7,56 +7,53 @@ from quadrants.math import vec4
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cuda], print_full_traceback=False)
+@test_utils.test(arch=[qd.cuda, qd.metal])
 def test_shared_array_not_accumulated_across_offloads():
-    """Shared memory from one offloaded task must not leak into the next."""
-    if qd.lang.impl.get_cuda_compute_capability() < 86:
-        pytest.skip("Skip the GPUs prior to Ampere")
+    # Execute 2 successive offloaded tasks both allocating more than half of
+    # the maximum shared memory available on the device to make sure shared
+    # memory is properly deallocated and per-task address offset is correctly
+    # reset.
 
-    BLOCK_DIM = 64
-    MAX_DOFS = 111
+    block_dim = 64
+    if qd.cfg.arch == qd.cuda:
+        max_shared_bytes = qd.lang.impl.get_cuda_max_shared_memory_bytes()
+    else:
+        max_shared_bytes = 32 * 1024
+    shared_array_size = int(0.75 * max_shared_bytes) // 4  # 75% of max, in i32 elements
 
     @qd.kernel
-    def kern(nt_H: qd.types.ndarray):
-        n_dofs = nt_H.shape[1]
-        n_lower_tri = n_dofs * (n_dofs + 1) // 2
+    def kern(out: qd.types.ndarray):
+        qd.loop_config(block_dim=block_dim)
+        for tid in range(block_dim):
+            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i32)
+            i = tid
+            while i < shared_array_size:
+                buf[i] = i
+                i += block_dim
+            qd.simt.block.sync()
+            out[tid] = buf[tid]
 
-        qd.loop_config(block_dim=BLOCK_DIM)
-        for tid in range(BLOCK_DIM):
-            H = qd.simt.block.SharedArray((MAX_DOFS, MAX_DOFS + 1), qd.f32)
-            i_pair = tid
-            while i_pair < n_lower_tri:
-                i_d1 = qd.cast(
-                    qd.floor((qd.sqrt(qd.cast(8 * i_pair + 1, qd.f32)) - 1.0) / 2.0),
-                    qd.i32,
-                )
-                if (i_d1 + 1) * (i_d1 + 2) // 2 <= i_pair:
-                    i_d1 = i_d1 + 1
-                i_d2 = i_pair - i_d1 * (i_d1 + 1) // 2
-                H[i_d1, i_d2] = nt_H[0, i_d1, i_d2]
-                i_pair = i_pair + BLOCK_DIM
+        qd.loop_config(block_dim=block_dim)
+        for tid in range(block_dim):
+            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i32)
+            i = tid
+            while i < shared_array_size:
+                buf[i] = i * 2
+                i += block_dim
+            qd.simt.block.sync()
+            out[tid] = out[tid] + buf[tid]
 
-        qd.loop_config(block_dim=BLOCK_DIM)
-        for tid in range(BLOCK_DIM):
-            H = qd.simt.block.SharedArray((MAX_DOFS, MAX_DOFS + 1), qd.f32)
-            n_dofs_2 = n_dofs**2
-            i_flat = tid
-            while i_flat < n_dofs_2:
-                i_d1 = i_flat // n_dofs
-                i_d2 = i_flat % n_dofs
-                if i_d2 <= i_d1:
-                    H[i_d1, i_d2] = nt_H[0, i_d1, i_d2]
-                i_flat = i_flat + BLOCK_DIM
+    out = qd.ndarray(dtype=qd.i32, shape=(block_dim,))
+    kern(out)
 
-    nt_H = qd.ndarray(dtype=qd.f32, shape=(1, 102, 102))
-    kern(nt_H)
+    expected = 3 * np.arange(block_dim, dtype=np.int32)
+    assert np.array_equal(out.to_numpy(), expected)
 
 
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
 def test_large_shared_array():
-    # Skip the GPUs prior to Ampere which doesn't have large dynamical shared memory.
-    if qd.lang.impl.get_cuda_compute_capability() < 86:
-        pytest.skip("Skip the GPUs prior to Ampere")
+    if qd.lang.impl.get_cuda_max_shared_memory_bytes() < 65536:
+        pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128
     nBlocks = 64
