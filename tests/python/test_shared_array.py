@@ -43,9 +43,10 @@ def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
     else:
         # Metal guarantees 32KB of threadgroup memory
         max_shared_bytes = 32 * 1024
-    # 75% of max shared memory, in i8 elements (1 byte each)
-    shared_array_size = int(0.75 * max_shared_bytes)
-    shared_array_size_2 = shared_array_size + shape_offset
+    # 75% of max shared memory in bytes
+    shared_array_bytes = int(0.75 * max_shared_bytes)
+    shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(qd.i8)
+    shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + shape_offset
 
     @qd.kernel
     def kern(out: qd.types.ndarray):
