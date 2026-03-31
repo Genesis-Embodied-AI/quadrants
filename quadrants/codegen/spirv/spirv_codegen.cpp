@@ -119,7 +119,7 @@ TaskCodegen::Result TaskCodegen::run() {
   kernel_function_ = ir_->new_function();  // void main();
   ir_->debug_name(spv::OpName, kernel_function_, "main");
 
-  scan_shared_atomic_allocs(task_ir_->body.get());
+  scan_shared_atomic_allocs(task_ir_->body.get(), shared_atomic_allocs_);
 
   if (task_ir_->task_type == OffloadedTaskType::serial) {
     generate_serial_kernel(task_ir_);
@@ -270,26 +270,35 @@ void TaskCodegen::visit(ConstStmt *const_stmt) {
   ir_->register_value(const_stmt->raw_name(), val);
 }
 
-const AllocaStmt *TaskCodegen::trace_to_alloca(const Stmt *s) {
-  if (auto *alloca = s->cast<AllocaStmt>())
+// Follow MatrixPtrStmt::origin chains back to the source AllocaStmt.
+// E.g. for `atomic_add(sharr[0], val)`, the dest is a MatrixPtrStmt for
+// sharr[0] whose origin is the AllocaStmt for sharr.
+// Returns nullptr if the chain does not lead to an AllocaStmt.
+const AllocaStmt *TaskCodegen::trace_to_alloca(const Stmt *stmt) {
+  if (auto *alloca = stmt->cast<AllocaStmt>())
     return alloca;
-  if (auto *mptr = s->cast<MatrixPtrStmt>())
-    return trace_to_alloca(mptr->origin);
+  if (auto *matrix_ptr = stmt->cast<MatrixPtrStmt>())
+    return trace_to_alloca(matrix_ptr->origin);
   return nullptr;
 }
 
-void TaskCodegen::scan_shared_atomic_allocs(Block *block) {
-  for (auto &s : block->statements) {
-    if (auto *atomic = s->cast<AtomicOpStmt>()) {
-      if (auto *alloca = trace_to_alloca(atomic->dest)) {
+// Walk the IR tree and collect shared float AllocaStmts targeted by atomic
+// operations into `out`. Only IfStmt, RangeForStmt, and WhileStmt carry
+// sub-blocks at this stage (StructForStmt/MeshForStmt are lowered earlier).
+void TaskCodegen::scan_shared_atomic_allocs(
+    Block *ir_block,
+    std::unordered_set<const Stmt *> &atomic_allocs) {
+  for (auto &s : ir_block->statements) {
+    if (auto *atomic_stmt = s->cast<AtomicOpStmt>()) {
+      if (auto *alloca = trace_to_alloca(atomic_stmt->dest)) {
         if (alloca->is_shared) {
-          auto dt = alloca->ret_type.ptr_removed();
-          if (auto *tt = dt->cast<TensorType>()) {
-            auto elem_dt = tt->get_element_type();
-            if (auto *nested = elem_dt->cast<TensorType>())
-              elem_dt = nested->get_element_type();
-            if (is_real(elem_dt))
-              shared_atomic_allocs_.insert(alloca);
+          auto alloca_dtype = alloca->ret_type.ptr_removed();
+          if (auto *tensor_type = alloca_dtype->cast<TensorType>()) {
+            auto scalar_dtype = tensor_type->get_element_type();
+            if (auto *nested = scalar_dtype->cast<TensorType>())
+              scalar_dtype = nested->get_element_type();
+            if (is_real(scalar_dtype))
+              atomic_allocs.insert(alloca);
           }
         }
       }
@@ -297,13 +306,15 @@ void TaskCodegen::scan_shared_atomic_allocs(Block *block) {
     // Recurse into sub-blocks
     if (auto *if_stmt = s->cast<IfStmt>()) {
       if (if_stmt->true_statements)
-        scan_shared_atomic_allocs(if_stmt->true_statements.get());
+        scan_shared_atomic_allocs(if_stmt->true_statements.get(),
+                                  atomic_allocs);
       if (if_stmt->false_statements)
-        scan_shared_atomic_allocs(if_stmt->false_statements.get());
-    } else if (auto *range = s->cast<RangeForStmt>()) {
-      scan_shared_atomic_allocs(range->body.get());
+        scan_shared_atomic_allocs(if_stmt->false_statements.get(),
+                                  atomic_allocs);
+    } else if (auto *range_for = s->cast<RangeForStmt>()) {
+      scan_shared_atomic_allocs(range_for->body.get(), atomic_allocs);
     } else if (auto *while_stmt = s->cast<WhileStmt>()) {
-      scan_shared_atomic_allocs(while_stmt->body.get());
+      scan_shared_atomic_allocs(while_stmt->body.get(), atomic_allocs);
     }
   }
 }

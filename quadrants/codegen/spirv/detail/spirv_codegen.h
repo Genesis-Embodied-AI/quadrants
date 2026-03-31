@@ -211,8 +211,10 @@ class TaskCodegen : public IRVisitor {
   std::unordered_set<const Stmt *> shared_float_retyped_;
 
   // Pre-scan the IR to find shared float AllocaStmts targeted by atomics.
-  void scan_shared_atomic_allocs(Block *block);
-  static const AllocaStmt *trace_to_alloca(const Stmt *s);
+  static void scan_shared_atomic_allocs(
+      Block *ir_block,
+      std::unordered_set<const Stmt *> &atomic_allocs);
+  static const AllocaStmt *trace_to_alloca(const Stmt *stmt);
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;
 
