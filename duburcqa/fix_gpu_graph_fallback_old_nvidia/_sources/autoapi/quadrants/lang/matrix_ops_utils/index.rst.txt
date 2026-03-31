@@ -1,0 +1,58 @@
+quadrants.lang.matrix_ops_utils
+===============================
+
+.. py:module:: quadrants.lang.matrix_ops_utils
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.matrix_ops_utils.do_check
+   quadrants.lang.matrix_ops_utils.preconditions
+   quadrants.lang.matrix_ops_utils.arg_at
+   quadrants.lang.matrix_ops_utils.assert_tensor
+   quadrants.lang.matrix_ops_utils.assert_vector
+   quadrants.lang.matrix_ops_utils.assert_list
+   quadrants.lang.matrix_ops_utils.arg_foreach_check
+   quadrants.lang.matrix_ops_utils.get_list_shape
+   quadrants.lang.matrix_ops_utils.same_shapes
+   quadrants.lang.matrix_ops_utils.square_matrix
+   quadrants.lang.matrix_ops_utils.dim_lt
+   quadrants.lang.matrix_ops_utils.is_int_const
+   quadrants.lang.matrix_ops_utils.check_matmul
+   quadrants.lang.matrix_ops_utils.check_transpose
+
+
+Module Contents
+---------------
+
+.. py:function:: do_check(checker_fns, *args, **kwargs)
+
+.. py:function:: preconditions(*checker_funcs)
+
+.. py:function:: arg_at(indices, *fns)
+
+.. py:function:: assert_tensor(m, msg='not tensor type: {}')
+
+.. py:function:: assert_vector(msg='expected a vector, got {}')
+
+.. py:function:: assert_list(x, msg='not a list: {}')
+
+.. py:function:: arg_foreach_check(*arg_indices, fns=[], logic='or', msg=None)
+
+.. py:function:: get_list_shape(x)
+
+.. py:function:: same_shapes(*xs)
+
+.. py:function:: square_matrix(x)
+
+.. py:function:: dim_lt(dim, limit)
+
+.. py:function:: is_int_const(x)
+
+.. py:function:: check_matmul(x, y)
+
+.. py:function:: check_transpose(x)
+
