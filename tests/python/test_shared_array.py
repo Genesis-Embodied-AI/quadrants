@@ -50,8 +50,9 @@ def test_shared_array_not_accumulated_across_offloads():
     assert np.array_equal(out.to_numpy(), expected)
 
 
+@pytest.mark.parametrize("gpu_graph", [False, True])
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
-def test_large_shared_array():
+def test_large_shared_array(gpu_graph):
     if qd.lang.impl.get_cuda_max_shared_memory_bytes() < 65536:
         pytest.skip("Device does not support large dynamic shared memory")
 
@@ -76,7 +77,7 @@ def test_large_shared_array():
                 acc += v_val * d[j]
             a[i] = acc
 
-    @qd.kernel
+    @qd.kernel(gpu_graph=gpu_graph)
     def calc_shared_array(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),

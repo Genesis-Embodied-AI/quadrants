@@ -278,6 +278,13 @@ void *GpuGraphManager::add_kernel_node(void *graph,
                                        unsigned int block_dim,
                                        unsigned int shared_mem,
                                        void **kernel_params) {
+  // Opt-in to the requested dynamic shared memory size, just as
+  // CUDAContext::launch does for the non-graph path.
+  if (shared_mem > 0) {
+    CUDADriver::get_instance().kernel_set_attribute(
+        func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_mem);
+  }
+
   CudaKernelNodeParams params{};
   params.func = func;
   params.gridDimX = grid_dim;
