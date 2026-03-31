@@ -8,15 +8,15 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize(
-    "shape_offset,dtype2",
+    "size_offset, dtype1, dtype2",
     [
-        (0, qd.i8),  # same shape, same dtype — triggers the singleton bug
-        (0, qd.f32),  # same shape, different dtype
-        (1, qd.i8),  # different shape, same dtype
+        (0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (0, qd.i8, qd.f32),  # same shape, different dtype
+        (1, qd.i8, qd.i8),  # different shape, same dtype
     ],
 )
 @test_utils.test(arch=[qd.cuda, qd.metal])
-def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
+def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype2):
     # Execute 2 successive offloaded tasks both allocating more than half of
     # the maximum shared memory available on the device to make sure shared
     # memory is properly deallocated and per-task address offset is correctly
@@ -54,17 +54,17 @@ def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
         max_shared_bytes = 32 * 1024
     # 75% of max shared memory in bytes
     shared_array_bytes = int(0.75 * max_shared_bytes)
-    shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(qd.i8)
-    shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + shape_offset
+    shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(dtype1)
+    shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + size_offset
 
     @qd.kernel
     def kern(out: qd.types.ndarray):
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
-            buf = qd.simt.block.SharedArray((shared_array_size,), qd.i8)
+            buf = qd.simt.block.SharedArray((shared_array_size,), dtype1)
             i = tid
             while i < shared_array_size:
-                buf[i] = qd.cast(i % 127, qd.i8)
+                buf[i] = qd.cast(i % 127, dtype1)
                 i += block_dim
             qd.simt.block.sync()
             out[tid] = qd.cast(buf[tid], qd.i32)
@@ -89,7 +89,15 @@ def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
 @pytest.mark.parametrize("gpu_graph", [False, True])
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
 def test_large_shared_array(gpu_graph):
-    if qd.lang.impl.get_max_shared_memory_bytes() < 65536:
+    # Any shared memory larger than 48kB requires so-called "dynamic
+    # allocation", which is a special feature that requires toggling some opt-in
+    # flag in gpu kernel context and is currently only supported on CUDA. In
+    # practice, all GPUs supporting this feature have a max shared memory size
+    # of 64kB or more, so hardcoding this value in the unit test guarantees to
+    # exercise this feature, while being safe and consistent across all GPUs.
+    shared_bytes = 65536
+
+    if qd.lang.impl.get_max_shared_memory_bytes() < shared_bytes:
         pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128
@@ -98,8 +106,12 @@ def test_large_shared_array(gpu_graph):
     v_np = np.random.randn(N).astype(np.float32)
     d_np = np.random.randn(N).astype(np.float32)
 
+    # Compute a[i] = v[i] * sum(d), i.e. scale each v[i] by the sum of d.
+    # The reference uses a naive double loop; the shared-memory version tiles
+    # d into shared memory blocks for cooperative loading.
+
     @qd.kernel
-    def calc(
+    def scaled_reduce_native(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),
         a: qd.types.ndarray(ndim=1),
@@ -112,7 +124,7 @@ def test_large_shared_array(gpu_graph):
             a[i] = acc
 
     @qd.kernel(gpu_graph=gpu_graph)
-    def calc_shared_array(
+    def scaled_reduce_shared(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),
         a: qd.types.ndarray(ndim=1),
@@ -120,7 +132,7 @@ def test_large_shared_array(gpu_graph):
         qd.loop_config(block_dim=block_dim)
         for i in range(nBlocks * block_dim):
             tid = i % block_dim
-            pad = qd.simt.block.SharedArray((65536 // 4,), qd.f32)
+            pad = qd.simt.block.SharedArray((shared_bytes // 4,), qd.f32)
             acc = 0.0
             v_val = v[i]
             for k in range(nBlocks):
@@ -139,8 +151,8 @@ def test_large_shared_array(gpu_graph):
 
     reference = qd.ndarray(dtype=qd.f32, shape=(N,))
     a_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
-    calc(v_arr, d_arr, reference)
-    calc_shared_array(v_arr, d_arr, a_arr)
+    scaled_reduce_native(v_arr, d_arr, reference)
+    scaled_reduce_shared(v_arr, d_arr, a_arr)
     assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 

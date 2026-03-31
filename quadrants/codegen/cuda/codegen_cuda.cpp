@@ -201,11 +201,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         // use shared arrays with the same shape and dtype. Mutating one
         // would zero out get_num_elements() for other tasks, causing
         // them to skip the dynamic allocation path and launch with no
-        // shared memory at all. The singleton is keyed by (shape, dtype)
-        // in TypeFactory, so the corruption only occurs when multiple
-        // offloaded tasks allocate shared arrays with identical shape
-        // and dtype. If either differs, each task gets a distinct
-        // TensorType instance and is unaffected.
+        // shared memory at all, leading to illegal memory accesses at
+        // runtime.
+        // The singleton is keyed by (shape, dtype) in TypeFactory, so the
+        // corruption only occurs when multiple offloaded tasks allocate
+        // shared arrays with identical shape and dtype. If either differs,
+        // each task gets a distinct TensorType instance and is unaffected.
         auto element_type =
             tlctx->get_data_type(tensor_type->get_element_type());
         type = llvm::ArrayType::get(element_type, 0);
