@@ -257,10 +257,13 @@ class PerformanceDispatcher(Generic[P, R]):
 
         if self._cached_impl is not None:
             ca, ck = self._cached_args, self._cached_kwargs
-            if (len(args) == len(ca)
-                    and len(kwargs) == len(ck)
-                    and all(a is b for a, b in zip(args, ca))
-                    and all(k in ck and v is ck[k] for k, v in kwargs.items())):
+            assert ca is not None and ck is not None
+            if (
+                len(args) == len(ca)
+                and len(kwargs) == len(ck)
+                and all(a is b for a, b in zip(args, ca))
+                and all(k in ck and v is ck[k] for k, v in kwargs.items())
+            ):
                 return self._cached_impl(*args, **kwargs)
 
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
