@@ -217,8 +217,8 @@ void GpuGraphManager::ensure_condition_kernel_loaded() {
   int cc = CUDAContext::get_instance().get_compute_capability();
   if (cc < 90) {
     QD_WARN(
-        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
-        "Falling back to non-graph path.",
+        "graph_do_while natively requires SM 9.0+, but this device is SM {}. "
+        "Falling back to host-side do-while loop.",
         cc);
     return;
   }
@@ -414,8 +414,11 @@ bool GpuGraphManager::try_launch(
 
   if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
-    QD_ERROR_IF(!cond_kernel_func_,
-                "Condition kernel not available; cannot build graph_do_while");
+    if (!cond_kernel_func_) {
+      // Device does not support graph_do_while (requires SM 9.0+).
+      // Return false so the caller falls back to the non-graph path.
+      return false;
+    }
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
