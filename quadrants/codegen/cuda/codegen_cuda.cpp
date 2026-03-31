@@ -178,7 +178,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           tensor_type->get_num_elements() *
           data_type_size(tensor_type->get_element_type());
 
-      llvm::Type *type;
+      llvm::Type *shared_array_type;
       if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
         if (dynamic_shared_array_bytes > 0) {
           /* Current version only allows one dynamic shared array allocation,
@@ -209,20 +209,21 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         // each task gets a distinct TensorType instance and is unaffected.
         auto element_type =
             tlctx->get_data_type(tensor_type->get_element_type());
-        type = llvm::ArrayType::get(element_type, 0);
+        shared_array_type = llvm::ArrayType::get(element_type, 0);
         dynamic_shared_array_bytes += shared_array_bytes;
       } else {
-        type = tlctx->get_data_type(tensor_type);
+        shared_array_type = tlctx->get_data_type(tensor_type);
       }
 
       auto base = new llvm::GlobalVariable(
-          *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
+          *module, shared_array_type, false, llvm::GlobalValue::ExternalLinkage,
+          nullptr,
           fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
           nullptr, llvm::GlobalVariable::NotThreadLocal,
           3 /*addrspace=shared*/);
       base->setAlignment(llvm::MaybeAlign(8));
-      auto ptr_type = llvm::PointerType::get(type, 0);
-      llvm_val[stmt] = builder->CreatePointerCast(base, ptr_type);
+      auto ptr_shared_array_type = llvm::PointerType::get(shared_array_type, 0);
+      llvm_val[stmt] = builder->CreatePointerCast(base, ptr_shared_array_type);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
