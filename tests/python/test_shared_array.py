@@ -8,6 +8,51 @@ from tests import test_utils
 
 
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
+def test_shared_array_not_accumulated_across_offloads():
+    """Shared memory from one offloaded task must not leak into the next."""
+    if qd.lang.impl.get_cuda_compute_capability() < 86:
+        pytest.skip("Skip the GPUs prior to Ampere")
+
+    BLOCK_DIM = 64
+    MAX_DOFS = 111
+
+    @qd.kernel
+    def kern(nt_H: qd.types.ndarray):
+        n_dofs = nt_H.shape[1]
+        n_lower_tri = n_dofs * (n_dofs + 1) // 2
+
+        qd.loop_config(block_dim=BLOCK_DIM)
+        for tid in range(BLOCK_DIM):
+            H = qd.simt.block.SharedArray((MAX_DOFS, MAX_DOFS + 1), qd.f32)
+            i_pair = tid
+            while i_pair < n_lower_tri:
+                i_d1 = qd.cast(
+                    qd.floor((qd.sqrt(qd.cast(8 * i_pair + 1, qd.f32)) - 1.0) / 2.0),
+                    qd.i32,
+                )
+                if (i_d1 + 1) * (i_d1 + 2) // 2 <= i_pair:
+                    i_d1 = i_d1 + 1
+                i_d2 = i_pair - i_d1 * (i_d1 + 1) // 2
+                H[i_d1, i_d2] = nt_H[0, i_d1, i_d2]
+                i_pair = i_pair + BLOCK_DIM
+
+        qd.loop_config(block_dim=BLOCK_DIM)
+        for tid in range(BLOCK_DIM):
+            H = qd.simt.block.SharedArray((MAX_DOFS, MAX_DOFS + 1), qd.f32)
+            n_dofs_2 = n_dofs**2
+            i_flat = tid
+            while i_flat < n_dofs_2:
+                i_d1 = i_flat // n_dofs
+                i_d2 = i_flat % n_dofs
+                if i_d2 <= i_d1:
+                    H[i_d1, i_d2] = nt_H[0, i_d1, i_d2]
+                i_flat = i_flat + BLOCK_DIM
+
+    nt_H = qd.ndarray(dtype=qd.f32, shape=(1, 102, 102))
+    kern(nt_H)
+
+
+@test_utils.test(arch=[qd.cuda], print_full_traceback=False)
 def test_large_shared_array():
     # Skip the GPUs prior to Ampere which doesn't have large dynamical shared memory.
     if qd.lang.impl.get_cuda_compute_capability() < 86:
