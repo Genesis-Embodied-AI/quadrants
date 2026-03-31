@@ -85,10 +85,8 @@ def test_large_shared_array(gpu_graph):
     block_dim = 128
     nBlocks = 64
     N = nBlocks * block_dim
-    v_arr = np.random.randn(N).astype(np.float32)
-    d_arr = np.random.randn(N).astype(np.float32)
-    a_arr = np.zeros(N).astype(np.float32)
-    reference = np.zeros(N).astype(np.float32)
+    v_np = np.random.randn(N).astype(np.float32)
+    d_np = np.random.randn(N).astype(np.float32)
 
     @qd.kernel
     def calc(
@@ -123,9 +121,17 @@ def test_large_shared_array(gpu_graph):
                 qd.simt.block.sync()
             a[i] = acc
 
+    # gpu_graph requires device-resident ndarrays
+    v_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
+    d_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
+    v_arr.from_numpy(v_np)
+    d_arr.from_numpy(d_np)
+
+    reference = qd.ndarray(dtype=qd.f32, shape=(N,))
+    a_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
     calc(v_arr, d_arr, reference)
     calc_shared_array(v_arr, d_arr, a_arr)
-    assert np.allclose(reference, a_arr)
+    assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
