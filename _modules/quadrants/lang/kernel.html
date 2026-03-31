@@ -739,9 +739,12 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
             <span class="p">)</span>
             <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">cached_graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">)</span>
+                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
+                <span class="p">)</span>
             <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frontend_cache_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_validated</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
@@ -755,6 +758,8 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
+                    <span class="k">if</span> <span class="n">cached_graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg</span>
                     <span class="k">return</span> <span class="n">used_py_dataclass_parameters</span>
 
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
@@ -916,6 +921,7 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
+                        <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
