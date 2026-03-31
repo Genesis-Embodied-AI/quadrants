@@ -31,11 +31,20 @@ def test_shared_array_not_accumulated_across_offloads(shape_offset, dtype2):
     # actual size is passed at kernel launch time). Creation of this special
     # type was previously corrupting the original cached tensor type when
     # several tasks using shared arrays with the same shape and dtype were
-    # involved. The cached tensor type is a singleton keyed by (shape, dtype)
-    # in TypeFactory, so the corruption only occurs when multiple offloaded
-    # tasks allocate shared arrays with identical shape and dtype. If either
-    # differs, each task gets a distinct tensor type instance and is
-    # unaffected.
+    # involved.
+    # The cached tensor type is a singleton keyed by (shape, dtype) in
+    # TypeFactory, so the corruption only occurs when multiple offloaded tasks
+    # allocate shared arrays with identical shape and dtype. If either differs,
+    # each task gets a distinct tensor type instance and is unaffected.
+    # The corruption would affect ALL tensors of the exact same type, not just
+    # shared memory, because this information is not part of the type but stored
+    # in 'stmt->is_shared'. However, it is only an issue when shared memories
+    # from different offloaded tasks are sharing the same tensor type because at
+    # this point in the codegen path, the IR structure (index calculations,
+    # strides, offsets) has already been baked into the IR statements. The only
+    # place that reads the type during codegen is the AllocaStmt visitor itself,
+    # which uses 'get_num_elements()' to decide between the static/dynamic path
+    # and to compute the LLVM type size.
 
     block_dim = 32
     if qd.cfg.arch == qd.cuda:
