@@ -1632,6 +1632,10 @@
     <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_compute_capability&quot;</span><span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">get_cuda_max_shared_memory_bytes</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_max_shared_memory_bytes&quot;</span><span class="p">)</span>
+
+
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">mesh_relation_access</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">from_index</span><span class="p">,</span> <span class="n">to_element_type</span><span class="p">):</span>
     <span class="c1"># to support qd.mesh_local and access mesh attribute as field</span>
