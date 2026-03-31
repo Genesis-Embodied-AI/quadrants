@@ -177,6 +177,8 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       size_t shared_array_bytes =
           tensor_type->get_num_elements() *
           data_type_size(tensor_type->get_element_type());
+
+      llvm::Type *type;
       if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
         if (dynamic_shared_array_bytes > 0) {
           /* Current version only allows one dynamic shared array allocation,
@@ -190,12 +192,18 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
               "Only one single large shared array instance is allowed in "
               "current version.")
         }
-        // Clear tensor shape for dynamic shared memory.
-        tensor_type->set_shape(std::vector<int>({0}));
+        // Build a zero-sized LLVM array type for dynamic shared memory.
+        // Do NOT mutate tensor_type (via set_shape) as TensorType instances
+        // are cached singletons in TypeFactory and shared across tasks
+        // compiled in parallel.
+        auto element_type =
+            tlctx->get_data_type(tensor_type->get_element_type());
+        type = llvm::ArrayType::get(element_type, 0);
         dynamic_shared_array_bytes += shared_array_bytes;
+      } else {
+        type = tlctx->get_data_type(tensor_type);
       }
 
-      auto type = tlctx->get_data_type(tensor_type);
       auto base = new llvm::GlobalVariable(
           *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
           fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
@@ -692,7 +700,6 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
-      dynamic_shared_array_bytes = 0;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);
