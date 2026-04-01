@@ -2745,16 +2745,21 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   if (get_environ_config(DUMP_IR_ENV.data())) {
     std::filesystem::create_directories(ir_dump_dir);
 
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
-    std::error_code EC;
-    llvm::raw_fd_ostream dest_file(filename.string(), EC);
-    if (!EC) {
-      module->print(dest_file, nullptr);
+    for (const auto &task : offloaded_tasks) {
+      std::filesystem::path filename =
+          ir_dump_dir / (task.name + "_llvm.ll");
+      std::error_code EC;
+      llvm::raw_fd_ostream dest_file(filename.string(), EC);
+      if (!EC) {
+        module->print(dest_file, nullptr);
+      }
     }
   }
 
   if (get_environ_config(LOAD_IR_ENV.data())) {
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
+    QD_ASSERT(!offloaded_tasks.empty());
+    std::filesystem::path filename =
+        ir_dump_dir / (offloaded_tasks[0].name + "_llvm.ll");
     llvm::SMDiagnostic err;
     auto loaded_module =
         llvm::parseAssemblyFile(filename.string(), err, *llvm_context);
