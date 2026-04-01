@@ -60,32 +60,6 @@ def test_loop_config_name_ir_dump(
     ), f"Expected exactly two loop_name= annotations (named loops only), got {combined.count('loop_name=')}:\n{combined}"
 
 
-@test_utils.test()
-def test_loop_config_name_does_not_leak():
-    """Name set on one loop should not leak to the next loop."""
-    n = 64
-    a = qd.ndarray(qd.i32, shape=(n,))
-    b = qd.ndarray(qd.i32, shape=(n,))
-
-    @qd.kernel
-    def no_leak(
-        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
-        b: qd.types.ndarray(dtype=qd.i32, ndim=1),
-    ):
-        qd.loop_config(name="first")
-        for i in range(n):
-            a[i] = 10
-
-        for i in range(n):
-            b[i] = 20
-
-    no_leak(a, b)
-    qd.sync()
-
-    assert a.to_numpy()[0] == 10
-    assert b.to_numpy()[0] == 20
-
-
 @test_utils.test(offline_cache=False)
 def test_loop_config_name_does_not_leak_in_ir(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
