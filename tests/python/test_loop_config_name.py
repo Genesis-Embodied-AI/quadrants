@@ -1,6 +1,7 @@
 import pathlib
 
 import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -9,9 +10,7 @@ _vk_on_mac = (qd.vulkan, "Darwin")
 
 
 @test_utils.test(offline_cache=False)
-def test_loop_config_name_ir_dump(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_loop_config_name_ir_dump(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
 
@@ -63,9 +62,7 @@ def test_loop_config_name_ir_dump(
 
 
 @test_utils.test(offline_cache=False)
-def test_loop_config_name_serialize_ir_dump(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_loop_config_name_serialize_ir_dump(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
 
@@ -88,9 +85,7 @@ def test_loop_config_name_serialize_ir_dump(
 
 
 @test_utils.test(arch=[qd.cuda], offline_cache=False)
-def test_loop_config_name_cuda_ptx_dump(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_loop_config_name_cuda_ptx_dump(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
 
@@ -119,9 +114,7 @@ def test_loop_config_name_cuda_ptx_dump(
     exclude=[_vk_on_mac],
     offline_cache=False,
 )
-def test_loop_config_name_spirv_dump(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_loop_config_name_spirv_dump(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
 
@@ -141,6 +134,4 @@ def test_loop_config_name_spirv_dump(
 
     spirv_files = list(tmp_path.glob("*_after_opt.spirv"))
     assert len(spirv_files) > 0, f"No *_after_opt.spirv under {tmp_path}"
-    assert any(
-        "spirv_fill_loop" in f.name for f in spirv_files
-    ), [f.name for f in spirv_files]
+    assert any("spirv_fill_loop" in f.name for f in spirv_files), [f.name for f in spirv_files]
