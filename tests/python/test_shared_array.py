@@ -10,7 +10,7 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize(
-    "num_dim, first_shape_offset, dtype1, dtype2",
+    "num_dim, first_shape_delta_size, dtype1, dtype2",
     [
         (1, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
         (2, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
@@ -23,7 +23,7 @@ from tests import test_utils
     ],
 )
 @test_utils.test(arch=[qd.cuda, qd.metal])
-def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_offset, dtype1, dtype2):
+def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta_size, dtype1, dtype2):
     # Execute 2 successive offloaded tasks both allocating more than half of
     # the maximum shared memory available on the device to make sure shared
     # memory is properly deallocated and per-task address offset is correctly
@@ -57,7 +57,7 @@ def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_offse
     max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(strict=False)
     # 75% of max shared memory in bytes, converted to element counts
     shared_array_bytes = int(0.75 * max_shared_bytes)
-    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_offset
+    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_delta_size
     num_elems_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2)
 
     # Build 1D or 2D shape tuples with the same total number of elements.
