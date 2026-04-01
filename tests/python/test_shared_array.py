@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -8,15 +10,20 @@ from tests import test_utils
 
 
 @pytest.mark.parametrize(
-    "size_offset, dtype1, dtype2",
+    "num_dim, first_shape_offset, dtype1, dtype2",
     [
-        (0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
-        (0, qd.i8, qd.f32),  # same shape, different dtype
-        (1, qd.i8, qd.i8),  # different shape, same dtype
+        (1, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (2, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (1, 0, qd.f32, qd.f32),  # same shape, same dtype — triggers the singleton bug
+        (2, 0, qd.u32, qd.u32),  # same shape, same dtype — triggers the singleton bug
+        (1, 0, qd.i8, qd.f32),  # same shape, different dtype
+        (1, 1, qd.i8, qd.i8),  # different shape, same dtype
+        (2, 0, qd.u32, qd.u32),  # different shape, same dtype
+        (1, 1, qd.i8, qd.f32),  # different shape, different dtype
     ],
 )
 @test_utils.test(arch=[qd.cuda, qd.metal])
-def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype2):
+def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_offset, dtype1, dtype2):
     # Execute 2 successive offloaded tasks both allocating more than half of
     # the maximum shared memory available on the device to make sure shared
     # memory is properly deallocated and per-task address offset is correctly
@@ -48,51 +55,74 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
 
     block_dim = 32
     max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(strict=False)
-    # 75% of max shared memory in bytes
+    # 75% of max shared memory in bytes, converted to element counts
     shared_array_bytes = int(0.75 * max_shared_bytes)
-    shared_array_size = shared_array_bytes // qd._lib.core.data_type_size(dtype1)
-    shared_array_size_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2) + size_offset
+    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_offset
+    num_elems_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2)
+
+    # Build 1D or 2D shape tuples with the same total number of elements.
+    # For 2D, split into (block_dim, num_elems // block_dim).
+    if num_dim == 1:
+        shape_1 = (num_elems_1,)
+        shape_2 = (num_elems_2,)
+    else:
+        shape_1 = (block_dim, num_elems_1 // block_dim)
+        shape_2 = (block_dim, num_elems_2 // block_dim)
+        num_elems_1 = math.prod(shape_1)
+        num_elems_2 = math.prod(shape_2)
 
     # Each offloaded task cooperatively fills a large shared array with an
     # LCG sequence, syncs, then each thread sums a contiguous chunk written
     # by other threads. This forces the entire shared array to be materialized
     # — the compiler cannot short-circuit it.
-    chunk_size = shared_array_size // block_dim
+    chunk_size_1 = num_elems_1 // block_dim
+    chunk_size_2 = num_elems_2 // block_dim
+    cols_1 = shape_1[-1]
+    cols_2 = shape_2[-1]
 
     @qd.kernel
     def kern(out: qd.types.ndarray):
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
-            buf = qd.simt.block.SharedArray((shared_array_size,), dtype1)
-            # Cooperatively fill with LCG sequence: buf[i] = (i*1103515245 + 12345) % 128
+            buf = qd.simt.block.SharedArray(shape_1, dtype1)
             i = tid
-            while i < shared_array_size:
-                buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
+            while i < num_elems_1:
+                if qd.static(num_dim == 2):
+                    buf[i // cols_1, i % cols_1] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
+                else:
+                    buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
                 i += block_dim
             qd.simt.block.sync()
-            # Each thread sums a contiguous chunk written by other threads
             acc = 0
-            j = tid * chunk_size
-            end = j + chunk_size
+            j = tid * chunk_size_1
+            end = j + chunk_size_1
             while j < end:
-                acc += qd.cast(buf[j], qd.i32)
+                if qd.static(num_dim == 2):
+                    acc += qd.cast(buf[j // cols_1, j % cols_1], qd.i32)
+                else:
+                    acc += qd.cast(buf[j], qd.i32)
                 j += 1
             out[tid] = acc
 
         qd.loop_config(block_dim=block_dim)
         for tid in range(block_dim):
-            buf = qd.simt.block.SharedArray((shared_array_size_2,), dtype2)
+            buf = qd.simt.block.SharedArray(shape_2, dtype2)
             i = tid
-            while i < shared_array_size_2:
-                buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
+            while i < num_elems_2:
+                if qd.static(num_dim == 2):
+                    buf[i // cols_2, i % cols_2] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
+                else:
+                    buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
                 i += block_dim
             qd.simt.block.sync()
-            chunk_size_2 = shared_array_size_2 // block_dim
             acc = 0
             j = tid * chunk_size_2
             end = j + chunk_size_2
             while j < end:
-                acc += qd.cast(buf[j], qd.i32)
+                if qd.static(num_dim == 2):
+                    acc += qd.cast(buf[j // cols_2, j % cols_2], qd.i32)
+                else:
+                    acc += qd.cast(buf[j], qd.i32)
                 j += 1
             out[tid] = out[tid] + acc
 
@@ -100,12 +130,12 @@ def test_shared_array_not_accumulated_across_offloads(size_offset, dtype1, dtype
     kern(out)
 
     # Compute expected values on host
-    vals1 = np.array([(i * 1103515245 + 12345) % 128 for i in range(shared_array_size)], dtype=np.int32)
-    vals2 = np.array([(i * 1103515245 + 12345) % 128 for i in range(shared_array_size_2)], dtype=np.int32)
-    chunk2 = shared_array_size_2 // block_dim
+    vals1 = np.array([(i * 1103515245 + 12345) % 128 for i in range(num_elems_1)], dtype=np.int32)
+    vals2 = np.array([(i * 1103515245 + 12345) % 128 for i in range(num_elems_2)], dtype=np.int32)
     expected = np.array(
         [
-            vals1[t * chunk_size : (t + 1) * chunk_size].sum() + vals2[t * chunk2 : (t + 1) * chunk2].sum()
+            vals1[t * chunk_size_1 : (t + 1) * chunk_size_1].sum()
+            + vals2[t * chunk_size_2 : (t + 1) * chunk_size_2].sum()
             for t in range(block_dim)
         ],
         dtype=np.int32,
