@@ -216,9 +216,9 @@ void GpuGraphManager::ensure_condition_kernel_loaded() {
 
   int cc = CUDAContext::get_instance().get_compute_capability();
   if (cc < 90) {
-    QD_WARN(
-        "graph_do_while requires SM 9.0+ (Hopper), but this device is SM {}. "
-        "Falling back to non-graph path.",
+    QD_INFO(
+        "graph_do_while natively requires SM 9.0+, but this device is SM {}. "
+        "Falling back to host-side do-while loop.",
         cc);
     return;
   }
@@ -278,6 +278,13 @@ void *GpuGraphManager::add_kernel_node(void *graph,
                                        unsigned int block_dim,
                                        unsigned int shared_mem,
                                        void **kernel_params) {
+  // Opt-in to the requested dynamic shared memory size, just as
+  // CUDAContext::launch does for the non-graph path.
+  if (shared_mem > 0) {
+    CUDADriver::get_instance().kernel_set_attribute(
+        func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_mem);
+  }
+
   CudaKernelNodeParams params{};
   params.func = func;
   params.gridDimX = grid_dim;
@@ -414,8 +421,19 @@ bool GpuGraphManager::try_launch(
 
   if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
-    QD_ERROR_IF(!cond_kernel_func_,
-                "Condition kernel not available; cannot build graph_do_while");
+    if (!cond_kernel_func_) {
+      int cc = CUDAContext::get_instance().get_compute_capability();
+      if (cc >= 90) {
+        // SM 9.0+ should always be able to load the condition kernel.
+        // Failing here means prerequisites are missing.
+        QD_ERROR(
+            "Condition kernel not available on SM {}; "
+            "cannot build graph_do_while",
+            cc);
+      }
+      // Pre-SM 9.0: fall back to host-side do-while loop.
+      return false;
+    }
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 

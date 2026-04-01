@@ -32,15 +32,13 @@ def _on_cuda():
     return impl.current_cfg().arch == qd.cuda
 
 
-def _xfail_if_cuda_without_hopper():
-    if _on_cuda() and qd.lang.impl.get_cuda_compute_capability() < 90:
-        pytest.xfail("graph_do_while requires SM 9.0+ (Hopper)")
+def _is_gpu_graph_do_while_natively_supported():
+    return _on_cuda() and qd.lang.impl.get_cuda_compute_capability() >= 90
 
 
 @test_utils.test()
 def test_graph_do_while_counter():
     """Test graph_do_while with a counter that decrements each iteration."""
-    _xfail_if_cuda_without_hopper()
     N = 64
 
     @qd.kernel(gpu_graph=True)
@@ -58,7 +56,7 @@ def test_graph_do_while_counter():
     counter.from_numpy(np.array(5, dtype=np.int32))
 
     graph_loop(x, counter)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -69,7 +67,7 @@ def test_graph_do_while_counter():
     counter.from_numpy(np.array(10, dtype=np.int32))
 
     graph_loop(x, counter)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -80,7 +78,6 @@ def test_graph_do_while_counter():
 @test_utils.test()
 def test_graph_do_while_boolean_done():
     """Test graph_do_while with a boolean 'continue' flag (non-zero = keep going)."""
-    _xfail_if_cuda_without_hopper()
     N = 64
 
     @qd.kernel(gpu_graph=True)
@@ -103,7 +100,7 @@ def test_graph_do_while_boolean_done():
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
     increment_until_threshold(x, 7, keep_going)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -114,7 +111,7 @@ def test_graph_do_while_boolean_done():
     keep_going.from_numpy(np.array(1, dtype=np.int32))
 
     increment_until_threshold(x, 12, keep_going)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -125,7 +122,6 @@ def test_graph_do_while_boolean_done():
 @test_utils.test()
 def test_graph_do_while_multiple_loops():
     """Test graph_do_while with multiple top-level loops in the kernel body."""
-    _xfail_if_cuda_without_hopper()
     N = 32
 
     @qd.kernel(gpu_graph=True)
@@ -151,7 +147,7 @@ def test_graph_do_while_multiple_loops():
     counter.from_numpy(np.array(10, dtype=np.int32))
 
     multi_loop(x, y, counter)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -164,7 +160,7 @@ def test_graph_do_while_multiple_loops():
     counter.from_numpy(np.array(5, dtype=np.int32))
 
     multi_loop(x, y, counter)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
 
@@ -183,7 +179,6 @@ def test_graph_do_while_swap_counter_ndarray():
     the graph wasn't rebuilt, it just updated the indirection slot with c2's
     pointer.
     """
-    _xfail_if_cuda_without_hopper()
     N = 32
 
     @qd.kernel(gpu_graph=True)
@@ -200,7 +195,7 @@ def test_graph_do_while_swap_counter_ndarray():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     c1.from_numpy(np.array(3, dtype=np.int32))
     k(x, c1)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
     assert c1.to_numpy() == 0
@@ -211,7 +206,7 @@ def test_graph_do_while_swap_counter_ndarray():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     c2.from_numpy(np.array(7, dtype=np.int32))
     k(x, c2)
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_used()
         assert _gpu_graph_cache_size() == 1
         assert _gpu_graph_total_builds() == 1
@@ -228,7 +223,6 @@ def test_graph_do_while_alternate_counter_ndarrays():
     count+10). Confirms the slot update works back and forth, not just as a
     one-time swap. Cache size is checked once at the end -- still 1.
     """
-    _xfail_if_cuda_without_hopper()
     N = 16
 
     @qd.kernel(gpu_graph=True)
@@ -249,7 +243,7 @@ def test_graph_do_while_alternate_counter_ndarrays():
         x.from_numpy(np.zeros(N, dtype=np.int32))
         c1.from_numpy(np.array(count, dtype=np.int32))
         k(x, c1)
-        if _on_cuda():
+        if _is_gpu_graph_do_while_natively_supported():
             assert _gpu_graph_used()
         assert c1.to_numpy() == 0
         np.testing.assert_array_equal(x.to_numpy(), np.full(N, count, dtype=np.int32))
@@ -257,12 +251,12 @@ def test_graph_do_while_alternate_counter_ndarrays():
         x.from_numpy(np.zeros(N, dtype=np.int32))
         c2.from_numpy(np.array(count + 10, dtype=np.int32))
         k(x, c2)
-        if _on_cuda():
+        if _is_gpu_graph_do_while_natively_supported():
             assert _gpu_graph_used()
         assert c2.to_numpy() == 0
         np.testing.assert_array_equal(x.to_numpy(), np.full(N, count + 10, dtype=np.int32))
 
-    if _on_cuda():
+    if _is_gpu_graph_do_while_natively_supported():
         assert _gpu_graph_cache_size() == 1
         assert _gpu_graph_total_builds() == 1
 
@@ -351,7 +345,6 @@ def _fastcache_do_while_child(args: list[str]) -> None:
 @test_utils.test()
 def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
     """After fastcache restore in a fresh process, graph_do_while_arg must be set."""
-    _xfail_if_cuda_without_hopper()
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
