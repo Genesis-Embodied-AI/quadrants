@@ -1296,7 +1296,7 @@ def get_max_shared_memory_bytes(*, strict):
     if arch == _qd_core.cuda:
         return _qd_core.query_int64("cuda_max_shared_memory_bytes")
     if not strict:
-        if arch == _qd_core.cpu:
+        if arch == _qd_core.host_arch():  # CPU backend matching host's hardware
             # CPU backend does not support shared memory.
             return 0
         if arch == _qd_core.metal:
