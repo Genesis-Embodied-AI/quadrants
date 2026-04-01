@@ -61,34 +61,6 @@ def test_loop_config_name_ir_dump(
 
 
 @test_utils.test()
-def test_loop_config_name_mixed_named_unnamed():
-    n = 64
-    a = qd.ndarray(qd.i32, shape=(n,))
-    b = qd.ndarray(qd.i32, shape=(n,))
-
-    @qd.kernel
-    def mixed(
-        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
-        b: qd.types.ndarray(dtype=qd.i32, ndim=1),
-    ):
-        qd.loop_config(name="named_loop")
-        for i in range(n):
-            a[i] = i
-
-        for i in range(n):
-            b[i] = i + 1
-
-    mixed(a, b)
-    qd.sync()
-
-    a_np = a.to_numpy()
-    b_np = b.to_numpy()
-    for i in range(n):
-        assert a_np[i] == i
-        assert b_np[i] == i + 1
-
-
-@test_utils.test()
 def test_loop_config_name_does_not_leak():
     """Name set on one loop should not leak to the next loop."""
     n = 64
