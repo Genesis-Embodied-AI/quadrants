@@ -154,7 +154,7 @@ def test_large_shared_array(gpu_graph):
     # exercise this feature, while being safe and consistent across all GPUs.
     shared_bytes = 65536
 
-    if qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=False) < shared_bytes:
+    if qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=True) < shared_bytes:
         pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128
