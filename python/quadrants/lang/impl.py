@@ -1284,10 +1284,34 @@ def get_cuda_compute_capability():
     return _qd_core.query_int64("cuda_compute_capability")
 
 
-def get_max_shared_memory_bytes():
+def get_max_shared_memory_bytes(*, strict):
+    """Return the maximum shared memory per block in bytes.
+
+    Args:
+        strict: If True, raise RuntimeError for backends where the exact
+            value cannot be queried. If False, return a conservative lower
+            bound based on hardware specifications.
+    """
     arch = current_cfg().arch
     if arch == _qd_core.cuda:
         return _qd_core.query_int64("cuda_max_shared_memory_bytes")
+    if not strict:
+        if arch == _qd_core.cpu:
+            # CPU backend does not support shared memory.
+            return 0
+        if arch == _qd_core.metal:
+            # All Apple Silicon GPUs have 32KB threadgroup memory.
+            # https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+            return 32 * 1024
+        if arch == _qd_core.amdgpu:
+            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2
+            # (Nov 2020).
+            # https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html
+            return 64 * 1024
+        if arch == _qd_core.vulkan:
+            # Vulkan Roadmap 2026 requires maxComputeSharedMemorySize >= 32768.
+            # https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-required
+            return 32 * 1024
     raise RuntimeError(f"get_max_shared_memory_bytes not implemented for arch {arch.name}")
 
 
