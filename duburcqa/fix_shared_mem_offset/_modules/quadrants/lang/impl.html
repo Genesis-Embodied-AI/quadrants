@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.impl &#8212; Quadrants 0.5.1 documentation</title>
+    <title>quadrants.lang.impl &#8212; Quadrants 0.5.2 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../_static/documentation_options.js?v=b9afe91b"></script>
+    <script src="../../../_static/documentation_options.js?v=8e576371"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -59,7 +59,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.5.1" />
+  <meta name="docsearch:version" content="0.5.2" />
   </head>
   
   
@@ -121,7 +121,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.5.1 documentation</p>
+    <p class="title logo__title">Quadrants 0.5.2 documentation</p>
   
 </a></div>
     
@@ -1632,18 +1632,18 @@
     <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_compute_capability&quot;</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">get_max_shared_memory_bytes</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_max_shared_memory_bytes</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">is_lowerbound_ok</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum shared memory per block in bytes.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        strict: If True, raise RuntimeError for backends where the exact</span>
-<span class="sd">            value cannot be queried. If False, return a conservative lower</span>
-<span class="sd">            bound based on hardware specifications.</span>
+<span class="sd">        is_lowerbound_ok: If True, return a conservative lower bound based on</span>
+<span class="sd">            hardware specifications. If False, raise RuntimeError for backends</span>
+<span class="sd">            where the exact value cannot be queried.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_max_shared_memory_bytes&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">strict</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">is_lowerbound_ok</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">host_arch</span><span class="p">():</span>  <span class="c1"># CPU backend matching host&#39;s hardware</span>
             <span class="c1"># CPU backend does not support shared memory.</span>
             <span class="k">return</span> <span class="mi">0</span>
