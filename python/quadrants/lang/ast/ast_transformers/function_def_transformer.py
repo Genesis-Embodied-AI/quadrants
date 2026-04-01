@@ -24,10 +24,11 @@ from quadrants.lang.ast.ast_transformer_utils import (
 from quadrants.lang.exception import (
     QuadrantsSyntaxError,
 )
+from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.struct import StructType
 from quadrants.lang.util import to_quadrants_type
-from quadrants.types import annotations, ndarray_type, primitive_types
+from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
 class FunctionDefTransformer:
@@ -55,6 +56,19 @@ class FunctionDefTransformer:
                     full_name,
                 ),
             )
+        if isinstance(annotation, buffer_view_type.BufferViewType):
+            assert this_arg_features is not None
+            raw_element_type, ndim, needs_grad, boundary = this_arg_features
+            arr = kernel_arguments.decl_ndarray_arg(
+                to_quadrants_type(raw_element_type),
+                ndim,
+                full_name + "_buf",
+                needs_grad,
+                BoundaryMode(boundary),
+            )
+            offset = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_offset")
+            count = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_count")
+            return True, BufferView(arr, offset, count)
         if isinstance(annotation, ndarray_type.NdarrayType):
             assert this_arg_features is not None
             raw_element_type: DataTypeCxx

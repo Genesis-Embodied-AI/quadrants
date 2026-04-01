@@ -48,6 +48,7 @@ from quadrants.lang.mesh import (
     MeshReorderedScalarFieldProxy,
     element_type_name,
 )
+from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.simt.block import SharedArray
 from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
@@ -98,6 +99,8 @@ def expr_init(rhs):
     if isinstance(rhs, Matrix):
         return make_matrix(rhs.to_list())
     if isinstance(rhs, SharedArray):
+        return rhs
+    if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
         return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
@@ -210,6 +213,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             Expr,
             Field,
             AnyArray,
+            BufferView,
             SparseMatrixProxy,
             MeshElementFieldProxy,
             MeshRelationAccessProxy,
@@ -250,6 +254,8 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         indices_expr_group = make_expr_group(*indices)
 
     if isinstance(value, SharedArray):
+        return value.subscript(*indices)
+    if isinstance(value, BufferView):
         return value.subscript(*indices)
     if isinstance(value, MeshElementFieldProxy):
         return value.subscript(*indices)  # type: ignore

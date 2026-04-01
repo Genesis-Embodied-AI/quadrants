@@ -144,7 +144,11 @@ def _kernel_impl(
     @wraps(_func)
     def wrapped_func(*args, **kwargs):
         try:
-            return primal(*args, **kwargs)
+            result = primal(*args, **kwargs)
+            runtime = impl.get_runtime()
+            if runtime.prog.config().debug:
+                runtime.sync()
+            return result
         except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
             if impl.get_runtime().print_full_traceback:
                 raise e
