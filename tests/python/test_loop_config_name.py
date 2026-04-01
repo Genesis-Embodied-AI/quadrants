@@ -101,6 +101,7 @@ def test_loop_config_name_cuda_ptx_dump(
     def ptx_probe(
         a: qd.types.ndarray(dtype=qd.i32, ndim=1),
     ):
+        qd.loop_config(name="ptx_fill_loop")
         for i in range(n):
             a[i] = i
 
@@ -110,8 +111,7 @@ def test_loop_config_name_cuda_ptx_dump(
     ptx_files = list(tmp_path.glob("*.ptx"))
     assert len(ptx_files) > 0, f"No .ptx files under debug_dump_path {tmp_path}"
     combined = "\n".join(f.read_text() for f in ptx_files)
-    assert ".version" in combined, combined
-    assert ".target" in combined, combined
+    assert "ptx_fill_loop" in combined, combined
 
 
 @test_utils.test(
