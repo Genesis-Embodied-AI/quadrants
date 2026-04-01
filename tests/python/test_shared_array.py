@@ -54,7 +54,7 @@ def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta
     # and to compute the LLVM type size.
 
     block_dim = 32
-    max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(strict=False)
+    max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=True)
     # 75% of max shared memory in bytes, converted to element counts
     shared_array_bytes = int(0.75 * max_shared_bytes)
     num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_delta_size
@@ -154,7 +154,7 @@ def test_large_shared_array(gpu_graph):
     # exercise this feature, while being safe and consistent across all GPUs.
     shared_bytes = 65536
 
-    if qd.lang.impl.get_max_shared_memory_bytes(strict=True) < shared_bytes:
+    if qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=False) < shared_bytes:
         pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128

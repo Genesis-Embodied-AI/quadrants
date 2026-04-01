@@ -1284,18 +1284,18 @@ def get_cuda_compute_capability():
     return _qd_core.query_int64("cuda_compute_capability")
 
 
-def get_max_shared_memory_bytes(*, strict):
+def get_max_shared_memory_bytes(*, is_lowerbound_ok):
     """Return the maximum shared memory per block in bytes.
 
     Args:
-        strict: If True, raise RuntimeError for backends where the exact
-            value cannot be queried. If False, return a conservative lower
-            bound based on hardware specifications.
+        is_lowerbound_ok: If True, return a conservative lower bound based on
+            hardware specifications. If False, raise RuntimeError for backends
+            where the exact value cannot be queried.
     """
     arch = current_cfg().arch
     if arch == _qd_core.cuda:
         return _qd_core.query_int64("cuda_max_shared_memory_bytes")
-    if not strict:
+    if is_lowerbound_ok:
         if arch == _qd_core.host_arch():  # CPU backend matching host's hardware
             # CPU backend does not support shared memory.
             return 0
