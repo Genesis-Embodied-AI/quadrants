@@ -2476,9 +2476,13 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
   auto *root = params_.ir_root->as<Block>();
 
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
+  const char *dump_spirv_env = std::getenv(DUMP_SPIRV_ENV.data());
   bool dump_ir = dump_ir_env != nullptr && std::string(dump_ir_env) == "1";
+  bool dump_spirv_asm =
+      dump_ir ||
+      (dump_spirv_env != nullptr && std::string(dump_spirv_env) == "1");
   std::filesystem::path ir_dump_dir = params_.compile_config->debug_dump_path;
-  if (dump_ir) {
+  if (dump_ir || dump_spirv_asm) {
     std::filesystem::create_directories(ir_dump_dir);
   }
   if (dump_ir) {
@@ -2506,7 +2510,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     auto task_res = cgen.run();
 
     std::filesystem::path ir_dump_dir = params_.compile_config->debug_dump_path;
-    if (dump_ir) {
+    if (dump_spirv_asm) {
       std::string spirv_asm;
       spirv_tools_->Disassemble(task_res.spirv_code, &spirv_asm);
       std::filesystem::path filename =
@@ -2541,7 +2545,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}",
              task_res.spirv_code.size(), optimized_spv.size());
 
-    if (dump_ir) {
+    if (dump_spirv_asm) {
       std::string spirv_asm;
       spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
       std::filesystem::path filename =
