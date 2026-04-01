@@ -12,7 +12,7 @@ def to_boundary_enum(boundary):
         return BoundaryMode.CLAMP
     if boundary == "unsafe":
         return BoundaryMode.UNSAFE
-    raise ValueError(f"Invalid boundary argument: {boundary}")
+    raise ValueError(f"Invalid boundary argument: {boundary}. Valid options: 'unsafe', 'clamp'")
 
 
 class DeviceCapability:

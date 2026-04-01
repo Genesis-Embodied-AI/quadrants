@@ -36,12 +36,14 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
+from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
 from quadrants.lang.util import is_data_oriented, to_quadrants_type
 from quadrants.types import (
+    buffer_view_type,
     ndarray_type,
     primitive_types,
     sparse_matrix_builder,
@@ -92,6 +94,15 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if raise_on_templated_floats and arg_type is float:
             raise ValueError("Floats not allowed as templated types.")
         return arg
+    if annotation_type is buffer_view_type.BufferViewType:
+        if not isinstance(arg, BufferViewInstance):
+            raise QuadrantsRuntimeTypeError(f"Argument {arg_name} expects a BufferView, got {type(arg).__name__}")
+        inner = arg.get_ndarray()
+        assert isinstance(inner, Ndarray)
+        assert inner.shape is not None
+        type_id = id(inner.element_type)
+        element_type = type_id if type_id in primitive_types.type_ids else inner.element_type
+        return element_type, len(inner.shape), False, annotation.ndarray_type.boundary
     if annotation_type is ndarray_type.NdarrayType:
         if isinstance(arg, Ndarray):
             # Allow deferring '__debug__' evaluation at runtime

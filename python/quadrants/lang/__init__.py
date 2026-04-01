@@ -4,6 +4,7 @@ from quadrants.lang import impl, simt  # noqa: F401
 from quadrants.lang._fast_caching.function_hasher import pure  # noqa: F401
 from quadrants.lang._ndarray import *
 from quadrants.lang._ndrange import ndrange  # noqa: F401
+from quadrants.lang.buffer_view import *
 from quadrants.lang.exception import *
 from quadrants.lang.field import *
 from quadrants.lang.impl import *
