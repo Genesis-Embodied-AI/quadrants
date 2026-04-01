@@ -132,6 +132,7 @@ def test_loop_config_name_spirv_dump(
     def spirv_probe(
         a: qd.types.ndarray(dtype=qd.i32, ndim=1),
     ):
+        qd.loop_config(name="spirv_fill_loop")
         for i in range(n):
             a[i] = i
 
@@ -140,5 +141,6 @@ def test_loop_config_name_spirv_dump(
 
     spirv_files = list(tmp_path.glob("*_after_opt.spirv"))
     assert len(spirv_files) > 0, f"No *_after_opt.spirv under {tmp_path}"
-    combined = "\n".join(f.read_text() for f in spirv_files)
-    assert "OpCapability" in combined, combined
+    assert any(
+        "spirv_fill_loop" in f.name for f in spirv_files
+    ), [f.name for f in spirv_files]
