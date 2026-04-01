@@ -1632,10 +1632,34 @@
     <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_compute_capability&quot;</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">get_max_shared_memory_bytes</span><span class="p">():</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_max_shared_memory_bytes</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum shared memory per block in bytes.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        strict: If True, raise RuntimeError for backends where the exact</span>
+<span class="sd">            value cannot be queried. If False, return a conservative lower</span>
+<span class="sd">            bound based on hardware specifications.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">query_int64</span><span class="p">(</span><span class="s2">&quot;cuda_max_shared_memory_bytes&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">strict</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cpu</span><span class="p">:</span>
+            <span class="c1"># CPU backend does not support shared memory.</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">metal</span><span class="p">:</span>
+            <span class="c1"># All Apple Silicon GPUs have 32KB threadgroup memory.</span>
+            <span class="c1"># https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf</span>
+            <span class="k">return</span> <span class="mi">32</span> <span class="o">*</span> <span class="mi">1024</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+            <span class="c1"># AMD GPUs have 64KB LDS per workgroup since at least RDNA 2</span>
+            <span class="c1"># (Nov 2020).</span>
+            <span class="c1"># https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html</span>
+            <span class="k">return</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span>
+        <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
+            <span class="c1"># Vulkan Roadmap 2026 requires maxComputeSharedMemorySize &gt;= 32768.</span>
+            <span class="c1"># https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-required</span>
+            <span class="k">return</span> <span class="mi">32</span> <span class="o">*</span> <span class="mi">1024</span>
     <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;get_max_shared_memory_bytes not implemented for arch </span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 
