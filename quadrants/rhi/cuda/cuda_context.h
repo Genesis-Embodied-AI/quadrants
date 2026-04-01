@@ -75,6 +75,10 @@ class CUDAContext {
     return compute_capability_;
   }
 
+  int get_max_shared_memory_bytes() const {
+    return max_shared_memory_bytes_;
+  }
+
   int64_t get_clock_rate_khz() const;
 
   bool supports_mem_pool() const {
