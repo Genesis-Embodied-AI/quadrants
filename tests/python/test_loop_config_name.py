@@ -122,7 +122,7 @@ def test_loop_config_name_cuda_ptx_dump(
 def test_loop_config_name_spirv_dump(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setenv("QD_DUMP_SPIRV", "1")
+    monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
 
     n = 16
