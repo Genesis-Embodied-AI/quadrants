@@ -1,41 +1,37 @@
-import os
 import pathlib
 
+import pytest
 import quadrants as qd
 
 from tests import test_utils
 
 
 @test_utils.test(offline_cache=False)
-def test_loop_config_name_ir_dump(tmp_path: pathlib.Path):
-    old_env = os.environ.get("QD_DUMP_IR")
-    os.environ["QD_DUMP_IR"] = "1"
+def test_loop_config_name_ir_dump(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
-    try:
-        n = 128
-        a = qd.ndarray(qd.i32, shape=(n,))
-        b = qd.ndarray(qd.i32, shape=(n,))
 
-        @qd.kernel
-        def two_loops(
-            a: qd.types.ndarray(dtype=qd.i32, ndim=1),
-            b: qd.types.ndarray(dtype=qd.i32, ndim=1),
-        ):
-            qd.loop_config(name="fill_a")
-            for i in range(n):
-                a[i] = i
+    n = 128
+    a = qd.ndarray(qd.i32, shape=(n,))
+    b = qd.ndarray(qd.i32, shape=(n,))
 
-            qd.loop_config(name="fill_b")
-            for i in range(n):
-                b[i] = i * 2
+    @qd.kernel
+    def two_loops(
+        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        b: qd.types.ndarray(dtype=qd.i32, ndim=1),
+    ):
+        qd.loop_config(name="fill_a")
+        for i in range(n):
+            a[i] = i
 
-        two_loops(a, b)
-        qd.sync()
-    finally:
-        if old_env is None:
-            os.environ.pop("QD_DUMP_IR", None)
-        else:
-            os.environ["QD_DUMP_IR"] = old_env
+        qd.loop_config(name="fill_b")
+        for i in range(n):
+            b[i] = i * 2
+
+    two_loops(a, b)
+    qd.sync()
 
     offload_files = list(tmp_path.glob("*after_offload*"))
     assert len(offload_files) > 0, f"No after_offload IR dumps found in {tmp_path}"
@@ -128,34 +124,30 @@ def test_loop_config_name_does_not_leak():
 
 
 @test_utils.test(offline_cache=False)
-def test_loop_config_name_does_not_leak_in_ir(tmp_path: pathlib.Path):
-    old_env = os.environ.get("QD_DUMP_IR")
-    os.environ["QD_DUMP_IR"] = "1"
+def test_loop_config_name_does_not_leak_in_ir(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
-    try:
-        n = 64
-        a = qd.ndarray(qd.i32, shape=(n,))
-        b = qd.ndarray(qd.i32, shape=(n,))
 
-        @qd.kernel
-        def no_leak_ir(
-            a: qd.types.ndarray(dtype=qd.i32, ndim=1),
-            b: qd.types.ndarray(dtype=qd.i32, ndim=1),
-        ):
-            qd.loop_config(name="only_first")
-            for i in range(n):
-                a[i] = i
+    n = 64
+    a = qd.ndarray(qd.i32, shape=(n,))
+    b = qd.ndarray(qd.i32, shape=(n,))
 
-            for i in range(n):
-                b[i] = i
+    @qd.kernel
+    def no_leak_ir(
+        a: qd.types.ndarray(dtype=qd.i32, ndim=1),
+        b: qd.types.ndarray(dtype=qd.i32, ndim=1),
+    ):
+        qd.loop_config(name="only_first")
+        for i in range(n):
+            a[i] = i
 
-        no_leak_ir(a, b)
-        qd.sync()
-    finally:
-        if old_env is None:
-            os.environ.pop("QD_DUMP_IR", None)
-        else:
-            os.environ["QD_DUMP_IR"] = old_env
+        for i in range(n):
+            b[i] = i
+
+    no_leak_ir(a, b)
+    qd.sync()
 
     offload_files = list(tmp_path.glob("*after_offload*"))
     assert len(offload_files) > 0
