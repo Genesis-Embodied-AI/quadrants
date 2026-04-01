@@ -1056,7 +1056,6 @@
     <span class="n">parallelize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">block_dim_adaptive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">bit_vectorize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Sets directives for the next loop</span>
 
@@ -1066,7 +1065,6 @@
 <span class="sd">        parallelize (int): The number of threads to use on CPU</span>
 <span class="sd">        block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default</span>
 <span class="sd">        bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.</span>
-<span class="sd">        name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.</span>
 
 <span class="sd">    Examples::</span>
 
@@ -1120,10 +1118,7 @@
         <span class="n">_block_dim_adaptive</span><span class="p">(</span><span class="n">block_dim_adaptive</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">bit_vectorize</span><span class="p">:</span>
-        <span class="n">_bit_vectorize</span><span class="p">()</span>
-
-    <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">set_loop_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+        <span class="n">_bit_vectorize</span><span class="p">()</span></div>
 
 
 
