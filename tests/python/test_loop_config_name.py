@@ -10,9 +10,7 @@ from tests import test_utils
 def test_loop_config_name_ir_dump(tmp_path: pathlib.Path):
     old_env = os.environ.get("QD_DUMP_IR")
     os.environ["QD_DUMP_IR"] = "1"
-    cfg = qd.lang.impl.current_cfg()
-    old_dump_path = cfg.debug_dump_path
-    cfg.debug_dump_path = str(tmp_path)
+    qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
     try:
         n = 128
         a = qd.ndarray(qd.i32, shape=(n,))
@@ -34,7 +32,6 @@ def test_loop_config_name_ir_dump(tmp_path: pathlib.Path):
         two_loops(a, b)
         qd.sync()
     finally:
-        cfg.debug_dump_path = old_dump_path
         if old_env is None:
             os.environ.pop("QD_DUMP_IR", None)
         else:
@@ -134,9 +131,7 @@ def test_loop_config_name_does_not_leak():
 def test_loop_config_name_does_not_leak_in_ir(tmp_path: pathlib.Path):
     old_env = os.environ.get("QD_DUMP_IR")
     os.environ["QD_DUMP_IR"] = "1"
-    cfg = qd.lang.impl.current_cfg()
-    old_dump_path = cfg.debug_dump_path
-    cfg.debug_dump_path = str(tmp_path)
+    qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
     try:
         n = 64
         a = qd.ndarray(qd.i32, shape=(n,))
@@ -157,7 +152,6 @@ def test_loop_config_name_does_not_leak_in_ir(tmp_path: pathlib.Path):
         no_leak_ir(a, b)
         qd.sync()
     finally:
-        cfg.debug_dump_path = old_dump_path
         if old_env is None:
             os.environ.pop("QD_DUMP_IR", None)
         else:
