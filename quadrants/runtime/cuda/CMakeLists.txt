@@ -3,7 +3,7 @@
 add_library(cuda_runtime)
 target_sources(cuda_runtime
   PRIVATE
-    gpu_graph_manager.cpp
+    graph_manager.cpp
     cuda_utils.cpp
     jit_cuda.cpp
     kernel_launcher.cpp

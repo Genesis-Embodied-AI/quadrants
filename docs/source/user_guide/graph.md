@@ -4,10 +4,10 @@ CUDA graphs reduce kernel launch overhead by capturing a sequence of GPU operati
 
 ## Basic usage
 
-Add `gpu_graph=True` to a `@qd.kernel` decorator:
+Add `graph=True` to a `@qd.kernel` decorator:
 
 ```python
-@qd.kernel(gpu_graph=True)
+@qd.kernel(graph=True)
 def my_kernel(
     x: qd.types.ndarray(qd.f32, ndim=1),
     y: qd.types.ndarray(qd.f32, ndim=1),
@@ -32,8 +32,8 @@ my_kernel(x, y)  # subsequent calls: replays the cached graph
 
 ### Restrictions
 
-- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use CUDA graphs. An error is raised if `gpu_graph=True` is set on such a kernel.
-- **Primal kernels only.** The `gpu_graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
+- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use CUDA graphs. An error is raised if `graph=True` is set on such a kernel.
+- **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
 
 ### Passing different arguments
 
@@ -56,10 +56,10 @@ When different fields are passed as template arguments, each unique combination 
 
 ## GPU-side iteration with `graph_do_while`
 
-For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `gpu_graph=True` kernel:
+For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `graph=True` kernel:
 
 ```python
-@qd.kernel(gpu_graph=True)
+@qd.kernel(graph=True)
 def solve(x: qd.types.ndarray(qd.f32, ndim=1),
           counter: qd.types.ndarray(qd.i32, ndim=0)):
     while qd.graph_do_while(counter):
@@ -85,7 +85,7 @@ The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndar
 **Counter-based**: set the counter to N, decrement each iteration. The body runs exactly N times.
 
 ```python
-@qd.kernel(gpu_graph=True)
+@qd.kernel(graph=True)
 def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
             counter: qd.types.ndarray(qd.i32, ndim=0)):
     while qd.graph_do_while(counter):
@@ -98,7 +98,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
 **Boolean flag**: set a `keep_going` flag to 1, have the kernel set it to 0 when a convergence criterion is met.
 
 ```python
-@qd.kernel(gpu_graph=True)
+@qd.kernel(graph=True)
 def converge(x: qd.types.ndarray(qd.f32, ndim=1),
              keep_going: qd.types.ndarray(qd.i32, ndim=0)):
     while qd.graph_do_while(keep_going):
