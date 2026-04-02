@@ -68,9 +68,9 @@ struct CachedGraph {
   std::size_t num_nodes{0};
 
   CachedGraph(std::size_t arg_buffer_size,
-                 std::size_t result_buffer_size,
-                 bool needs_counter_ptr_slot,
-                 LlvmRuntimeExecutor *executor);
+              std::size_t result_buffer_size,
+              bool needs_counter_ptr_slot,
+              LlvmRuntimeExecutor *executor);
   ~CachedGraph();
   CachedGraph(const CachedGraph &) = delete;
   CachedGraph &operator=(const CachedGraph &) = delete;

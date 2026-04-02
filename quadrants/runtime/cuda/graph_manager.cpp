@@ -76,9 +76,9 @@ static const char *kConditionKernelPTX = R"PTX(
 )PTX";
 
 CachedGraph::CachedGraph(std::size_t arg_buf_size,
-                               std::size_t result_buf_size,
-                               bool needs_counter_ptr_slot,
-                               LlvmRuntimeExecutor *executor)
+                         std::size_t result_buf_size,
+                         bool needs_counter_ptr_slot,
+                         LlvmRuntimeExecutor *executor)
     : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
   CUDADriver::get_instance().malloc(
       (void **)&persistent_device_result_buffer,
@@ -272,12 +272,12 @@ void GraphManager::ensure_condition_kernel_loaded() {
 }
 
 void *GraphManager::add_kernel_node(void *graph,
-                                       void *prev_node,
-                                       void *func,
-                                       unsigned int grid_dim,
-                                       unsigned int block_dim,
-                                       unsigned int shared_mem,
-                                       void **kernel_params) {
+                                    void *prev_node,
+                                    void *func,
+                                    unsigned int grid_dim,
+                                    unsigned int block_dim,
+                                    unsigned int shared_mem,
+                                    void **kernel_params) {
   // Opt-in to the requested dynamic shared memory size, just as
   // CUDAContext::launch does for the non-graph path.
   if (shared_mem > 0) {
@@ -339,8 +339,8 @@ void *GraphManager::add_conditional_while_node(
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached,
-                                          LaunchContextBuilder &ctx,
-                                          bool use_graph_do_while) {
+                                       LaunchContextBuilder &ctx,
+                                       bool use_graph_do_while) {
   // TODO: these two memcpy_host_to_device calls could be async
   // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
   if (use_graph_do_while && cached.counter_ptr_slot) {
@@ -388,7 +388,7 @@ bool GraphManager::try_launch(
   CUDAContext::get_instance().make_current();
 
   CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
-                        use_graph_do_while, executor);
+                     use_graph_do_while, executor);
 
   if (cached.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(
