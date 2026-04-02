@@ -1559,6 +1559,8 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
   // Shared arrays have already created an accesschain, use it directly.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
 
+  // The dest_is_ptr ternaries guard against calling at_buffer() on workgroup
+  // pointers, which would fail (at_buffer only handles StorageBuffer).
   if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
@@ -1589,25 +1591,22 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       atomic_fp_op = spv::OpAtomicFAddEXT;
     }
 
-    // Uint-retyped shared arrays must use CAS (uint pointer, not float).
     bool use_native_atomics = false;
 
-    if (!uint_backed_shared_float_ptr_stmts_.count(stmt->dest)) {
-      if (dt->is_primitive(PrimitiveTypeID::f64)) {
-        if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
-            stmt->op_type == AtomicOpType::add) {
-          use_native_atomics = true;
-        }
-      } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
-        if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
-            stmt->op_type == AtomicOpType::add) {
-          use_native_atomics = true;
-        }
-      } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
-        if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
-            stmt->op_type == AtomicOpType::add) {
-          use_native_atomics = true;
-        }
+    if (dt->is_primitive(PrimitiveTypeID::f64)) {
+      if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
+          stmt->op_type == AtomicOpType::add) {
+        use_native_atomics = true;
+      }
+    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+      if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
+          stmt->op_type == AtomicOpType::add) {
+        use_native_atomics = true;
+      }
+    } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
+      if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
+          stmt->op_type == AtomicOpType::add) {
+        use_native_atomics = true;
       }
     }
 
