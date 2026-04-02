@@ -784,7 +784,97 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     }
   }
 
+  void visit(InternalFuncStmt *stmt) override {
+    if (stmt->func_name == "subgroupShuffle" ||
+        stmt->func_name == "subgroupBroadcast") {
+      llvm_val[stmt] = emit_subgroup_shuffle(
+          llvm_val[stmt->args[0]], stmt->args[0]->ret_type,
+          llvm_val[stmt->args[1]], "cuda_shfl_sync", 31);
+    } else if (stmt->func_name == "subgroupShuffleDown") {
+      llvm_val[stmt] = emit_subgroup_shuffle(
+          llvm_val[stmt->args[0]], stmt->args[0]->ret_type,
+          llvm_val[stmt->args[1]], "cuda_shfl_down_sync", 31);
+    } else if (stmt->func_name == "subgroupShuffleUp") {
+      llvm_val[stmt] = emit_subgroup_shuffle(
+          llvm_val[stmt->args[0]], stmt->args[0]->ret_type,
+          llvm_val[stmt->args[1]], "cuda_shfl_up_sync", 0);
+    } else if (stmt->func_name == "subgroupBarrier") {
+      call("warp_barrier", tlctx->get_constant((uint32)0xFFFFFFFF));
+      llvm_val[stmt] = tlctx->get_constant((int32)0);
+    } else if (stmt->func_name == "subgroupMemoryBarrier") {
+      call("block_memfence");
+      llvm_val[stmt] = tlctx->get_constant((int32)0);
+    } else if (stmt->func_name == "subgroupSize") {
+      llvm_val[stmt] = tlctx->get_constant((int32)32);
+    } else if (stmt->func_name == "subgroupInvocationId") {
+      auto tid = call("thread_idx");
+      llvm_val[stmt] =
+          builder->CreateAnd(tid, tlctx->get_constant((int32)31));
+    } else if (stmt->func_name == "subgroupElect") {
+      auto tid = call("thread_idx");
+      auto lane = builder->CreateAnd(tid, tlctx->get_constant((int32)31));
+      auto is_zero =
+          builder->CreateICmpEQ(lane, tlctx->get_constant((int32)0));
+      llvm_val[stmt] = builder->CreateZExt(
+          is_zero, llvm::Type::getInt32Ty(*llvm_context));
+    } else if (stmt->func_name.find("subgroup") == 0) {
+      QD_ERROR(
+          "Subgroup operation '{}' is not yet supported on CUDA. "
+          "Use qd.simt.warp equivalents instead.",
+          stmt->func_name);
+    } else {
+      TaskCodeGenLLVM::visit(stmt);
+    }
+  }
+
  private:
+  llvm::Value *emit_subgroup_shuffle(llvm::Value *value,
+                                     DataType dt,
+                                     llvm::Value *index,
+                                     const std::string &cuda_func_prefix,
+                                     int width_param) {
+    auto mask = tlctx->get_constant((uint32)0xFFFFFFFF);
+    auto width = tlctx->get_constant((int32)width_param);
+
+    if (dt->is_primitive(PrimitiveTypeID::i32) ||
+        dt->is_primitive(PrimitiveTypeID::u32)) {
+      return call(cuda_func_prefix + "_i32", mask, value, index, width);
+    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+      return call(cuda_func_prefix + "_f32", mask, value, index, width);
+    } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
+      auto i64_ty = llvm::Type::getInt64Ty(*llvm_context);
+      auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
+      auto f64_ty = llvm::Type::getDoubleTy(*llvm_context);
+
+      auto as_i64 = builder->CreateBitCast(value, i64_ty);
+      auto lo = builder->CreateTrunc(as_i64, i32_ty);
+      auto hi = builder->CreateTrunc(builder->CreateLShr(as_i64, 32), i32_ty);
+      lo = call(cuda_func_prefix + "_i32", mask, lo, index, width);
+      hi = call(cuda_func_prefix + "_i32", mask, hi, index, width);
+      auto lo_64 = builder->CreateZExt(lo, i64_ty);
+      auto hi_64 = builder->CreateZExt(hi, i64_ty);
+      auto combined =
+          builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
+      return builder->CreateBitCast(combined, f64_ty);
+    } else if (dt->is_primitive(PrimitiveTypeID::i64) ||
+               dt->is_primitive(PrimitiveTypeID::u64)) {
+      auto i64_ty = llvm::Type::getInt64Ty(*llvm_context);
+      auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
+
+      auto lo = builder->CreateTrunc(value, i32_ty);
+      auto hi = builder->CreateTrunc(builder->CreateLShr(value, 32), i32_ty);
+      lo = call(cuda_func_prefix + "_i32", mask, lo, index, width);
+      hi = call(cuda_func_prefix + "_i32", mask, hi, index, width);
+      auto lo_64 = builder->CreateZExt(lo, i64_ty);
+      auto hi_64 = builder->CreateZExt(hi, i64_ty);
+      return builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
+    } else {
+      QD_ERROR("subgroup shuffle: unsupported type {}",
+               data_type_name(dt));
+      return nullptr;
+    }
+  }
+
   std::tuple<llvm::Value *, llvm::Value *> get_spmd_info() override {
     auto thread_idx = builder->CreateIntrinsic(
         Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
