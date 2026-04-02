@@ -557,51 +557,12 @@ def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
 
 
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_shuffle_i32_broadcast():
-    """Broadcast lane 0's value to all lanes. Works with any subgroup size."""
+def test_subgroup_shuffle_broadcast(dtype):
+    """Broadcast lane 0's value to all lanes via shuffle."""
     N = 64
-    a = qd.field(dtype=qd.i32, shape=N)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=N)
-        for i in range(N):
-            lane = subgroup.invocation_id()
-            val = qd.cast(lane + 100, qd.i32)
-            a[i] = subgroup.shuffle(val, qd.u32(0))
-
-    foo()
-
-    for i in range(N):
-        assert a[i] == 100
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_shuffle_f32_broadcast():
-    """Broadcast lane 0's f32 value to all lanes."""
-    N = 64
-    a = qd.field(dtype=qd.f32, shape=N)
-
-    @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=N)
-        for i in range(N):
-            lane = subgroup.invocation_id()
-            val = qd.cast(lane, qd.f32) * 0.5 + 3.14
-            a[i] = subgroup.shuffle(val, qd.u32(0))
-
-    foo()
-
-    for i in range(N):
-        assert a[i] == approx(3.14, abs=1e-4)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_subgroup_shuffle_f64_broadcast():
-    """Broadcast lane 0's f64 value via shuffle, verifying full precision."""
-    N = 64
-    a = qd.field(dtype=qd.f64, shape=N)
+    a = qd.field(dtype=dtype, shape=N)
 
     @qd.kernel
     def foo():
@@ -610,40 +571,44 @@ def test_subgroup_shuffle_f64_broadcast():
             a[i] = subgroup.shuffle(a[i], qd.u32(0))
 
     for i in range(N):
-        a[i] = 1.0000000000001 * (i + 1)
+        a[i] = dtype(1.0000000000001 * (i + 1))
 
-    expected_lane0 = a[0]
+    expected = a[0]
     foo()
 
     # Lanes 0-3 are guaranteed to be in the same subgroup (min size is 4).
     for i in range(4):
-        assert a[i] == expected_lane0
+        assert a[i] == expected
 
 
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_shuffle_roundtrip():
+def test_subgroup_shuffle_roundtrip(dtype):
     """Each lane shuffles to its own ID (identity shuffle)."""
     N = 64
-    a = qd.field(dtype=qd.i32, shape=N)
+    a = qd.field(dtype=dtype, shape=N)
+    diff = qd.field(dtype=dtype, shape=N)
 
     @qd.kernel
     def foo():
         qd.loop_config(block_dim=N)
         for i in range(N):
             lane = subgroup.invocation_id()
-            val = qd.cast(lane * 7 + 42, qd.i32)
-            result = subgroup.shuffle(val, qd.cast(lane, qd.u32))
-            a[i] = result - val
+            result = subgroup.shuffle(a[i], qd.cast(lane, qd.u32))
+            diff[i] = result - a[i]
+
+    for i in range(N):
+        a[i] = dtype(1.0000000000001 * (i + 1))
 
     foo()
 
     for i in range(N):
-        assert a[i] == 0
+        assert diff[i] == 0
 
 
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
-    """Verify invocation IDs are in [0, 32) — valid for all current GPU backends."""
+    """Verify invocation IDs are non-negative."""
     N = 64
     a = qd.field(dtype=qd.i32, shape=N)
 
