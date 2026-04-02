@@ -307,7 +307,7 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
             caps_->get(DeviceCapability::spirv_has_shared_atomic_float16_add);
       if (needs_cas || !has_native_shared_add) {
         scalar_stype =
-            ir_->get_primitive_type(ir_->get_atomic_uint_dtype(scalar_dtype));
+            ir_->get_primitive_type(get_atomic_uint_dtype(*ir_, scalar_dtype));
         uint_backed_shared_float_ptr_stmts_.insert(alloca);
       }
     }
@@ -342,7 +342,7 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   auto get_maybe_retyped_stype = [&]() -> spirv::SType {
     auto scalar_stype = ir_->get_primitive_type(dt);
     if (uint_backed_shared_float_ptr_stmts_.count(stmt->origin)) {
-      scalar_stype = ir_->get_primitive_type(ir_->get_atomic_uint_dtype(dt));
+      scalar_stype = ir_->get_primitive_type(get_atomic_uint_dtype(*ir_, dt));
       uint_backed_shared_float_ptr_stmts_.insert(stmt);
     }
     return scalar_stype;
@@ -390,9 +390,9 @@ void TaskCodegen::visit(LocalLoadStmt *stmt) {
   spirv::Value val;
   if (uint_backed_shared_float_ptr_stmts_.count(ptr)) {
     auto shared_type = ir_->get_primitive_type(
-        ir_->get_atomic_uint_dtype(stmt->element_type()));
+        get_atomic_uint_dtype(*ir_, stmt->element_type()));
     val = ir_->load_variable(ptr_val, shared_type);
-    val = ir_->shared_uint_to_float(val, stmt->element_type());
+    val = shared_uint_to_float(*ir_, val, stmt->element_type());
   } else {
     val = ir_->load_variable(ptr_val, expected_type);
   }
@@ -403,7 +403,7 @@ void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
   if (uint_backed_shared_float_ptr_stmts_.count(stmt->dest)) {
-    val = ir_->float_to_shared_uint(val, stmt->val->element_type());
+    val = float_to_shared_uint(*ir_, val, stmt->val->element_type());
   }
   ir_->store_variable(ptr_val, val);
 }
@@ -1662,13 +1662,12 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       val = ir_->make_value(atomic_fp_op, ir_->get_primitive_type(dt), addr_ptr,
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
+    } else if (dest_is_ptr) {
+      // Shared arrays use width-aware CAS (e.g. u32 backing for f16).
+      val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
-      // For shared arrays (dest_is_ptr), use get_atomic_uint_dtype which may
-      // widen sub-32-bit types (f16->u32). For device buffers, use same-width.
-      auto atomic_uint_dt = dest_is_ptr ? ir_->get_atomic_uint_dtype(dt)
-                                        : ir_->get_quadrants_uint_type(dt);
-      val =
-          ir_->float_atomic(stmt->op_type, addr_ptr, data, dt, atomic_uint_dt);
+      // Device buffers use same-width CAS.
+      val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
     bool use_native_atomics = false;
