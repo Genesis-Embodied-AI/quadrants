@@ -277,8 +277,7 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   // alloca->ret_type is a pointer to the stored type; ptr_removed() gives the
   // stored type itself (e.g. TensorType<32 x f32> for a 32-element array).
   auto alloca_type = alloca->ret_type.ptr_removed();
-  // Shared array is *always* modeled as a tensor type (i.e. an array of
-  // scalars).
+  // Shared array is always modeled as a tensor type, i.e. an array of scalars.
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
     auto elem_num = tensor_type->get_num_elements();
     DataType scalar_dtype = tensor_type->get_element_type();
@@ -314,7 +313,7 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   spirv::Value origin_val = ir_->query_value(stmt->origin->raw_name());
   spirv::Value offset_val = ir_->query_value(stmt->offset->raw_name());
   auto dt = stmt->element_type().ptr_removed();
-  // Flatten nested tensor types to scalar (e.g., vec3 to f32)
+  // Flatten nested tensor types to scalar, e.g. vec3 to f32
   if (auto nested = dt->cast<TensorType>()) {
     dt = nested->get_element_type();
   }
@@ -1557,29 +1556,29 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
 
   spirv::Value addr_ptr;
   spirv::Value dest_val = ir_->query_value(stmt->dest->raw_name());
-  // Shared (workgroup) arrays already have a typed pointer from OpAccessChain.
-  // at_buffer() constructs a StorageBuffer pointer and would fail on workgroup
-  // storage, so we check dest_is_ptr first before the dtype dispatch.
+  // Shared arrays have already created an accesschain, use it directly.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
 
-  if (dest_is_ptr) {
-    addr_ptr = dest_val;
-  } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
+  if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
-      addr_ptr = at_buffer(stmt->dest, dt);
+      addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = dest_is_ptr
+                     ? dest_val
+                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
         stmt->op_type == AtomicOpType::add) {
-      addr_ptr = at_buffer(stmt->dest, dt);
+      addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
     } else {
-      addr_ptr = at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
+      addr_ptr = dest_is_ptr
+                     ? dest_val
+                     : at_buffer(stmt->dest, ir_->get_quadrants_uint_type(dt));
     }
   } else {
-    addr_ptr = at_buffer(stmt->dest, dt);
+    addr_ptr = dest_is_ptr ? dest_val : at_buffer(stmt->dest, dt);
   }
 
   auto ret_type = ir_->get_primitive_type(dt);
@@ -1590,15 +1589,26 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       atomic_fp_op = spv::OpAtomicFAddEXT;
     }
 
-    // Native float atomics require a float-typed pointer. Uint-retyped shared
-    // arrays have uint pointers and must use CAS. Non-retyped shared arrays
-    // (device supports native shared float atomics) keep float pointers.
+    // Uint-retyped shared arrays must use CAS (uint pointer, not float).
     bool use_native_atomics = false;
 
-    if (!uint_backed_shared_float_ptr_stmts_.count(stmt->dest) &&
-        stmt->op_type == AtomicOpType::add &&
-        has_native_float_atomic_add(*caps_, dt, dest_is_ptr)) {
-      use_native_atomics = true;
+    if (!uint_backed_shared_float_ptr_stmts_.count(stmt->dest)) {
+      if (dt->is_primitive(PrimitiveTypeID::f64)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      } else if (dt->is_primitive(PrimitiveTypeID::f16)) {
+        if (caps_->get(DeviceCapability::spirv_has_atomic_float16_add) &&
+            stmt->op_type == AtomicOpType::add) {
+          use_native_atomics = true;
+        }
+      }
     }
 
     if (use_native_atomics) {
@@ -1606,10 +1616,8 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
     } else if (dest_is_ptr) {
-      // Shared arrays use width-aware CAS (e.g. u32 backing for f16).
       val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
-      // Device buffers use same-width CAS.
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
     }
   } else if (is_integral(dt)) {
