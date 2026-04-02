@@ -571,7 +571,7 @@ def test_subgroup_shuffle_broadcast(dtype):
             a[i] = subgroup.shuffle(a[i], qd.u32(0))
 
     for i in range(N):
-        a[i] = dtype(1.0000000000001 * (i + 1))
+        a[i] = 1.0000000000001 * (i + 1)
 
     expected = a[0]
     foo()
@@ -598,7 +598,7 @@ def test_subgroup_shuffle_roundtrip(dtype):
             diff[i] = result - a[i]
 
     for i in range(N):
-        a[i] = dtype(1.0000000000001 * (i + 1))
+        a[i] = 1.0000000000001 * (i + 1)
 
     foo()
 
@@ -626,7 +626,7 @@ def test_subgroup_shuffle_cross_lane(dtype):
             dst[i] = subgroup.shuffle(src[i], qd.cast(src_lane, qd.u32))
 
     for i in range(N):
-        src[i] = dtype(1.0000000000001 * (i + 1))
+        src[i] = 1.0000000000001 * (i + 1)
 
     foo()
 
@@ -654,7 +654,7 @@ def test_subgroup_shuffle_xor_pattern(dtype):
             dst[i] = subgroup.shuffle(src[i], qd.cast(lane ^ 1, qd.u32))
 
     for i in range(N):
-        src[i] = dtype(1.0000000000001 * (i + 1))
+        src[i] = 1.0000000000001 * (i + 1)
 
     foo()
 
