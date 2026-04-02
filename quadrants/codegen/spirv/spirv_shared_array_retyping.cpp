@@ -16,6 +16,14 @@ const AllocaStmt *trace_to_alloca(const Stmt *stmt) {
   return nullptr;
 }
 
+DataType get_atomic_uint_dtype(IRBuilder &ir, const DataType &dt) {
+  DataType uint_dt = ir.get_quadrants_uint_type(dt);
+  if (uint_dt == PrimitiveType::u16 || uint_dt == PrimitiveType::u8) {
+    return PrimitiveType::u32;
+  }
+  return uint_dt;
+}
+
 // CAS loop with width-aware uint<->float conversion. The atomic backing type
 // (res_type) may be wider than the float type (e.g. u32 for f16), so
 // OpUConvert narrows/widens around the bitcasts.
@@ -129,29 +137,72 @@ void scan_shared_atomic_allocs(Block *ir_block,
   }
 }
 
-DataType get_atomic_uint_dtype(IRBuilder &ir, const DataType &dt) {
-  DataType uint_dt = ir.get_quadrants_uint_type(dt);
-  if (uint_dt == PrimitiveType::u16 || uint_dt == PrimitiveType::u8) {
-    return PrimitiveType::u32;
-  }
-  return uint_dt;
+SType maybe_retype_shared_float_alloca(
+    IRBuilder &ir,
+    const DeviceCapabilityConfig &caps,
+    const AllocaStmt *alloca,
+    const DataType &scalar_dtype,
+    const std::unordered_map<const Stmt *, bool> &alloc_map,
+    std::unordered_set<const Stmt *> &retyped_stmts) {
+  auto stype = ir.get_primitive_type(scalar_dtype);
+  auto it = alloc_map.find(alloca);
+  if (it == alloc_map.end())
+    return stype;
+  bool needs_cas = it->second;
+  if (!needs_cas && has_native_float_atomic_add(caps, scalar_dtype, true))
+    return stype;
+  stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
+  retyped_stmts.insert(alloca);
+  return stype;
 }
 
-Value shared_uint_to_float(IRBuilder &ir, Value val, const DataType &dt) {
-  SType narrow_uint = ir.get_primitive_uint_type(dt);
-  SType atomic_uint = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
-  if (atomic_uint.id != narrow_uint.id) {
-    val = ir.make_value(spv::OpUConvert, narrow_uint, val);
+SType maybe_retype_derived_ptr(
+    IRBuilder &ir,
+    const Stmt *origin,
+    const Stmt *stmt,
+    const DataType &dt,
+    std::unordered_set<const Stmt *> &retyped_stmts) {
+  auto stype = ir.get_primitive_type(dt);
+  if (retyped_stmts.count(origin)) {
+    stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
+    retyped_stmts.insert(stmt);
   }
-  return ir.make_value(spv::OpBitcast, ir.get_primitive_type(dt), val);
+  return stype;
 }
 
-Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
-  SType narrow_uint = ir.get_primitive_uint_type(dt);
-  val = ir.make_value(spv::OpBitcast, narrow_uint, val);
-  SType atomic_uint = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
-  if (atomic_uint.id != narrow_uint.id) {
-    val = ir.make_value(spv::OpUConvert, atomic_uint, val);
+Value load_shared_float(IRBuilder &ir,
+                        Value ptr_val,
+                        const Stmt *ptr,
+                        const DataType &element_type,
+                        const std::unordered_set<const Stmt *> &retyped_stmts) {
+  if (retyped_stmts.count(ptr)) {
+    auto shared_type =
+        ir.get_primitive_type(get_atomic_uint_dtype(ir, element_type));
+    Value val = ir.load_variable(ptr_val, shared_type);
+    SType narrow_uint = ir.get_primitive_uint_type(element_type);
+    if (shared_type.id != narrow_uint.id) {
+      val = ir.make_value(spv::OpUConvert, narrow_uint, val);
+    }
+    return ir.make_value(spv::OpBitcast, ir.get_primitive_type(element_type),
+                         val);
+  }
+  return ir.load_variable(ptr_val, ir.get_primitive_type(element_type));
+}
+
+Value store_shared_float(
+    IRBuilder &ir,
+    Value val,
+    const Stmt *dest,
+    const DataType &val_type,
+    const std::unordered_set<const Stmt *> &retyped_stmts) {
+  if (retyped_stmts.count(dest)) {
+    SType narrow_uint = ir.get_primitive_uint_type(val_type);
+    val = ir.make_value(spv::OpBitcast, narrow_uint, val);
+    SType atomic_uint =
+        ir.get_primitive_type(get_atomic_uint_dtype(ir, val_type));
+    if (atomic_uint.id != narrow_uint.id) {
+      val = ir.make_value(spv::OpUConvert, atomic_uint, val);
+    }
   }
   return val;
 }
@@ -195,6 +246,24 @@ Value shared_float_atomic(IRBuilder &ir,
   } else {
     QD_NOT_IMPLEMENTED
   }
+}
+
+bool has_native_float_atomic_add(const DeviceCapabilityConfig &caps,
+                                 const DataType &dt,
+                                 bool is_shared) {
+  if (dt->is_primitive(PrimitiveTypeID::f32))
+    return caps.get(is_shared
+                        ? DeviceCapability::spirv_has_shared_atomic_float_add
+                        : DeviceCapability::spirv_has_atomic_float_add);
+  if (dt->is_primitive(PrimitiveTypeID::f64))
+    return caps.get(is_shared
+                        ? DeviceCapability::spirv_has_shared_atomic_float64_add
+                        : DeviceCapability::spirv_has_atomic_float64_add);
+  if (dt->is_primitive(PrimitiveTypeID::f16))
+    return caps.get(is_shared
+                        ? DeviceCapability::spirv_has_shared_atomic_float16_add
+                        : DeviceCapability::spirv_has_atomic_float16_add);
+  return false;
 }
 
 }  // namespace spirv
