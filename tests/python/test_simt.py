@@ -557,6 +557,11 @@ def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
 
 
+def _init_field(field, n, dtype):
+    for i in range(n):
+        field[i] = (i + 1) if dtype == qd.i32 else 1.0000000000001 * (i + 1)
+
+
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_broadcast(dtype):
@@ -570,8 +575,7 @@ def test_subgroup_shuffle_broadcast(dtype):
         for i in range(N):
             a[i] = subgroup.shuffle(a[i], qd.u32(0))
 
-    for i in range(N):
-        a[i] = 1.0000000000001 * (i + 1)
+    _init_field(a, N, dtype)
 
     expected = a[0]
     foo()
@@ -597,8 +601,7 @@ def test_subgroup_shuffle_roundtrip(dtype):
             result = subgroup.shuffle(a[i], qd.cast(lane, qd.u32))
             diff[i] = result - a[i]
 
-    for i in range(N):
-        a[i] = 1.0000000000001 * (i + 1)
+    _init_field(a, N, dtype)
 
     foo()
 
@@ -625,8 +628,7 @@ def test_subgroup_shuffle_cross_lane(dtype):
             src_lane = group_base + 3 - lane % 4
             dst[i] = subgroup.shuffle(src[i], qd.cast(src_lane, qd.u32))
 
-    for i in range(N):
-        src[i] = 1.0000000000001 * (i + 1)
+    _init_field(src, N, dtype)
 
     foo()
 
@@ -653,8 +655,7 @@ def test_subgroup_shuffle_xor_pattern(dtype):
             lane = subgroup.invocation_id()
             dst[i] = subgroup.shuffle(src[i], qd.cast(lane ^ 1, qd.u32))
 
-    for i in range(N):
-        src[i] = 1.0000000000001 * (i + 1)
+    _init_field(src, N, dtype)
 
     foo()
 
