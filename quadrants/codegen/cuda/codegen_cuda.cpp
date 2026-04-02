@@ -787,13 +787,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
   void visit(InternalFuncStmt *stmt) override {
     if (stmt->func_name == "subgroupShuffle" ||
         stmt->func_name == "subgroupBroadcast") {
-      llvm_val[stmt] = emit_subgroup_shuffle(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type,
-          llvm_val[stmt->args[1]]);
+      llvm_val[stmt] = emit_subgroup_shuffle(llvm_val[stmt->args[0]],
+                                             stmt->args[0]->ret_type,
+                                             llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       auto tid = call("thread_idx");
-      llvm_val[stmt] =
-          builder->CreateAnd(tid, tlctx->get_constant((int32)31));
+      llvm_val[stmt] = builder->CreateAnd(tid, tlctx->get_constant((int32)31));
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
@@ -823,8 +822,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       hi = call("cuda_shfl_sync_i32", mask, hi, index, width);
       auto lo_64 = builder->CreateZExt(lo, i64_ty);
       auto hi_64 = builder->CreateZExt(hi, i64_ty);
-      auto combined =
-          builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
+      auto combined = builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
       return builder->CreateBitCast(combined, f64_ty);
     } else if (dt->is_primitive(PrimitiveTypeID::i64) ||
                dt->is_primitive(PrimitiveTypeID::u64)) {
@@ -839,8 +837,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       auto hi_64 = builder->CreateZExt(hi, i64_ty);
       return builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
     } else {
-      QD_ERROR("subgroup shuffle: unsupported type {}",
-               data_type_name(dt));
+      QD_ERROR("subgroup shuffle: unsupported type {}", data_type_name(dt));
       return nullptr;
     }
   }

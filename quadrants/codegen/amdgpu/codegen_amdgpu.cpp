@@ -510,8 +510,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
                                     {byte_index, hi});
       auto lo_64 = builder->CreateZExt(lo, i64_ty);
       auto hi_64 = builder->CreateZExt(hi, i64_ty);
-      auto combined =
-          builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
+      auto combined = builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
       return builder->CreateBitCast(combined, f64_ty);
     } else if (dt->is_primitive(PrimitiveTypeID::i64) ||
                dt->is_primitive(PrimitiveTypeID::u64)) {

@@ -606,6 +606,65 @@ def test_subgroup_shuffle_roundtrip(dtype):
         assert diff[i] == 0
 
 
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_cross_lane(dtype):
+    """Each lane in a group of 4 reads from a different lane in the group."""
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            group_base = (lane // 4) * 4
+            # Each lane reads from lane (group_base + 3 - probe_id),
+            # i.e. lane 0 reads from lane 3, lane 1 from lane 2, etc.
+            src_lane = group_base + 3 - lane % 4
+            dst[i] = subgroup.shuffle(src[i], qd.cast(src_lane, qd.u32))
+
+    for i in range(N):
+        src[i] = dtype(1.0000000000001 * (i + 1))
+
+    foo()
+
+    # Lanes 0-3 are guaranteed to be in the same subgroup.
+    # Lane 0 should have lane 3's value, lane 1 should have lane 2's, etc.
+    assert dst[0] == src[3]
+    assert dst[1] == src[2]
+    assert dst[2] == src[1]
+    assert dst[3] == src[0]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_xor_pattern(dtype):
+    """XOR shuffle: each lane reads from lane_id ^ 1 (swap neighbors)."""
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            dst[i] = subgroup.shuffle(src[i], qd.cast(lane ^ 1, qd.u32))
+
+    for i in range(N):
+        src[i] = dtype(1.0000000000001 * (i + 1))
+
+    foo()
+
+    # Lanes 0-3 are in the same subgroup: 0<->1 swap, 2<->3 swap
+    assert dst[0] == src[1]
+    assert dst[1] == src[0]
+    assert dst[2] == src[3]
+    assert dst[3] == src[2]
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""
