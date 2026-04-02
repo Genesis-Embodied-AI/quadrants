@@ -248,6 +248,74 @@ def test_shfl_sync_f32():
 
 
 @test_utils.test(arch=qd.cuda)
+def test_shfl_sync_f64():
+    a = qd.field(dtype=qd.f64, shape=32)
+
+    @qd.kernel
+    def broadcast_lane0():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = qd.simt.warp.shfl_sync_f64(qd.u32(0xFFFFFFFF), a[i], 0)
+
+    # Use values that exercise the full f64 mantissa (not exactly representable in f32)
+    for i in range(32):
+        a[i] = 1.0000000000001 * (i + 1)
+
+    expected = a[0]
+    broadcast_lane0()
+
+    for i in range(32):
+        assert a[i] == expected
+
+    # Test shuffle to an arbitrary source lane
+    @qd.kernel
+    def broadcast_lane17():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = qd.simt.warp.shfl_sync_f64(qd.u32(0xFFFFFFFF), a[i], 17)
+
+    for i in range(32):
+        a[i] = 3.141592653589793 + i * 1e-12
+
+    expected = a[17]
+    broadcast_lane17()
+
+    for i in range(32):
+        assert a[i] == expected
+
+
+@test_utils.test(arch=qd.cuda)
+def test_shfl_sync_f64_negative_and_special():
+    a = qd.field(dtype=qd.f64, shape=32)
+
+    @qd.kernel
+    def broadcast_lane0():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = qd.simt.warp.shfl_sync_f64(qd.u32(0xFFFFFFFF), a[i], 0)
+
+    # Negative value with high-bit pattern in upper 32 bits
+    for i in range(32):
+        a[i] = -1.23456789012345e+100 if i == 0 else float(i)
+
+    expected = a[0]
+    broadcast_lane0()
+
+    for i in range(32):
+        assert a[i] == expected
+
+    # Very small subnormal-adjacent value
+    for i in range(32):
+        a[i] = 1e-308 if i == 0 else float(i)
+
+    expected = a[0]
+    broadcast_lane0()
+
+    for i in range(32):
+        assert a[i] == expected
+
+
+@test_utils.test(arch=qd.cuda)
 def test_shfl_up_i32():
     # TODO
     pass
