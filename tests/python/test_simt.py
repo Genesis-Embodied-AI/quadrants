@@ -710,43 +710,56 @@ def test_subgroup_shuffle_roundtrip():
         assert a[i] == 0
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
 def test_subgroup_shuffle_down_i32():
-    a = qd.field(dtype=qd.i32, shape=32)
-    b = qd.field(dtype=qd.i32, shape=32)
+    """Shuffle down by 1. Uses invocation_id so it's subgroup-size-independent."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+    lane_field = qd.field(dtype=qd.i32, shape=N)
+    sg_field = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
     def foo():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
-            a[i] = subgroup.shuffle_down(b[i], qd.u32(1))
-
-    for i in range(32):
-        b[i] = i * i
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            sg_size = subgroup.group_size()
+            val = qd.cast(lane * lane, qd.i32)
+            a[i] = subgroup.shuffle_down(val, qd.u32(1))
+            lane_field[i] = lane
+            sg_field[i] = sg_size
 
     foo()
 
-    for i in range(31):
-        assert a[i] == b[i + 1]
+    for i in range(N):
+        lane = lane_field[i]
+        sg_size = sg_field[i]
+        if lane < sg_size - 1:
+            assert a[i] == (lane + 1) * (lane + 1)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
 def test_subgroup_shuffle_up_i32():
-    a = qd.field(dtype=qd.i32, shape=32)
+    """Shuffle up by 1. Uses invocation_id so it's subgroup-size-independent."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+    lane_field = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
     def foo():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
-            a[i] = subgroup.shuffle_up(a[i], qd.u32(1))
-
-    for i in range(32):
-        a[i] = i * i
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            val = qd.cast(lane * lane, qd.i32)
+            a[i] = subgroup.shuffle_up(val, qd.u32(1))
+            lane_field[i] = lane
 
     foo()
 
-    for i in range(1, 32):
-        assert a[i] == (i - 1) * (i - 1)
+    for i in range(N):
+        lane = lane_field[i]
+        if lane > 0:
+            assert a[i] == (lane - 1) * (lane - 1)
 
 
 @test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
