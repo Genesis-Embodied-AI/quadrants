@@ -1,3 +1,6 @@
+// Note: this module operates only on Quadrants IR types (AllocaStmt, Block,
+// etc.) and SPIR-V types — no LLVM types are involved.
+
 #include "quadrants/codegen/spirv/spirv_shared_array_retyping.h"
 
 #include "quadrants/ir/type_utils.h"
@@ -105,11 +108,18 @@ void scan_shared_atomic_allocs(Block *ir_block,
     if (auto *atomic_stmt = s->cast<AtomicOpStmt>()) {
       if (auto *alloca = trace_to_alloca(atomic_stmt->dest)) {
         if (alloca->is_shared) {
+          // alloca->ret_type is a pointer to the stored type;
+          // ptr_removed() gives the stored type (e.g. array of 128 floats).
           auto alloca_dtype = alloca->ret_type.ptr_removed();
+          // Shared array is always modeled as a tensor type.
           if (auto *tensor_type = alloca_dtype->cast<TensorType>()) {
             auto scalar_dtype = tensor_type->get_element_type();
-            if (auto *nested = scalar_dtype->cast<TensorType>())
+            if (auto *nested = scalar_dtype->cast<TensorType>()) {
               scalar_dtype = nested->get_element_type();
+              QD_ASSERT_INFO(
+                  !scalar_dtype->cast<TensorType>(),
+                  "Nested tensor types deeper than 2 levels not supported");
+            }
             if (is_real(scalar_dtype)) {
               bool has_non_add = (atomic_stmt->op_type != AtomicOpType::add);
               auto [it, inserted] = out.emplace(alloca, has_non_add);

@@ -328,7 +328,7 @@ def test_shared_array_float_atomics(op, dtype):
                 sharr[tid] = val
                 qd.simt.block.sync()
                 atomic_fn(sharr[0], val)
-                qd.simt.block.sync()
+                qd.simt.block.sync()  # wait for all threads' atomics to complete
                 out[i] = sharr[0]
 
         return kern
