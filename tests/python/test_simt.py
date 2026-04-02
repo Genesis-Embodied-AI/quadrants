@@ -1,3 +1,5 @@
+import platform
+
 import numpy as np
 import pytest
 from pytest import approx
@@ -6,6 +8,16 @@ import quadrants as qd
 from quadrants.lang.simt import subgroup
 
 from tests import test_utils
+
+
+def _skip_if_f64_unsupported(dtype):
+    if dtype != qd.f64:
+        return
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal:
+        pytest.skip("Metal does not support f64 in buffer-backed snode/kernel I/O")
+    if arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support f64")
 
 
 @test_utils.test(arch=qd.cuda)
@@ -555,3 +567,134 @@ def test_subgroup_reduction_max_f32():
 @test_utils.test(arch=qd.vulkan)
 def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
+
+
+def _init_field(field, n, dtype):
+    for i in range(n):
+        field[i] = (i + 1) if dtype == qd.i32 else 1.0000000000001 * (i + 1)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_broadcast(dtype):
+    """Broadcast lane 0's value to all lanes via shuffle."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    a = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.shuffle(a[i], qd.u32(0))
+
+    _init_field(a, N, dtype)
+
+    expected = a[0]
+    foo()
+
+    # Lanes 0-3 are guaranteed to be in the same subgroup (min size is 4).
+    for i in range(4):
+        assert a[i] == expected
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_roundtrip(dtype):
+    """Each lane shuffles to its own ID (identity shuffle)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    a = qd.field(dtype=dtype, shape=N)
+    diff = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            result = subgroup.shuffle(a[i], qd.cast(lane, qd.u32))
+            diff[i] = result - a[i]
+
+    _init_field(a, N, dtype)
+
+    foo()
+
+    for i in range(N):
+        assert diff[i] == 0
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_cross_lane(dtype):
+    """Each lane in a group of 4 reads from a different lane in the group."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            group_base = (lane // 4) * 4
+            # Each lane reads from lane (group_base + 3 - probe_id),
+            # i.e. lane 0 reads from lane 3, lane 1 from lane 2, etc.
+            src_lane = group_base + 3 - lane % 4
+            dst[i] = subgroup.shuffle(src[i], qd.cast(src_lane, qd.u32))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lanes 0-3 are guaranteed to be in the same subgroup.
+    # Lane 0 should have lane 3's value, lane 1 should have lane 2's, etc.
+    assert dst[0] == src[3]
+    assert dst[1] == src[2]
+    assert dst[2] == src[1]
+    assert dst[3] == src[0]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_xor_pattern(dtype):
+    """XOR shuffle: each lane reads from lane_id ^ 1 (swap neighbors)."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            dst[i] = subgroup.shuffle(src[i], qd.cast(lane ^ 1, qd.u32))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lanes 0-3 are in the same subgroup: 0<->1 swap, 2<->3 swap
+    assert dst[0] == src[1]
+    assert dst[1] == src[0]
+    assert dst[2] == src[3]
+    assert dst[3] == src[2]
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_invocation_id_range():
+    """Verify invocation IDs are non-negative."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            a[i] = subgroup.invocation_id()
+
+    foo()
+
+    for i in range(N):
+        assert 0 <= a[i]
