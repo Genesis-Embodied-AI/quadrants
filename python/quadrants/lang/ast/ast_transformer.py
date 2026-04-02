@@ -1222,8 +1222,8 @@ class ASTTransformer(Builder):
                     f"parameter of kernel {kernel.func.__name__!r}. "
                     f"Available parameters: {arg_names}"
                 )
-            if not kernel.use_gpu_graph:
-                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(gpu_graph=True)")
+            if not kernel.use_graph:
+                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
             kernel.graph_do_while_arg = graph_do_while_arg
             build_stmts(ctx, node.body)
             return None

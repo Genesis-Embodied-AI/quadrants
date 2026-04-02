@@ -1,4 +1,4 @@
-#include "quadrants/runtime/cuda/gpu_graph_manager.h"
+#include "quadrants/runtime/cuda/graph_manager.h"
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
@@ -75,7 +75,7 @@ static const char *kConditionKernelPTX = R"PTX(
 }
 )PTX";
 
-CachedGpuGraph::CachedGpuGraph(std::size_t arg_buf_size,
+CachedGraph::CachedGraph(std::size_t arg_buf_size,
                                std::size_t result_buf_size,
                                bool needs_counter_ptr_slot,
                                LlvmRuntimeExecutor *executor)
@@ -99,7 +99,7 @@ CachedGpuGraph::CachedGpuGraph(std::size_t arg_buf_size,
   persistent_ctx.cpu_thread_id = 0;
 }
 
-CachedGpuGraph::~CachedGpuGraph() {
+CachedGraph::~CachedGraph() {
   if (graph_exec) {
     CUDADriver::get_instance().graph_exec_destroy(graph_exec);
   }
@@ -114,7 +114,7 @@ CachedGpuGraph::~CachedGpuGraph() {
   }
 }
 
-CachedGpuGraph::CachedGpuGraph(CachedGpuGraph &&other) noexcept
+CachedGraph::CachedGraph(CachedGraph &&other) noexcept
     : graph_exec(other.graph_exec),
       persistent_device_arg_buffer(other.persistent_device_arg_buffer),
       persistent_device_result_buffer(other.persistent_device_result_buffer),
@@ -129,10 +129,10 @@ CachedGpuGraph::CachedGpuGraph(CachedGpuGraph &&other) noexcept
   other.counter_ptr_slot = nullptr;
 }
 
-CachedGpuGraph &CachedGpuGraph::operator=(CachedGpuGraph &&other) noexcept {
+CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   // Move-and-swap: after the swaps, `raii_guard` holds our old resources and
   // its destructor frees them, so every owned pointer is released uniformly.
-  CachedGpuGraph raii_guard(std::move(other));
+  CachedGraph raii_guard(std::move(other));
   std::swap(graph_exec, raii_guard.graph_exec);
   std::swap(persistent_device_arg_buffer,
             raii_guard.persistent_device_arg_buffer);
@@ -151,9 +151,9 @@ CachedGpuGraph &CachedGpuGraph::operator=(CachedGpuGraph &&other) noexcept {
 //
 // Unlike the normal launch path, this does not handle host-resident arrays
 // (no temporary device allocation or host-to-device transfer). Errors if
-// any external array is on the host, since gpu_graph requires all arrays
+// any external array is on the host, since graph requires all arrays
 // to be device-resident.
-void GpuGraphManager::resolve_ctx_ndarray_ptrs(
+void GraphManager::resolve_ctx_ndarray_ptrs(
     LaunchContextBuilder &ctx,
     const std::vector<std::pair<int, Callable::Parameter>> &parameters,
     LlvmRuntimeExecutor *executor) {
@@ -176,7 +176,7 @@ void GpuGraphManager::resolve_ctx_ndarray_ptrs(
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
       QD_ERROR_IF(grad_ptr != nullptr,
-                  "gpu_graph does not support autograd; "
+                  "graph does not support autograd; "
                   "ndarray arg {} has a non-null gradient pointer",
                   arg_id);
 
@@ -187,7 +187,7 @@ void GpuGraphManager::resolve_ctx_ndarray_ptrs(
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         QD_ERROR_IF(!on_cuda_device(data_ptr),
-                    "gpu_graph requires all ndarrays to be device-resident; "
+                    "graph requires all ndarrays to be device-resident; "
                     "ndarray arg {} is host-resident",
                     arg_id);
         resolved_data = data_ptr;
@@ -210,7 +210,7 @@ void GpuGraphManager::resolve_ctx_ndarray_ptrs(
 // Links the PTX (kConditionKernelPTX) with libcudadevrt.a to produce a cubin,
 // then loads the _qd_graph_do_while_cond function for use in conditional
 // while nodes. Only called once; subsequent calls are no-ops.
-void GpuGraphManager::ensure_condition_kernel_loaded() {
+void GraphManager::ensure_condition_kernel_loaded() {
   if (cond_kernel_func_)
     return;
 
@@ -271,7 +271,7 @@ void GpuGraphManager::ensure_condition_kernel_loaded() {
            cubin_size);
 }
 
-void *GpuGraphManager::add_kernel_node(void *graph,
+void *GraphManager::add_kernel_node(void *graph,
                                        void *prev_node,
                                        void *func,
                                        unsigned int grid_dim,
@@ -304,7 +304,7 @@ void *GpuGraphManager::add_kernel_node(void *graph,
   return node;
 }
 
-void *GpuGraphManager::add_conditional_while_node(
+void *GraphManager::add_conditional_while_node(
     void *graph,
     unsigned long long *cond_handle_out) {
   ensure_condition_kernel_loaded();
@@ -317,7 +317,7 @@ void *GpuGraphManager::add_conditional_while_node(
       /*defaultLaunchValue=*/1,
       /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
 
-  GpuGraphNodeParams cond_node_params{};
+  GraphNodeParams cond_node_params{};
   cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
   cond_node_params.handle = *cond_handle_out;
   cond_node_params.condType = 1;  // CU_GRAPH_COND_TYPE_WHILE
@@ -338,7 +338,7 @@ void *GpuGraphManager::add_conditional_while_node(
   return body_graphs[0];
 }
 
-bool GpuGraphManager::launch_cached_graph(CachedGpuGraph &cached,
+bool GraphManager::launch_cached_graph(CachedGraph &cached,
                                           LaunchContextBuilder &ctx,
                                           bool use_graph_do_while) {
   // TODO: these two memcpy_host_to_device calls could be async
@@ -361,7 +361,7 @@ bool GpuGraphManager::launch_cached_graph(CachedGpuGraph &cached,
   return true;
 }
 
-bool GpuGraphManager::try_launch(
+bool GraphManager::try_launch(
     int launch_id,
     LaunchContextBuilder &ctx,
     JITModule *cuda_module,
@@ -375,8 +375,8 @@ bool GpuGraphManager::try_launch(
   const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
 
   QD_ERROR_IF(ctx.result_buffer_size > 0,
-              "gpu_graph=True is not supported for kernels with struct return "
-              "values; remove gpu_graph=True or avoid returning values");
+              "graph=True is not supported for kernels with struct return "
+              "values; remove graph=True or avoid returning values");
 
   resolve_ctx_ndarray_ptrs(ctx, parameters, executor);
 
@@ -387,7 +387,7 @@ bool GpuGraphManager::try_launch(
 
   CUDAContext::get_instance().make_current();
 
-  CachedGpuGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
+  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
                         use_graph_do_while, executor);
 
   if (cached.arg_buffer_size > 0) {

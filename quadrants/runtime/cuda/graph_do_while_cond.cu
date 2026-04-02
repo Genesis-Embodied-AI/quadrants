@@ -1,7 +1,7 @@
 // Source for the graph_do_while condition kernel.
 //
 // This file is the source of truth for the PTX string kConditionKernelPTX
-// in gpu_graph_manager.cpp. After editing, regenerate the PTX and paste
+// in graph_manager.cpp. After editing, regenerate the PTX and paste
 // the entire output into the R"PTX(...)PTX" literal:
 //
 //   nvcc -ptx -arch=sm_90 -rdc=true graph_do_while_cond.cu \

@@ -150,7 +150,7 @@ class LaunchContextBuilder {
   size_t arg_buffer_size{0};
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
-  bool use_gpu_graph{false};
+  bool use_graph{false};
   int graph_do_while_arg_id{-1};
   void *graph_do_while_flag_dev_ptr{nullptr};
 
