@@ -623,3 +623,149 @@ def test_subgroup_reduction_max_f32():
 @test_utils.test(arch=qd.vulkan)
 def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_shuffle_i32():
+    a = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def broadcast_lane0():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.shuffle(a[i], qd.u32(0))
+
+    for i in range(32):
+        a[i] = i + 100
+
+    broadcast_lane0()
+
+    for i in range(32):
+        assert a[i] == 100
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_shuffle_f32():
+    a = qd.field(dtype=qd.f32, shape=32)
+
+    @qd.kernel
+    def broadcast_lane5():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.shuffle(a[i], qd.u32(5))
+
+    for i in range(32):
+        a[i] = (i + 1) * 0.5
+
+    broadcast_lane5()
+
+    for i in range(32):
+        assert a[i] == approx(3.0, abs=1e-4)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_shuffle_f64():
+    a = qd.field(dtype=qd.f64, shape=32)
+
+    @qd.kernel
+    def broadcast_lane0():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.shuffle(a[i], qd.u32(0))
+
+    for i in range(32):
+        a[i] = 1.0000000000001 * (i + 1)
+
+    expected = a[0]
+    broadcast_lane0()
+
+    for i in range(32):
+        assert a[i] == expected
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_shuffle_down_i32():
+    a = qd.field(dtype=qd.i32, shape=32)
+    b = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.shuffle_down(b[i], qd.u32(1))
+
+    for i in range(32):
+        b[i] = i * i
+
+    foo()
+
+    for i in range(31):
+        assert a[i] == b[i + 1]
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_shuffle_up_i32():
+    a = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.shuffle_up(a[i], qd.u32(1))
+
+    for i in range(32):
+        a[i] = i * i
+
+    foo()
+
+    for i in range(1, 32):
+        assert a[i] == (i - 1) * (i - 1)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_invocation_id():
+    a = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.invocation_id()
+
+    foo()
+
+    for i in range(32):
+        assert a[i] == i
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_size_cuda():
+    a = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.group_size()
+
+    foo()
+
+    for i in range(32):
+        assert a[i] == 32
+
+
+@test_utils.test(arch=qd.cuda)
+def test_subgroup_elect_cuda():
+    a = qd.field(dtype=qd.i32, shape=32)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=32)
+        for i in range(32):
+            a[i] = subgroup.elect()
+
+    foo()
+
+    assert a[0] == 1
+    for i in range(1, 32):
+        assert a[i] == 0
