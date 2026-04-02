@@ -625,62 +625,89 @@ def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_shuffle_i32():
-    a = qd.field(dtype=qd.i32, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_shuffle_i32_broadcast():
+    """Broadcast lane 0's value to all lanes. Works with any subgroup size."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
-    def broadcast_lane0():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
-            a[i] = subgroup.shuffle(a[i], qd.u32(0))
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            val = qd.cast(lane + 100, qd.i32)
+            a[i] = subgroup.shuffle(val, qd.u32(0))
 
-    for i in range(32):
-        a[i] = i + 100
+    foo()
 
-    broadcast_lane0()
-
-    for i in range(32):
+    for i in range(N):
         assert a[i] == 100
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_shuffle_f32():
-    a = qd.field(dtype=qd.f32, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_shuffle_f32_broadcast():
+    """Broadcast lane 0's f32 value to all lanes."""
+    N = 64
+    a = qd.field(dtype=qd.f32, shape=N)
 
     @qd.kernel
-    def broadcast_lane5():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
-            a[i] = subgroup.shuffle(a[i], qd.u32(5))
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            val = qd.cast(lane, qd.f32) * 0.5 + 3.14
+            a[i] = subgroup.shuffle(val, qd.u32(0))
 
-    for i in range(32):
-        a[i] = (i + 1) * 0.5
+    foo()
 
-    broadcast_lane5()
-
-    for i in range(32):
-        assert a[i] == approx(3.0, abs=1e-4)
+    for i in range(N):
+        assert a[i] == approx(3.14, abs=1e-4)
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_shuffle_f64():
-    a = qd.field(dtype=qd.f64, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_shuffle_f64_broadcast():
+    """Broadcast lane 0's f64 value via shuffle, verifying full precision."""
+    N = 64
+    a = qd.field(dtype=qd.f64, shape=N)
 
     @qd.kernel
-    def broadcast_lane0():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
             a[i] = subgroup.shuffle(a[i], qd.u32(0))
 
-    for i in range(32):
+    for i in range(N):
         a[i] = 1.0000000000001 * (i + 1)
 
-    expected = a[0]
-    broadcast_lane0()
+    expected_lane0 = a[0]
+    foo()
 
-    for i in range(32):
-        assert a[i] == expected
+    # Lanes 0-3 are guaranteed to be in the same subgroup (min size is 4).
+    # They should all have lane 0's original f64 value with full precision.
+    for i in range(4):
+        assert a[i] == expected_lane0
+
+
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_shuffle_roundtrip():
+    """Each lane shuffles to its own ID (identity shuffle)."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            lane = subgroup.invocation_id()
+            val = qd.cast(lane * 7 + 42, qd.i32)
+            result = subgroup.shuffle(val, qd.cast(lane, qd.u32))
+            a[i] = result - val
+
+    foo()
+
+    for i in range(N):
+        assert a[i] == 0
 
 
 @test_utils.test(arch=qd.cuda)
@@ -722,50 +749,63 @@ def test_subgroup_shuffle_up_i32():
         assert a[i] == (i - 1) * (i - 1)
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_invocation_id():
-    a = qd.field(dtype=qd.i32, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_invocation_id_range():
+    """Verify invocation IDs are in [0, subgroup_size)."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
+    sg = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
     def foo():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
+        qd.loop_config(block_dim=N)
+        for i in range(N):
             a[i] = subgroup.invocation_id()
+            sg[i] = subgroup.group_size()
 
     foo()
 
-    for i in range(32):
-        assert a[i] == i
+    for i in range(N):
+        assert 0 <= a[i] < sg[i]
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_size_cuda():
-    a = qd.field(dtype=qd.i32, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_size_positive():
+    """Verify subgroup size is a reasonable power-of-two."""
+    N = 64
+    a = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
     def foo():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
+        qd.loop_config(block_dim=N)
+        for i in range(N):
             a[i] = subgroup.group_size()
 
     foo()
 
-    for i in range(32):
-        assert a[i] == 32
+    sg_size = a[0]
+    assert sg_size in (4, 8, 16, 32, 64, 128)
+    for i in range(N):
+        assert a[i] == sg_size
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_elect_cuda():
-    a = qd.field(dtype=qd.i32, shape=32)
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+def test_subgroup_elect_one_per_subgroup():
+    """Verify exactly one lane per subgroup is elected."""
+    N = 64
+    elected = qd.field(dtype=qd.i32, shape=N)
+    sg_size_field = qd.field(dtype=qd.i32, shape=N)
 
     @qd.kernel
     def foo():
-        qd.loop_config(block_dim=32)
-        for i in range(32):
-            a[i] = subgroup.elect()
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            elected[i] = subgroup.elect()
+            sg_size_field[i] = subgroup.group_size()
 
     foo()
 
-    assert a[0] == 1
-    for i in range(1, 32):
-        assert a[i] == 0
+    sg_size = sg_size_field[0]
+    num_subgroups = N // sg_size
+    total_elected = sum(elected[i] for i in range(N))
+    assert total_elected == num_subgroups
