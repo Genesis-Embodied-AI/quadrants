@@ -200,21 +200,16 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<int, GetRootStmt *>
       root_stmts_;  // maps root id to get root stmt
   std::unordered_map<const Stmt *, BufferInfo> ptr_to_buffers_;
-  // Shared float AllocaStmts that need uint retyping because they are targeted
-  // by atomic operations. Populated by scan_shared_atomic_allocs() before the
-  // main codegen pass. Only these arrays pay the uint-backing + bitcast cost.
-  std::unordered_set<const Stmt *> shared_atomic_allocs_;
-  // Propagated from shared_atomic_allocs_ to derived MatrixPtrStmt nodes
-  // during codegen, so that load/store/atomic visitors know to bitcast.
-  // Example: if `sharr` (AllocaStmt) is in shared_atomic_allocs_, then
+  // Shared float AllocaStmts targeted by atomics, populated by
+  // scan_shared_atomic_allocs() before codegen. Value = true means the alloca
+  // has non-add ops (CAS unconditionally needed); false = add-only (native
+  // shared float atomics can be used if the device supports them).
+  std::unordered_map<const Stmt *, bool> shared_float_allocas_with_atomic_rmw_;
+  // Propagated from shared_float_allocas_with_atomic_rmw_ to derived
+  // MatrixPtrStmt nodes during codegen, so that load/store/atomic visitors
+  // know to bitcast. E.g. if `sharr` (AllocaStmt) is retyped, then
   // `sharr[0]` (MatrixPtrStmt) is added here during visit(MatrixPtrStmt).
-  std::unordered_set<const Stmt *> shared_float_retyped_;
-
-  // Pre-scan the IR to find shared float AllocaStmts targeted by atomics.
-  static void scan_shared_atomic_allocs(
-      Block *ir_block,
-      std::unordered_set<const Stmt *> &atomic_allocs);
-  static const AllocaStmt *trace_to_alloca(const Stmt *stmt);
+  std::unordered_set<const Stmt *> uint_backed_shared_float_ptr_stmts_;
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
       argid_to_tex_value_;
 

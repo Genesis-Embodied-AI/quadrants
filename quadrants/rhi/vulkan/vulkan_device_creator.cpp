@@ -752,6 +752,12 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       if (shader_atomic_float_feature.shaderBufferFloat64Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float64, true);
       }
+      if (shader_atomic_float_feature.shaderSharedFloat32AtomicAdd) {
+        caps.set(DeviceCapability::spirv_has_shared_atomic_float_add, true);
+      }
+      if (shader_atomic_float_feature.shaderSharedFloat64AtomicAdd) {
+        caps.set(DeviceCapability::spirv_has_shared_atomic_float64_add, true);
+      }
       *pNextEnd = &shader_atomic_float_feature;
       pNextEnd = &shader_atomic_float_feature.pNext;
     }
@@ -768,6 +774,9 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       }
       if (shader_atomic_float_2_feature.shaderBufferFloat16Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float16, true);
+      }
+      if (shader_atomic_float_2_feature.shaderSharedFloat16AtomicAdd) {
+        caps.set(DeviceCapability::spirv_has_shared_atomic_float16_add, true);
       }
       if (shader_atomic_float_2_feature.shaderBufferFloat32AtomicMinMax) {
         caps.set(DeviceCapability::spirv_has_atomic_float_minmax, true);

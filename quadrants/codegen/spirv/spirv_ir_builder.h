@@ -341,12 +341,12 @@ class IRBuilder {
   SType from_quadrants_type(const DataType &dt, bool has_buffer_ptr);
   // Get the size in bytes of a given Quadrants data type
   size_t get_primitive_type_size(const DataType &dt) const;
-  // Return the SPIR-V uint type with the same bit-width as dt (e.g. f32->u32).
-  // dt is a Quadrants DataType; the returned SType is the SPIR-V counterpart.
-  SType get_bitcast_uint_stype(const DataType &dt) const;
-  // Return the Quadrants uint DataType with the same bit-width as dt.
-  DataType get_bitcast_uint_dtype(const DataType &dt) const;
-  // Like get_bitcast_uint_dtype but returns at least u32 so that the result
+  // Get the spirv uint type with the same size of a given Quadrants data type
+  SType get_primitive_uint_type(const DataType &dt) const;
+  // Get the Quadrants uint type with the same size of a given Quadrants data
+  // type
+  DataType get_quadrants_uint_type(const DataType &dt) const;
+  // Like get_quadrants_uint_type but returns at least u32 so that the result
   // is usable with atomic ops (Metal/Vulkan lack 16-bit atomics).
   DataType get_atomic_uint_dtype(const DataType &dt) const;
   // Convert a SPIR-V value from shared-memory uint backing to float dt.

@@ -378,7 +378,7 @@ size_t IRBuilder::get_primitive_type_size(const DataType &dt) const {
   }
 }
 
-SType IRBuilder::get_bitcast_uint_stype(const DataType &dt) const {
+SType IRBuilder::get_primitive_uint_type(const DataType &dt) const {
   if (dt == PrimitiveType::i64 || dt == PrimitiveType::u64 ||
       dt == PrimitiveType::f64) {
     return t_uint64_;
@@ -395,7 +395,7 @@ SType IRBuilder::get_bitcast_uint_stype(const DataType &dt) const {
   }
 }
 
-DataType IRBuilder::get_bitcast_uint_dtype(const DataType &dt) const {
+DataType IRBuilder::get_quadrants_uint_type(const DataType &dt) const {
   if (dt == PrimitiveType::i64 || dt == PrimitiveType::u64 ||
       dt == PrimitiveType::f64) {
     return PrimitiveType::u64;
@@ -413,7 +413,7 @@ DataType IRBuilder::get_bitcast_uint_dtype(const DataType &dt) const {
 }
 
 DataType IRBuilder::get_atomic_uint_dtype(const DataType &dt) const {
-  DataType uint_dt = get_bitcast_uint_dtype(dt);
+  DataType uint_dt = get_quadrants_uint_type(dt);
   if (uint_dt == PrimitiveType::u16 || uint_dt == PrimitiveType::u8) {
     return PrimitiveType::u32;
   }
@@ -421,7 +421,7 @@ DataType IRBuilder::get_atomic_uint_dtype(const DataType &dt) const {
 }
 
 Value IRBuilder::shared_uint_to_float(Value val, const DataType &dt) {
-  SType narrow_uint = get_bitcast_uint_stype(dt);
+  SType narrow_uint = get_primitive_uint_type(dt);
   SType atomic_uint = get_primitive_type(get_atomic_uint_dtype(dt));
   if (atomic_uint.id != narrow_uint.id) {
     val = make_value(spv::OpUConvert, narrow_uint, val);
@@ -430,7 +430,7 @@ Value IRBuilder::shared_uint_to_float(Value val, const DataType &dt) {
 }
 
 Value IRBuilder::float_to_shared_uint(Value val, const DataType &dt) {
-  SType narrow_uint = get_bitcast_uint_stype(dt);
+  SType narrow_uint = get_primitive_uint_type(dt);
   val = make_value(spv::OpBitcast, narrow_uint, val);
   SType atomic_uint = get_primitive_type(get_atomic_uint_dtype(dt));
   if (atomic_uint.id != narrow_uint.id) {
@@ -1143,7 +1143,7 @@ Value IRBuilder::integer_atomic(AtomicOpType op_type,
   if (op_type == AtomicOpType::mul) {
     return atomic_operation(
         addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); }, dt,
-        get_bitcast_uint_dtype(dt));
+        get_quadrants_uint_type(dt));
   } else {
     QD_NOT_IMPLEMENTED
   }
@@ -1155,7 +1155,7 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
                                   const DataType &dt,
                                   const DataType &atomic_uint_dt) {
   SType float_type = get_primitive_type(dt);
-  SType narrow_uint = get_bitcast_uint_stype(dt);
+  SType narrow_uint = get_primitive_uint_type(dt);
   SType res_type = get_primitive_type(atomic_uint_dt);
   Value ret_val_int = alloca_variable(res_type);
 
