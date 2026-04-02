@@ -1,3 +1,5 @@
+import platform
+
 import numpy as np
 import pytest
 from pytest import approx
@@ -6,6 +8,16 @@ import quadrants as qd
 from quadrants.lang.simt import subgroup
 
 from tests import test_utils
+
+
+def _skip_if_f64_unsupported(dtype):
+    if dtype != qd.f64:
+        return
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal:
+        pytest.skip("Metal does not support f64 in buffer-backed snode/kernel I/O")
+    if arch == qd.vulkan and platform.system() == "Darwin":
+        pytest.skip("MoltenVK does not support f64")
 
 
 @test_utils.test(arch=qd.cuda)
@@ -566,6 +578,7 @@ def _init_field(field, n, dtype):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_broadcast(dtype):
     """Broadcast lane 0's value to all lanes via shuffle."""
+    _skip_if_f64_unsupported(dtype)
     N = 64
     a = qd.field(dtype=dtype, shape=N)
 
@@ -589,6 +602,7 @@ def test_subgroup_shuffle_broadcast(dtype):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_roundtrip(dtype):
     """Each lane shuffles to its own ID (identity shuffle)."""
+    _skip_if_f64_unsupported(dtype)
     N = 64
     a = qd.field(dtype=dtype, shape=N)
     diff = qd.field(dtype=dtype, shape=N)
@@ -613,6 +627,7 @@ def test_subgroup_shuffle_roundtrip(dtype):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_cross_lane(dtype):
     """Each lane in a group of 4 reads from a different lane in the group."""
+    _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
@@ -644,6 +659,7 @@ def test_subgroup_shuffle_cross_lane(dtype):
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_xor_pattern(dtype):
     """XOR shuffle: each lane reads from lane_id ^ 1 (swap neighbors)."""
+    _skip_if_f64_unsupported(dtype)
     N = 64
     src = qd.field(dtype=dtype, shape=N)
     dst = qd.field(dtype=dtype, shape=N)
