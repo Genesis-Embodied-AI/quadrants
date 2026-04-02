@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.misc &#8212; Quadrants 0.5.2 documentation</title>
+    <title>quadrants.lang.misc &#8212; Quadrants 0.5.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../../_static/documentation_options.js?v=8e576371"></script>
+    <script src="../../../../_static/documentation_options.js?v=2a2fe768"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@
     <link rel="prev" title="quadrants.lang.mesh" href="../mesh/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.5.2" />
+  <meta name="docsearch:version" content="0.5.3" />
   </head>
   
   
@@ -124,7 +124,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.5.2 documentation</p>
+    <p class="title logo__title">Quadrants 0.5.3 documentation</p>
   
 </a></div>
     
@@ -833,14 +833,14 @@ value untouched.</p>
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">graph_do_while</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">condition</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#graph_do_while"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.graph_do_while" title="Link to this definition">#</a></dt>
 <dd><p>Marks a while loop as a CUDA graph do-while conditional node.</p>
 <p>Used as <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(flag):</span></code> inside a
-<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(gpu_graph=True)</span></code> kernel. The loop body repeats while
+<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel. The loop body repeats while
 <code class="docutils literal notranslate"><span class="pre">flag</span></code> (a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray) is non-zero.</p>
 <p>On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
 conditional while node. On older CUDA GPUs and non-CUDA backends
 it falls back to a host-side do-while loop.</p>
 <p>This function should not be called directly at runtime; it is
 recognised and transformed during AST compilation.
-Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(gpu_graph=True)</span></code>.</p>
+Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p>
 </dd></dl>
 
 <dl class="py function">
