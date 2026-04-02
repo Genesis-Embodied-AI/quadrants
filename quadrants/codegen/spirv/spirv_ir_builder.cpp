@@ -1088,6 +1088,7 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
         addr_ptr, data, [&](Value lhs, Value rhs) { return mul(lhs, rhs); },
         dt);
   } else if (op_type == AtomicOpType::min) {
+    // Use dt-derived type instead of t_fp32_ so FMin/FMax work for f16/f64.
     auto float_type = get_primitive_type(dt);
     return atomic_operation(
         addr_ptr, data,
