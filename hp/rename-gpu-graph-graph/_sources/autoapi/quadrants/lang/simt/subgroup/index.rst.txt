@@ -1,0 +1,112 @@
+quadrants.lang.simt.subgroup
+============================
+
+.. py:module:: quadrants.lang.simt.subgroup
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.subgroup.barrier
+   quadrants.lang.simt.subgroup.memory_barrier
+   quadrants.lang.simt.subgroup.elect
+   quadrants.lang.simt.subgroup.all_true
+   quadrants.lang.simt.subgroup.any_true
+   quadrants.lang.simt.subgroup.all_equal
+   quadrants.lang.simt.subgroup.broadcast_first
+   quadrants.lang.simt.subgroup.reduce_add
+   quadrants.lang.simt.subgroup.reduce_mul
+   quadrants.lang.simt.subgroup.reduce_min
+   quadrants.lang.simt.subgroup.reduce_max
+   quadrants.lang.simt.subgroup.reduce_and
+   quadrants.lang.simt.subgroup.reduce_or
+   quadrants.lang.simt.subgroup.reduce_xor
+   quadrants.lang.simt.subgroup.inclusive_add
+   quadrants.lang.simt.subgroup.inclusive_mul
+   quadrants.lang.simt.subgroup.inclusive_min
+   quadrants.lang.simt.subgroup.inclusive_max
+   quadrants.lang.simt.subgroup.inclusive_and
+   quadrants.lang.simt.subgroup.inclusive_or
+   quadrants.lang.simt.subgroup.inclusive_xor
+   quadrants.lang.simt.subgroup.exclusive_add
+   quadrants.lang.simt.subgroup.exclusive_mul
+   quadrants.lang.simt.subgroup.exclusive_min
+   quadrants.lang.simt.subgroup.exclusive_max
+   quadrants.lang.simt.subgroup.exclusive_and
+   quadrants.lang.simt.subgroup.exclusive_or
+   quadrants.lang.simt.subgroup.exclusive_xor
+   quadrants.lang.simt.subgroup.shuffle
+   quadrants.lang.simt.subgroup.shuffle_xor
+   quadrants.lang.simt.subgroup.shuffle_up
+   quadrants.lang.simt.subgroup.shuffle_down
+
+
+Module Contents
+---------------
+
+.. py:function:: barrier()
+
+.. py:function:: memory_barrier()
+
+.. py:function:: elect()
+
+.. py:function:: all_true(cond)
+
+.. py:function:: any_true(cond)
+
+.. py:function:: all_equal(value)
+
+.. py:function:: broadcast_first(value)
+
+.. py:function:: reduce_add(value)
+
+.. py:function:: reduce_mul(value)
+
+.. py:function:: reduce_min(value)
+
+.. py:function:: reduce_max(value)
+
+.. py:function:: reduce_and(value)
+
+.. py:function:: reduce_or(value)
+
+.. py:function:: reduce_xor(value)
+
+.. py:function:: inclusive_add(value)
+
+.. py:function:: inclusive_mul(value)
+
+.. py:function:: inclusive_min(value)
+
+.. py:function:: inclusive_max(value)
+
+.. py:function:: inclusive_and(value)
+
+.. py:function:: inclusive_or(value)
+
+.. py:function:: inclusive_xor(value)
+
+.. py:function:: exclusive_add(value)
+
+.. py:function:: exclusive_mul(value)
+
+.. py:function:: exclusive_min(value)
+
+.. py:function:: exclusive_max(value)
+
+.. py:function:: exclusive_and(value)
+
+.. py:function:: exclusive_or(value)
+
+.. py:function:: exclusive_xor(value)
+
+.. py:function:: shuffle(value, index)
+
+.. py:function:: shuffle_xor(value, mask)
+
+.. py:function:: shuffle_up(value, offset)
+
+.. py:function:: shuffle_down(value, offset)
+
