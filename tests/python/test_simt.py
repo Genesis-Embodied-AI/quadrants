@@ -7,7 +7,6 @@ from quadrants.lang.simt import subgroup
 
 from tests import test_utils
 
-gpu_archs = [qd.cuda, qd.vulkan, qd.metal]
 
 
 @test_utils.test(arch=qd.cuda)
@@ -627,7 +626,7 @@ def test_subgroup_reduction_min_f32():
     _test_subgroup_reduce(qd.atomic_max, subgroup.reduce_max, np.max, 2677, 0, qd.f32)
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_i32_broadcast():
     """Broadcast lane 0's value to all lanes. Works with any subgroup size."""
     N = 64
@@ -647,7 +646,7 @@ def test_subgroup_shuffle_i32_broadcast():
         assert a[i] == 100
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_f32_broadcast():
     """Broadcast lane 0's f32 value to all lanes."""
     N = 64
@@ -667,7 +666,7 @@ def test_subgroup_shuffle_f32_broadcast():
         assert a[i] == approx(3.14, abs=1e-4)
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_f64_broadcast():
     """Broadcast lane 0's f64 value via shuffle, verifying full precision."""
     N = 64
@@ -691,7 +690,7 @@ def test_subgroup_shuffle_f64_broadcast():
         assert a[i] == expected_lane0
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_roundtrip():
     """Each lane shuffles to its own ID (identity shuffle)."""
     N = 64
@@ -712,7 +711,7 @@ def test_subgroup_shuffle_roundtrip():
         assert a[i] == 0
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_down_i32():
     """Shuffle down by 1. Uses invocation_id so it's subgroup-size-independent."""
     N = 64
@@ -740,7 +739,7 @@ def test_subgroup_shuffle_down_i32():
             assert a[i] == (lane + 1) * (lane + 1)
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_shuffle_up_i32():
     """Shuffle up by 1. Uses invocation_id so it's subgroup-size-independent."""
     N = 64
@@ -764,7 +763,7 @@ def test_subgroup_shuffle_up_i32():
             assert a[i] == (lane - 1) * (lane - 1)
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are in [0, subgroup_size)."""
     N = 64
@@ -784,7 +783,7 @@ def test_subgroup_invocation_id_range():
         assert 0 <= a[i] < sg[i]
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_size_positive():
     """Verify subgroup size is a reasonable power-of-two."""
     N = 64
@@ -804,7 +803,7 @@ def test_subgroup_size_positive():
         assert a[i] == sg_size
 
 
-@test_utils.test(arch=gpu_archs)
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_elect_one_per_subgroup():
     """Verify exactly one lane per subgroup is elected."""
     N = 64
