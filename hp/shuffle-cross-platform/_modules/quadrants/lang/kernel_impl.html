@@ -448,7 +448,7 @@
     <span class="n">_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span>
     <span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="n">gpu_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
     <span class="c1"># Can decorators determine if a function is being defined inside a class?</span>
     <span class="c1"># https://stackoverflow.com/a/8793684/12003165</span>
@@ -458,7 +458,7 @@
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;kernel=</span><span class="si">{</span><span class="n">_func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is_classkernel=</span><span class="si">{</span><span class="n">is_classkernel</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="n">primal</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_NONE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
     <span class="n">adjoint</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_REVERSE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
-    <span class="n">primal</span><span class="o">.</span><span class="n">use_gpu_graph</span> <span class="o">=</span> <span class="n">gpu_graph</span>
+    <span class="n">primal</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="n">graph</span>
     <span class="c1"># Having |primal| contains |grad| makes the tape work.</span>
     <span class="n">primal</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">adjoint</span>
 
@@ -502,7 +502,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.kernel">[docs]</a>
 <span class="c1"># TODO: This callable should be Callable[[F], F].</span>
 <span class="c1"># See comments below.</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">gpu_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
 
 
 
@@ -513,7 +513,7 @@
 <span class="c1"># However, by making it return Any, we can make the pure parameter</span>
 <span class="c1"># change now, without breaking pyright.</span>
 <span class="nd">@overload</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">gpu_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span>
@@ -521,7 +521,7 @@
     <span class="o">*</span><span class="p">,</span>
     <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">fastcache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="n">gpu_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Marks a function as a Quadrants kernel.</span>
@@ -534,7 +534,7 @@
 <span class="sd">    Kernel&#39;s gradient kernel would be generated automatically by the AutoDiff system.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        gpu_graph: If True, kernels with 2+ top-level for loops are captured</span>
+<span class="sd">        graph: If True, kernels with 2+ top-level for loops are captured</span>
 <span class="sd">            into a CUDA graph on first launch and replayed on subsequent</span>
 <span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends</span>
 <span class="sd">            are not supported currently.</span>
@@ -557,7 +557,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">level</span> <span class="o">=</span> <span class="mi">4</span>
 
-        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">gpu_graph</span><span class="o">=</span><span class="n">gpu_graph</span><span class="p">)</span>
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">)</span>
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>

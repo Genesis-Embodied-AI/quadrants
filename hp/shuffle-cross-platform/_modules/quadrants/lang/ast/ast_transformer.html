@@ -1694,8 +1694,8 @@
                     <span class="sa">f</span><span class="s2">&quot;parameter of kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_gpu_graph</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_do_while() requires @qd.kernel(gpu_graph=True)&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_do_while() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
             <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">graph_do_while_arg</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>

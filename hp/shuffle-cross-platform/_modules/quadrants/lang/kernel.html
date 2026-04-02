@@ -326,7 +326,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_logging</span>
 
-<span class="n">_GPU_GRAPH_ENABLED</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_GPU_GRAPH&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span>
+<span class="n">_GRAPH_ENABLED</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_GRAPH&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Arch</span><span class="p">,</span>
@@ -662,9 +662,9 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.has_print">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">has_print</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="Kernel.use_gpu_graph">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_gpu_graph">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">use_gpu_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+<div class="viewcode-block" id="Kernel.use_graph">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_graph">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
@@ -928,7 +928,7 @@
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
-            <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_gpu_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_gpu_graph</span> <span class="ow">and</span> <span class="n">_GPU_GRAPH_ENABLED</span>
+            <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">_GRAPH_ENABLED</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_graph_do_while_cpp_arg_id&quot;</span><span class="p">):</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">graph_do_while_arg_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span>
             <span class="n">prog</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span><span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
