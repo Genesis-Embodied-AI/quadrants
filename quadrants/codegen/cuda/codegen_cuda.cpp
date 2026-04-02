@@ -788,8 +788,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (stmt->func_name == "subgroupShuffle" ||
         stmt->func_name == "subgroupBroadcast") {
       llvm_val[stmt] = emit_cuda_shuffle(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type,
-          llvm_val[stmt->args[1]]);
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type,
+          /* index=*/llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
     } else {

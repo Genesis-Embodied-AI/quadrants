@@ -421,7 +421,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       auto index = builder->CreateZExtOrTrunc(
           llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
       llvm_val[stmt] = emit_amdgpu_shuffle(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type, index);
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type, index);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else {

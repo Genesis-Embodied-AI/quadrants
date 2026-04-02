@@ -1200,7 +1200,10 @@ i32 amdgpu_shuffle_i32(i32 index, i32 value) {
 }
 
 f32 amdgpu_shuffle_f32(i32 index, f32 value) {
-  union { f32 f; i32 i; } u;
+  union {
+    f32 f;
+    i32 i;
+  } u;
   u.f = value;
   u.i = amdgpu_shuffle_i32(index, u.i);
   return u.f;
@@ -1215,7 +1218,10 @@ i64 amdgpu_shuffle_i64(i32 index, i64 value) {
 }
 
 f64 amdgpu_shuffle_f64(i32 index, f64 value) {
-  union { f64 d; i64 i; } u;
+  union {
+    f64 d;
+    i64 i;
+  } u;
   u.d = value;
   u.i = amdgpu_shuffle_i64(index, u.i);
   return u.d;
@@ -1230,7 +1236,10 @@ i32 cuda_shuffle_i32(i32 index, i32 value) {
 }
 
 f32 cuda_shuffle_f32(i32 index, f32 value) {
-  union { f32 f; i32 i; } u;
+  union {
+    f32 f;
+    i32 i;
+  } u;
   u.f = value;
   u.i = cuda_shuffle_i32(index, u.i);
   return u.f;
@@ -1245,7 +1254,10 @@ i64 cuda_shuffle_i64(i32 index, i64 value) {
 }
 
 f64 cuda_shuffle_f64(i32 index, f64 value) {
-  union { f64 d; i64 i; } u;
+  union {
+    f64 d;
+    i64 i;
+  } u;
   u.d = value;
   u.i = cuda_shuffle_i64(index, u.i);
   return u.d;
