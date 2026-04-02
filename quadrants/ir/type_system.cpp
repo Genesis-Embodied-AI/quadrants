@@ -379,8 +379,6 @@ void Operations::init_internals() {
   PLAIN_OP(subgroupElect, i32, false);
   POLY_OP(subgroupBroadcast, false, Signature({}, {ValueT, !u32}, ValueT));
   POLY_OP(subgroupShuffle, false, Signature({}, {ValueT, !u32}, ValueT));
-  POLY_OP(subgroupShuffleDown, false, Signature({}, {ValueT, !u32}, ValueT));
-  POLY_OP(subgroupShuffleUp, false, Signature({}, {ValueT, !u32}, ValueT));
   PLAIN_OP(subgroupSize, i32, false);
   PLAIN_OP(subgroupInvocationId, i32, false);
   POLY_OP(subgroupAdd, false, Signature({}, {ValueT}, ValueT));

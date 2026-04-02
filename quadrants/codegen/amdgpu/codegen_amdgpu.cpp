@@ -424,50 +424,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
           tlctx->get_constant((int32)4));
       llvm_val[stmt] = emit_subgroup_shuffle_amdgpu(
           llvm_val[stmt->args[0]], stmt->args[0]->ret_type, byte_index);
-    } else if (stmt->func_name == "subgroupShuffleDown") {
-      auto lane_id = emit_amdgpu_lane_id();
-      auto src = builder->CreateAdd(
-          lane_id,
-          builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]],
-                                     llvm::Type::getInt32Ty(*llvm_context)));
-      auto byte_index =
-          builder->CreateMul(src, tlctx->get_constant((int32)4));
-      llvm_val[stmt] = emit_subgroup_shuffle_amdgpu(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type, byte_index);
-    } else if (stmt->func_name == "subgroupShuffleUp") {
-      auto lane_id = emit_amdgpu_lane_id();
-      auto src = builder->CreateSub(
-          lane_id,
-          builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]],
-                                     llvm::Type::getInt32Ty(*llvm_context)));
-      auto byte_index =
-          builder->CreateMul(src, tlctx->get_constant((int32)4));
-      llvm_val[stmt] = emit_subgroup_shuffle_amdgpu(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type, byte_index);
-    } else if (stmt->func_name == "subgroupBarrier") {
-      builder->CreateIntrinsic(llvm::Type::getVoidTy(*llvm_context),
-                               Intrinsic::amdgcn_wave_barrier, {});
-      llvm_val[stmt] = tlctx->get_constant((int32)0);
-    } else if (stmt->func_name == "subgroupMemoryBarrier") {
-      builder->CreateFence(llvm::AtomicOrdering::AcquireRelease);
-      llvm_val[stmt] = tlctx->get_constant((int32)0);
-    } else if (stmt->func_name == "subgroupSize") {
-      llvm_val[stmt] = builder->CreateIntrinsic(
-          llvm::Type::getInt32Ty(*llvm_context),
-          Intrinsic::amdgcn_wavefrontsize, {});
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = emit_amdgpu_lane_id();
-    } else if (stmt->func_name == "subgroupElect") {
-      auto lane_id = emit_amdgpu_lane_id();
-      auto is_zero =
-          builder->CreateICmpEQ(lane_id, tlctx->get_constant((int32)0));
-      llvm_val[stmt] = builder->CreateZExt(
-          is_zero, llvm::Type::getInt32Ty(*llvm_context));
-    } else if (stmt->func_name.find("subgroup") == 0) {
-      QD_ERROR(
-          "Subgroup operation '{}' is not yet supported on AMDGPU. "
-          "Use qd.simt.warp equivalents instead.",
-          stmt->func_name);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
