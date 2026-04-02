@@ -1172,15 +1172,22 @@ f32 cuda_shfl_sync_f32(u32 mask, f32 val, i32 delta, int width) {
   return 0;
 }
 
+// Stubs patched to AMDGPU intrinsics at module load (see llvm_context.cpp).
+// The bodies are replaced by patch_intrinsic; __builtin_trap guards against
+// accidentally calling an unpatched stub.
+
 i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
+  __builtin_trap();
   return 0;
 }
 
 i32 amdgpu_mbcnt_lo(i32 mask, i32 base) {
+  __builtin_trap();
   return 0;
 }
 
 i32 amdgpu_mbcnt_hi(i32 mask, i32 base) {
+  __builtin_trap();
   return 0;
 }
 
