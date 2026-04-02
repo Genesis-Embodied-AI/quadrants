@@ -418,14 +418,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   void visit(InternalFuncStmt *stmt) override {
     if (stmt->func_name == "subgroupShuffle" ||
         stmt->func_name == "subgroupBroadcast") {
-      auto byte_index = builder->CreateMul(
-          builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]],
-                                     llvm::Type::getInt32Ty(*llvm_context)),
-          tlctx->get_constant((int32)4));
-      llvm_val[stmt] = emit_subgroup_shuffle_amdgpu(
-          llvm_val[stmt->args[0]], stmt->args[0]->ret_type, byte_index);
+      auto index = builder->CreateZExtOrTrunc(
+          llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
+      llvm_val[stmt] = emit_amdgpu_shuffle(
+          llvm_val[stmt->args[0]], stmt->args[0]->ret_type, index);
     } else if (stmt->func_name == "subgroupInvocationId") {
-      llvm_val[stmt] = emit_amdgpu_lane_id();
+      llvm_val[stmt] = call("amdgpu_lane_id");
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
@@ -472,64 +470,22 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
  private:
-  llvm::Value *emit_amdgpu_lane_id() {
-    auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
-    auto all_ones = tlctx->get_constant((int32)-1);
-    auto zero = tlctx->get_constant((int32)0);
-    auto lo = builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_mbcnt_lo,
-                                       {all_ones, zero});
-    return builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_mbcnt_hi,
-                                    {all_ones, lo});
-  }
-
-  llvm::Value *emit_subgroup_shuffle_amdgpu(llvm::Value *value,
-                                            DataType dt,
-                                            llvm::Value *byte_index) {
-    auto i32_ty = llvm::Type::getInt32Ty(*llvm_context);
-
+  llvm::Value *emit_amdgpu_shuffle(llvm::Value *value,
+                                   DataType dt,
+                                   llvm::Value *index) {
     if (dt->is_primitive(PrimitiveTypeID::i32) ||
-        dt->is_primitive(PrimitiveTypeID::u32)) {
-      return builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_ds_bpermute,
-                                      {byte_index, value});
-    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
-      auto as_i32 = builder->CreateBitCast(value, i32_ty);
-      auto shuffled = builder->CreateIntrinsic(
-          i32_ty, Intrinsic::amdgcn_ds_bpermute, {byte_index, as_i32});
-      return builder->CreateBitCast(shuffled,
-                                    llvm::Type::getFloatTy(*llvm_context));
-    } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
-      auto i64_ty = llvm::Type::getInt64Ty(*llvm_context);
-      auto f64_ty = llvm::Type::getDoubleTy(*llvm_context);
-
-      auto as_i64 = builder->CreateBitCast(value, i64_ty);
-      auto lo = builder->CreateTrunc(as_i64, i32_ty);
-      auto hi = builder->CreateTrunc(builder->CreateLShr(as_i64, 32), i32_ty);
-      lo = builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_ds_bpermute,
-                                    {byte_index, lo});
-      hi = builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_ds_bpermute,
-                                    {byte_index, hi});
-      auto lo_64 = builder->CreateZExt(lo, i64_ty);
-      auto hi_64 = builder->CreateZExt(hi, i64_ty);
-      auto combined = builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
-      return builder->CreateBitCast(combined, f64_ty);
-    } else if (dt->is_primitive(PrimitiveTypeID::i64) ||
-               dt->is_primitive(PrimitiveTypeID::u64)) {
-      auto i64_ty = llvm::Type::getInt64Ty(*llvm_context);
-
-      auto lo = builder->CreateTrunc(value, i32_ty);
-      auto hi = builder->CreateTrunc(builder->CreateLShr(value, 32), i32_ty);
-      lo = builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_ds_bpermute,
-                                    {byte_index, lo});
-      hi = builder->CreateIntrinsic(i32_ty, Intrinsic::amdgcn_ds_bpermute,
-                                    {byte_index, hi});
-      auto lo_64 = builder->CreateZExt(lo, i64_ty);
-      auto hi_64 = builder->CreateZExt(hi, i64_ty);
-      return builder->CreateOr(builder->CreateShl(hi_64, 32), lo_64);
-    } else {
-      QD_ERROR("subgroup shuffle: unsupported type {} on AMDGPU",
-               data_type_name(dt));
-      return nullptr;
-    }
+        dt->is_primitive(PrimitiveTypeID::u32))
+      return call("amdgpu_shuffle_i32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("amdgpu_shuffle_f32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("amdgpu_shuffle_f64", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) ||
+        dt->is_primitive(PrimitiveTypeID::u64))
+      return call("amdgpu_shuffle_i64", index, value);
+    QD_ERROR("subgroup shuffle: unsupported type {} on AMDGPU",
+             data_type_name(dt));
+    return nullptr;
   }
 
   std::tuple<llvm::Value *, llvm::Value *> get_spmd_info() override {

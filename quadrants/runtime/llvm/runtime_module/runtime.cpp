@@ -1172,6 +1172,58 @@ f32 cuda_shfl_sync_f32(u32 mask, f32 val, i32 delta, int width) {
   return 0;
 }
 
+i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
+  return 0;
+}
+
+i32 amdgpu_mbcnt_lo(i32 mask, i32 base) {
+  return 0;
+}
+
+i32 amdgpu_mbcnt_hi(i32 mask, i32 base) {
+  return 0;
+}
+
+i32 amdgpu_lane_id() {
+  return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
+}
+
+i32 amdgpu_shuffle_i32(i32 index, i32 value) {
+  return amdgpu_ds_bpermute(index * 4, value);
+}
+
+f32 amdgpu_shuffle_f32(i32 index, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_ds_bpermute(index * 4, u.i);
+  return u.f;
+}
+
+f64 amdgpu_shuffle_f64(i32 index, f64 value) {
+  union {
+    f64 d;
+    u64 bits;
+  } u;
+  u.d = value;
+  i32 lo = (i32)(u.bits);
+  i32 hi = (i32)(u.bits >> 32);
+  lo = amdgpu_ds_bpermute(index * 4, lo);
+  hi = amdgpu_ds_bpermute(index * 4, hi);
+  u.bits = ((u64)(u32)hi << 32) | (u64)(u32)lo;
+  return u.d;
+}
+
+i64 amdgpu_shuffle_i64(i32 index, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_ds_bpermute(index * 4, lo);
+  hi = amdgpu_ds_bpermute(index * 4, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
 bool cuda_all_sync(u32 mask, bool bit) {
   return false;
 }
