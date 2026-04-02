@@ -225,7 +225,8 @@ RangeForStmt::RangeForStmt(Stmt *begin,
                            int num_cpu_threads,
                            int block_dim,
                            bool strictly_serialized,
-                           std::string range_hint)
+                           std::string range_hint,
+                           std::string loop_name)
     : begin(begin),
       end(end),
       body(std::move(body)),
@@ -233,7 +234,8 @@ RangeForStmt::RangeForStmt(Stmt *begin,
       num_cpu_threads(num_cpu_threads),
       block_dim(block_dim),
       strictly_serialized(strictly_serialized),
-      range_hint(range_hint) {
+      range_hint(range_hint),
+      loop_name(std::move(loop_name)) {
   reversed = false;
   this->body->set_parent_stmt(this);
   QD_STMT_REG_FIELDS;
@@ -244,6 +246,7 @@ std::unique_ptr<Stmt> RangeForStmt::clone() const {
       begin, end, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim,
       strictly_serialized);
   new_stmt->reversed = reversed;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 
@@ -265,6 +268,7 @@ std::unique_ptr<Stmt> StructForStmt::clone() const {
   auto new_stmt = std::make_unique<StructForStmt>(
       snode, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim);
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 
@@ -439,6 +443,7 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->tls_size = tls_size;
   new_stmt->bls_size = bls_size;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 

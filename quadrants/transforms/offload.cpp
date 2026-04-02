@@ -134,6 +134,7 @@ class Offloader {
           offloaded->body->insert(std::move(s->body->statements[j]));
         }
         offloaded->range_hint = s->range_hint;
+        offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
         assemble_serial_statements();
@@ -257,6 +258,7 @@ class Offloader {
     offloaded_struct_for->num_cpu_threads =
         std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
+    offloaded_struct_for->loop_name = for_stmt->loop_name;
 
     root_block->insert(std::move(offloaded_struct_for));
   }

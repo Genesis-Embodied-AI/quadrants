@@ -23,6 +23,7 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  std::string loop_name{""};
 };
 
 #define QD_DEFINE_CLONE_FOR_FRONTEND_IR                \
@@ -207,6 +208,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
                   SNode *snode,
@@ -952,6 +954,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.loop_name.clear();
     }
   };
 
@@ -1097,6 +1100,10 @@ class ASTBuilder {
       QD_ASSERT(bit::is_power_of_two(v));
     }
     for_loop_dec_.config.block_dim = v;
+  }
+
+  void set_loop_name(const std::string &loop_name) {
+    for_loop_dec_.config.loop_name = loop_name;
   }
 
   void insert_snode_access_flag(SNodeAccessFlag v, const Expr &field) {

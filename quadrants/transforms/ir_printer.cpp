@@ -425,11 +425,15 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(RangeForStmt *for_stmt) override {
-    print("{} : {}for in range({}, {}) {}{}{{", for_stmt->name(),
+    const std::string loop_name_suffix =
+        for_stmt->loop_name.empty()
+            ? std::string()
+            : fmt::format(" loop_name={}", for_stmt->loop_name);
+    print("{} : {}for in range({}, {}) {}{}{}{{", for_stmt->name(),
           for_stmt->reversed ? "reversed " : "", for_stmt->begin->name(),
           for_stmt->end->name(),
           for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "",
-          block_dim_info(for_stmt->block_dim));
+          block_dim_info(for_stmt->block_dim), loop_name_suffix);
     for_stmt->body->accept(this);
     print("}}");
     dbg_info_printer_(for_stmt);
@@ -686,11 +690,17 @@ class IRPrinter : public IRVisitor {
       details =
           fmt::format("range_for({}, {}) grid_dim={} block_dim={}", begin_str,
                       end_str, stmt->grid_dim, stmt->block_dim);
+      if (!stmt->loop_name.empty()) {
+        details += fmt::format(" loop_name={}", stmt->loop_name);
+      }
     } else if (stmt->task_type == OffloadedTaskType::struct_for) {
       details =
           fmt::format("struct_for({}) grid_dim={} block_dim={} bls={}",
                       stmt->snode->get_node_type_name_hinted(), stmt->grid_dim,
                       stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
+      if (!stmt->loop_name.empty()) {
+        details += fmt::format(" loop_name={}", stmt->loop_name);
+      }
     } else if (stmt->task_type == OffloadedTaskType::mesh_for) {
       details = fmt::format(
           "mesh_for({} -> {}) num_patches={} grid_dim={} block_dim={} bls={}",

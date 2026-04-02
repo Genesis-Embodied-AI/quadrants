@@ -64,9 +64,14 @@ TaskCodegen::TaskCodegen(const Params &params)
       task_ir_(params.task_ir),
       compiled_structs_(params.compiled_structs),
       ctx_attribs_(params.ctx_attribs),
-      task_name_(fmt::format("{}_t{:02d}",
-                             params.ti_kernel_name,
-                             params.task_id_in_kernel)) {
+      task_name_(params.task_ir->loop_name.empty()
+                     ? fmt::format("{}_t{:02d}",
+                                   params.ti_kernel_name,
+                                   params.task_id_in_kernel)
+                     : fmt::format("{}_t{:02d}_{}",
+                                   params.ti_kernel_name,
+                                   params.task_id_in_kernel,
+                                   params.task_ir->loop_name)) {
   allow_undefined_visitor = true;
   invoke_default_visitor = true;
 
@@ -2499,13 +2504,14 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     TaskCodegen cgen(tp);
     auto task_res = cgen.run();
+    const std::string &spirv_dump_basename = task_res.task_attribs.name;
 
     std::filesystem::path ir_dump_dir = params_.compile_config->debug_dump_path;
     if (dump_ir) {
       std::string spirv_asm;
       spirv_tools_->Disassemble(task_res.spirv_code, &spirv_asm);
       std::filesystem::path filename =
-          ir_dump_dir / (tp.ti_kernel_name + "_before_opt.spirv");
+          ir_dump_dir / (spirv_dump_basename + "_before_opt.spirv");
       if (std::ofstream out_file(filename); out_file) {
         out_file.write(spirv_asm.c_str(), spirv_asm.size());
       }
@@ -2540,7 +2546,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       std::string spirv_asm;
       spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
       std::filesystem::path filename =
-          ir_dump_dir / (tp.ti_kernel_name + "_after_opt.spirv");
+          ir_dump_dir / (spirv_dump_basename + "_after_opt.spirv");
       if (std::ofstream out_file(filename); out_file) {
         out_file.write(spirv_asm.c_str(), spirv_asm.size());
       }

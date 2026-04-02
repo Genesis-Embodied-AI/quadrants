@@ -117,26 +117,24 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
   }
 
   if (dump_ir_env != nullptr) {
-    const std::string dumpOutDir = "/tmp/ptx/";
-    std::filesystem::create_directories(dumpOutDir);
+    std::filesystem::path ir_dump_dir = config_.debug_dump_path;
+    std::filesystem::create_directories(ir_dump_dir);
     std::string dumpName = moduleToDumpName(M.get());
-    std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
-    std::ofstream out_file(filename);
-    if (out_file.is_open()) {
+    std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
+    if (std::ofstream out_file(ptx_path); out_file.is_open()) {
       out_file << ptx << std::endl;
-      out_file.close();
     }
-    std::cout << "PTX dumped to: " << filename << std::endl;
+    std::cout << "PTX dumped to: " << ptx_path.string() << std::endl;
   }
 
   const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
   if (load_ptx_env != nullptr) {
-    const std::string dumpOutDir = "/tmp/ptx/";
+    std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::string dumpName = moduleToDumpName(M.get());
-    std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
-    std::ifstream in_file(filename);
+    std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
+    std::ifstream in_file(ptx_path);
     if (in_file.is_open()) {
-      QD_INFO("Loading PTX from file: {}", filename);
+      QD_INFO("Loading PTX from file: {}", ptx_path.string());
       std::ostringstream ptx_stream;
       std::string line;
       while (std::getline(in_file, line)) {
@@ -147,7 +145,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
       ptx = ptx_stream.str();
       in_file.close();
     } else {
-      QD_WARN("Failed to open PTX file for loading: {}", filename);
+      QD_WARN("Failed to open PTX file for loading: {}", ptx_path.string());
     }
   }
 

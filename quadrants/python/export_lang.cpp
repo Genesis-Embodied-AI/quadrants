@@ -330,6 +330,7 @@ void export_lang(py::module &m) {
       .def("expr_alloca_shared_array", &ASTBuilder::expr_alloca_shared_array)
       .def("create_assert_stmt", &ASTBuilder::create_assert_stmt)
       .def("expr_assign", &ASTBuilder::expr_assign)
+      .def("set_loop_name", &ASTBuilder::set_loop_name)
       .def("begin_frontend_range_for", &ASTBuilder::begin_frontend_range_for)
       .def("end_frontend_range_for", &ASTBuilder::pop_scope)
       .def("begin_frontend_struct_for_on_snode",
