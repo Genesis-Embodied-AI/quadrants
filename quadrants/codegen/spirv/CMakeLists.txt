@@ -6,6 +6,7 @@ target_sources(spirv_codegen
     kernel_utils.cpp
     snode_struct_compiler.cpp
     spirv_codegen.cpp
+    spirv_shared_array_retyping.cpp
     spirv_ir_builder.cpp
     spirv_types.cpp
     compiled_kernel_data.cpp
