@@ -279,19 +279,10 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   // Shared array is always modeled as a tensor type, i.e. an array of scalars.
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
-    auto elem_num = tensor_type->get_num_elements();
-    DataType scalar_dtype = tensor_type->get_element_type();
-    // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
-    if (auto nested = scalar_dtype->cast<TensorType>()) {
-      elem_num *= nested->get_num_elements();
-      scalar_dtype = nested->get_element_type();
-      QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
-                     "Nested tensor types deeper than 2 levels not supported");
-    }
-    spirv::SType scalar_stype =
-        maybe_retype_shared_float_alloca(*ir_, *caps_, alloca, scalar_dtype,
-                                         shared_float_allocas_with_atomic_rmw_,
-                                         uint_backed_shared_float_ptr_stmts_);
+    auto [elem_num, scalar_stype] =
+        prepare_shared_alloca_type(*ir_, *caps_, alloca, tensor_type,
+                                   shared_float_allocas_with_atomic_rmw_,
+                                   uint_backed_shared_float_ptr_stmts_);
     spirv::SType arr_type = ir_->get_array_type(scalar_stype, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
@@ -313,10 +304,6 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   spirv::Value origin_val = ir_->query_value(stmt->origin->raw_name());
   spirv::Value offset_val = ir_->query_value(stmt->offset->raw_name());
   auto dt = stmt->element_type().ptr_removed();
-  // Flatten nested tensor types to scalar, e.g. vec3 to f32
-  if (auto nested = dt->cast<TensorType>()) {
-    dt = nested->get_element_type();
-  }
   if (stmt->offset_used_as_index()) {
     // Origin is a local or shared array allocation - use OpAccessChain
     if (stmt->origin->is<AllocaStmt>()) {
@@ -357,16 +344,22 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
 void TaskCodegen::visit(LocalLoadStmt *stmt) {
   auto ptr = stmt->src;
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
-  spirv::Value val = load_shared_float(*ir_, ptr_val, ptr, stmt->element_type(),
-                                       uint_backed_shared_float_ptr_stmts_);
+  spirv::Value val;
+  if (uint_backed_shared_float_ptr_stmts_.count(ptr)) {
+    val = load_uint_backed_shared_float(*ir_, ptr_val, stmt->element_type());
+  } else {
+    val = ir_->load_variable(ptr_val,
+                             ir_->get_primitive_type(stmt->element_type()));
+  }
   ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::visit(LocalStoreStmt *stmt) {
   spirv::Value ptr_val = ir_->query_value(stmt->dest->raw_name());
   spirv::Value val = ir_->query_value(stmt->val->raw_name());
-  val = store_shared_float(*ir_, val, stmt->dest, stmt->val->element_type(),
-                           uint_backed_shared_float_ptr_stmts_);
+  if (uint_backed_shared_float_ptr_stmts_.count(stmt->dest)) {
+    val = float_to_shared_uint(*ir_, val, stmt->val->element_type());
+  }
   ir_->store_variable(ptr_val, val);
 }
 
@@ -1556,11 +1549,11 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
 
   spirv::Value addr_ptr;
   spirv::Value dest_val = ir_->query_value(stmt->dest->raw_name());
-  // Shared arrays have already created an accesschain, use it directly.
+  // Shared arrays already have a pointer from OpAccessChain (dest_is_ptr=true).
+  // at_buffer() looks up ptr_to_buffers_ to find the StorageBuffer and compute
+  // a byte offset — shared/workgroup arrays aren't in ptr_to_buffers_, so
+  // at_buffer() would fail on them.
   const bool dest_is_ptr = dest_val.stype.flag == TypeKind::kPtr;
-
-  // The dest_is_ptr ternaries guard against calling at_buffer() on workgroup
-  // pointers, which would fail (at_buffer only handles StorageBuffer).
   if (dt->is_primitive(PrimitiveTypeID::f64)) {
     if (caps_->get(DeviceCapability::spirv_has_atomic_float64_add) &&
         stmt->op_type == AtomicOpType::add) {
@@ -1615,6 +1608,9 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
     } else if (dest_is_ptr) {
+      // Shared float arrays use uint-backed CAS (width-aware for f16->u32).
+      // Integer shared atomics don't need this — they use native OpAtomicIAdd
+      // etc. directly on the shared pointer.
       val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
@@ -2135,8 +2131,9 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.buffer_binds = get_buffer_binds();
 }
 
-// Return the SPIR-V address for a global/storage-buffer access. Only works for
-// device-buffer-backed pointers (via ptr_to_buffers_), not workgroup arrays.
+// Return the address in device memory for a global/storage-buffer access.
+// Only works for device-buffer-backed pointers (via ptr_to_buffers_), not
+// workgroup arrays — those already have a pointer from OpAccessChain.
 spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 

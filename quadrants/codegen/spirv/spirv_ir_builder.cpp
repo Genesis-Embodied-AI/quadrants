@@ -1160,7 +1160,7 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
     // int loaded = atomicCompSwap(vals[0], old, new);
     /*
     * Don't need this part, theoretically
-    auto semantics = uint_immediate_number(
+    auto semantics = uint_imm ediate_number(
         t_uint32_, spv::MemorySemanticsAcquireReleaseMask |
                        spv::MemorySemanticsUniformMemoryMask);
     make_inst(spv::OpMemoryBarrier, const_i32_one_, semantics);

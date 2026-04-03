@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "quadrants/ir/statements.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
@@ -21,38 +22,34 @@ namespace spirv {
 void scan_shared_atomic_allocs(Block *ir_block,
                                std::unordered_map<const Stmt *, bool> &out);
 
-// If alloca needs uint-backed retyping (based on device caps and atomic ops),
-// return the retyped SType and insert into retyped_stmts. Otherwise return
-// the original SType for scalar_dtype.
-SType maybe_retype_shared_float_alloca(
+// Flatten nested tensor types and optionally retype to uint for shared float
+// atomics. Returns (elem_count, element_stype) ready for array construction.
+std::pair<uint32_t, SType> prepare_shared_alloca_type(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
     const AllocaStmt *alloca,
-    const DataType &scalar_dtype,
+    const TensorType *tensor_type,
     const std::unordered_map<const Stmt *, bool> &alloc_map,
     std::unordered_set<const Stmt *> &retyped_stmts);
 
-// If origin is in retyped_stmts, propagate retyping to stmt and return the
-// uint-backed element SType. Otherwise return the default SType for dt.
+// Flatten nested tensor types in dt, then if origin is in retyped_stmts,
+// propagate retyping to stmt and return the uint-backed element SType.
+// Otherwise return the default SType for dt.
 SType maybe_retype_derived_ptr(IRBuilder &ir,
                                const Stmt *origin,
                                const Stmt *stmt,
-                               const DataType &dt,
+                               DataType &dt,
                                std::unordered_set<const Stmt *> &retyped_stmts);
 
-// Load from a shared float pointer, bitcasting from uint if retyped.
-Value load_shared_float(IRBuilder &ir,
-                        Value ptr_val,
-                        const Stmt *ptr,
-                        const DataType &element_type,
-                        const std::unordered_set<const Stmt *> &retyped_stmts);
+// Load from a uint-backed shared float pointer: loads as uint, bitcasts to
+// float. Only call when ptr is known to be in retyped_stmts.
+Value load_uint_backed_shared_float(IRBuilder &ir,
+                                    Value ptr_val,
+                                    const DataType &element_type);
 
-// Store to a shared float pointer, bitcasting to uint if retyped.
-Value store_shared_float(IRBuilder &ir,
-                         Value val,
-                         const Stmt *dest,
-                         const DataType &val_type,
-                         const std::unordered_set<const Stmt *> &retyped_stmts);
+// Convert a float value to uint for storing into a uint-backed shared array.
+// Only call when dest is known to be in retyped_stmts.
+Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt);
 
 // CAS-based float atomic for shared (workgroup) arrays. Unlike
 // IRBuilder::float_atomic, this handles width-mismatched uint backing
@@ -63,8 +60,9 @@ Value shared_float_atomic(IRBuilder &ir,
                           Value data,
                           const DataType &dt);
 
-// Check whether the device has native shared float atomic add for dt.
-// For device buffers (dest_is_ptr=false), checks buffer capabilities instead.
+// Check whether the device has native float atomic add for dt.
+// When is_shared=true, checks shared/workgroup capabilities;
+// when is_shared=false, checks buffer capabilities.
 bool has_native_float_atomic_add(const DeviceCapabilityConfig &caps,
                                  const DataType &dt,
                                  bool is_shared);

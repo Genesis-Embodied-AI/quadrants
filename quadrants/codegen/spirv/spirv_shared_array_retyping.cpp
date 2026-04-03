@@ -147,31 +147,46 @@ void scan_shared_atomic_allocs(Block *ir_block,
   }
 }
 
-SType maybe_retype_shared_float_alloca(
+std::pair<uint32_t, SType> prepare_shared_alloca_type(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
     const AllocaStmt *alloca,
-    const DataType &scalar_dtype,
+    const TensorType *tensor_type,
     const std::unordered_map<const Stmt *, bool> &alloc_map,
     std::unordered_set<const Stmt *> &retyped_stmts) {
+  auto elem_num = tensor_type->get_num_elements();
+  DataType scalar_dtype = tensor_type->get_element_type();
+  // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
+  if (auto nested = scalar_dtype->cast<TensorType>()) {
+    elem_num *= nested->get_num_elements();
+    scalar_dtype = nested->get_element_type();
+    QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
+                   "Nested tensor types deeper than 2 levels not supported");
+  }
   auto stype = ir.get_primitive_type(scalar_dtype);
+  // Retype to uint if this alloca is targeted by float atomics and the device
+  // lacks native shared float atomic support for all ops used.
   auto it = alloc_map.find(alloca);
-  if (it == alloc_map.end())
-    return stype;
-  bool needs_cas = it->second;
-  if (!needs_cas && has_native_float_atomic_add(caps, scalar_dtype, true))
-    return stype;
-  stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
-  retyped_stmts.insert(alloca);
-  return stype;
+  if (it != alloc_map.end()) {
+    bool needs_cas = it->second;
+    if (needs_cas || !has_native_float_atomic_add(caps, scalar_dtype, true)) {
+      stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
+      retyped_stmts.insert(alloca);
+    }
+  }
+  return {elem_num, stype};
 }
 
 SType maybe_retype_derived_ptr(
     IRBuilder &ir,
     const Stmt *origin,
     const Stmt *stmt,
-    const DataType &dt,
+    DataType &dt,
     std::unordered_set<const Stmt *> &retyped_stmts) {
+  // Flatten nested tensor types to scalar (e.g., vec3 to f32)
+  if (auto nested = dt->cast<TensorType>()) {
+    dt = nested->get_element_type();
+  }
   auto stype = ir.get_primitive_type(dt);
   if (retyped_stmts.count(origin)) {
     stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
@@ -180,39 +195,26 @@ SType maybe_retype_derived_ptr(
   return stype;
 }
 
-Value load_shared_float(IRBuilder &ir,
-                        Value ptr_val,
-                        const Stmt *ptr,
-                        const DataType &element_type,
-                        const std::unordered_set<const Stmt *> &retyped_stmts) {
-  if (retyped_stmts.count(ptr)) {
-    auto shared_type =
-        ir.get_primitive_type(get_atomic_uint_dtype(ir, element_type));
-    Value val = ir.load_variable(ptr_val, shared_type);
-    SType narrow_uint = ir.get_primitive_uint_type(element_type);
-    if (shared_type.id != narrow_uint.id) {
-      val = ir.make_value(spv::OpUConvert, narrow_uint, val);
-    }
-    return ir.make_value(spv::OpBitcast, ir.get_primitive_type(element_type),
-                         val);
+Value load_uint_backed_shared_float(IRBuilder &ir,
+                                    Value ptr_val,
+                                    const DataType &element_type) {
+  auto shared_type =
+      ir.get_primitive_type(get_atomic_uint_dtype(ir, element_type));
+  Value val = ir.load_variable(ptr_val, shared_type);
+  SType narrow_uint = ir.get_primitive_uint_type(element_type);
+  if (shared_type.id != narrow_uint.id) {
+    val = ir.make_value(spv::OpUConvert, narrow_uint, val);
   }
-  return ir.load_variable(ptr_val, ir.get_primitive_type(element_type));
+  return ir.make_value(spv::OpBitcast, ir.get_primitive_type(element_type),
+                       val);
 }
 
-Value store_shared_float(
-    IRBuilder &ir,
-    Value val,
-    const Stmt *dest,
-    const DataType &val_type,
-    const std::unordered_set<const Stmt *> &retyped_stmts) {
-  if (retyped_stmts.count(dest)) {
-    SType narrow_uint = ir.get_primitive_uint_type(val_type);
-    val = ir.make_value(spv::OpBitcast, narrow_uint, val);
-    SType atomic_uint =
-        ir.get_primitive_type(get_atomic_uint_dtype(ir, val_type));
-    if (atomic_uint.id != narrow_uint.id) {
-      val = ir.make_value(spv::OpUConvert, atomic_uint, val);
-    }
+Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
+  SType narrow_uint = ir.get_primitive_uint_type(dt);
+  val = ir.make_value(spv::OpBitcast, narrow_uint, val);
+  SType atomic_uint = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
+  if (atomic_uint.id != narrow_uint.id) {
+    val = ir.make_value(spv::OpUConvert, atomic_uint, val);
   }
   return val;
 }
