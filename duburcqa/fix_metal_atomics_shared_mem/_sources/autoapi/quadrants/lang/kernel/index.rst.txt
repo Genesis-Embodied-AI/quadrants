@@ -90,7 +90,7 @@ Module Contents
 
 
 
-   .. py:attribute:: use_gpu_graph
+   .. py:attribute:: use_graph
       :type:  bool
       :value: False
 
