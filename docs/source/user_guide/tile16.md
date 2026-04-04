@@ -106,7 +106,6 @@ TILE = 16
 @qd.func
 def blocked_cholesky(H, tid, n_dofs, eps):
     N_BLOCKS = (n_dofs + TILE - 1) // TILE
-
     for kb in range(N_BLOCKS):
         k0 = kb * TILE
 

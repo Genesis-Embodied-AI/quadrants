@@ -29,26 +29,28 @@ _TILE = 16
 # =============================================================================
 
 
-@qd.dataclass
 class Tile16:
-    """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers."""
+    """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
 
-    r0: qd.f32 = 0.0
-    r1: qd.f32 = 0.0
-    r2: qd.f32 = 0.0
-    r3: qd.f32 = 0.0
-    r4: qd.f32 = 0.0
-    r5: qd.f32 = 0.0
-    r6: qd.f32 = 0.0
-    r7: qd.f32 = 0.0
-    r8: qd.f32 = 0.0
-    r9: qd.f32 = 0.0
-    r10: qd.f32 = 0.0
-    r11: qd.f32 = 0.0
-    r12: qd.f32 = 0.0
-    r13: qd.f32 = 0.0
-    r14: qd.f32 = 0.0
-    r15: qd.f32 = 0.0
+    All fields default to 0.0 when omitted: ``Tile16()`` creates a zero tile.
+    """
+
+    r0: qd.f32
+    r1: qd.f32
+    r2: qd.f32
+    r3: qd.f32
+    r4: qd.f32
+    r5: qd.f32
+    r6: qd.f32
+    r7: qd.f32
+    r8: qd.f32
+    r9: qd.f32
+    r10: qd.f32
+    r11: qd.f32
+    r12: qd.f32
+    r13: qd.f32
+    r14: qd.f32
+    r15: qd.f32
 
     @qd.func
     def load(self, arr, row, col0, n_cols):
@@ -424,3 +426,9 @@ class Tile16:
             if c == 13: self.r13 = new_val
             if c == 14: self.r14 = new_val
             if c == 15: self.r15 = new_val
+
+
+# StructType.__call__ already defaults missing args to 0, so Tile16()
+# produces a zero-initialized tile without needing default values in the
+# class definition (which @qd.dataclass doesn't support).
+Tile16 = qd.dataclass(Tile16)
