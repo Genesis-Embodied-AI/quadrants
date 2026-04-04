@@ -174,10 +174,11 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
 Benchmark script: `misc/demos/cholesky_blocked.py`
 
-RTX 5090, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hessian).
+RTX PRO 6000 Blackwell, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hessian).
 
 ```
 Kernel                                      Threads   Time (us)    vs baseline
-baseline (scalar Crout, shared mem)              64       569         1.00x
-tile16   (Tile16, no shared memory)              16       179         3.17x
+baseline (scalar Crout, shared mem)              64       611         1.00x
+blocked  (scalar Crout, shared mem)              16       515         1.19x
+tile16   (Tile16, no shared memory)              16       200         3.05x
 ```
