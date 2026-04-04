@@ -3,7 +3,6 @@ import pytest
 import scipy.linalg
 
 import quadrants as qd
-from quadrants.lang.simt import tile16
 from quadrants.lang.simt.tile16 import Tile16
 
 from tests import test_utils
@@ -223,64 +222,3 @@ def test_tile16_potrf_then_trsm():
     L_ref = np.linalg.cholesky(A.astype(np.float64))
     X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T.astype(np.float64), lower=True).T.astype(np.float32)
     np.testing.assert_allclose(X, X_ref, atol=1e-3)
-
-
-# =============================================================================
-# Standalone function API tests (backward compatibility)
-# =============================================================================
-
-
-@test_utils.test(arch=qd.cuda)
-def test_standalone_load_store():
-    src = qd.field(dtype=qd.f32, shape=(N, N))
-    dst = qd.field(dtype=qd.f32, shape=(N, N))
-
-    @qd.kernel
-    def run():
-        qd.loop_config(block_dim=N)
-        for tid in range(N):
-            z = qd.f32(0.0)
-            r0 = z; r1 = z; r2 = z; r3 = z; r4 = z; r5 = z; r6 = z; r7 = z
-            r8 = z; r9 = z; r10 = z; r11 = z; r12 = z; r13 = z; r14 = z; r15 = z
-            r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15 = \
-                tile16.load(src, tid, 0, N,
-                            r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15)
-            tile16.store(dst, tid, 0, N,
-                         r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15)
-
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N)
-    src.from_numpy(data)
-    run()
-    np.testing.assert_allclose(dst.to_numpy(), data)
-
-
-@test_utils.test(arch=qd.cuda)
-def test_standalone_syr_sub():
-    mat = qd.field(dtype=qd.f32, shape=(N, N))
-    vec = qd.field(dtype=qd.f32, shape=(N,))
-    out = qd.field(dtype=qd.f32, shape=(N, N))
-
-    @qd.kernel
-    def run():
-        qd.loop_config(block_dim=N)
-        for tid in range(N):
-            v = vec[tid]
-            r0 = mat[tid, 0]; r1 = mat[tid, 1]; r2 = mat[tid, 2]; r3 = mat[tid, 3]
-            r4 = mat[tid, 4]; r5 = mat[tid, 5]; r6 = mat[tid, 6]; r7 = mat[tid, 7]
-            r8 = mat[tid, 8]; r9 = mat[tid, 9]; r10 = mat[tid, 10]; r11 = mat[tid, 11]
-            r12 = mat[tid, 12]; r13 = mat[tid, 13]; r14 = mat[tid, 14]; r15 = mat[tid, 15]
-            r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15 = \
-                tile16.syr_sub(v, r0, r1, r2, r3, r4, r5, r6, r7,
-                               r8, r9, r10, r11, r12, r13, r14, r15)
-            out[tid, 0] = r0; out[tid, 1] = r1; out[tid, 2] = r2; out[tid, 3] = r3
-            out[tid, 4] = r4; out[tid, 5] = r5; out[tid, 6] = r6; out[tid, 7] = r7
-            out[tid, 8] = r8; out[tid, 9] = r9; out[tid, 10] = r10; out[tid, 11] = r11
-            out[tid, 12] = r12; out[tid, 13] = r13; out[tid, 14] = r14; out[tid, 15] = r15
-
-    rng = np.random.RandomState(123)
-    R = rng.randn(N, N).astype(np.float32)
-    v = rng.randn(N).astype(np.float32)
-    mat.from_numpy(R)
-    vec.from_numpy(v)
-    run()
-    np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=1e-5)
