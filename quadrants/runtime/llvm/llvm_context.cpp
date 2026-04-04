@@ -580,10 +580,6 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(
       patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier,
                       false);
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
-      patch_intrinsic("amdgpu_ds_bpermute",
-                      llvm::Intrinsic::amdgcn_ds_bpermute);
-      patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
-      patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
 
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim(

@@ -784,38 +784,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     }
   }
 
-  void visit(InternalFuncStmt *stmt) override {
-    if (stmt->func_name == "subgroupShuffle" ||
-        stmt->func_name == "subgroupBroadcast") {
-      llvm_val[stmt] = emit_cuda_shuffle(
-          /* value=*/llvm_val[stmt->args[0]],
-          /* dt=*/stmt->args[0]->ret_type,
-          /* index=*/llvm_val[stmt->args[1]]);
-    } else if (stmt->func_name == "subgroupInvocationId") {
-      llvm_val[stmt] = call("cuda_lane_id");
-    } else {
-      TaskCodeGenLLVM::visit(stmt);
-    }
-  }
-
  private:
-  llvm::Value *emit_cuda_shuffle(llvm::Value *value,
-                                 DataType dt,
-                                 llvm::Value *index) {
-    if (dt->is_primitive(PrimitiveTypeID::i32) ||
-        dt->is_primitive(PrimitiveTypeID::u32))
-      return call("cuda_shuffle_i32", index, value);
-    if (dt->is_primitive(PrimitiveTypeID::f32))
-      return call("cuda_shuffle_f32", index, value);
-    if (dt->is_primitive(PrimitiveTypeID::f64))
-      return call("cuda_shuffle_f64", index, value);
-    if (dt->is_primitive(PrimitiveTypeID::i64) ||
-        dt->is_primitive(PrimitiveTypeID::u64))
-      return call("cuda_shuffle_i64", index, value);
-    QD_ERROR("subgroup shuffle: unsupported type {}", data_type_name(dt));
-    return nullptr;
-  }
-
   std::tuple<llvm::Value *, llvm::Value *> get_spmd_info() override {
     auto thread_idx = builder->CreateIntrinsic(
         Intrinsic::nvvm_read_ptx_sreg_tid_x, ArrayRef<llvm::Value *>{});
