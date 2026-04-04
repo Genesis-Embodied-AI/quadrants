@@ -1,0 +1,181 @@
+quadrants.lang.simt.tile16
+==========================
+
+.. py:module:: quadrants.lang.simt.tile16
+
+.. autoapi-nested-parse::
+
+   Register-resident 16x16 tile operations using subgroup (warp) shuffles.
+
+   Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
+   one row per thread, with each row stored in 16 scalar registers (r0-r15).
+   Cross-thread communication uses warp shuffles — no shared memory needed.
+
+   Usage example::
+
+       t = Tile16()                              # zero-initialized tile
+       t.load(arr, row, col0, n_cols)            # load from 2D array
+       t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])
+       t.syr_sub(v)                              # symmetric rank-1 subtract
+       t.potrf(tid, eps)                         # Cholesky factorization
+       b.trsm(L)                                 # triangular solve using L
+       t.store(arr, row, col0, n_cols)           # store to 2D array
+       t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.tile16.Tile16
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.tile16.Tile16
+
+
+Module Contents
+---------------
+
+.. py:class:: Tile16
+
+   A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
+
+   All fields default to 0.0 when omitted: ``Tile16()`` creates a zero tile.
+
+
+   .. py:attribute:: r0
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r1
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r2
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r3
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r4
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r5
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r6
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r7
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r8
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r9
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r10
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r11
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r12
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r13
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r14
+      :type:  quadrants.f32
+
+
+   .. py:attribute:: r15
+      :type:  quadrants.f32
+
+
+   .. py:method:: load(arr, row, col0, n_cols)
+
+      Load one row from a 2D array with column bounds checking.
+
+
+
+   .. py:method:: load3d(arr, i0, row, col0, n_cols)
+
+      Load one row from a 3D array: arr[i0, row, col0+c] with column bounds checking.
+
+
+
+   .. py:method:: store(arr, row, col0, n_cols)
+
+      Store one row to a 2D array with column bounds checking.
+
+
+
+   .. py:method:: store3d(arr, i0, row, col0, n_cols)
+
+      Store one row to a 3D array: arr[i0, row, col0+c] with column bounds checking.
+
+
+
+   .. py:method:: set_identity(tid)
+
+      Set this tile row to the identity matrix row for thread tid.
+
+      Each thread sets its diagonal element to 1.0 and all others to 0.0,
+      producing a distributed 16x16 identity matrix across the subgroup.
+
+
+
+   .. py:method:: syr_sub(v)
+
+      Symmetric rank-1 subtract in-place: self -= v @ v^T.
+
+
+
+   .. py:method:: ger_sub(a, b)
+
+      General rank-1 subtract in-place: self -= a @ b^T.
+
+
+
+   .. py:method:: potrf(tid, eps)
+
+      In-place 16x16 Cholesky factorization (POTRF) via subgroup shuffles.
+
+      On return, the lower triangle holds L such that A = L @ L^T.
+      Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
+
+
+
+   .. py:method:: trsm(L)
+
+      In-place triangular solve: solve self @ L^T = B (original self).
+
+      L is a Tile16 holding the lower-triangular Cholesky factor (from potrf).
+      On return, self holds the solution X.
+
+
+
+.. py:data:: Tile16
+
