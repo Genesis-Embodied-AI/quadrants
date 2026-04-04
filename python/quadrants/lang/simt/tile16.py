@@ -14,12 +14,14 @@ Two APIs are provided:
 
 Tile16 usage example::
 
-    t = Tile16()                    # zero-initialized tile
-    t.load(arr, row, col0, n_cols)  # load from 2D array
-    t.syr_sub(v)                    # symmetric rank-1 subtract
-    t.potrf(tid, eps)               # Cholesky factorization
-    b.trsm(L)                       # triangular solve using L
-    t.store(arr, row, col0, n_cols) # store to 2D array
+    t = Tile16()                              # zero-initialized tile
+    t.load(arr, row, col0, n_cols)            # load from 2D array
+    t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])
+    t.syr_sub(v)                              # symmetric rank-1 subtract
+    t.potrf(tid, eps)                         # Cholesky factorization
+    b.trsm(L)                                 # triangular solve using L
+    t.store(arr, row, col0, n_cols)           # store to 2D array
+    t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array
 """
 
 import quadrants as qd
@@ -74,6 +76,26 @@ class Tile16:
         if col0 + 15 < n_cols: self.r15 = arr[row, col0 + 15]
 
     @qd.func
+    def load3d(self, arr, i0, row, col0, n_cols):
+        """Load one row from a 3D array: arr[i0, row, col0+c] with column bounds checking."""
+        if col0 + 0 < n_cols: self.r0 = arr[i0, row, col0 + 0]
+        if col0 + 1 < n_cols: self.r1 = arr[i0, row, col0 + 1]
+        if col0 + 2 < n_cols: self.r2 = arr[i0, row, col0 + 2]
+        if col0 + 3 < n_cols: self.r3 = arr[i0, row, col0 + 3]
+        if col0 + 4 < n_cols: self.r4 = arr[i0, row, col0 + 4]
+        if col0 + 5 < n_cols: self.r5 = arr[i0, row, col0 + 5]
+        if col0 + 6 < n_cols: self.r6 = arr[i0, row, col0 + 6]
+        if col0 + 7 < n_cols: self.r7 = arr[i0, row, col0 + 7]
+        if col0 + 8 < n_cols: self.r8 = arr[i0, row, col0 + 8]
+        if col0 + 9 < n_cols: self.r9 = arr[i0, row, col0 + 9]
+        if col0 + 10 < n_cols: self.r10 = arr[i0, row, col0 + 10]
+        if col0 + 11 < n_cols: self.r11 = arr[i0, row, col0 + 11]
+        if col0 + 12 < n_cols: self.r12 = arr[i0, row, col0 + 12]
+        if col0 + 13 < n_cols: self.r13 = arr[i0, row, col0 + 13]
+        if col0 + 14 < n_cols: self.r14 = arr[i0, row, col0 + 14]
+        if col0 + 15 < n_cols: self.r15 = arr[i0, row, col0 + 15]
+
+    @qd.func
     def store(self, arr, row, col0, n_cols):
         """Store one row to a 2D array with column bounds checking."""
         if col0 + 0 < n_cols: arr[row, col0 + 0] = self.r0
@@ -92,6 +114,26 @@ class Tile16:
         if col0 + 13 < n_cols: arr[row, col0 + 13] = self.r13
         if col0 + 14 < n_cols: arr[row, col0 + 14] = self.r14
         if col0 + 15 < n_cols: arr[row, col0 + 15] = self.r15
+
+    @qd.func
+    def store3d(self, arr, i0, row, col0, n_cols):
+        """Store one row to a 3D array: arr[i0, row, col0+c] with column bounds checking."""
+        if col0 + 0 < n_cols: arr[i0, row, col0 + 0] = self.r0
+        if col0 + 1 < n_cols: arr[i0, row, col0 + 1] = self.r1
+        if col0 + 2 < n_cols: arr[i0, row, col0 + 2] = self.r2
+        if col0 + 3 < n_cols: arr[i0, row, col0 + 3] = self.r3
+        if col0 + 4 < n_cols: arr[i0, row, col0 + 4] = self.r4
+        if col0 + 5 < n_cols: arr[i0, row, col0 + 5] = self.r5
+        if col0 + 6 < n_cols: arr[i0, row, col0 + 6] = self.r6
+        if col0 + 7 < n_cols: arr[i0, row, col0 + 7] = self.r7
+        if col0 + 8 < n_cols: arr[i0, row, col0 + 8] = self.r8
+        if col0 + 9 < n_cols: arr[i0, row, col0 + 9] = self.r9
+        if col0 + 10 < n_cols: arr[i0, row, col0 + 10] = self.r10
+        if col0 + 11 < n_cols: arr[i0, row, col0 + 11] = self.r11
+        if col0 + 12 < n_cols: arr[i0, row, col0 + 12] = self.r12
+        if col0 + 13 < n_cols: arr[i0, row, col0 + 13] = self.r13
+        if col0 + 14 < n_cols: arr[i0, row, col0 + 14] = self.r14
+        if col0 + 15 < n_cols: arr[i0, row, col0 + 15] = self.r15
 
     @qd.func
     def syr_sub(self, v):
@@ -407,6 +449,49 @@ def store(arr, row, col0, n_cols, r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r
     if col0 + 13 < n_cols: arr[row, col0 + 13] = r13
     if col0 + 14 < n_cols: arr[row, col0 + 14] = r14
     if col0 + 15 < n_cols: arr[row, col0 + 15] = r15
+
+
+@qd.func
+def load3d(arr, i0, row, col0, n_cols, r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15):
+    """Load one row of a 16x16 tile from a 3D array: arr[i0, row, col0+c]."""
+    if col0 + 0 < n_cols: r0 = arr[i0, row, col0 + 0]
+    if col0 + 1 < n_cols: r1 = arr[i0, row, col0 + 1]
+    if col0 + 2 < n_cols: r2 = arr[i0, row, col0 + 2]
+    if col0 + 3 < n_cols: r3 = arr[i0, row, col0 + 3]
+    if col0 + 4 < n_cols: r4 = arr[i0, row, col0 + 4]
+    if col0 + 5 < n_cols: r5 = arr[i0, row, col0 + 5]
+    if col0 + 6 < n_cols: r6 = arr[i0, row, col0 + 6]
+    if col0 + 7 < n_cols: r7 = arr[i0, row, col0 + 7]
+    if col0 + 8 < n_cols: r8 = arr[i0, row, col0 + 8]
+    if col0 + 9 < n_cols: r9 = arr[i0, row, col0 + 9]
+    if col0 + 10 < n_cols: r10 = arr[i0, row, col0 + 10]
+    if col0 + 11 < n_cols: r11 = arr[i0, row, col0 + 11]
+    if col0 + 12 < n_cols: r12 = arr[i0, row, col0 + 12]
+    if col0 + 13 < n_cols: r13 = arr[i0, row, col0 + 13]
+    if col0 + 14 < n_cols: r14 = arr[i0, row, col0 + 14]
+    if col0 + 15 < n_cols: r15 = arr[i0, row, col0 + 15]
+    return r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15
+
+
+@qd.func
+def store3d(arr, i0, row, col0, n_cols, r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15):
+    """Store one row of a 16x16 tile to a 3D array: arr[i0, row, col0+c]."""
+    if col0 + 0 < n_cols: arr[i0, row, col0 + 0] = r0
+    if col0 + 1 < n_cols: arr[i0, row, col0 + 1] = r1
+    if col0 + 2 < n_cols: arr[i0, row, col0 + 2] = r2
+    if col0 + 3 < n_cols: arr[i0, row, col0 + 3] = r3
+    if col0 + 4 < n_cols: arr[i0, row, col0 + 4] = r4
+    if col0 + 5 < n_cols: arr[i0, row, col0 + 5] = r5
+    if col0 + 6 < n_cols: arr[i0, row, col0 + 6] = r6
+    if col0 + 7 < n_cols: arr[i0, row, col0 + 7] = r7
+    if col0 + 8 < n_cols: arr[i0, row, col0 + 8] = r8
+    if col0 + 9 < n_cols: arr[i0, row, col0 + 9] = r9
+    if col0 + 10 < n_cols: arr[i0, row, col0 + 10] = r10
+    if col0 + 11 < n_cols: arr[i0, row, col0 + 11] = r11
+    if col0 + 12 < n_cols: arr[i0, row, col0 + 12] = r12
+    if col0 + 13 < n_cols: arr[i0, row, col0 + 13] = r13
+    if col0 + 14 < n_cols: arr[i0, row, col0 + 14] = r14
+    if col0 + 15 < n_cols: arr[i0, row, col0 + 15] = r15
 
 
 @qd.func
