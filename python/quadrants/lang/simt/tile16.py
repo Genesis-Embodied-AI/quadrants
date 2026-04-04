@@ -136,6 +136,34 @@ class Tile16:
         if col0 + 15 < n_cols: arr[i0, row, col0 + 15] = self.r15
 
     @qd.func
+    def set_identity(self, tid):
+        """Set this tile row to the identity matrix row for thread tid.
+
+        Each thread sets its diagonal element to 1.0 and all others to 0.0,
+        producing a distributed 16x16 identity matrix across the subgroup.
+        """
+        self.r0 = 0.0; self.r1 = 0.0; self.r2 = 0.0; self.r3 = 0.0
+        self.r4 = 0.0; self.r5 = 0.0; self.r6 = 0.0; self.r7 = 0.0
+        self.r8 = 0.0; self.r9 = 0.0; self.r10 = 0.0; self.r11 = 0.0
+        self.r12 = 0.0; self.r13 = 0.0; self.r14 = 0.0; self.r15 = 0.0
+        if tid == 0: self.r0 = 1.0
+        if tid == 1: self.r1 = 1.0
+        if tid == 2: self.r2 = 1.0
+        if tid == 3: self.r3 = 1.0
+        if tid == 4: self.r4 = 1.0
+        if tid == 5: self.r5 = 1.0
+        if tid == 6: self.r6 = 1.0
+        if tid == 7: self.r7 = 1.0
+        if tid == 8: self.r8 = 1.0
+        if tid == 9: self.r9 = 1.0
+        if tid == 10: self.r10 = 1.0
+        if tid == 11: self.r11 = 1.0
+        if tid == 12: self.r12 = 1.0
+        if tid == 13: self.r13 = 1.0
+        if tid == 14: self.r14 = 1.0
+        if tid == 15: self.r15 = 1.0
+
+    @qd.func
     def syr_sub(self, v):
         """Symmetric rank-1 subtract in-place: self -= v @ v^T."""
         vc = qd.simt.subgroup.shuffle(v, qd.u32(0));  self.r0 -= v * vc
