@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """Benchmark 64x64 blocked Cholesky factorization using Tile16.
 
-Compares a baseline scalar Cholesky-Crout (64 threads, shared memory,
-64 sequential syncs) against a fully register-resident blocked Cholesky
-using Tile16 (16 threads, no shared memory, zero syncs).
+Three kernels compared:
 
-The blocked kernel reads initial values from global memory, writes factorized
-tiles to a separate output field, and reads prior tiles from that field for
-GEMM lookback (served by L2 cache). Each thread only reads/writes its own
-rows, so program order guarantees visibility without any fencing.
+1. Baseline: scalar Cholesky-Crout, 64 threads, shared memory, 64 sequential
+   syncs. Thread 0 computes each diagonal, remaining threads parallelize
+   off-diagonal updates.
 
-Tested on RTX 5090, 4096 environments, f32:
+2. Blocked: 4x4 grid of 16x16 tiles, 16 threads, shared memory, scalar Crout
+   for diagonal blocks. Same blocking structure as Tile16 but all data lives
+   in shared memory with block.sync() between every step.
 
-    Kernel                          Threads   Time (us)    vs baseline
-    baseline (scalar Crout, shared mem)  64       569         1.00x
-    blocked  (Tile16, no shmem)          16       179         3.17x
+3. Tile16: same blocked structure but fully register-resident via Tile16.
+   No shared memory, zero syncs. Prior tiles read from global memory (L2).
+
+Results on RTX PRO 6000 Blackwell, 4096 environments, f32:
+
+    Kernel                                 Threads   Time (us)    vs baseline
+    baseline (scalar Crout, shared mem)         64       611         1.00x
+    blocked  (scalar Crout, shared mem)         16       515         1.19x
+    tile16   (Tile16, no shared memory)         16       200         3.05x
 
 Usage:
     python misc/demos/cholesky_blocked.py
@@ -37,6 +42,7 @@ qd.init(arch=qd.cuda)
 
 A_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_baseline_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
+L_blocked_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_tile16_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 
 
@@ -48,46 +54,130 @@ def make_spd_matrices(n_envs, n):
 
 
 # ---------------------------------------------------------------------------
-# Baseline: scalar Cholesky-Crout (64 threads, shared memory)
+# Kernel 1: scalar Cholesky-Crout (64 threads, shared memory)
 # ---------------------------------------------------------------------------
 
 @qd.kernel
 def cholesky_baseline():
-    qd.loop_config(name="chol_baseline", block_dim=N)
-    for idx in range(N_ENVS * N):
-        tid = idx % N
-        env = idx // N
+    qd.loop_config(name="chol_baseline", block_dim=64)
+    for idx in range(N_ENVS * 64):
+        tid = idx % 64
+        env = idx // 64
 
-        H = qd.simt.block.SharedArray(N * (N + 1), qd.f32)
+        H = qd.simt.block.SharedArray((N, N + 1), qd.f32)
 
-        for c in range(N):
-            if tid <= c:
-                H[c * (N + 1) + tid] = A_field[env, c, tid]
+        for row in range(N):
+            if row % 64 == tid:
+                for col in range(row + 1):
+                    H[row, col] = A_field[env, row, col]
         qd.simt.block.sync()
 
-        for j in range(N):
+        for i_d in range(N):
             if tid == 0:
-                s = qd.f32(0.0)
-                for p in range(j):
-                    s += H[j * (N + 1) + p] * H[j * (N + 1) + p]
-                H[j * (N + 1) + j] = qd.sqrt(qd.max(H[j * (N + 1) + j] - s, qd.f32(1e-12)))
+                tmp = H[i_d, i_d]
+                for j_d in range(i_d):
+                    tmp -= H[i_d, j_d] * H[i_d, j_d]
+                H[i_d, i_d] = qd.sqrt(qd.max(tmp, qd.f32(1e-12)))
             qd.simt.block.sync()
 
-            row = tid
-            if row > j:
-                s = qd.f32(0.0)
-                for p in range(j):
-                    s += H[row * (N + 1) + p] * H[j * (N + 1) + p]
-                H[row * (N + 1) + j] = (H[row * (N + 1) + j] - s) / H[j * (N + 1) + j]
+            inv_diag = qd.f32(1.0) / H[i_d, i_d]
+            j_d = i_d + 1 + tid
+            while j_d < N:
+                dot = qd.f32(0.0)
+                for k_d in range(i_d):
+                    dot += H[j_d, k_d] * H[i_d, k_d]
+                H[j_d, i_d] = (H[j_d, i_d] - dot) * inv_diag
+                j_d += 64
             qd.simt.block.sync()
 
-        for c in range(N):
-            if tid <= c:
-                L_baseline_field[env, c, tid] = H[c * (N + 1) + tid]
+        for row in range(N):
+            if row % 64 == tid:
+                for col in range(row + 1):
+                    L_baseline_field[env, row, col] = H[row, col]
 
 
 # ---------------------------------------------------------------------------
-# Tile16: fully register-resident blocked Cholesky (16 threads, no shmem)
+# Kernel 2: blocked Cholesky (16 threads, shared memory, scalar Crout)
+# ---------------------------------------------------------------------------
+
+@qd.kernel
+def cholesky_blocked():
+    qd.loop_config(name="chol_blocked", block_dim=TILE)
+    for idx in range(N_ENVS * TILE):
+        tid = idx % TILE
+        env = idx // TILE
+
+        H = qd.simt.block.SharedArray((N, N + 1), qd.f32)
+
+        for row in range(N):
+            c = tid
+            while c <= row:
+                H[row, c] = A_field[env, row, c]
+                c += TILE
+        qd.simt.block.sync()
+
+        for kb in range(N_BLOCKS):
+            k0 = kb * TILE
+
+            for r in range(TILE):
+                c = tid
+                if c <= r:
+                    s = qd.f32(0.0)
+                    for jb in range(kb):
+                        j0 = jb * TILE
+                        for t in range(TILE):
+                            s += H[k0 + r, j0 + t] * H[k0 + c, j0 + t]
+                    H[k0 + r, k0 + c] -= s
+            qd.simt.block.sync()
+
+            for col in range(TILE):
+                if tid == 0:
+                    tmp = H[k0 + col, k0 + col]
+                    for j in range(col):
+                        tmp -= H[k0 + col, k0 + j] * H[k0 + col, k0 + j]
+                    H[k0 + col, k0 + col] = qd.sqrt(qd.max(tmp, qd.f32(1e-12)))
+                qd.simt.block.sync()
+
+                row = col + 1 + tid
+                if row < TILE:
+                    inv_d = qd.f32(1.0) / H[k0 + col, k0 + col]
+                    dot = qd.f32(0.0)
+                    for j in range(col):
+                        dot += H[k0 + row, k0 + j] * H[k0 + col, k0 + j]
+                    H[k0 + row, k0 + col] = (H[k0 + row, k0 + col] - dot) * inv_d
+                qd.simt.block.sync()
+
+            for ib in range(kb + 1, N_BLOCKS):
+                i0 = ib * TILE
+
+                for r in range(TILE):
+                    c = tid
+                    s = qd.f32(0.0)
+                    for jb in range(kb):
+                        j0 = jb * TILE
+                        for t in range(TILE):
+                            s += H[i0 + r, j0 + t] * H[k0 + c, j0 + t]
+                    H[i0 + r, k0 + c] -= s
+                qd.simt.block.sync()
+
+                for c in range(TILE):
+                    r = tid
+                    if r < TILE:
+                        dot = qd.f32(0.0)
+                        for j in range(c):
+                            dot += H[i0 + r, k0 + j] * H[k0 + c, k0 + j]
+                        H[i0 + r, k0 + c] = (H[i0 + r, k0 + c] - dot) / H[k0 + c, k0 + c]
+                    qd.simt.block.sync()
+
+        for row in range(N):
+            c = tid
+            while c <= row:
+                L_blocked_field[env, row, c] = H[row, c]
+                c += TILE
+
+
+# ---------------------------------------------------------------------------
+# Kernel 3: Tile16 blocked Cholesky (16 threads, no shared memory)
 # ---------------------------------------------------------------------------
 
 @qd.kernel
@@ -100,29 +190,23 @@ def cholesky_tile16():
         for kb in range(N_BLOCKS):
             k0 = kb * TILE
 
-            # Load diagonal block from A
             L_kk = Tile16()
             L_kk.load3d(A_field, env, k0 + tid, k0, N)
 
-            # Diagonal syr subtract: A_kk -= L_k* @ L_k*^T (lookback from L)
             for jb in range(kb):
                 j0 = jb * TILE
                 for t in range(TILE):
                     v = L_tile16_field[env, k0 + tid, j0 + t]
                     L_kk.syr_sub(v)
 
-            # POTRF: factorize diagonal tile
             L_kk.potrf(tid, qd.f32(1e-12))
 
-            # Off-diagonal blocks
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * TILE
 
-                # Load off-diagonal block from A
                 L_ik = Tile16()
                 L_ik.load3d(A_field, env, i0 + tid, k0, N)
 
-                # Off-diagonal ger subtract: A_ik -= L_i* @ L_k*^T
                 for jb in range(kb):
                     j0 = jb * TILE
                     for t in range(TILE):
@@ -130,13 +214,10 @@ def cholesky_tile16():
                         v_diag = L_tile16_field[env, k0 + tid, j0 + t]
                         L_ik.ger_sub(v_own, v_diag)
 
-                # TRSM: solve L_kk @ X^T = L_ik^T
                 L_ik.trsm(L_kk)
 
-                # Store off-diagonal result
                 L_ik.store3d(L_tile16_field, env, i0 + tid, k0, N)
 
-            # Store diagonal result
             L_kk.store3d(L_tile16_field, env, k0 + tid, k0, N)
 
 
@@ -154,7 +235,7 @@ def benchmark(name, kernel_fn, n_warmup, n_iters):
     qd.sync()
     elapsed = time.perf_counter() - t0
     us_per_call = elapsed / n_iters * 1e6
-    print(f"  {name:40s}  {us_per_call:8.1f} us/call  ({n_iters} iters)")
+    print(f"  {name:45s}  {us_per_call:8.1f} us/call  ({n_iters} iters)")
     return us_per_call
 
 
@@ -187,6 +268,11 @@ def main():
     qd.sync()
     verify("baseline", L_baseline_field, A_np)
 
+    print("Compiling blocked (scalar Crout, 16 threads, shared mem)...")
+    cholesky_blocked()
+    qd.sync()
+    verify("blocked", L_blocked_field, A_np)
+
     print("Compiling Tile16 (blocked, 16 threads, no shared memory)...")
     cholesky_tile16()
     qd.sync()
@@ -194,10 +280,13 @@ def main():
     print()
 
     print("Benchmarking:")
-    t_baseline = benchmark("baseline (scalar Crout, 64 threads)", cholesky_baseline, WARMUP, ITERS)
-    t_tile16 = benchmark("tile16 (blocked, no shmem, 16 threads)", cholesky_tile16, WARMUP, ITERS)
+    t_baseline = benchmark("baseline (scalar Crout, 64 thr, shared mem)", cholesky_baseline, WARMUP, ITERS)
+    t_blocked = benchmark("blocked  (scalar Crout, 16 thr, shared mem)", cholesky_blocked, WARMUP, ITERS)
+    t_tile16 = benchmark("tile16   (Tile16, 16 thr, no shared mem)", cholesky_tile16, WARMUP, ITERS)
     print()
-    print(f"  Tile16 vs baseline: {t_baseline / t_tile16:.2f}x")
+    print(f"  blocked  vs baseline: {t_baseline / t_blocked:.2f}x")
+    print(f"  tile16   vs baseline: {t_baseline / t_tile16:.2f}x")
+    print(f"  tile16   vs blocked:  {t_blocked / t_tile16:.2f}x")
 
 
 if __name__ == "__main__":
