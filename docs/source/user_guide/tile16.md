@@ -4,6 +4,8 @@
 
 This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
+Tile16 runs on all GPU backends supported by Quadrants: CUDA, AMD (via Vulkan), Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required.
+
 ## Quick start
 
 ```python
