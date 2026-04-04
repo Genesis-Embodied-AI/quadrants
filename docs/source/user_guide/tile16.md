@@ -173,42 +173,10 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
 Benchmark script: `misc/demos/cholesky_blocked.py`
 
-Setup: Quadrants 0.6.0b1, RTX 5090, 4096 environments, f32. The 64x64 matrix (62 DOFs padded to 64) matches the constraint-space Hessian in the Genesis dex_hand scene.
-
-### Kernels
-
-**Baseline (Genesis-style)**: flat scalar Cholesky-Crout, 64 threads per env, 64 sequential column steps with `block.sync()` after each. Thread 0 computes diagonal, remaining threads parallelize off-diagonal updates. Matches `func_cholesky_factor_direct_tiled` in Genesis.
-
-**Tile16 (no shared memory)**: 4x4 grid of 16x16 tiles, 16 threads per env. Diagonal blocks loaded into `Tile16`, updated via `syr_sub`, factorized via `potrf`. Off-diagonal blocks loaded into a second `Tile16`, updated via `ger_sub`, solved via `trsm`. All operations are register-resident with zero shared memory and zero syncs. Prior factorized tiles are read back from global memory (served by L2 cache).
-
-### Results
+RTX 5090, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hessian).
 
 ```
 Kernel                                      Threads   Time (us)    vs baseline
 baseline (Genesis Crout, shared mem)             64       569         1.00x
 tile16   (Tile16, no shared memory)              16       179         3.17x
 ```
-
-### Why it's fast
-
-The key insight is that shared memory, despite being "fast", is the bottleneck — not as a slow memory, but as a **scarce resource limiting occupancy**.
-
-With shared memory, each thread block needs ~17 KB for the 64x65 matrix (padded for bank conflicts). On an SM with 128 KB shared, this allows ~7 concurrent warps. The `Tile16` kernel uses zero shared memory, so occupancy is limited only by registers (~50 per thread x 16 threads = 800 per block), allowing ~32 concurrent warps — a 4.5x increase in schedulable warps that provides dramatically better latency hiding.
-
-Despite non-coalesced global reads (stride-64 row-major), the L2 cache (96 MB on Blackwell) easily holds the working set (~16 KB per env x 4096 envs = 64 MB). The massive occupancy gain dominates.
-
-### Optimization progression
-
-The path from baseline to `Tile16` involved six incremental steps:
-
-1. **Blocking (1.18x)**: 4x4 grid of 16x16 tiles reduces sequential depth from 64 to 4 block-column steps. Smaller `block_dim` (16 vs 64) improves occupancy.
-
-2. **Fused GEMM+POTRF (1.20x)**: loads diagonal block into registers first, runs GEMM subtract via shuffles, then POTRF — no intermediate sync or shared memory round-trip.
-
-3. **Register-resident TRSM (1.39x)**: keeps `L_kk` in registers after POTRF, loads each off-diagonal block into a second register set. TRSM solves entirely via shuffles, eliminating ~120 shared memory reads of `L_kk` per off-diagonal block.
-
-4. **Shuffle off-diagonal GEMM (1.53x)**: converts the last shared-memory-heavy operation to shuffles. Reduces shared memory reads from 32 to 2 per iteration — a 16x reduction. Total syncs drop from ~235 to 5.
-
-5. **Eliminate shared memory (3.17x)**: replaces shared memory with global memory lookback (L2 cache). Occupancy jumps from ~7 to ~32 warps. The 2.08x gain over the previous step confirms shared memory scarcity was the primary bottleneck.
-
-All of these steps are encapsulated in the `Tile16` API — the user writes `L_kk.potrf(tid, eps)` and gets the fully optimized register-resident implementation.
