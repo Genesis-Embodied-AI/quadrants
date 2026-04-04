@@ -177,6 +177,6 @@ RTX 5090, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hess
 
 ```
 Kernel                                      Threads   Time (us)    vs baseline
-baseline (Genesis Crout, shared mem)             64       569         1.00x
+baseline (scalar Crout, shared mem)              64       569         1.00x
 tile16   (Tile16, no shared memory)              16       179         3.17x
 ```

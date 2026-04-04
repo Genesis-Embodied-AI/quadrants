@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Benchmark 64x64 blocked Cholesky factorization using Tile16.
 
-Compares a baseline Genesis-style scalar Cholesky-Crout (64 threads, shared
-memory, 64 sequential syncs) against a fully register-resident blocked
-Cholesky using Tile16 (16 threads, no shared memory, zero syncs).
+Compares a baseline scalar Cholesky-Crout (64 threads, shared memory,
+64 sequential syncs) against a fully register-resident blocked Cholesky
+using Tile16 (16 threads, no shared memory, zero syncs).
 
 The blocked kernel reads initial values from global memory, writes factorized
 tiles to a separate output field, and reads prior tiles from that field for
@@ -13,7 +13,7 @@ rows, so program order guarantees visibility without any fencing.
 Tested on RTX 5090, 4096 environments, f32:
 
     Kernel                          Threads   Time (us)    vs baseline
-    baseline (Genesis Crout)             64       569         1.00x
+    baseline (scalar Crout, shared mem)  64       569         1.00x
     blocked  (Tile16, no shmem)          16       179         3.17x
 
 Usage:
@@ -48,7 +48,7 @@ def make_spd_matrices(n_envs, n):
 
 
 # ---------------------------------------------------------------------------
-# Baseline: Genesis-style scalar Cholesky-Crout (64 threads, shared memory)
+# Baseline: scalar Cholesky-Crout (64 threads, shared memory)
 # ---------------------------------------------------------------------------
 
 @qd.kernel
@@ -182,7 +182,7 @@ def main():
     A_np = make_spd_matrices(N_ENVS, N)
     A_field.from_numpy(A_np)
 
-    print("Compiling baseline (Genesis-style Crout, 64 threads)...")
+    print("Compiling baseline (scalar Crout, 64 threads)...")
     cholesky_baseline()
     qd.sync()
     verify("baseline", L_baseline_field, A_np)
@@ -194,7 +194,7 @@ def main():
     print()
 
     print("Benchmarking:")
-    t_baseline = benchmark("baseline (Genesis Crout, 64 threads)", cholesky_baseline, WARMUP, ITERS)
+    t_baseline = benchmark("baseline (scalar Crout, 64 threads)", cholesky_baseline, WARMUP, ITERS)
     t_tile16 = benchmark("tile16 (blocked, no shmem, 16 threads)", cholesky_tile16, WARMUP, ITERS)
     print()
     print(f"  Tile16 vs baseline: {t_baseline / t_tile16:.2f}x")
