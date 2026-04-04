@@ -570,10 +570,11 @@
 <section id="experiment-64x64-blocked-cholesky-dex-hand-dimensions">
 <h2>Experiment: 64x64 blocked Cholesky (dex_hand dimensions)<a class="headerlink" href="#experiment-64x64-blocked-cholesky-dex-hand-dimensions" title="Link to this heading">#</a></h2>
 <p>Benchmark script: <code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></p>
-<p>RTX 5090, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hessian).</p>
+<p>RTX PRO 6000 Blackwell, 4096 environments, f32, 64x64 matrices (dex_hand constraint-space Hessian).</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Kernel</span>                                      <span class="n">Threads</span>   <span class="n">Time</span> <span class="p">(</span><span class="n">us</span><span class="p">)</span>    <span class="n">vs</span> <span class="n">baseline</span>
-<span class="n">baseline</span> <span class="p">(</span><span class="n">scalar</span> <span class="n">Crout</span><span class="p">,</span> <span class="n">shared</span> <span class="n">mem</span><span class="p">)</span>              <span class="mi">64</span>       <span class="mi">569</span>         <span class="mf">1.00</span><span class="n">x</span>
-<span class="n">tile16</span>   <span class="p">(</span><span class="n">Tile16</span><span class="p">,</span> <span class="n">no</span> <span class="n">shared</span> <span class="n">memory</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">179</span>         <span class="mf">3.17</span><span class="n">x</span>
+<span class="n">baseline</span> <span class="p">(</span><span class="n">scalar</span> <span class="n">Crout</span><span class="p">,</span> <span class="n">shared</span> <span class="n">mem</span><span class="p">)</span>              <span class="mi">64</span>       <span class="mi">611</span>         <span class="mf">1.00</span><span class="n">x</span>
+<span class="n">blocked</span>  <span class="p">(</span><span class="n">scalar</span> <span class="n">Crout</span><span class="p">,</span> <span class="n">shared</span> <span class="n">mem</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">515</span>         <span class="mf">1.19</span><span class="n">x</span>
+<span class="n">tile16</span>   <span class="p">(</span><span class="n">Tile16</span><span class="p">,</span> <span class="n">no</span> <span class="n">shared</span> <span class="n">memory</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">200</span>         <span class="mf">3.05</span><span class="n">x</span>
 </pre></div>
 </div>
 </section>
