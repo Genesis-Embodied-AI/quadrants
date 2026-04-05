@@ -26,7 +26,32 @@ Usage example::
     arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
 """
 
+from typing import TYPE_CHECKING
+
 import quadrants as qd
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    class _Tile16x16Proto:  # noqa: E303
+        """Static type stub so pyright sees Tile16x16 methods correctly."""
+
+        SIZE: int
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
+        def eye_(self) -> None: ...  # noqa: E704
+        def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
+        def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
+        def load(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def store(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def load3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def store3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def syr_sub(self, v: Any) -> None: ...  # noqa: E704
+        def ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
+        def trsm(self, L: _Tile16x16Proto) -> None: ...  # noqa: E704
+        def __isub__(self, other: Any) -> _Tile16x16Proto: ...  # noqa: E704
+        def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
+        def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
 
 _TILE = 16
 
@@ -114,7 +139,7 @@ class _TileRefProxy:
 _tile16_cache = {}
 
 
-def make_tile16x16(dtype=qd.f32):
+def make_tile16x16(dtype=qd.f32) -> "type[_Tile16x16Proto]":
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64)."""
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]

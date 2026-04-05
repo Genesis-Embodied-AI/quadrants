@@ -3,7 +3,7 @@ import pytest
 import scipy.linalg
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import Tile16x16, make_tile16x16
+from quadrants.lang.simt.tile16 import Tile16x16, make_tile16x16, outer
 
 from tests import test_utils
 
@@ -12,7 +12,7 @@ N = 16
 Tile16x16_f64 = make_tile16x16(qd.f64)
 
 
-def _make_spd(seed=42, dtype=np.float32):
+def _make_spd(seed: int = 42, dtype: type = np.float32):
     rng = np.random.RandomState(seed)
     B = rng.randn(N, N).astype(np.float64)
     return (B @ B.T + N * np.eye(N)).astype(dtype)
@@ -109,7 +109,7 @@ def test_tile16_syr_sub(tensor_type):
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
             )
-            t -= qd.outer(vec_arr[tid], vec_arr[tid])
+            t -= outer(vec_arr[tid], vec_arr[tid])
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(123)
@@ -159,7 +159,7 @@ def test_tile16_ger_sub(tensor_type):
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
             )
-            t -= qd.outer(va_arr[tid], vb_arr[tid])
+            t -= outer(va_arr[tid], vb_arr[tid])
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(456)
