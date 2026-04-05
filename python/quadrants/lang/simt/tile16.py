@@ -26,11 +26,11 @@ Usage example::
     arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 import quadrants as qd
 
-if TYPE_CHECKING:
+if _TYPE_CHECKING:
     from typing import Any
 
     class _Tile16x16Proto:  # noqa: E303
