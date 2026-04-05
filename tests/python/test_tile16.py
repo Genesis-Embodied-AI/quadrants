@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import scipy.linalg
 
 import quadrants as qd
@@ -73,10 +72,22 @@ def test_tile16_syr_sub():
         qd.loop_config(block_dim=N)
         for tid in range(N):
             t = Tile16(
-                mat[tid, 0], mat[tid, 1], mat[tid, 2], mat[tid, 3],
-                mat[tid, 4], mat[tid, 5], mat[tid, 6], mat[tid, 7],
-                mat[tid, 8], mat[tid, 9], mat[tid, 10], mat[tid, 11],
-                mat[tid, 12], mat[tid, 13], mat[tid, 14], mat[tid, 15],
+                mat[tid, 0],
+                mat[tid, 1],
+                mat[tid, 2],
+                mat[tid, 3],
+                mat[tid, 4],
+                mat[tid, 5],
+                mat[tid, 6],
+                mat[tid, 7],
+                mat[tid, 8],
+                mat[tid, 9],
+                mat[tid, 10],
+                mat[tid, 11],
+                mat[tid, 12],
+                mat[tid, 13],
+                mat[tid, 14],
+                mat[tid, 15],
             )
             t.syr_sub(vec[tid])
             t.store(out, tid, 0, N)
@@ -102,10 +113,22 @@ def test_tile16_ger_sub():
         qd.loop_config(block_dim=N)
         for tid in range(N):
             t = Tile16(
-                mat[tid, 0], mat[tid, 1], mat[tid, 2], mat[tid, 3],
-                mat[tid, 4], mat[tid, 5], mat[tid, 6], mat[tid, 7],
-                mat[tid, 8], mat[tid, 9], mat[tid, 10], mat[tid, 11],
-                mat[tid, 12], mat[tid, 13], mat[tid, 14], mat[tid, 15],
+                mat[tid, 0],
+                mat[tid, 1],
+                mat[tid, 2],
+                mat[tid, 3],
+                mat[tid, 4],
+                mat[tid, 5],
+                mat[tid, 6],
+                mat[tid, 7],
+                mat[tid, 8],
+                mat[tid, 9],
+                mat[tid, 10],
+                mat[tid, 11],
+                mat[tid, 12],
+                mat[tid, 13],
+                mat[tid, 14],
+                mat[tid, 15],
             )
             t.ger_sub(vec_a[tid], vec_b[tid])
             t.store(out, tid, 0, N)
@@ -132,10 +155,22 @@ def test_tile16_potrf():
         qd.loop_config(block_dim=N)
         for tid in range(N):
             t = Tile16(
-                src[tid, 0], src[tid, 1], src[tid, 2], src[tid, 3],
-                src[tid, 4], src[tid, 5], src[tid, 6], src[tid, 7],
-                src[tid, 8], src[tid, 9], src[tid, 10], src[tid, 11],
-                src[tid, 12], src[tid, 13], src[tid, 14], src[tid, 15],
+                src[tid, 0],
+                src[tid, 1],
+                src[tid, 2],
+                src[tid, 3],
+                src[tid, 4],
+                src[tid, 5],
+                src[tid, 6],
+                src[tid, 7],
+                src[tid, 8],
+                src[tid, 9],
+                src[tid, 10],
+                src[tid, 11],
+                src[tid, 12],
+                src[tid, 13],
+                src[tid, 14],
+                src[tid, 15],
             )
             t.potrf(tid, eps_field[None])
             t.store(dst, tid, 0, N)
@@ -159,16 +194,40 @@ def test_tile16_trsm():
         qd.loop_config(block_dim=N)
         for tid in range(N):
             L = Tile16(
-                l_field[tid, 0], l_field[tid, 1], l_field[tid, 2], l_field[tid, 3],
-                l_field[tid, 4], l_field[tid, 5], l_field[tid, 6], l_field[tid, 7],
-                l_field[tid, 8], l_field[tid, 9], l_field[tid, 10], l_field[tid, 11],
-                l_field[tid, 12], l_field[tid, 13], l_field[tid, 14], l_field[tid, 15],
+                l_field[tid, 0],
+                l_field[tid, 1],
+                l_field[tid, 2],
+                l_field[tid, 3],
+                l_field[tid, 4],
+                l_field[tid, 5],
+                l_field[tid, 6],
+                l_field[tid, 7],
+                l_field[tid, 8],
+                l_field[tid, 9],
+                l_field[tid, 10],
+                l_field[tid, 11],
+                l_field[tid, 12],
+                l_field[tid, 13],
+                l_field[tid, 14],
+                l_field[tid, 15],
             )
             B = Tile16(
-                b_field[tid, 0], b_field[tid, 1], b_field[tid, 2], b_field[tid, 3],
-                b_field[tid, 4], b_field[tid, 5], b_field[tid, 6], b_field[tid, 7],
-                b_field[tid, 8], b_field[tid, 9], b_field[tid, 10], b_field[tid, 11],
-                b_field[tid, 12], b_field[tid, 13], b_field[tid, 14], b_field[tid, 15],
+                b_field[tid, 0],
+                b_field[tid, 1],
+                b_field[tid, 2],
+                b_field[tid, 3],
+                b_field[tid, 4],
+                b_field[tid, 5],
+                b_field[tid, 6],
+                b_field[tid, 7],
+                b_field[tid, 8],
+                b_field[tid, 9],
+                b_field[tid, 10],
+                b_field[tid, 11],
+                b_field[tid, 12],
+                b_field[tid, 13],
+                b_field[tid, 14],
+                b_field[tid, 15],
             )
             B.trsm(L)
             B.store(x_field, tid, 0, N)
@@ -196,17 +255,41 @@ def test_tile16_potrf_then_trsm():
         qd.loop_config(block_dim=N)
         for tid in range(N):
             L = Tile16(
-                a_field[tid, 0], a_field[tid, 1], a_field[tid, 2], a_field[tid, 3],
-                a_field[tid, 4], a_field[tid, 5], a_field[tid, 6], a_field[tid, 7],
-                a_field[tid, 8], a_field[tid, 9], a_field[tid, 10], a_field[tid, 11],
-                a_field[tid, 12], a_field[tid, 13], a_field[tid, 14], a_field[tid, 15],
+                a_field[tid, 0],
+                a_field[tid, 1],
+                a_field[tid, 2],
+                a_field[tid, 3],
+                a_field[tid, 4],
+                a_field[tid, 5],
+                a_field[tid, 6],
+                a_field[tid, 7],
+                a_field[tid, 8],
+                a_field[tid, 9],
+                a_field[tid, 10],
+                a_field[tid, 11],
+                a_field[tid, 12],
+                a_field[tid, 13],
+                a_field[tid, 14],
+                a_field[tid, 15],
             )
             L.potrf(tid, eps_field[None])
             B = Tile16(
-                b_field[tid, 0], b_field[tid, 1], b_field[tid, 2], b_field[tid, 3],
-                b_field[tid, 4], b_field[tid, 5], b_field[tid, 6], b_field[tid, 7],
-                b_field[tid, 8], b_field[tid, 9], b_field[tid, 10], b_field[tid, 11],
-                b_field[tid, 12], b_field[tid, 13], b_field[tid, 14], b_field[tid, 15],
+                b_field[tid, 0],
+                b_field[tid, 1],
+                b_field[tid, 2],
+                b_field[tid, 3],
+                b_field[tid, 4],
+                b_field[tid, 5],
+                b_field[tid, 6],
+                b_field[tid, 7],
+                b_field[tid, 8],
+                b_field[tid, 9],
+                b_field[tid, 10],
+                b_field[tid, 11],
+                b_field[tid, 12],
+                b_field[tid, 13],
+                b_field[tid, 14],
+                b_field[tid, 15],
             )
             B.trsm(L)
             B.store(x_field, tid, 0, N)
