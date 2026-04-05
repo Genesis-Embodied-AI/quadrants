@@ -836,7 +836,9 @@ def _make_tile16_class(dtype):
     # StructType.__call__ already defaults missing args to 0, so Tile16()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
-    return qd.dataclass(_Tile16)
+    result = qd.dataclass(_Tile16)
+    result.SIZE = _TILE
+    return result
 
 
 Tile16 = make_tile16(qd.f32)
