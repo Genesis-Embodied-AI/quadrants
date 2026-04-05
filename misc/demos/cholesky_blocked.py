@@ -220,7 +220,7 @@ def cholesky_tile16():
                         v_diag = L_tile16_field[env, k0 + tid, j0 + t]
                         L_ik.ger_sub(v_own, v_diag)
 
-                L_ik.trsm(L_kk)
+                L_kk.solve_triangular_(L_ik)
 
                 L_ik.store3d(L_tile16_field, env, i0, k0, N)
 

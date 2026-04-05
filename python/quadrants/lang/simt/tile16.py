@@ -20,7 +20,7 @@ Usage example::
     t.eye_()                                  # set to identity matrix (in-place)
     t.syr_sub(v)                              # symmetric rank-1 subtract
     t.cholesky_(eps)                           # in-place Cholesky factorization
-    b.trsm(L)                                 # triangular solve using L
+    L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
     t.store(arr, row0, col0, n_cols)          # store to 2D array
     t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array
 """
@@ -736,6 +736,16 @@ def _make_tile16_class(dtype):
                     self.r14 = new_val
                 if c == 15:
                     self.r15 = new_val
+
+        def solve_triangular_(self, B, lower=True):
+            """Triangular solve: X @ self^T = B, storing result X in B in-place.
+
+            self must be lower-triangular (e.g. from cholesky_()).
+            Only lower=True is supported.
+            """
+            if not lower:
+                raise TypeError("Tile16.solve_triangular_: only lower=True is supported")
+            B.trsm(self)
 
     # StructType.__call__ already defaults missing args to 0, so Tile16()
     # produces a zero-initialized tile without needing default values in the

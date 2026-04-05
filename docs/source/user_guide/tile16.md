@@ -86,13 +86,13 @@ t.cholesky_(eps)
 
 Factorizes the tile in-place: replaces the lower triangle with `L` such that `L @ L^T ≈ A`. The `eps` parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of `t` contains `L`.
 
-## Triangular solve (trsm)
+## Triangular solve (solve_triangular_)
 
 ```python
-B.trsm(L)
+L.solve_triangular_(B)
 ```
 
-Solves `L @ X^T = B^T` in-place, replacing `B` with `X`. `L` must be a lower-triangular tile (e.g. from `potrf`). Used for off-diagonal blocks in blocked Cholesky.
+Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` (self) must be a lower-triangular tile (e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`. Used for off-diagonal blocks in blocked Cholesky.
 
 ## Full example: blocked Cholesky
 
@@ -147,7 +147,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
                         v_diag = H[k0 + tid, j0 + t]
                     L_ik.ger_sub(v_own, v_diag)
 
-            L_ik.trsm(L_kk)
+            L_kk.solve_triangular_(L_ik)
 
             if i0 + tid < n_dofs:
                 L_ik.store(H, i0, k0, n_dofs)
@@ -168,7 +168,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 | `syr_sub` | `(v)` | Symmetric rank-1 subtract |
 | `ger_sub` | `(a, b)` | General rank-1 subtract |
 | `cholesky_` | `(eps)` | In-place Cholesky factorization |
-| `trsm` | `(L)` | Triangular solve |
+| `solve_triangular_` | `(B, lower=True)` | Triangular solve (in-place on B) |
 
 ## Experiment: 64x64 blocked Cholesky (dex_hand dimensions)
 

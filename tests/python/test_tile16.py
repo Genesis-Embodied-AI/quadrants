@@ -195,7 +195,7 @@ def test_tile16_trsm(tensor_type):
             L.load(l_arr, 0, 0, N)
             B = Tile16()
             B.load(b_arr, 0, 0, N)
-            B.trsm(L)
+            L.solve_triangular_(B)
             B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=99)
@@ -226,7 +226,7 @@ def test_tile16_potrf_then_trsm(tensor_type):
             L.cholesky_(eps_field[None])
             B = Tile16()
             B.load(b_arr, 0, 0, N)
-            B.trsm(L)
+            L.solve_triangular_(B)
             B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=55)
@@ -308,7 +308,7 @@ def test_tile16_f64_potrf_then_trsm(tensor_type):
             L.cholesky_(eps_field[None])
             B = Tile16_f64()
             B.load(b_arr, 0, 0, N)
-            B.trsm(L)
+            L.solve_triangular_(B)
             B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=55, dtype=np.float64)
