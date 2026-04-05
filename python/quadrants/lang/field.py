@@ -258,8 +258,7 @@ class ScalarField(Field):
         """
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
-                "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the "
-                "snode will be converted to zeros in the resulting array."
+                "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array."
             )
         from quadrants.lang._interop import (  # pylint: disable=C0415
             can_zerocopy,
