@@ -15,8 +15,8 @@ Usage example::
 
     Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
     t = Tile16()                              # zero-initialized tile
-    t = arr[r0:r0+16, c0:c0+n]                # load from 2D array (slice syntax)
-    t = arr[i0, r0:r0+16, c0:c0+n]           # load from 3D array (slice syntax)
+    t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
+    t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
     t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T
     t -= qd.outer(v, v)                       # symmetric rank-1 subtract
@@ -83,6 +83,28 @@ class _TileSliceProxy:
             tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop)
         else:
             tile.store(self.arr, self.row_start, self.col_start, self.col_stop)
+
+
+class _TileRefProxy:
+    """Proxy returned by tile[:] for the LHS of a load assignment.
+
+    Enables ``tile[:] = arr[r:r+16, c:n]``.  The ``[:]`` is required to
+    distinguish in-place tile loads from variable rebinding.
+    """
+
+    _is_deferred = True
+
+    def __init__(self, tile):
+        self.tile = tile
+
+    def _assign(self, value):
+        if isinstance(value, _TileSliceProxy):
+            if value.batch_idx is not None:
+                self.tile.load3d(value.arr, value.batch_idx, value.row_start, value.col_start, value.col_stop)
+            else:
+                self.tile.load(value.arr, value.row_start, value.col_start, value.col_stop)
+        else:
+            raise TypeError(f"Tile16[:] can only be assigned from an array slice, got {type(value)}")
 
 
 # =============================================================================
@@ -791,16 +813,6 @@ def _make_tile16_class(dtype):
                     self.r14 = new_val
                 if c == 15:
                     self.r15 = new_val
-
-        def _assign(self, other):
-            if isinstance(other, _TileSliceProxy):
-                if other.batch_idx is not None:
-                    self.load3d(other.arr, other.batch_idx, other.row_start, other.col_start, other.col_stop)
-                else:
-                    self.load(other.arr, other.row_start, other.col_start, other.col_stop)
-            else:
-                from quadrants.lang.struct import Struct
-                Struct._assign(self, other)
 
         def _augassign(self, other, op):
             if isinstance(other, _OuterProduct):

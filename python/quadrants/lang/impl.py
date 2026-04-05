@@ -222,6 +222,11 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             raise Exception(
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
+        if len(_indices) == 1 and isinstance(_indices[0], slice) and _indices[0] == slice(None):
+            from quadrants.lang.struct import Struct
+            if isinstance(value, Struct):
+                from quadrants.lang.simt.tile16 import _TileRefProxy
+                return _TileRefProxy(value)
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)

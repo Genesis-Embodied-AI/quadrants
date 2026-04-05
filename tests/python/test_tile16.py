@@ -34,7 +34,7 @@ def test_tile16_load_store(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
-            t = src_arr[0:N, 0:N]
+            t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:N] = t
 
     data = np.arange(N * N, dtype=np.float32).reshape(N, N)
@@ -55,7 +55,7 @@ def test_tile16_load_store_partial(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
-            t = src_arr[0:N, 0:NCOLS]
+            t[:] = src_arr[0:N, 0:NCOLS]
             dst_arr[0:N, 0:N] = t
 
     data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
@@ -168,7 +168,7 @@ def test_tile16_potrf(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
-            t = src_arr[0:N, 0:N]
+            t[:] = src_arr[0:N, 0:N]
             t.cholesky_(eps_field[None])
             dst_arr[0:N, 0:N] = t
 
@@ -192,9 +192,9 @@ def test_tile16_trsm(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16()
-            L = l_arr[0:N, 0:N]
+            L[:] = l_arr[0:N, 0:N]
             B = Tile16()
-            B = b_arr[0:N, 0:N]
+            B[:] = b_arr[0:N, 0:N]
             L.solve_triangular_(B)
             x_arr[0:N, 0:N] = B
 
@@ -222,10 +222,10 @@ def test_tile16_potrf_then_trsm(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16()
-            L = a_arr[0:N, 0:N]
+            L[:] = a_arr[0:N, 0:N]
             L.cholesky_(eps_field[None])
             B = Tile16()
-            B = b_arr[0:N, 0:N]
+            B[:] = b_arr[0:N, 0:N]
             L.solve_triangular_(B)
             x_arr[0:N, 0:N] = B
 
@@ -258,7 +258,7 @@ def test_tile16_f64_load_store(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16_f64()
-            t = src_arr[0:N, 0:N]
+            t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:N] = t
 
     data = np.arange(N * N, dtype=np.float64).reshape(N, N)
@@ -279,7 +279,7 @@ def test_tile16_f64_potrf(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16_f64()
-            t = src_arr[0:N, 0:N]
+            t[:] = src_arr[0:N, 0:N]
             t.cholesky_(eps_field[None])
             dst_arr[0:N, 0:N] = t
 
@@ -304,10 +304,10 @@ def test_tile16_f64_potrf_then_trsm(tensor_type):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16_f64()
-            L = a_arr[0:N, 0:N]
+            L[:] = a_arr[0:N, 0:N]
             L.cholesky_(eps_field[None])
             B = Tile16_f64()
-            B = b_arr[0:N, 0:N]
+            B[:] = b_arr[0:N, 0:N]
             L.solve_triangular_(B)
             x_arr[0:N, 0:N] = B
 
@@ -342,7 +342,7 @@ def test_tile16_load3d_store3d(tensor_type):
         for _ in range(N):
             for i_b in range(N_BATCH):
                 t = Tile16()
-                t = src_arr[i_b, 0:N, 0:N]
+                t[:] = src_arr[i_b, 0:N, 0:N]
                 dst_arr[i_b, 0:N, 0:N] = t
 
     data = np.arange(N_BATCH * N * N, dtype=np.float32).reshape(N_BATCH, N, N)
