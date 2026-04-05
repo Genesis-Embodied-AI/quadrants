@@ -18,7 +18,8 @@ quadrants.lang.simt.tile16
    Usage example::
 
        Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-       t = Tile16x16()                              # zero-initialized tile
+       t = Tile16x16.zeros()                        # zero-initialized tile
+       t = Tile16x16.eye()                          # identity tile
        t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
        t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
        t.eye_()                                  # set to identity matrix (in-place)

@@ -13,7 +13,7 @@ from quadrants.lang.simt.tile16 import Tile16x16
 
 @qd.func
 def my_blocked_op(A, row0, col0, n_cols, eps):
-    t = Tile16x16()
+    t = Tile16x16.zeros()
     t[:] = A[row0:row0+16, col0:n_cols]
     t.cholesky_(eps)
     A[row0:row0+16, col0:n_cols] = t
@@ -21,10 +21,11 @@ def my_blocked_op(A, row0, col0, n_cols, eps):
 
 ## Creating a tile
 
-`Tile16x16()` creates a zero-initialized tile. You can also pass 16 initial values:
+`Tile16x16.zeros()` creates a zero-initialized tile. `Tile16x16.eye()` creates an identity tile. You can also pass 16 initial values:
 
 ```python
-t = Tile16x16()                                    # all zeros
+t = Tile16x16.zeros()                              # all zeros
+t = Tile16x16.eye()                                # 16x16 identity
 t = Tile16x16(a0, a1, a2, ..., a15)                # explicit values
 ```
 
@@ -35,7 +36,7 @@ Load/store transfer data between a tile and device memory arrays using slice syn
 ### 2D arrays
 
 ```python
-t = Tile16x16()
+t = Tile16x16.zeros()
 t[:] = arr[row0:row0+16, col0:col_end]    # load
 arr[row0:row0+16, col0:col_end] = t       # store
 ```
@@ -45,7 +46,7 @@ arr[row0:row0+16, col0:col_end] = t       # store
 For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
 
 ```python
-t = Tile16x16()
+t = Tile16x16.zeros()
 t[:] = arr[i0, row0:row0+16, col0:col_end]    # load
 arr[i0, row0:row0+16, col0:col_end] = t       # store
 ```
@@ -59,10 +60,11 @@ The `[:]` on the load LHS is required — it distinguishes an in-place tile load
 For padding partial tiles in blocked algorithms:
 
 ```python
-t.eye_()
+t = Tile16x16.eye()   # create a new identity tile
+t.eye_()               # or reset an existing tile to identity in-place
 ```
 
-Sets the tile to the 16x16 identity matrix in-place. Each thread sets its diagonal element to 1.0 and all others to 0.0.
+Each thread sets its diagonal element to 1.0 and all others to 0.0.
 
 ## Rank-1 updates
 
@@ -107,11 +109,11 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         k0 = kb * TILE
 
         # Load diagonal block, pad with identity if out of bounds
-        L_kk = Tile16x16()
         if k0 + tid < n_dofs:
+            L_kk = Tile16x16.zeros()
             L_kk[:] = H[k0:k0+16, k0:n_dofs]
         else:
-            L_kk.eye_()
+            L_kk = Tile16x16.eye()
 
         # Subtract contributions from previous blocks
         for jb in range(kb):
@@ -129,7 +131,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         for ib in range(kb + 1, N_BLOCKS):
             i0 = ib * TILE
 
-            L_ik = Tile16x16()
+            L_ik = Tile16x16.zeros()
             if i0 + tid < n_dofs:
                 L_ik[:] = H[i0:i0+16, k0:n_dofs]
 
@@ -157,6 +159,8 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
 | Operation | Description |
 |-----------|-------------|
+| `Tile16x16.zeros()` | Create a zero-initialized tile |
+| `Tile16x16.eye()` | Create an identity tile |
 | `t[:] = arr[r0:r0+16, c0:c_end]` | Load from 2D array |
 | `t[:] = arr[i, r0:r0+16, c0:c_end]` | Load from 3D array |
 | `arr[r0:r0+16, c0:c_end] = t` | Store to 2D array |
