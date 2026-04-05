@@ -206,9 +206,12 @@ def test_fused_kernels():
     X = qd.Matrix.field(3, 2, qd.f32, shape=(n, n, n))
     s = impl.get_runtime().get_num_compiled_functions()
     t = X.to_torch()
-    assert impl.get_runtime().get_num_compiled_functions() == s + 1
+    s_after_to = impl.get_runtime().get_num_compiled_functions()
+    # to_torch may use zero-copy (0 kernels) or the fused kernel path (1 kernel)
+    assert s_after_to - s <= 1
     X.from_torch(t)
-    assert impl.get_runtime().get_num_compiled_functions() == s + 2
+    # from_torch always compiles exactly one fused kernel
+    assert impl.get_runtime().get_num_compiled_functions() == s_after_to + 1
 
 
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")

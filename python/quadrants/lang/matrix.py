@@ -1303,7 +1303,7 @@ class MatrixField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, keep_dims=False, dtype=None):
+    def to_numpy(self, keep_dims=False, dtype=None, *, copy=None):
         """Converts the field instance to a NumPy array.
 
         Args:
@@ -1312,10 +1312,35 @@ class MatrixField(Field):
                 When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
                 For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result NumPy array.
         """
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
+
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, shape=self.shape):
+            tc = dlpack_to_torch(self)
+            if tc.device.type == "cpu":
+                as_vector = self.m == 1 and not keep_dims
+                shape_ext = (self.n,) if as_vector else (self.n, self.m)
+                expected = self.shape + shape_ext
+                np_arr = tc.numpy()
+                if np_arr.shape != expected:
+                    np_arr = np_arr.reshape(expected)
+                if dtype is not None and np_arr.dtype != dtype:
+                    if copy is False:
+                        raise ValueError("copy=False is incompatible with dtype conversion")
+                    return np_arr.astype(dtype)
+                return np_arr
+            if copy is False:
+                raise ValueError("Zero-copy to numpy requires a CPU backend")
+        elif copy is False:
+            raise ValueError("Zero-copy not available for this backend/type combination")
+
         if dtype is None:
             dtype = to_numpy_type(self.dtype)
         as_vector = self.m == 1 and not keep_dims
@@ -1327,17 +1352,43 @@ class MatrixField(Field):
         runtime_ops.sync()
         return arr
 
-    def to_torch(self, device=None, keep_dims=False):
+    def to_torch(self, device=None, keep_dims=False, *, copy=None):
         """Converts the field instance to a PyTorch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.tensor: The result torch tensor.
         """
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
+
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, shape=self.shape):
+            import torch  # pylint: disable=C0415
+
+            tc = dlpack_to_torch(self)
+            as_vector = self.m == 1 and not keep_dims
+            shape_ext = (self.n,) if as_vector else (self.n, self.m)
+            expected = self.shape + shape_ext
+            if tc.shape != expected:
+                tc = tc.reshape(expected)
+            if device is not None and tc.device != torch.device(device):
+                if copy is False:
+                    raise ValueError(
+                        f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+                    )
+                return tc.to(device)
+            return tc
+
+        if copy is False:
+            raise ValueError("Zero-copy not available for this backend/type combination")
+
         import torch  # pylint: disable=C0415
 
         as_vector = self.m == 1 and not keep_dims
@@ -1717,7 +1768,7 @@ class MatrixNdarray(Ndarray):
         return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, *, copy=None):
         """Converts this ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1730,7 +1781,7 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
-        return self._ndarray_matrix_to_numpy(as_vector=0)
+        return self._ndarray_matrix_to_numpy(as_vector=0, copy=copy)
 
     @python_scope
     def from_numpy(self, arr):
@@ -1828,7 +1879,7 @@ class VectorNdarray(Ndarray):
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
     @python_scope
-    def to_numpy(self):
+    def to_numpy(self, *, copy=None):
         """Converts this vector ndarray to a `numpy.ndarray`.
 
         Example::
@@ -1841,7 +1892,7 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
-        return self._ndarray_matrix_to_numpy(as_vector=1)
+        return self._ndarray_matrix_to_numpy(as_vector=1, copy=copy)
 
     @python_scope
     def from_numpy(self, arr):

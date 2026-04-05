@@ -86,6 +86,7 @@ def is_quadrants_class(rhs):
     return quadrants_class
 
 
+@functools.lru_cache(maxsize=None)
 def to_numpy_type(dt):
     """Convert quadrants data type to its counterpart in numpy.
 
@@ -123,6 +124,7 @@ def to_numpy_type(dt):
     assert False
 
 
+@functools.lru_cache(maxsize=None)
 def to_pytorch_type(dt):
     """Convert quadrants data type to its counterpart in torch.
 

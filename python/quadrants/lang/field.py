@@ -105,8 +105,15 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_numpy(self, dtype: DataTypeCxx | None = None):
+    def to_numpy(self, dtype: DataTypeCxx | None = None, *, copy: bool | None = None):
         """Converts `self` to a numpy array.
+
+        Args:
+            copy: Controls copying behaviour:
+
+                - ``None`` (default) -- zero-copy when possible, copy otherwise.
+                - ``True`` -- always return an independent copy.
+                - ``False`` -- require zero-copy; raises if not possible.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -114,11 +121,16 @@ class Field:
         raise NotImplementedError()
 
     @python_scope
-    def to_torch(self, device=None):
+    def to_torch(self, device=None, *, copy: bool | None = None):
         """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
+            copy: Controls copying behaviour:
+
+                - ``None`` (default) -- zero-copy when possible, copy otherwise.
+                - ``True`` -- always return an independent copy.
+                - ``False`` -- require zero-copy; raises if not possible.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -236,12 +248,35 @@ class ScalarField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, dtype=None):
-        """Converts this field to a `numpy.ndarray`."""
+    def to_numpy(self, dtype=None, *, copy=None):
+        """Converts this field to a `numpy.ndarray`.
+
+        Args:
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+        """
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
                 "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array."
             )
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
+
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, is_scalar_field=True, shape=self.shape):
+            tc = dlpack_to_torch(self)
+            if tc.device.type == "cpu":
+                np_arr = tc.numpy()
+                if dtype is not None and np_arr.dtype != dtype:
+                    if copy is False:
+                        raise ValueError("copy=False is incompatible with dtype conversion")
+                    return np_arr.astype(dtype)
+                return np_arr
+            if copy is False:
+                raise ValueError("Zero-copy to numpy requires a CPU backend")
+        elif copy is False:
+            raise ValueError("Zero-copy not available for this backend/type combination")
+
         if dtype is None:
             dtype = to_numpy_type(self.dtype)
         import numpy as np  # pylint: disable=C0415
@@ -255,8 +290,32 @@ class ScalarField(Field):
         return arr
 
     @python_scope
-    def to_torch(self, device=None):
-        """Converts this field to a `torch.tensor`."""
+    def to_torch(self, device=None, *, copy=None):
+        """Converts this field to a `torch.tensor`.
+
+        Args:
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+        """
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
+
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, is_scalar_field=True, shape=self.shape):
+            import torch  # pylint: disable=C0415
+
+            tc = dlpack_to_torch(self)
+            if device is not None and tc.device != torch.device(device):
+                if copy is False:
+                    raise ValueError(
+                        f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+                    )
+                return tc.to(device)
+            return tc
+
+        if copy is False:
+            raise ValueError("Zero-copy not available for this backend/type combination")
+
         import torch  # pylint: disable=C0415
 
         # pylint: disable=E1101
