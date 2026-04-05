@@ -1192,6 +1192,7 @@
     <span class="c1"># class definition (which @qd.dataclass doesn&#39;t support).</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">_Tile16x16</span><span class="p">)</span>
     <span class="n">result</span><span class="o">.</span><span class="n">SIZE</span> <span class="o">=</span> <span class="n">_TILE</span>
+    <span class="n">result</span><span class="o">.</span><span class="n">_quadrants_internal</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">result</span><span class="o">.</span><span class="n">zeros</span> <span class="o">=</span> <span class="n">result</span>
 
     <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
