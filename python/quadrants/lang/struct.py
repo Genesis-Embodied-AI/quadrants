@@ -555,8 +555,7 @@ class StructField(Field):
         The dictionary may be nested when converting nested structs.
 
         Args:
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.
@@ -574,8 +573,7 @@ class StructField(Field):
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             Dict[str, Union[torch.Tensor, Dict]]: The result PyTorch tensor.

@@ -254,8 +254,7 @@ class ScalarField(Field):
 
         Args:
             dtype: Target numpy dtype.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
@@ -298,8 +297,7 @@ class ScalarField(Field):
 
         Args:
             device: Target device.  When *None* the tensor lives on the field's native device.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
         from quadrants.lang._interop import (  # pylint: disable=C0415
             can_zerocopy,

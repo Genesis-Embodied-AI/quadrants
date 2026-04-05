@@ -1308,14 +1308,11 @@ class MatrixField(Field):
 
         Args:
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
-                When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims,
-                even for 1x1, 1xn, nx1 matrix fields.
-                When keep_dims=False, the resulting numpy array should skip the matrix dims with
-                size 1.  For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in
-                an array of shape 5x6x7x4.
+                When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
+                When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
+                For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result NumPy array.
@@ -1361,10 +1358,8 @@ class MatrixField(Field):
         Args:
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
-                See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed
-                explanation.
-            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                ``False`` requires zero-copy or raises.
+                See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
+            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
             torch.Tensor: The result torch tensor.

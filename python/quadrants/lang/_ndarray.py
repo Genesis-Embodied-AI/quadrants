@@ -172,8 +172,7 @@ class Ndarray:
         """Converts ndarray to a numpy array.
 
         Args:
-            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -203,8 +202,7 @@ class Ndarray:
 
         Args:
             as_vector: Whether to treat as a vector ndarray.
-            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy,
-                ``False`` requires zero-copy or raises.
+            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy, ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
