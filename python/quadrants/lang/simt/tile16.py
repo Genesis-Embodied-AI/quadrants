@@ -42,7 +42,7 @@ def make_tile16(dtype=qd.f32):
 
 
 def _make_tile16_class(dtype):
-    class Tile16:
+    class _Tile16:
         """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
 
         All fields default to 0.0 when omitted: ``Tile16()`` creates a zero tile.
@@ -721,11 +721,10 @@ def _make_tile16_class(dtype):
                 if c == 15:
                     self.r15 = new_val
 
-
     # StructType.__call__ already defaults missing args to 0, so Tile16()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
-    return qd.dataclass(Tile16)
+    return qd.dataclass(_Tile16)
 
 
 Tile16 = make_tile16(qd.f32)
