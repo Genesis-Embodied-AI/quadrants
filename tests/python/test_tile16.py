@@ -32,6 +32,42 @@ def _ann(tensor_type, dtype, ndim):
 
 @test_utils.test(arch=qd.cuda)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_zeros(tensor_type):
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.zeros()
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_tile16_eye(tensor_type):
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = Tile16x16.eye()
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 def test_tile16_load_store(tensor_type):
     src = tensor_type(qd.f32, (N, N))
     dst = tensor_type(qd.f32, (N, N))
