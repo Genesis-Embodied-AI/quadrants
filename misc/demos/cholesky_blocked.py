@@ -196,7 +196,7 @@ def cholesky_tile16():
         for kb in range(N_BLOCKS):
             k0 = kb * TILE
 
-            L_kk = Tile16x16()
+            L_kk = Tile16x16.zeros()
             L_kk[:] = A_field[env, k0 : k0 + TILE, k0:N]
 
             for jb in range(kb):
@@ -210,7 +210,7 @@ def cholesky_tile16():
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * TILE
 
-                L_ik = Tile16x16()
+                L_ik = Tile16x16.zeros()
                 L_ik[:] = A_field[env, i0 : i0 + TILE, k0:N]
 
                 for jb in range(kb):
