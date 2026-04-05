@@ -17,7 +17,7 @@ Usage example::
     t = Tile16()                              # zero-initialized tile
     t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)
     t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
-    t.set_identity()                          # set to identity matrix
+    t.eye_()                                  # set to identity matrix (in-place)
     t.syr_sub(v)                              # symmetric rank-1 subtract
     t.potrf(eps)                              # Cholesky factorization
     b.trsm(L)                                 # triangular solve using L
@@ -225,7 +225,7 @@ def _make_tile16_class(dtype):
                 arr[i0, row, col0 + 15] = self.r15
 
         @qd.func
-        def set_identity(self):
+        def eye_(self):
             """Set this tile to the 16x16 identity matrix.
 
             Each thread sets its diagonal element to 1.0 and all others to 0.0.

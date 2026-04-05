@@ -55,10 +55,10 @@ All load/store methods perform column bounds checking against `n_cols`. Out-of-b
 For padding partial tiles in blocked algorithms:
 
 ```python
-t.set_identity()
+t.eye_()
 ```
 
-Sets the tile to the 16x16 identity matrix. Each thread sets its diagonal element to 1.0 and all others to 0.0.
+Sets the tile to the 16x16 identity matrix in-place. Each thread sets its diagonal element to 1.0 and all others to 0.0.
 
 ## Rank-1 updates
 
@@ -114,7 +114,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         if k0 + tid < n_dofs:
             L_kk.load(H, k0, k0, n_dofs)
         else:
-            L_kk.set_identity()
+            L_kk.eye_()
 
         # Subtract contributions from previous blocks
         for jb in range(kb):
@@ -164,7 +164,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 | `load3d` | `(arr, i0, row0, col0, n_cols)` | Load from 3D array (row = row0 + tid) |
 | `store` | `(arr, row0, col0, n_cols)` | Store to 2D array (row = row0 + tid) |
 | `store3d` | `(arr, i0, row0, col0, n_cols)` | Store to 3D array (row = row0 + tid) |
-| `set_identity` | `()` | Set to 16x16 identity matrix |
+| `eye_` | `()` | Set to 16x16 identity matrix (in-place) |
 | `syr_sub` | `(v)` | Symmetric rank-1 subtract |
 | `ger_sub` | `(a, b)` | General rank-1 subtract |
 | `potrf` | `(eps)` | Cholesky factorization |
