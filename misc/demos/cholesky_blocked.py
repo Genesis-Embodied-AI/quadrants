@@ -30,7 +30,7 @@ import time
 import numpy as np
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import Tile16
+from quadrants.lang.simt.tile16 import make_tile16
 
 N = 64
 TILE = 16
@@ -40,6 +40,8 @@ WARMUP = 50
 ITERS = 200
 
 qd.init(arch=qd.cuda)
+
+Tile16 = make_tile16(qd.f32)
 
 A_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_baseline_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
