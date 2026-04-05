@@ -1,9 +1,9 @@
 # type: ignore
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 from quadrants._lib import core as _qd_core
 
-if TYPE_CHECKING:
+if _TYPE_CHECKING:
     from quadrants._lib.core.quadrants_python import CompileConfig
 
     cfg: CompileConfig | None
