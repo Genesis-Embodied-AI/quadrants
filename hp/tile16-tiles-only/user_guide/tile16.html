@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tile16: register-resident 16x16 tiles &#8212; Quadrants 0.6.0 documentation</title>
+    <title>Tile16x16: register-resident 16x16 tiles &#8212; Quadrants 0.6.0 documentation</title>
   
   
   
@@ -297,7 +297,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Tile16: register-resident 16x16 tiles</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
@@ -354,7 +354,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Tile16: register-resident 16x16 tiles</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Tile16x16: register-resident 16x16 tiles</span></li>
   </ul>
 </nav>
 </div>
@@ -371,50 +371,53 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="tile16-register-resident-16x16-tiles">
-<h1>Tile16: register-resident 16x16 tiles<a class="headerlink" href="#tile16-register-resident-16x16-tiles" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">Tile16</span></code> provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses warp shuffles — no shared memory needed.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="tile16x16-register-resident-16x16-tiles">
+<h1>Tile16x16: register-resident 16x16 tiles<a class="headerlink" href="#tile16x16-register-resident-16x16-tiles" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses warp shuffles — no shared memory needed.</p>
 <p>This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.</p>
-<p>Tile16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required.</p>
+<p>Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required.</p>
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16x16</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>
-    <span class="n">t</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+    <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span>
     <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
-    <span class="n">t</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
+    <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
 </pre></div>
 </div>
 </section>
 <section id="creating-a-tile">
 <h2>Creating a tile<a class="headerlink" href="#creating-a-tile" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">Tile16()</span></code> creates a zero-initialized tile. You can also pass 16 initial values:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>                                    <span class="c1"># all zeros</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">(</span><span class="n">a0</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">a15</span><span class="p">)</span>                <span class="c1"># explicit values</span>
+<p><code class="docutils literal notranslate"><span class="pre">Tile16x16()</span></code> creates a zero-initialized tile. You can also pass 16 initial values:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>                                    <span class="c1"># all zeros</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">(</span><span class="n">a0</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">a15</span><span class="p">)</span>                <span class="c1"># explicit values</span>
 </pre></div>
 </div>
 </section>
 <section id="loading-and-storing">
 <h2>Loading and storing<a class="headerlink" href="#loading-and-storing" title="Link to this heading">#</a></h2>
-<p>Load/store transfer data between a tile and device memory arrays. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
+<p>Load/store transfer data between a tile and device memory arrays using slice syntax. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
 <section id="d-arrays">
 <h3>2D arrays<a class="headerlink" href="#d-arrays" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>       <span class="c1"># arr[row0 + tid, col0+0..15]</span>
-<span class="n">t</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
 </div>
 </section>
 <section id="id1">
 <h3>3D arrays<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <p>For arrays with a leading batch dimension (e.g. <code class="docutils literal notranslate"><span class="pre">H[batch,</span> <span class="pre">row,</span> <span class="pre">col]</span></code>):</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">load3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>   <span class="c1"># arr[i0, row0 + tid, col0+0..15]</span>
-<span class="n">t</span><span class="o">.</span><span class="n">store3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
 </div>
-<p>All load/store methods perform column bounds checking against <code class="docutils literal notranslate"><span class="pre">n_cols</span></code>. Out-of-bounds columns are left as zero (load) or skipped (store).</p>
+<p>The column slice endpoint (<code class="docutils literal notranslate"><span class="pre">col_end</span></code>) serves as the column bound — columns beyond the array boundary are left as zero (load) or skipped (store). This replaces the explicit <code class="docutils literal notranslate"><span class="pre">n_cols</span></code> parameter of the underlying <code class="docutils literal notranslate"><span class="pre">load</span></code>/<code class="docutils literal notranslate"><span class="pre">store</span></code> methods.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">[:]</span></code> on the load LHS is required — it distinguishes an in-place tile load from a variable rebinding. The store side does not need <code class="docutils literal notranslate"><span class="pre">[:]</span></code> because the array subscript on the LHS already triggers the correct assignment path.</p>
 </section>
 </section>
 <section id="identity-initialization">
@@ -431,7 +434,7 @@
 <span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>    <span class="c1"># t -= a @ b^T  (general)</span>
 </pre></div>
 </div>
-<p>Each thread provides its element(s) of the vector(s). The outer product is computed via warp shuffles and subtracted from the tile in-place. <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span></code> returns a deferred proxy — it is only valid as the RHS of <code class="docutils literal notranslate"><span class="pre">-=</span></code> on a Tile16. Composition like <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span> <span class="pre">+</span> <span class="pre">qd.outer(c,</span> <span class="pre">d)</span></code> raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
+<p>Each thread provides its element(s) of the vector(s). The outer product is computed via warp shuffles and subtracted from the tile in-place. <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span></code> returns a deferred proxy — it is only valid as the RHS of <code class="docutils literal notranslate"><span class="pre">-=</span></code> on a Tile16x16. Composition like <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span> <span class="pre">+</span> <span class="pre">qd.outer(c,</span> <span class="pre">d)</span></code> raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
 <p>Used for diagonal block updates (symmetric case) and off-diagonal block updates (general case) in blocked Cholesky.</p>
 </section>
 <section id="cholesky-factorization-cholesky">
@@ -450,8 +453,8 @@
 </section>
 <section id="full-example-blocked-cholesky">
 <h2>Full example: blocked Cholesky<a class="headerlink" href="#full-example-blocked-cholesky" title="Link to this heading">#</a></h2>
-<p>A simplified blocked Cholesky factorization using <code class="docutils literal notranslate"><span class="pre">Tile16</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16</span>
+<p>A simplified blocked Cholesky factorization using <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16x16</span>
 
 <span class="n">TILE</span> <span class="o">=</span> <span class="mi">16</span>
 
@@ -462,9 +465,9 @@
         <span class="n">k0</span> <span class="o">=</span> <span class="n">kb</span> <span class="o">*</span> <span class="n">TILE</span>
 
         <span class="c1"># Load diagonal block, pad with identity if out of bounds</span>
-        <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>
+        <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
+            <span class="n">L_kk</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">L_kk</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
 
@@ -484,9 +487,9 @@
         <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N_BLOCKS</span><span class="p">):</span>
             <span class="n">i0</span> <span class="o">=</span> <span class="n">ib</span> <span class="o">*</span> <span class="n">TILE</span>
 
-            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>
+            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">L_ik</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
+                <span class="n">L_ik</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
 
             <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
                 <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">TILE</span>
@@ -502,10 +505,10 @@
             <span class="n">L_kk</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">L_ik</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">L_ik</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
+                <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_ik</span>
 
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
+            <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_kk</span>
 </pre></div>
 </div>
 </section>
@@ -513,46 +516,36 @@
 <h2>Method reference<a class="headerlink" href="#method-reference" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>Method</p></th>
-<th class="head"><p>Signature</p></th>
+<tr class="row-odd"><th class="head"><p>Operation</p></th>
 <th class="head"><p>Description</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(arr,</span> <span class="pre">row0,</span> <span class="pre">col0,</span> <span class="pre">n_cols)</span></code></p></td>
-<td><p>Load from 2D array (row = row0 + tid)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t[:]</span> <span class="pre">=</span> <span class="pre">arr[r0:r0+16,</span> <span class="pre">c0:c_end]</span></code></p></td>
+<td><p>Load from 2D array</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">load3d</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(arr,</span> <span class="pre">i0,</span> <span class="pre">row0,</span> <span class="pre">col0,</span> <span class="pre">n_cols)</span></code></p></td>
-<td><p>Load from 3D array (row = row0 + tid)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t[:]</span> <span class="pre">=</span> <span class="pre">arr[i,</span> <span class="pre">r0:r0+16,</span> <span class="pre">c0:c_end]</span></code></p></td>
+<td><p>Load from 3D array</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">store</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(arr,</span> <span class="pre">row0,</span> <span class="pre">col0,</span> <span class="pre">n_cols)</span></code></p></td>
-<td><p>Store to 2D array (row = row0 + tid)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">arr[r0:r0+16,</span> <span class="pre">c0:c_end]</span> <span class="pre">=</span> <span class="pre">t</span></code></p></td>
+<td><p>Store to 2D array</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">store3d</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(arr,</span> <span class="pre">i0,</span> <span class="pre">row0,</span> <span class="pre">col0,</span> <span class="pre">n_cols)</span></code></p></td>
-<td><p>Store to 3D array (row = row0 + tid)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">arr[i,</span> <span class="pre">r0:r0+16,</span> <span class="pre">c0:c_end]</span> <span class="pre">=</span> <span class="pre">t</span></code></p></td>
+<td><p>Store to 3D array</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">eye_</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">()</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t.eye_()</span></code></p></td>
 <td><p>Set to 16x16 identity matrix (in-place)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">-=</span> <span class="pre">qd.outer(v,</span> <span class="pre">v)</span></code></p></td>
-<td><p></p></td>
 <td><p>Symmetric rank-1 subtract</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">-=</span> <span class="pre">qd.outer(a,</span> <span class="pre">b)</span></code></p></td>
-<td><p></p></td>
 <td><p>General rank-1 subtract</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cholesky_</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(eps)</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t.cholesky_(eps)</span></code></p></td>
 <td><p>In-place Cholesky factorization</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">solve_triangular_</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">lower=True)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">L.solve_triangular_(B)</span></code></p></td>
 <td><p>Triangular solve (in-place on B)</p></td>
 </tr>
 </tbody>
@@ -566,7 +559,7 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Kernel</span>                                      <span class="n">Threads</span>   <span class="n">Time</span> <span class="p">(</span><span class="n">us</span><span class="p">)</span>    <span class="n">vs</span> <span class="n">baseline</span>
 <span class="n">baseline</span> <span class="p">(</span><span class="n">scalar</span> <span class="n">Crout</span><span class="p">,</span> <span class="n">shared</span> <span class="n">mem</span><span class="p">)</span>              <span class="mi">64</span>       <span class="mi">611</span>         <span class="mf">1.00</span><span class="n">x</span>
 <span class="n">blocked</span>  <span class="p">(</span><span class="n">scalar</span> <span class="n">Crout</span><span class="p">,</span> <span class="n">shared</span> <span class="n">mem</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">515</span>         <span class="mf">1.19</span><span class="n">x</span>
-<span class="n">tile16</span>   <span class="p">(</span><span class="n">Tile16</span><span class="p">,</span> <span class="n">no</span> <span class="n">shared</span> <span class="n">memory</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">200</span>         <span class="mf">3.05</span><span class="n">x</span>
+<span class="n">tile16</span>   <span class="p">(</span><span class="n">Tile16x16</span><span class="p">,</span> <span class="n">no</span> <span class="n">shared</span> <span class="n">memory</span><span class="p">)</span>              <span class="mi">16</span>       <span class="mi">200</span>         <span class="mf">3.05</span><span class="n">x</span>
 </pre></div>
 </div>
 </section>
