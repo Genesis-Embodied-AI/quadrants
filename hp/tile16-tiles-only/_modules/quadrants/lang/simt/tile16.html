@@ -343,11 +343,11 @@
 <span class="sd">    arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span> <span class="k">as</span> <span class="n">_TYPE_CHECKING</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+<span class="k">if</span> <span class="n">_TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
     <span class="k">class</span><span class="w"> </span><span class="nc">_Tile16x16Proto</span><span class="p">:</span>  <span class="c1"># noqa: E303</span>
