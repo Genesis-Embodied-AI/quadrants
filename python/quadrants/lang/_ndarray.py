@@ -65,10 +65,28 @@ class Ndarray:
             impl.get_runtime().sync()
         return impl.get_runtime().prog.ndarray_to_dlpack(self, self.arr)
 
+    @python_scope
+    def to_torch(self, *, copy=None):
+        """Converts this ndarray to a ``torch.Tensor`` via DLPack.
+
+        Uses zero-copy when possible (all backends except Vulkan).
+
+        Args:
+            copy: ``None``/``False`` return a zero-copy view, ``True`` returns an
+                independent copy.
+        """
+        from quadrants.lang._interop import dlpack_to_torch  # pylint: disable=C0415
+
+        tc = dlpack_to_torch(self)
+        return tc.clone() if copy is True else tc
+
     def _reset(self):
         """
         Called by runtime, when we call qd.reset()
         """
+        from quadrants.lang._interop import invalidate_zerocopy_cache  # pylint: disable=C0415
+
+        invalidate_zerocopy_cache(self)
         self.arr = None
         self.grad = None
         self.host_accessor = None
@@ -132,12 +150,28 @@ class Ndarray:
             self._fill_by_kernel(val)
 
     @python_scope
-    def _ndarray_to_numpy(self):
+    def _ndarray_to_numpy(self, *, copy=None):
         """Converts ndarray to a numpy array.
+
+        Args:
+            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy,
+                ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
         """
+        if copy is not True:
+            from quadrants.lang._interop import dlpack_to_torch  # pylint: disable=C0415
+
+            try:
+                tc = dlpack_to_torch(self)
+                if tc.device.type == "cpu":
+                    return tc.numpy()
+            except (ImportError, RuntimeError):
+                pass
+            if copy is False:
+                raise ValueError("Zero-copy to numpy not available (requires CPU backend and torch)")
+
         arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
 
@@ -146,12 +180,29 @@ class Ndarray:
         return arr
 
     @python_scope
-    def _ndarray_matrix_to_numpy(self, as_vector):
+    def _ndarray_matrix_to_numpy(self, as_vector, *, copy=None):
         """Converts matrix ndarray to a numpy array.
+
+        Args:
+            as_vector: Whether to treat as a vector ndarray.
+            copy: ``None`` prefers zero-copy (CPU only), ``True`` forces copy,
+                ``False`` requires zero-copy or raises.
 
         Returns:
             numpy.ndarray: The result numpy array.
         """
+        if copy is not True:
+            from quadrants.lang._interop import dlpack_to_torch  # pylint: disable=C0415
+
+            try:
+                tc = dlpack_to_torch(self)
+                if tc.device.type == "cpu":
+                    return tc.numpy()
+            except (ImportError, RuntimeError):
+                pass
+            if copy is False:
+                raise ValueError("Zero-copy to numpy not available (requires CPU backend and torch)")
+
         arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import (  # pylint: disable=C0415
             ndarray_matrix_to_ext_arr,  # pylint: disable=C0415
@@ -322,8 +373,8 @@ class ScalarNdarray(Ndarray):
         return self.host_accessor.getter(*self._pad_key(key))
 
     @python_scope
-    def to_numpy(self):
-        return self._ndarray_to_numpy()
+    def to_numpy(self, *, copy=None):
+        return self._ndarray_to_numpy(copy=copy)
 
     @python_scope
     def from_numpy(self, arr):
