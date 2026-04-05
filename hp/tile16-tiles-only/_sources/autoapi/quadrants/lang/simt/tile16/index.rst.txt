@@ -61,7 +61,7 @@ Module Contents
        t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
 
 
-.. py:function:: make_tile16x16(dtype=qd.f32)
+.. py:function:: make_tile16x16(dtype=qd.f32) -> type[_Tile16x16Proto]
 
    Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
