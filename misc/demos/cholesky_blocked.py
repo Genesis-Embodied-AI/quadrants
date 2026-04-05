@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark 64x64 blocked Cholesky factorization using Tile16.
+"""Benchmark 64x64 blocked Cholesky factorization using Tile16x16.
 
 Three kernels compared:
 
@@ -8,10 +8,10 @@ Three kernels compared:
    off-diagonal updates.
 
 2. Blocked: 4x4 grid of 16x16 tiles, 16 threads, shared memory, scalar Crout
-   for diagonal blocks. Same blocking structure as Tile16 but all data lives
+   for diagonal blocks. Same blocking structure as Tile16x16 but all data lives
    in shared memory with block.sync() between every step.
 
-3. Tile16: same blocked structure but fully register-resident via Tile16.
+3. Tile16x16: same blocked structure but fully register-resident via Tile16x16.
    No shared memory, zero syncs. Prior tiles read from global memory (L2).
 
 Results on RTX PRO 6000 Blackwell, 4096 environments, f32:
@@ -19,7 +19,7 @@ Results on RTX PRO 6000 Blackwell, 4096 environments, f32:
     Kernel                                 Threads   Time (us)    vs baseline
     baseline (scalar Crout, shared mem)         64       611         1.00x
     blocked  (scalar Crout, shared mem)         16       515         1.19x
-    tile16   (Tile16, no shared memory)         16       200         3.05x
+    tile16   (Tile16x16, no shared memory)         16       200         3.05x
 
 Usage:
     python misc/demos/cholesky_blocked.py
@@ -30,7 +30,7 @@ import time
 import numpy as np
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import make_tile16
+from quadrants.lang.simt.tile16 import make_tile16x16
 
 N = 64
 TILE = 16
@@ -41,7 +41,7 @@ ITERS = 200
 
 qd.init(arch=qd.cuda)
 
-Tile16 = make_tile16(qd.f32)
+Tile16x16 = make_tile16x16(qd.f32)
 
 A_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_baseline_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
@@ -182,7 +182,7 @@ def cholesky_blocked():
 
 
 # ---------------------------------------------------------------------------
-# Kernel 3: Tile16 blocked Cholesky (16 threads, no shared memory)
+# Kernel 3: Tile16x16 blocked Cholesky (16 threads, no shared memory)
 # ---------------------------------------------------------------------------
 
 
@@ -196,7 +196,7 @@ def cholesky_tile16():
         for kb in range(N_BLOCKS):
             k0 = kb * TILE
 
-            L_kk = Tile16()
+            L_kk = Tile16x16()
             L_kk[:] = A_field[env, k0:k0+TILE, k0:N]
 
             for jb in range(kb):
@@ -210,7 +210,7 @@ def cholesky_tile16():
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * TILE
 
-                L_ik = Tile16()
+                L_ik = Tile16x16()
                 L_ik[:] = A_field[env, i0:i0+TILE, k0:N]
 
                 for jb in range(kb):
@@ -280,7 +280,7 @@ def main():
     qd.sync()
     verify("blocked", L_blocked_field, A_np)
 
-    print("Compiling Tile16 (blocked, 16 threads, no shared memory)...")
+    print("Compiling Tile16x16 (blocked, 16 threads, no shared memory)...")
     cholesky_tile16()
     qd.sync()
     verify("tile16", L_tile16_field, A_np)
@@ -289,7 +289,7 @@ def main():
     print("Benchmarking:")
     t_baseline = benchmark("baseline (scalar Crout, 64 thr, shared mem)", cholesky_baseline, WARMUP, ITERS)
     t_blocked = benchmark("blocked  (scalar Crout, 16 thr, shared mem)", cholesky_blocked, WARMUP, ITERS)
-    t_tile16 = benchmark("tile16   (Tile16, 16 thr, no shared mem)", cholesky_tile16, WARMUP, ITERS)
+    t_tile16 = benchmark("tile16   (Tile16x16, 16 thr, no shared mem)", cholesky_tile16, WARMUP, ITERS)
     print()
     print(f"  blocked  vs baseline: {t_baseline / t_blocked:.2f}x")
     print(f"  tile16   vs baseline: {t_baseline / t_tile16:.2f}x")

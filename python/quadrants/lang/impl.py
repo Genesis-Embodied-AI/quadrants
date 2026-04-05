@@ -258,9 +258,9 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 from quadrants.lang.simt.tile16 import _TileSliceProxy
                 row_slice, col_slice = slice_indices
                 if row_slice.start is None or col_slice.start is None:
-                    raise QuadrantsSyntaxError("Tile16 slice: start index is required")
+                    raise QuadrantsSyntaxError("Tile16x16 slice: start index is required")
                 if col_slice.stop is None:
-                    raise QuadrantsSyntaxError("Tile16 slice: column stop index is required")
+                    raise QuadrantsSyntaxError("Tile16x16 slice: column stop index is required")
                 batch_idx = non_slice_indices[0] if non_slice_indices else None
                 return _TileSliceProxy(value, row_slice.start, col_slice.start, col_slice.stop, batch_idx)
         if not (isinstance(value, Expr) and value.is_tensor()):

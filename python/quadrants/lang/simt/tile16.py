@@ -13,8 +13,8 @@ each thread accesses row = row0 + tid.
 
 Usage example::
 
-    Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-    t = Tile16()                              # zero-initialized tile
+    Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
+    t = Tile16x16()                              # zero-initialized tile
     t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
     t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
@@ -32,7 +32,7 @@ _TILE = 16
 
 
 class _OuterProduct:
-    """Deferred outer product proxy for use with augmented assignment on Tile16.
+    """Deferred outer product proxy for use with augmented assignment on Tile16x16.
 
     Created by qd.outer(a, b). Not a quadrants expression — only valid as the
     RHS of ``tile -= qd.outer(a, b)``.
@@ -50,7 +50,7 @@ class _OuterProduct:
 
 
 def outer(a, b):
-    """Create a deferred outer product for use with Tile16 augmented assignment.
+    """Create a deferred outer product for use with Tile16x16 augmented assignment.
 
     Usage::
 
@@ -104,30 +104,30 @@ class _TileRefProxy:
             else:
                 self.tile.load(value.arr, value.row_start, value.col_start, value.col_stop)
         else:
-            raise TypeError(f"Tile16[:] can only be assigned from an array slice, got {type(value)}")
+            raise TypeError(f"Tile16x16[:] can only be assigned from an array slice, got {type(value)}")
 
 
 # =============================================================================
-# Tile16 factory — creates a Tile16 class for the given scalar dtype
+# Tile16x16 factory — creates a Tile16x16 class for the given scalar dtype
 # =============================================================================
 
 _tile16_cache = {}
 
 
-def make_tile16(dtype=qd.f32):
-    """Create a Tile16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64)."""
+def make_tile16x16(dtype=qd.f32):
+    """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64)."""
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]
-    cls = _make_tile16_class(dtype)
+    cls = _make_tile16x16_class(dtype)
     _tile16_cache[dtype] = cls
     return cls
 
 
-def _make_tile16_class(dtype):
-    class _Tile16:
+def _make_tile16x16_class(dtype):
+    class _Tile16x16:
         """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
 
-        All fields default to 0.0 when omitted: ``Tile16()`` creates a zero tile.
+        All fields default to 0.0 when omitted: ``Tile16x16()`` creates a zero tile.
         """
 
         r0: dtype
@@ -659,7 +659,7 @@ def _make_tile16_class(dtype):
         def trsm(self, L):
             """In-place triangular solve: solve self @ L^T = B (original self).
 
-            L is a Tile16 holding the lower-triangular Cholesky factor (from potrf).
+            L is a Tile16x16 holding the lower-triangular Cholesky factor (from potrf).
             On return, self holds the solution X.
             """
             for c in range(_TILE):
@@ -819,9 +819,9 @@ def _make_tile16_class(dtype):
                 if op == "Sub":
                     self.ger_sub(other.a, other.b)
                 else:
-                    raise TypeError(f"Tile16: unsupported augmented assignment op '{op}' with outer product")
+                    raise TypeError(f"Tile16x16: unsupported augmented assignment op '{op}' with outer product")
             else:
-                raise TypeError(f"Tile16: unsupported augmented assignment with {type(other)}")
+                raise TypeError(f"Tile16x16: unsupported augmented assignment with {type(other)}")
 
         def solve_triangular_(self, B, lower=True):
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
@@ -830,15 +830,15 @@ def _make_tile16_class(dtype):
             Only lower=True is supported.
             """
             if not lower:
-                raise TypeError("Tile16.solve_triangular_: only lower=True is supported")
+                raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
             B.trsm(self)
 
-    # StructType.__call__ already defaults missing args to 0, so Tile16()
+    # StructType.__call__ already defaults missing args to 0, so Tile16x16()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
-    result = qd.dataclass(_Tile16)
+    result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE
     return result
 
 
-Tile16 = make_tile16(qd.f32)
+Tile16x16 = make_tile16x16(qd.f32)
