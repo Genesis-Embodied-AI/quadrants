@@ -28,6 +28,7 @@ Usage:
 import time
 
 import numpy as np
+
 import quadrants as qd
 from quadrants.lang.simt.tile16 import Tile16
 
@@ -56,6 +57,7 @@ def make_spd_matrices(n_envs, n):
 # ---------------------------------------------------------------------------
 # Kernel 1: scalar Cholesky-Crout (64 threads, shared memory)
 # ---------------------------------------------------------------------------
+
 
 @qd.kernel
 def cholesky_baseline():
@@ -99,6 +101,7 @@ def cholesky_baseline():
 # ---------------------------------------------------------------------------
 # Kernel 2: blocked Cholesky (16 threads, shared memory, scalar Crout)
 # ---------------------------------------------------------------------------
+
 
 @qd.kernel
 def cholesky_blocked():
@@ -180,6 +183,7 @@ def cholesky_blocked():
 # Kernel 3: Tile16 blocked Cholesky (16 threads, no shared memory)
 # ---------------------------------------------------------------------------
 
+
 @qd.kernel
 def cholesky_tile16():
     qd.loop_config(name="chol_tile16", block_dim=TILE)
@@ -224,6 +228,7 @@ def cholesky_tile16():
 # ---------------------------------------------------------------------------
 # Benchmark + verification
 # ---------------------------------------------------------------------------
+
 
 def benchmark(name, kernel_fn, n_warmup, n_iters):
     for _ in range(n_warmup):
