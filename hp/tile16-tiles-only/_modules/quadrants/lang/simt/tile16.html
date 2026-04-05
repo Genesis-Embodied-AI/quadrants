@@ -324,17 +324,22 @@
 <span class="sd">one row per thread, with each row stored in 16 scalar registers (r0-r15).</span>
 <span class="sd">Cross-thread communication uses warp shuffles — no shared memory needed.</span>
 
+<span class="sd">The thread&#39;s lane index (tid) is obtained internally via subgroup.invocation_id(),</span>
+<span class="sd">so callers never need to pass it. Load/store methods take a row offset (row0);</span>
+<span class="sd">each thread accesses row = row0 + tid.</span>
+
 <span class="sd">Usage example::</span>
 
 <span class="sd">    Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)</span>
 <span class="sd">    t = Tile16()                              # zero-initialized tile</span>
-<span class="sd">    t.load(arr, row, col0, n_cols)            # load from 2D array</span>
-<span class="sd">    t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])</span>
+<span class="sd">    t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)</span>
+<span class="sd">    t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])</span>
+<span class="sd">    t.set_identity()                          # set to identity matrix</span>
 <span class="sd">    t.syr_sub(v)                              # symmetric rank-1 subtract</span>
-<span class="sd">    t.potrf(tid, eps)                         # Cholesky factorization</span>
+<span class="sd">    t.potrf(eps)                              # Cholesky factorization</span>
 <span class="sd">    b.trsm(L)                                 # triangular solve using L</span>
-<span class="sd">    t.store(arr, row, col0, n_cols)           # store to 2D array</span>
-<span class="sd">    t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array</span>
+<span class="sd">    t.store(arr, row0, col0, n_cols)          # store to 2D array</span>
+<span class="sd">    t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
@@ -386,8 +391,12 @@
         <span class="n">r15</span><span class="p">:</span> <span class="n">dtype</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Load one row from a 2D array with column bounds checking.&quot;&quot;&quot;</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Load one row from a 2D array with column bounds checking.</span>
+
+<span class="sd">            Each thread loads arr[row0 + tid, col0:col0+16].</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">row0</span> <span class="o">+</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">r0</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
@@ -422,8 +431,9 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">15</span><span class="p">]</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">load3d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Load one row from a 3D array: arr[i0, row, col0+c] with column bounds checking.&quot;&quot;&quot;</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">load3d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Load one row from a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking.&quot;&quot;&quot;</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">row0</span> <span class="o">+</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">r0</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
@@ -458,8 +468,12 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">15</span><span class="p">]</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">store</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Store one row to a 2D array with column bounds checking.&quot;&quot;&quot;</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">store</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Store one row to a 2D array with column bounds checking.</span>
+
+<span class="sd">            Each thread stores to arr[row0 + tid, col0:col0+16].</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">row0</span> <span class="o">+</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
                 <span class="n">arr</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r0</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
@@ -494,8 +508,9 @@
                 <span class="n">arr</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">15</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r15</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">store3d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Store one row to a 3D array: arr[i0, row, col0+c] with column bounds checking.&quot;&quot;&quot;</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">store3d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Store one row to a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking.&quot;&quot;&quot;</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">row0</span> <span class="o">+</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
                 <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r0</span>
             <span class="k">if</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">n_cols</span><span class="p">:</span>
@@ -530,12 +545,12 @@
                 <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">15</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r15</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">set_identity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tid</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Set this tile row to the identity matrix row for thread tid.</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">set_identity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Set this tile to the 16x16 identity matrix.</span>
 
-<span class="sd">            Each thread sets its diagonal element to 1.0 and all others to 0.0,</span>
-<span class="sd">            producing a distributed 16x16 identity matrix across the subgroup.</span>
+<span class="sd">            Each thread sets its diagonal element to 1.0 and all others to 0.0.</span>
 <span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">r0</span> <span class="o">=</span> <span class="mf">0.0</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">r1</span> <span class="o">=</span> <span class="mf">0.0</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">r2</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -658,12 +673,13 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">-=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">bc</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">potrf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">potrf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
 <span class="w">            </span><span class="sd">&quot;&quot;&quot;In-place 16x16 Cholesky factorization (POTRF) via subgroup shuffles.</span>
 
 <span class="sd">            On return, the lower triangle holds L such that A = L @ L^T.</span>
 <span class="sd">            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.</span>
 <span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
             <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">_TILE</span><span class="p">):</span>
                 <span class="n">diag_val</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="n">k</span><span class="p">:</span>

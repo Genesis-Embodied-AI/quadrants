@@ -11,17 +11,22 @@ quadrants.lang.simt.tile16
    one row per thread, with each row stored in 16 scalar registers (r0-r15).
    Cross-thread communication uses warp shuffles — no shared memory needed.
 
+   The thread's lane index (tid) is obtained internally via subgroup.invocation_id(),
+   so callers never need to pass it. Load/store methods take a row offset (row0);
+   each thread accesses row = row0 + tid.
+
    Usage example::
 
        Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
        t = Tile16()                              # zero-initialized tile
-       t.load(arr, row, col0, n_cols)            # load from 2D array
-       t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])
+       t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)
+       t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
+       t.set_identity()                          # set to identity matrix
        t.syr_sub(v)                              # symmetric rank-1 subtract
-       t.potrf(tid, eps)                         # Cholesky factorization
+       t.potrf(eps)                              # Cholesky factorization
        b.trsm(L)                                 # triangular solve using L
-       t.store(arr, row, col0, n_cols)           # store to 2D array
-       t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array
+       t.store(arr, row0, col0, n_cols)          # store to 2D array
+       t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array
 
 
 

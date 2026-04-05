@@ -12,11 +12,11 @@ Tile16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vu
 from quadrants.lang.simt.tile16 import Tile16
 
 @qd.func
-def my_blocked_op(A, tid, row, col0, n_cols, eps):
+def my_blocked_op(A, row0, col0, n_cols, eps):
     t = Tile16()
-    t.load(A, row, col0, n_cols)
-    t.potrf(tid, eps)
-    t.store(A, row, col0, n_cols)
+    t.load(A, row0, col0, n_cols)
+    t.potrf(eps)
+    t.store(A, row0, col0, n_cols)
 ```
 
 ## Creating a tile
@@ -30,13 +30,13 @@ t = Tile16(a0, a1, a2, ..., a15)                # explicit values
 
 ## Loading and storing
 
-Load/store transfer data between a tile and device memory arrays.
+Load/store transfer data between a tile and device memory arrays. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
 ### 2D arrays
 
 ```python
-t.load(arr, row, col0, n_cols)       # arr[row, col0+0..15]
-t.store(arr, row, col0, n_cols)
+t.load(arr, row0, col0, n_cols)       # arr[row0 + tid, col0+0..15]
+t.store(arr, row0, col0, n_cols)
 ```
 
 ### 3D arrays
@@ -44,8 +44,8 @@ t.store(arr, row, col0, n_cols)
 For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
 
 ```python
-t.load3d(arr, i0, row, col0, n_cols)   # arr[i0, row, col0+0..15]
-t.store3d(arr, i0, row, col0, n_cols)
+t.load3d(arr, i0, row0, col0, n_cols)   # arr[i0, row0 + tid, col0+0..15]
+t.store3d(arr, i0, row0, col0, n_cols)
 ```
 
 All load/store methods perform column bounds checking against `n_cols`. Out-of-bounds columns are left as zero (load) or skipped (store).
@@ -55,10 +55,10 @@ All load/store methods perform column bounds checking against `n_cols`. Out-of-b
 For padding partial tiles in blocked algorithms:
 
 ```python
-t.set_identity(tid)
+t.set_identity()
 ```
 
-Sets the tile to the identity matrix row for thread `tid`: column `tid` gets 1.0, all others 0.0. Across the full subgroup, this produces a distributed 16x16 identity matrix.
+Sets the tile to the 16x16 identity matrix. Each thread sets its diagonal element to 1.0 and all others to 0.0.
 
 ## Rank-1 updates
 
@@ -81,7 +81,7 @@ Like `syr_sub` but with two different vectors. Used for off-diagonal block updat
 ## Cholesky factorization (potrf)
 
 ```python
-t.potrf(tid, eps)
+t.potrf(eps)
 ```
 
 Factorizes the tile in-place: replaces the lower triangle with `L` such that `L @ L^T ≈ A`. The `eps` parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of `t` contains `L`.
@@ -112,9 +112,9 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         # Load diagonal block, pad with identity if out of bounds
         L_kk = Tile16()
         if k0 + tid < n_dofs:
-            L_kk.load(H, k0 + tid, k0, n_dofs)
+            L_kk.load(H, k0, k0, n_dofs)
         else:
-            L_kk.set_identity(tid)
+            L_kk.set_identity()
 
         # Subtract contributions from previous blocks
         for jb in range(kb):
@@ -126,7 +126,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
                 L_kk.syr_sub(v)
 
         # Factorize diagonal block
-        L_kk.potrf(tid, eps)
+        L_kk.potrf(eps)
 
         # Process off-diagonal blocks
         for ib in range(kb + 1, N_BLOCKS):
@@ -134,7 +134,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
             L_ik = Tile16()
             if i0 + tid < n_dofs:
-                L_ik.load(H, i0 + tid, k0, n_dofs)
+                L_ik.load(H, i0, k0, n_dofs)
 
             for jb in range(kb):
                 j0 = jb * TILE
@@ -150,24 +150,24 @@ def blocked_cholesky(H, tid, n_dofs, eps):
             L_ik.trsm(L_kk)
 
             if i0 + tid < n_dofs:
-                L_ik.store(H, i0 + tid, k0, n_dofs)
+                L_ik.store(H, i0, k0, n_dofs)
 
         if k0 + tid < n_dofs:
-            L_kk.store(H, k0 + tid, k0, n_dofs)
+            L_kk.store(H, k0, k0, n_dofs)
 ```
 
 ## Method reference
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `load` | `(arr, row, col0, n_cols)` | Load from 2D array |
-| `load3d` | `(arr, i0, row, col0, n_cols)` | Load from 3D array |
-| `store` | `(arr, row, col0, n_cols)` | Store to 2D array |
-| `store3d` | `(arr, i0, row, col0, n_cols)` | Store to 3D array |
-| `set_identity` | `(tid)` | Set to identity matrix row |
+| `load` | `(arr, row0, col0, n_cols)` | Load from 2D array (row = row0 + tid) |
+| `load3d` | `(arr, i0, row0, col0, n_cols)` | Load from 3D array (row = row0 + tid) |
+| `store` | `(arr, row0, col0, n_cols)` | Store to 2D array (row = row0 + tid) |
+| `store3d` | `(arr, i0, row0, col0, n_cols)` | Store to 3D array (row = row0 + tid) |
+| `set_identity` | `()` | Set to 16x16 identity matrix |
 | `syr_sub` | `(v)` | Symmetric rank-1 subtract |
 | `ger_sub` | `(a, b)` | General rank-1 subtract |
-| `potrf` | `(tid, eps)` | Cholesky factorization |
+| `potrf` | `(eps)` | Cholesky factorization |
 | `trsm` | `(L)` | Triangular solve |
 
 ## Experiment: 64x64 blocked Cholesky (dex_hand dimensions)
