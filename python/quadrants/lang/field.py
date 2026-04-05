@@ -106,10 +106,9 @@ class Field:
 
     @python_scope
     def to_numpy(self, dtype: DataTypeCxx | None = None, *, copy: bool | None = None):
-        """Converts ``self`` to a numpy array.
+        """Converts `self` to a numpy array.
 
         Args:
-            dtype: Target numpy dtype.  When *None* the native dtype is used.
             copy: Controls copying behaviour:
 
                 - ``None`` (default) -- zero-copy when possible, copy otherwise.
@@ -123,7 +122,7 @@ class Field:
 
     @python_scope
     def to_torch(self, device=None, *, copy: bool | None = None):
-        """Converts ``self`` to a torch tensor.
+        """Converts `self` to a torch tensor.
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
@@ -134,7 +133,7 @@ class Field:
                 - ``False`` -- require zero-copy; raises if not possible.
 
         Returns:
-            torch.Tensor: The result torch tensor.
+            torch.tensor: The result torch tensor.
         """
         raise NotImplementedError()
 
@@ -250,10 +249,9 @@ class ScalarField(Field):
 
     @python_scope
     def to_numpy(self, dtype=None, *, copy=None):
-        """Converts this field to a ``numpy.ndarray``.
+        """Converts this field to a `numpy.ndarray`.
 
         Args:
-            dtype: Target numpy dtype.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
@@ -287,15 +285,15 @@ class ScalarField(Field):
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
+        # TODO: can we remove .runtime_ops here?
         quadrants.lang.runtime_ops.sync()  # type: ignore
         return arr
 
     @python_scope
     def to_torch(self, device=None, *, copy=None):
-        """Converts this field to a ``torch.Tensor``.
+        """Converts this field to a `torch.tensor`.
 
         Args:
-            device: Target device.  When *None* the tensor lives on the field's native device.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
         """
         from quadrants.lang._interop import (  # pylint: disable=C0415
@@ -320,10 +318,12 @@ class ScalarField(Field):
 
         import torch  # pylint: disable=C0415
 
+        # pylint: disable=E1101
         arr = torch.zeros(size=self.shape, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import tensor_to_ext_arr  # pylint: disable=C0415
 
         tensor_to_ext_arr(self, arr)
+        # TODO: can we remove .runtime_ops here?
         quadrants.lang.runtime_ops.sync()  # type: ignore
         return arr
 

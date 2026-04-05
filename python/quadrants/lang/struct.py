@@ -572,11 +572,13 @@ class StructField(Field):
         The dictionary may be nested when converting nested structs.
 
         Args:
-            device (torch.device, optional): The desired device of returned tensor.
+            device (torch.device, optional): The
+                desired device of returned tensor.
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
-            Dict[str, Union[torch.Tensor, Dict]]: The result PyTorch tensor.
+            Dict[str, Union[torch.Tensor, Dict]]: The result
+                PyTorch tensor.
         """
         if copy is False:
             raise ValueError("copy=False is not supported for StructField (interleaved memory layout)")

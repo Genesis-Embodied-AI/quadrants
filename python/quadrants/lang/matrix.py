@@ -1362,7 +1362,7 @@ class MatrixField(Field):
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
         Returns:
-            torch.Tensor: The result torch tensor.
+            torch.tensor: The result torch tensor.
         """
         from quadrants.lang._interop import (  # pylint: disable=C0415
             can_zerocopy,
@@ -1393,6 +1393,7 @@ class MatrixField(Field):
 
         as_vector = self.m == 1 and not keep_dims
         shape_ext = (self.n,) if as_vector else (self.n, self.m)
+        # pylint: disable=E1101
         arr = torch.empty(self.shape + shape_ext, dtype=to_pytorch_type(self.dtype), device=device)
         from quadrants._kernels import matrix_to_ext_arr  # pylint: disable=C0415
 
@@ -1768,7 +1769,7 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def to_numpy(self, *, copy=None):
-        """Converts this ndarray to a ``numpy.ndarray``.
+        """Converts this ndarray to a `numpy.ndarray`.
 
         Example::
 
@@ -1784,7 +1785,7 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def from_numpy(self, arr):
-        """Copies the data of a ``numpy.ndarray`` into this array.
+        """Copies the data of a `numpy.ndarray` into this array.
 
         Example::
 
@@ -1879,7 +1880,7 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def to_numpy(self, *, copy=None):
-        """Converts this vector ndarray to a ``numpy.ndarray``.
+        """Converts this vector ndarray to a `numpy.ndarray`.
 
         Example::
 
@@ -1895,9 +1896,9 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def from_numpy(self, arr):
-        """Copies the data from a ``numpy.ndarray`` into this ndarray.
+        """Copies the data from a `numpy.ndarray` into this ndarray.
 
-        The shape and data type of ``arr`` must match this ndarray.
+        The shape and data type of `arr` must match this ndarray.
 
         Example::
 
