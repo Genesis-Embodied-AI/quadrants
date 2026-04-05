@@ -18,6 +18,13 @@ def _make_spd(seed=42, dtype=np.float32):
     return (B @ B.T + N * np.eye(N)).astype(dtype)
 
 
+def _ann(tensor_type, dtype, ndim):
+    """Return the right kernel annotation for the given tensor_type."""
+    if tensor_type == qd.ndarray:
+        return qd.types.NDArray[dtype, ndim]
+    return qd.Template
+
+
 # =============================================================================
 # Tile16 class API tests (field + ndarray)
 # =============================================================================
@@ -29,8 +36,10 @@ def test_tile16_load_store(tensor_type):
     src = tensor_type(qd.f32, (N, N))
     dst = tensor_type(qd.f32, (N, N))
 
+    Ann = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
@@ -50,8 +59,10 @@ def test_tile16_load_store_partial(tensor_type):
     src = tensor_type(qd.f32, (N, N))
     dst = tensor_type(qd.f32, (N, N))
 
+    Ann = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
@@ -73,8 +84,11 @@ def test_tile16_syr_sub(tensor_type):
     vec = tensor_type(qd.f32, (N,))
     out = tensor_type(qd.f32, (N, N))
 
+    Ann2 = _ann(tensor_type, qd.f32, 2)
+    Ann1 = _ann(tensor_type, qd.f32, 1)
+
     @qd.kernel
-    def run(mat_arr: qd.template(), vec_arr: qd.template(), out_arr: qd.template()):
+    def run(mat_arr: Ann2, vec_arr: Ann1, out_arr: Ann2):
         qd.loop_config(block_dim=N)
         for tid in range(N):
             t = Tile16(
@@ -115,12 +129,15 @@ def test_tile16_ger_sub(tensor_type):
     vec_b = tensor_type(qd.f32, (N,))
     out = tensor_type(qd.f32, (N, N))
 
+    Ann2 = _ann(tensor_type, qd.f32, 2)
+    Ann1 = _ann(tensor_type, qd.f32, 1)
+
     @qd.kernel
     def run(
-        mat_arr: qd.template(),
-        va_arr: qd.template(),
-        vb_arr: qd.template(),
-        out_arr: qd.template(),
+        mat_arr: Ann2,
+        va_arr: Ann1,
+        vb_arr: Ann1,
+        out_arr: Ann2,
     ):
         qd.loop_config(block_dim=N)
         for tid in range(N):
@@ -163,8 +180,10 @@ def test_tile16_potrf(tensor_type):
     dst = tensor_type(qd.f32, (N, N))
     eps_field = qd.field(dtype=qd.f32, shape=())
 
+    Ann = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16()
@@ -187,8 +206,10 @@ def test_tile16_trsm(tensor_type):
     b_field = tensor_type(qd.f32, (N, N))
     x_field = tensor_type(qd.f32, (N, N))
 
+    Ann = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def run(l_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
+    def run(l_arr: Ann, b_arr: Ann, x_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16()
@@ -217,8 +238,10 @@ def test_tile16_potrf_then_trsm(tensor_type):
     x_field = tensor_type(qd.f32, (N, N))
     eps_field = qd.field(dtype=qd.f32, shape=())
 
+    Ann = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def run(a_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
+    def run(a_arr: Ann, b_arr: Ann, x_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16()
@@ -253,8 +276,10 @@ def test_tile16_f64_load_store(tensor_type):
     src = tensor_type(qd.f64, (N, N))
     dst = tensor_type(qd.f64, (N, N))
 
+    Ann = _ann(tensor_type, qd.f64, 2)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16_f64()
@@ -274,8 +299,10 @@ def test_tile16_f64_potrf(tensor_type):
     dst = tensor_type(qd.f64, (N, N))
     eps_field = qd.field(dtype=qd.f64, shape=())
 
+    Ann = _ann(tensor_type, qd.f64, 2)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = Tile16_f64()
@@ -299,8 +326,10 @@ def test_tile16_f64_potrf_then_trsm(tensor_type):
     x_field = tensor_type(qd.f64, (N, N))
     eps_field = qd.field(dtype=qd.f64, shape=())
 
+    Ann = _ann(tensor_type, qd.f64, 2)
+
     @qd.kernel
-    def run(a_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
+    def run(a_arr: Ann, b_arr: Ann, x_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             L = Tile16_f64()
@@ -336,8 +365,10 @@ def test_tile16_load3d_store3d(tensor_type):
     src = tensor_type(qd.f32, (N_BATCH, N, N))
     dst = tensor_type(qd.f32, (N_BATCH, N, N))
 
+    Ann = _ann(tensor_type, qd.f32, 3)
+
     @qd.kernel
-    def run(src_arr: qd.template(), dst_arr: qd.template()):
+    def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             for i_b in range(N_BATCH):

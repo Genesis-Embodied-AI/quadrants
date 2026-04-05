@@ -157,7 +157,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
 | Operation | Description |
 |-----------|-------------|
-| `t[:] = arr[r0:r0+16, c0:c_end]` | Load from 2D array (row = r0 + tid) |
+| `t[:] = arr[r0:r0+16, c0:c_end]` | Load from 2D array |
 | `t[:] = arr[i, r0:r0+16, c0:c_end]` | Load from 3D array |
 | `arr[r0:r0+16, c0:c_end] = t` | Store to 2D array |
 | `arr[i, r0:r0+16, c0:c_end] = t` | Store to 3D array |
