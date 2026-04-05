@@ -53,6 +53,7 @@ if TYPE_CHECKING:
         def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
         def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
 
+
 _TILE = 16
 
 

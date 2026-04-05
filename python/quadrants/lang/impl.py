@@ -223,9 +223,13 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
         if len(_indices) == 1 and isinstance(_indices[0], slice) and _indices[0] == slice(None):
-            from quadrants.lang.struct import Struct
+            # pylint: disable-next=import-outside-toplevel,reimported,redefined-outer-name
+            from quadrants.lang.struct import Struct  # noqa: I001
+
             if isinstance(value, Struct):
-                from quadrants.lang.simt.tile16 import _TileRefProxy
+                # pylint: disable-next=import-outside-toplevel
+                from quadrants.lang.simt.tile16 import _TileRefProxy  # noqa: I001
+
                 return _TileRefProxy(value)
         if len(_indices) == 1:
             _indices = _indices[0]
@@ -255,7 +259,9 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             slice_indices = [i for i in indices if isinstance(i, slice)]
             non_slice_indices = [i for i in indices if not isinstance(i, slice)]
             if len(slice_indices) == 2:
-                from quadrants.lang.simt.tile16 import _TileSliceProxy
+                # pylint: disable-next=import-outside-toplevel
+                from quadrants.lang.simt.tile16 import _TileSliceProxy  # noqa: I001
+
                 row_slice, col_slice = slice_indices
                 if row_slice.start is None or col_slice.start is None:
                     raise QuadrantsSyntaxError("Tile16x16 slice: start index is required")
