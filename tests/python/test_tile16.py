@@ -2,17 +2,19 @@ import numpy as np
 import scipy.linalg
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import Tile16
+from quadrants.lang.simt.tile16 import Tile16, make_tile16
 
 from tests import test_utils
 
 N = 16
 
+Tile16_f64 = make_tile16(qd.f64)
 
-def _make_spd(seed=42):
+
+def _make_spd(seed=42, dtype=np.float32):
     rng = np.random.RandomState(seed)
     B = rng.randn(N, N).astype(np.float64)
-    return (B @ B.T + N * np.eye(N)).astype(np.float32)
+    return (B @ B.T + N * np.eye(N)).astype(dtype)
 
 
 # =============================================================================
@@ -305,3 +307,82 @@ def test_tile16_potrf_then_trsm():
     L_ref = np.linalg.cholesky(A.astype(np.float64))
     X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T.astype(np.float64), lower=True).T.astype(np.float32)
     np.testing.assert_allclose(X, X_ref, atol=1e-3)
+
+
+# =============================================================================
+# f64 precision tests — verify make_tile16(qd.f64) preserves double precision
+# =============================================================================
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_f64_load_store():
+    src = qd.field(dtype=qd.f64, shape=(N, N))
+    dst = qd.field(dtype=qd.f64, shape=(N, N))
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for tid in range(N):
+            t = Tile16_f64()
+            t.load(src, tid, 0, N)
+            t.store(dst, tid, 0, N)
+
+    data = np.arange(N * N, dtype=np.float64).reshape(N, N)
+    src.from_numpy(data)
+    run()
+    np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_f64_potrf():
+    src = qd.field(dtype=qd.f64, shape=(N, N))
+    dst = qd.field(dtype=qd.f64, shape=(N, N))
+    eps_field = qd.field(dtype=qd.f64, shape=())
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for tid in range(N):
+            t = Tile16_f64()
+            t.load(src, tid, 0, N)
+            t.potrf(tid, eps_field[None])
+            t.store(dst, tid, 0, N)
+
+    A = _make_spd(dtype=np.float64)
+    src.from_numpy(A)
+    eps_field[None] = 1e-30
+    run()
+    L_expected = np.linalg.cholesky(A)
+    np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-12)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_tile16_f64_potrf_then_trsm():
+    a_field = qd.field(dtype=qd.f64, shape=(N, N))
+    b_field = qd.field(dtype=qd.f64, shape=(N, N))
+    x_field = qd.field(dtype=qd.f64, shape=(N, N))
+    eps_field = qd.field(dtype=qd.f64, shape=())
+
+    @qd.kernel
+    def run():
+        qd.loop_config(block_dim=N)
+        for tid in range(N):
+            L = Tile16_f64()
+            L.load(a_field, tid, 0, N)
+            L.potrf(tid, eps_field[None])
+            B = Tile16_f64()
+            B.load(b_field, tid, 0, N)
+            B.trsm(L)
+            B.store(x_field, tid, 0, N)
+
+    A = _make_spd(seed=55, dtype=np.float64)
+    rng = np.random.RandomState(66)
+    Bnp = rng.randn(N, N).astype(np.float64)
+    a_field.from_numpy(A)
+    b_field.from_numpy(Bnp)
+    eps_field[None] = 1e-30
+    run()
+    X = x_field.to_numpy()
+    L_ref = np.linalg.cholesky(A)
+    X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T, lower=True).T
+    np.testing.assert_allclose(X, X_ref, atol=1e-12)
