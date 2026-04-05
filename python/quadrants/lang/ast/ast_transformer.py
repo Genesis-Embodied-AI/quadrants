@@ -85,10 +85,8 @@ class ASTTransformer(Builder):
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
             if isinstance(node.ptr, (float, int, Field)):
-                message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                if node.id.upper() == node.id:
-                    warnings.warn(message)
-                else:
+                if node.id.upper() != node.id:
+                    message = f"[PURE.VIOLATION] Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
                     raise exception.QuadrantsCompilationError(message)
         if isinstance(node.ptr, Generator):
             raise ValueError("Cannot store generators in variables, inside kernels or functions")
@@ -673,14 +671,12 @@ class ASTTransformer(Builder):
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
-                        # ignore this built-in module
+                        violation = False
+                    if violation and node.attr.upper() == node.attr:
                         violation = False
                     if violation:
-                        message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
-                        if node.attr.upper() == node.attr:
-                            warnings.warn(message)
-                        else:
-                            raise exception.QuadrantsCompilationError(message)
+                        message = f"[PURE.VIOLATION] Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
+                        raise exception.QuadrantsCompilationError(message)
         return node.ptr
 
     @staticmethod
