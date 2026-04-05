@@ -11,17 +11,23 @@ quadrants.lang.simt.tile16
    one row per thread, with each row stored in 16 scalar registers (r0-r15).
    Cross-thread communication uses warp shuffles — no shared memory needed.
 
+   The thread's lane index (tid) is obtained internally via subgroup.invocation_id(),
+   so callers never need to pass it. Load/store methods take a row offset (row0);
+   each thread accesses row = row0 + tid.
+
    Usage example::
 
-       Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-       t = Tile16()                              # zero-initialized tile
-       t.load(arr, row, col0, n_cols)            # load from 2D array
-       t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])
-       t.syr_sub(v)                              # symmetric rank-1 subtract
-       t.potrf(tid, eps)                         # Cholesky factorization
-       b.trsm(L)                                 # triangular solve using L
-       t.store(arr, row, col0, n_cols)           # store to 2D array
-       t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array
+       Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
+       t = Tile16x16()                              # zero-initialized tile
+       t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
+       t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
+       t.eye_()                                  # set to identity matrix (in-place)
+       t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T
+       t -= qd.outer(v, v)                       # symmetric rank-1 subtract
+       t.cholesky_(eps)                           # in-place Cholesky factorization
+       L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
+       arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)
+       arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
 
 
 
@@ -30,7 +36,7 @@ Attributes
 
 .. autoapisummary::
 
-   quadrants.lang.simt.tile16.Tile16
+   quadrants.lang.simt.tile16.Tile16x16
 
 
 Functions
@@ -38,16 +44,27 @@ Functions
 
 .. autoapisummary::
 
-   quadrants.lang.simt.tile16.make_tile16
+   quadrants.lang.simt.tile16.outer
+   quadrants.lang.simt.tile16.make_tile16x16
 
 
 Module Contents
 ---------------
 
-.. py:function:: make_tile16(dtype=qd.f32)
+.. py:function:: outer(a, b)
 
-   Create a Tile16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
+   Create a deferred outer product for use with Tile16x16 augmented assignment.
+
+   Usage::
+
+       t -= qd.outer(a, b)   # equivalent to t.ger_sub(a, b)
+       t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
 
 
-.. py:data:: Tile16
+.. py:function:: make_tile16x16(dtype=qd.f32)
+
+   Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
+
+
+.. py:data:: Tile16x16
 

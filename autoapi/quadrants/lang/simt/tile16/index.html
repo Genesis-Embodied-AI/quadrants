@@ -353,23 +353,28 @@
 <p>Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
 Cross-thread communication uses warp shuffles — no shared memory needed.</p>
+<p>The thread’s lane index (tid) is obtained internally via subgroup.invocation_id(),
+so callers never need to pass it. Load/store methods take a row offset (row0);
+each thread accesses row = row0 + tid.</p>
 <p>Usage example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Tile16</span> <span class="o">=</span> <span class="n">make_tile16</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>              <span class="c1"># create f32 tile class (or qd.f64 for double precision)</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>                              <span class="c1"># zero-initialized tile</span>
-<span class="n">t</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>            <span class="c1"># load from 2D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">load3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>      <span class="c1"># load from 3D array (arr[i0, row, ...])</span>
-<span class="n">t</span><span class="o">.</span><span class="n">syr_sub</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>                              <span class="c1"># symmetric rank-1 subtract</span>
-<span class="n">t</span><span class="o">.</span><span class="n">potrf</span><span class="p">(</span><span class="n">tid</span><span class="p">,</span> <span class="n">eps</span><span class="p">)</span>                         <span class="c1"># Cholesky factorization</span>
-<span class="n">b</span><span class="o">.</span><span class="n">trsm</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>                                 <span class="c1"># triangular solve using L</span>
-<span class="n">t</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>           <span class="c1"># store to 2D array</span>
-<span class="n">t</span><span class="o">.</span><span class="n">store3d</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>     <span class="c1"># store to 3D array</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Tile16x16</span> <span class="o">=</span> <span class="n">make_tile16x16</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>              <span class="c1"># create f32 tile class (or qd.f64 for double precision)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>                              <span class="c1"># zero-initialized tile</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">r0</span><span class="p">:</span><span class="n">r0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">c0</span><span class="p">:</span><span class="n">c0</span><span class="o">+</span><span class="n">n</span><span class="p">]</span>             <span class="c1"># load from 2D array (slice syntax)</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">r0</span><span class="p">:</span><span class="n">r0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">c0</span><span class="p">:</span><span class="n">c0</span><span class="o">+</span><span class="n">n</span><span class="p">]</span>        <span class="c1"># load from 3D array (slice syntax)</span>
+<span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>                                  <span class="c1"># set to identity matrix (in-place)</span>
+<span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>                       <span class="c1"># rank-1 subtract: t -= a @ b^T</span>
+<span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>                       <span class="c1"># symmetric rank-1 subtract</span>
+<span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>                           <span class="c1"># in-place Cholesky factorization</span>
+<span class="n">L</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>                     <span class="c1"># triangular solve: X @ L^T = B, result in B</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">r0</span><span class="p">:</span><span class="n">r0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">c0</span><span class="p">:</span><span class="n">c0</span><span class="o">+</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>               <span class="c1"># store to 2D array (slice syntax)</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">r0</span><span class="p">:</span><span class="n">r0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">c0</span><span class="p">:</span><span class="n">c0</span><span class="o">+</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>           <span class="c1"># store to 3D array (slice syntax)</span>
 </pre></div>
 </div>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.tile16.Tile16" title="quadrants.lang.simt.tile16.Tile16"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Tile16</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.tile16.Tile16x16" title="quadrants.lang.simt.tile16.Tile16x16"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Tile16x16</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -380,8 +385,11 @@ Cross-thread communication uses warp shuffles — no shared memory needed.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.tile16.make_tile16" title="quadrants.lang.simt.tile16.make_tile16"><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_tile16</span></code></a>([dtype])</p></td>
-<td><p>Create a Tile16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.tile16.outer" title="quadrants.lang.simt.tile16.outer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">outer</span></code></a>(a, b)</p></td>
+<td><p>Create a deferred outer product for use with Tile16x16 augmented assignment.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.tile16.make_tile16x16" title="quadrants.lang.simt.tile16.make_tile16x16"><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_tile16x16</span></code></a>([dtype])</p></td>
+<td><p>Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).</p></td>
 </tr>
 </tbody>
 </table>
@@ -390,14 +398,25 @@ Cross-thread communication uses warp shuffles — no shared memory needed.</p>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.tile16.make_tile16">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile16.</span></span><span class="sig-name descname"><span class="pre">make_tile16</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">qd.f32</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile16.html#make_tile16"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile16.make_tile16" title="Link to this definition">#</a></dt>
-<dd><p>Create a Tile16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).</p>
+<dt class="sig sig-object py" id="quadrants.lang.simt.tile16.outer">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile16.</span></span><span class="sig-name descname"><span class="pre">outer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile16.html#outer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile16.outer" title="Link to this definition">#</a></dt>
+<dd><p>Create a deferred outer product for use with Tile16x16 augmented assignment.</p>
+<p>Usage:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>   <span class="c1"># equivalent to t.ger_sub(a, b)</span>
+<span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>   <span class="c1"># equivalent to t.syr_sub(v)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.tile16.make_tile16x16">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile16.</span></span><span class="sig-name descname"><span class="pre">make_tile16x16</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">qd.f32</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile16.html#make_tile16x16"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile16.make_tile16x16" title="Link to this definition">#</a></dt>
+<dd><p>Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).</p>
 </dd></dl>
 
 <dl class="py data">
-<dt class="sig sig-object py" id="quadrants.lang.simt.tile16.Tile16">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile16.</span></span><span class="sig-name descname"><span class="pre">Tile16</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile16.html#Tile16"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile16.Tile16" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="quadrants.lang.simt.tile16.Tile16x16">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile16.</span></span><span class="sig-name descname"><span class="pre">Tile16x16</span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile16.html#Tile16x16"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile16.Tile16x16" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </section>
@@ -453,8 +472,9 @@ Cross-thread communication uses warp shuffles — no shared memory needed.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.tile16.make_tile16"><code class="docutils literal notranslate"><span class="pre">make_tile16()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.tile16.Tile16"><code class="docutils literal notranslate"><span class="pre">Tile16</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.tile16.outer"><code class="docutils literal notranslate"><span class="pre">outer()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.tile16.make_tile16x16"><code class="docutils literal notranslate"><span class="pre">make_tile16x16()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.tile16.Tile16x16"><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code></a></li>
 </ul>
 </li>
 </ul>
