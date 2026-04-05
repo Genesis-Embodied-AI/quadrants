@@ -62,21 +62,14 @@ Sets the tile to the 16x16 identity matrix in-place. Each thread sets its diagon
 
 ## Rank-1 updates
 
-### Symmetric rank-1 subtract (syr)
-
 ```python
-t.syr_sub(v)    # t -= v @ v^T
+t -= qd.outer(v, v)    # t -= v @ v^T  (symmetric)
+t -= qd.outer(a, b)    # t -= a @ b^T  (general)
 ```
 
-Each thread provides its element of the vector `v`. The outer product `v @ v^T` is computed via shuffles and subtracted from the tile in-place. Used for diagonal block updates in blocked Cholesky.
+Each thread provides its element(s) of the vector(s). The outer product is computed via warp shuffles and subtracted from the tile in-place. `qd.outer(a, b)` returns a deferred proxy — it is only valid as the RHS of `-=` on a Tile16. Composition like `qd.outer(a, b) + qd.outer(c, d)` raises `TypeError`.
 
-### General rank-1 subtract (ger)
-
-```python
-t.ger_sub(a, b)   # t -= a @ b^T
-```
-
-Like `syr_sub` but with two different vectors. Used for off-diagonal block updates.
+Used for diagonal block updates (symmetric case) and off-diagonal block updates (general case) in blocked Cholesky.
 
 ## Cholesky factorization (cholesky_)
 
@@ -123,7 +116,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
                 v = 0.0
                 if k0 + tid < n_dofs:
                     v = H[k0 + tid, j0 + t]
-                L_kk.syr_sub(v)
+                L_kk -= qd.outer(v, v)
 
         # Factorize diagonal block
         L_kk.cholesky_(eps)
@@ -145,7 +138,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
                         v_own = H[i0 + tid, j0 + t]
                     if k0 + tid < n_dofs:
                         v_diag = H[k0 + tid, j0 + t]
-                    L_ik.ger_sub(v_own, v_diag)
+                    L_ik -= qd.outer(v_own, v_diag)
 
             L_kk.solve_triangular_(L_ik)
 
@@ -165,8 +158,8 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 | `store` | `(arr, row0, col0, n_cols)` | Store to 2D array (row = row0 + tid) |
 | `store3d` | `(arr, i0, row0, col0, n_cols)` | Store to 3D array (row = row0 + tid) |
 | `eye_` | `()` | Set to 16x16 identity matrix (in-place) |
-| `syr_sub` | `(v)` | Symmetric rank-1 subtract |
-| `ger_sub` | `(a, b)` | General rank-1 subtract |
+| `t -= qd.outer(v, v)` | | Symmetric rank-1 subtract |
+| `t -= qd.outer(a, b)` | | General rank-1 subtract |
 | `cholesky_` | `(eps)` | In-place Cholesky factorization |
 | `solve_triangular_` | `(B, lower=True)` | Triangular solve (in-place on B) |
 

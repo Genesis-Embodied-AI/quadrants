@@ -203,7 +203,7 @@ def cholesky_tile16():
                 j0 = jb * TILE
                 for t in range(TILE):
                     v = L_tile16_field[env, k0 + tid, j0 + t]
-                    L_kk.syr_sub(v)
+                    L_kk -= qd.outer(v, v)
 
             L_kk.cholesky_(qd.f32(1e-12))
 
@@ -218,7 +218,7 @@ def cholesky_tile16():
                     for t in range(TILE):
                         v_own = L_tile16_field[env, i0 + tid, j0 + t]
                         v_diag = L_tile16_field[env, k0 + tid, j0 + t]
-                        L_ik.ger_sub(v_own, v_diag)
+                        L_ik -= qd.outer(v_own, v_diag)
 
                 L_kk.solve_triangular_(L_ik)
 

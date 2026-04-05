@@ -18,7 +18,8 @@ Usage example::
     t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)
     t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
     t.eye_()                                  # set to identity matrix (in-place)
-    t.syr_sub(v)                              # symmetric rank-1 subtract
+    t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T
+    t -= qd.outer(v, v)                       # symmetric rank-1 subtract
     t.cholesky_(eps)                           # in-place Cholesky factorization
     L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
     t.store(arr, row0, col0, n_cols)          # store to 2D array
@@ -28,6 +29,35 @@ Usage example::
 import quadrants as qd
 
 _TILE = 16
+
+
+class _OuterProduct:
+    """Deferred outer product proxy for use with augmented assignment on Tile16.
+
+    Created by qd.outer(a, b). Not a quadrants expression — only valid as the
+    RHS of ``tile -= qd.outer(a, b)``.
+    """
+
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+    def __add__(self, other):
+        raise TypeError("OuterProduct does not support composition; apply each update separately")
+
+    def __radd__(self, other):
+        raise TypeError("OuterProduct does not support composition; apply each update separately")
+
+
+def outer(a, b):
+    """Create a deferred outer product for use with Tile16 augmented assignment.
+
+    Usage::
+
+        t -= qd.outer(a, b)   # equivalent to t.ger_sub(a, b)
+        t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
+    """
+    return _OuterProduct(a, b)
 
 
 # =============================================================================
@@ -736,6 +766,15 @@ def _make_tile16_class(dtype):
                     self.r14 = new_val
                 if c == 15:
                     self.r15 = new_val
+
+        def _augassign(self, other, op):
+            if isinstance(other, _OuterProduct):
+                if op == "Sub":
+                    self.ger_sub(other.a, other.b)
+                else:
+                    raise TypeError(f"Tile16: unsupported augmented assignment op '{op}' with outer product")
+            else:
+                raise TypeError(f"Tile16: unsupported augmented assignment with {type(other)}")
 
         def solve_triangular_(self, B, lower=True):
             """Triangular solve: X @ self^T = B, storing result X in B in-place.

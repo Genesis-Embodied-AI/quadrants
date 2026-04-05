@@ -95,7 +95,7 @@ def test_tile16_syr_sub(tensor_type):
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
             )
-            t.syr_sub(vec_arr[tid])
+            t -= qd.outer(vec_arr[tid], vec_arr[tid])
             t.store(out_arr, 0, 0, N)
 
     rng = np.random.RandomState(123)
@@ -142,7 +142,7 @@ def test_tile16_ger_sub(tensor_type):
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
             )
-            t.ger_sub(va_arr[tid], vb_arr[tid])
+            t -= qd.outer(va_arr[tid], vb_arr[tid])
             t.store(out_arr, 0, 0, N)
 
     rng = np.random.RandomState(456)

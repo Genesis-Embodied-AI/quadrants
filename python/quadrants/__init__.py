@@ -33,6 +33,9 @@ from quadrants.types.primitive_types import *
 def __getattr__(attr):
     if attr == "cfg":
         return None if lang.impl.get_runtime()._prog is None else lang.impl.current_cfg()
+    if attr == "outer":
+        from quadrants.lang.simt.tile16 import outer
+        return outer
     raise AttributeError(f"module '{__name__}' has no attribute '{attr}'")
 
 
