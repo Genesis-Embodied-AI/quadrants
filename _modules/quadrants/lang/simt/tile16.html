@@ -331,7 +331,8 @@
 <span class="sd">Usage example::</span>
 
 <span class="sd">    Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)</span>
-<span class="sd">    t = Tile16x16()                              # zero-initialized tile</span>
+<span class="sd">    t = Tile16x16.zeros()                        # zero-initialized tile</span>
+<span class="sd">    t = Tile16x16.eye()                          # identity tile</span>
 <span class="sd">    t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)</span>
 <span class="sd">    t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)</span>
 <span class="sd">    t.eye_()                                  # set to identity matrix (in-place)</span>
@@ -356,6 +357,10 @@
         <span class="n">SIZE</span><span class="p">:</span> <span class="nb">int</span>
 
         <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">zeros</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Tile16x16Proto</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">eye</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Tile16x16Proto</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">eye_</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">cholesky_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">solve_triangular_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">B</span><span class="p">:</span> <span class="n">_Tile16x16Proto</span><span class="p">,</span> <span class="n">lower</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># noqa: E704</span>
@@ -476,7 +481,7 @@
     <span class="k">class</span><span class="w"> </span><span class="nc">_Tile16x16</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.</span>
 
-<span class="sd">        All fields default to 0.0 when omitted: ``Tile16x16()`` creates a zero tile.</span>
+<span class="sd">        All fields default to 0.0 when omitted: ``Tile16x16.zeros()`` creates a zero tile.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="n">r0</span><span class="p">:</span> <span class="n">dtype</span>
@@ -1182,11 +1187,20 @@
                 <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Tile16x16.solve_triangular_: only lower=True is supported&quot;</span><span class="p">)</span>
             <span class="n">B</span><span class="o">.</span><span class="n">trsm</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
-    <span class="c1"># StructType.__call__ already defaults missing args to 0, so Tile16x16()</span>
+    <span class="c1"># StructType.__call__ already defaults missing args to 0, so Tile16x16.zeros()</span>
     <span class="c1"># produces a zero-initialized tile without needing default values in the</span>
     <span class="c1"># class definition (which @qd.dataclass doesn&#39;t support).</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">_Tile16x16</span><span class="p">)</span>
     <span class="n">result</span><span class="o">.</span><span class="n">SIZE</span> <span class="o">=</span> <span class="n">_TILE</span>
+    <span class="n">result</span><span class="o">.</span><span class="n">zeros</span> <span class="o">=</span> <span class="n">result</span>
+
+    <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_eye</span><span class="p">():</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">result</span><span class="p">()</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">t</span>
+
+    <span class="n">result</span><span class="o">.</span><span class="n">eye</span> <span class="o">=</span> <span class="n">_eye</span>
     <span class="k">return</span> <span class="n">result</span>
 
 

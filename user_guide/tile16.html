@@ -382,7 +382,7 @@
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
     <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span>
     <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
     <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
@@ -391,8 +391,9 @@
 </section>
 <section id="creating-a-tile">
 <h2>Creating a tile<a class="headerlink" href="#creating-a-tile" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">Tile16x16()</span></code> creates a zero-initialized tile. You can also pass 16 initial values:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>                                    <span class="c1"># all zeros</span>
+<p><code class="docutils literal notranslate"><span class="pre">Tile16x16.zeros()</span></code> creates a zero-initialized tile. <code class="docutils literal notranslate"><span class="pre">Tile16x16.eye()</span></code> creates an identity tile. You can also pass 16 initial values:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>                              <span class="c1"># all zeros</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>                                <span class="c1"># 16x16 identity</span>
 <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">(</span><span class="n">a0</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">a15</span><span class="p">)</span>                <span class="c1"># explicit values</span>
 </pre></div>
 </div>
@@ -402,7 +403,7 @@
 <p>Load/store transfer data between a tile and device memory arrays using slice syntax. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
 <section id="d-arrays">
 <h3>2D arrays<a class="headerlink" href="#d-arrays" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
 <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
 <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
@@ -411,7 +412,7 @@
 <section id="id1">
 <h3>3D arrays<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <p>For arrays with a leading batch dimension (e.g. <code class="docutils literal notranslate"><span class="pre">H[batch,</span> <span class="pre">row,</span> <span class="pre">col]</span></code>):</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
 <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
 <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
@@ -423,10 +424,11 @@
 <section id="identity-initialization">
 <h2>Identity initialization<a class="headerlink" href="#identity-initialization" title="Link to this heading">#</a></h2>
 <p>For padding partial tiles in blocked algorithms:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>   <span class="c1"># create a new identity tile</span>
+<span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>               <span class="c1"># or reset an existing tile to identity in-place</span>
 </pre></div>
 </div>
-<p>Sets the tile to the 16x16 identity matrix in-place. Each thread sets its diagonal element to 1.0 and all others to 0.0.</p>
+<p>Each thread sets its diagonal element to 1.0 and all others to 0.0.</p>
 </section>
 <section id="rank-1-updates">
 <h2>Rank-1 updates<a class="headerlink" href="#rank-1-updates" title="Link to this heading">#</a></h2>
@@ -465,11 +467,11 @@
         <span class="n">k0</span> <span class="o">=</span> <span class="n">kb</span> <span class="o">*</span> <span class="n">TILE</span>
 
         <span class="c1"># Load diagonal block, pad with identity if out of bounds</span>
-        <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
+            <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
             <span class="n">L_kk</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
+            <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>
 
         <span class="c1"># Subtract contributions from previous blocks</span>
         <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
@@ -487,7 +489,7 @@
         <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N_BLOCKS</span><span class="p">):</span>
             <span class="n">i0</span> <span class="o">=</span> <span class="n">ib</span> <span class="o">*</span> <span class="n">TILE</span>
 
-            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
                 <span class="n">L_ik</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
 
@@ -521,6 +523,12 @@
 </tr>
 </thead>
 <tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Tile16x16.zeros()</span></code></p></td>
+<td><p>Create a zero-initialized tile</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Tile16x16.eye()</span></code></p></td>
+<td><p>Create an identity tile</p></td>
+</tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t[:]</span> <span class="pre">=</span> <span class="pre">arr[r0:r0+16,</span> <span class="pre">c0:c_end]</span></code></p></td>
 <td><p>Load from 2D array</p></td>
 </tr>
