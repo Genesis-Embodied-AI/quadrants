@@ -7,17 +7,22 @@ Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
 Cross-thread communication uses warp shuffles — no shared memory needed.
 
+The thread's lane index (tid) is obtained internally via subgroup.invocation_id(),
+so callers never need to pass it. Load/store methods take a row offset (row0);
+each thread accesses row = row0 + tid.
+
 Usage example::
 
     Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
     t = Tile16()                              # zero-initialized tile
-    t.load(arr, row, col0, n_cols)            # load from 2D array
-    t.load3d(arr, i0, row, col0, n_cols)      # load from 3D array (arr[i0, row, ...])
+    t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)
+    t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
+    t.set_identity()                          # set to identity matrix
     t.syr_sub(v)                              # symmetric rank-1 subtract
-    t.potrf(tid, eps)                         # Cholesky factorization
+    t.potrf(eps)                              # Cholesky factorization
     b.trsm(L)                                 # triangular solve using L
-    t.store(arr, row, col0, n_cols)           # store to 2D array
-    t.store3d(arr, i0, row, col0, n_cols)     # store to 3D array
+    t.store(arr, row0, col0, n_cols)          # store to 2D array
+    t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array
 """
 
 import quadrants as qd
@@ -66,8 +71,12 @@ def _make_tile16_class(dtype):
         r15: dtype
 
         @qd.func
-        def load(self, arr: qd.template(), row, col0, n_cols):
-            """Load one row from a 2D array with column bounds checking."""
+        def load(self, arr: qd.template(), row0, col0, n_cols):
+            """Load one row from a 2D array with column bounds checking.
+
+            Each thread loads arr[row0 + tid, col0:col0+16].
+            """
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 self.r0 = arr[row, col0 + 0]
             if col0 + 1 < n_cols:
@@ -102,8 +111,9 @@ def _make_tile16_class(dtype):
                 self.r15 = arr[row, col0 + 15]
 
         @qd.func
-        def load3d(self, arr: qd.template(), i0, row, col0, n_cols):
-            """Load one row from a 3D array: arr[i0, row, col0+c] with column bounds checking."""
+        def load3d(self, arr: qd.template(), i0, row0, col0, n_cols):
+            """Load one row from a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking."""
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 self.r0 = arr[i0, row, col0 + 0]
             if col0 + 1 < n_cols:
@@ -138,8 +148,12 @@ def _make_tile16_class(dtype):
                 self.r15 = arr[i0, row, col0 + 15]
 
         @qd.func
-        def store(self, arr: qd.template(), row, col0, n_cols):
-            """Store one row to a 2D array with column bounds checking."""
+        def store(self, arr: qd.template(), row0, col0, n_cols):
+            """Store one row to a 2D array with column bounds checking.
+
+            Each thread stores to arr[row0 + tid, col0:col0+16].
+            """
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 arr[row, col0 + 0] = self.r0
             if col0 + 1 < n_cols:
@@ -174,8 +188,9 @@ def _make_tile16_class(dtype):
                 arr[row, col0 + 15] = self.r15
 
         @qd.func
-        def store3d(self, arr: qd.template(), i0, row, col0, n_cols):
-            """Store one row to a 3D array: arr[i0, row, col0+c] with column bounds checking."""
+        def store3d(self, arr: qd.template(), i0, row0, col0, n_cols):
+            """Store one row to a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking."""
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 arr[i0, row, col0 + 0] = self.r0
             if col0 + 1 < n_cols:
@@ -210,12 +225,12 @@ def _make_tile16_class(dtype):
                 arr[i0, row, col0 + 15] = self.r15
 
         @qd.func
-        def set_identity(self, tid):
-            """Set this tile row to the identity matrix row for thread tid.
+        def set_identity(self):
+            """Set this tile to the 16x16 identity matrix.
 
-            Each thread sets its diagonal element to 1.0 and all others to 0.0,
-            producing a distributed 16x16 identity matrix across the subgroup.
+            Each thread sets its diagonal element to 1.0 and all others to 0.0.
             """
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
             self.r0 = 0.0
             self.r1 = 0.0
             self.r2 = 0.0
@@ -338,12 +353,13 @@ def _make_tile16_class(dtype):
             self.r15 -= a * bc
 
         @qd.func
-        def potrf(self, tid, eps):
+        def potrf(self, eps):
             """In-place 16x16 Cholesky factorization (POTRF) via subgroup shuffles.
 
             On return, the lower triangle holds L such that A = L @ L^T.
             Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
             """
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
             for k in range(_TILE):
                 diag_val = qd.cast(0.0, dtype)
                 if tid == k:
