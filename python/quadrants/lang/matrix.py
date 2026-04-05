@@ -1320,7 +1320,10 @@ class MatrixField(Field):
         Returns:
             numpy.ndarray: The result NumPy array.
         """
-        from quadrants.lang._interop import can_zerocopy, dlpack_to_torch  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
 
         if copy is not True and can_zerocopy(is_field=True, shape=self.shape):
             tc = dlpack_to_torch(self)
@@ -1366,7 +1369,10 @@ class MatrixField(Field):
         Returns:
             torch.Tensor: The result torch tensor.
         """
-        from quadrants.lang._interop import can_zerocopy, dlpack_to_torch  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
 
         if copy is not True and can_zerocopy(is_field=True, shape=self.shape):
             import torch  # pylint: disable=C0415

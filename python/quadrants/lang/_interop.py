@@ -25,7 +25,7 @@ def _torch_mps_supports_dlpack_bytes_offset() -> bool:
     Available since torch > 2.9.1 (see pytorch/pytorch#168193).
     """
     try:
-        import torch
+        import torch  # pylint: disable=C0415
 
         parts = torch.__version__.replace("+", ".").split(".")[:3]
         return tuple(map(int, parts)) > (2, 9, 1)
@@ -69,9 +69,9 @@ def dlpack_to_torch(obj):
     try:
         return obj._qd_dlpack_tc
     except AttributeError:
-        import torch
+        import torch  # pylint: disable=C0415
 
-        tc = torch.utils.dlpack.from_dlpack(obj.to_dlpack())
+        tc = torch.from_dlpack(obj.to_dlpack())
         obj._qd_dlpack_tc = tc
         if impl.current_cfg().arch == _ARCH_METAL:
             impl.get_runtime().sync()

@@ -262,7 +262,10 @@ class ScalarField(Field):
                 "You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the "
                 "snode will be converted to zeros in the resulting array."
             )
-        from quadrants.lang._interop import can_zerocopy, dlpack_to_torch  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
 
         if copy is not True and can_zerocopy(is_field=True, is_scalar_field=True, shape=self.shape):
             tc = dlpack_to_torch(self)
@@ -298,7 +301,10 @@ class ScalarField(Field):
             copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
                 ``False`` requires zero-copy or raises.
         """
-        from quadrants.lang._interop import can_zerocopy, dlpack_to_torch  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
 
         if copy is not True and can_zerocopy(is_field=True, is_scalar_field=True, shape=self.shape):
             import torch  # pylint: disable=C0415

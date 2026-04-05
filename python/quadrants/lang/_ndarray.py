@@ -84,7 +84,9 @@ class Ndarray:
         """
         Called by runtime, when we call qd.reset()
         """
-        from quadrants.lang._interop import invalidate_zerocopy_cache  # pylint: disable=C0415
+        from quadrants.lang._interop import (
+            invalidate_zerocopy_cache,  # pylint: disable=C0415
+        )
 
         invalidate_zerocopy_cache(self)
         self.arr = None
