@@ -267,7 +267,7 @@ class ScalarField(Field):
             dlpack_to_torch,
         )
 
-        if copy is not True and can_zerocopy(is_field=True, is_scalar_field=True, shape=self.shape):
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, is_scalar_field=True, shape=self.shape):
             tc = dlpack_to_torch(self)
             if tc.device.type == "cpu":
                 np_arr = tc.numpy()
@@ -306,7 +306,7 @@ class ScalarField(Field):
             dlpack_to_torch,
         )
 
-        if copy is not True and can_zerocopy(is_field=True, is_scalar_field=True, shape=self.shape):
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, is_scalar_field=True, shape=self.shape):
             import torch  # pylint: disable=C0415
 
             tc = dlpack_to_torch(self)

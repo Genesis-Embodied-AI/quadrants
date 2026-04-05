@@ -561,7 +561,10 @@ class StructField(Field):
         Returns:
             Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.
         """
-        return {k: v.to_numpy(copy=copy) for k, v in self._items}
+        # Struct children have interleaved SNode memory; DLPack cannot represent this, so always use kernel copy.
+        if copy is False:
+            raise ValueError("copy=False is not supported for StructField (interleaved memory layout)")
+        return {k: v.to_numpy(copy=True) for k, v in self._items}
 
     @python_scope
     def to_torch(self, device=None, *, copy=None):
@@ -577,7 +580,9 @@ class StructField(Field):
         Returns:
             Dict[str, Union[torch.Tensor, Dict]]: The result PyTorch tensor.
         """
-        return {k: v.to_torch(device=device, copy=copy) for k, v in self._items}
+        if copy is False:
+            raise ValueError("copy=False is not supported for StructField (interleaved memory layout)")
+        return {k: v.to_torch(device=device, copy=True) for k, v in self._items}
 
     @python_scope
     def __setitem__(self, indices, element):

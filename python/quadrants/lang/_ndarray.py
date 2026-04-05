@@ -16,6 +16,7 @@ from quadrants.lang.util import (
     get_traceback,
     python_scope,
     to_numpy_type,
+    to_pytorch_type,
 )
 from quadrants.types import primitive_types
 from quadrants.types.enums import Layout
@@ -69,23 +70,38 @@ class Ndarray:
     def to_torch(self, *, copy=None):
         """Converts this ndarray to a ``torch.Tensor`` via DLPack.
 
-        Uses zero-copy when possible (all backends except Vulkan).
+        Uses zero-copy when possible (all backends except Vulkan, and when the dtype is supported by DLPack).
 
         Args:
-            copy: ``None``/``False`` return a zero-copy view, ``True`` returns an
-                independent copy.
+            copy: ``None``/``False`` return a zero-copy view, ``True`` returns an independent copy.
         """
-        from quadrants.lang._interop import dlpack_to_torch  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            can_zerocopy,
+            dlpack_to_torch,
+        )
 
-        tc = dlpack_to_torch(self)
-        return tc.clone() if copy is True else tc
+        if copy is not True and can_zerocopy(is_field=False, dtype=self.dtype):
+            tc = dlpack_to_torch(self)
+            return tc.clone() if copy is True else tc
+
+        if copy is False:
+            raise ValueError("Zero-copy not available for this backend/dtype combination")
+
+        import torch  # pylint: disable=C0415
+
+        arr = torch.zeros(size=self.arr.total_shape(), dtype=to_pytorch_type(self.dtype))
+        from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
+
+        ndarray_to_ext_arr(self, arr)
+        impl.get_runtime().sync()
+        return arr
 
     def _reset(self):
         """
         Called by runtime, when we call qd.reset()
         """
-        from quadrants.lang._interop import (
-            invalidate_zerocopy_cache,  # pylint: disable=C0415
+        from quadrants.lang._interop import (  # pylint: disable=C0415
+            invalidate_zerocopy_cache,
         )
 
         invalidate_zerocopy_cache(self)

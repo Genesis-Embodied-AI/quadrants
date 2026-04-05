@@ -1325,7 +1325,7 @@ class MatrixField(Field):
             dlpack_to_torch,
         )
 
-        if copy is not True and can_zerocopy(is_field=True, shape=self.shape):
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, shape=self.shape):
             tc = dlpack_to_torch(self)
             if tc.device.type == "cpu":
                 as_vector = self.m == 1 and not keep_dims
@@ -1374,7 +1374,7 @@ class MatrixField(Field):
             dlpack_to_torch,
         )
 
-        if copy is not True and can_zerocopy(is_field=True, shape=self.shape):
+        if copy is not True and can_zerocopy(is_field=True, dtype=self.dtype, shape=self.shape):
             import torch  # pylint: disable=C0415
 
             tc = dlpack_to_torch(self)
