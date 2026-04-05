@@ -66,7 +66,7 @@ def _make_tile16_class(dtype):
         r15: dtype
 
         @qd.func
-        def load(self, arr, row, col0, n_cols):
+        def load(self, arr: qd.template(), row, col0, n_cols):
             """Load one row from a 2D array with column bounds checking."""
             if col0 + 0 < n_cols:
                 self.r0 = arr[row, col0 + 0]
@@ -102,7 +102,7 @@ def _make_tile16_class(dtype):
                 self.r15 = arr[row, col0 + 15]
 
         @qd.func
-        def load3d(self, arr, i0, row, col0, n_cols):
+        def load3d(self, arr: qd.template(), i0, row, col0, n_cols):
             """Load one row from a 3D array: arr[i0, row, col0+c] with column bounds checking."""
             if col0 + 0 < n_cols:
                 self.r0 = arr[i0, row, col0 + 0]
@@ -138,7 +138,7 @@ def _make_tile16_class(dtype):
                 self.r15 = arr[i0, row, col0 + 15]
 
         @qd.func
-        def store(self, arr, row, col0, n_cols):
+        def store(self, arr: qd.template(), row, col0, n_cols):
             """Store one row to a 2D array with column bounds checking."""
             if col0 + 0 < n_cols:
                 arr[row, col0 + 0] = self.r0
@@ -174,7 +174,7 @@ def _make_tile16_class(dtype):
                 arr[row, col0 + 15] = self.r15
 
         @qd.func
-        def store3d(self, arr, i0, row, col0, n_cols):
+        def store3d(self, arr: qd.template(), i0, row, col0, n_cols):
             """Store one row to a 3D array: arr[i0, row, col0+c] with column bounds checking."""
             if col0 + 0 < n_cols:
                 arr[i0, row, col0 + 0] = self.r0
