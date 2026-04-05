@@ -454,10 +454,9 @@
 <div class="viewcode-block" id="Field.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts ``self`` to a numpy array.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a numpy array.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            dtype: Target numpy dtype.  When *None* the native dtype is used.</span>
 <span class="sd">            copy: Controls copying behaviour:</span>
 
 <span class="sd">                - ``None`` (default) -- zero-copy when possible, copy otherwise.</span>
@@ -474,7 +473,7 @@
 <div class="viewcode-block" id="Field.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts ``self`` to a torch tensor.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts `self` to a torch tensor.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
@@ -485,7 +484,7 @@
 <span class="sd">                - ``False`` -- require zero-copy; raises if not possible.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            torch.Tensor: The result torch tensor.</span>
+<span class="sd">            torch.tensor: The result torch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div>
 
@@ -622,21 +621,21 @@
 <div class="viewcode-block" id="ScalarField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``numpy.ndarray``.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `numpy.ndarray`.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            dtype: Target numpy dtype.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">()</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">SNodeType</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
             <span class="n">warn</span><span class="p">(</span>
-                <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the &quot;</span>
-                <span class="s2">&quot;snode will be converted to zeros in the resulting array.&quot;</span>
+                <span class="s2">&quot;You are trying to convert a dynamic snode to a numpy array, be aware that inactive items in the snode will be converted to zeros in the resulting array.&quot;</span>
             <span class="p">)</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">can_zerocopy</span><span class="p">,</span> <span class="n">dlpack_to_torch</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="n">can_zerocopy</span><span class="p">,</span>
+            <span class="n">dlpack_to_torch</span><span class="p">,</span>
+        <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
                 <span class="n">np_arr</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
@@ -658,6 +657,7 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
+        <span class="c1"># TODO: can we remove .runtime_ops here?</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 
@@ -666,16 +666,17 @@
 <div class="viewcode-block" id="ScalarField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a ``torch.Tensor``.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this field to a `torch.tensor`.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            device: Target device.  When *None* the tensor lives on the field&#39;s native device.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">can_zerocopy</span><span class="p">,</span> <span class="n">dlpack_to_torch</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="n">can_zerocopy</span><span class="p">,</span>
+            <span class="n">dlpack_to_torch</span><span class="p">,</span>
+        <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">is_scalar_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
@@ -692,10 +693,12 @@
 
         <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
+        <span class="c1"># pylint: disable=E1101</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">to_pytorch_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">tensor_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="n">tensor_to_ext_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">)</span>
+        <span class="c1"># TODO: can we remove .runtime_ops here?</span>
         <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">runtime_ops</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
         <span class="k">return</span> <span class="n">arr</span></div>
 

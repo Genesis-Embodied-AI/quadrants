@@ -631,8 +631,7 @@ between corresponding items can be performed.</p>
 <p>The dictionary may be nested when converting nested structs.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy,
-<code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The result NumPy array.</p>
@@ -651,13 +650,17 @@ between corresponding items can be performed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy,
-<code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The
+desired device of returned tensor.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The result PyTorch tensor.</p>
+<dd class="field-even"><p><dl class="simple">
+<dt>The result</dt><dd><p>PyTorch tensor.</p>
+</dd>
+</dl>
+</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>Dict[str, Union[torch.Tensor, Dict]]</p>

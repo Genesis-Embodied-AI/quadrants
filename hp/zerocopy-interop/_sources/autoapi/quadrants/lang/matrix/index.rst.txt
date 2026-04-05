@@ -708,16 +708,13 @@ Module Contents
       Converts the field instance to a NumPy array.
 
       :param keep_dims: Whether to keep the dimension after conversion.
-                        When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims,
-                        even for 1x1, 1xn, nx1 matrix fields.
-                        When keep_dims=False, the resulting numpy array should skip the matrix dims with
-                        size 1.  For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in
-                        an array of shape 5x6x7x4.
+                        When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
+                        When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
+                        For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
@@ -731,14 +728,12 @@ Module Contents
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
       :param keep_dims: Whether to keep the dimension after conversion.
-                        See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed
-                        explanation.
+                        See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
       :type keep_dims: bool, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
       :returns: The result torch tensor.
-      :rtype: torch.Tensor
+      :rtype: torch.tensor
 
 
 
@@ -809,7 +804,7 @@ Module Contents
 
    .. py:method:: to_numpy(*, copy=None)
 
-      Converts this ndarray to a ``numpy.ndarray``.
+      Converts this ndarray to a `numpy.ndarray`.
 
       Example::
 
@@ -825,7 +820,7 @@ Module Contents
 
    .. py:method:: from_numpy(arr)
 
-      Copies the data of a ``numpy.ndarray`` into this array.
+      Copies the data of a `numpy.ndarray` into this array.
 
       Example::
 
@@ -885,7 +880,7 @@ Module Contents
 
    .. py:method:: to_numpy(*, copy=None)
 
-      Converts this vector ndarray to a ``numpy.ndarray``.
+      Converts this vector ndarray to a `numpy.ndarray`.
 
       Example::
 
@@ -901,9 +896,9 @@ Module Contents
 
    .. py:method:: from_numpy(arr)
 
-      Copies the data from a ``numpy.ndarray`` into this ndarray.
+      Copies the data from a `numpy.ndarray` into this ndarray.
 
-      The shape and data type of ``arr`` must match this ndarray.
+      The shape and data type of `arr` must match this ndarray.
 
       Example::
 

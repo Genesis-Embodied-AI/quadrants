@@ -930,13 +930,15 @@
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="c1"># Struct children have interleaved SNode memory; DLPack cannot represent this, so always use kernel copy.</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is not supported for StructField (interleaved memory layout)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>
@@ -948,14 +950,17 @@
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">            device (torch.device, optional): The</span>
+<span class="sd">                desired device of returned tensor.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            Dict[str, Union[torch.Tensor, Dict]]: The result PyTorch tensor.</span>
+<span class="sd">            Dict[str, Union[torch.Tensor, Dict]]: The result</span>
+<span class="sd">                PyTorch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;copy=False is not supported for StructField (interleaved memory layout)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
     <span class="nd">@python_scope</span>

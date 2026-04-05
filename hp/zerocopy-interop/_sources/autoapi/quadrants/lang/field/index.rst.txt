@@ -80,9 +80,8 @@ Module Contents
       :abstractmethod:
 
 
-      Converts ``self`` to a numpy array.
+      Converts `self` to a numpy array.
 
-      :param dtype: Target numpy dtype.  When *None* the native dtype is used.
       :param copy: Controls copying behaviour:
 
                    - ``None`` (default) -- zero-copy when possible, copy otherwise.
@@ -98,7 +97,7 @@ Module Contents
       :abstractmethod:
 
 
-      Converts ``self`` to a torch tensor.
+      Converts `self` to a torch tensor.
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
@@ -109,7 +108,7 @@ Module Contents
                    - ``False`` -- require zero-copy; raises if not possible.
 
       :returns: The result torch tensor.
-      :rtype: torch.Tensor
+      :rtype: torch.tensor
 
 
 
@@ -171,21 +170,17 @@ Module Contents
 
    .. py:method:: to_numpy(dtype=None, *, copy=None)
 
-      Converts this field to a ``numpy.ndarray``.
+      Converts this field to a `numpy.ndarray`.
 
-      :param dtype: Target numpy dtype.
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
 
 
    .. py:method:: to_torch(device=None, *, copy=None)
 
-      Converts this field to a ``torch.Tensor``.
+      Converts this field to a `torch.tensor`.
 
-      :param device: Target device.  When *None* the tensor lives on the field's native device.
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
 
 

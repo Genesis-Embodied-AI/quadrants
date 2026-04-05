@@ -1154,14 +1154,11 @@ should have consistent dimension consistent with <cite>self</cite>.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion.
-When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims,
-even for 1x1, 1xn, nx1 matrix fields.
-When keep_dims=False, the resulting numpy array should skip the matrix dims with
-size 1.  For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in
-an array of shape 5x6x7x4.</p></li>
+When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.
+When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.
+For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em><em>, </em><em>optional</em>) – The desired data type of returned numpy array.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy,
-<code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1182,17 +1179,15 @@ an array of shape 5x6x7x4.</p></li>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p></li>
 <li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion.
-See <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code> for more detailed
-explanation.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy,
-<code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+See <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code> for more detailed explanation.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The result torch tensor.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
+<dd class="field-odd"><p>torch.tensor</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1280,7 +1275,7 @@ explanation.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.to_numpy">
 <span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.to_numpy" title="Link to this definition">#</a></dt>
-<dd><p>Converts this ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
+<dd><p>Converts this ndarray to a <cite>numpy.ndarray</cite>.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">arr</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">MatrixNdarray</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">arr</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
@@ -1296,7 +1291,7 @@ explanation.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.from_numpy">
 <span class="sig-name descname"><span class="pre">from_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.from_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.from_numpy" title="Link to this definition">#</a></dt>
-<dd><p>Copies the data of a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code> into this array.</p>
+<dd><p>Copies the data of a <cite>numpy.ndarray</cite> into this array.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">MatrixNdarray</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">layout</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
@@ -1370,7 +1365,7 @@ explanation.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.to_numpy">
 <span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.to_numpy" title="Link to this definition">#</a></dt>
-<dd><p>Converts this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
+<dd><p>Converts this vector ndarray to a <cite>numpy.ndarray</cite>.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">VectorNdarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
@@ -1386,8 +1381,8 @@ explanation.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.from_numpy">
 <span class="sig-name descname"><span class="pre">from_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.from_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.from_numpy" title="Link to this definition">#</a></dt>
-<dd><p>Copies the data from a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code> into this ndarray.</p>
-<p>The shape and data type of <code class="docutils literal notranslate"><span class="pre">arr</span></code> must match this ndarray.</p>
+<dd><p>Copies the data from a <cite>numpy.ndarray</cite> into this ndarray.</p>
+<p>The shape and data type of <cite>arr</cite> must match this ndarray.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">VectorNdarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>

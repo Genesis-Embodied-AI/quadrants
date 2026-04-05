@@ -1755,21 +1755,21 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">            keep_dims (bool, optional): Whether to keep the dimension after conversion.</span>
-<span class="sd">                When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims,</span>
-<span class="sd">                even for 1x1, 1xn, nx1 matrix fields.</span>
-<span class="sd">                When keep_dims=False, the resulting numpy array should skip the matrix dims with</span>
-<span class="sd">                size 1.  For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in</span>
-<span class="sd">                an array of shape 5x6x7x4.</span>
+<span class="sd">                When keep_dims=True, on an n-D matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix fields.</span>
+<span class="sd">                When keep_dims=False, the resulting numpy array should skip the matrix dims with size 1.</span>
+<span class="sd">                For example, a 4x1 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</span>
 <span class="sd">            dtype (DataType, optional): The desired data type of returned numpy array.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result NumPy array.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">can_zerocopy</span><span class="p">,</span> <span class="n">dlpack_to_torch</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="n">can_zerocopy</span><span class="p">,</span>
+            <span class="n">dlpack_to_torch</span><span class="p">,</span>
+        <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">tc</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
                 <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_dims</span>
@@ -1808,17 +1808,18 @@
 <span class="sd">        Args:</span>
 <span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
 <span class="sd">            keep_dims (bool, optional): Whether to keep the dimension after conversion.</span>
-<span class="sd">                See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed</span>
-<span class="sd">                explanation.</span>
-<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,</span>
-<span class="sd">                ``False`` requires zero-copy or raises.</span>
+<span class="sd">                See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.</span>
+<span class="sd">            copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            torch.Tensor: The result torch tensor.</span>
+<span class="sd">            torch.tensor: The result torch tensor.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">can_zerocopy</span><span class="p">,</span> <span class="n">dlpack_to_torch</span>  <span class="c1"># pylint: disable=C0415</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._interop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
+            <span class="n">can_zerocopy</span><span class="p">,</span>
+            <span class="n">dlpack_to_torch</span><span class="p">,</span>
+        <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">can_zerocopy</span><span class="p">(</span><span class="n">is_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">tc</span> <span class="o">=</span> <span class="n">dlpack_to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
@@ -1842,6 +1843,7 @@
 
         <span class="n">as_vector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_dims</span>
         <span class="n">shape_ext</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,)</span> <span class="k">if</span> <span class="n">as_vector</span> <span class="k">else</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
+        <span class="c1"># pylint: disable=E1101</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="n">shape_ext</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">to_pytorch_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_to_ext_arr</span>  <span class="c1"># pylint: disable=C0415</span>
 
@@ -2250,7 +2252,7 @@
 <div class="viewcode-block" id="MatrixNdarray.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this ndarray to a ``numpy.ndarray``.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this ndarray to a `numpy.ndarray`.</span>
 
 <span class="sd">        Example::</span>
 
@@ -2269,7 +2271,7 @@
 <div class="viewcode-block" id="MatrixNdarray.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data of a ``numpy.ndarray`` into this array.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data of a `numpy.ndarray` into this array.</span>
 
 <span class="sd">        Example::</span>
 
@@ -2391,7 +2393,7 @@
 <div class="viewcode-block" id="VectorNdarray.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this vector ndarray to a ``numpy.ndarray``.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this vector ndarray to a `numpy.ndarray`.</span>
 
 <span class="sd">        Example::</span>
 
@@ -2410,9 +2412,9 @@
 <div class="viewcode-block" id="VectorNdarray.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a ``numpy.ndarray`` into this ndarray.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a `numpy.ndarray` into this ndarray.</span>
 
-<span class="sd">        The shape and data type of ``arr`` must match this ndarray.</span>
+<span class="sd">        The shape and data type of `arr` must match this ndarray.</span>
 
 <span class="sd">        Example::</span>
 

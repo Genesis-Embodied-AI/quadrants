@@ -254,8 +254,7 @@ Module Contents
 
       The dictionary may be nested when converting nested structs.
 
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
       :returns: The result NumPy array.
       :rtype: Dict[str, Union[numpy.ndarray, Dict]]
@@ -268,12 +267,15 @@ Module Contents
 
       The dictionary may be nested when converting nested structs.
 
-      :param device: The desired device of returned tensor.
+      :param device: The
+                     desired device of returned tensor.
       :type device: torch.device, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy,
-                   ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
 
-      :returns: The result PyTorch tensor.
+      :returns:
+
+                The result
+                    PyTorch tensor.
       :rtype: Dict[str, Union[torch.Tensor, Dict]]
 
 
