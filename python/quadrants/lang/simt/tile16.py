@@ -15,6 +15,7 @@ Usage example::
 
     Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
     t = Tile16x16.zeros()                        # zero-initialized tile
+    t = Tile16x16.eye()                          # identity tile
     t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
     t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
@@ -41,6 +42,8 @@ if _TYPE_CHECKING:
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
         @classmethod
         def zeros(cls) -> _Tile16x16Proto: ...  # noqa: E704
+        @classmethod
+        def eye(cls) -> _Tile16x16Proto: ...  # noqa: E704
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
@@ -867,6 +870,14 @@ def _make_tile16x16_class(dtype):
     result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE
     result.zeros = result
+
+    @qd.func
+    def _eye():
+        t = result()
+        t.eye_()
+        return t
+
+    result.eye = _eye
     return result
 
 
