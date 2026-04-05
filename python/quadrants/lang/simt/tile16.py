@@ -19,7 +19,7 @@ Usage example::
     t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
     t.eye_()                                  # set to identity matrix (in-place)
     t.syr_sub(v)                              # symmetric rank-1 subtract
-    t.potrf(eps)                              # Cholesky factorization
+    t.cholesky_(eps)                           # in-place Cholesky factorization
     b.trsm(L)                                 # triangular solve using L
     t.store(arr, row0, col0, n_cols)          # store to 2D array
     t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array
@@ -353,8 +353,8 @@ def _make_tile16_class(dtype):
             self.r15 -= a * bc
 
         @qd.func
-        def potrf(self, eps):
-            """In-place 16x16 Cholesky factorization (POTRF) via subgroup shuffles.
+        def cholesky_(self, eps):
+            """In-place 16x16 Cholesky factorization via subgroup shuffles.
 
             On return, the lower triangle holds L such that A = L @ L^T.
             Diagonal clamped to sqrt(max(value, eps)) for numerical stability.

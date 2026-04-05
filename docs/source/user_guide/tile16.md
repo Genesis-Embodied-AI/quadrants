@@ -15,7 +15,7 @@ from quadrants.lang.simt.tile16 import Tile16
 def my_blocked_op(A, row0, col0, n_cols, eps):
     t = Tile16()
     t.load(A, row0, col0, n_cols)
-    t.potrf(eps)
+    t.cholesky_(eps)
     t.store(A, row0, col0, n_cols)
 ```
 
@@ -78,10 +78,10 @@ t.ger_sub(a, b)   # t -= a @ b^T
 
 Like `syr_sub` but with two different vectors. Used for off-diagonal block updates.
 
-## Cholesky factorization (potrf)
+## Cholesky factorization (cholesky_)
 
 ```python
-t.potrf(eps)
+t.cholesky_(eps)
 ```
 
 Factorizes the tile in-place: replaces the lower triangle with `L` such that `L @ L^T ≈ A`. The `eps` parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of `t` contains `L`.
@@ -126,7 +126,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
                 L_kk.syr_sub(v)
 
         # Factorize diagonal block
-        L_kk.potrf(eps)
+        L_kk.cholesky_(eps)
 
         # Process off-diagonal blocks
         for ib in range(kb + 1, N_BLOCKS):
@@ -167,7 +167,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 | `eye_` | `()` | Set to 16x16 identity matrix (in-place) |
 | `syr_sub` | `(v)` | Symmetric rank-1 subtract |
 | `ger_sub` | `(a, b)` | General rank-1 subtract |
-| `potrf` | `(eps)` | Cholesky factorization |
+| `cholesky_` | `(eps)` | In-place Cholesky factorization |
 | `trsm` | `(L)` | Triangular solve |
 
 ## Experiment: 64x64 blocked Cholesky (dex_hand dimensions)

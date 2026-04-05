@@ -205,7 +205,7 @@ def cholesky_tile16():
                     v = L_tile16_field[env, k0 + tid, j0 + t]
                     L_kk.syr_sub(v)
 
-            L_kk.potrf(qd.f32(1e-12))
+            L_kk.cholesky_(qd.f32(1e-12))
 
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * TILE

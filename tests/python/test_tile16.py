@@ -169,7 +169,7 @@ def test_tile16_potrf(tensor_type):
         for _ in range(N):
             t = Tile16()
             t.load(src_arr, 0, 0, N)
-            t.potrf(eps_field[None])
+            t.cholesky_(eps_field[None])
             t.store(dst_arr, 0, 0, N)
 
     A = _make_spd()
@@ -223,7 +223,7 @@ def test_tile16_potrf_then_trsm(tensor_type):
         for _ in range(N):
             L = Tile16()
             L.load(a_arr, 0, 0, N)
-            L.potrf(eps_field[None])
+            L.cholesky_(eps_field[None])
             B = Tile16()
             B.load(b_arr, 0, 0, N)
             B.trsm(L)
@@ -280,7 +280,7 @@ def test_tile16_f64_potrf(tensor_type):
         for _ in range(N):
             t = Tile16_f64()
             t.load(src_arr, 0, 0, N)
-            t.potrf(eps_field[None])
+            t.cholesky_(eps_field[None])
             t.store(dst_arr, 0, 0, N)
 
     A = _make_spd(dtype=np.float64)
@@ -305,7 +305,7 @@ def test_tile16_f64_potrf_then_trsm(tensor_type):
         for _ in range(N):
             L = Tile16_f64()
             L.load(a_arr, 0, 0, N)
-            L.potrf(eps_field[None])
+            L.cholesky_(eps_field[None])
             B = Tile16_f64()
             B.load(b_arr, 0, 0, N)
             B.trsm(L)
