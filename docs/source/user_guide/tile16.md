@@ -13,7 +13,7 @@ from quadrants.lang.simt.tile16 import Tile16x16
 
 @qd.func
 def my_blocked_op(A, row0, col0, n_cols, eps):
-    t = Tile16x16()
+    t = Tile16x16.zeros()
     t[:] = A[row0:row0+16, col0:n_cols]
     t.cholesky_(eps)
     A[row0:row0+16, col0:n_cols] = t
@@ -21,10 +21,10 @@ def my_blocked_op(A, row0, col0, n_cols, eps):
 
 ## Creating a tile
 
-`Tile16x16()` creates a zero-initialized tile. You can also pass 16 initial values:
+`Tile16x16.zeros()` creates a zero-initialized tile. You can also pass 16 initial values:
 
 ```python
-t = Tile16x16()                                    # all zeros
+t = Tile16x16.zeros()                                    # all zeros
 t = Tile16x16(a0, a1, a2, ..., a15)                # explicit values
 ```
 
@@ -35,7 +35,7 @@ Load/store transfer data between a tile and device memory arrays using slice syn
 ### 2D arrays
 
 ```python
-t = Tile16x16()
+t = Tile16x16.zeros()
 t[:] = arr[row0:row0+16, col0:col_end]    # load
 arr[row0:row0+16, col0:col_end] = t       # store
 ```
@@ -45,7 +45,7 @@ arr[row0:row0+16, col0:col_end] = t       # store
 For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
 
 ```python
-t = Tile16x16()
+t = Tile16x16.zeros()
 t[:] = arr[i0, row0:row0+16, col0:col_end]    # load
 arr[i0, row0:row0+16, col0:col_end] = t       # store
 ```
@@ -107,7 +107,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         k0 = kb * TILE
 
         # Load diagonal block, pad with identity if out of bounds
-        L_kk = Tile16x16()
+        L_kk = Tile16x16.zeros()
         if k0 + tid < n_dofs:
             L_kk[:] = H[k0:k0+16, k0:n_dofs]
         else:
@@ -129,7 +129,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         for ib in range(kb + 1, N_BLOCKS):
             i0 = ib * TILE
 
-            L_ik = Tile16x16()
+            L_ik = Tile16x16.zeros()
             if i0 + tid < n_dofs:
                 L_ik[:] = H[i0:i0+16, k0:n_dofs]
 

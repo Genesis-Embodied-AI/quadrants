@@ -14,7 +14,7 @@ each thread accesses row = row0 + tid.
 Usage example::
 
     Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-    t = Tile16x16()                              # zero-initialized tile
+    t = Tile16x16.zeros()                        # zero-initialized tile
     t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
     t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
@@ -39,6 +39,8 @@ if _TYPE_CHECKING:
         SIZE: int
 
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
+        @classmethod
+        def zeros(cls) -> _Tile16x16Proto: ...  # noqa: E704
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
@@ -153,7 +155,7 @@ def _make_tile16x16_class(dtype):
     class _Tile16x16:
         """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.
 
-        All fields default to 0.0 when omitted: ``Tile16x16()`` creates a zero tile.
+        All fields default to 0.0 when omitted: ``Tile16x16.zeros()`` creates a zero tile.
         """
 
         r0: dtype
@@ -859,11 +861,12 @@ def _make_tile16x16_class(dtype):
                 raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
             B.trsm(self)
 
-    # StructType.__call__ already defaults missing args to 0, so Tile16x16()
+    # StructType.__call__ already defaults missing args to 0, so Tile16x16.zeros()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE
+    result.zeros = result
     return result
 
 
