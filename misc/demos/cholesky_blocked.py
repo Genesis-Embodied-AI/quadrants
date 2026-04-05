@@ -197,7 +197,7 @@ def cholesky_tile16():
             k0 = kb * TILE
 
             L_kk = Tile16()
-            L_kk.load3d(A_field, env, k0, k0, N)
+            L_kk = A_field[env, k0:k0+TILE, k0:N]
 
             for jb in range(kb):
                 j0 = jb * TILE
@@ -211,7 +211,7 @@ def cholesky_tile16():
                 i0 = ib * TILE
 
                 L_ik = Tile16()
-                L_ik.load3d(A_field, env, i0, k0, N)
+                L_ik = A_field[env, i0:i0+TILE, k0:N]
 
                 for jb in range(kb):
                     j0 = jb * TILE
@@ -222,9 +222,9 @@ def cholesky_tile16():
 
                 L_kk.solve_triangular_(L_ik)
 
-                L_ik.store3d(L_tile16_field, env, i0, k0, N)
+                L_tile16_field[env, i0:i0+TILE, k0:N] = L_ik
 
-            L_kk.store3d(L_tile16_field, env, k0, k0, N)
+            L_tile16_field[env, k0:k0+TILE, k0:N] = L_kk
 
 
 # ---------------------------------------------------------------------------

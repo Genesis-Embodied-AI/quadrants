@@ -119,6 +119,8 @@ def expr_init(rhs):
         return rhs
     if hasattr(rhs, "_data_oriented"):
         return rhs
+    if hasattr(rhs, "_is_deferred"):
+        return rhs
     return Expr(
         compiling_callable.ast_builder().expr_var(
             Expr(rhs).ptr, _qd_core.DebugInfo(get_runtime().get_current_src_info())
@@ -244,6 +246,18 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
+        if isinstance(value, (Field, AnyArray)):
+            slice_indices = [i for i in indices if isinstance(i, slice)]
+            non_slice_indices = [i for i in indices if not isinstance(i, slice)]
+            if len(slice_indices) == 2:
+                from quadrants.lang.simt.tile16 import _TileSliceProxy
+                row_slice, col_slice = slice_indices
+                if row_slice.start is None or col_slice.start is None:
+                    raise QuadrantsSyntaxError("Tile16 slice: start index is required")
+                if col_slice.stop is None:
+                    raise QuadrantsSyntaxError("Tile16 slice: column stop index is required")
+                batch_idx = non_slice_indices[0] if non_slice_indices else None
+                return _TileSliceProxy(value, row_slice.start, col_slice.start, col_slice.stop, batch_idx)
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:

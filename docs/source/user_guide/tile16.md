@@ -14,9 +14,9 @@ from quadrants.lang.simt.tile16 import Tile16
 @qd.func
 def my_blocked_op(A, row0, col0, n_cols, eps):
     t = Tile16()
-    t.load(A, row0, col0, n_cols)
+    t = A[row0:row0+16, col0:n_cols]
     t.cholesky_(eps)
-    t.store(A, row0, col0, n_cols)
+    A[row0:row0+16, col0:n_cols] = t
 ```
 
 ## Creating a tile
@@ -30,13 +30,14 @@ t = Tile16(a0, a1, a2, ..., a15)                # explicit values
 
 ## Loading and storing
 
-Load/store transfer data between a tile and device memory arrays. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
+Load/store transfer data between a tile and device memory arrays using slice syntax. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
 ### 2D arrays
 
 ```python
-t.load(arr, row0, col0, n_cols)       # arr[row0 + tid, col0+0..15]
-t.store(arr, row0, col0, n_cols)
+t = Tile16()
+t = arr[row0:row0+16, col0:col_end]    # load
+arr[row0:row0+16, col0:col_end] = t    # store
 ```
 
 ### 3D arrays
@@ -44,11 +45,14 @@ t.store(arr, row0, col0, n_cols)
 For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
 
 ```python
-t.load3d(arr, i0, row0, col0, n_cols)   # arr[i0, row0 + tid, col0+0..15]
-t.store3d(arr, i0, row0, col0, n_cols)
+t = Tile16()
+t = arr[i0, row0:row0+16, col0:col_end]    # load
+arr[i0, row0:row0+16, col0:col_end] = t    # store
 ```
 
-All load/store methods perform column bounds checking against `n_cols`. Out-of-bounds columns are left as zero (load) or skipped (store).
+The column slice endpoint (`col_end`) serves as the column bound — columns beyond the array boundary are left as zero (load) or skipped (store). This replaces the explicit `n_cols` parameter of the underlying `load`/`store` methods.
+
+The tile must be declared before loading into it (`t = Tile16()` followed by `t = arr[...]`). The second assignment modifies the existing tile in-place via quadrants' `_assign` protocol — it does not create a new tile.
 
 ## Identity initialization
 
@@ -105,7 +109,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
         # Load diagonal block, pad with identity if out of bounds
         L_kk = Tile16()
         if k0 + tid < n_dofs:
-            L_kk.load(H, k0, k0, n_dofs)
+            L_kk = H[k0:k0+16, k0:n_dofs]
         else:
             L_kk.eye_()
 
@@ -127,7 +131,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
             L_ik = Tile16()
             if i0 + tid < n_dofs:
-                L_ik.load(H, i0, k0, n_dofs)
+                L_ik = H[i0:i0+16, k0:n_dofs]
 
             for jb in range(kb):
                 j0 = jb * TILE
@@ -143,25 +147,25 @@ def blocked_cholesky(H, tid, n_dofs, eps):
             L_kk.solve_triangular_(L_ik)
 
             if i0 + tid < n_dofs:
-                L_ik.store(H, i0, k0, n_dofs)
+                H[i0:i0+16, k0:n_dofs] = L_ik
 
         if k0 + tid < n_dofs:
-            L_kk.store(H, k0, k0, n_dofs)
+            H[k0:k0+16, k0:n_dofs] = L_kk
 ```
 
 ## Method reference
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `load` | `(arr, row0, col0, n_cols)` | Load from 2D array (row = row0 + tid) |
-| `load3d` | `(arr, i0, row0, col0, n_cols)` | Load from 3D array (row = row0 + tid) |
-| `store` | `(arr, row0, col0, n_cols)` | Store to 2D array (row = row0 + tid) |
-| `store3d` | `(arr, i0, row0, col0, n_cols)` | Store to 3D array (row = row0 + tid) |
-| `eye_` | `()` | Set to 16x16 identity matrix (in-place) |
-| `t -= qd.outer(v, v)` | | Symmetric rank-1 subtract |
-| `t -= qd.outer(a, b)` | | General rank-1 subtract |
-| `cholesky_` | `(eps)` | In-place Cholesky factorization |
-| `solve_triangular_` | `(B, lower=True)` | Triangular solve (in-place on B) |
+| Operation | Description |
+|-----------|-------------|
+| `t = arr[r0:r0+16, c0:c_end]` | Load from 2D array (row = r0 + tid) |
+| `t = arr[i, r0:r0+16, c0:c_end]` | Load from 3D array |
+| `arr[r0:r0+16, c0:c_end] = t` | Store to 2D array |
+| `arr[i, r0:r0+16, c0:c_end] = t` | Store to 3D array |
+| `t.eye_()` | Set to 16x16 identity matrix (in-place) |
+| `t -= qd.outer(v, v)` | Symmetric rank-1 subtract |
+| `t -= qd.outer(a, b)` | General rank-1 subtract |
+| `t.cholesky_(eps)` | In-place Cholesky factorization |
+| `L.solve_triangular_(B)` | Triangular solve (in-place on B) |
 
 ## Experiment: 64x64 blocked Cholesky (dex_hand dimensions)
 

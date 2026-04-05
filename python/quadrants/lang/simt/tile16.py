@@ -15,15 +15,15 @@ Usage example::
 
     Tile16 = make_tile16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
     t = Tile16()                              # zero-initialized tile
-    t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)
-    t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])
+    t = arr[r0:r0+16, c0:c0+n]                # load from 2D array (slice syntax)
+    t = arr[i0, r0:r0+16, c0:c0+n]           # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
     t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T
     t -= qd.outer(v, v)                       # symmetric rank-1 subtract
     t.cholesky_(eps)                           # in-place Cholesky factorization
     L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
-    t.store(arr, row0, col0, n_cols)          # store to 2D array
-    t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array
+    arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)
+    arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
 """
 
 import quadrants as qd
@@ -58,6 +58,31 @@ def outer(a, b):
         t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
     """
     return _OuterProduct(a, b)
+
+
+class _TileSliceProxy:
+    """Deferred 2D/3D array slice for tile load/store.
+
+    Created by subscripting a Field or ndarray with 2D slices, e.g.
+    ``arr[k0:k0+16, k0:k0+16]``.  Not a quadrants expression — only valid
+    as the RHS of a tile assignment (load) or as the LHS target (store).
+    """
+
+    _is_deferred = True
+
+    def __init__(self, arr, row_start, col_start, col_stop, batch_idx=None):
+        self.arr = arr
+        self.row_start = row_start
+        self.col_start = col_start
+        self.col_stop = col_stop
+        self.batch_idx = batch_idx
+
+    def _assign(self, tile):
+        """Store path: arr[r:r+16, c:c+n] = tile."""
+        if self.batch_idx is not None:
+            tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop)
+        else:
+            tile.store(self.arr, self.row_start, self.col_start, self.col_stop)
 
 
 # =============================================================================
@@ -766,6 +791,16 @@ def _make_tile16_class(dtype):
                     self.r14 = new_val
                 if c == 15:
                     self.r15 = new_val
+
+        def _assign(self, other):
+            if isinstance(other, _TileSliceProxy):
+                if other.batch_idx is not None:
+                    self.load3d(other.arr, other.batch_idx, other.row_start, other.col_start, other.col_stop)
+                else:
+                    self.load(other.arr, other.row_start, other.col_start, other.col_stop)
+            else:
+                from quadrants.lang.struct import Struct
+                Struct._assign(self, other)
 
         def _augassign(self, other, op):
             if isinstance(other, _OuterProduct):
