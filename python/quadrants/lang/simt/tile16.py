@@ -345,9 +345,9 @@ def _make_tile16_class(dtype):
             Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
             """
             for k in range(_TILE):
-                diag_val = 0.0
+                diag_val = qd.cast(0.0, dtype)
                 if tid == k:
-                    s = 0.0
+                    s = qd.cast(0.0, dtype)
                     if k > 0:
                         s += self.r0 * self.r0
                     if k > 1:
@@ -378,7 +378,7 @@ def _make_tile16_class(dtype):
                         s += self.r13 * self.r13
                     if k > 14:
                         s += self.r14 * self.r14
-                    cur = 0.0
+                    cur = qd.cast(0.0, dtype)
                     if k == 0:
                         cur = self.r0
                     if k == 1:
@@ -447,7 +447,7 @@ def _make_tile16_class(dtype):
 
                 diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
 
-                dot = 0.0
+                dot = qd.cast(0.0, dtype)
                 if k > 0:
                     Lkj = qd.simt.subgroup.shuffle(self.r0, qd.u32(k))
                     dot += Lkj * self.r0
@@ -495,7 +495,7 @@ def _make_tile16_class(dtype):
                     dot += Lkj * self.r14
 
                 if tid > k:
-                    cur = 0.0
+                    cur = qd.cast(0.0, dtype)
                     if k == 0:
                         cur = self.r0
                     if k == 1:
@@ -570,7 +570,7 @@ def _make_tile16_class(dtype):
             On return, self holds the solution X.
             """
             for c in range(_TILE):
-                dot = 0.0
+                dot = qd.cast(0.0, dtype)
                 if c > 0:
                     Lkj = qd.simt.subgroup.shuffle(L.r0, qd.u32(c))
                     dot += self.r0 * Lkj
@@ -617,7 +617,7 @@ def _make_tile16_class(dtype):
                     Lkj = qd.simt.subgroup.shuffle(L.r14, qd.u32(c))
                     dot += self.r14 * Lkj
 
-                diag_reg = 0.0
+                diag_reg = qd.cast(0.0, dtype)
                 if c == 0:
                     diag_reg = L.r0
                 if c == 1:
@@ -652,7 +652,7 @@ def _make_tile16_class(dtype):
                     diag_reg = L.r15
                 diag_c = qd.simt.subgroup.shuffle(diag_reg, qd.u32(c))
 
-                cur = 0.0
+                cur = qd.cast(0.0, dtype)
                 if c == 0:
                     cur = self.r0
                 if c == 1:
