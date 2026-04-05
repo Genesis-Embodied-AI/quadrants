@@ -334,10 +334,11 @@
 <span class="sd">    t = Tile16()                              # zero-initialized tile</span>
 <span class="sd">    t.load(arr, row0, col0, n_cols)           # load from 2D array (row = row0 + tid)</span>
 <span class="sd">    t.load3d(arr, i0, row0, col0, n_cols)     # load from 3D array (arr[i0, row0+tid, ...])</span>
-<span class="sd">    t.set_identity()                          # set to identity matrix</span>
-<span class="sd">    t.syr_sub(v)                              # symmetric rank-1 subtract</span>
-<span class="sd">    t.potrf(eps)                              # Cholesky factorization</span>
-<span class="sd">    b.trsm(L)                                 # triangular solve using L</span>
+<span class="sd">    t.eye_()                                  # set to identity matrix (in-place)</span>
+<span class="sd">    t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T</span>
+<span class="sd">    t -= qd.outer(v, v)                       # symmetric rank-1 subtract</span>
+<span class="sd">    t.cholesky_(eps)                           # in-place Cholesky factorization</span>
+<span class="sd">    L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B</span>
 <span class="sd">    t.store(arr, row0, col0, n_cols)          # store to 2D array</span>
 <span class="sd">    t.store3d(arr, i0, row0, col0, n_cols)    # store to 3D array</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -345,6 +346,38 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 <span class="n">_TILE</span> <span class="o">=</span> <span class="mi">16</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_OuterProduct</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deferred outer product proxy for use with augmented assignment on Tile16.</span>
+
+<span class="sd">    Created by qd.outer(a, b). Not a quadrants expression — only valid as the</span>
+<span class="sd">    RHS of ``tile -= qd.outer(a, b)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;OuterProduct does not support composition; apply each update separately&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;OuterProduct does not support composition; apply each update separately&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="outer">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/tile16/index.html#quadrants.lang.simt.tile16.outer">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a deferred outer product for use with Tile16 augmented assignment.</span>
+
+<span class="sd">    Usage::</span>
+
+<span class="sd">        t -= qd.outer(a, b)   # equivalent to t.ger_sub(a, b)</span>
+<span class="sd">        t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_OuterProduct</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span></div>
+
 
 
 <span class="c1"># =============================================================================</span>
@@ -545,7 +578,7 @@
                 <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">col0</span> <span class="o">+</span> <span class="mi">15</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r15</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">set_identity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">eye_</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">            </span><span class="sd">&quot;&quot;&quot;Set this tile to the 16x16 identity matrix.</span>
 
 <span class="sd">            Each thread sets its diagonal element to 1.0 and all others to 0.0.</span>
@@ -673,8 +706,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">-=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">bc</span>
 
         <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">potrf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;In-place 16x16 Cholesky factorization (POTRF) via subgroup shuffles.</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">cholesky_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;In-place 16x16 Cholesky factorization via subgroup shuffles.</span>
 
 <span class="sd">            On return, the lower triangle holds L such that A = L @ L^T.</span>
 <span class="sd">            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.</span>
@@ -1056,6 +1089,25 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">r14</span> <span class="o">=</span> <span class="n">new_val</span>
                 <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="mi">15</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">=</span> <span class="n">new_val</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_augassign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">_OuterProduct</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Sub&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">ger_sub</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tile16: unsupported augmented assignment op &#39;</span><span class="si">{</span><span class="n">op</span><span class="si">}</span><span class="s2">&#39; with outer product&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tile16: unsupported augmented assignment with </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">solve_triangular_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Triangular solve: X @ self^T = B, storing result X in B in-place.</span>
+
+<span class="sd">            self must be lower-triangular (e.g. from cholesky_()).</span>
+<span class="sd">            Only lower=True is supported.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">lower</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Tile16.solve_triangular_: only lower=True is supported&quot;</span><span class="p">)</span>
+            <span class="n">B</span><span class="o">.</span><span class="n">trsm</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
     <span class="c1"># StructType.__call__ already defaults missing args to 0, so Tile16()</span>
     <span class="c1"># produces a zero-initialized tile without needing default values in the</span>

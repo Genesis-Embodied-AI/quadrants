@@ -384,7 +384,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
     <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16</span><span class="p">()</span>
     <span class="n">t</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
-    <span class="n">t</span><span class="o">.</span><span class="n">potrf</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
+    <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
     <span class="n">t</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -420,41 +420,33 @@
 <section id="identity-initialization">
 <h2>Identity initialization<a class="headerlink" href="#identity-initialization" title="Link to this heading">#</a></h2>
 <p>For padding partial tiles in blocked algorithms:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">set_identity</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Sets the tile to the 16x16 identity matrix. Each thread sets its diagonal element to 1.0 and all others to 0.0.</p>
+<p>Sets the tile to the 16x16 identity matrix in-place. Each thread sets its diagonal element to 1.0 and all others to 0.0.</p>
 </section>
 <section id="rank-1-updates">
 <h2>Rank-1 updates<a class="headerlink" href="#rank-1-updates" title="Link to this heading">#</a></h2>
-<section id="symmetric-rank-1-subtract-syr">
-<h3>Symmetric rank-1 subtract (syr)<a class="headerlink" href="#symmetric-rank-1-subtract-syr" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">syr_sub</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>    <span class="c1"># t -= v @ v^T</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>    <span class="c1"># t -= v @ v^T  (symmetric)</span>
+<span class="n">t</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>    <span class="c1"># t -= a @ b^T  (general)</span>
 </pre></div>
 </div>
-<p>Each thread provides its element of the vector <code class="docutils literal notranslate"><span class="pre">v</span></code>. The outer product <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">&#64;</span> <span class="pre">v^T</span></code> is computed via shuffles and subtracted from the tile in-place. Used for diagonal block updates in blocked Cholesky.</p>
+<p>Each thread provides its element(s) of the vector(s). The outer product is computed via warp shuffles and subtracted from the tile in-place. <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span></code> returns a deferred proxy — it is only valid as the RHS of <code class="docutils literal notranslate"><span class="pre">-=</span></code> on a Tile16. Composition like <code class="docutils literal notranslate"><span class="pre">qd.outer(a,</span> <span class="pre">b)</span> <span class="pre">+</span> <span class="pre">qd.outer(c,</span> <span class="pre">d)</span></code> raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
+<p>Used for diagonal block updates (symmetric case) and off-diagonal block updates (general case) in blocked Cholesky.</p>
 </section>
-<section id="general-rank-1-subtract-ger">
-<h3>General rank-1 subtract (ger)<a class="headerlink" href="#general-rank-1-subtract-ger" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">ger_sub</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>   <span class="c1"># t -= a @ b^T</span>
-</pre></div>
-</div>
-<p>Like <code class="docutils literal notranslate"><span class="pre">syr_sub</span></code> but with two different vectors. Used for off-diagonal block updates.</p>
-</section>
-</section>
-<section id="cholesky-factorization-potrf">
-<h2>Cholesky factorization (potrf)<a class="headerlink" href="#cholesky-factorization-potrf" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">potrf</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
+<section id="cholesky-factorization-cholesky">
+<h2>Cholesky factorization (cholesky_)<a class="headerlink" href="#cholesky-factorization-cholesky" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Factorizes the tile in-place: replaces the lower triangle with <code class="docutils literal notranslate"><span class="pre">L</span></code> such that <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">&#64;</span> <span class="pre">L^T</span> <span class="pre">≈</span> <span class="pre">A</span></code>. The <code class="docutils literal notranslate"><span class="pre">eps</span></code> parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of <code class="docutils literal notranslate"><span class="pre">t</span></code> contains <code class="docutils literal notranslate"><span class="pre">L</span></code>.</p>
 </section>
-<section id="triangular-solve-trsm">
-<h2>Triangular solve (trsm)<a class="headerlink" href="#triangular-solve-trsm" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">B</span><span class="o">.</span><span class="n">trsm</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
+<section id="triangular-solve-solve-triangular">
+<h2>Triangular solve (solve_triangular_)<a class="headerlink" href="#triangular-solve-solve-triangular" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">L</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Solves <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">&#64;</span> <span class="pre">X^T</span> <span class="pre">=</span> <span class="pre">B^T</span></code> in-place, replacing <code class="docutils literal notranslate"><span class="pre">B</span></code> with <code class="docutils literal notranslate"><span class="pre">X</span></code>. <code class="docutils literal notranslate"><span class="pre">L</span></code> must be a lower-triangular tile (e.g. from <code class="docutils literal notranslate"><span class="pre">potrf</span></code>). Used for off-diagonal blocks in blocked Cholesky.</p>
+<p>Solves <code class="docutils literal notranslate"><span class="pre">X</span> <span class="pre">&#64;</span> <span class="pre">L^T</span> <span class="pre">=</span> <span class="pre">B</span></code> in-place, replacing <code class="docutils literal notranslate"><span class="pre">B</span></code> with <code class="docutils literal notranslate"><span class="pre">X</span></code>. <code class="docutils literal notranslate"><span class="pre">L</span></code> (self) must be a lower-triangular tile (e.g. from <code class="docutils literal notranslate"><span class="pre">cholesky_()</span></code>). Only <code class="docutils literal notranslate"><span class="pre">lower=True</span></code> is supported; passing <code class="docutils literal notranslate"><span class="pre">lower=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>. Used for off-diagonal blocks in blocked Cholesky.</p>
 </section>
 <section id="full-example-blocked-cholesky">
 <h2>Full example: blocked Cholesky<a class="headerlink" href="#full-example-blocked-cholesky" title="Link to this heading">#</a></h2>
@@ -474,7 +466,7 @@
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
             <span class="n">L_kk</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">L_kk</span><span class="o">.</span><span class="n">set_identity</span><span class="p">()</span>
+            <span class="n">L_kk</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
 
         <span class="c1"># Subtract contributions from previous blocks</span>
         <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
@@ -483,10 +475,10 @@
                 <span class="n">v</span> <span class="o">=</span> <span class="mf">0.0</span>
                 <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
                     <span class="n">v</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
-                <span class="n">L_kk</span><span class="o">.</span><span class="n">syr_sub</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+                <span class="n">L_kk</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
 
         <span class="c1"># Factorize diagonal block</span>
-        <span class="n">L_kk</span><span class="o">.</span><span class="n">potrf</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
+        <span class="n">L_kk</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
 
         <span class="c1"># Process off-diagonal blocks</span>
         <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N_BLOCKS</span><span class="p">):</span>
@@ -505,9 +497,9 @@
                         <span class="n">v_own</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
                     <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
                         <span class="n">v_diag</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
-                    <span class="n">L_ik</span><span class="o">.</span><span class="n">ger_sub</span><span class="p">(</span><span class="n">v_own</span><span class="p">,</span> <span class="n">v_diag</span><span class="p">)</span>
+                    <span class="n">L_ik</span> <span class="o">-=</span> <span class="n">qd</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">v_own</span><span class="p">,</span> <span class="n">v_diag</span><span class="p">)</span>
 
-            <span class="n">L_ik</span><span class="o">.</span><span class="n">trsm</span><span class="p">(</span><span class="n">L_kk</span><span class="p">)</span>
+            <span class="n">L_kk</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">L_ik</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
                 <span class="n">L_ik</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">i0</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">)</span>
@@ -543,25 +535,25 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">(arr,</span> <span class="pre">i0,</span> <span class="pre">row0,</span> <span class="pre">col0,</span> <span class="pre">n_cols)</span></code></p></td>
 <td><p>Store to 3D array (row = row0 + tid)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">set_identity</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">eye_</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">()</span></code></p></td>
-<td><p>Set to 16x16 identity matrix</p></td>
+<td><p>Set to 16x16 identity matrix (in-place)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">syr_sub</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(v)</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">-=</span> <span class="pre">qd.outer(v,</span> <span class="pre">v)</span></code></p></td>
+<td><p></p></td>
 <td><p>Symmetric rank-1 subtract</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ger_sub</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(a,</span> <span class="pre">b)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">-=</span> <span class="pre">qd.outer(a,</span> <span class="pre">b)</span></code></p></td>
+<td><p></p></td>
 <td><p>General rank-1 subtract</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">potrf</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cholesky_</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(eps)</span></code></p></td>
-<td><p>Cholesky factorization</p></td>
+<td><p>In-place Cholesky factorization</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">trsm</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">(L)</span></code></p></td>
-<td><p>Triangular solve</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">solve_triangular_</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">lower=True)</span></code></p></td>
+<td><p>Triangular solve (in-place on B)</p></td>
 </tr>
 </tbody>
 </table>
@@ -635,13 +627,9 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#identity-initialization">Identity initialization</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rank-1-updates">Rank-1 updates</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#symmetric-rank-1-subtract-syr">Symmetric rank-1 subtract (syr)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#general-rank-1-subtract-ger">General rank-1 subtract (ger)</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cholesky-factorization-potrf">Cholesky factorization (potrf)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#triangular-solve-trsm">Triangular solve (trsm)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rank-1-updates">Rank-1 updates</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cholesky-factorization-cholesky">Cholesky factorization (cholesky_)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#triangular-solve-solve-triangular">Triangular solve (solve_triangular_)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#full-example-blocked-cholesky">Full example: blocked Cholesky</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#method-reference">Method reference</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#experiment-64x64-blocked-cholesky-dex-hand-dimensions">Experiment: 64x64 blocked Cholesky (dex_hand dimensions)</a></li>
