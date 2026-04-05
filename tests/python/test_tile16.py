@@ -32,10 +32,10 @@ def test_tile16_load_store(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             t = Tile16()
-            t.load(src_arr, tid, 0, N)
-            t.store(dst_arr, tid, 0, N)
+            t.load(src_arr, 0, 0, N)
+            t.store(dst_arr, 0, 0, N)
 
     data = np.arange(N * N, dtype=np.float32).reshape(N, N)
     src.from_numpy(data)
@@ -53,10 +53,10 @@ def test_tile16_load_store_partial(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             t = Tile16()
-            t.load(src_arr, tid, 0, NCOLS)
-            t.store(dst_arr, tid, 0, N)
+            t.load(src_arr, 0, 0, NCOLS)
+            t.store(dst_arr, 0, 0, N)
 
     data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
     src.from_numpy(data)
@@ -96,7 +96,7 @@ def test_tile16_syr_sub(tensor_type):
                 mat_arr[tid, 15],
             )
             t.syr_sub(vec_arr[tid])
-            t.store(out_arr, tid, 0, N)
+            t.store(out_arr, 0, 0, N)
 
     rng = np.random.RandomState(123)
     R = rng.randn(N, N).astype(np.float32)
@@ -143,7 +143,7 @@ def test_tile16_ger_sub(tensor_type):
                 mat_arr[tid, 15],
             )
             t.ger_sub(va_arr[tid], vb_arr[tid])
-            t.store(out_arr, tid, 0, N)
+            t.store(out_arr, 0, 0, N)
 
     rng = np.random.RandomState(456)
     R = rng.randn(N, N).astype(np.float32)
@@ -166,11 +166,11 @@ def test_tile16_potrf(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             t = Tile16()
-            t.load(src_arr, tid, 0, N)
-            t.potrf(tid, eps_field[None])
-            t.store(dst_arr, tid, 0, N)
+            t.load(src_arr, 0, 0, N)
+            t.potrf(eps_field[None])
+            t.store(dst_arr, 0, 0, N)
 
     A = _make_spd()
     src.from_numpy(A)
@@ -190,13 +190,13 @@ def test_tile16_trsm(tensor_type):
     @qd.kernel
     def run(l_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             L = Tile16()
-            L.load(l_arr, tid, 0, N)
+            L.load(l_arr, 0, 0, N)
             B = Tile16()
-            B.load(b_arr, tid, 0, N)
+            B.load(b_arr, 0, 0, N)
             B.trsm(L)
-            B.store(x_arr, tid, 0, N)
+            B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=99)
     Lnp = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
@@ -220,14 +220,14 @@ def test_tile16_potrf_then_trsm(tensor_type):
     @qd.kernel
     def run(a_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             L = Tile16()
-            L.load(a_arr, tid, 0, N)
-            L.potrf(tid, eps_field[None])
+            L.load(a_arr, 0, 0, N)
+            L.potrf(eps_field[None])
             B = Tile16()
-            B.load(b_arr, tid, 0, N)
+            B.load(b_arr, 0, 0, N)
             B.trsm(L)
-            B.store(x_arr, tid, 0, N)
+            B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=55)
     rng = np.random.RandomState(66)
@@ -256,10 +256,10 @@ def test_tile16_f64_load_store(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             t = Tile16_f64()
-            t.load(src_arr, tid, 0, N)
-            t.store(dst_arr, tid, 0, N)
+            t.load(src_arr, 0, 0, N)
+            t.store(dst_arr, 0, 0, N)
 
     data = np.arange(N * N, dtype=np.float64).reshape(N, N)
     src.from_numpy(data)
@@ -277,11 +277,11 @@ def test_tile16_f64_potrf(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             t = Tile16_f64()
-            t.load(src_arr, tid, 0, N)
-            t.potrf(tid, eps_field[None])
-            t.store(dst_arr, tid, 0, N)
+            t.load(src_arr, 0, 0, N)
+            t.potrf(eps_field[None])
+            t.store(dst_arr, 0, 0, N)
 
     A = _make_spd(dtype=np.float64)
     src.from_numpy(A)
@@ -302,14 +302,14 @@ def test_tile16_f64_potrf_then_trsm(tensor_type):
     @qd.kernel
     def run(a_arr: qd.template(), b_arr: qd.template(), x_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             L = Tile16_f64()
-            L.load(a_arr, tid, 0, N)
-            L.potrf(tid, eps_field[None])
+            L.load(a_arr, 0, 0, N)
+            L.potrf(eps_field[None])
             B = Tile16_f64()
-            B.load(b_arr, tid, 0, N)
+            B.load(b_arr, 0, 0, N)
             B.trsm(L)
-            B.store(x_arr, tid, 0, N)
+            B.store(x_arr, 0, 0, N)
 
     A = _make_spd(seed=55, dtype=np.float64)
     rng = np.random.RandomState(66)
@@ -339,11 +339,11 @@ def test_tile16_load3d_store3d(tensor_type):
     @qd.kernel
     def run(src_arr: qd.template(), dst_arr: qd.template()):
         qd.loop_config(block_dim=N)
-        for tid in range(N):
+        for _ in range(N):
             for i_b in range(N_BATCH):
                 t = Tile16()
-                t.load3d(src_arr, i_b, tid, 0, N)
-                t.store3d(dst_arr, i_b, tid, 0, N)
+                t.load3d(src_arr, i_b, 0, 0, N)
+                t.store3d(dst_arr, i_b, 0, 0, N)
 
     data = np.arange(N_BATCH * N * N, dtype=np.float32).reshape(N_BATCH, N, N)
     src.from_numpy(data)
