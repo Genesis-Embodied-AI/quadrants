@@ -869,6 +869,7 @@ def _make_tile16x16_class(dtype):
     # class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE
+    result._quadrants_internal = True
     result.zeros = result
 
     @qd.func
