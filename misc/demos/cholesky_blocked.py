@@ -14,7 +14,7 @@ Three kernels compared:
 3. Tile16x16: same blocked structure but fully register-resident via Tile16x16.
    No shared memory, zero syncs. Prior tiles read from global memory (L2).
 
-Results on RTX 6000 Ada, 4096 environments, N=92, f32:
+Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
 
     Kernel                                        Threads  Time (us)  vs baseline
     baseline (scalar Crout, shared mem)                64       2766        1.00x

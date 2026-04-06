@@ -173,7 +173,7 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
 Benchmark script: `misc/demos/cholesky_blocked.py`
 
-RTX 6000 Ada, 4096 environments, f32, 92x92 matrices (dex_hand constraint-space Hessian).
+RTX PRO 6000 Blackwell, 4096 environments, f32, 92x92 matrices (dex_hand constraint-space Hessian).
 
 ```
 Kernel                                        Threads  Time (us)  vs baseline
