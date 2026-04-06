@@ -14,7 +14,7 @@ from weakref import ReferenceType
 
 from quadrants import _logging
 
-_GPU_GRAPH_ENABLED = os.environ.get("QD_GPU_GRAPH", "1") == "1"
+_GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
 
 from quadrants._lib.core.quadrants_python import (
     Arch,
@@ -294,7 +294,7 @@ class Kernel(FuncBase):
         # and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
-        self.use_gpu_graph: bool = False
+        self.use_graph: bool = False
         self.graph_do_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
@@ -516,7 +516,7 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
-            launch_ctx.use_gpu_graph = self.use_gpu_graph and _GPU_GRAPH_ENABLED
+            launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             prog.launch_kernel(compiled_kernel_data, launch_ctx)

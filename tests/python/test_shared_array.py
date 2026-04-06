@@ -143,9 +143,9 @@ def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta
     assert np.array_equal(out.to_numpy(), expected)
 
 
-@pytest.mark.parametrize("gpu_graph", [False, True])
+@pytest.mark.parametrize("graph", [False, True])
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
-def test_large_shared_array(gpu_graph):
+def test_large_shared_array(graph):
     # Any shared memory larger than 48kB requires so-called "dynamic
     # allocation", which is a special feature that requires toggling some opt-in
     # flag in gpu kernel context and is currently only supported on CUDA. In
@@ -180,7 +180,7 @@ def test_large_shared_array(gpu_graph):
                 acc += v_val * d[j]
             a[i] = acc
 
-    @qd.kernel(gpu_graph=gpu_graph)
+    @qd.kernel(graph=graph)
     def scaled_reduce_shared(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),
@@ -200,7 +200,7 @@ def test_large_shared_array(gpu_graph):
                 qd.simt.block.sync()
             a[i] = acc
 
-    # gpu_graph requires device-resident arrays (qd.ndarray or CUDA torch
+    # graph requires device-resident arrays (qd.ndarray or CUDA torch
     # tensors), not host-resident numpy arrays
     v_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
     d_arr = qd.ndarray(dtype=qd.f32, shape=(N,))

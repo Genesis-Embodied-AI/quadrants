@@ -39,7 +39,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
 
-  if (ctx.use_gpu_graph) {
+  if (ctx.use_graph) {
     auto &lctx = contexts_[handle.get_launch_id()];
     if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module,
                                   *lctx.parameters, lctx.offloaded_tasks,
