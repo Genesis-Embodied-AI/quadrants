@@ -188,43 +188,57 @@ def cholesky_blocked():
 
 @qd.kernel
 def cholesky_tile16():
-    qd.loop_config(name="chol_tile16", block_dim=TILE)
-    for idx in range(N_ENVS * TILE):
-        tid = idx % TILE
-        env = idx // TILE
+    qd.loop_config(name="chol_tile16", block_dim=Tile16x16.SIZE)
+    for idx in range(N_ENVS * Tile16x16.SIZE):
+        tid = idx % Tile16x16.SIZE
+        env = idx // Tile16x16.SIZE
 
         for kb in range(N_BLOCKS):
-            k0 = kb * TILE
+            k0 = kb * Tile16x16.SIZE
+            k1 = qd.min(k0 + Tile16x16.SIZE, N)
 
             L_kk = Tile16x16()
-            L_kk[:] = A_field[env, k0 : k0 + 16, k0 : k0 + 16]
+            if k0 + tid < N:
+                L_kk[:] = A_field[env, k0:k1, k0:k1]
+            else:
+                L_kk.eye_()
 
             for jb in range(kb):
-                j0 = jb * TILE
-                for t in range(TILE):
-                    v = L_tile16_field[env, k0 + tid, j0 + t]
+                j0 = jb * Tile16x16.SIZE
+                for t in range(Tile16x16.SIZE):
+                    v = qd.f32(0.0)
+                    if k0 + tid < N:
+                        v = L_tile16_field[env, k0 + tid, j0 + t]
                     L_kk -= qd.outer(v, v)
 
             L_kk.cholesky_(qd.f32(1e-12))
 
             for ib in range(kb + 1, N_BLOCKS):
-                i0 = ib * TILE
+                i0 = ib * Tile16x16.SIZE
+                i1 = qd.min(i0 + Tile16x16.SIZE, N)
 
                 L_ik = Tile16x16()
-                L_ik[:] = A_field[env, i0 : i0 + 16, k0 : k0 + 16]
+                if i0 + tid < N:
+                    L_ik[:] = A_field[env, i0:i1, k0:k1]
 
                 for jb in range(kb):
-                    j0 = jb * TILE
-                    for t in range(TILE):
-                        v_own = L_tile16_field[env, i0 + tid, j0 + t]
-                        v_diag = L_tile16_field[env, k0 + tid, j0 + t]
+                    j0 = jb * Tile16x16.SIZE
+                    for t in range(Tile16x16.SIZE):
+                        v_own = qd.f32(0.0)
+                        v_diag = qd.f32(0.0)
+                        if i0 + tid < N:
+                            v_own = L_tile16_field[env, i0 + tid, j0 + t]
+                        if k0 + tid < N:
+                            v_diag = L_tile16_field[env, k0 + tid, j0 + t]
                         L_ik -= qd.outer(v_own, v_diag)
 
                 L_kk.solve_triangular_(L_ik)
 
-                L_tile16_field[env, i0 : i0 + 16, k0 : k0 + 16] = L_ik
+                if i0 + tid < N:
+                    L_tile16_field[env, i0:i1, k0:k1] = L_ik
 
-            L_tile16_field[env, k0 : k0 + 16, k0 : k0 + 16] = L_kk
+            if k0 + tid < N:
+                L_tile16_field[env, k0:k1, k0:k1] = L_kk
 
 
 # ---------------------------------------------------------------------------
