@@ -1604,10 +1604,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
       val = ir_->make_value(atomic_fp_op, ir_->get_primitive_type(dt), addr_ptr,
                             /*scope=*/ir_->const_i32_one_,
                             /*semantics=*/ir_->const_i32_zero_, data);
-    } else if (dest_is_ptr) {
-      // Shared float arrays use uint-backed CAS (width-aware for f16->u32).
-      // Integer shared atomics don't need this — they use native OpAtomicIAdd
-      // etc. directly on the shared pointer.
+    } else if (uint_backed_shared_float_ptr_stmts_.count(stmt->dest)) {
       val = shared_float_atomic(*ir_, stmt->op_type, addr_ptr, data, dt);
     } else {
       val = ir_->float_atomic(stmt->op_type, addr_ptr, data, dt);
