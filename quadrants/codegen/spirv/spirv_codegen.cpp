@@ -284,8 +284,8 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
         ir_->get_primitive_type(tensor_type->get_element_type());
     maybe_retype_shared_alloca(*ir_, *caps_, alloca, tensor_type,
                                shared_float_allocas_with_atomic_rmw_,
-                               uint_backed_shared_float_ptr_stmts_,
-                               elem_num, elem_type);
+                               uint_backed_shared_float_ptr_stmts_, elem_num,
+                               elem_type);
     spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);

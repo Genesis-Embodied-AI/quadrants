@@ -176,12 +176,11 @@ void maybe_retype_shared_alloca(
   }
 }
 
-void maybe_retype_derived_ptr(
-    IRBuilder &ir,
-    const Stmt *origin,
-    const Stmt *stmt,
-    DataType &dt,
-    std::unordered_set<const Stmt *> &retyped_stmts) {
+void maybe_retype_derived_ptr(IRBuilder &ir,
+                              const Stmt *origin,
+                              const Stmt *stmt,
+                              DataType &dt,
+                              std::unordered_set<const Stmt *> &retyped_stmts) {
   if (retyped_stmts.count(origin)) {
     // Flatten nested tensor types to scalar (e.g., vec3 to f32)
     if (auto nested = dt->cast<TensorType>()) {
