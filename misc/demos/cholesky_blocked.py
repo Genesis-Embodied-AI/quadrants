@@ -14,12 +14,12 @@ Three kernels compared:
 3. Tile16x16: same blocked structure but fully register-resident via Tile16x16.
    No shared memory, zero syncs. Prior tiles read from global memory (L2).
 
-Results on RTX PRO 6000 Blackwell, 4096 environments, f32:
+Results on RTX 6000 Ada, 4096 environments, N=92, f32:
 
-    Kernel                                 Threads   Time (us)    vs baseline
-    baseline (scalar Crout, shared mem)         64       611         1.00x
-    blocked  (scalar Crout, shared mem)         16       515         1.19x
-    tile16   (Tile16x16, no shared memory)         16       200         3.05x
+    Kernel                                        Threads   Time (us)    vs baseline
+    baseline (scalar Crout, shared mem)                64       2770         1.00x
+    blocked  (scalar Crout, shared mem)                16       2559         1.08x
+    tile16   (Tile16x16, no shared memory)             16        532         5.21x
 
 Usage:
     python misc/demos/cholesky_blocked.py
@@ -247,7 +247,7 @@ def cholesky_tile16():
 # ---------------------------------------------------------------------------
 
 
-def benchmark(name, kernel_fn, n_warmup, n_iters):
+def benchmark(kernel_fn, n_warmup, n_iters):
     for _ in range(n_warmup):
         kernel_fn()
     qd.sync()
@@ -256,9 +256,7 @@ def benchmark(name, kernel_fn, n_warmup, n_iters):
         kernel_fn()
     qd.sync()
     elapsed = time.perf_counter() - t0
-    us_per_call = elapsed / n_iters * 1e6
-    print(f"  {name:45s}  {us_per_call:8.1f} us/call  ({n_iters} iters)")
-    return us_per_call
+    return elapsed / n_iters * 1e6
 
 
 def verify(name, L_field, A_np):
@@ -301,14 +299,19 @@ def main():
     verify("tile16", L_tile16_field, A_np)
     print()
 
-    print("Benchmarking:")
-    t_baseline = benchmark("baseline (scalar Crout, 64 thr, shared mem)", cholesky_baseline, WARMUP, ITERS)
-    t_blocked = benchmark("blocked  (scalar Crout, 16 thr, shared mem)", cholesky_blocked, WARMUP, ITERS)
-    t_tile16 = benchmark("tile16   (Tile16x16, 16 thr, no shared mem)", cholesky_tile16, WARMUP, ITERS)
-    print()
-    print(f"  blocked  vs baseline: {t_baseline / t_blocked:.2f}x")
-    print(f"  tile16   vs baseline: {t_baseline / t_tile16:.2f}x")
-    print(f"  tile16   vs blocked:  {t_blocked / t_tile16:.2f}x")
+    t_baseline = benchmark(cholesky_baseline, WARMUP, ITERS)
+    t_blocked = benchmark(cholesky_blocked, WARMUP, ITERS)
+    t_tile16 = benchmark(cholesky_tile16, WARMUP, ITERS)
+
+    print(f"{'Kernel':<45s} {'Threads':>7s} {'Time (us)':>10s} {'vs baseline':>12s}")
+    rows = [
+        ("baseline (scalar Crout, shared mem)", 64, t_baseline),
+        ("blocked  (scalar Crout, shared mem)", 16, t_blocked),
+        ("tile16   (Tile16x16, no shared memory)", 16, t_tile16),
+    ]
+    for name, threads, t in rows:
+        speedup = t_baseline / t
+        print(f"{name:<45s} {threads:>7d} {t:>10.0f} {speedup:>11.2f}x")
 
 
 if __name__ == "__main__":
