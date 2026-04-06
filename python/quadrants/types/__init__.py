@@ -8,7 +8,6 @@ This module defines data types in Quadrants:
 - quant: for quantized types, see "https://yuanming.quadrants.graphics/publication/2021-quanquadrants/quanquadrants.pdf"
 """
 
-from quadrants.lang.simt.tile16 import make_tile16x16 as Tile16x16
 from quadrants.types import quant
 from quadrants.types.annotations import *  # type: ignore
 from quadrants.types.compound_types import *  # type: ignore
@@ -17,3 +16,12 @@ from quadrants.types.primitive_types import *  # type: ignore
 from quadrants.types.utils import *  # type: ignore
 
 __all__ = ["Tile16x16", "quant"]
+
+
+def __getattr__(name):
+    if name == "Tile16x16":
+        from quadrants.lang.simt.tile16 import make_tile16x16  # pylint: disable=import-outside-toplevel
+
+        globals()["Tile16x16"] = make_tile16x16
+        return make_tile16x16
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
