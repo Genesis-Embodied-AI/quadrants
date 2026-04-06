@@ -1543,7 +1543,7 @@ void TaskCodegen::visit(AtomicOpStmt *stmt) {
 
   spirv::Value addr_ptr;
   spirv::Value dest_val = ir_->query_value(stmt->dest->raw_name());
-  // Shared arrays already have a pointer from OpAccessChain (dest_is_ptr=true).
+  // Shared arrays have already created an accesschain, use it directly.
   // at_buffer() looks up ptr_to_buffers_ to find the StorageBuffer and compute
   // a byte offset — shared/workgroup arrays aren't in ptr_to_buffers_, so
   // at_buffer() would fail on them.
