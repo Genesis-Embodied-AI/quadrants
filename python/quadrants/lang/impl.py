@@ -268,6 +268,23 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 col_stop = col_slice.stop if col_slice.stop is not None else col_slice.start + 16
                 batch_idx = non_slice_indices[0] if non_slice_indices else None
                 return _TileSliceProxy(value, row_slice.start, col_slice.start, col_stop, batch_idx)
+            if len(slice_indices) == 1:
+                # pylint: disable-next=import-outside-toplevel
+                from quadrants.lang.simt.tile16 import _VecSliceProxy  # noqa: I001
+
+                row_slice = slice_indices[0]
+                if row_slice.start is None:
+                    raise QuadrantsSyntaxError("Vec slice: start index is required")
+                row_stop = row_slice.stop if row_slice.stop is not None else row_slice.start + 16
+                if len(non_slice_indices) == 1:
+                    col = non_slice_indices[0]
+                    batch_idx = None
+                elif len(non_slice_indices) == 2:
+                    batch_idx = non_slice_indices[0]
+                    col = non_slice_indices[1]
+                else:
+                    raise QuadrantsSyntaxError("Vec slice: expected arr[r0:r_end, col] or arr[batch, r0:r_end, col]")
+                return _VecSliceProxy(value, row_slice.start, row_stop, col, batch_idx)
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
