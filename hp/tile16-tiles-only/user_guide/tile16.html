@@ -381,11 +381,11 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16x16</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
-    <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+    <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>
     <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
-    <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">n_cols</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
+    <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
 </pre></div>
 </div>
 </section>
@@ -403,21 +403,21 @@
 <p>Load/store transfer data between a tile and device memory arrays using slice syntax. Each thread accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>, where <code class="docutils literal notranslate"><span class="pre">tid</span></code> is the thread’s subgroup lane index (obtained internally via <code class="docutils literal notranslate"><span class="pre">subgroup.invocation_id()</span></code>).</p>
 <section id="d-arrays">
 <h3>2D arrays<a class="headerlink" href="#d-arrays" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
-<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
-<span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>    <span class="c1"># load</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
 </div>
 </section>
 <section id="id1">
 <h3>3D arrays<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <p>For arrays with a leading batch dimension (e.g. <code class="docutils literal notranslate"><span class="pre">H[batch,</span> <span class="pre">row,</span> <span class="pre">col]</span></code>):</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
-<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span>    <span class="c1"># load</span>
-<span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>    <span class="c1"># load</span>
+<span class="n">arr</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>       <span class="c1"># store</span>
 </pre></div>
 </div>
-<p>The column slice endpoint (<code class="docutils literal notranslate"><span class="pre">col_end</span></code>) serves as the column bound — columns beyond the array boundary are left as zero (load) or skipped (store). This replaces the explicit <code class="docutils literal notranslate"><span class="pre">n_cols</span></code> parameter of the underlying <code class="docutils literal notranslate"><span class="pre">load</span></code>/<code class="docutils literal notranslate"><span class="pre">store</span></code> methods.</p>
+<p>Standard NumPy-style slicing. The load/store automatically clamps column indices to the array’s shape, so out-of-bounds columns are left as zero (load) or skipped (store).</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">[:]</span></code> on the load LHS is required — it distinguishes an in-place tile load from a variable rebinding. The store side does not need <code class="docutils literal notranslate"><span class="pre">[:]</span></code> because the array subscript on the LHS already triggers the correct assignment path.</p>
 </section>
 </section>
@@ -458,25 +458,23 @@
 <p>A simplified blocked Cholesky factorization using <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.tile16</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tile16x16</span>
 
-<span class="n">TILE</span> <span class="o">=</span> <span class="mi">16</span>
-
 <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">blocked_cholesky</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">n_dofs</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">N_BLOCKS</span> <span class="o">=</span> <span class="p">(</span><span class="n">n_dofs</span> <span class="o">+</span> <span class="n">TILE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">TILE</span>
+    <span class="n">N_BLOCKS</span> <span class="o">=</span> <span class="p">(</span><span class="n">n_dofs</span> <span class="o">+</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
     <span class="k">for</span> <span class="n">kb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_BLOCKS</span><span class="p">):</span>
-        <span class="n">k0</span> <span class="o">=</span> <span class="n">kb</span> <span class="o">*</span> <span class="n">TILE</span>
+        <span class="n">k0</span> <span class="o">=</span> <span class="n">kb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
 
         <span class="c1"># Load diagonal block, pad with identity if out of bounds</span>
+        <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
-            <span class="n">L_kk</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
+            <span class="n">L_kk</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">L_kk</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>
+            <span class="n">L_kk</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>
 
         <span class="c1"># Subtract contributions from previous blocks</span>
         <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
-            <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">TILE</span>
-            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">TILE</span><span class="p">):</span>
+            <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">):</span>
                 <span class="n">v</span> <span class="o">=</span> <span class="mf">0.0</span>
                 <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
                     <span class="n">v</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">t</span><span class="p">]</span>
@@ -487,15 +485,15 @@
 
         <span class="c1"># Process off-diagonal blocks</span>
         <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N_BLOCKS</span><span class="p">):</span>
-            <span class="n">i0</span> <span class="o">=</span> <span class="n">ib</span> <span class="o">*</span> <span class="n">TILE</span>
+            <span class="n">i0</span> <span class="o">=</span> <span class="n">ib</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
 
-            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
+            <span class="n">L_ik</span> <span class="o">=</span> <span class="n">Tile16x16</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">L_ik</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span>
+                <span class="n">L_ik</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span>
 
             <span class="k">for</span> <span class="n">jb</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">kb</span><span class="p">):</span>
-                <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">TILE</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">TILE</span><span class="p">):</span>
+                <span class="n">j0</span> <span class="o">=</span> <span class="n">jb</span> <span class="o">*</span> <span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">):</span>
                     <span class="n">v_own</span> <span class="o">=</span> <span class="mf">0.0</span>
                     <span class="n">v_diag</span> <span class="o">=</span> <span class="mf">0.0</span>
                     <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
@@ -507,10 +505,10 @@
             <span class="n">L_kk</span><span class="o">.</span><span class="n">solve_triangular_</span><span class="p">(</span><span class="n">L_ik</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-                <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_ik</span>
+                <span class="n">H</span><span class="p">[</span><span class="n">i0</span><span class="p">:</span><span class="n">i0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_ik</span>
 
         <span class="k">if</span> <span class="n">k0</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_dofs</span><span class="p">:</span>
-            <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">n_dofs</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_kk</span>
+            <span class="n">H</span><span class="p">[</span><span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span><span class="n">k0</span><span class="o">+</span><span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">L_kk</span>
 </pre></div>
 </div>
 </section>

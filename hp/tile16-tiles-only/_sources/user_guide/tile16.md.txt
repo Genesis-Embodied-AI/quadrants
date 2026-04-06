@@ -12,11 +12,11 @@ Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and
 from quadrants.lang.simt.tile16 import Tile16x16
 
 @qd.func
-def my_blocked_op(A, row0, col0, n_cols, eps):
-    t = Tile16x16.zeros()
-    t[:] = A[row0:row0+16, col0:n_cols]
+def my_blocked_op(A, row0, col0, eps):
+    t = Tile16x16()
+    t[:] = A[row0:row0+16, col0:col0+16]
     t.cholesky_(eps)
-    A[row0:row0+16, col0:n_cols] = t
+    A[row0:row0+16, col0:col0+16] = t
 ```
 
 ## Creating a tile
@@ -36,9 +36,9 @@ Load/store transfer data between a tile and device memory arrays using slice syn
 ### 2D arrays
 
 ```python
-t = Tile16x16.zeros()
-t[:] = arr[row0:row0+16, col0:col_end]    # load
-arr[row0:row0+16, col0:col_end] = t       # store
+t = Tile16x16()
+t[:] = arr[row0:row0+16, col0:col0+16]    # load
+arr[row0:row0+16, col0:col0+16] = t       # store
 ```
 
 ### 3D arrays
@@ -46,12 +46,12 @@ arr[row0:row0+16, col0:col_end] = t       # store
 For arrays with a leading batch dimension (e.g. `H[batch, row, col]`):
 
 ```python
-t = Tile16x16.zeros()
-t[:] = arr[i0, row0:row0+16, col0:col_end]    # load
-arr[i0, row0:row0+16, col0:col_end] = t       # store
+t = Tile16x16()
+t[:] = arr[i0, row0:row0+16, col0:col0+16]    # load
+arr[i0, row0:row0+16, col0:col0+16] = t       # store
 ```
 
-The column slice endpoint (`col_end`) serves as the column bound — columns beyond the array boundary are left as zero (load) or skipped (store). This replaces the explicit `n_cols` parameter of the underlying `load`/`store` methods.
+Standard NumPy-style slicing. The load/store automatically clamps column indices to the array's shape, so out-of-bounds columns are left as zero (load) or skipped (store).
 
 The `[:]` on the load LHS is required — it distinguishes an in-place tile load from a variable rebinding. The store side does not need `[:]` because the array subscript on the LHS already triggers the correct assignment path.
 
@@ -100,25 +100,23 @@ A simplified blocked Cholesky factorization using `Tile16x16`:
 ```python
 from quadrants.lang.simt.tile16 import Tile16x16
 
-TILE = 16
-
 @qd.func
 def blocked_cholesky(H, tid, n_dofs, eps):
-    N_BLOCKS = (n_dofs + TILE - 1) // TILE
+    N_BLOCKS = (n_dofs + Tile16x16.SIZE - 1) // Tile16x16.SIZE
     for kb in range(N_BLOCKS):
-        k0 = kb * TILE
+        k0 = kb * Tile16x16.SIZE
 
         # Load diagonal block, pad with identity if out of bounds
+        L_kk = Tile16x16()
         if k0 + tid < n_dofs:
-            L_kk = Tile16x16.zeros()
-            L_kk[:] = H[k0:k0+16, k0:n_dofs]
+            L_kk[:] = H[k0:k0+16, k0:k0+16]
         else:
-            L_kk = Tile16x16.eye()
+            L_kk.eye_()
 
         # Subtract contributions from previous blocks
         for jb in range(kb):
-            j0 = jb * TILE
-            for t in range(TILE):
+            j0 = jb * Tile16x16.SIZE
+            for t in range(Tile16x16.SIZE):
                 v = 0.0
                 if k0 + tid < n_dofs:
                     v = H[k0 + tid, j0 + t]
@@ -129,15 +127,15 @@ def blocked_cholesky(H, tid, n_dofs, eps):
 
         # Process off-diagonal blocks
         for ib in range(kb + 1, N_BLOCKS):
-            i0 = ib * TILE
+            i0 = ib * Tile16x16.SIZE
 
-            L_ik = Tile16x16.zeros()
+            L_ik = Tile16x16()
             if i0 + tid < n_dofs:
-                L_ik[:] = H[i0:i0+16, k0:n_dofs]
+                L_ik[:] = H[i0:i0+16, k0:k0+16]
 
             for jb in range(kb):
-                j0 = jb * TILE
-                for t in range(TILE):
+                j0 = jb * Tile16x16.SIZE
+                for t in range(Tile16x16.SIZE):
                     v_own = 0.0
                     v_diag = 0.0
                     if i0 + tid < n_dofs:
@@ -149,10 +147,10 @@ def blocked_cholesky(H, tid, n_dofs, eps):
             L_kk.solve_triangular_(L_ik)
 
             if i0 + tid < n_dofs:
-                H[i0:i0+16, k0:n_dofs] = L_ik
+                H[i0:i0+16, k0:k0+16] = L_ik
 
         if k0 + tid < n_dofs:
-            H[k0:k0+16, k0:n_dofs] = L_kk
+            H[k0:k0+16, k0:k0+16] = L_kk
 ```
 
 ## Method reference
