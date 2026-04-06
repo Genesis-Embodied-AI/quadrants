@@ -183,7 +183,11 @@ def _make_tile16x16_class(dtype):
             """Load one row from a 2D array with column bounds checking.
 
             Each thread loads arr[row0 + tid, col0:col0+16].
+            n_cols is clamped to arr.shape[1] to prevent out-of-bounds access.
             """
+            arr_n_cols = arr.shape[1]
+            if arr_n_cols < n_cols:
+                n_cols = arr_n_cols
             row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 self.r0 = arr[row, col0 + 0]
@@ -220,7 +224,13 @@ def _make_tile16x16_class(dtype):
 
         @qd.func
         def load3d(self, arr: qd.template(), i0, row0, col0, n_cols):
-            """Load one row from a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking."""
+            """Load one row from a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking.
+
+            n_cols is clamped to arr.shape[2] to prevent out-of-bounds access.
+            """
+            arr_n_cols = arr.shape[2]
+            if arr_n_cols < n_cols:
+                n_cols = arr_n_cols
             row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 self.r0 = arr[i0, row, col0 + 0]
@@ -260,7 +270,11 @@ def _make_tile16x16_class(dtype):
             """Store one row to a 2D array with column bounds checking.
 
             Each thread stores to arr[row0 + tid, col0:col0+16].
+            n_cols is clamped to arr.shape[1] to prevent out-of-bounds access.
             """
+            arr_n_cols = arr.shape[1]
+            if arr_n_cols < n_cols:
+                n_cols = arr_n_cols
             row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 arr[row, col0 + 0] = self.r0
@@ -297,7 +311,13 @@ def _make_tile16x16_class(dtype):
 
         @qd.func
         def store3d(self, arr: qd.template(), i0, row0, col0, n_cols):
-            """Store one row to a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking."""
+            """Store one row to a 3D array: arr[i0, row0+tid, col0+c] with column bounds checking.
+
+            n_cols is clamped to arr.shape[2] to prevent out-of-bounds access.
+            """
+            arr_n_cols = arr.shape[2]
+            if arr_n_cols < n_cols:
+                n_cols = arr_n_cols
             row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
             if col0 + 0 < n_cols:
                 arr[i0, row, col0 + 0] = self.r0
