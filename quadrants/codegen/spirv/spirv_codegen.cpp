@@ -305,15 +305,18 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
   spirv::Value offset_val = ir_->query_value(stmt->offset->raw_name());
   auto dt = stmt->element_type().ptr_removed();
   if (stmt->offset_used_as_index()) {
-    // Origin is a local or shared array allocation - use OpAccessChain
-    if (stmt->origin->is<AllocaStmt>()) {
+    // Origin is a local/shared array allocation or a derived pointer from one
+    // — use OpAccessChain or OpPtrAccessChain respectively.
+    if (stmt->origin->is<AllocaStmt>() ||
+        origin_val.stype.flag == TypeKind::kPtr) {
       auto scalar_stype = maybe_retype_derived_ptr(
           *ir_, stmt->origin, stmt, dt, uint_backed_shared_float_ptr_stmts_);
       spirv::SType ptr_type =
           ir_->get_pointer_type(scalar_stype, origin_val.stype.storage_class);
-      ptr_val =
-          ir_->make_value(spv::OpAccessChain, ptr_type, origin_val, offset_val);
-      if (stmt->origin->as<AllocaStmt>()->is_shared) {
+      auto op = stmt->origin->is<AllocaStmt>() ? spv::OpAccessChain
+                                               : spv::OpPtrAccessChain;
+      ptr_val = ir_->make_value(op, ptr_type, origin_val, offset_val);
+      if (auto *a = stmt->origin->cast<AllocaStmt>(); a && a->is_shared) {
         ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
       }
     } else if (stmt->origin->is<GlobalTemporaryStmt>()) {
@@ -322,15 +325,6 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
       spirv::Value offset_bytes = ir_->mul(dt_bytes, offset_val);
       ptr_val = ir_->add(origin_val, offset_bytes);
       ptr_to_buffers_[stmt] = ptr_to_buffers_[stmt->origin];
-      // Origin is already a pointer (e.g. from a prior OpAccessChain on a
-      // shared array component) - use OpPtrAccessChain for further indexing.
-    } else if (origin_val.stype.flag == TypeKind::kPtr) {
-      auto scalar_stype = maybe_retype_derived_ptr(
-          *ir_, stmt->origin, stmt, dt, uint_backed_shared_float_ptr_stmts_);
-      spirv::SType ptr_type =
-          ir_->get_pointer_type(scalar_stype, origin_val.stype.storage_class);
-      ptr_val = ir_->make_value(spv::OpPtrAccessChain, ptr_type, origin_val,
-                                offset_val);
     } else {
       QD_NOT_IMPLEMENTED;
     }
