@@ -147,14 +147,18 @@ void scan_shared_atomic_allocs(Block *ir_block,
   }
 }
 
-std::pair<uint32_t, SType> prepare_shared_alloca_type(
+void maybe_retype_shared_alloca(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
     const AllocaStmt *alloca,
     const TensorType *tensor_type,
     const std::unordered_map<const Stmt *, bool> &alloc_map,
-    std::unordered_set<const Stmt *> &retyped_stmts) {
-  auto elem_num = tensor_type->get_num_elements();
+    std::unordered_set<const Stmt *> &retyped_stmts,
+    int &elem_num,
+    SType &elem_type) {
+  auto it = alloc_map.find(alloca);
+  if (it == alloc_map.end())
+    return;
   DataType scalar_dtype = tensor_type->get_element_type();
   // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
   if (auto nested = scalar_dtype->cast<TensorType>()) {
@@ -163,36 +167,29 @@ std::pair<uint32_t, SType> prepare_shared_alloca_type(
     QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
                    "Nested tensor types deeper than 2 levels not supported");
   }
-  auto stype = ir.get_primitive_type(scalar_dtype);
-  // Retype to uint if this alloca is targeted by float atomics and the device
-  // lacks native shared float atomic support for all ops used.
-  auto it = alloc_map.find(alloca);
-  if (it != alloc_map.end()) {
-    bool needs_cas = it->second;
-    if (needs_cas || !has_native_float_atomic_add(caps, scalar_dtype, true)) {
-      stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
-      retyped_stmts.insert(alloca);
-    }
+  // Retype to uint if CAS is needed or the device lacks native shared float
+  // atomic add support.
+  bool needs_cas = it->second;
+  if (needs_cas || !has_native_float_atomic_add(caps, scalar_dtype, true)) {
+    elem_type = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
+    retyped_stmts.insert(alloca);
   }
-  return {elem_num, stype};
 }
 
-SType maybe_retype_derived_ptr(
+void maybe_retype_derived_ptr(
     IRBuilder &ir,
     const Stmt *origin,
     const Stmt *stmt,
     DataType &dt,
     std::unordered_set<const Stmt *> &retyped_stmts) {
-  // Flatten nested tensor types to scalar (e.g., vec3 to f32)
-  if (auto nested = dt->cast<TensorType>()) {
-    dt = nested->get_element_type();
-  }
-  auto stype = ir.get_primitive_type(dt);
   if (retyped_stmts.count(origin)) {
-    stype = ir.get_primitive_type(get_atomic_uint_dtype(ir, dt));
+    // Flatten nested tensor types to scalar (e.g., vec3 to f32)
+    if (auto nested = dt->cast<TensorType>()) {
+      dt = nested->get_element_type();
+    }
+    dt = get_atomic_uint_dtype(ir, dt);
     retyped_stmts.insert(stmt);
   }
-  return stype;
 }
 
 Value load_uint_backed_shared_float(IRBuilder &ir,

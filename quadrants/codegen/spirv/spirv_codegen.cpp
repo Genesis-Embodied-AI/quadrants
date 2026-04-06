@@ -279,10 +279,13 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   // Shared array is always modeled as a tensor type, i.e. an array of scalars.
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
-    auto [elem_num, elem_type] =
-        prepare_shared_alloca_type(*ir_, *caps_, alloca, tensor_type,
-                                   shared_float_allocas_with_atomic_rmw_,
-                                   uint_backed_shared_float_ptr_stmts_);
+    auto elem_num = tensor_type->get_num_elements();
+    spirv::SType elem_type =
+        ir_->get_primitive_type(tensor_type->get_element_type());
+    maybe_retype_shared_alloca(*ir_, *caps_, alloca, tensor_type,
+                               shared_float_allocas_with_atomic_rmw_,
+                               uint_backed_shared_float_ptr_stmts_,
+                               elem_num, elem_type);
     spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
@@ -309,10 +312,10 @@ void TaskCodegen::visit(MatrixPtrStmt *stmt) {
     // — use OpAccessChain or OpPtrAccessChain respectively.
     if (stmt->origin->is<AllocaStmt>() ||
         origin_val.stype.flag == TypeKind::kPtr) {
-      auto scalar_stype = maybe_retype_derived_ptr(
-          *ir_, stmt->origin, stmt, dt, uint_backed_shared_float_ptr_stmts_);
-      spirv::SType ptr_type =
-          ir_->get_pointer_type(scalar_stype, origin_val.stype.storage_class);
+      maybe_retype_derived_ptr(*ir_, stmt->origin, stmt, dt,
+                               uint_backed_shared_float_ptr_stmts_);
+      spirv::SType ptr_type = ir_->get_pointer_type(
+          ir_->get_primitive_type(dt), origin_val.stype.storage_class);
       auto op = stmt->origin->is<AllocaStmt>() ? spv::OpAccessChain
                                                : spv::OpPtrAccessChain;
       ptr_val = ir_->make_value(op, ptr_type, origin_val, offset_val);

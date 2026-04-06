@@ -22,24 +22,28 @@ namespace spirv {
 void scan_shared_atomic_allocs(Block *ir_block,
                                std::unordered_map<const Stmt *, bool> &out);
 
-// Flatten nested tensor types and optionally retype to uint for shared float
-// atomics. Returns (elem_count, element_stype) ready for array construction.
-std::pair<uint32_t, SType> prepare_shared_alloca_type(
+// Retype a shared float alloca to uint backing for CAS-based atomics.
+// Modifies elem_num and elem_type in-place when retyping is needed (including
+// flattening nested tensor types into the element count).
+// No-op when the alloca is not targeted by float atomics.
+void maybe_retype_shared_alloca(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
     const AllocaStmt *alloca,
     const TensorType *tensor_type,
     const std::unordered_map<const Stmt *, bool> &alloc_map,
-    std::unordered_set<const Stmt *> &retyped_stmts);
+    std::unordered_set<const Stmt *> &retyped_stmts,
+    int &elem_num,
+    SType &elem_type);
 
-// Flatten nested tensor types in dt, then if origin is in retyped_stmts,
-// propagate retyping to stmt and return the uint-backed element SType.
-// Otherwise return the default SType for dt.
-SType maybe_retype_derived_ptr(IRBuilder &ir,
-                               const Stmt *origin,
-                               const Stmt *stmt,
-                               DataType &dt,
-                               std::unordered_set<const Stmt *> &retyped_stmts);
+// If origin is in retyped_stmts, propagate retyping to stmt and change dt
+// to the uint-backed DataType (flattening nested tensor types first).
+// Otherwise leave dt unchanged.
+void maybe_retype_derived_ptr(IRBuilder &ir,
+                              const Stmt *origin,
+                              const Stmt *stmt,
+                              DataType &dt,
+                              std::unordered_set<const Stmt *> &retyped_stmts);
 
 // Load from a uint-backed shared float pointer: loads as uint, bitcasts to
 // float. Only call when ptr is known to be in retyped_stmts.
