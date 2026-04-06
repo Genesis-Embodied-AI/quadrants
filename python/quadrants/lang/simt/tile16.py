@@ -19,8 +19,10 @@ Usage example::
     t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
     t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
     t.eye_()                                  # set to identity matrix (in-place)
-    t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T
-    t -= qd.outer(v, v)                       # symmetric rank-1 subtract
+    v = arr[r0:r_end, col]                     # load column vector (per-thread scalar, 0 for out-of-range)
+    v = arr[i0, r0:r_end, col]                # load column vector from 3D array
+    t -= qd.outer(v, v)                       # symmetric rank-1 subtract (v may be scalar or vec proxy)
+    t -= qd.outer(a, b)                       # general rank-1 subtract: t -= a @ b^T
     t.cholesky_(eps)                           # in-place Cholesky factorization
     L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
     arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)
@@ -114,6 +116,24 @@ class _TileSliceProxy:
             tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop)
         else:
             tile.store(self.arr, self.row_start, self.col_start, self.col_stop)
+
+
+class _VecSliceProxy:
+    """Deferred column-vector load from a 2D/3D array.
+
+    Created by ``arr[r0:r_end, col]`` or ``arr[batch, r0:r_end, col]``.
+    Each subgroup thread loads one element; out-of-range threads get 0.
+    Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
+    """
+
+    _is_deferred = True
+
+    def __init__(self, arr, row_start, row_stop, col, batch_idx=None):
+        self.arr = arr
+        self.row_start = row_start
+        self.row_stop = row_stop
+        self.col = col
+        self.batch_idx = batch_idx
 
 
 class _TileRefProxy:
@@ -865,10 +885,35 @@ def _make_tile16x16_class(dtype):
                 if c == 15:
                     self.r15 = new_val
 
+        @qd.func
+        def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            v = dtype(0.0)
+            if row_start + tid < row_stop:
+                v = arr[row_start + tid, col]
+            return v
+
+        @qd.func
+        def _resolve_vec3d(self, arr: qd.template(), batch, row_start, row_stop, col):
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            v = dtype(0.0)
+            if row_start + tid < row_stop:
+                v = arr[batch, row_start + tid, col]
+            return v
+
+        def _resolve_vec_proxy(self, proxy):
+            if proxy.batch_idx is not None:
+                return self._resolve_vec3d(proxy.arr, proxy.batch_idx, proxy.row_start, proxy.row_stop, proxy.col)
+            return self._resolve_vec2d(proxy.arr, proxy.row_start, proxy.row_stop, proxy.col)
+
         def _augassign(self, other, op):
             if isinstance(other, _OuterProduct):
                 if op == "Sub":
-                    self.ger_sub(other.a, other.b)
+                    a_orig = other.a
+                    b_orig = other.b
+                    a = self._resolve_vec_proxy(a_orig) if isinstance(a_orig, _VecSliceProxy) else a_orig
+                    b = a if (b_orig is a_orig) else (self._resolve_vec_proxy(b_orig) if isinstance(b_orig, _VecSliceProxy) else b_orig)
+                    self.ger_sub(a, b)
                 else:
                     raise TypeError(f"Tile16x16: unsupported augmented assignment op '{op}' with outer product")
             else:
