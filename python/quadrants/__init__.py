@@ -1,5 +1,12 @@
 # type: ignore
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
 from quadrants._lib import core as _qd_core
+
+if _TYPE_CHECKING:
+    from quadrants._lib.core.quadrants_python import CompileConfig
+
+    cfg: CompileConfig | None
 
 __version__ = (
     _qd_core.get_version_major(),
@@ -33,6 +40,10 @@ from quadrants.types.primitive_types import *
 def __getattr__(attr):
     if attr == "cfg":
         return None if lang.impl.get_runtime()._prog is None else lang.impl.current_cfg()
+    if attr == "outer":
+        from quadrants.lang.simt.tile16 import outer  # noqa: I001  # pylint: disable=import-outside-toplevel
+
+        return outer
     raise AttributeError(f"module '{__name__}' has no attribute '{attr}'")
 
 

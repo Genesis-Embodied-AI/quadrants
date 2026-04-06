@@ -673,7 +673,8 @@ class ASTTransformer(Builder):
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
-                        # ignore this built-in module
+                        violation = False
+                    if violation and getattr(node.value.ptr, "_quadrants_internal", False):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
