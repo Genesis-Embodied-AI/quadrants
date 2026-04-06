@@ -198,12 +198,14 @@ def cholesky_tile16():
             k0 = kb * Tile16x16.SIZE
             k1 = qd.min(k0 + Tile16x16.SIZE, N)
 
+            # Load diagonal block from input, pad with identity if partial
             L_kk = Tile16x16()
             if k0 + tid < N:
                 L_kk[:] = A_field[env, k0:k1, k0:k1]
             else:
                 L_kk.eye_()
 
+            # Subtract contributions from previously factored columns
             for jb in range(kb):
                 j0 = jb * Tile16x16.SIZE
                 for t in range(Tile16x16.SIZE):
@@ -212,16 +214,20 @@ def cholesky_tile16():
                         v = L_tile16_field[env, k0 + tid, j0 + t]
                     L_kk -= qd.outer(v, v)
 
+            # Factorize diagonal block: L_kk such that L_kk @ L_kk^T = A_kk
             L_kk.cholesky_(qd.f32(1e-12))
 
+            # Update off-diagonal blocks below the diagonal
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * Tile16x16.SIZE
                 i1 = qd.min(i0 + Tile16x16.SIZE, N)
 
+                # Load off-diagonal block from input
                 L_ik = Tile16x16()
                 if i0 + tid < N:
                     L_ik[:] = A_field[env, i0:i1, k0:k1]
 
+                # Subtract contributions from previously factored columns
                 for jb in range(kb):
                     j0 = jb * Tile16x16.SIZE
                     for t in range(Tile16x16.SIZE):
@@ -233,11 +239,14 @@ def cholesky_tile16():
                             v_diag = L_tile16_field[env, k0 + tid, j0 + t]
                         L_ik -= qd.outer(v_own, v_diag)
 
+                # Triangular solve: L_ik = L_ik @ L_kk^{-T}
                 L_kk.solve_triangular_(L_ik)
 
+                # Store completed off-diagonal block
                 if i0 + tid < N:
                     L_tile16_field[env, i0:i1, k0:k1] = L_ik
 
+            # Store completed diagonal block
             if k0 + tid < N:
                 L_tile16_field[env, k0:k1, k0:k1] = L_kk
 
