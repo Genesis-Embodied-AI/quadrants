@@ -279,11 +279,11 @@ void TaskCodegen::visit(AllocaStmt *alloca) {
   auto alloca_type = alloca->ret_type.ptr_removed();
   // Shared array is always modeled as a tensor type, i.e. an array of scalars.
   if (auto tensor_type = alloca_type->cast<TensorType>()) {
-    auto [elem_num, scalar_stype] =
+    auto [elem_num, elem_type] =
         prepare_shared_alloca_type(*ir_, *caps_, alloca, tensor_type,
                                    shared_float_allocas_with_atomic_rmw_,
                                    uint_backed_shared_float_ptr_stmts_);
-    spirv::SType arr_type = ir_->get_array_type(scalar_stype, elem_num);
+    spirv::SType arr_type = ir_->get_array_type(elem_type, elem_num);
     if (alloca->is_shared) {  // for shared memory / workgroup memory
       ptr_val = ir_->alloca_workgroup_array(arr_type);
       shared_array_binds_.push_back(ptr_val);
