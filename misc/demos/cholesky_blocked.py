@@ -71,6 +71,7 @@ def cholesky_baseline():
 
         H = qd.simt.block.SharedArray((N, N + 1), qd.f32)
 
+        # Load lower triangle into shared memory
         for row in range(N):
             if row % 64 == tid:
                 for col in range(row + 1):
@@ -78,6 +79,7 @@ def cholesky_baseline():
         qd.simt.block.sync()
 
         for i_d in range(N):
+            # Thread 0 computes diagonal: sqrt(A_ii - sum(L_ij^2))
             if tid == 0:
                 tmp = H[i_d, i_d]
                 for j_d in range(i_d):
@@ -85,6 +87,7 @@ def cholesky_baseline():
                 H[i_d, i_d] = qd.sqrt(qd.max(tmp, qd.f32(1e-12)))
             qd.simt.block.sync()
 
+            # All threads update off-diagonal entries in parallel
             inv_diag = qd.f32(1.0) / H[i_d, i_d]
             j_d = i_d + 1 + tid
             while j_d < N:
@@ -95,6 +98,7 @@ def cholesky_baseline():
                 j_d += 64
             qd.simt.block.sync()
 
+        # Write result to global memory
         for row in range(N):
             if row % 64 == tid:
                 for col in range(row + 1):
@@ -115,6 +119,7 @@ def cholesky_blocked():
 
         H = qd.simt.block.SharedArray((N_PADDED, N_PADDED + 1), qd.f32)
 
+        # Load lower triangle into shared memory
         for row in range(N):
             c = tid
             while c <= row:
@@ -125,6 +130,7 @@ def cholesky_blocked():
         for kb in range(N_BLOCKS):
             k0 = kb * TILE
 
+            # Subtract prior-block contributions from diagonal block
             for r in range(TILE):
                 c = tid
                 if c <= r:
@@ -136,6 +142,7 @@ def cholesky_blocked():
                     H[k0 + r, k0 + c] -= s
             qd.simt.block.sync()
 
+            # Scalar Crout factorization of 16x16 diagonal block
             for col in range(TILE):
                 if tid == 0:
                     tmp = H[k0 + col, k0 + col]
@@ -153,9 +160,11 @@ def cholesky_blocked():
                     H[k0 + row, k0 + col] = (H[k0 + row, k0 + col] - dot) * inv_d
                 qd.simt.block.sync()
 
+            # Update off-diagonal blocks below the diagonal
             for ib in range(kb + 1, N_BLOCKS):
                 i0 = ib * TILE
 
+                # Subtract prior-block contributions from off-diagonal block
                 for r in range(TILE):
                     c = tid
                     s = qd.f32(0.0)
@@ -166,6 +175,7 @@ def cholesky_blocked():
                     H[i0 + r, k0 + c] -= s
                 qd.simt.block.sync()
 
+                # Triangular solve against diagonal block
                 for c in range(TILE):
                     r = tid
                     if r < TILE:
@@ -175,6 +185,7 @@ def cholesky_blocked():
                         H[i0 + r, k0 + c] = (H[i0 + r, k0 + c] - dot) / H[k0 + c, k0 + c]
                     qd.simt.block.sync()
 
+        # Write result to global memory
         for row in range(N):
             c = tid
             while c <= row:
