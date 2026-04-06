@@ -32,9 +32,10 @@ import numpy as np
 import quadrants as qd
 from quadrants.lang.simt.tile16 import make_tile16x16
 
-N = 64
+N = 92
 TILE = 16
-N_BLOCKS = N // TILE  # 4
+N_BLOCKS = (N + TILE - 1) // TILE  # 6
+N_PADDED = N_BLOCKS * TILE  # 96, rounded up for blocked kernel SharedArrays
 N_ENVS = 4096
 WARMUP = 50
 ITERS = 200
@@ -112,7 +113,7 @@ def cholesky_blocked():
         tid = idx % TILE
         env = idx // TILE
 
-        H = qd.simt.block.SharedArray((N, N + 1), qd.f32)
+        H = qd.simt.block.SharedArray((N_PADDED, N_PADDED + 1), qd.f32)
 
         for row in range(N):
             c = tid
