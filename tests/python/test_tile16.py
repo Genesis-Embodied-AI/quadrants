@@ -1162,7 +1162,8 @@ def test_proxy_in_func(tensor_type):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_proxy_default_dtype_survives_reinit():
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_default_dtype_survives_reinit(tensor_type):
     """Proxy with default dtype must follow default_fp across init/reset cycles.
 
     This is the actual regression scenario: init with f64, compile a kernel,
@@ -1171,8 +1172,23 @@ def test_proxy_default_dtype_survives_reinit():
     """
     from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
+    def _make(dtype):
+        if tensor_type == qd.ndarray:
+            return qd.ndarray(dtype, (N, N))
+        return qd.field(dtype, shape=(N, N))
+
+    Ann64 = _ann(tensor_type, qd.f64, 2)
+    Ann32 = _ann(tensor_type, qd.f32, 2)
+
     @qd.kernel
-    def write_eye_f64(dst: qd.types.NDArray[qd.f64, 2]):
+    def write_eye_f64(dst: Ann64):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.eye()
+            dst[0:N, 0:N] = t
+
+    @qd.kernel
+    def write_eye_f32(dst: Ann32):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             t = qd.simt.Tile16x16.eye()
@@ -1180,22 +1196,15 @@ def test_proxy_default_dtype_survives_reinit():
 
     # Phase 1: switch to f64, compile and run
     impl.get_runtime().set_default_fp(qd.f64)
-    dst64 = qd.ndarray(qd.f64, (N, N))
+    dst64 = _make(qd.f64)
     write_eye_f64(dst64)
     np.testing.assert_allclose(dst64.to_numpy(), np.eye(N))
 
-    # Phase 2: reset, reinit with f32
+    # Phase 2: reset, reinit with f32 — kernel must now use f32 tiles
     qd.reset()
     qd.init(arch=qd.gpu, default_fp=qd.f32)
 
-    @qd.kernel
-    def write_eye_f32(dst: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16.eye()
-            dst[0:N, 0:N] = t
-
-    dst32 = qd.ndarray(qd.f32, (N, N))
+    dst32 = _make(qd.f32)
     write_eye_f32(dst32)
     result32 = dst32.to_numpy()
 
