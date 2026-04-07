@@ -340,6 +340,7 @@ class VulkanPipeline : public Pipeline {
   static VkShaderModule create_shader_module(VkDevice device,
                                              const SpirvCodeView &code);
 
+  // Internal grouping of Vulkan create-info structs; not passed to any Vulkan API.
   struct GraphicsPipelineTemplate {
     VkPipelineViewportStateCreateInfo viewport_state{};
     std::vector<VkVertexInputBindingDescription> input_bindings;
