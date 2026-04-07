@@ -336,8 +336,10 @@
 <span class="sd">    t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)</span>
 <span class="sd">    t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)</span>
 <span class="sd">    t.eye_()                                  # set to identity matrix (in-place)</span>
-<span class="sd">    t -= qd.outer(a, b)                       # rank-1 subtract: t -= a @ b^T</span>
-<span class="sd">    t -= qd.outer(v, v)                       # symmetric rank-1 subtract</span>
+<span class="sd">    v = arr[r0:r_end, col]                     # load column vector (per-thread scalar, 0 for out-of-range)</span>
+<span class="sd">    v = arr[i0, r0:r_end, col]                # load column vector from 3D array</span>
+<span class="sd">    t -= qd.outer(v, v)                       # symmetric rank-1 subtract (v may be scalar or vec proxy)</span>
+<span class="sd">    t -= qd.outer(a, b)                       # general rank-1 subtract: t -= a @ b^T</span>
 <span class="sd">    t.cholesky_(eps)                           # in-place Cholesky factorization</span>
 <span class="sd">    L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B</span>
 <span class="sd">    arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)</span>
@@ -434,6 +436,24 @@
             <span class="n">tile</span><span class="o">.</span><span class="n">store3d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_idx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">row_start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">col_start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">col_stop</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">tile</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">row_start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">col_start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">col_stop</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_VecSliceProxy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deferred column-vector load from a 2D/3D array.</span>
+
+<span class="sd">    Created by ``arr[r0:r_end, col]`` or ``arr[batch, r0:r_end, col]``.</span>
+<span class="sd">    Each subgroup thread loads one element; out-of-range threads get 0.</span>
+<span class="sd">    Only valid as an argument to ``qd.outer()`` in tile augmented assignment.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_is_deferred</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">row_start</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">batch_idx</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">row_start</span> <span class="o">=</span> <span class="n">row_start</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">row_stop</span> <span class="o">=</span> <span class="n">row_stop</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">col</span> <span class="o">=</span> <span class="n">col</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_idx</span> <span class="o">=</span> <span class="n">batch_idx</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_TileRefProxy</span><span class="p">:</span>
@@ -1188,10 +1208,35 @@
                 <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="mi">15</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">r15</span> <span class="o">=</span> <span class="n">new_val</span>
 
+        <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_vec2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">row_start</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">,</span> <span class="n">col</span><span class="p">):</span>
+            <span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">dtype</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">row_start</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">row_stop</span><span class="p">:</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">row_start</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">v</span>
+
+        <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_vec3d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">template</span><span class="p">(),</span> <span class="n">batch</span><span class="p">,</span> <span class="n">row_start</span><span class="p">,</span> <span class="n">row_stop</span><span class="p">,</span> <span class="n">col</span><span class="p">):</span>
+            <span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">dtype</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">row_start</span> <span class="o">+</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">row_stop</span><span class="p">:</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">batch</span><span class="p">,</span> <span class="n">row_start</span> <span class="o">+</span> <span class="n">tid</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">v</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_vec_proxy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">proxy</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">proxy</span><span class="o">.</span><span class="n">batch_idx</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_vec3d</span><span class="p">(</span><span class="n">proxy</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">batch_idx</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">row_start</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">row_stop</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">col</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_vec2d</span><span class="p">(</span><span class="n">proxy</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">row_start</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">row_stop</span><span class="p">,</span> <span class="n">proxy</span><span class="o">.</span><span class="n">col</span><span class="p">)</span>
+
         <span class="k">def</span><span class="w"> </span><span class="nf">_augassign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">op</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">_OuterProduct</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="s2">&quot;Sub&quot;</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">ger_sub</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+                    <span class="n">a_orig</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">a</span>
+                    <span class="n">b_orig</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">b</span>
+                    <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_vec_proxy</span><span class="p">(</span><span class="n">a_orig</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a_orig</span><span class="p">,</span> <span class="n">_VecSliceProxy</span><span class="p">)</span> <span class="k">else</span> <span class="n">a_orig</span>
+                    <span class="n">b</span> <span class="o">=</span> <span class="n">a</span> <span class="k">if</span> <span class="p">(</span><span class="n">b_orig</span> <span class="ow">is</span> <span class="n">a_orig</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_vec_proxy</span><span class="p">(</span><span class="n">b_orig</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b_orig</span><span class="p">,</span> <span class="n">_VecSliceProxy</span><span class="p">)</span> <span class="k">else</span> <span class="n">b_orig</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">ger_sub</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tile16x16: unsupported augmented assignment op &#39;</span><span class="si">{</span><span class="n">op</span><span class="si">}</span><span class="s2">&#39; with outer product&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
