@@ -5,13 +5,16 @@ import pytest
 import scipy.linalg
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import Tile16x16, make_tile16x16, outer
+from quadrants.lang.simt.tile16 import outer
 
 from tests import test_utils
 
 N = 16
 
-Tile16x16_f64 = make_tile16x16(qd.f64)
+_QD_DTYPES = [qd.f32, qd.f64]
+_NP_DTYPES = {qd.f32: np.float32, qd.f64: np.float64}
+_ATOLS = {qd.f32: 1e-4, qd.f64: 1e-10}
+_EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
 
 
 def _make_spd(seed: int = 42, dtype: type = np.float32):
@@ -28,110 +31,120 @@ def _ann(tensor_type, dtype, ndim):
 
 
 # =============================================================================
-# Tile16x16 class API tests (field + ndarray)
+# Tile16x16 API tests (field + ndarray, f32 + f64)
 # =============================================================================
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_zeros(tensor_type):
-    dst = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_zeros(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             dst_arr[0:N, 0:N] = t
 
     run(dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_eye(tensor_type):
-    dst = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_eye(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.eye()
+            t = qd.simt.Tile16x16.eye(dtype=qd_dtype)
             dst_arr[0:N, 0:N] = t
 
     run(dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_eye_inplace(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_eye_inplace(tensor_type, qd_dtype):
     """Load non-zero data into tile, call eye_(), verify identity overwrites it."""
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
+    np_dtype = _NP_DTYPES[qd_dtype]
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             t.eye_()
             dst_arr[0:N, 0:N] = t
 
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 100.0
+    data = np.arange(N * N, dtype=np_dtype).reshape(N, N) + 100.0
     src.from_numpy(data)
     run(src, dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_load_store(tensor_type):
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_load_store(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:N] = t
 
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N)
+    data = np.arange(N * N, dtype=np_dtype).reshape(N, N)
     src.from_numpy(data)
     run(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_load_store_partial(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_load_store_partial(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 12
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:NCOLS]
             dst_arr[0:N, 0:N] = t
 
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    data = np.arange(N * N, dtype=np_dtype).reshape(N, N) + 1.0
     src.from_numpy(data)
     run(src, dst)
     result = dst.to_numpy()
@@ -139,53 +152,57 @@ def test_tile16_load_store_partial(tensor_type):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_store_partial_cols(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_store_partial_cols(tensor_type, qd_dtype):
     """Load full 16 columns, store only NCOLS < 16. Remaining dst columns must be untouched."""
+    np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:NCOLS] = t
 
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    data = np.arange(N * N, dtype=np_dtype).reshape(N, N) + 1.0
     src.from_numpy(data)
-    dst.from_numpy(np.full((N, N), -1.0, dtype=np.float32))
+    dst.from_numpy(np.full((N, N), -1.0, dtype=np_dtype))
     run(src, dst)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     np.testing.assert_allclose(result[:, NCOLS:], -1.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_load_clamp_to_array_shape(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_load_clamp_to_array_shape(tensor_type, qd_dtype):
     """Load from an array narrower than 16 columns. Columns beyond arr width should be zero."""
+    np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
-    src = tensor_type(qd.f32, (N, NCOLS))
-    dst = tensor_type(qd.f32, (N, N))
+    src = tensor_type(qd_dtype, (N, NCOLS))
+    dst = tensor_type(qd_dtype, (N, N))
 
-    Ann_src = _ann(tensor_type, qd.f32, 2)
-    Ann_dst = _ann(tensor_type, qd.f32, 2)
+    Ann_src = _ann(tensor_type, qd_dtype, 2)
+    Ann_dst = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann_src, dst_arr: Ann_dst):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:N] = t
 
-    data = np.arange(N * NCOLS, dtype=np.float32).reshape(N, NCOLS) + 1.0
+    data = np.arange(N * NCOLS, dtype=np_dtype).reshape(N, NCOLS) + 1.0
     src.from_numpy(data)
     run(src, dst)
     result = dst.to_numpy()
@@ -193,47 +210,51 @@ def test_tile16_load_clamp_to_array_shape(tensor_type):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_store_clamp_to_array_shape(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_store_clamp_to_array_shape(tensor_type, qd_dtype):
     """Store to an array narrower than 16 columns. Must not write out of bounds."""
+    np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, NCOLS))
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, NCOLS))
 
-    Ann_src = _ann(tensor_type, qd.f32, 2)
-    Ann_dst = _ann(tensor_type, qd.f32, 2)
+    Ann_src = _ann(tensor_type, qd_dtype, 2)
+    Ann_dst = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann_src, dst_arr: Ann_dst):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             dst_arr[0:N, 0:N] = t
 
-    data = np.arange(N * N, dtype=np.float32).reshape(N, N) + 1.0
+    data = np.arange(N * N, dtype=np_dtype).reshape(N, N) + 1.0
     src.from_numpy(data)
     run(src, dst)
     result = dst.to_numpy()
     np.testing.assert_allclose(result, data[:, :NCOLS])
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_syr_sub(tensor_type):
-    mat = tensor_type(qd.f32, (N, N))
-    vec = tensor_type(qd.f32, (N,))
-    out = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_syr_sub(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    mat = tensor_type(qd_dtype, (N, N))
+    vec = tensor_type(qd_dtype, (N,))
+    out = tensor_type(qd_dtype, (N, N))
 
-    Ann2 = _ann(tensor_type, qd.f32, 2)
-    Ann1 = _ann(tensor_type, qd.f32, 1)
+    Ann2 = _ann(tensor_type, qd_dtype, 2)
+    Ann1 = _ann(tensor_type, qd_dtype, 1)
 
     @qd.kernel
     def run(mat_arr: Ann2, vec_arr: Ann1, out_arr: Ann2):
         qd.loop_config(block_dim=N)
         for tid in range(N):
-            t = Tile16x16(
+            t = qd.simt.Tile16x16(
                 mat_arr[tid, 0],
                 mat_arr[tid, 1],
                 mat_arr[tid, 2],
@@ -250,29 +271,32 @@ def test_tile16_syr_sub(tensor_type):
                 mat_arr[tid, 13],
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
+                dtype=qd_dtype,
             )
             t -= outer(vec_arr[tid], vec_arr[tid])
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(123)
-    R = rng.randn(N, N).astype(np.float32)
-    v = rng.randn(N).astype(np.float32)
+    R = rng.randn(N, N).astype(np_dtype)
+    v = rng.randn(N).astype(np_dtype)
     mat.from_numpy(R)
     vec.from_numpy(v)
     run(mat, vec, out)
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_ger_sub(tensor_type):
-    mat = tensor_type(qd.f32, (N, N))
-    vec_a = tensor_type(qd.f32, (N,))
-    vec_b = tensor_type(qd.f32, (N,))
-    out = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_ger_sub(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    mat = tensor_type(qd_dtype, (N, N))
+    vec_a = tensor_type(qd_dtype, (N,))
+    vec_b = tensor_type(qd_dtype, (N,))
+    out = tensor_type(qd_dtype, (N, N))
 
-    Ann2 = _ann(tensor_type, qd.f32, 2)
-    Ann1 = _ann(tensor_type, qd.f32, 1)
+    Ann2 = _ann(tensor_type, qd_dtype, 2)
+    Ann1 = _ann(tensor_type, qd_dtype, 1)
 
     @qd.kernel
     def run(
@@ -283,7 +307,7 @@ def test_tile16_ger_sub(tensor_type):
     ):
         qd.loop_config(block_dim=N)
         for tid in range(N):
-            t = Tile16x16(
+            t = qd.simt.Tile16x16(
                 mat_arr[tid, 0],
                 mat_arr[tid, 1],
                 mat_arr[tid, 2],
@@ -300,14 +324,15 @@ def test_tile16_ger_sub(tensor_type):
                 mat_arr[tid, 13],
                 mat_arr[tid, 14],
                 mat_arr[tid, 15],
+                dtype=qd_dtype,
             )
             t -= outer(va_arr[tid], vb_arr[tid])
             out_arr[0:N, 0:N] = t
 
     rng = np.random.RandomState(456)
-    R = rng.randn(N, N).astype(np.float32)
-    a = rng.randn(N).astype(np.float32)
-    b = rng.randn(N).astype(np.float32)
+    R = rng.randn(N, N).astype(np_dtype)
+    a = rng.randn(N).astype(np_dtype)
+    b = rng.randn(N).astype(np_dtype)
     mat.from_numpy(R)
     vec_a.from_numpy(a)
     vec_b.from_numpy(b)
@@ -315,217 +340,140 @@ def test_tile16_ger_sub(tensor_type):
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(a, b), atol=1e-5)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_potrf(tensor_type):
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
-    eps_field = qd.field(dtype=qd.f32, shape=())
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_potrf(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    atol = _ATOLS[qd_dtype]
+    src = tensor_type(qd_dtype, (N, N))
+    dst = tensor_type(qd_dtype, (N, N))
+    eps_field = qd.field(dtype=qd_dtype, shape=())
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:N, 0:N]
             t.cholesky_(eps_field[None])
             dst_arr[0:N, 0:N] = t
 
-    A = _make_spd()
+    A = _make_spd(dtype=np_dtype)
     src.from_numpy(A)
-    eps_field[None] = 1e-10
+    eps_field[None] = _EPS_VALS[qd_dtype]
     run(src, dst)
-    L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
-    np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)
+    L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np_dtype)
+    np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_trsm(tensor_type):
-    l_field = tensor_type(qd.f32, (N, N))
-    b_field = tensor_type(qd.f32, (N, N))
-    x_field = tensor_type(qd.f32, (N, N))
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_trsm(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    atol = _ATOLS[qd_dtype]
+    l_field = tensor_type(qd_dtype, (N, N))
+    b_field = tensor_type(qd_dtype, (N, N))
+    x_field = tensor_type(qd_dtype, (N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(l_arr: Ann, b_arr: Ann, x_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            L = Tile16x16.zeros()
+            L = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             L[:] = l_arr[0:N, 0:N]
-            B = Tile16x16.zeros()
+            B = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             B[:] = b_arr[0:N, 0:N]
             L.solve_triangular_(B)
             x_arr[0:N, 0:N] = B
 
-    A = _make_spd(seed=99)
-    Lnp = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
+    A = _make_spd(seed=99, dtype=np_dtype)
+    Lnp = np.linalg.cholesky(A.astype(np.float64)).astype(np_dtype)
     rng = np.random.RandomState(77)
-    Bnp = rng.randn(N, N).astype(np.float32)
+    Bnp = rng.randn(N, N).astype(np_dtype)
     l_field.from_numpy(Lnp)
     b_field.from_numpy(Bnp)
     run(l_field, b_field, x_field)
     X = x_field.to_numpy()
-    np.testing.assert_allclose(X @ Lnp.T, Bnp, atol=1e-3)
+    np.testing.assert_allclose(X @ Lnp.T, Bnp, atol=max(atol, 1e-3))
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_potrf_then_trsm(tensor_type):
-    a_field = tensor_type(qd.f32, (N, N))
-    b_field = tensor_type(qd.f32, (N, N))
-    x_field = tensor_type(qd.f32, (N, N))
-    eps_field = qd.field(dtype=qd.f32, shape=())
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_potrf_then_trsm(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
+    atol = _ATOLS[qd_dtype]
+    a_field = tensor_type(qd_dtype, (N, N))
+    b_field = tensor_type(qd_dtype, (N, N))
+    x_field = tensor_type(qd_dtype, (N, N))
+    eps_field = qd.field(dtype=qd_dtype, shape=())
 
-    Ann = _ann(tensor_type, qd.f32, 2)
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def run(a_arr: Ann, b_arr: Ann, x_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            L = Tile16x16.zeros()
+            L = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             L[:] = a_arr[0:N, 0:N]
             L.cholesky_(eps_field[None])
-            B = Tile16x16.zeros()
+            B = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             B[:] = b_arr[0:N, 0:N]
             L.solve_triangular_(B)
             x_arr[0:N, 0:N] = B
 
-    A = _make_spd(seed=55)
+    A = _make_spd(seed=55, dtype=np_dtype)
     rng = np.random.RandomState(66)
-    Bnp = rng.randn(N, N).astype(np.float32)
+    Bnp = rng.randn(N, N).astype(np_dtype)
     a_field.from_numpy(A)
     b_field.from_numpy(Bnp)
-    eps_field[None] = 1e-10
+    eps_field[None] = _EPS_VALS[qd_dtype]
     run(a_field, b_field, x_field)
     X = x_field.to_numpy()
     L_ref = np.linalg.cholesky(A.astype(np.float64))
-    X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T.astype(np.float64), lower=True).T.astype(np.float32)
-    np.testing.assert_allclose(X, X_ref, atol=1e-3)
+    X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T.astype(np.float64), lower=True).T.astype(np_dtype)
+    np.testing.assert_allclose(X, X_ref, atol=max(atol, 1e-3))
 
 
 # =============================================================================
-# f64 precision tests — verify make_tile16x16(qd.f64) preserves double precision
+# 3D load/store tests
 # =============================================================================
 
 
-@test_utils.test(arch=qd.cuda)
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_f64_load_store(tensor_type):
-    src = tensor_type(qd.f64, (N, N))
-    dst = tensor_type(qd.f64, (N, N))
-
-    Ann = _ann(tensor_type, qd.f64, 2)
-
-    @qd.kernel
-    def run(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = Tile16x16_f64.zeros()
-            t[:] = src_arr[0:N, 0:N]
-            dst_arr[0:N, 0:N] = t
-
-    data = np.arange(N * N, dtype=np.float64).reshape(N, N)
-    src.from_numpy(data)
-    run(src, dst)
-    np.testing.assert_allclose(dst.to_numpy(), data)
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_f64_potrf(tensor_type):
-    src = tensor_type(qd.f64, (N, N))
-    dst = tensor_type(qd.f64, (N, N))
-    eps_field = qd.field(dtype=qd.f64, shape=())
-
-    Ann = _ann(tensor_type, qd.f64, 2)
-
-    @qd.kernel
-    def run(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = Tile16x16_f64.zeros()
-            t[:] = src_arr[0:N, 0:N]
-            t.cholesky_(eps_field[None])
-            dst_arr[0:N, 0:N] = t
-
-    A = _make_spd(dtype=np.float64)
-    src.from_numpy(A)
-    eps_field[None] = 1e-30
-    run(src, dst)
-    L_expected = np.linalg.cholesky(A)
-    np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-12)
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_f64_potrf_then_trsm(tensor_type):
-    a_field = tensor_type(qd.f64, (N, N))
-    b_field = tensor_type(qd.f64, (N, N))
-    x_field = tensor_type(qd.f64, (N, N))
-    eps_field = qd.field(dtype=qd.f64, shape=())
-
-    Ann = _ann(tensor_type, qd.f64, 2)
-
-    @qd.kernel
-    def run(a_arr: Ann, b_arr: Ann, x_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            L = Tile16x16_f64.zeros()
-            L[:] = a_arr[0:N, 0:N]
-            L.cholesky_(eps_field[None])
-            B = Tile16x16_f64.zeros()
-            B[:] = b_arr[0:N, 0:N]
-            L.solve_triangular_(B)
-            x_arr[0:N, 0:N] = B
-
-    A = _make_spd(seed=55, dtype=np.float64)
-    rng = np.random.RandomState(66)
-    Bnp = rng.randn(N, N).astype(np.float64)
-    a_field.from_numpy(A)
-    b_field.from_numpy(Bnp)
-    eps_field[None] = 1e-30
-    run(a_field, b_field, x_field)
-    X = x_field.to_numpy()
-    L_ref = np.linalg.cholesky(A)
-    X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T, lower=True).T
-    np.testing.assert_allclose(X, X_ref, atol=1e-12)
-
-
-# =============================================================================
-# 3D load/store tests — verify load3d/store3d with field and ndarray
-# =============================================================================
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_tile16_load3d_store3d(tensor_type):
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+def test_tile16_load3d_store3d(tensor_type, qd_dtype):
+    np_dtype = _NP_DTYPES[qd_dtype]
     N_BATCH = 2
-    src = tensor_type(qd.f32, (N_BATCH, N, N))
-    dst = tensor_type(qd.f32, (N_BATCH, N, N))
+    src = tensor_type(qd_dtype, (N_BATCH, N, N))
+    dst = tensor_type(qd_dtype, (N_BATCH, N, N))
 
-    Ann = _ann(tensor_type, qd.f32, 3)
+    Ann = _ann(tensor_type, qd_dtype, 3)
 
     @qd.kernel
     def run(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
             for i_b in range(N_BATCH):
-                t = Tile16x16.zeros()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t[:] = src_arr[i_b, 0:N, 0:N]
                 dst_arr[i_b, 0:N, 0:N] = t
 
-    data = np.arange(N_BATCH * N * N, dtype=np.float32).reshape(N_BATCH, N, N)
+    data = np.arange(N_BATCH * N * N, dtype=np_dtype).reshape(N_BATCH, N, N)
     src.from_numpy(data)
     run(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
 # =============================================================================
-# SharedArray load/store tests — verify tile <-> shared memory transfers
+# SharedArray load/store tests (CUDA only, f32 only — SharedArray dtype is explicit)
 # =============================================================================
 
 
@@ -540,11 +488,11 @@ def test_tile16_shared_array_roundtrip():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, N), qd.f32)
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = src[0:N, 0:N]
             sh[0:N, 0:N] = t
             qd.simt.block.sync()
-            t2 = Tile16x16.zeros()
+            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t2[:] = sh[0:N, 0:N]
             dst[0:N, 0:N] = t2
 
@@ -566,11 +514,11 @@ def test_tile16_shared_array_partial_cols():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, N), qd.f32)
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = src[0:N, 0:NCOLS]
             sh[0:N, 0:NCOLS] = t
             qd.simt.block.sync()
-            t2 = Tile16x16.zeros()
+            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t2[:] = sh[0:N, 0:NCOLS]
             dst[0:N, 0:N] = t2
 
@@ -594,12 +542,12 @@ def test_tile16_shared_array_cholesky():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, N), qd.f32)
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = src[0:N, 0:N]
             t.cholesky_(eps_field[None])
             sh[0:N, 0:N] = t
             qd.simt.block.sync()
-            t2 = Tile16x16.zeros()
+            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t2[:] = sh[0:N, 0:N]
             dst[0:N, 0:N] = t2
 
@@ -627,11 +575,11 @@ def test_tile16_shared_array_store_partial_cols():
             for c in range(N):
                 sh[tid, c] = qd.f32(-1.0)
             qd.simt.block.sync()
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = src[0:N, 0:N]
             sh[0:N, 0:NCOLS] = t
             qd.simt.block.sync()
-            t2 = Tile16x16.zeros()
+            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t2[:] = sh[0:N, 0:N]
             dst[0:N, 0:N] = t2
 
@@ -655,11 +603,11 @@ def test_tile16_shared_array_load_partial_cols():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, N), qd.f32)
-            t_load = Tile16x16.zeros()
+            t_load = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t_load[:] = src[0:N, 0:N]
             sh[0:N, 0:N] = t_load
             qd.simt.block.sync()
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = sh[0:N, 0:NCOLS]
             dst[0:N, 0:N] = t
 
@@ -683,11 +631,11 @@ def test_tile16_shared_array_clamp_store():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, NCOLS), qd.f32)
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = src[0:N, 0:N]
             sh[0:N, 0:N] = t
             qd.simt.block.sync()
-            t2 = Tile16x16.zeros()
+            t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t2[:] = sh[0:N, 0:NCOLS]
             dst[0:N, 0:NCOLS] = t2
 
@@ -710,11 +658,11 @@ def test_tile16_shared_array_clamp_load():
         qd.loop_config(block_dim=N)
         for _ in range(N):
             sh = qd.simt.block.SharedArray((N, NCOLS), qd.f32)
-            t_load = Tile16x16.zeros()
+            t_load = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t_load[:] = src[0:N, 0:NCOLS]
             sh[0:N, 0:NCOLS] = t_load
             qd.simt.block.sync()
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = sh[0:N, 0:N]
             dst[0:N, 0:N] = t
 
@@ -751,9 +699,9 @@ def test_tile16_vec_proxy_syr_sub_2d(tensor_type):
     def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:N, 0:N]
-            v = vecs_arr[K0:K0 + Tile16x16.SIZE, COL]
+            v = vecs_arr[K0:K0 + qd.simt.Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
@@ -786,9 +734,9 @@ def test_tile16_vec_proxy_syr_sub_3d(tensor_type):
     def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:N, 0:N]
-            v = vecs_arr[1, K0:K0 + Tile16x16.SIZE, COL]
+            v = vecs_arr[1, K0:K0 + qd.simt.Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
@@ -821,10 +769,10 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type):
     def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:N, 0:N]
-            a = vecs_arr[K0_A:K0_A + Tile16x16.SIZE, COL]
-            b = vecs_arr[K0_B:K0_B + Tile16x16.SIZE, COL]
+            a = vecs_arr[K0_A:K0_A + qd.simt.Tile16x16.SIZE, COL]
+            b = vecs_arr[K0_B:K0_B + qd.simt.Tile16x16.SIZE, COL]
             t -= outer(a, b)
             out_arr[0:N, 0:N] = t
 
@@ -860,9 +808,9 @@ def test_tile16_vec_proxy_shared_array():
                     for c in range(M):
                         sh[row, c] = vecs[row, c]
             qd.simt.block.sync()
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat[0:N, 0:N]
-            v = sh[K0:K0 + Tile16x16.SIZE, COL]
+            v = sh[K0:K0 + qd.simt.Tile16x16.SIZE, COL]
             t -= outer(v, v)
             out[0:N, 0:N] = t
 
@@ -894,7 +842,7 @@ def test_tile16_vec_proxy_partial_rows(tensor_type):
     def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:N, 0:N]
             v = vecs_arr[K0:M, COL]
             t -= outer(v, v)
@@ -929,10 +877,10 @@ def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
     def run(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile16x16.zeros()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:N, 0:N]
             for c in range(NCOLS):
-                v = vecs_arr[K0:K0 + Tile16x16.SIZE, c]
+                v = vecs_arr[K0:K0 + qd.simt.Tile16x16.SIZE, c]
                 t -= outer(v, v)
             out_arr[0:N, 0:N] = t
 
@@ -950,22 +898,13 @@ def test_tile16_vec_proxy_multi_column_accumulate(tensor_type):
 
 
 # =============================================================================
-# Dtype mismatch regression tests — f64 tile on f32 arrays
-#
-# Reproduces the g1_fall 50% FPS regression: when Genesis's solver.py captures
-# Tile16x16 = make_tile16x16(qd.f64) at import time (because a CPU test with
-# precision=64 imported it first), all subsequent GPU kernels use f64 tile
-# registers on f32 data — doubling register pressure and halving throughput.
+# f64 tile on f32 array roundtrip — must be lossless
 # =============================================================================
 
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu])
 def test_tile16_f64_roundtrip_into_f32_array():
     """Load f32 data through an f64 tile and store back — must be lossless."""
-
-    Tile_f64 = make_tile16x16(qd.f64)
-    Tile_f32 = make_tile16x16(qd.f32)
-
     src = qd.ndarray(shape=(N, N), dtype=qd.f32)
     dst_f32 = qd.ndarray(shape=(N, N), dtype=qd.f32)
     dst_f64 = qd.ndarray(shape=(N, N), dtype=qd.f32)
@@ -976,7 +915,7 @@ def test_tile16_f64_roundtrip_into_f32_array():
     def roundtrip_f32(s: Ann, d: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile_f32()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:N, 0:N]
             d[0:N, 0:N] = t
 
@@ -984,7 +923,7 @@ def test_tile16_f64_roundtrip_into_f32_array():
     def roundtrip_f64(s: Ann, d: Ann):
         qd.loop_config(block_dim=N)
         for _ in range(N):
-            t = Tile_f64()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
             t[:] = s[0:N, 0:N]
             d[0:N, 0:N] = t
 
@@ -997,13 +936,18 @@ def test_tile16_f64_roundtrip_into_f32_array():
     np.testing.assert_array_equal(dst_f32.to_numpy(), data)
     np.testing.assert_array_equal(dst_f64.to_numpy(), data)
 
+
+# =============================================================================
+# Dtype mismatch perf regression test (kept for hardware where f64 is slower)
+# =============================================================================
+
 _ENVS = 4096
 _NDOFS = 48
 _N_BLOCKS = (_NDOFS + N - 1) // N
 
 
-def _make_cholesky_kernel(tile_cls):
-    """Build a tiled Cholesky kernel using the given Tile16x16 class."""
+def _make_cholesky_kernel(qd_dtype):
+    """Build a tiled Cholesky kernel using qd.simt.Tile16x16 with the given dtype."""
 
     @qd.kernel
     def cholesky_tiled(H: qd.types.NDArray[qd.f32, 3], eps_arr: qd.types.NDArray[qd.f32, 1]):
@@ -1011,40 +955,40 @@ def _make_cholesky_kernel(tile_cls):
         _B = H.shape[0]
         EPS = eps_arr[0]
 
-        qd.loop_config(block_dim=tile_cls.SIZE)
-        for i in range(_B * tile_cls.SIZE):
-            tid = i % tile_cls.SIZE
-            i_b = i // tile_cls.SIZE
+        qd.loop_config(block_dim=N)
+        for i in range(_B * N):
+            tid = i % N
+            i_b = i // N
             if i_b >= _B:
                 continue
 
             for kb in range(_N_BLOCKS):
-                k0 = kb * tile_cls.SIZE
+                k0 = kb * N
 
-                L_kk = tile_cls()
+                L_kk = qd.simt.Tile16x16(dtype=qd_dtype)
                 if k0 + tid < n_dofs:
-                    L_kk[:] = H[i_b, k0 : k0 + tile_cls.SIZE, k0:n_dofs]
+                    L_kk[:] = H[i_b, k0 : k0 + N, k0:n_dofs]
                 else:
                     L_kk.eye_()
 
                 for jb in range(kb):
-                    j0 = jb * tile_cls.SIZE
-                    for t in range(tile_cls.SIZE):
+                    j0 = jb * N
+                    for t in range(N):
                         v = H[i_b, k0:n_dofs, j0 + t]
                         L_kk -= outer(v, v)
 
                 L_kk.cholesky_(EPS)
 
                 for ib in range(kb + 1, _N_BLOCKS):
-                    i0 = ib * tile_cls.SIZE
+                    i0 = ib * N
 
-                    L_ik = tile_cls()
+                    L_ik = qd.simt.Tile16x16(dtype=qd_dtype)
                     if i0 + tid < n_dofs:
-                        L_ik[:] = H[i_b, i0 : i0 + tile_cls.SIZE, k0:n_dofs]
+                        L_ik[:] = H[i_b, i0 : i0 + N, k0:n_dofs]
 
                     for jb in range(kb):
-                        j0 = jb * tile_cls.SIZE
-                        for t in range(tile_cls.SIZE):
+                        j0 = jb * N
+                        for t in range(N):
                             v_own = H[i_b, i0:n_dofs, j0 + t]
                             v_diag = H[i_b, k0:n_dofs, j0 + t]
                             L_ik -= outer(v_own, v_diag)
@@ -1052,10 +996,10 @@ def _make_cholesky_kernel(tile_cls):
                     L_kk.solve_triangular_(L_ik)
 
                     if i0 + tid < n_dofs:
-                        H[i_b, i0 : i0 + tile_cls.SIZE, k0:n_dofs] = L_ik
+                        H[i_b, i0 : i0 + N, k0:n_dofs] = L_ik
 
                 if k0 + tid < n_dofs:
-                    H[i_b, k0 : k0 + tile_cls.SIZE, k0:n_dofs] = L_kk
+                    H[i_b, k0 : k0 + N, k0:n_dofs] = L_kk
 
     return cholesky_tiled
 
@@ -1064,17 +1008,12 @@ def _make_cholesky_kernel(tile_cls):
 def test_tile16_f64_on_f32_arrays_perf_regression():
     """f64 Tile16x16 on f32 arrays must not be silently slower than f32 tile.
 
-    This reproduces the g1_fall regression where solver.py captured
-    Tile16x16 = make_tile16x16(qd.f64) at module import time because
-    a CPU test with precision=64 imported it first.  The f64 tile uses
-    double-width registers for all Cholesky/trsm math, causing ~2x
-    slowdown on f32 data.
+    This reproduces the g1_fall regression where the solver captured an f64
+    tile at import time, causing all subsequent GPU kernels to use f64 tile
+    registers on f32 data — doubling register pressure and halving throughput.
     """
-    Tile_f32 = make_tile16x16(qd.f32)
-    Tile_f64 = make_tile16x16(qd.f64)
-
-    kernel_f32 = _make_cholesky_kernel(Tile_f32)
-    kernel_f64 = _make_cholesky_kernel(Tile_f64)
+    kernel_f32 = _make_cholesky_kernel(qd.f32)
+    kernel_f64 = _make_cholesky_kernel(qd.f64)
 
     rng = np.random.RandomState(42)
     B_np = rng.randn(_ENVS, _NDOFS, _NDOFS).astype(np.float32)
@@ -1085,7 +1024,6 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
     eps_arr = qd.ndarray(qd.f32, (1,))
     eps_arr.from_numpy(np.array([1e-6], dtype=np.float32))
 
-    # Warmup + correctness
     H_f32.from_numpy(H_np.copy())
     kernel_f32(H_f32, eps_arr)
     result_f32 = H_f32.to_numpy()
@@ -1094,18 +1032,16 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
     kernel_f64(H_f64_on_f32, eps_arr)
     result_f64 = H_f64_on_f32.to_numpy()
 
-    # Both must produce the same Cholesky factor (lower triangle)
     for b in [0, 1, _ENVS - 1]:
         L32 = np.tril(result_f32[b])
         L64 = np.tril(result_f64[b])
         np.testing.assert_allclose(L32, L64, atol=1e-3,
                                    err_msg=f"Cholesky mismatch at batch {b}")
 
-    # Benchmark
     REPS = 20
     qd.sync()
     H_f32.from_numpy(H_np.copy())
-    kernel_f32(H_f32, eps_arr)  # compile warmup
+    kernel_f32(H_f32, eps_arr)
     qd.sync()
 
     t0 = time.perf_counter()
@@ -1116,7 +1052,7 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
     ms_f32 = (time.perf_counter() - t0) / REPS * 1000
 
     H_f64_on_f32.from_numpy(H_np.copy())
-    kernel_f64(H_f64_on_f32, eps_arr)  # compile warmup
+    kernel_f64(H_f64_on_f32, eps_arr)
     qd.sync()
 
     t0 = time.perf_counter()
@@ -1140,44 +1076,13 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
 
 
 # =============================================================================
-# qd.simt.Tile16x16 proxy API tests
+# Proxy API specific tests
 # =============================================================================
 
 
 @test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_proxy_zeros(tensor_type):
-    dst = tensor_type(qd.f32, (N, N))
-
-    Ann = _ann(tensor_type, qd.f32, 2)
-
-    @qd.kernel
-    def run(dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            dst_arr[0:N, 0:N] = t
-
-    run(dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_proxy_eye(tensor_type):
-    dst = tensor_type(qd.f32, (N, N))
-
-    Ann = _ann(tensor_type, qd.f32, 2)
-
-    @qd.kernel
-    def run(dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16.eye(dtype=qd.f32)
-            dst_arr[0:N, 0:N] = t
-
-    run(dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+def test_proxy_size_constant():
+    assert qd.simt.Tile16x16.SIZE == 16
 
 
 @test_utils.test(arch=qd.cuda)
@@ -1197,86 +1102,6 @@ def test_proxy_default_dtype(tensor_type):
 
     run(dst)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_proxy_call_is_zeros(tensor_type):
-    """Calling the proxy directly (no method) produces a zero tile."""
-    dst = tensor_type(qd.f32, (N, N))
-
-    Ann = _ann(tensor_type, qd.f32, 2)
-
-    @qd.kernel
-    def run(dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16(dtype=qd.f32)
-            dst_arr[0:N, 0:N] = t
-
-    run(dst)
-    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
-
-
-@test_utils.test(arch=qd.cuda)
-def test_proxy_size_constant():
-    assert qd.simt.Tile16x16.SIZE == 16
-
-
-@test_utils.test(arch=qd.cuda)
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_proxy_cholesky(tensor_type):
-    """Full Cholesky factorisation via proxy API."""
-    src = tensor_type(qd.f32, (N, N))
-    dst = tensor_type(qd.f32, (N, N))
-
-    Ann = _ann(tensor_type, qd.f32, 2)
-
-    @qd.kernel
-    def run(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = src_arr[0:N, 0:N]
-            t.cholesky_(qd.f32(1e-6))
-            dst_arr[0:N, 0:N] = t
-
-    H = _make_spd()
-    src.from_numpy(H)
-    dst.from_numpy(np.zeros_like(H))
-    run(src, dst)
-
-    L_qd = np.tril(dst.to_numpy())
-    L_ref = np.linalg.cholesky(H)
-    np.testing.assert_allclose(L_qd, L_ref, atol=1e-4)
-
-
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
-def test_proxy_f64(tensor_type):
-    """Proxy with explicit dtype=qd.f64 produces f64-precision tiles."""
-    src = tensor_type(qd.f64, (N, N))
-    dst = tensor_type(qd.f64, (N, N))
-
-    Ann = _ann(tensor_type, qd.f64, 2)
-
-    @qd.kernel
-    def run(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=N)
-        for _ in range(N):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
-            t[:] = src_arr[0:N, 0:N]
-            t.cholesky_(qd.f64(1e-14))
-            dst_arr[0:N, 0:N] = t
-
-    H = _make_spd(dtype=np.float64)
-    src.from_numpy(H)
-    dst.from_numpy(np.zeros_like(H))
-    run(src, dst)
-
-    L_qd = np.tril(dst.to_numpy())
-    L_ref = np.linalg.cholesky(H)
-    np.testing.assert_allclose(L_qd, L_ref, atol=1e-10)
 
 
 @test_utils.test(arch=qd.cuda)

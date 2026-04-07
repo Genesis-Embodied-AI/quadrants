@@ -15,13 +15,4 @@ from quadrants.types.ndarray_type import *  # type: ignore
 from quadrants.types.primitive_types import *  # type: ignore
 from quadrants.types.utils import *  # type: ignore
 
-__all__ = ["Tile16x16", "quant"]
-
-
-def __getattr__(name):
-    if name == "Tile16x16":
-        from quadrants.lang.simt.tile16 import make_tile16x16  # pylint: disable=import-outside-toplevel
-
-        globals()["Tile16x16"] = make_tile16x16
-        return make_tile16x16
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__all__ = ["quant"]

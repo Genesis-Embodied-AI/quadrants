@@ -11,22 +11,22 @@ The thread's lane index (tid) is obtained internally via subgroup.invocation_id(
 so callers never need to pass it. Load/store methods take a row offset (row0);
 each thread accesses row = row0 + tid.
 
-Usage example::
+Usage example (inside a @qd.kernel or @qd.func)::
 
-    Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-    t = Tile16x16.zeros()                        # zero-initialized tile
-    t = Tile16x16.eye()                          # identity tile
-    t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
-    t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
-    t.eye_()                                  # set to identity matrix (in-place)
-    v = arr[r0:r_end, col]                     # load column vector (per-thread scalar, 0 for out-of-range)
-    v = arr[i0, r0:r_end, col]                # load column vector from 3D array
-    t -= qd.outer(v, v)                       # symmetric rank-1 subtract (v may be scalar or vec proxy)
-    t -= qd.outer(a, b)                       # general rank-1 subtract: t -= a @ b^T
-    t.cholesky_(eps)                           # in-place Cholesky factorization
-    L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
-    arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)
-    arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
+    t = qd.simt.Tile16x16.zeros(dtype=qd.f32)  # zero-initialized tile (explicit dtype)
+    t = qd.simt.Tile16x16.eye(dtype=qd.f32)    # identity tile
+    t = qd.simt.Tile16x16()                     # zero tile using default_fp
+    t[:] = arr[r0:r0+16, c0:c0+n]               # load from 2D array (slice syntax)
+    t[:] = arr[i0, r0:r0+16, c0:c0+n]           # load from 3D array (slice syntax)
+    t.eye_()                                     # set to identity matrix (in-place)
+    v = arr[r0:r_end, col]                       # load column vector (per-thread scalar, 0 for out-of-range)
+    v = arr[i0, r0:r_end, col]                   # load column vector from 3D array
+    t -= qd.outer(v, v)                          # symmetric rank-1 subtract
+    t -= qd.outer(a, b)                          # general rank-1 subtract: t -= a @ b^T
+    t.cholesky_(eps)                             # in-place Cholesky factorization
+    L.solve_triangular_(B)                       # triangular solve: X @ L^T = B, result in B
+    arr[r0:r0+16, c0:c0+n] = t                  # store to 2D array (slice syntax)
+    arr[i0, r0:r0+16, c0:c0+n] = t              # store to 3D array (slice syntax)
 """
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
@@ -165,8 +165,11 @@ class _TileRefProxy:
 _tile16_cache = {}
 
 
-def make_tile16x16(dtype=qd.f32) -> "type[_Tile16x16Proto]":
-    """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64)."""
+def _make_tile16x16(dtype=qd.f32) -> "type[_Tile16x16Proto]":
+    """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
+
+    This is an internal factory. Use ``qd.simt.Tile16x16`` (the proxy) instead.
+    """
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]
     cls = _make_tile16x16_class(dtype)
@@ -947,7 +950,7 @@ def _make_tile16x16_class(dtype):
     return result
 
 
-Tile16x16 = make_tile16x16(qd.f32)
+Tile16x16 = _make_tile16x16(qd.f32)  # kept for backward compat; prefer qd.simt.Tile16x16
 
 
 class _Tile16x16Proxy:
@@ -966,19 +969,19 @@ class _Tile16x16Proxy:
             from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
             dtype = impl.get_runtime().default_fp
-        return make_tile16x16(dtype)
+        return _make_tile16x16(dtype)
 
-    def zeros(self, dtype=None):
-        """Zero-initialized tile. Equivalent to ``Tile16x16()``."""
+    def zeros(self, *, dtype=None):
+        """Zero-initialized tile."""
         return self._resolve(dtype)()
 
-    def eye(self, dtype=None):
+    def eye(self, *, dtype=None):
         """Identity tile (diagonal = 1, rest = 0)."""
         return self._resolve(dtype).eye()
 
-    def __call__(self, dtype=None):
-        """Zero-initialized tile (same as ``.zeros()``)."""
-        return self._resolve(dtype)()
+    def __call__(self, *args, dtype=None):
+        """Create a tile. With no args: zero-initialized. With 16 args: per-register values."""
+        return self._resolve(dtype)(*args)
 
 
 Tile16x16Proxy = _Tile16x16Proxy()

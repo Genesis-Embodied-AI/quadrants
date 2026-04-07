@@ -30,7 +30,6 @@ import time
 import numpy as np
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import make_tile16x16
 
 N = 92
 TILE = 16
@@ -41,8 +40,6 @@ WARMUP = 50
 ITERS = 200
 
 qd.init(arch=qd.cuda)
-
-Tile16x16 = make_tile16x16(qd.f32)
 
 A_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_baseline_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
@@ -200,58 +197,49 @@ def cholesky_blocked():
 
 @qd.kernel
 def cholesky_tile16():
-    qd.loop_config(name="chol_tile16", block_dim=Tile16x16.SIZE)
-    for idx in range(N_ENVS * Tile16x16.SIZE):
-        tid = idx % Tile16x16.SIZE
-        env = idx // Tile16x16.SIZE
+    qd.loop_config(name="chol_tile16", block_dim=TILE)
+    for idx in range(N_ENVS * TILE):
+        tid = idx % TILE
+        env = idx // TILE
 
         for kb in range(N_BLOCKS):
-            k0 = kb * Tile16x16.SIZE
-            k1 = qd.min(k0 + Tile16x16.SIZE, N)
+            k0 = kb * TILE
+            k1 = qd.min(k0 + TILE, N)
 
-            # Load diagonal block from input, pad with identity if partial
-            L_kk = Tile16x16()
+            L_kk = qd.simt.Tile16x16(dtype=qd.f32)
             if k0 + tid < N:
                 L_kk[:] = A_field[env, k0:k1, k0:k1]
             else:
                 L_kk.eye_()
 
-            # Subtract contributions from previously factored columns
             for jb in range(kb):
-                j0 = jb * Tile16x16.SIZE
-                for t in range(Tile16x16.SIZE):
+                j0 = jb * TILE
+                for t in range(TILE):
                     v = L_tile16_field[env, k0:k1, j0 + t]
                     L_kk -= qd.outer(v, v)
 
-            # Factorize diagonal block: L_kk such that L_kk @ L_kk^T = A_kk
             L_kk.cholesky_(qd.f32(1e-12))
 
-            # Update off-diagonal blocks below the diagonal
             for ib in range(kb + 1, N_BLOCKS):
-                i0 = ib * Tile16x16.SIZE
-                i1 = qd.min(i0 + Tile16x16.SIZE, N)
+                i0 = ib * TILE
+                i1 = qd.min(i0 + TILE, N)
 
-                # Load off-diagonal block from input
-                L_ik = Tile16x16()
+                L_ik = qd.simt.Tile16x16(dtype=qd.f32)
                 if i0 + tid < N:
                     L_ik[:] = A_field[env, i0:i1, k0:k1]
 
-                # Subtract contributions from previously factored columns
                 for jb in range(kb):
-                    j0 = jb * Tile16x16.SIZE
-                    for t in range(Tile16x16.SIZE):
+                    j0 = jb * TILE
+                    for t in range(TILE):
                         v_own = L_tile16_field[env, i0:i1, j0 + t]
                         v_diag = L_tile16_field[env, k0:k1, j0 + t]
                         L_ik -= qd.outer(v_own, v_diag)
 
-                # Triangular solve: L_ik = L_ik @ L_kk^{-T}
                 L_kk.solve_triangular_(L_ik)
 
-                # Store completed off-diagonal block
                 if i0 + tid < N:
                     L_tile16_field[env, i0:i1, k0:k1] = L_ik
 
-            # Store completed diagonal block
             if k0 + tid < N:
                 L_tile16_field[env, k0:k1, k0:k1] = L_kk
 
