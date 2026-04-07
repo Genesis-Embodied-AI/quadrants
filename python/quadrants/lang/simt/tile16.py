@@ -116,11 +116,10 @@ class _TileSliceProxy:
 
     def _assign(self, tile):
         """Store path: arr[r:r+n_rows, c:c+n_cols] = tile."""
-        n_rows = self.row_stop - self.row_start
         if self.batch_idx is not None:
-            tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop, n_rows)
+            tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop, self.row_stop)
         else:
-            tile.store(self.arr, self.row_start, self.col_start, self.col_stop, n_rows)
+            tile.store(self.arr, self.row_start, self.col_start, self.col_stop, self.row_stop)
 
 
 class _VecSliceProxy:
@@ -155,11 +154,10 @@ class _TileRefProxy:
 
     def _assign(self, value):
         if isinstance(value, _TileSliceProxy):
-            n_rows = value.row_stop - value.row_start
             if value.batch_idx is not None:
-                self.tile.load3d(value.arr, value.batch_idx, value.row_start, value.col_start, value.col_stop, n_rows)
+                self.tile.load3d(value.arr, value.batch_idx, value.row_start, value.col_start, value.col_stop, value.row_stop)
             else:
-                self.tile.load(value.arr, value.row_start, value.col_start, value.col_stop, n_rows)
+                self.tile.load(value.arr, value.row_start, value.col_start, value.col_stop, value.row_stop)
         else:
             raise TypeError(f"Tile16x16[:] can only be assigned from an array slice, got {type(value)}")
 
@@ -208,18 +206,17 @@ def _make_tile16x16_class(dtype):
         r15: dtype
 
         @qd.func
-        def load(self, arr: qd.template(), row0, col0, n_cols, n_rows):
+        def load(self, arr: qd.template(), row0, col0, n_cols, row_stop):
             """Load from a 2D array with row and column bounds checking.
 
             Each thread loads arr[row0 + tid, col0:col0+n_cols].
-            Threads with tid >= n_rows skip the load (tile row unchanged).
+            Threads where row0 + tid >= row_stop skip the load (tile row unchanged).
             """
-            tid = qd.i32(qd.simt.subgroup.invocation_id())
-            if tid < n_rows:
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_stop:
                 arr_n_cols = arr.shape[1]
                 if arr_n_cols < n_cols:
                     n_cols = arr_n_cols
-                row = row0 + tid
                 if col0 + 0 < n_cols:
                     self.r0 = arr[row, col0 + 0]
                 if col0 + 1 < n_cols:
@@ -254,18 +251,17 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[row, col0 + 15]
 
         @qd.func
-        def load3d(self, arr: qd.template(), i0, row0, col0, n_cols, n_rows):
+        def load3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
             """Load from a 3D array with row and column bounds checking.
 
             Each thread loads arr[i0, row0+tid, col0:col0+n_cols].
-            Threads with tid >= n_rows skip the load (tile row unchanged).
+            Threads where row0 + tid >= row_stop skip the load (tile row unchanged).
             """
-            tid = qd.i32(qd.simt.subgroup.invocation_id())
-            if tid < n_rows:
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_stop:
                 arr_n_cols = arr.shape[2]
                 if arr_n_cols < n_cols:
                     n_cols = arr_n_cols
-                row = row0 + tid
                 if col0 + 0 < n_cols:
                     self.r0 = arr[i0, row, col0 + 0]
                 if col0 + 1 < n_cols:
@@ -300,18 +296,17 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[i0, row, col0 + 15]
 
         @qd.func
-        def store(self, arr: qd.template(), row0, col0, n_cols, n_rows):
+        def store(self, arr: qd.template(), row0, col0, n_cols, row_stop):
             """Store to a 2D array with row and column bounds checking.
 
             Each thread stores to arr[row0 + tid, col0:col0+n_cols].
-            Threads with tid >= n_rows skip the store.
+            Threads where row0 + tid >= row_stop skip the store.
             """
-            tid = qd.i32(qd.simt.subgroup.invocation_id())
-            if tid < n_rows:
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_stop:
                 arr_n_cols = arr.shape[1]
                 if arr_n_cols < n_cols:
                     n_cols = arr_n_cols
-                row = row0 + tid
                 if col0 + 0 < n_cols:
                     arr[row, col0 + 0] = self.r0
                 if col0 + 1 < n_cols:
@@ -346,18 +341,17 @@ def _make_tile16x16_class(dtype):
                     arr[row, col0 + 15] = self.r15
 
         @qd.func
-        def store3d(self, arr: qd.template(), i0, row0, col0, n_cols, n_rows):
+        def store3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
             """Store to a 3D array with row and column bounds checking.
 
             Each thread stores to arr[i0, row0+tid, col0:col0+n_cols].
-            Threads with tid >= n_rows skip the store.
+            Threads where row0 + tid >= row_stop skip the store.
             """
-            tid = qd.i32(qd.simt.subgroup.invocation_id())
-            if tid < n_rows:
+            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_stop:
                 arr_n_cols = arr.shape[2]
                 if arr_n_cols < n_cols:
                     n_cols = arr_n_cols
-                row = row0 + tid
                 if col0 + 0 < n_cols:
                     arr[i0, row, col0 + 0] = self.r0
                 if col0 + 1 < n_cols:

@@ -25,8 +25,8 @@ def _skip_if_f64_unsupported(dtype):
     arch = qd.lang.impl.current_cfg().arch
     if arch == qd.metal:
         pytest.skip("Metal does not support f64")
-    if arch == qd.vulkan and platform.system() == "Darwin":
-        pytest.skip("MoltenVK does not support f64")
+    if arch == qd.vulkan:
+        pytest.skip("Vulkan does not reliably support f64")
 
 
 def _make_spd(seed: int = 42, dtype: type = np.float32):

@@ -209,7 +209,10 @@ def cholesky_tile16():
             L_kk = qd.simt.Tile16x16.eye(dtype=qd.f32)
             L_kk[:] = A_field[env, k0:k1, k0:k1]
 
-            # Subtract rank-1 contributions from prior column-blocks
+            # Subtract rank-1 contributions from prior column-blocks.
+            # Each vector load reads from global memory, but only data this
+            # subgroup itself wrote in an earlier iteration (same thread reads
+            # its own prior store), so no cross-thread sync is needed.
             for jb in range(kb):
                 j0 = jb * TILE
                 for t in range(TILE):
@@ -229,6 +232,7 @@ def cholesky_tile16():
                 L_ik[:] = A_field[env, i0:i1, k0:k1]
 
                 # Subtract rank-1 contributions from prior column-blocks
+                # (same self-read-after-self-write pattern as above)
                 for jb in range(kb):
                     j0 = jb * TILE
                     for t in range(TILE):
