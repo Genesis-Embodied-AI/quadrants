@@ -63,8 +63,15 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(
             .allocate_with_cache(this, params);
   }
 
-  if (info.ptr)
-    CUDADriver::get_instance().memset((void *)info.ptr, 0, info.size);
+  if (!info.ptr) {
+    DeviceAllocation fail_alloc;
+    fail_alloc.alloc_id = -1;
+    fail_alloc.device = this;
+
+    return fail_alloc;
+  }
+
+  CUDADriver::get_instance().memset((void *)info.ptr, 0, info.size);
 
   info.is_imported = false;
   info.use_cached = true;

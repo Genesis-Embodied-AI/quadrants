@@ -62,7 +62,14 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(
     info.ptr = DeviceMemoryPool::get_instance(Arch::amdgpu,
                                               false /*merge_upon_release*/)
                    .allocate_with_cache(this, params);
-    QD_ASSERT(info.ptr != nullptr);
+
+    if (!info.ptr) {
+      DeviceAllocation fail_alloc;
+      fail_alloc.alloc_id = -1;
+      fail_alloc.device = this;
+
+      return fail_alloc;
+    }
 
     AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
   }

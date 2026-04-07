@@ -952,6 +952,7 @@ void runtime_memory_allocate_aligned(LLVMRuntime *runtime,
                                      std::size_t size,
                                      std::size_t alignment,
                                      uint64 *result) {
+  *result = (uint64) nullptr;
   *result = quadrants_union_cast_with_different_sizes<uint64>(
       runtime->allocate_aligned(runtime->runtime_memory_chunk, size,
                                 alignment));
