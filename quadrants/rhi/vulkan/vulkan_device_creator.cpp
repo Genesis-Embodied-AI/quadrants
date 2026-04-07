@@ -663,14 +663,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
     subgroup_properties.pNext = nullptr;
 
-    VkPhysicalDeviceSubgroupSizeControlProperties size_ctrl_props{};
-    if (ti_device_->vk_caps().subgroup_size_control) {
-      size_ctrl_props.sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
-      size_ctrl_props.pNext = nullptr;
-      subgroup_properties.pNext = &size_ctrl_props;
-    }
-
     VkPhysicalDeviceProperties2 physical_device_properties{};
     physical_device_properties.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -696,13 +688,6 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       caps.set(DeviceCapability::spirv_has_subgroup_ballot, true);
     }
 
-    if (ti_device_->vk_caps().subgroup_size_control) {
-      ti_device_->vk_caps().required_subgroup_size =
-          size_ctrl_props.maxSubgroupSize;
-    } else {
-      ti_device_->vk_caps().required_subgroup_size =
-          subgroup_properties.subgroupSize;
-    }
   }
 
   create_info.pEnabledFeatures = &device_features;

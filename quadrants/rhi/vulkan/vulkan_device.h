@@ -573,7 +573,6 @@ struct VulkanCapabilities {
   bool present{false};
   bool dynamic_rendering{false};
   bool subgroup_size_control{false};
-  uint32_t required_subgroup_size{0};
 };
 
 class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {
