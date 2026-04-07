@@ -413,12 +413,11 @@ void VulkanPipeline::create_shader_stages(const Params &params) {
     // and breaking Tile16x16 and other subgroup-dependent operations.
     if (code_view.stage == VK_SHADER_STAGE_COMPUTE_BIT &&
         ti_device_.vk_caps().subgroup_size_control) {
-      auto &req = subgroup_size_info_.emplace_back();
-      req.sType =
+      subgroup_size_info_.sType =
           VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO;
-      req.pNext = nullptr;
-      req.requiredSubgroupSize = 32;
-      shader_stage_info.pNext = &req;
+      subgroup_size_info_.pNext = nullptr;
+      subgroup_size_info_.requiredSubgroupSize = 32;
+      shader_stage_info.pNext = &subgroup_size_info_;
     }
 
     shader_modules_.push_back(shader_module);
