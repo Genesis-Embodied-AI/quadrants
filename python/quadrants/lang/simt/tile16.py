@@ -948,3 +948,37 @@ def _make_tile16x16_class(dtype):
 
 
 Tile16x16 = make_tile16x16(qd.f32)
+
+
+class _Tile16x16Proxy:
+    """Proxy for dtype-at-point-of-use tile creation.
+
+    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel.
+    The dtype is resolved at kernel compilation time, defaulting to the
+    compile config's ``default_fp`` if omitted.
+    """
+
+    SIZE = _TILE
+
+    @staticmethod
+    def _resolve(dtype):
+        if dtype is None:
+            from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
+
+            dtype = impl.get_runtime().default_fp
+        return make_tile16x16(dtype)
+
+    def zeros(self, dtype=None):
+        """Zero-initialized tile. Equivalent to ``Tile16x16()``."""
+        return self._resolve(dtype)()
+
+    def eye(self, dtype=None):
+        """Identity tile (diagonal = 1, rest = 0)."""
+        return self._resolve(dtype).eye()
+
+    def __call__(self, dtype=None):
+        """Zero-initialized tile (same as ``.zeros()``)."""
+        return self._resolve(dtype)()
+
+
+Tile16x16Proxy = _Tile16x16Proxy()

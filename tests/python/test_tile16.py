@@ -1137,3 +1137,175 @@ def test_tile16_f64_on_f32_arrays_perf_regression():
         f"got {ratio:.2f}x. If f64 is as fast as f32, the dtype mismatch "
         f"regression may no longer apply on this hardware."
     )
+
+
+# =============================================================================
+# qd.simt.Tile16x16 proxy API tests
+# =============================================================================
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_zeros(tensor_type):
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_eye(tensor_type):
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.eye(dtype=qd.f32)
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(N, dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_default_dtype(tensor_type):
+    """Omitting dtype= uses the compile config's default_fp (f32 by default)."""
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.zeros()
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_call_is_zeros(tensor_type):
+    """Calling the proxy directly (no method) produces a zero tile."""
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16(dtype=qd.f32)
+            dst_arr[0:N, 0:N] = t
+
+    run(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((N, N), dtype=np.float32))
+
+
+@test_utils.test(arch=qd.cuda)
+def test_proxy_size_constant():
+    assert qd.simt.Tile16x16.SIZE == 16
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_cholesky(tensor_type):
+    """Full Cholesky factorisation via proxy API."""
+    src = tensor_type(qd.f32, (N, N))
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann, dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+            t[:] = src_arr[0:N, 0:N]
+            t.cholesky_(qd.f32(1e-6))
+            dst_arr[0:N, 0:N] = t
+
+    H = _make_spd()
+    src.from_numpy(H)
+    dst.from_numpy(np.zeros_like(H))
+    run(src, dst)
+
+    L_qd = np.tril(dst.to_numpy())
+    L_ref = np.linalg.cholesky(H)
+    np.testing.assert_allclose(L_qd, L_ref, atol=1e-4)
+
+
+@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_f64(tensor_type):
+    """Proxy with explicit dtype=qd.f64 produces f64-precision tiles."""
+    src = tensor_type(qd.f64, (N, N))
+    dst = tensor_type(qd.f64, (N, N))
+
+    Ann = _ann(tensor_type, qd.f64, 2)
+
+    @qd.kernel
+    def run(src_arr: Ann, dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
+            t[:] = src_arr[0:N, 0:N]
+            t.cholesky_(qd.f64(1e-14))
+            dst_arr[0:N, 0:N] = t
+
+    H = _make_spd(dtype=np.float64)
+    src.from_numpy(H)
+    dst.from_numpy(np.zeros_like(H))
+    run(src, dst)
+
+    L_qd = np.tril(dst.to_numpy())
+    L_ref = np.linalg.cholesky(H)
+    np.testing.assert_allclose(L_qd, L_ref, atol=1e-10)
+
+
+@test_utils.test(arch=qd.cuda)
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
+def test_proxy_in_func(tensor_type):
+    """Proxy works when called from a @qd.func, not just @qd.kernel."""
+    src = tensor_type(qd.f32, (N, N))
+    dst = tensor_type(qd.f32, (N, N))
+
+    Ann = _ann(tensor_type, qd.f32, 2)
+
+    @qd.func
+    def cholesky_via_proxy(s: Ann, d: Ann):
+        t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+        t[:] = s[0:N, 0:N]
+        t.cholesky_(qd.f32(1e-6))
+        d[0:N, 0:N] = t
+
+    @qd.kernel
+    def run(src_arr: Ann, dst_arr: Ann):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            cholesky_via_proxy(src_arr, dst_arr)
+
+    H = _make_spd()
+    src.from_numpy(H)
+    dst.from_numpy(np.zeros_like(H))
+    run(src, dst)
+
+    L_qd = np.tril(dst.to_numpy())
+    L_ref = np.linalg.cholesky(H)
+    np.testing.assert_allclose(L_qd, L_ref, atol=1e-4)
