@@ -118,29 +118,46 @@ def test_tile16_eye_inplace(tensor_type, qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
+_ARR = 92
+
+
 @test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
-def test_tile16_load_store(tensor_type, qd_dtype):
+@pytest.mark.parametrize("row_off", [0, 13, _ARR - _TILE])
+@pytest.mark.parametrize("col_off", [0, 7, _ARR - _TILE])
+@pytest.mark.parametrize("ncols", [_TILE, 5, 3])
+def test_tile16_load_store(tensor_type, qd_dtype, row_off, col_off, ncols):
+    """Load 16 rows x ncols columns from (row_off, col_off) in a large array into a tile,
+    store to a _TILE x _TILE destination, and verify contents + zero padding.
+
+    The tile always loads _TILE rows (one per thread); only the column count varies.
+    """
     _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    src = tensor_type(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_ARR, _ARR))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
 
-    Ann = _ann(tensor_type, qd_dtype, 2)
+    Ann_src = _ann(tensor_type, qd_dtype, 2)
+    Ann_dst = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: Ann, dst_arr: Ann):
+    def k1(src_arr: Ann_src, dst_arr: Ann_dst):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
-            t[:] = src_arr[0:_TILE, 0:_TILE]
+            t[:] = src_arr[row_off : row_off + _TILE, col_off : col_off + ncols]
             dst_arr[0:_TILE, 0:_TILE] = t
 
-    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE)
+    data = (np.arange(_ARR * _ARR, dtype=np_dtype).reshape(_ARR, _ARR) + 1.0)
     src.from_numpy(data)
+    dst.from_numpy(np.full((_TILE, _TILE), -1.0, dtype=np_dtype))
     k1(src, dst)
-    np.testing.assert_allclose(dst.to_numpy(), data)
+    result = dst.to_numpy()
+
+    expected = np.zeros((_TILE, _TILE), dtype=np_dtype)
+    expected[:, :ncols] = data[row_off : row_off + _TILE, col_off : col_off + ncols]
+    np.testing.assert_allclose(result, expected)
 
 
 @test_utils.test(arch=qd.gpu)
