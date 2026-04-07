@@ -621,6 +621,8 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) {
+      // Required to use VkPipelineShaderStageRequiredSubgroupSizeCreateInfo
+      // when creating compute pipelines (see vulkan_device.cpp).
       ti_device_->vk_caps().subgroup_size_control = true;
       enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(),
