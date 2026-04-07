@@ -328,22 +328,22 @@
 <span class="sd">so callers never need to pass it. Load/store methods take a row offset (row0);</span>
 <span class="sd">each thread accesses row = row0 + tid.</span>
 
-<span class="sd">Usage example::</span>
+<span class="sd">Usage example (inside a @qd.kernel or @qd.func)::</span>
 
-<span class="sd">    Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)</span>
-<span class="sd">    t = Tile16x16.zeros()                        # zero-initialized tile</span>
-<span class="sd">    t = Tile16x16.eye()                          # identity tile</span>
-<span class="sd">    t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)</span>
-<span class="sd">    t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)</span>
-<span class="sd">    t.eye_()                                  # set to identity matrix (in-place)</span>
-<span class="sd">    v = arr[r0:r_end, col]                     # load column vector (per-thread scalar, 0 for out-of-range)</span>
-<span class="sd">    v = arr[i0, r0:r_end, col]                # load column vector from 3D array</span>
-<span class="sd">    t -= qd.outer(v, v)                       # symmetric rank-1 subtract (v may be scalar or vec proxy)</span>
-<span class="sd">    t -= qd.outer(a, b)                       # general rank-1 subtract: t -= a @ b^T</span>
-<span class="sd">    t.cholesky_(eps)                           # in-place Cholesky factorization</span>
-<span class="sd">    L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B</span>
-<span class="sd">    arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)</span>
-<span class="sd">    arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)</span>
+<span class="sd">    t = qd.simt.Tile16x16.zeros(dtype=qd.f32)  # zero-initialized tile (explicit dtype)</span>
+<span class="sd">    t = qd.simt.Tile16x16.eye(dtype=qd.f32)    # identity tile</span>
+<span class="sd">    t = qd.simt.Tile16x16()                     # zero tile using default_fp</span>
+<span class="sd">    t[:] = arr[r0:r0+16, c0:c0+n]               # load from 2D array (slice syntax)</span>
+<span class="sd">    t[:] = arr[i0, r0:r0+16, c0:c0+n]           # load from 3D array (slice syntax)</span>
+<span class="sd">    t.eye_()                                     # set to identity matrix (in-place)</span>
+<span class="sd">    v = arr[r0:r_end, col]                       # load column vector (per-thread scalar, 0 for out-of-range)</span>
+<span class="sd">    v = arr[i0, r0:r_end, col]                   # load column vector from 3D array</span>
+<span class="sd">    t -= qd.outer(v, v)                          # symmetric rank-1 subtract</span>
+<span class="sd">    t -= qd.outer(a, b)                          # general rank-1 subtract: t -= a @ b^T</span>
+<span class="sd">    t.cholesky_(eps)                             # in-place Cholesky factorization</span>
+<span class="sd">    L.solve_triangular_(B)                       # triangular solve: X @ L^T = B, result in B</span>
+<span class="sd">    arr[r0:r0+16, c0:c0+n] = t                  # store to 2D array (slice syntax)</span>
+<span class="sd">    arr[i0, r0:r0+16, c0:c0+n] = t              # store to 3D array (slice syntax)</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span> <span class="k">as</span> <span class="n">_TYPE_CHECKING</span>
@@ -485,16 +485,16 @@
 <span class="n">_tile16_cache</span> <span class="o">=</span> <span class="p">{}</span>
 
 
-<div class="viewcode-block" id="make_tile16x16">
-<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/tile16/index.html#quadrants.lang.simt.tile16.make_tile16x16">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">make_tile16x16</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;type[_Tile16x16Proto]&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_tile16x16</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;type[_Tile16x16Proto]&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).</span>
+
+<span class="sd">    This is an internal factory. Use ``qd.simt.Tile16x16`` (the proxy) instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">_tile16_cache</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_tile16_cache</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
     <span class="bp">cls</span> <span class="o">=</span> <span class="n">_make_tile16x16_class</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
     <span class="n">_tile16_cache</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span>
-    <span class="k">return</span> <span class="bp">cls</span></div>
-
+    <span class="k">return</span> <span class="bp">cls</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_make_tile16x16_class</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
@@ -1272,7 +1272,44 @@
 
 <div class="viewcode-block" id="Tile16x16">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/tile16/index.html#quadrants.lang.simt.tile16.Tile16x16">[docs]</a>
-<span class="n">Tile16x16</span> <span class="o">=</span> <span class="n">make_tile16x16</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span></div>
+<span class="n">Tile16x16</span> <span class="o">=</span> <span class="n">_make_tile16x16</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>  <span class="c1"># kept for backward compat; prefer qd.simt.Tile16x16</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Tile16x16Proxy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Proxy for dtype-at-point-of-use tile creation.</span>
+
+<span class="sd">    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel.</span>
+<span class="sd">    The dtype is resolved at kernel compilation time, defaulting to the</span>
+<span class="sd">    compile config&#39;s ``default_fp`` if omitted.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">SIZE</span> <span class="o">=</span> <span class="n">_TILE</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span>
+        <span class="k">return</span> <span class="n">_make_tile16x16</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">zeros</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Zero-initialized tile.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve</span><span class="p">(</span><span class="n">dtype</span><span class="p">)()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">eye</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Identity tile (diagonal = 1, rest = 0).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a tile. With no args: zero-initialized. With 16 args: per-register values.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve</span><span class="p">(</span><span class="n">dtype</span><span class="p">)(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Tile16x16Proxy">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/tile16/index.html#quadrants.lang.simt.tile16.Tile16x16Proxy">[docs]</a>
+<span class="n">Tile16x16Proxy</span> <span class="o">=</span> <span class="n">_Tile16x16Proxy</span><span class="p">()</span></div>
 
 </pre></div>
 

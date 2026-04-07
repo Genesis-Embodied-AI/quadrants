@@ -15,22 +15,22 @@ quadrants.lang.simt.tile16
    so callers never need to pass it. Load/store methods take a row offset (row0);
    each thread accesses row = row0 + tid.
 
-   Usage example::
+   Usage example (inside a @qd.kernel or @qd.func)::
 
-       Tile16x16 = make_tile16x16(qd.f32)              # create f32 tile class (or qd.f64 for double precision)
-       t = Tile16x16.zeros()                        # zero-initialized tile
-       t = Tile16x16.eye()                          # identity tile
-       t[:] = arr[r0:r0+16, c0:c0+n]             # load from 2D array (slice syntax)
-       t[:] = arr[i0, r0:r0+16, c0:c0+n]        # load from 3D array (slice syntax)
-       t.eye_()                                  # set to identity matrix (in-place)
-       v = arr[r0:r_end, col]                     # load column vector (per-thread scalar, 0 for out-of-range)
-       v = arr[i0, r0:r_end, col]                # load column vector from 3D array
-       t -= qd.outer(v, v)                       # symmetric rank-1 subtract (v may be scalar or vec proxy)
-       t -= qd.outer(a, b)                       # general rank-1 subtract: t -= a @ b^T
-       t.cholesky_(eps)                           # in-place Cholesky factorization
-       L.solve_triangular_(B)                     # triangular solve: X @ L^T = B, result in B
-       arr[r0:r0+16, c0:c0+n] = t               # store to 2D array (slice syntax)
-       arr[i0, r0:r0+16, c0:c0+n] = t           # store to 3D array (slice syntax)
+       t = qd.simt.Tile16x16.zeros(dtype=qd.f32)  # zero-initialized tile (explicit dtype)
+       t = qd.simt.Tile16x16.eye(dtype=qd.f32)    # identity tile
+       t = qd.simt.Tile16x16()                     # zero tile using default_fp
+       t[:] = arr[r0:r0+16, c0:c0+n]               # load from 2D array (slice syntax)
+       t[:] = arr[i0, r0:r0+16, c0:c0+n]           # load from 3D array (slice syntax)
+       t.eye_()                                     # set to identity matrix (in-place)
+       v = arr[r0:r_end, col]                       # load column vector (per-thread scalar, 0 for out-of-range)
+       v = arr[i0, r0:r_end, col]                   # load column vector from 3D array
+       t -= qd.outer(v, v)                          # symmetric rank-1 subtract
+       t -= qd.outer(a, b)                          # general rank-1 subtract: t -= a @ b^T
+       t.cholesky_(eps)                             # in-place Cholesky factorization
+       L.solve_triangular_(B)                       # triangular solve: X @ L^T = B, result in B
+       arr[r0:r0+16, c0:c0+n] = t                  # store to 2D array (slice syntax)
+       arr[i0, r0:r0+16, c0:c0+n] = t              # store to 3D array (slice syntax)
 
 
 
@@ -40,6 +40,7 @@ Attributes
 .. autoapisummary::
 
    quadrants.lang.simt.tile16.Tile16x16
+   quadrants.lang.simt.tile16.Tile16x16Proxy
 
 
 Functions
@@ -48,7 +49,6 @@ Functions
 .. autoapisummary::
 
    quadrants.lang.simt.tile16.outer
-   quadrants.lang.simt.tile16.make_tile16x16
 
 
 Module Contents
@@ -64,10 +64,7 @@ Module Contents
        t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
 
 
-.. py:function:: make_tile16x16(dtype=qd.f32) -> type[_Tile16x16Proto]
-
-   Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
-
-
 .. py:data:: Tile16x16
+
+.. py:data:: Tile16x16Proxy
 
