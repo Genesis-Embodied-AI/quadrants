@@ -564,6 +564,7 @@ class VulkanStream : public Stream {
   std::vector<TrackedCmdbuf> submitted_cmdbuffers_;
 };
 
+// Internal bookkeeping; not passed to any Vulkan API.
 struct VulkanCapabilities {
   uint32_t vk_api_version{0};
   bool physical_device_features2{false};
