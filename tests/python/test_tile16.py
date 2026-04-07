@@ -1309,3 +1309,45 @@ def test_proxy_in_func(tensor_type):
     L_qd = np.tril(dst.to_numpy())
     L_ref = np.linalg.cholesky(H)
     np.testing.assert_allclose(L_qd, L_ref, atol=1e-4)
+
+
+@test_utils.test(arch=qd.cuda)
+def test_proxy_default_dtype_survives_reinit():
+    """Proxy with default dtype must follow default_fp across init/reset cycles.
+
+    This is the actual regression scenario: init with f64, compile a kernel,
+    reset, reinit with f32, compile the same kernel pattern — the second
+    kernel must use f32 tiles, not stale f64.
+    """
+    from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
+
+    @qd.kernel
+    def write_eye_f64(dst: qd.types.NDArray[qd.f64, 2]):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.eye()
+            dst[0:N, 0:N] = t
+
+    # Phase 1: switch to f64, compile and run
+    impl.get_runtime().set_default_fp(qd.f64)
+    dst64 = qd.ndarray(qd.f64, (N, N))
+    write_eye_f64(dst64)
+    np.testing.assert_allclose(dst64.to_numpy(), np.eye(N))
+
+    # Phase 2: reset, reinit with f32
+    qd.reset()
+    qd.init(arch=qd.cuda, default_fp=qd.f32)
+
+    @qd.kernel
+    def write_eye_f32(dst: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=N)
+        for _ in range(N):
+            t = qd.simt.Tile16x16.eye()
+            dst[0:N, 0:N] = t
+
+    dst32 = qd.ndarray(qd.f32, (N, N))
+    write_eye_f32(dst32)
+    result32 = dst32.to_numpy()
+
+    np.testing.assert_allclose(result32, np.eye(N, dtype=np.float32))
+    assert result32.dtype == np.float32
