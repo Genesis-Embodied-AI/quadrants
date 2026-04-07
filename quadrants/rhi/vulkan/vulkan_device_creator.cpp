@@ -620,6 +620,9 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
+    } else if (name == VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) {
+      ti_device_->vk_caps().subgroup_size_control = true;
+      enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(),
                          params_.additional_device_extensions.end(),
                          name) != params_.additional_device_extensions.end()) {
@@ -660,6 +663,14 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
     subgroup_properties.pNext = nullptr;
 
+    VkPhysicalDeviceSubgroupSizeControlProperties size_ctrl_props{};
+    if (ti_device_->vk_caps().subgroup_size_control) {
+      size_ctrl_props.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
+      size_ctrl_props.pNext = nullptr;
+      subgroup_properties.pNext = &size_ctrl_props;
+    }
+
     VkPhysicalDeviceProperties2 physical_device_properties{};
     physical_device_properties.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -683,6 +694,14 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     if (subgroup_properties.supportedOperations &
         VK_SUBGROUP_FEATURE_BALLOT_BIT) {
       caps.set(DeviceCapability::spirv_has_subgroup_ballot, true);
+    }
+
+    if (ti_device_->vk_caps().subgroup_size_control) {
+      ti_device_->vk_caps().required_subgroup_size =
+          size_ctrl_props.maxSubgroupSize;
+    } else {
+      ti_device_->vk_caps().required_subgroup_size =
+          subgroup_properties.subgroupSize;
     }
   }
 
