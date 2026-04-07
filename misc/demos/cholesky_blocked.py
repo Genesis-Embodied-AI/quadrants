@@ -199,19 +199,15 @@ def cholesky_blocked():
 def cholesky_tile16():
     qd.loop_config(name="chol_tile16", block_dim=TILE)
     for idx in range(N_ENVS * TILE):
-        tid = idx % TILE
         env = idx // TILE
 
         for kb in range(N_BLOCKS):
             k0 = kb * TILE
             k1 = qd.min(k0 + TILE, N)
 
-            # Load diagonal block (or identity for padding rows)
-            L_kk = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            if k0 + tid < N:
-                L_kk[:] = A_field[env, k0:k1, k0:k1]
-            else:
-                L_kk.eye_()
+            # Load diagonal block (identity for padding rows beyond N)
+            L_kk = qd.simt.Tile16x16.eye(dtype=qd.f32)
+            L_kk[:] = A_field[env, k0:k1, k0:k1]
 
             # Subtract rank-1 contributions from prior column-blocks
             for jb in range(kb):
@@ -228,10 +224,9 @@ def cholesky_tile16():
                 i0 = ib * TILE
                 i1 = qd.min(i0 + TILE, N)
 
-                # Load off-diagonal block
+                # Load off-diagonal block (zeros for padding rows beyond N)
                 L_ik = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-                if i0 + tid < N:
-                    L_ik[:] = A_field[env, i0:i1, k0:k1]
+                L_ik[:] = A_field[env, i0:i1, k0:k1]
 
                 # Subtract rank-1 contributions from prior column-blocks
                 for jb in range(kb):
@@ -245,12 +240,10 @@ def cholesky_tile16():
                 L_kk.solve_triangular_(L_ik)
 
                 # Store off-diagonal result
-                if i0 + tid < N:
-                    L_tile16_field[env, i0:i1, k0:k1] = L_ik
+                L_tile16_field[env, i0:i1, k0:k1] = L_ik
 
             # Store diagonal result
-            if k0 + tid < N:
-                L_tile16_field[env, k0:k1, k0:k1] = L_kk
+            L_tile16_field[env, k0:k1, k0:k1] = L_kk
 
 
 # ---------------------------------------------------------------------------
