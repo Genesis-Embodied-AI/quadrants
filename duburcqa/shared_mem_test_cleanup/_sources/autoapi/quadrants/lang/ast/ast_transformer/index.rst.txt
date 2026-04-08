@@ -1,0 +1,380 @@
+quadrants.lang.ast.ast_transformer
+==================================
+
+.. py:module:: quadrants.lang.ast.ast_transformer
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer.AutodiffMode
+   quadrants.lang.ast.ast_transformer.build_stmt
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer.ASTTransformer
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformer.reshape_list
+   quadrants.lang.ast.ast_transformer.boundary_type_cast_warning
+   quadrants.lang.ast.ast_transformer.build_stmts
+
+
+Module Contents
+---------------
+
+.. py:data:: AutodiffMode
+
+.. py:function:: reshape_list(flat_list: list[Any], target_shape: Sequence[int]) -> list[Any]
+
+.. py:function:: boundary_type_cast_warning(expression: quadrants.lang.expr.Expr) -> None
+
+.. py:class:: ASTTransformer
+
+   Bases: :py:obj:`quadrants.lang.ast.ast_transformer_utils.Builder`
+
+
+   .. py:method:: build_Name(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Name)
+      :staticmethod:
+
+
+
+   .. py:method:: build_AnnAssign(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.AnnAssign)
+      :staticmethod:
+
+
+
+   .. py:method:: build_assign_annotated(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool, annotation: Type)
+      :staticmethod:
+
+
+      Build an annotated assignment like this: target: annotation = value.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param target: A variable name. `target.id` holds the name as
+      :type target: ast.Name
+      :param a string.:
+      :param annotation: A type we hope to assign to the target
+      :param value: A node representing the value.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_Assign(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Assign) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_assign_unpack(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node_target: list | ast.Tuple, values, is_static_assign: bool)
+      :staticmethod:
+
+
+      Build the unpack assignments like this: (target1, target2) = (value1, value2).
+      The function should be called only if the node target is a tuple.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param node_target: A list or tuple object. `node_target.elts` holds a
+      :type node_target: ast.Tuple
+      :param list of nodes representing the elements.:
+      :param values: A node/list representing the values.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_assign_basic(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, target: ast.Name, value, is_static_assign: bool)
+      :staticmethod:
+
+
+      Build basic assignment like this: target = value.
+
+      :param ctx: The builder context.
+      :type ctx: ast_builder_utils.BuilderContext
+      :param target: A variable name. `target.id` holds the name as
+      :type target: ast.Name
+      :param a string.:
+      :param value: A node representing the value.
+      :param is_static_assign: A boolean value indicating whether this is a static assignment
+
+
+
+   .. py:method:: build_NamedExpr(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.NamedExpr)
+      :staticmethod:
+
+
+
+   .. py:method:: is_tuple(node)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Subscript(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Subscript)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Slice(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Slice)
+      :staticmethod:
+
+
+
+   .. py:method:: build_ExtSlice(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.ExtSlice)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Tuple(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Tuple)
+      :staticmethod:
+
+
+
+   .. py:method:: build_List(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.List)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Dict(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Dict)
+      :staticmethod:
+
+
+
+   .. py:method:: process_listcomp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node, result) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: process_dictcomp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node, result) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: process_generators(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.GeneratorExp, now_comp, func, result)
+      :staticmethod:
+
+
+
+   .. py:method:: process_ifs(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.If, now_comp, now_if, func, result)
+      :staticmethod:
+
+
+
+   .. py:method:: build_ListComp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.ListComp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_DictComp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.DictComp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Index(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Index)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Constant(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Constant)
+      :staticmethod:
+
+
+
+   .. py:method:: build_keyword(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.keyword)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Starred(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Starred)
+      :staticmethod:
+
+
+
+   .. py:method:: build_FormattedValue(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FormattedValue)
+      :staticmethod:
+
+
+
+   .. py:method:: build_JoinedStr(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.JoinedStr)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Call(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Call) -> Any | None
+      :staticmethod:
+
+
+
+   .. py:method:: build_FunctionDef(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.FunctionDef) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Return(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Return) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Module(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Module) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_attribute_if_is_dynamic_snode_method(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node) -> bool
+      :staticmethod:
+
+
+
+   .. py:method:: build_Attribute(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Attribute)
+      :staticmethod:
+
+
+
+   .. py:method:: build_BinOp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.BinOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_AugAssign(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.AugAssign)
+      :staticmethod:
+
+
+
+   .. py:method:: build_UnaryOp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.UnaryOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_bool_op(op)
+      :staticmethod:
+
+
+
+   .. py:method:: build_static_and(operands)
+      :staticmethod:
+
+
+
+   .. py:method:: build_static_or(operands)
+      :staticmethod:
+
+
+
+   .. py:method:: build_BoolOp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.BoolOp)
+      :staticmethod:
+
+
+
+   .. py:method:: build_Compare(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Compare)
+      :staticmethod:
+
+
+
+   .. py:method:: get_for_loop_targets(node: ast.Name | ast.Tuple | Any) -> list
+      :staticmethod:
+
+
+      Returns the list of indices of the for loop |node|.
+      See also: https://docs.python.org/3/library/ast.html#ast.For
+
+
+
+   .. py:method:: build_static_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_range_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_ndrange_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_grouped_ndrange_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_struct_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For, is_grouped: bool) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_mesh_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_nested_mesh_for(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_For(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.For) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_While(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.While) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_If(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.If) -> ast.If | None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Expr(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Expr) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_IfExp(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.IfExp)
+      :staticmethod:
+
+
+
+   .. py:method:: qd_format_list_to_assert_msg(raw) -> tuple[str, list]
+      :staticmethod:
+
+
+
+   .. py:method:: build_Assert(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Assert) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Break(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Break) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Continue(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Continue) -> None
+      :staticmethod:
+
+
+
+   .. py:method:: build_Pass(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Pass) -> None
+      :staticmethod:
+
+
+
+.. py:data:: build_stmt
+
+.. py:function:: build_stmts(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, stmts: list[ast.stmt])
+
