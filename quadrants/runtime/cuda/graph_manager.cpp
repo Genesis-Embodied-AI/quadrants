@@ -7,6 +7,9 @@
 #include <cstring>
 #include <filesystem>
 #include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace quadrants::lang {
 namespace cuda {
@@ -239,8 +242,11 @@ void GraphManager::ensure_condition_kernel_loaded() {
     }
   }
 #ifdef _WIN32
+  char windir[MAX_PATH];
+  GetWindowsDirectoryA(windir, MAX_PATH);
   const std::string toolkit_base =
-      "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA";
+      std::string(windir, 2) +
+      "\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA";
   if (std::filesystem::is_directory(toolkit_base)) {
     std::vector<std::filesystem::path> cuda_dirs;
     for (const auto &entry :
