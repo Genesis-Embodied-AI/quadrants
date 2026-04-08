@@ -249,10 +249,13 @@ void GraphManager::ensure_condition_kernel_loaded() {
       "\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA";
   if (std::filesystem::is_directory(toolkit_base)) {
     std::vector<std::filesystem::path> cuda_dirs;
-    for (const auto &entry :
-         std::filesystem::directory_iterator(toolkit_base)) {
-      if (entry.is_directory())
-        cuda_dirs.push_back(entry.path());
+    try {
+      for (const auto &entry :
+           std::filesystem::directory_iterator(toolkit_base)) {
+        if (entry.is_directory())
+          cuda_dirs.push_back(entry.path());
+      }
+    } catch (const std::filesystem::filesystem_error &) {
     }
     // Sort descending so the newest CUDA version is tried first.
     std::sort(cuda_dirs.rbegin(), cuda_dirs.rend());
