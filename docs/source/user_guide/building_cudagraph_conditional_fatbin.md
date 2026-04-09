@@ -9,7 +9,7 @@ conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
 There are three distinct phases:
 
 1. **Fatbin generation** (rare, manual) — A developer runs
-   `scripts/build_condition_kernel_fatbin.sh`, which compiles the kernel and
+   `scripts/build_condition_kernel_fatbin.py`, which compiles the kernel and
    device-links it with `libcudadevrt.a` to resolve `cudaGraphSetConditional`.
    The output is a self-contained fatbin, committed to git as a C header.
    Requires `nvcc` and the CUDA toolkit.
@@ -38,7 +38,7 @@ You only need to regenerate the fatbin if:
 Run the script from the repo root:
 
 ```bash
-./scripts/build_condition_kernel_fatbin.sh
+python scripts/build_condition_kernel_fatbin.py
 ```
 
 This will:
@@ -55,15 +55,15 @@ pick up the new fatbin.
 
 ## Adding a new SM architecture
 
-Edit the `SM_TARGETS` array in `scripts/build_condition_kernel_fatbin.sh` to
-add the new `-gencode` flag, then regenerate.
+Edit the `SM_TARGETS` list in `scripts/build_condition_kernel_fatbin.py` to
+add the new `-gencode` entry, then regenerate.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `quadrants/runtime/cuda/graph_do_while_cond.cu` | CUDA C source for the condition kernel |
-| `scripts/build_condition_kernel_fatbin.sh` | Regeneration script |
+| `scripts/build_condition_kernel_fatbin.py` | Regeneration script |
 | `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h` | Generated C header (checked into git) |
 
 ## How it's used at runtime

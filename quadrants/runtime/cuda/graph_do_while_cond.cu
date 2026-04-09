@@ -2,7 +2,7 @@
 //
 // After editing, regenerate the pre-built fatbin:
 //
-//   ./scripts/build_condition_kernel_fatbin.sh
+//   python scripts/build_condition_kernel_fatbin.py
 
 #include <cstdint>
 #include <cuda_runtime.h>
