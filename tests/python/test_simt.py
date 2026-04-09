@@ -700,47 +700,66 @@ def test_subgroup_invocation_id_range():
         assert 0 <= a[i]
 
 
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_size_range():
+    """min/max subgroup size must match hardware expectations."""
+    arch = qd.lang.impl.current_cfg().arch
+    min_sg = qd.simt.min_subgroup_size()
+    max_sg = qd.simt.max_subgroup_size()
+
+    if arch == qd.cuda:
+        assert min_sg == 32 and max_sg == 32
+    elif arch == qd.vulkan:
+        assert 8 <= min_sg <= max_sg <= 128
+    elif arch == qd.metal:
+        assert min_sg == 32 and max_sg == 32
+    elif arch == qd.amdgpu:
+        assert min_sg >= 32 and max_sg >= min_sg
+
+
+@pytest.mark.parametrize("sg_size", [8, 16, 32, 64])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
-def test_subgroup_size_validation():
-    """Validate subgroup_size=32 on GPU, reject invalid values, reject on CPU."""
+def test_subgroup_size_validation(sg_size):
+    """For each subgroup size, check it's accepted or rejected depending on arch."""
     arch = qd.lang.impl.current_cfg().arch
 
+    # Expected valid sizes per backend (Python-side validation).
+    # Vulkan delegates to the driver — use device-reported range.
+    _valid = {
+        qd.cuda: {32},
+        qd.metal: {32},
+        qd.amdgpu: {32, 64},
+    }
+
     if arch in (qd.cpu, qd.x64, qd.arm64):
-
-        @qd.kernel
-        def k_cpu():
-            qd.loop_config(subgroup_size=32)
-            for i in range(16):
-                pass
-
-        with pytest.raises(ValueError, match="not supported on CPU"):
-            k_cpu()
+        should_raise = True
+        match = "not supported on CPU"
+    elif arch in _valid:
+        should_raise = sg_size not in _valid[arch]
+        match = "not valid"
+    elif arch == qd.vulkan:
+        min_sg = qd.simt.min_subgroup_size()
+        max_sg = qd.simt.max_subgroup_size()
+        if not (min_sg <= sg_size <= max_sg):
+            pytest.skip(f"subgroup_size={sg_size} outside device range [{min_sg}, {max_sg}]")
+            return
+        should_raise = False
+        match = None
+    else:
+        pytest.skip(f"untested arch {arch}")
         return
 
-    N = 32
-    ids = qd.ndarray(dtype=qd.i32, shape=(N,))
-
     @qd.kernel
-    def k_valid(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        qd.loop_config(block_dim=N, subgroup_size=32)
-        for i in range(N):
-            out[i] = subgroup.invocation_id()
+    def k():
+        qd.loop_config(block_dim=32, subgroup_size=sg_size)
+        for i in range(32):
+            pass
 
-    k_valid(ids)
-    result = ids.to_numpy()
-    for i in range(N):
-        assert 0 <= result[i]
-
-    if arch != qd.vulkan:
-
-        @qd.kernel
-        def k_invalid():
-            qd.loop_config(block_dim=16, subgroup_size=16)
-            for i in range(16):
-                pass
-
-        with pytest.raises(ValueError, match="not valid"):
-            k_invalid()
+    if should_raise:
+        with pytest.raises(ValueError, match=match):
+            k()
+    else:
+        k()
 
 
 @test_utils.test(arch=qd.vulkan)
