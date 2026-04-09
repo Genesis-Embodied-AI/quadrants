@@ -64,184 +64,184 @@ def _make_tile16x16_class(dtype):
         r15: dtype
 
         @qd.func
-        def _load(self, arr: qd.template(), row0, col0, n_cols, row_stop):
-            """Load from a 2D array with row and column bounds checking.
+        def _load(self, arr: qd.template(), row_start, col_start, col_end, row_end):
+            """Load from a 2D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread loads arr[row0 + tid, col0:col0+n_cols].
-            Threads where row0 + tid >= row_stop skip the load (tile row unchanged).
+            Each thread loads arr[row_start + tid, col_start:col_end].
+            Threads where row_start + tid >= row_end skip the load (tile row unchanged).
             """
-            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
-            if row < row_stop:
-                arr_n_cols = arr.shape[1]
-                if arr_n_cols < n_cols:
-                    n_cols = arr_n_cols
-                if col0 + 0 < n_cols:
-                    self.r0 = arr[row, col0 + 0]
-                if col0 + 1 < n_cols:
-                    self.r1 = arr[row, col0 + 1]
-                if col0 + 2 < n_cols:
-                    self.r2 = arr[row, col0 + 2]
-                if col0 + 3 < n_cols:
-                    self.r3 = arr[row, col0 + 3]
-                if col0 + 4 < n_cols:
-                    self.r4 = arr[row, col0 + 4]
-                if col0 + 5 < n_cols:
-                    self.r5 = arr[row, col0 + 5]
-                if col0 + 6 < n_cols:
-                    self.r6 = arr[row, col0 + 6]
-                if col0 + 7 < n_cols:
-                    self.r7 = arr[row, col0 + 7]
-                if col0 + 8 < n_cols:
-                    self.r8 = arr[row, col0 + 8]
-                if col0 + 9 < n_cols:
-                    self.r9 = arr[row, col0 + 9]
-                if col0 + 10 < n_cols:
-                    self.r10 = arr[row, col0 + 10]
-                if col0 + 11 < n_cols:
-                    self.r11 = arr[row, col0 + 11]
-                if col0 + 12 < n_cols:
-                    self.r12 = arr[row, col0 + 12]
-                if col0 + 13 < n_cols:
-                    self.r13 = arr[row, col0 + 13]
-                if col0 + 14 < n_cols:
-                    self.r14 = arr[row, col0 + 14]
-                if col0 + 15 < n_cols:
-                    self.r15 = arr[row, col0 + 15]
+            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_end:
+                arr_col_end = arr.shape[1]
+                if arr_col_end < col_end:
+                    col_end = arr_col_end
+                if col_start + 0 < col_end:
+                    self.r0 = arr[row, col_start + 0]
+                if col_start + 1 < col_end:
+                    self.r1 = arr[row, col_start + 1]
+                if col_start + 2 < col_end:
+                    self.r2 = arr[row, col_start + 2]
+                if col_start + 3 < col_end:
+                    self.r3 = arr[row, col_start + 3]
+                if col_start + 4 < col_end:
+                    self.r4 = arr[row, col_start + 4]
+                if col_start + 5 < col_end:
+                    self.r5 = arr[row, col_start + 5]
+                if col_start + 6 < col_end:
+                    self.r6 = arr[row, col_start + 6]
+                if col_start + 7 < col_end:
+                    self.r7 = arr[row, col_start + 7]
+                if col_start + 8 < col_end:
+                    self.r8 = arr[row, col_start + 8]
+                if col_start + 9 < col_end:
+                    self.r9 = arr[row, col_start + 9]
+                if col_start + 10 < col_end:
+                    self.r10 = arr[row, col_start + 10]
+                if col_start + 11 < col_end:
+                    self.r11 = arr[row, col_start + 11]
+                if col_start + 12 < col_end:
+                    self.r12 = arr[row, col_start + 12]
+                if col_start + 13 < col_end:
+                    self.r13 = arr[row, col_start + 13]
+                if col_start + 14 < col_end:
+                    self.r14 = arr[row, col_start + 14]
+                if col_start + 15 < col_end:
+                    self.r15 = arr[row, col_start + 15]
 
         @qd.func
-        def _load3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
-            """Load from a 3D array with row and column bounds checking.
+        def _load3d(self, arr: qd.template(), i0, row_start, col_start, col_end, row_end):
+            """Load from a 3D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread loads arr[i0, row0+tid, col0:col0+n_cols].
-            Threads where row0 + tid >= row_stop skip the load (tile row unchanged).
+            Each thread loads arr[i0, row_start+tid, col_start:col_end].
+            Threads where row_start + tid >= row_end skip the load (tile row unchanged).
             """
-            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
-            if row < row_stop:
-                arr_n_cols = arr.shape[2]
-                if arr_n_cols < n_cols:
-                    n_cols = arr_n_cols
-                if col0 + 0 < n_cols:
-                    self.r0 = arr[i0, row, col0 + 0]
-                if col0 + 1 < n_cols:
-                    self.r1 = arr[i0, row, col0 + 1]
-                if col0 + 2 < n_cols:
-                    self.r2 = arr[i0, row, col0 + 2]
-                if col0 + 3 < n_cols:
-                    self.r3 = arr[i0, row, col0 + 3]
-                if col0 + 4 < n_cols:
-                    self.r4 = arr[i0, row, col0 + 4]
-                if col0 + 5 < n_cols:
-                    self.r5 = arr[i0, row, col0 + 5]
-                if col0 + 6 < n_cols:
-                    self.r6 = arr[i0, row, col0 + 6]
-                if col0 + 7 < n_cols:
-                    self.r7 = arr[i0, row, col0 + 7]
-                if col0 + 8 < n_cols:
-                    self.r8 = arr[i0, row, col0 + 8]
-                if col0 + 9 < n_cols:
-                    self.r9 = arr[i0, row, col0 + 9]
-                if col0 + 10 < n_cols:
-                    self.r10 = arr[i0, row, col0 + 10]
-                if col0 + 11 < n_cols:
-                    self.r11 = arr[i0, row, col0 + 11]
-                if col0 + 12 < n_cols:
-                    self.r12 = arr[i0, row, col0 + 12]
-                if col0 + 13 < n_cols:
-                    self.r13 = arr[i0, row, col0 + 13]
-                if col0 + 14 < n_cols:
-                    self.r14 = arr[i0, row, col0 + 14]
-                if col0 + 15 < n_cols:
-                    self.r15 = arr[i0, row, col0 + 15]
+            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_end:
+                arr_col_end = arr.shape[2]
+                if arr_col_end < col_end:
+                    col_end = arr_col_end
+                if col_start + 0 < col_end:
+                    self.r0 = arr[i0, row, col_start + 0]
+                if col_start + 1 < col_end:
+                    self.r1 = arr[i0, row, col_start + 1]
+                if col_start + 2 < col_end:
+                    self.r2 = arr[i0, row, col_start + 2]
+                if col_start + 3 < col_end:
+                    self.r3 = arr[i0, row, col_start + 3]
+                if col_start + 4 < col_end:
+                    self.r4 = arr[i0, row, col_start + 4]
+                if col_start + 5 < col_end:
+                    self.r5 = arr[i0, row, col_start + 5]
+                if col_start + 6 < col_end:
+                    self.r6 = arr[i0, row, col_start + 6]
+                if col_start + 7 < col_end:
+                    self.r7 = arr[i0, row, col_start + 7]
+                if col_start + 8 < col_end:
+                    self.r8 = arr[i0, row, col_start + 8]
+                if col_start + 9 < col_end:
+                    self.r9 = arr[i0, row, col_start + 9]
+                if col_start + 10 < col_end:
+                    self.r10 = arr[i0, row, col_start + 10]
+                if col_start + 11 < col_end:
+                    self.r11 = arr[i0, row, col_start + 11]
+                if col_start + 12 < col_end:
+                    self.r12 = arr[i0, row, col_start + 12]
+                if col_start + 13 < col_end:
+                    self.r13 = arr[i0, row, col_start + 13]
+                if col_start + 14 < col_end:
+                    self.r14 = arr[i0, row, col_start + 14]
+                if col_start + 15 < col_end:
+                    self.r15 = arr[i0, row, col_start + 15]
 
         @qd.func
-        def _store(self, arr: qd.template(), row0, col0, n_cols, row_stop):
-            """Store to a 2D array with row and column bounds checking.
+        def _store(self, arr: qd.template(), row_start, col_start, col_end, row_end):
+            """Store to a 2D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread stores to arr[row0 + tid, col0:col0+n_cols].
-            Threads where row0 + tid >= row_stop skip the store.
+            Each thread stores to arr[row_start + tid, col_start:col_end].
+            Threads where row_start + tid >= row_end skip the store.
             """
-            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
-            if row < row_stop:
-                arr_n_cols = arr.shape[1]
-                if arr_n_cols < n_cols:
-                    n_cols = arr_n_cols
-                if col0 + 0 < n_cols:
-                    arr[row, col0 + 0] = self.r0
-                if col0 + 1 < n_cols:
-                    arr[row, col0 + 1] = self.r1
-                if col0 + 2 < n_cols:
-                    arr[row, col0 + 2] = self.r2
-                if col0 + 3 < n_cols:
-                    arr[row, col0 + 3] = self.r3
-                if col0 + 4 < n_cols:
-                    arr[row, col0 + 4] = self.r4
-                if col0 + 5 < n_cols:
-                    arr[row, col0 + 5] = self.r5
-                if col0 + 6 < n_cols:
-                    arr[row, col0 + 6] = self.r6
-                if col0 + 7 < n_cols:
-                    arr[row, col0 + 7] = self.r7
-                if col0 + 8 < n_cols:
-                    arr[row, col0 + 8] = self.r8
-                if col0 + 9 < n_cols:
-                    arr[row, col0 + 9] = self.r9
-                if col0 + 10 < n_cols:
-                    arr[row, col0 + 10] = self.r10
-                if col0 + 11 < n_cols:
-                    arr[row, col0 + 11] = self.r11
-                if col0 + 12 < n_cols:
-                    arr[row, col0 + 12] = self.r12
-                if col0 + 13 < n_cols:
-                    arr[row, col0 + 13] = self.r13
-                if col0 + 14 < n_cols:
-                    arr[row, col0 + 14] = self.r14
-                if col0 + 15 < n_cols:
-                    arr[row, col0 + 15] = self.r15
+            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_end:
+                arr_col_end = arr.shape[1]
+                if arr_col_end < col_end:
+                    col_end = arr_col_end
+                if col_start + 0 < col_end:
+                    arr[row, col_start + 0] = self.r0
+                if col_start + 1 < col_end:
+                    arr[row, col_start + 1] = self.r1
+                if col_start + 2 < col_end:
+                    arr[row, col_start + 2] = self.r2
+                if col_start + 3 < col_end:
+                    arr[row, col_start + 3] = self.r3
+                if col_start + 4 < col_end:
+                    arr[row, col_start + 4] = self.r4
+                if col_start + 5 < col_end:
+                    arr[row, col_start + 5] = self.r5
+                if col_start + 6 < col_end:
+                    arr[row, col_start + 6] = self.r6
+                if col_start + 7 < col_end:
+                    arr[row, col_start + 7] = self.r7
+                if col_start + 8 < col_end:
+                    arr[row, col_start + 8] = self.r8
+                if col_start + 9 < col_end:
+                    arr[row, col_start + 9] = self.r9
+                if col_start + 10 < col_end:
+                    arr[row, col_start + 10] = self.r10
+                if col_start + 11 < col_end:
+                    arr[row, col_start + 11] = self.r11
+                if col_start + 12 < col_end:
+                    arr[row, col_start + 12] = self.r12
+                if col_start + 13 < col_end:
+                    arr[row, col_start + 13] = self.r13
+                if col_start + 14 < col_end:
+                    arr[row, col_start + 14] = self.r14
+                if col_start + 15 < col_end:
+                    arr[row, col_start + 15] = self.r15
 
         @qd.func
-        def _store3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
-            """Store to a 3D array with row and column bounds checking.
+        def _store3d(self, arr: qd.template(), i0, row_start, col_start, col_end, row_end):
+            """Store to a 3D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread stores to arr[i0, row0+tid, col0:col0+n_cols].
-            Threads where row0 + tid >= row_stop skip the store.
+            Each thread stores to arr[i0, row_start+tid, col_start:col_end].
+            Threads where row_start + tid >= row_end skip the store.
             """
-            row = row0 + qd.i32(qd.simt.subgroup.invocation_id())
-            if row < row_stop:
-                arr_n_cols = arr.shape[2]
-                if arr_n_cols < n_cols:
-                    n_cols = arr_n_cols
-                if col0 + 0 < n_cols:
-                    arr[i0, row, col0 + 0] = self.r0
-                if col0 + 1 < n_cols:
-                    arr[i0, row, col0 + 1] = self.r1
-                if col0 + 2 < n_cols:
-                    arr[i0, row, col0 + 2] = self.r2
-                if col0 + 3 < n_cols:
-                    arr[i0, row, col0 + 3] = self.r3
-                if col0 + 4 < n_cols:
-                    arr[i0, row, col0 + 4] = self.r4
-                if col0 + 5 < n_cols:
-                    arr[i0, row, col0 + 5] = self.r5
-                if col0 + 6 < n_cols:
-                    arr[i0, row, col0 + 6] = self.r6
-                if col0 + 7 < n_cols:
-                    arr[i0, row, col0 + 7] = self.r7
-                if col0 + 8 < n_cols:
-                    arr[i0, row, col0 + 8] = self.r8
-                if col0 + 9 < n_cols:
-                    arr[i0, row, col0 + 9] = self.r9
-                if col0 + 10 < n_cols:
-                    arr[i0, row, col0 + 10] = self.r10
-                if col0 + 11 < n_cols:
-                    arr[i0, row, col0 + 11] = self.r11
-                if col0 + 12 < n_cols:
-                    arr[i0, row, col0 + 12] = self.r12
-                if col0 + 13 < n_cols:
-                    arr[i0, row, col0 + 13] = self.r13
-                if col0 + 14 < n_cols:
-                    arr[i0, row, col0 + 14] = self.r14
-                if col0 + 15 < n_cols:
-                    arr[i0, row, col0 + 15] = self.r15
+            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            if row < row_end:
+                arr_col_end = arr.shape[2]
+                if arr_col_end < col_end:
+                    col_end = arr_col_end
+                if col_start + 0 < col_end:
+                    arr[i0, row, col_start + 0] = self.r0
+                if col_start + 1 < col_end:
+                    arr[i0, row, col_start + 1] = self.r1
+                if col_start + 2 < col_end:
+                    arr[i0, row, col_start + 2] = self.r2
+                if col_start + 3 < col_end:
+                    arr[i0, row, col_start + 3] = self.r3
+                if col_start + 4 < col_end:
+                    arr[i0, row, col_start + 4] = self.r4
+                if col_start + 5 < col_end:
+                    arr[i0, row, col_start + 5] = self.r5
+                if col_start + 6 < col_end:
+                    arr[i0, row, col_start + 6] = self.r6
+                if col_start + 7 < col_end:
+                    arr[i0, row, col_start + 7] = self.r7
+                if col_start + 8 < col_end:
+                    arr[i0, row, col_start + 8] = self.r8
+                if col_start + 9 < col_end:
+                    arr[i0, row, col_start + 9] = self.r9
+                if col_start + 10 < col_end:
+                    arr[i0, row, col_start + 10] = self.r10
+                if col_start + 11 < col_end:
+                    arr[i0, row, col_start + 11] = self.r11
+                if col_start + 12 < col_end:
+                    arr[i0, row, col_start + 12] = self.r12
+                if col_start + 13 < col_end:
+                    arr[i0, row, col_start + 13] = self.r13
+                if col_start + 14 < col_end:
+                    arr[i0, row, col_start + 14] = self.r14
+                if col_start + 15 < col_end:
+                    arr[i0, row, col_start + 15] = self.r15
 
         @qd.func
         def _eye_(self):

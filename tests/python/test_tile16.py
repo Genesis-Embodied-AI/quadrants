@@ -106,13 +106,19 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, dst_row_dx, dst_col_dx, n
     src = qd.ndarray(qd_dtype, (GRID, GRID))
     dst = qd.ndarray(qd_dtype, (GRID, GRID))
 
+    col_stop = src_col + ncols
+    row_stop = src_row + nrows
+    dr, dc = src_row + dst_row_dx, src_col + dst_col_dx
+    dst_col_stop = dc + ncols
+    dst_row_stop = dr + nrows
+
     @qd.kernel
     def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, src_row, src_col, ncols, nrows)
-            t._store(dst_arr, src_row + dst_row_dx, src_col + dst_col_dx, ncols, nrows)
+            t._load(src_arr, src_row, src_col, col_stop, row_stop)
+            t._store(dst_arr, dr, dc, dst_col_stop, dst_row_stop)
 
     data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
     src.from_numpy(data)
@@ -120,7 +126,6 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, dst_row_dx, dst_col_dx, n
     k1(src, dst)
 
     result = dst.to_numpy()
-    dr, dc = src_row + dst_row_dx, src_col + dst_col_dx
     expected = np.full((GRID, GRID), -1.0, dtype=np_dtype)
     expected[dr : dr + nrows, dc : dc + ncols] = data[src_row : src_row + nrows, src_col : src_col + ncols]
     np.testing.assert_allclose(result, expected)
@@ -148,13 +153,16 @@ def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
     src = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
     dst = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
 
+    col_stop = src_col + ncols
+    row_stop = src_row + nrows
+
     @qd.kernel
     def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load3d(src_arr, batch, src_row, src_col, ncols, nrows)
-            t._store3d(dst_arr, batch, src_row, src_col, ncols, nrows)
+            t._load3d(src_arr, batch, src_row, src_col, col_stop, row_stop)
+            t._store3d(dst_arr, batch, src_row, src_col, col_stop, row_stop)
 
     data = np.arange(NBATCH * GRID * GRID, dtype=np_dtype).reshape(NBATCH, GRID, GRID) + 1.0
     src.from_numpy(data)
