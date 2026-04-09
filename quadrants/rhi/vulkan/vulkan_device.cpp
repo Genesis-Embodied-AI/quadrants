@@ -407,10 +407,10 @@ void VulkanPipeline::create_shader_stages(const Params &params) {
     shader_stage_info.module = shader_module;
     shader_stage_info.pName = "main";
 
-    // Without an explicit subgroup size, the NVIDIA Vulkan driver may
-    // silently reduce it (e.g. from 32 to 8) after repeated VkDevice
-    // create/destroy cycles, causing SubgroupLocalInvocationId to wrap
-    // and breaking Tile16x16 and other subgroup-dependent operations.
+    // Pin the subgroup size so the driver cannot silently change it.
+    // Defense-in-depth: the primary fix (VkInstance reuse) prevents the
+    // NVIDIA driver bug, but this ensures correctness on drivers that
+    // support variable subgroup sizes (e.g. Intel Xe: 8/16/32).
     if (code_view.stage == VK_SHADER_STAGE_COMPUTE_BIT &&
         ti_device_.vk_caps().subgroup_size_control) {
       uint32_t sg = params.subgroup_size > 0 ? params.subgroup_size : 32;
