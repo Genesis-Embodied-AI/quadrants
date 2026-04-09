@@ -1,14 +1,22 @@
 # Building the CUDA graph conditional fatbin
 
-The `graph_do_while` feature uses a tiny CUDA kernel to control conditional
-while nodes on SM 9.0+ GPUs. This kernel calls `cudaGraphSetConditional`, a
-device-side function from NVIDIA's `libcudadevrt.a`. The regeneration script
-device-links with `libcudadevrt.a` to resolve this call, producing a
-self-contained fatbin that is checked into the repo as a C header. At runtime,
-the fatbin is loaded directly — no CUDA toolkit is needed on the user's system
-or during the Quadrants build.
+The `graph_do_while` feature uses a tiny CUDA kernel that calls
+`cudaGraphSetConditional` (a device-side function from NVIDIA's
+`libcudadevrt.a`) to control conditional while nodes on SM 9.0+ GPUs.
 
-This page documents how to regenerate the pre-built fatbin.
+There are three distinct phases:
+
+1. **Fatbin generation** (rare, manual) — A developer runs
+   `scripts/build_condition_kernel_fatbin.sh`, which compiles the kernel and
+   device-links it with `libcudadevrt.a` to resolve `cudaGraphSetConditional`.
+   The output is a self-contained fatbin, committed to git as a C header.
+   Requires `nvcc` and the CUDA toolkit.
+2. **Quadrants build** (CI / developers) — The C header is `#include`d as a
+   plain byte array. No CUDA toolkit needed.
+3. **Runtime** (end users) — The fatbin is loaded via `cuModuleLoadData`.
+   No CUDA toolkit needed.
+
+This page documents phase 1: regenerating the pre-built fatbin.
 
 ## When to regenerate
 
