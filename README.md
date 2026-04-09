@@ -91,6 +91,8 @@ On Genesis simulator (Linux + NVIDIA 5090):
 pip install quadrants
 ```
 
+**SM 9.0+ GPUs (Hopper, Blackwell, …):** for best performance, make sure the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) is installed at the default location, otherwise either `CUDA_HOME` or `CUDA_PATH` must be set to enable native graph conditionals. Without it Quadrants still works but falls back to a slower host-side code path.
+
 (For how to build from source, see our CI build scripts, e.g. [linux build scripts](.github/workflows/scripts_new/linux_x86/) )
 
 # Documentation

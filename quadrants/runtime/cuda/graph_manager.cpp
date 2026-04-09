@@ -215,8 +215,9 @@ void GraphManager::resolve_ctx_ndarray_ptrs(
 // then loads the _qd_graph_do_while_cond function for use in conditional
 // while nodes. Only called once; subsequent calls are no-ops.
 void GraphManager::ensure_condition_kernel_loaded() {
-  if (cond_kernel_func_)
+  if (cond_kernel_load_attempted_)
     return;
+  cond_kernel_load_attempted_ = true;
 
   int cc = CUDAContext::get_instance().get_compute_capability();
   if (cc < 90) {
@@ -273,34 +274,56 @@ void GraphManager::ensure_condition_kernel_loaded() {
       break;
     }
   }
-  QD_ERROR_IF(cudadevrt_path.empty(),
-              "Cannot find cudadevrt library — required for graph_do_while. "
-              "Install the CUDA toolkit and set CUDA_HOME or CUDA_PATH.");
+  if (cudadevrt_path.empty()) {
+    QD_WARN(
+        "Could not find CUDA toolkit (cudadevrt library), so Quadrants "
+        "will fall back to degraded mode — the graph do-while loop will "
+        "run on the host instead of the GPU, and a major performance hit "
+        "is to be expected. Make sure the CUDA toolkit is installed at the "
+        "default location, otherwise either CUDA_HOME or CUDA_PATH must "
+        "be set to enable native graph conditionals.");
+    return;
+  }
 
-  // CUlinkState handle for the JIT linker session that combines our PTX
-  // with libcudadevrt.a to resolve the cudaGraphSetConditional extern.
+  // JIT-link our PTX with libcudadevrt.a to resolve the
+  // cudaGraphSetConditional extern, then load the resulting cubin.
+  // If anything goes wrong (e.g. incompatible toolkit version, corrupt
+  // library), warn and leave cond_kernel_func_ null so the caller falls
+  // back to host-side do-while.
   void *link_state = nullptr;
-  driver.link_create(0, nullptr, nullptr, &link_state);
+  try {
+    driver.link_create(0, nullptr, nullptr, &link_state);
 
-  std::size_t ptx_len = std::strlen(kConditionKernelPTX) + 1;
-  driver.link_add_data(link_state, /*CU_JIT_INPUT_PTX=*/1,
-                       const_cast<char *>(kConditionKernelPTX), ptx_len,
-                       /*name=*/"qd_cond", 0, nullptr, nullptr);
+    std::size_t ptx_len = std::strlen(kConditionKernelPTX) + 1;
+    driver.link_add_data(link_state, /*CU_JIT_INPUT_PTX=*/1,
+                         const_cast<char *>(kConditionKernelPTX), ptx_len,
+                         /*name=*/"qd_cond", 0, nullptr, nullptr);
 
-  driver.link_add_file(link_state, /*CU_JIT_INPUT_LIBRARY=*/4,
-                       cudadevrt_path.c_str(), 0, nullptr, nullptr);
+    driver.link_add_file(link_state, /*CU_JIT_INPUT_LIBRARY=*/4,
+                         cudadevrt_path.c_str(), 0, nullptr, nullptr);
 
-  void *cubin = nullptr;
-  std::size_t cubin_size = 0;
-  driver.link_complete(link_state, &cubin, &cubin_size);
+    void *cubin = nullptr;
+    std::size_t cubin_size = 0;
+    driver.link_complete(link_state, &cubin, &cubin_size);
 
-  driver.module_load_data(&cond_kernel_module_, cubin);
-  driver.module_get_function(&cond_kernel_func_, cond_kernel_module_,
-                             "_qd_graph_do_while_cond");
-  driver.link_destroy(link_state);
+    driver.module_load_data(&cond_kernel_module_, cubin);
+    driver.module_get_function(&cond_kernel_func_, cond_kernel_module_,
+                               "_qd_graph_do_while_cond");
+    driver.link_destroy(link_state);
 
-  QD_TRACE("Loaded graph_do_while condition kernel ({} bytes cubin)",
-           cubin_size);
+    QD_TRACE("Loaded graph_do_while condition kernel ({} bytes cubin)",
+             cubin_size);
+  } catch (const std::exception &e) {
+    if (link_state) {
+      driver.link_destroy.call_with_warning(link_state);
+    }
+    QD_WARN(
+        "Failed to compile graph conditional kernel: {}. Quadrants will "
+        "fall back to degraded mode — the graph do-while loop will run on "
+        "the host instead of the GPU, and a major performance hit is to be "
+        "expected.",
+        e.what());
+  }
 }
 
 void *GraphManager::add_kernel_node(void *graph,
@@ -419,6 +442,31 @@ bool GraphManager::try_launch(
 
   CUDAContext::get_instance().make_current();
 
+  // Check condition kernel availability before allocating any CUDA resources,
+  // so we can bail out cleanly without leaking a graph handle.
+  if (use_graph_do_while) {
+    ensure_condition_kernel_loaded();
+    if (!cond_kernel_func_) {
+      int cc = CUDAContext::get_instance().get_compute_capability();
+      if (cc >= 90) {
+        // SM 9.0+ should always be able to load the condition kernel.
+        // Failing here means prerequisites are missing.
+        QD_WARN(
+            "This GPU (SM {}) supports native graph conditionals for "
+            "faster performance, but the required software prerequisites "
+            "appear to be missing. Quadrants will fall back to degraded "
+            "mode — the graph do-while loop will run on the host instead "
+            "of the GPU, and a major performance hit is to be expected. "
+            "Make sure the CUDA toolkit is installed at the default "
+            "location, otherwise either CUDA_HOME or CUDA_PATH must be "
+            "set to enable native graph conditionals.",
+            cc);
+      }
+      // Pre-SM 9.0: fall back to host-side do-while loop.
+      return false;
+    }
+  }
+
   CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size,
                      use_graph_do_while, executor);
 
@@ -452,20 +500,6 @@ bool GraphManager::try_launch(
   unsigned long long cond_handle = 0;
 
   if (use_graph_do_while) {
-    ensure_condition_kernel_loaded();
-    if (!cond_kernel_func_) {
-      int cc = CUDAContext::get_instance().get_compute_capability();
-      if (cc >= 90) {
-        // SM 9.0+ should always be able to load the condition kernel.
-        // Failing here means prerequisites are missing.
-        QD_ERROR(
-            "Condition kernel not available on SM {}; "
-            "cannot build graph_do_while",
-            cc);
-      }
-      // Pre-SM 9.0: fall back to host-side do-while loop.
-      return false;
-    }
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 

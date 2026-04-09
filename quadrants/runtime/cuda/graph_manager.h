@@ -138,6 +138,7 @@ class GraphManager {
   std::size_t total_builds_{0};
 
   // JIT-compiled condition kernel for graph_do_while conditional nodes
+  bool cond_kernel_load_attempted_{false};
   void *cond_kernel_module_{nullptr};  // CUmodule
   void *cond_kernel_func_{nullptr};    // CUfunction
 };
