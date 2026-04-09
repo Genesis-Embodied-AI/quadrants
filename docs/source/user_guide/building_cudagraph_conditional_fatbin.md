@@ -17,7 +17,7 @@ This page documents how to regenerate the pre-built fatbin.
 
 You only need to regenerate the fatbin if:
 
-- The condition kernel source (`quadrants/runtime/cuda/condition_kernel.cu`)
+- The condition kernel source (`quadrants/runtime/cuda/graph_do_while_cond.cu`)
   changes.
 - You need to add support for a new SM architecture.
 
@@ -36,7 +36,7 @@ Run the script from the repo root:
 
 This will:
 
-1. Compile `quadrants/runtime/cuda/condition_kernel.cu` with relocatable device
+1. Compile `quadrants/runtime/cuda/graph_do_while_cond.cu` with relocatable device
    code for each target SM architecture.
 2. Device-link the result with `libcudadevrt.a` to resolve the
    `cudaGraphSetConditional` extern.
@@ -54,14 +54,14 @@ add the new `-gencode` flag, then regenerate.
 
 | File | Purpose |
 |------|---------|
-| `quadrants/runtime/cuda/condition_kernel.cu` | CUDA C source for the condition kernel |
+| `quadrants/runtime/cuda/graph_do_while_cond.cu` | CUDA C source for the condition kernel |
 | `scripts/build_condition_kernel_fatbin.sh` | Regeneration script |
 | `quadrants/runtime/cuda/condition_kernel_fatbin.h` | Generated C header (checked into git) |
 
 ## How it's used at runtime
 
-`KernelLauncher::ensure_condition_kernel_loaded()` in
-`quadrants/runtime/cuda/kernel_launcher.cpp` tries to load the pre-built fatbin
+`GraphManager::ensure_condition_kernel_loaded()` in
+`quadrants/runtime/cuda/graph_manager.cpp` tries to load the pre-built fatbin
 first. If that fails (e.g. running on an SM architecture not included in the
 fatbin), it falls back to JIT linking the embedded PTX with `libcudadevrt.a`
 from the system's CUDA toolkit.
