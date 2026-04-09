@@ -297,6 +297,25 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
                                           bool manual_create) {
+  // Discover instance extensions and set capability flags on ti_device_.
+  // This must run every cycle because ti_device_ is freshly created.
+  uint32_t num_instance_extensions = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
+                                         nullptr);
+  std::vector<VkExtensionProperties> supported_extensions(
+      num_instance_extensions);
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
+                                         supported_extensions.data());
+
+  for (auto &ext : supported_extensions) {
+    std::string name = ext.extensionName;
+    if (name == VK_KHR_SURFACE_EXTENSION_NAME) {
+      ti_device_->vk_caps().surface = true;
+    } else if (name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
+      ti_device_->vk_caps().physical_device_features2 = true;
+    }
+  }
+
   // Reuse the VkInstance from a previous init/reset cycle if available.
   // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
   // that corrupts SubgroupLocalInvocationId after ~11 cycles.
@@ -362,28 +381,13 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
     extensions.insert(std::string(ext));
   }
 
-  uint32_t num_instance_extensions = 0;
-  // FIXME: (penguinliong) This was NOT called when `manual_create` is true.
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
-                                         nullptr);
-  std::vector<VkExtensionProperties> supported_extensions(
-      num_instance_extensions);
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
-                                         supported_extensions.data());
-
   for (auto &ext : supported_extensions) {
     std::string name = ext.extensionName;
-    if (name == VK_KHR_SURFACE_EXTENSION_NAME) {
-      extensions.insert(name);
-      ti_device_->vk_caps().surface = true;
-    } else if (name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
-      extensions.insert(name);
-      ti_device_->vk_caps().physical_device_features2 = true;
-    } else if (name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME) {
-      extensions.insert(name);
-    } else if (name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME) {
-      extensions.insert(name);
-    } else if (name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
+    if (name == VK_KHR_SURFACE_EXTENSION_NAME ||
+        name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME ||
+        name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME ||
+        name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME ||
+        name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
       extensions.insert(name);
     }
   }
