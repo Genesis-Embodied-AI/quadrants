@@ -27,6 +27,7 @@ trap cleanup EXIT
 
 SM_TARGETS=(
     -gencode=arch=compute_90,code=sm_90
+    -gencode=arch=compute_100,code=sm_100
     -gencode=arch=compute_120,code=sm_120
 )
 
