@@ -2,6 +2,7 @@
 // Do not edit manually. Regenerate with that script.
 //
 // Source: quadrants/runtime/cuda/graph_do_while_cond.cu
+// SM targets: sm_90, sm_100, sm_120
 // Size: 16248 bytes
 
 #pragma once

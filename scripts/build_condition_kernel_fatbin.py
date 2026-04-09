@@ -50,6 +50,7 @@ def generate_header(fatbin_path: Path, out_path: Path) -> None:
         "// Do not edit manually. Regenerate with that script.",
         "//",
         "// Source: quadrants/runtime/cuda/graph_do_while_cond.cu",
+        f"// SM targets: {', '.join(f'sm_{v}' for v in SM_VERSIONS)}",
         f"// Size: {len(fatbin_data)} bytes",
         "",
         "#pragma once",
