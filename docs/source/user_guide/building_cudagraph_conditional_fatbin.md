@@ -2,10 +2,11 @@
 
 The `graph_do_while` feature uses a tiny CUDA kernel to control conditional
 while nodes on SM 9.0+ GPUs. This kernel calls `cudaGraphSetConditional`, a
-device-side function from NVIDIA's `libcudadevrt.a`. The call is resolved at
-build time by device-linking with `libcudadevrt.a`, producing a self-contained
-fatbin that is checked into the repo as a C header. At runtime, the fatbin is
-loaded directly — no CUDA toolkit is needed on the user's system.
+device-side function from NVIDIA's `libcudadevrt.a`. The regeneration script
+device-links with `libcudadevrt.a` to resolve this call, producing a
+self-contained fatbin that is checked into the repo as a C header. At runtime,
+the fatbin is loaded directly — no CUDA toolkit is needed on the user's system
+or during the Quadrants build.
 
 This page documents how to regenerate the pre-built fatbin.
 
