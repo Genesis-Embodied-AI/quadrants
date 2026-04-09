@@ -95,7 +95,7 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` (self) must be a lowe
 
 ## Full example: blocked Cholesky
 
-See the `cholesky_tile16` kernel in `misc/demos/cholesky_blocked.py` for a complete blocked Cholesky factorization using `Tile16x16`.
+See the `cholesky_tile16` kernel in [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using `Tile16x16`.
 
 ## Method reference
 
