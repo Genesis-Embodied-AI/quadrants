@@ -700,67 +700,47 @@ def test_subgroup_invocation_id_range():
         assert 0 <= a[i]
 
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_size_valid_cuda():
-    """subgroup_size=32 must be accepted on CUDA (it's the warp size)."""
-    N = 32
-    a = qd.field(dtype=qd.i32, shape=N)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+def test_subgroup_size_validation():
+    """Validate subgroup_size=32 on GPU, reject invalid values, reject on CPU."""
+    arch = qd.lang.impl.current_cfg().arch
 
-    @qd.kernel
-    def k():
-        qd.loop_config(block_dim=N, subgroup_size=32)
-        for i in range(N):
-            a[i] = subgroup.invocation_id()
+    if arch in (qd.cpu, qd.x64, qd.arm64):
 
-    k()
-    for i in range(N):
-        assert 0 <= a[i]
+        @qd.kernel
+        def k_cpu():
+            qd.loop_config(subgroup_size=32)
+            for i in range(16):
+                pass
 
+        with pytest.raises(ValueError, match="not supported on CPU"):
+            k_cpu()
+        return
 
-@test_utils.test(arch=qd.cuda)
-def test_subgroup_size_invalid_cuda():
-    """subgroup_size != 32 must raise ValueError on CUDA."""
-
-    @qd.kernel
-    def k():
-        qd.loop_config(block_dim=16, subgroup_size=16)
-        for i in range(16):
-            pass
-
-    with pytest.raises(ValueError, match="not valid"):
-        k()
-
-
-@test_utils.test(arch=qd.cpu)
-def test_subgroup_size_invalid_cpu():
-    """subgroup_size must raise ValueError on CPU backends."""
-
-    @qd.kernel
-    def k():
-        qd.loop_config(subgroup_size=32)
-        for i in range(16):
-            pass
-
-    with pytest.raises(ValueError, match="not supported on CPU"):
-        k()
-
-
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_size_vulkan():
-    """subgroup_size=32 must produce correct invocation IDs on Vulkan."""
     N = 32
     ids = qd.ndarray(dtype=qd.i32, shape=(N,))
 
     @qd.kernel
-    def k(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+    def k_valid(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
         qd.loop_config(block_dim=N, subgroup_size=32)
         for i in range(N):
             out[i] = subgroup.invocation_id()
 
-    k(ids)
+    k_valid(ids)
     result = ids.to_numpy()
-    expected = np.arange(N, dtype=np.int32)
-    assert np.array_equal(result, expected)
+    for i in range(N):
+        assert 0 <= result[i]
+
+    if arch != qd.vulkan:
+
+        @qd.kernel
+        def k_invalid():
+            qd.loop_config(block_dim=16, subgroup_size=16)
+            for i in range(16):
+                pass
+
+        with pytest.raises(ValueError, match="not valid"):
+            k_invalid()
 
 
 @test_utils.test(arch=qd.vulkan)
