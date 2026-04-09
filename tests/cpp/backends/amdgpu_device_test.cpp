@@ -28,8 +28,7 @@ namespace quadrants {
 namespace lang {
 
 TEST(AMDGPU, CreateDeviceAndAlloc) {
-  std::unique_ptr<amdgpu::AmdgpuDevice> device =
-      std::make_unique<amdgpu::AmdgpuDevice>();
+  std::unique_ptr<amdgpu::AmdgpuDevice> device = std::make_unique<amdgpu::AmdgpuDevice>();
   EXPECT_TRUE(device != nullptr);
   quadrants::lang::Device::AllocParams params;
   params.size = 400;
@@ -59,16 +58,13 @@ TEST(AMDGPU, CreateDeviceAndAlloc) {
 }
 
 TEST(AMDGPU, ImportMemory) {
-  std::unique_ptr<amdgpu::AmdgpuDevice> device =
-      std::make_unique<amdgpu::AmdgpuDevice>();
+  std::unique_ptr<amdgpu::AmdgpuDevice> device = std::make_unique<amdgpu::AmdgpuDevice>();
   EXPECT_TRUE(device != nullptr);
 
   int *ptr = nullptr;
   size_t mem_size = 400;
-  AMDGPUDriver::get_instance().malloc_managed((void **)&ptr, mem_size,
-                                              HIP_MEM_ATTACH_GLOBAL);
-  const quadrants::lang::DeviceAllocation device_alloc =
-      device->import_memory(ptr, mem_size);
+  AMDGPUDriver::get_instance().malloc_managed((void **)&ptr, mem_size, HIP_MEM_ATTACH_GLOBAL);
+  const quadrants::lang::DeviceAllocation device_alloc = device->import_memory(ptr, mem_size);
 
   for (int i = 0; i < mem_size / sizeof(int); i++) {
     ptr[i] = i;
@@ -83,8 +79,7 @@ TEST(AMDGPU, ImportMemory) {
   const quadrants::lang::DeviceAllocationGuard device_dest_guard(device_dest);
 
   AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-  device->memcpy_internal(device_dest.get_ptr(0), device_alloc.get_ptr(0),
-                          params.size);
+  device->memcpy_internal(device_dest.get_ptr(0), device_alloc.get_ptr(0), params.size);
   void *mapped;
   EXPECT_EQ(device->map(device_dest, &mapped), RhiResult::success);
 
@@ -127,9 +122,8 @@ TEST(AMDGPU, ConvertAllocaInstAddressSpacePass) {
       "}\n";
   llvm::LLVMContext llvm_context;
   llvm::SMDiagnostic diagnostic_err;
-  std::unique_ptr<llvm::Module> llvm_module = llvm::parseIR(
-      llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(),
-      diagnostic_err, llvm_context);
+  std::unique_ptr<llvm::Module> llvm_module =
+      llvm::parseIR(llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(), diagnostic_err, llvm_context);
   llvm::legacy::FunctionPassManager function_pass_manager(llvm_module.get());
   function_pass_manager.add(new AMDGPUConvertAllocaInstAddressSpacePass());
   function_pass_manager.doInitialization();
@@ -178,15 +172,13 @@ TEST(AMDGPU, ConvertFuncParamAddressSpacePass) {
       "}\n";
   llvm::LLVMContext llvm_context;
   llvm::SMDiagnostic diagnostic_err;
-  std::unique_ptr<llvm::Module> llvm_module = llvm::parseIR(
-      llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(),
-      diagnostic_err, llvm_context);
+  std::unique_ptr<llvm::Module> llvm_module =
+      llvm::parseIR(llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(), diagnostic_err, llvm_context);
   llvm::legacy::PassManager module_pass_manager;
   module_pass_manager.add(new AMDGPUConvertFuncParamAddressSpacePass());
   module_pass_manager.run(*llvm_module);
   auto func = llvm_module->getFunction("runtime_add");
-  for (llvm::Function::arg_iterator I = func->arg_begin(), E = func->arg_end();
-       I != E; ++I) {
+  for (llvm::Function::arg_iterator I = func->arg_begin(), E = func->arg_end(); I != E; ++I) {
     if (I->getType()->getTypeID() == llvm::Type::PointerTyID) {
       EXPECT_EQ(I->getType()->getPointerAddressSpace(), 1);
     }
@@ -225,9 +217,8 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
       "}\n";
   llvm::LLVMContext llvm_context;
   llvm::SMDiagnostic diagnostic_err;
-  std::unique_ptr<llvm::Module> llvm_module = llvm::parseIR(
-      llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(),
-      diagnostic_err, llvm_context);
+  std::unique_ptr<llvm::Module> llvm_module =
+      llvm::parseIR(llvm::MemoryBuffer::getMemBuffer(program)->getMemBufferRef(), diagnostic_err, llvm_context);
 
   // auto amdgpu_session = new JITSessionAMDGPU(new QuadrantsLLVMContext(new
   // CompileConfig, Arch::amdgpu), new CompileConfig(), llvm::DataLayout(""));
@@ -236,8 +227,7 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
   LLVMInitializeAMDGPUTargetInfo();
   LLVMInitializeAMDGPUAsmPrinter();
   LLVMInitializeAMDGPUAsmParser();
-  auto amdgpu_session = new JITSessionAMDGPU(nullptr, default_compile_config,
-                                             llvm::DataLayout(""));
+  auto amdgpu_session = new JITSessionAMDGPU(nullptr, default_compile_config, llvm::DataLayout(""));
   auto amdgpu_module = amdgpu_session->add_module(std::move(llvm_module), 0);
   std::vector<void *> arg_pointers;
   std::vector<int> arg_sizes;
@@ -249,10 +239,8 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
   double a = 10.0;
   double b = 7.0;
   double ret;
-  AMDGPUDriver::get_instance().memcpy_host_to_device(args[0], &a,
-                                                     sizeof(double));
-  AMDGPUDriver::get_instance().memcpy_host_to_device(args[1], &b,
-                                                     sizeof(double));
+  AMDGPUDriver::get_instance().memcpy_host_to_device(args[0], &a, sizeof(double));
+  AMDGPUDriver::get_instance().memcpy_host_to_device(args[1], &b, sizeof(double));
   arg_pointers.push_back((void *)&args[0]);
   arg_pointers.push_back((void *)&args[1]);
   arg_pointers.push_back((void *)&args[2]);
@@ -261,8 +249,7 @@ TEST(AMDGPU, CompileProgramAndLaunch) {
   arg_sizes.push_back(arg_size);
   amdgpu_module->call("runtime_add", arg_pointers, arg_sizes);
   AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-  AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, args[2],
-                                                     sizeof(double));
+  AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, args[2], sizeof(double));
   EXPECT_EQ(ret, 17);
   AMDGPUDriver::get_instance().mem_free(args[0]);
 }

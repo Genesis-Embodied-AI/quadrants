@@ -64,8 +64,7 @@ class MemoryAccessOptions {
     options_.clear();
   }
 
-  std::unordered_map<SNode *, std::unordered_set<SNodeAccessFlag>> get_all()
-      const {
+  std::unordered_map<SNode *, std::unordered_set<SNodeAccessFlag>> get_all() const {
     return options_;
   }
 
@@ -85,8 +84,7 @@ class Identifier {
   // Identifier() = default;
 
   // Multiple identifiers can share the same name but must have different id's
-  explicit Identifier(int id, const std::string &name = "")
-      : name_(name), id(id) {
+  explicit Identifier(int id, const std::string &name = "") : name_(name), id(id) {
   }
 
   std::string raw_name() const;
@@ -274,13 +272,12 @@ class IRNode {
     visitor->visit(this);                    \
   }
 
-#define QD_DEFINE_CLONE                                             \
-  std::unique_ptr<Stmt> clone() const override {                    \
-    auto new_stmt =                                                 \
-        std::make_unique<std::decay<decltype(*this)>::type>(*this); \
-    new_stmt->mark_fields_registered();                             \
-    new_stmt->io(new_stmt->field_manager);                          \
-    return new_stmt;                                                \
+#define QD_DEFINE_CLONE                                                         \
+  std::unique_ptr<Stmt> clone() const override {                                \
+    auto new_stmt = std::make_unique<std::decay<decltype(*this)>::type>(*this); \
+    new_stmt->mark_fields_registered();                                         \
+    new_stmt->io(new_stmt->field_manager);                                      \
+    return new_stmt;                                                            \
   }
 
 #define QD_DEFINE_ACCEPT_AND_CLONE \
@@ -310,11 +307,9 @@ class StmtFieldNumeric final : public StmtField {
 
   bool equal(const StmtField *other_generic) const override {
     if (auto other = dynamic_cast<const StmtFieldNumeric *>(other_generic)) {
-      if (std::holds_alternative<T *>(other->value_) &&
-          std::holds_alternative<T *>(value_)) {
+      if (std::holds_alternative<T *>(other->value_) && std::holds_alternative<T *>(value_)) {
         return *(std::get<T *>(other->value_)) == *(std::get<T *>(value_));
-      } else if (std::holds_alternative<T *>(other->value_) ||
-                 std::holds_alternative<T *>(value_)) {
+      } else if (std::holds_alternative<T *>(other->value_) || std::holds_alternative<T *>(value_)) {
         QD_ERROR(
             "Inconsistent StmtField value types: a pointer value is compared "
             "to a non-pointer value.");
@@ -347,8 +342,7 @@ class StmtFieldMemoryAccessOptions final : public StmtField {
   MemoryAccessOptions const &opt_;
 
  public:
-  explicit StmtFieldMemoryAccessOptions(MemoryAccessOptions const &opt)
-      : opt_(opt) {
+  explicit StmtFieldMemoryAccessOptions(MemoryAccessOptions const &opt) : opt_(opt) {
   }
 
   bool equal(const StmtField *other_generic) const override;
@@ -372,8 +366,7 @@ class StmtFieldManager {
     std::string key(key_);
     size_t pos = key.find(',');
     std::string first_name = key.substr(0, pos);
-    std::string rest_names =
-        key.substr(pos + 2, int(key.size()) - (int)pos - 2);
+    std::string rest_names = key.substr(pos + 2, int(key.size()) - (int)pos - 2);
     this->operator()(first_name.c_str(), std::forward<T>(t));
     this->operator()(rest_names.c_str(), std::forward<Args>(rest)...);
   }
@@ -557,14 +550,10 @@ class Block : public IRNode {
 
   void replace_statements_in_range(int start, int end, VecStatement &&stmts);
   void set_statements(VecStatement &&stmts);
-  void replace_with(Stmt *old_statement,
-                    std::unique_ptr<Stmt> &&new_statement,
-                    bool replace_usages = true);
+  void replace_with(Stmt *old_statement, std::unique_ptr<Stmt> &&new_statement, bool replace_usages = true);
   void insert_before(Stmt *old_statement, VecStatement &&new_statements);
   void insert_after(Stmt *old_statement, VecStatement &&new_statements);
-  void replace_with(Stmt *old_statement,
-                    VecStatement &&new_statements,
-                    bool replace_usages = true);
+  void replace_with(Stmt *old_statement, VecStatement &&new_statements, bool replace_usages = true);
   Stmt *lookup_var(const Identifier &ident) const;
   IRNode *get_parent() const override;
 
@@ -610,9 +599,7 @@ class DelayedIRModifier {
   void insert_before(Stmt *old_statement, VecStatement &&new_statements);
   void insert_after(Stmt *old_statement, std::unique_ptr<Stmt> new_statement);
   void insert_after(Stmt *old_statement, VecStatement &&new_statements);
-  void replace_with(Stmt *stmt,
-                    VecStatement &&new_statements,
-                    bool replace_usages = true);
+  void replace_with(Stmt *stmt, VecStatement &&new_statements, bool replace_usages = true);
   void extract_to_block_front(Stmt *stmt, Block *blk);
   void type_check(IRNode *node, CompileConfig cfg);
   bool modify_ir();
@@ -638,31 +625,25 @@ template <typename T>
 inline void StmtFieldManager::operator()(const char *key, T &&value) {
   using decay_T = typename std::decay<T>::type;
   if constexpr (is_specialization<decay_T, std::vector>::value) {
-    stmt_->field_manager.fields.emplace_back(
-        std::make_unique<StmtFieldNumeric<std::size_t>>(value.size()));
+    stmt_->field_manager.fields.emplace_back(std::make_unique<StmtFieldNumeric<std::size_t>>(value.size()));
     for (int i = 0; i < (int)value.size(); i++) {
       (*this)("__element", value[i]);
     }
-  } else if constexpr (std::is_same<decay_T,
-                                    std::variant<Stmt *, std::string>>::value) {
+  } else if constexpr (std::is_same<decay_T, std::variant<Stmt *, std::string>>::value) {
     if (std::holds_alternative<std::string>(value)) {
       stmt_->field_manager.fields.emplace_back(
-          std::make_unique<StmtFieldNumeric<std::string>>(
-              std::get<std::string>(value)));
+          std::make_unique<StmtFieldNumeric<std::string>>(std::get<std::string>(value)));
     } else {
       (*this)("__element", std::get<Stmt *>(value));
     }
   } else if constexpr (std::is_same<decay_T, Stmt *>::value) {
     stmt_->register_operand(const_cast<Stmt *&>(value));
   } else if constexpr (std::is_same<decay_T, SNode *>::value) {
-    stmt_->field_manager.fields.emplace_back(
-        std::make_unique<StmtFieldSNode>(value));
+    stmt_->field_manager.fields.emplace_back(std::make_unique<StmtFieldSNode>(value));
   } else if constexpr (std::is_same<decay_T, MemoryAccessOptions>::value) {
-    stmt_->field_manager.fields.emplace_back(
-        std::make_unique<StmtFieldMemoryAccessOptions>(value));
+    stmt_->field_manager.fields.emplace_back(std::make_unique<StmtFieldMemoryAccessOptions>(value));
   } else {
-    stmt_->field_manager.fields.emplace_back(
-        std::make_unique<StmtFieldNumeric<std::remove_reference_t<T>>>(&value));
+    stmt_->field_manager.fields.emplace_back(std::make_unique<StmtFieldNumeric<std::remove_reference_t<T>>>(&value));
   }
 }
 

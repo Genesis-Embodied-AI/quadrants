@@ -16,8 +16,7 @@ std::string compiled_lib_dir;
 std::string runtime_tmp_dir;
 
 std::string get_custom_cuda_library_path() {
-  std::string path = join_path(
-      runtime_lib_dir(), "cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc");
+  std::string path = join_path(runtime_lib_dir(), "cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc");
 
   // check path existance
   if (!path_exists(path)) {
@@ -33,15 +32,14 @@ std::string runtime_lib_dir() {
     folder = compiled_lib_dir;
   } else {
     auto ti_lib_dir = getenv("QD_LIB_DIR");
-    QD_ERROR_IF(
-        !ti_lib_dir,
-        "If you are running the quadrants_cpp_tests please set $QD_LIB_DIR "
-        "to $QUADRANTS_INSTALL_DIR/_lib/runtime. $QUADRANTS_INSTALL_DIR can be "
-        "retrieved from quadrants.__path__[0] in python. You can also use this "
-        "script to populate $QD_LIB_DIR:\n\n"
-        "export QD_LIB_DIR=$(python -c \"import os; import quadrants as ti; "
-        "p = os.path.join(ti.__path__[0], '_lib', 'runtime'); print(p)\" | "
-        "tail -n 1)");
+    QD_ERROR_IF(!ti_lib_dir,
+                "If you are running the quadrants_cpp_tests please set $QD_LIB_DIR "
+                "to $QUADRANTS_INSTALL_DIR/_lib/runtime. $QUADRANTS_INSTALL_DIR can be "
+                "retrieved from quadrants.__path__[0] in python. You can also use this "
+                "script to populate $QD_LIB_DIR:\n\n"
+                "export QD_LIB_DIR=$(python -c \"import os; import quadrants as ti; "
+                "p = os.path.join(ti.__path__[0], '_lib', 'runtime'); print(p)\" | "
+                "tail -n 1)");
     folder = std::string(ti_lib_dir);
   }
   return folder;
@@ -54,8 +52,7 @@ real get_cpu_frequency() {
     Time::sleep(1);
     uint64 elapsed_cycles = Time::get_cycles() - cycles;
     auto frequency = real(std::round(elapsed_cycles / 1e8_f64) / 10.0_f64);
-    QD_INFO("CPU frequency = {:.2f} GHz ({} cycles per second)", frequency,
-            elapsed_cycles);
+    QD_INFO("CPU frequency = {:.2f} GHz ({} cycles per second)", frequency, elapsed_cycles);
     cpu_frequency = frequency;
   }
   return cpu_frequency;
@@ -63,9 +60,7 @@ real get_cpu_frequency() {
 
 real default_measurement_time = 1;
 
-real measure_cpe(std::function<void()> target,
-                 int64 elements_per_call,
-                 real time_second) {
+real measure_cpe(std::function<void()> target, int64 elements_per_call, real time_second) {
   if (time_second == 0) {
     target();
     return std::numeric_limits<real>::quiet_NaN();
@@ -93,8 +88,7 @@ real measure_cpe(std::function<void()> target,
     }
     total_batches += batch_size;
   }
-  auto elasped_cycles =
-      (Time::get_time() - start_t) * 1e9_f64 * get_cpu_frequency();
+  auto elasped_cycles = (Time::get_time() - start_t) * 1e9_f64 * get_cpu_frequency();
   return elasped_cycles / float64(total_batches * elements_per_call);
 }
 
@@ -130,8 +124,7 @@ void initialize_benchmark() {
   std::ifstream noturbo("/sys/devices/system/cpu/intel_pstate/no_turbo");
   char c;
   noturbo >> c;
-  QD_WARN_IF(c != '1',
-             "You seem to be running the benchmark with Intel Turboboost.");
+  QD_WARN_IF(c != '1', "You seem to be running the benchmark with Intel Turboboost.");
 #endif
 }
 

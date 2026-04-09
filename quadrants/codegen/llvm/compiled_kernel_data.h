@@ -23,13 +23,7 @@ class CompiledKernelData : public lang::CompiledKernelData {
     const StructType *args_type = nullptr;
     size_t args_size{0};
 
-    QD_IO_DEF(args,
-              rets,
-              compiled_data,
-              ret_type,
-              ret_size,
-              args_type,
-              args_size);
+    QD_IO_DEF(args, rets, compiled_data, ret_type, ret_size, args_type, args_size);
 
     InternalData() = default;
 
@@ -61,8 +55,7 @@ class CompiledKernelData : public lang::CompiledKernelData {
     return data_;
   }
 
-  std::string debug_dump_to_string()
-      const override;  // for debug/dev/testing only
+  std::string debug_dump_to_string() const override;  // for debug/dev/testing only
 
  protected:
   Err load_impl(const CompiledKernelDataFile &file) override;

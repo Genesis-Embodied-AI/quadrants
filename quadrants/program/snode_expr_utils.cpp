@@ -84,8 +84,7 @@ void place_child(Expr *expr_arg,
 
 void make_lazy_place(SNode *snode,
                      SNodeFieldMap *snode_to_fields,
-                     const std::function<void(std::unique_ptr<SNode> &,
-                                              std::vector<Expr> &)> &collect) {
+                     const std::function<void(std::unique_ptr<SNode> &, std::vector<Expr> &)> &collect) {
   if (snode->type == SNodeType::place)
     return;
   for (auto &c : snode->ch) {

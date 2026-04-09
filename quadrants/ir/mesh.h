@@ -76,8 +76,7 @@ class Mesh {
 
   int num_patches{0};
   MeshMapping<int> num_elements{};
-  MeshMapping<int>
-      patch_max_element_num{};  // the max number of mesh element in each patch
+  MeshMapping<int> patch_max_element_num{};  // the max number of mesh element in each patch
 
   MeshMapping<SNode *> owned_offset{};  // prefix of owned element
   MeshMapping<SNode *> total_offset{};  // prefix of total element

@@ -6,8 +6,7 @@
 
 namespace quadrants::lang {
 
-std::size_t UnifiedAllocator::default_allocator_size =
-    1 << 30;  // 1 GB per allocator
+std::size_t UnifiedAllocator::default_allocator_size = 1 << 30;  // 1 GB per allocator
 
 template <typename T>
 static void swap_erase_vector(std::vector<T> &vec, size_t idx) {
@@ -27,9 +26,7 @@ static void swap_erase_vector(std::vector<T> &vec, size_t idx) {
 UnifiedAllocator::UnifiedAllocator() {
 }
 
-void *UnifiedAllocator::allocate(std::size_t size,
-                                 std::size_t alignment,
-                                 bool exclusive) {
+void *UnifiedAllocator::allocate(std::size_t size, std::size_t alignment, bool exclusive) {
   // UnifiedAllocator never reuses the previously allocated memory
   // just move the head forward util depleting all the free memory
 
@@ -46,8 +43,7 @@ void *UnifiedAllocator::allocate(std::size_t size,
       auto tail = (std::size_t)chunk.tail;
       auto data = (std::size_t)chunk.data;
       auto ret = head + alignment - 1 - (head + alignment - 1) % alignment;
-      QD_TRACE("UM [data={}] allocate() request={} remain={}", (intptr_t)data,
-               size, (tail - head));
+      QD_TRACE("UM [data={}] allocate() request={} remain={}", (intptr_t)data, size, (tail - head));
       head = ret + size;
       if (head <= tail) {
         // success
@@ -68,11 +64,9 @@ void *UnifiedAllocator::allocate(std::size_t size,
     allocation_size = std::max(allocation_size, default_allocator_size);
   }
 
-  QD_TRACE("Allocating virtual address space of size {} MB",
-           allocation_size / 1024 / 1024);
+  QD_TRACE("Allocating virtual address space of size {} MB", allocation_size / 1024 / 1024);
 
-  void *ptr =
-      HostMemoryPool::get_instance().allocate_raw_memory(allocation_size);
+  void *ptr = HostMemoryPool::get_instance().allocate_raw_memory(allocation_size);
   chunk.data = ptr;
   chunk.head = (void *)((std::size_t)chunk.data + size);
   chunk.tail = (void *)((std::size_t)chunk.head + allocation_size);

@@ -49,10 +49,7 @@ class TaskCodegen : public IRVisitor {
   struct Result {
     std::vector<uint32_t> spirv_code;
     TaskAttributes task_attribs;
-    std::unordered_map<std::vector<int>,
-                       irpass::ExternalPtrAccess,
-                       hashing::Hasher<std::vector<int>>>
-        arr_access;
+    std::unordered_map<std::vector<int>, irpass::ExternalPtrAccess, hashing::Hasher<std::vector<int>>> arr_access;
   };
 
   Result run();
@@ -106,8 +103,7 @@ class TaskCodegen : public IRVisitor {
   void compile_args_struct();
   void compile_ret_struct();
   std::vector<BufferBind> get_buffer_binds();
-  void push_loop_control_labels(spirv::Label continue_label,
-                                spirv::Label merge_label);
+  void push_loop_control_labels(spirv::Label continue_label, spirv::Label merge_label);
   void pop_loop_control_labels();
   const spirv::Label current_continue_label() const;
   const spirv::Label current_merge_label() const;
@@ -119,33 +115,15 @@ class TaskCodegen : public IRVisitor {
                                     int root_id,
                                     const SNode *sn,
                                     spirv::Value input_index);
-  void generate_overflow_branch(const spirv::Value &cond_v,
-                                const std::string &op,
-                                const std::string &tb);
-  spirv::Value generate_uadd_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_usub_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_sadd_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_ssub_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_umul_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_smul_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_ushl_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
-  spirv::Value generate_sshl_overflow(const spirv::Value &a,
-                                      const spirv::Value &b,
-                                      const std::string &tb);
+  void generate_overflow_branch(const spirv::Value &cond_v, const std::string &op, const std::string &tb);
+  spirv::Value generate_uadd_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_usub_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_sadd_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_ssub_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_umul_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_smul_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_ushl_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
+  spirv::Value generate_sshl_overflow(const spirv::Value &a, const spirv::Value &b, const std::string &tb);
   inline bool ends_with(std::string const &value, std::string const &ending);
 
   Arch arch_;
@@ -160,10 +138,7 @@ class TaskCodegen : public IRVisitor {
   spirv::SType args_struct_type_;
   spirv::Value args_buffer_value_;
 
-  std::unordered_map<std::vector<int>,
-                     spirv::SType,
-                     hashing::Hasher<std::vector<int>>>
-      args_struct_types_;
+  std::unordered_map<std::vector<int>, spirv::SType, hashing::Hasher<std::vector<int>>> args_struct_types_;
 
   std::vector<spirv::SType> rets_struct_types_;
 
@@ -171,14 +146,8 @@ class TaskCodegen : public IRVisitor {
   spirv::Value ret_buffer_value_;
 
   std::shared_ptr<spirv::IRBuilder> ir_;  // spirv binary code builder
-  std::unordered_map<std::pair<BufferInfo, int>,
-                     spirv::Value,
-                     BufferInfoTypeTupleHasher>
-      buffer_value_map_;
-  std::unordered_map<std::pair<BufferInfo, int>,
-                     uint32_t,
-                     BufferInfoTypeTupleHasher>
-      buffer_binding_map_;
+  std::unordered_map<std::pair<BufferInfo, int>, spirv::Value, BufferInfoTypeTupleHasher> buffer_value_map_;
+  std::unordered_map<std::pair<BufferInfo, int>, uint32_t, BufferInfoTypeTupleHasher> buffer_binding_map_;
   std::vector<spirv::Value> shared_array_binds_;
   spirv::Value kernel_function_;
   spirv::Label kernel_return_label_;
@@ -197,8 +166,7 @@ class TaskCodegen : public IRVisitor {
   std::unordered_set<const Stmt *> offload_loop_motion_;
 
   TaskAttributes task_attribs_;
-  std::unordered_map<int, GetRootStmt *>
-      root_stmts_;  // maps root id to get root stmt
+  std::unordered_map<int, GetRootStmt *> root_stmts_;  // maps root id to get root stmt
   std::unordered_map<const Stmt *, BufferInfo> ptr_to_buffers_;
   // Shared float AllocaStmts targeted by atomics, populated by
   // scan_shared_atomic_allocs() before codegen. Value = true means the alloca
@@ -210,15 +178,13 @@ class TaskCodegen : public IRVisitor {
   // know to bitcast. E.g. if `sharr` (AllocaStmt) is retyped, then
   // `sharr[0]` (MatrixPtrStmt) is added here during visit(MatrixPtrStmt).
   std::unordered_set<const Stmt *> uint_backed_shared_float_ptr_stmts_;
-  std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>>
-      argid_to_tex_value_;
+  std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>> argid_to_tex_value_;
 
   struct PhysicalPtrComponents {
     spirv::Value base_ptr;
     spirv::Value element_index;
   };
-  std::unordered_map<const Stmt *, PhysicalPtrComponents>
-      physical_ptr_components_;
+  std::unordered_map<const Stmt *, PhysicalPtrComponents> physical_ptr_components_;
 
   bool use_volatile_buffer_access_{false};
 };

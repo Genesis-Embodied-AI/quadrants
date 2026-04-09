@@ -27,14 +27,12 @@ CompiledKernelDataFile::Err CompiledKernelDataFile::dump(std::ostream &os) {
     std::uint32_t arch = static_cast<std::uint32_t>(arch_);
     std::uint64_t metadata_size = metadata_.size();
     std::uint64_t src_code_size = src_code_.size();
-    bool io_success =
-        os.write(head_, std::size(head_)) &&
-        os.write((const char *)&arch, sizeof(arch)) &&
-        os.write((const char *)&metadata_size, sizeof(metadata_size)) &&
-        os.write((const char *)&src_code_size, sizeof(src_code_size)) &&
-        os.write((const char *)metadata_.data(), metadata_size) &&
-        os.write((const char *)src_code_.data(), src_code_size) &&
-        os.write((const char *)hash_.data(), kHashSize);
+    bool io_success = os.write(head_, std::size(head_)) && os.write((const char *)&arch, sizeof(arch)) &&
+                      os.write((const char *)&metadata_size, sizeof(metadata_size)) &&
+                      os.write((const char *)&src_code_size, sizeof(src_code_size)) &&
+                      os.write((const char *)metadata_.data(), metadata_size) &&
+                      os.write((const char *)src_code_.data(), src_code_size) &&
+                      os.write((const char *)hash_.data(), kHashSize);
     if (!io_success) {
       return Err::kIOStreamError;
     }
@@ -54,8 +52,7 @@ CompiledKernelDataFile::Err CompiledKernelDataFile::load(std::istream &is) {
     std::uint32_t arch;
     std::uint64_t metadata_size;
     std::uint64_t src_code_size;
-    bool io_success = is.read((char *)&arch, sizeof(arch)) &&
-                      is.read((char *)&metadata_size, sizeof(metadata_size)) &&
+    bool io_success = is.read((char *)&arch, sizeof(arch)) && is.read((char *)&metadata_size, sizeof(metadata_size)) &&
                       is.read((char *)&src_code_size, sizeof(src_code_size));
     if (!io_success) {
       return Err::kIOStreamError;
@@ -64,8 +61,7 @@ CompiledKernelDataFile::Err CompiledKernelDataFile::load(std::istream &is) {
     metadata_.resize(metadata_size);
     src_code_.resize(src_code_size);
     hash_.resize(kHashSize);
-    io_success = is.read((char *)metadata_.data(), metadata_size) &&
-                 is.read((char *)src_code_.data(), src_code_size) &&
+    io_success = is.read((char *)metadata_.data(), metadata_size) && is.read((char *)src_code_.data(), src_code_size) &&
                  is.read((char *)hash_.data(), kHashSize);
     if (!io_success) {
       return Err::kIOStreamError;
@@ -128,8 +124,7 @@ CompiledKernelData::Err CompiledKernelData::dump(std::ostream &os) const {
 }
 
 // static functions
-std::unique_ptr<CompiledKernelData> CompiledKernelData::load(std::istream &is,
-                                                             Err *p_err) {
+std::unique_ptr<CompiledKernelData> CompiledKernelData::load(std::istream &is, Err *p_err) {
   Err err = Err::kNoError;
   CompiledKernelDataFile file;
   std::unique_ptr<CompiledKernelData> result{nullptr};
@@ -187,8 +182,7 @@ std::string CompiledKernelData::get_err_msg(Err err) {
   }
 }
 
-std::unique_ptr<CompiledKernelData> CompiledKernelData::create(Arch arch,
-                                                               Err &err) {
+std::unique_ptr<CompiledKernelData> CompiledKernelData::create(Arch arch, Err &err) {
   err = Err::kUnknown;
   if (arch_uses_llvm(arch)) {
     if (llvm_creator) {

@@ -64,18 +64,16 @@ Value atomic_operation_widened(IRBuilder &ir,
     if (res_type.id != narrow_uint.id) {
       old_narrow = ir.make_value(spv::OpUConvert, narrow_uint, old_val);
     }
-    Value old_data_value =
-        ir.make_value(spv::OpBitcast, float_type, old_narrow);
+    Value old_data_value = ir.make_value(spv::OpBitcast, float_type, old_narrow);
     Value new_data_value = op(old_data_value, data);
     // float -> uint (widening if needed)
     Value new_val = ir.make_value(spv::OpBitcast, narrow_uint, new_data_value);
     if (res_type.id != narrow_uint.id) {
       new_val = ir.make_value(spv::OpUConvert, res_type, new_val);
     }
-    Value loaded = ir.make_value(
-        spv::OpAtomicCompareExchange, res_type, addr_ptr,
-        /*scope=*/ir.const_i32_one_, /*semantics if equal=*/ir.const_i32_zero_,
-        /*semantics if unequal=*/ir.const_i32_zero_, new_val, old_val);
+    Value loaded = ir.make_value(spv::OpAtomicCompareExchange, res_type, addr_ptr,
+                                 /*scope=*/ir.const_i32_one_, /*semantics if equal=*/ir.const_i32_zero_,
+                                 /*semantics if unequal=*/ir.const_i32_zero_, new_val, old_val);
     Value ok = ir.make_value(spv::OpIEqual, ir.bool_type(), loaded, old_val);
     ir.store_variable(ret_val_int, loaded);
     ir.make_inst(spv::OpSelectionMerge, branch_false, 0);
@@ -102,8 +100,7 @@ Value atomic_operation_widened(IRBuilder &ir,
 
 }  // namespace
 
-void scan_shared_atomic_allocs(Block *ir_block,
-                               std::unordered_map<const Stmt *, bool> &out) {
+void scan_shared_atomic_allocs(Block *ir_block, std::unordered_map<const Stmt *, bool> &out) {
   for (auto &s : ir_block->statements) {
     if (auto *atomic_stmt = s->cast<AtomicOpStmt>()) {
       if (auto *alloca = trace_to_alloca(atomic_stmt->dest)) {
@@ -116,9 +113,8 @@ void scan_shared_atomic_allocs(Block *ir_block,
             auto scalar_dtype = tensor_type->get_element_type();
             if (auto *nested = scalar_dtype->cast<TensorType>()) {
               scalar_dtype = nested->get_element_type();
-              QD_ASSERT_INFO(
-                  !scalar_dtype->cast<TensorType>(),
-                  "Nested tensor types deeper than 2 levels not supported");
+              QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
+                             "Nested tensor types deeper than 2 levels not supported");
             }
             if (is_real(scalar_dtype)) {
               bool has_non_add = (atomic_stmt->op_type != AtomicOpType::add);
@@ -150,23 +146,21 @@ void scan_shared_atomic_allocs(Block *ir_block,
 // Callers must NOT pre-initialize elem_num/elem_type - this function handles
 // nested tensor flattening (e.g. array of vec3 -> flat array of f32) which must
 // happen before get_primitive_type is called on the element dtype.
-void maybe_retype_alloca(
-    IRBuilder &ir,
-    const DeviceCapabilityConfig &caps,
-    const AllocaStmt *alloca,
-    const TensorType *tensor_type,
-    const std::unordered_map<const Stmt *, bool> &alloc_map,
-    std::unordered_set<const Stmt *> &retyped_stmts,
-    int &elem_num,
-    SType &elem_type) {
+void maybe_retype_alloca(IRBuilder &ir,
+                         const DeviceCapabilityConfig &caps,
+                         const AllocaStmt *alloca,
+                         const TensorType *tensor_type,
+                         const std::unordered_map<const Stmt *, bool> &alloc_map,
+                         std::unordered_set<const Stmt *> &retyped_stmts,
+                         int &elem_num,
+                         SType &elem_type) {
   elem_num = tensor_type->get_num_elements();
   DataType scalar_dtype = tensor_type->get_element_type();
   // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
   if (auto nested = scalar_dtype->cast<TensorType>()) {
     elem_num *= nested->get_num_elements();
     scalar_dtype = nested->get_element_type();
-    QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
-                   "Nested tensor types deeper than 2 levels not supported");
+    QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(), "Nested tensor types deeper than 2 levels not supported");
   }
   elem_type = ir.get_primitive_type(scalar_dtype);
   // Retype to uint if this alloca is targeted by float atomics and the device
@@ -175,8 +169,7 @@ void maybe_retype_alloca(
   if (it != alloc_map.end()) {
     bool needs_cas = it->second;
     if (needs_cas || !has_native_float_atomic_add(caps, scalar_dtype, true)) {
-      elem_type =
-          ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
+      elem_type = ir.get_primitive_type(get_atomic_uint_dtype(ir, scalar_dtype));
       retyped_stmts.insert(alloca);
     }
   }
@@ -202,18 +195,14 @@ void maybe_retype_derived_ptr(IRBuilder &ir,
   }
 }
 
-Value load_uint_backed_shared_float(IRBuilder &ir,
-                                    Value ptr_val,
-                                    const DataType &element_type) {
-  auto shared_type =
-      ir.get_primitive_type(get_atomic_uint_dtype(ir, element_type));
+Value load_uint_backed_shared_float(IRBuilder &ir, Value ptr_val, const DataType &element_type) {
+  auto shared_type = ir.get_primitive_type(get_atomic_uint_dtype(ir, element_type));
   Value val = ir.load_variable(ptr_val, shared_type);
   SType narrow_uint = ir.get_primitive_uint_type(element_type);
   if (shared_type.id != narrow_uint.id) {
     val = ir.make_value(spv::OpUConvert, narrow_uint, val);
   }
-  return ir.make_value(spv::OpBitcast, ir.get_primitive_type(element_type),
-                       val);
+  return ir.make_value(spv::OpBitcast, ir.get_primitive_type(element_type), val);
 }
 
 Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
@@ -226,62 +215,41 @@ Value float_to_shared_uint(IRBuilder &ir, Value val, const DataType &dt) {
   return val;
 }
 
-Value shared_float_atomic(IRBuilder &ir,
-                          AtomicOpType op_type,
-                          Value addr_ptr,
-                          Value data,
-                          const DataType &dt) {
+Value shared_float_atomic(IRBuilder &ir, AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt) {
   auto atomic_uint_dt = get_atomic_uint_dtype(ir, dt);
   auto float_type = ir.get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {
     return atomic_operation_widened(
-        ir, addr_ptr, data,
-        [&](Value lhs, Value rhs) { return ir.add(lhs, rhs); }, dt,
-        atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.add(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::sub) {
     return atomic_operation_widened(
-        ir, addr_ptr, data,
-        [&](Value lhs, Value rhs) { return ir.sub(lhs, rhs); }, dt,
-        atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.sub(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::mul) {
     return atomic_operation_widened(
-        ir, addr_ptr, data,
-        [&](Value lhs, Value rhs) { return ir.mul(lhs, rhs); }, dt,
-        atomic_uint_dt);
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.mul(lhs, rhs); }, dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::min) {
     return atomic_operation_widened(
-        ir, addr_ptr, data,
-        [&](Value lhs, Value rhs) {
-          return ir.call_glsl450(float_type, /*FMin*/ 37, lhs, rhs);
-        },
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.call_glsl450(float_type, /*FMin*/ 37, lhs, rhs); },
         dt, atomic_uint_dt);
   } else if (op_type == AtomicOpType::max) {
     return atomic_operation_widened(
-        ir, addr_ptr, data,
-        [&](Value lhs, Value rhs) {
-          return ir.call_glsl450(float_type, /*FMax*/ 40, lhs, rhs);
-        },
+        ir, addr_ptr, data, [&](Value lhs, Value rhs) { return ir.call_glsl450(float_type, /*FMax*/ 40, lhs, rhs); },
         dt, atomic_uint_dt);
   } else {
     QD_NOT_IMPLEMENTED
   }
 }
 
-bool has_native_float_atomic_add(const DeviceCapabilityConfig &caps,
-                                 const DataType &dt,
-                                 bool is_shared) {
+bool has_native_float_atomic_add(const DeviceCapabilityConfig &caps, const DataType &dt, bool is_shared) {
   if (dt->is_primitive(PrimitiveTypeID::f32))
-    return caps.get(is_shared
-                        ? DeviceCapability::spirv_has_shared_atomic_float_add
-                        : DeviceCapability::spirv_has_atomic_float_add);
+    return caps.get(is_shared ? DeviceCapability::spirv_has_shared_atomic_float_add
+                              : DeviceCapability::spirv_has_atomic_float_add);
   if (dt->is_primitive(PrimitiveTypeID::f64))
-    return caps.get(is_shared
-                        ? DeviceCapability::spirv_has_shared_atomic_float64_add
-                        : DeviceCapability::spirv_has_atomic_float64_add);
+    return caps.get(is_shared ? DeviceCapability::spirv_has_shared_atomic_float64_add
+                              : DeviceCapability::spirv_has_atomic_float64_add);
   if (dt->is_primitive(PrimitiveTypeID::f16))
-    return caps.get(is_shared
-                        ? DeviceCapability::spirv_has_shared_atomic_float16_add
-                        : DeviceCapability::spirv_has_atomic_float16_add);
+    return caps.get(is_shared ? DeviceCapability::spirv_has_shared_atomic_float16_add
+                              : DeviceCapability::spirv_has_atomic_float16_add);
   return false;
 }
 

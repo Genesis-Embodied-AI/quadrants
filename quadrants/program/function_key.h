@@ -31,8 +31,7 @@ class FunctionKey {
 namespace std {
 template <>
 struct hash<quadrants::lang::FunctionKey> {
-  std::size_t operator()(
-      const quadrants::lang::FunctionKey &key) const noexcept {
+  std::size_t operator()(const quadrants::lang::FunctionKey &key) const noexcept {
     return key.func_id ^ (key.instance_id << 16);
   }
 };

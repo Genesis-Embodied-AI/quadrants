@@ -21,8 +21,7 @@ bool is_representative(uint32 mask, uint64 value) {
     for (int s = 1; s < 32; s++) {
       auto cond = warp_idx() + s < 32 && ((mask >> (warp_idx() + s)) & 1);
 #define TEST_PEER(x) ((x) == cuda_shfl_down_sync_i32(mask, (x), s, 31))
-      auto equiv = cond && TEST_PEER(i32(i64(value))) &&
-                   TEST_PEER(i32((u64)value >> 32));
+      auto equiv = cond && TEST_PEER(i32(i64(value))) && TEST_PEER(i32((u64)value >> 32));
 #undef TEST_PEER
       has_following_eqiv = has_following_eqiv || equiv;
     }

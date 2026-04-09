@@ -27,8 +27,7 @@ using high_res_clock = std::chrono::high_resolution_clock;
 
 // TODO: In the future this isn't necessarily a pointer, since DeviceAllocation
 // is already a pretty cheap handle>
-using InputBuffersMap =
-    std::unordered_map<BufferInfo, DeviceAllocation *, BufferInfoHasher>;
+using InputBuffersMap = std::unordered_map<BufferInfo, DeviceAllocation *, BufferInfoHasher>;
 
 class SNodeTreeManager;
 
@@ -112,21 +111,19 @@ class QD_DLL_EXPORT GfxRuntime {
 
   size_t get_root_buffer_size(int id) const;
 
-  void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs);
+  void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                 const std::vector<ComputeOpImageRef> &image_refs);
 
   bool used_in_kernel(DeviceAllocationId id) {
     return ndarrays_in_use_.count(id) > 0;
   }
 
-  static std::pair<const lang::StructType *, size_t>
-  get_struct_type_with_data_layout(const lang::StructType *old_ty,
-                                   const std::string &layout);
+  static std::pair<const lang::StructType *, size_t> get_struct_type_with_data_layout(const lang::StructType *old_ty,
+                                                                                      const std::string &layout);
 
-  static std::tuple<const lang::StructType *, size_t, size_t>
-  get_struct_type_with_data_layout_impl(const lang::StructType *old_ty,
-                                        const std::string &layout);
+  static std::tuple<const lang::StructType *, size_t, size_t> get_struct_type_with_data_layout_impl(
+      const lang::StructType *old_ty,
+      const std::string &layout);
 
  private:
   friend class quadrants::lang::gfx::SNodeTreeManager;
@@ -163,12 +160,11 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unordered_set<DeviceAllocationId> ndarrays_in_use_;
 };
 
-GfxRuntime::RegisterParams run_codegen(
-    Kernel *kernel,
-    Arch arch,
-    const DeviceCapabilityConfig &caps,
-    const std::vector<CompiledSNodeStructs> &compiled_structs,
-    const CompileConfig &compile_config);
+GfxRuntime::RegisterParams run_codegen(Kernel *kernel,
+                                       Arch arch,
+                                       const DeviceCapabilityConfig &caps,
+                                       const std::vector<CompiledSNodeStructs> &compiled_structs,
+                                       const CompileConfig &compile_config);
 
 }  // namespace gfx
 }  // namespace quadrants::lang

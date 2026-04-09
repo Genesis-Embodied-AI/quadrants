@@ -109,14 +109,10 @@ struct get_vec_field<3, VEC> {
 template <int i,
           typename VEC,
           typename Class,
-          std::enable_if_t<get_dim<VEC>::value<i + 1, int> = 0> void
-              register_vec_field(Class &cls) {
+          std::enable_if_t<get_dim<VEC>::value<i + 1, int> = 0> void register_vec_field(Class &cls) {
 }
 
-template <int i,
-          typename VEC,
-          typename Class,
-          std::enable_if_t<get_dim<VEC>::value >= i + 1, int> = 0>
+template <int i, typename VEC, typename Class, std::enable_if_t<get_dim<VEC>::value >= i + 1, int> = 0>
 void register_vec_field(Class &cls) {
   static const char *names[4] = {"x", "y", "z", "w"};
   cls.def_readwrite(names[i], get_vec_field<i, VEC>::get());
@@ -131,8 +127,7 @@ struct VectorRegistration<VectorND<dim, T, ISE>> {
     using Vector = VectorND<dim, T, ISE>;
 
     // e.g. Vector4f
-    std::string vector_name =
-        std::string("Vector") + std::to_string(dim) + get_type_short_name<T>();
+    std::string vector_name = std::string("Vector") + std::to_string(dim) + get_type_short_name<T>();
 
     auto cls = py::class_<Vector>(m, vector_name.c_str());
     cls.def(VectorInitializer<dim, T>::get())

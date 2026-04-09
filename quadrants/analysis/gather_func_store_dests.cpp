@@ -19,11 +19,9 @@ class GatherFuncStoreDests : public BasicStmtVisitor {
   };
   TarjanData &tarjan_data_;
 
-  static std::unordered_set<Stmt *> run(Function *func,
-                                        TarjanData &tarjan_data) {
+  static std::unordered_set<Stmt *> run(Function *func, TarjanData &tarjan_data) {
     QD_ASSERT(tarjan_data.func_dfn.count(func) == 0);
-    tarjan_data.func_dfn[func] = tarjan_data.func_low[func] =
-        tarjan_data.func_dfn.size();
+    tarjan_data.func_dfn[func] = tarjan_data.func_low[func] = tarjan_data.func_dfn.size();
     tarjan_data.func_in_stack.insert(func);
     tarjan_data.func_stack.push(func);
     GatherFuncStoreDests searcher(func, tarjan_data);
@@ -33,8 +31,7 @@ class GatherFuncStoreDests : public BasicStmtVisitor {
         auto top = tarjan_data.func_stack.top();
         tarjan_data.func_stack.pop();
         tarjan_data.func_in_stack.erase(top);
-        top->store_dests.insert(searcher.results_.begin(),
-                                searcher.results_.end());
+        top->store_dests.insert(searcher.results_.begin(), searcher.results_.end());
         if (top == func) {
           break;
         }
@@ -51,8 +48,7 @@ class GatherFuncStoreDests : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  GatherFuncStoreDests(Function *func, TarjanData &tarjan_data)
-      : current_func_(func), tarjan_data_(tarjan_data) {
+  GatherFuncStoreDests(Function *func, TarjanData &tarjan_data) : current_func_(func), tarjan_data_(tarjan_data) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -86,11 +82,11 @@ class GatherFuncStoreDests : public BasicStmtVisitor {
     if (!tarjan_data_.func_dfn.count(func)) {
       auto result = run(func, tarjan_data_);
       results_.merge(result);
-      tarjan_data_.func_low[current_func_] = std::min(
-          tarjan_data_.func_low[current_func_], tarjan_data_.func_low[func]);
+      tarjan_data_.func_low[current_func_] =
+          std::min(tarjan_data_.func_low[current_func_], tarjan_data_.func_low[func]);
     } else if (tarjan_data_.func_in_stack.count(func)) {
-      tarjan_data_.func_low[current_func_] = std::min(
-          tarjan_data_.func_low[current_func_], tarjan_data_.func_dfn[func]);
+      tarjan_data_.func_low[current_func_] =
+          std::min(tarjan_data_.func_low[current_func_], tarjan_data_.func_dfn[func]);
     } else {
       const auto &dests = func->store_dests;
       results_.insert(dests.begin(), dests.end());

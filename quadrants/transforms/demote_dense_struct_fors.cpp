@@ -36,8 +36,7 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
 
   ////// Begin core transformation
   auto body = std::move(offloaded->body);
-  const int num_loop_vars =
-      snodes.empty() ? 0 : snodes.back()->num_active_indices;
+  const int num_loop_vars = snodes.empty() ? 0 : snodes.back()->num_active_indices;
 
   std::vector<Stmt *> new_loop_vars;
 
@@ -75,12 +74,9 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
       }
       index = generate_div(&body_header, index, ext.acc_shape);
       total_shape[p] /= ext.shape;
-      auto multiplier =
-          body_header.push_back<ConstStmt>(TypedConstant(total_shape[p]));
-      auto delta = body_header.push_back<BinaryOpStmt>(BinaryOpType::mul, index,
-                                                       multiplier);
-      new_loop_vars[j] = body_header.push_back<BinaryOpStmt>(
-          BinaryOpType::add, new_loop_vars[j], delta);
+      auto multiplier = body_header.push_back<ConstStmt>(TypedConstant(total_shape[p]));
+      auto delta = body_header.push_back<BinaryOpStmt>(BinaryOpType::mul, index, multiplier);
+      new_loop_vars[j] = body_header.push_back<BinaryOpStmt>(BinaryOpType::add, new_loop_vars[j], delta);
     }
   }
 
@@ -95,8 +91,7 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
       },
       /*finder=*/
       [&](Stmt *s) {
-        auto index = std::find(physical_indices.begin(), physical_indices.end(),
-                               s->as<LoopIndexStmt>()->index);
+        auto index = std::find(physical_indices.begin(), physical_indices.end(), s->as<LoopIndexStmt>()->index);
         QD_ASSERT(index != physical_indices.end());
         return new_loop_vars[index - physical_indices.begin()];
       });
@@ -112,8 +107,7 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
 }
 
 void maybe_convert(OffloadedStmt *stmt) {
-  if ((stmt->task_type == TaskType::struct_for) &&
-      stmt->snode->is_path_all_dense) {
+  if ((stmt->task_type == TaskType::struct_for) && stmt->snode->is_path_all_dense) {
     convert_to_range_for(stmt);
   }
 }

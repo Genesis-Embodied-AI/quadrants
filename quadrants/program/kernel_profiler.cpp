@@ -20,13 +20,11 @@ void KernelProfileStatisticalResult::insert_record(double t) {
   total += t;
 }
 
-bool KernelProfileStatisticalResult::operator<(
-    const KernelProfileStatisticalResult &o) const {
+bool KernelProfileStatisticalResult::operator<(const KernelProfileStatisticalResult &o) const {
   return total > o.total;
 }
 
-void KernelProfilerBase::profiler_start(KernelProfilerBase *profiler,
-                                        const char *kernel_name) {
+void KernelProfilerBase::profiler_start(KernelProfilerBase *profiler, const char *kernel_name) {
   QD_ASSERT(profiler);
   profiler->start(std::string(kernel_name));
 }
@@ -37,11 +35,7 @@ void KernelProfilerBase::profiler_stop(KernelProfilerBase *profiler) {
 }
 
 // TODO : deprecated
-void KernelProfilerBase::query(const std::string &kernel_name,
-                               int &counter,
-                               double &min,
-                               double &max,
-                               double &avg) {
+void KernelProfilerBase::query(const std::string &kernel_name, int &counter, double &min, double &max, double &avg) {
   sync();
   std::regex name_regex(kernel_name + "(.*)");
   for (auto &rec : statistical_results_) {
@@ -56,8 +50,7 @@ void KernelProfilerBase::query(const std::string &kernel_name,
         max += rec.max;
         avg += rec.total / rec.counter;
       } else {
-        QD_WARN("{}.counter({}) != {}.counter({}).", kernel_name, counter,
-                rec.name, rec.counter);
+        QD_WARN("{}.counter({}) != {}.counter({}).", kernel_name, counter, rec.name, rec.counter);
       }
     }
   }
@@ -67,17 +60,15 @@ double KernelProfilerBase::get_total_time() const {
   return total_time_ms_ / 1000.0;
 }
 
-void KernelProfilerBase::insert_record(const std::string &kernel_name,
-                                       double duration_ms) {
+void KernelProfilerBase::insert_record(const std::string &kernel_name, double duration_ms) {
   // Trace record
   KernelProfileTracedRecord record;
   record.name = kernel_name;
   record.kernel_elapsed_time_in_ms = duration_ms;
   traced_records_.push_back(record);
   // Count record
-  auto it = std::find_if(
-      statistical_results_.begin(), statistical_results_.end(),
-      [&](KernelProfileStatisticalResult &r) { return r.name == record.name; });
+  auto it = std::find_if(statistical_results_.begin(), statistical_results_.end(),
+                         [&](KernelProfileStatisticalResult &r) { return r.name == record.name; });
   if (it == statistical_results_.end()) {
     statistical_results_.emplace_back(record.name);
     it = std::prev(statistical_results_.end());
@@ -117,11 +108,8 @@ class DefaultProfiler : public KernelProfilerBase {
     record.kernel_elapsed_time_in_ms = ms;
     traced_records_.push_back(record);
     // count record
-    auto it =
-        std::find_if(statistical_results_.begin(), statistical_results_.end(),
-                     [&](KernelProfileStatisticalResult &r) {
-                       return r.name == event_name_;
-                     });
+    auto it = std::find_if(statistical_results_.begin(), statistical_results_.end(),
+                           [&](KernelProfileStatisticalResult &r) { return r.name == event_name_; });
     if (it == statistical_results_.end()) {
       statistical_results_.emplace_back(event_name_);
       it = std::prev(statistical_results_.end());

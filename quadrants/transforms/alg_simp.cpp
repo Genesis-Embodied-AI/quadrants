@@ -67,14 +67,11 @@ class AlgSimp : public BasicStmtVisitor {
   Stmt *get_inverse(BinaryOpStmt *stmt) {
     auto rhs = stmt->rhs;
     if (rhs->is<ConstStmt>()) {
-      auto reciprocal =
-          Stmt::make_typed<ConstStmt>(TypedConstant(rhs->ret_type));
+      auto reciprocal = Stmt::make_typed<ConstStmt>(TypedConstant(rhs->ret_type));
       if (rhs->ret_type->is_primitive(PrimitiveTypeID::f64)) {
-        reciprocal->val.val_float64() =
-            (float64)1.0 / rhs->as<ConstStmt>()->val.val_float64();
+        reciprocal->val.val_float64() = (float64)1.0 / rhs->as<ConstStmt>()->val.val_float64();
       } else if (rhs->ret_type->is_primitive(PrimitiveTypeID::f32)) {
-        reciprocal->val.val_float32() =
-            (float32)1.0 / rhs->as<ConstStmt>()->val.val_float32();
+        reciprocal->val.val_float32() = (float32)1.0 / rhs->as<ConstStmt>()->val.val_float32();
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -88,14 +85,11 @@ class AlgSimp : public BasicStmtVisitor {
       for (auto scalar_stmt : matrix_rhs->values) {
         auto const_stmt = scalar_stmt->cast<ConstStmt>();
         QD_ASSERT(const_stmt != nullptr);
-        auto reciprocal =
-            Stmt::make_typed<ConstStmt>(TypedConstant(scalar_stmt->ret_type));
+        auto reciprocal = Stmt::make_typed<ConstStmt>(TypedConstant(scalar_stmt->ret_type));
         if (scalar_stmt->ret_type->is_primitive(PrimitiveTypeID::f64)) {
-          reciprocal->val.val_float64() =
-              (float64)1.0 / const_stmt->val.val_float64();
+          reciprocal->val.val_float64() = (float64)1.0 / const_stmt->val.val_float64();
         } else if (scalar_stmt->ret_type->is_primitive(PrimitiveTypeID::f32)) {
-          reciprocal->val.val_float32() =
-              (float32)1.0 / const_stmt->val.val_float32();
+          reciprocal->val.val_float32() = (float32)1.0 / const_stmt->val.val_float32();
         } else {
           QD_NOT_IMPLEMENTED
         }
@@ -114,10 +108,8 @@ class AlgSimp : public BasicStmtVisitor {
   Stmt *get_log2rhs(BinaryOpStmt *stmt) {
     auto rhs = stmt->rhs;
     if (auto const_rhs = stmt->rhs->cast<ConstStmt>()) {
-      int log2rhs =
-          bit::log2int((uint64)rhs->as<ConstStmt>()->val.val_as_int64());
-      auto new_rhs =
-          Stmt::make<ConstStmt>(TypedConstant(stmt->lhs->ret_type, log2rhs));
+      int log2rhs = bit::log2int((uint64)rhs->as<ConstStmt>()->val.val_as_int64());
+      auto new_rhs = Stmt::make<ConstStmt>(TypedConstant(stmt->lhs->ret_type, log2rhs));
       Stmt *new_rhs_ptr = new_rhs.get();
       modifier.insert_before(stmt, std::move(new_rhs));
       return new_rhs_ptr;
@@ -130,8 +122,7 @@ class AlgSimp : public BasicStmtVisitor {
         auto const_stmt = scalar_stmt->cast<ConstStmt>();
         QD_ASSERT(const_stmt != nullptr);
         int log2int = bit::log2int((uint64)const_stmt->val.val_as_int64());
-        auto log2int_stmt = Stmt::make<ConstStmt>(
-            TypedConstant(scalar_stmt->ret_type, log2int));
+        auto log2int_stmt = Stmt::make<ConstStmt>(TypedConstant(scalar_stmt->ret_type, log2int));
 
         values.push_back(log2int_stmt.get());
         modifier.insert_before(stmt, std::move(log2int_stmt));
@@ -214,8 +205,7 @@ class AlgSimp : public BasicStmtVisitor {
     }
 
     float64 exponent = exponents[0];
-    if (!(exponent == std::round(exponent) && exponent > 0 &&
-          exponent <= max_weaken_exponent)) {
+    if (!(exponent == std::round(exponent) && exponent > 0 && exponent <= max_weaken_exponent)) {
       return false;
     }
 
@@ -231,8 +221,7 @@ class AlgSimp : public BasicStmtVisitor {
         if (!result)
           result = a_power_of_2;
         else {
-          auto new_result =
-              Stmt::make<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
+          auto new_result = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
           new_result->ret_type = a->ret_type;
           result = new_result.get();
           modifier.insert_before(stmt, std::move(new_result));
@@ -241,8 +230,7 @@ class AlgSimp : public BasicStmtVisitor {
       current_exponent <<= 1;
       if (current_exponent > exp)
         break;
-      auto new_a_power = Stmt::make<BinaryOpStmt>(BinaryOpType::mul,
-                                                  a_power_of_2, a_power_of_2);
+      auto new_a_power = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, a_power_of_2, a_power_of_2);
       new_a_power->ret_type = a->ret_type;
       a_power_of_2 = new_a_power.get();
       modifier.insert_before(stmt, std::move(new_a_power));
@@ -260,8 +248,7 @@ class AlgSimp : public BasicStmtVisitor {
 
     // All negative exponent
     for (auto exponent : exponents) {
-      if (!(exponent == std::round(exponent) && exponent < 0 &&
-            exponent >= -max_weaken_exponent)) {
+      if (!(exponent == std::round(exponent) && exponent < 0 && exponent >= -max_weaken_exponent)) {
         return false;
       }
     }
@@ -280,11 +267,9 @@ class AlgSimp : public BasicStmtVisitor {
     cast_to_result_type(one, stmt);
     auto new_exponent = Stmt::make<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
     new_exponent->ret_type = stmt->rhs->ret_type;
-    auto a_to_n = Stmt::make<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs,
-                                           new_exponent.get());
+    auto a_to_n = Stmt::make<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
     a_to_n->ret_type = stmt->ret_type;
-    auto result =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
+    auto result = Stmt::make<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
     result->ret_type = stmt->ret_type;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(new_exponent));
@@ -302,8 +287,7 @@ class AlgSimp : public BasicStmtVisitor {
   explicit AlgSimp(bool fast_math_) : fast_math(fast_math_) {
   }
 
-  [[nodiscard]] bool is_redundant_cast(const DataType &first_cast,
-                                       const DataType &second_cast) const {
+  [[nodiscard]] bool is_redundant_cast(const DataType &first_cast, const DataType &second_cast) const {
     // Tests if second_cast(first_cast(a)) is guaranteed to be equivalent to
     // second_cast(a).
     if (!first_cast->is<PrimitiveType>() || !second_cast->is<PrimitiveType>()) {
@@ -312,8 +296,7 @@ class AlgSimp : public BasicStmtVisitor {
     }
     if (is_real(second_cast)) {
       // float(...(a))
-      return is_real(first_cast) &&
-             data_type_bits(second_cast) <= data_type_bits(first_cast);
+      return is_real(first_cast) && data_type_bits(second_cast) <= data_type_bits(first_cast);
     }
     if (is_integral(first_cast)) {
       // int(int(a)), note it's not always equivalent when signedness differ,
@@ -337,15 +320,12 @@ class AlgSimp : public BasicStmtVisitor {
       if (stmt->cast_type == stmt->operand->ret_type) {
         stmt->replace_usages_with(stmt->operand);
         modifier.erase(stmt);
-      } else if (stmt->operand->is<UnaryOpStmt>() &&
-                 stmt->operand->as<UnaryOpStmt>()->is_cast()) {
+      } else if (stmt->operand->is<UnaryOpStmt>() && stmt->operand->as<UnaryOpStmt>()->is_cast()) {
         auto prev_cast = stmt->operand->as<UnaryOpStmt>();
-        if (stmt->op_type == UnaryOpType::cast_bits &&
-            prev_cast->op_type == UnaryOpType::cast_bits) {
+        if (stmt->op_type == UnaryOpType::cast_bits && prev_cast->op_type == UnaryOpType::cast_bits) {
           stmt->operand = prev_cast->operand;
           modifier.mark_as_modified();
-        } else if (stmt->op_type == UnaryOpType::cast_value &&
-                   prev_cast->op_type == UnaryOpType::cast_value &&
+        } else if (stmt->op_type == UnaryOpType::cast_value && prev_cast->op_type == UnaryOpType::cast_value &&
                    is_redundant_cast(prev_cast->cast_type, stmt->cast_type)) {
           stmt->operand = prev_cast->operand;
           modifier.mark_as_modified();
@@ -365,14 +345,12 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.erase(stmt);
       return true;
     }
-    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) &&
-        (alg_is_zero(lhs) || alg_is_zero(rhs))) {
+    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) && (alg_is_zero(lhs) || alg_is_zero(rhs))) {
       // fast_math or integral operands: 0 * a -> 0, a * 0 -> 0
       replace_with_zero(stmt);
       return true;
     }
-    if (is_integral(stmt->ret_type.get_element_type()) &&
-        (alg_is_pot(lhs) || alg_is_pot(rhs))) {
+    if (is_integral(stmt->ret_type.get_element_type()) && (alg_is_pot(lhs) || alg_is_pot(rhs))) {
       // a * pot -> a << log2(pot)
       if (alg_is_pot(lhs)) {
         std::swap(stmt->lhs, stmt->rhs);
@@ -380,8 +358,7 @@ class AlgSimp : public BasicStmtVisitor {
       }
 
       Stmt *new_rhs = get_log2rhs(stmt);
-      auto result =
-          Stmt::make<BinaryOpStmt>(BinaryOpType::bit_shl, stmt->lhs, new_rhs);
+      auto result = Stmt::make<BinaryOpStmt>(BinaryOpType::bit_shl, stmt->lhs, new_rhs);
       result->ret_type = stmt->ret_type;
 
       result->dbg_info = stmt->dbg_info;
@@ -410,10 +387,9 @@ class AlgSimp : public BasicStmtVisitor {
   bool optimize_division(BinaryOpStmt *stmt) {
     // return true iff the IR is modified
     auto rhs = stmt->rhs;
-    QD_ASSERT(stmt->op_type == BinaryOpType::div ||
-              stmt->op_type == BinaryOpType::floordiv);
-    if (alg_is_one(rhs) && !(is_real(stmt->lhs->ret_type.get_element_type()) &&
-                             stmt->op_type == BinaryOpType::floordiv)) {
+    QD_ASSERT(stmt->op_type == BinaryOpType::div || stmt->op_type == BinaryOpType::floordiv);
+    if (alg_is_one(rhs) &&
+        !(is_real(stmt->lhs->ret_type.get_element_type()) && stmt->op_type == BinaryOpType::floordiv)) {
       // a / 1 -> a
       stmt->replace_usages_with(stmt->lhs);
       modifier.erase(stmt);
@@ -425,8 +401,7 @@ class AlgSimp : public BasicStmtVisitor {
       replace_with_one(stmt);
       return true;
     }
-    if (fast_math && alg_is_optimizable(rhs) &&
-        is_real(rhs->ret_type.get_element_type()) &&
+    if (fast_math && alg_is_optimizable(rhs) && is_real(rhs->ret_type.get_element_type()) &&
         stmt->op_type != BinaryOpType::floordiv) {
       if (alg_is_zero(rhs)) {
         QD_WARN("Potential division by 0\n{}", stmt->get_tb());
@@ -434,8 +409,7 @@ class AlgSimp : public BasicStmtVisitor {
         // a / const -> a * (1 / const)
         Stmt *new_rhs = get_inverse(stmt);
 
-        auto product =
-            Stmt::make<BinaryOpStmt>(BinaryOpType::mul, stmt->lhs, new_rhs);
+        auto product = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, stmt->lhs, new_rhs);
         product->ret_type = stmt->ret_type;
         stmt->replace_usages_with(product.get());
         modifier.insert_before(stmt, std::move(product));
@@ -443,14 +417,12 @@ class AlgSimp : public BasicStmtVisitor {
         return true;
       }
     }
-    if (is_integral(stmt->lhs->ret_type.get_element_type()) &&
-        is_unsigned(stmt->lhs->ret_type.get_element_type()) &&
+    if (is_integral(stmt->lhs->ret_type.get_element_type()) && is_unsigned(stmt->lhs->ret_type.get_element_type()) &&
         alg_is_pot(rhs)) {
       // (unsigned)a / pot -> a >> log2(pot)
 
       Stmt *new_rhs = get_log2rhs(stmt);
-      auto result =
-          Stmt::make<BinaryOpStmt>(BinaryOpType::bit_sar, stmt->lhs, new_rhs);
+      auto result = Stmt::make<BinaryOpStmt>(BinaryOpType::bit_sar, stmt->lhs, new_rhs);
       result->ret_type = stmt->ret_type;
       stmt->replace_usages_with(result.get());
       modifier.insert_before(stmt, std::move(result));
@@ -465,13 +437,10 @@ class AlgSimp : public BasicStmtVisitor {
     auto rhs = stmt->rhs;
     if (stmt->op_type == BinaryOpType::mul) {
       optimize_multiplication(stmt);
-    } else if (stmt->op_type == BinaryOpType::div ||
-               stmt->op_type == BinaryOpType::floordiv) {
+    } else if (stmt->op_type == BinaryOpType::div || stmt->op_type == BinaryOpType::floordiv) {
       optimize_division(stmt);
-    } else if (stmt->op_type == BinaryOpType::add ||
-               stmt->op_type == BinaryOpType::sub ||
-               stmt->op_type == BinaryOpType::bit_or ||
-               stmt->op_type == BinaryOpType::bit_xor) {
+    } else if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
+               stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
       if (alg_is_zero(rhs)) {
         // a +-|^ 0 -> a
         stmt->replace_usages_with(stmt->lhs);
@@ -480,15 +449,12 @@ class AlgSimp : public BasicStmtVisitor {
         // 0 +|^ a -> a
         stmt->replace_usages_with(stmt->rhs);
         modifier.erase(stmt);
-      } else if (stmt->op_type == BinaryOpType::bit_or &&
-                 irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
+      } else if (stmt->op_type == BinaryOpType::bit_or && irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
         // a | a -> a
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
-      } else if ((stmt->op_type == BinaryOpType::sub ||
-                  stmt->op_type == BinaryOpType::bit_xor) &&
-                 (fast_math ||
-                  is_integral(stmt->ret_type.get_element_type())) &&
+      } else if ((stmt->op_type == BinaryOpType::sub || stmt->op_type == BinaryOpType::bit_xor) &&
+                 (fast_math || is_integral(stmt->ret_type.get_element_type())) &&
                  irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
         // fast_math or integral operands: a -^ a -> 0
         replace_with_zero(stmt);
@@ -522,8 +488,7 @@ class AlgSimp : public BasicStmtVisitor {
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
       }
-    } else if (stmt->op_type == BinaryOpType::bit_sar ||
-               stmt->op_type == BinaryOpType::bit_shl ||
+    } else if (stmt->op_type == BinaryOpType::bit_sar || stmt->op_type == BinaryOpType::bit_shl ||
                stmt->op_type == BinaryOpType::bit_shr) {
       if (alg_is_zero(rhs) || alg_is_zero(lhs)) {
         // a >> 0 -> a
@@ -538,12 +503,10 @@ class AlgSimp : public BasicStmtVisitor {
       if ((fast_math || is_integral(stmt->lhs->ret_type.get_element_type())) &&
           irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
         // fast_math or integral operands: a == a -> 1, a != a -> 0
-        if (stmt->op_type == BinaryOpType::cmp_eq ||
-            stmt->op_type == BinaryOpType::cmp_ge ||
+        if (stmt->op_type == BinaryOpType::cmp_eq || stmt->op_type == BinaryOpType::cmp_ge ||
             stmt->op_type == BinaryOpType::cmp_le) {
           replace_with_one(stmt);
-        } else if (stmt->op_type == BinaryOpType::cmp_ne ||
-                   stmt->op_type == BinaryOpType::cmp_gt ||
+        } else if (stmt->op_type == BinaryOpType::cmp_ne || stmt->op_type == BinaryOpType::cmp_gt ||
                    stmt->op_type == BinaryOpType::cmp_lt) {
           replace_with_zero(stmt);
         } else {
