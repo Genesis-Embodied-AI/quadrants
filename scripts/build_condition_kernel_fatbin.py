@@ -58,8 +58,8 @@ def generate_header(fatbin_path: Path, out_path: Path) -> None:
         "",
         "static const unsigned char kConditionKernelFatbin[] = {",
     ]
-    for i in range(0, len(fatbin_data), 16):
-        chunk = fatbin_data[i : i + 16]
+    for i in range(0, len(fatbin_data), 12):
+        chunk = fatbin_data[i : i + 12]
         header_lines.append("    " + ", ".join(f"0x{b:02x}" for b in chunk) + ",")
     header_lines.append("};")
     header_lines.append("")
