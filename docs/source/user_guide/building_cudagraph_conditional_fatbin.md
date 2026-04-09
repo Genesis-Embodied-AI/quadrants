@@ -41,7 +41,7 @@ This will:
 2. Device-link the result with `libcudadevrt.a` to resolve the
    `cudaGraphSetConditional` extern.
 3. Write the fatbin as a C byte array to
-   `quadrants/runtime/cuda/condition_kernel_fatbin.h`.
+   `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h`.
 
 After regenerating, rebuild Quadrants and commit the updated header.
 
@@ -56,7 +56,7 @@ add the new `-gencode` flag, then regenerate.
 |------|---------|
 | `quadrants/runtime/cuda/graph_do_while_cond.cu` | CUDA C source for the condition kernel |
 | `scripts/build_condition_kernel_fatbin.sh` | Regeneration script |
-| `quadrants/runtime/cuda/condition_kernel_fatbin.h` | Generated C header (checked into git) |
+| `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h` | Generated C header (checked into git) |
 
 ## How it's used at runtime
 

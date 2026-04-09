@@ -1,5 +1,5 @@
 #include "quadrants/runtime/cuda/graph_manager.h"
-#include "quadrants/runtime/cuda/condition_kernel_fatbin.h"
+#include "quadrants/runtime/cuda/graph_do_while_cond_fatbin.h"
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
