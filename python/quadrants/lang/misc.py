@@ -655,7 +655,10 @@ def loop_config(
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
         name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
-        subgroup_size (int): Required subgroup (warp/wavefront/SIMD group) size for Vulkan compute pipelines. Defaults to 32. Ignored on CUDA and Metal (fixed at 32).
+        subgroup_size (int): Required subgroup (warp/wavefront/SIMD group) size.
+            On Vulkan, passed as ``requiredSubgroupSize`` (defaults to 32).
+            On CUDA/Metal/AMDGPU, validated against the hardware's fixed
+            warp/SIMD size and raises ``ValueError`` if it doesn't match.
 
     Examples::
 
@@ -715,6 +718,20 @@ def loop_config(
         get_runtime().compiling_callable.ast_builder().set_loop_name(name)
 
     if subgroup_size is not None:
+        arch = impl.current_cfg().arch
+        _valid_subgroup_sizes = {
+            cuda: {32},
+            metal: {32},
+            amdgpu: {32, 64},
+        }
+        if arch in _valid_subgroup_sizes:
+            valid = _valid_subgroup_sizes[arch]
+            if subgroup_size not in valid:
+                raise ValueError(
+                    f"subgroup_size={subgroup_size} is not valid for {arch}. " f"Supported: {sorted(valid)}"
+                )
+        elif arch in (cpu, x64, arm64):
+            raise ValueError("subgroup_size is not supported on CPU backends")
         get_runtime().compiling_callable.ast_builder().subgroup_size(subgroup_size)
 
 
