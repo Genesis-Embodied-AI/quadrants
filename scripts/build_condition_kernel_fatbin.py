@@ -73,17 +73,17 @@ def main() -> None:
     nvcc = find_nvcc()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        obj = Path(tmpdir) / "condition_kernel.o"
-        fatbin = Path(tmpdir) / "condition_kernel.fatbin"
+        obj_path = Path(tmpdir) / "condition_kernel.o"
+        fatbin_path = Path(tmpdir) / "condition_kernel.fatbin"
 
         print("Compiling ...")
-        run([nvcc, "-dc", "-rdc=true", *SM_TARGETS, str(SRC), "-o", str(obj)])
+        run([nvcc, "-dc", "-rdc=true", *SM_TARGETS, str(SRC), "-o", str(obj_path)])
 
         print("Device-linking with libcudadevrt ...")
-        run([nvcc, "-dlink", *SM_TARGETS, str(obj), "-lcudadevrt", "-fatbin", "-o", str(fatbin)])
+        run([nvcc, "-dlink", *SM_TARGETS, str(obj_path), "-lcudadevrt", "-fatbin", "-o", str(fatbin_path)])
 
         print("Generating C header ...")
-        generate_header(fatbin, OUT_HEADER)
+        generate_header(fatbin_path, OUT_HEADER)
 
     print("Done.")
 
