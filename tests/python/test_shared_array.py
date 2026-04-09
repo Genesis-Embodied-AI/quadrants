@@ -305,7 +305,7 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
-@test_utils.test(arch=[qd.cuda, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_int_atomic_mul():
     # Regression test for dest_is_ptr guard on integer atomic_mul.
     # Without the guard, at_buffer() crashes on shared pointers.

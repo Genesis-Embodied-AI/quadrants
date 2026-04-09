@@ -1075,6 +1075,8 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
                               Value addr_ptr,
                               Value data,
                               const DataType &dt) {
+  // Use dt-derived type instead of t_fp32_ so FMin/FMax work for f16/f64.
+  auto float_type = get_primitive_type(dt);
   if (op_type == AtomicOpType::add) {
     return atomic_operation(
         addr_ptr, data, [&](Value lhs, Value rhs) { return add(lhs, rhs); },
@@ -1091,14 +1093,14 @@ Value IRBuilder::float_atomic(AtomicOpType op_type,
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMin*/ 37, lhs, rhs);
+          return call_glsl450(float_type, /*FMin*/ 37, lhs, rhs);
         },
         dt);
   } else if (op_type == AtomicOpType::max) {
     return atomic_operation(
         addr_ptr, data,
         [&](Value lhs, Value rhs) {
-          return call_glsl450(t_fp32_, /*FMax*/ 40, lhs, rhs);
+          return call_glsl450(float_type, /*FMax*/ 40, lhs, rhs);
         },
         dt);
   } else {
@@ -1124,7 +1126,14 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
                                   std::function<Value(Value, Value)> op,
                                   const DataType &dt) {
   SType out_type = get_primitive_type(dt);
-  SType res_type = get_primitive_uint_type(dt);
+  // Device-buffer pointers are uint-typed (from at_buffer), so CAS uses uint.
+  // Workgroup (shared) pointers keep their original type (e.g. i32). Using uint
+  // on a signed pointer causes Metal's atomic_compare_exchange to reject the
+  // shader due to signed/unsigned type mismatch.
+  const bool is_workgroup =
+      addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
+  SType res_type =
+      is_workgroup ? out_type : get_primitive_uint_type(dt);
   Value ret_val_int = alloca_variable(res_type);
 
   // do-while
@@ -1150,10 +1159,15 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
     Value old_val = make_value(spv::OpAtomicLoad, res_type, addr_ptr,
                                /*scope=*/const_i32_one_,
                                /*semantics=*/const_i32_zero_);
-    // int new = dataTypeBitsToInt(atomic_op(intBitsToDataType(old), data));
-    Value old_data_value = make_value(spv::OpBitcast, out_type, old_val);
+    // Bitcast uint<->float for the operation. Skip when types already match
+    // (integer workgroup path where res_type == out_type).
+    Value old_data_value = (out_type.id != res_type.id)
+                               ? make_value(spv::OpBitcast, out_type, old_val)
+                               : old_val;
     Value new_data_value = op(old_data_value, data);
-    Value new_val = make_value(spv::OpBitcast, res_type, new_data_value);
+    Value new_val = (out_type.id != res_type.id)
+                        ? make_value(spv::OpBitcast, res_type, new_data_value)
+                        : new_data_value;
     // int loaded = atomicCompSwap(vals[0], old, new);
     /*
     * Don't need this part, theoretically
@@ -1188,8 +1202,10 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   }
   start_label(exit);
 
-  return make_value(spv::OpBitcast, out_type,
-                    load_variable(ret_val_int, res_type));
+  Value ret_loaded = load_variable(ret_val_int, res_type);
+  return (out_type.id != res_type.id)
+             ? make_value(spv::OpBitcast, out_type, ret_loaded)
+             : ret_loaded;
 }
 
 Value IRBuilder::rand_u32(Value global_tmp_) {
