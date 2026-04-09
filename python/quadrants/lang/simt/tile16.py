@@ -35,7 +35,7 @@ def _make_tile16x16(dtype=qd.f32):
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
     Returns a @qd.dataclass type with 16 fields (r0–r15), zeros/eye factories, and
-    load/store/_eye_ methods.
+    _load/_store/_eye_ methods.
     """
     if dtype in _tile16_cache:
         return _tile16_cache[dtype]
