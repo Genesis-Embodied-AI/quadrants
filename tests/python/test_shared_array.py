@@ -331,6 +331,49 @@ def test_shared_array_int_atomic_mul():
         assert arr[idx] == 24
 
 
+@pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_float_atomics(op, dtype):
+    if dtype == qd.f64:
+        if qd.cfg.arch in (qd.vulkan, qd.metal):
+            caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+            if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+                pytest.skip("Device does not support f64")
+    N = 256
+    block_dim = 32
+    SCALE = 0.1523  # fractional so values are truly non-integer floats
+    # Arithmetic sum: SCALE * (0 + 1 + ... + block_dim-1)
+    expected_sum = SCALE * block_dim * (block_dim - 1) / 2.0
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    def make_kernel(atomic_fn):
+        @qd.kernel
+        def kern(out: qd.types.ndarray()):
+            qd.loop_config(block_dim=block_dim)
+            for i in range(N):
+                tid = i % block_dim
+                sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+                val = qd.cast(tid * SCALE, dtype)
+                sharr[tid] = val
+                qd.simt.block.sync()
+                atomic_fn(sharr[0], val)
+                qd.simt.block.sync()  # wait for all threads' atomics to complete
+                out[i] = sharr[0]
+
+        return kern
+
+    expected = {
+        "add": expected_sum,
+        "sub": -expected_sum,
+        "min": 0.0,
+        "max": (block_dim - 1) * SCALE,
+    }
+    rtol = 1e-3 if dtype == qd.f16 else 1e-6
+    arr = qd.ndarray(qd.f32, (N))
+    make_kernel(atomic_op)(arr)
+    for idx in (0, 31, 32, 255):
+        assert arr[idx] == test_utils.approx(expected[op], rel=rtol)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +431,7 @@ def test_shared_array_dtypes(dtype):
                 assert arr[block_start + tid] == neighbor
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test(arch=[qd.cuda])
 def test_shared_array_tensor_type():
     data_type = vec4
     block_dim = 16
