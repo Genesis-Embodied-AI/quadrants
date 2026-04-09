@@ -21,7 +21,6 @@ each thread accesses row = row0 + tid.
 
 import quadrants as qd
 
-
 _TILE = 16
 
 

@@ -135,5 +135,7 @@ def test_tile16_load3d_store3d(batch, src_row, src_col, ncols, nrows):
 
     result = dst.to_numpy()
     expected = np.full((NBATCH, GRID, GRID), -1.0, dtype=np.float32)
-    expected[batch, src_row : src_row + nrows, src_col : src_col + ncols] = data[batch, src_row : src_row + nrows, src_col : src_col + ncols]
+    expected[batch, src_row : src_row + nrows, src_col : src_col + ncols] = data[
+        batch, src_row : src_row + nrows, src_col : src_col + ncols
+    ]
     np.testing.assert_allclose(result, expected)
