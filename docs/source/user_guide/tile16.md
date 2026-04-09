@@ -95,53 +95,7 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` (self) must be a lowe
 
 ## Full example: blocked Cholesky
 
-A simplified blocked Cholesky factorization using `Tile16x16`. Partial tiles at the boundary are handled by the slice bounds (`k0:k1` where `k1 = min(k0+TILE, n_dofs)`) — out-of-range rows are automatically zero on load and skipped on store, and `eye()` initializes padding rows to identity:
-
-```python
-@qd.func
-def blocked_cholesky(H, L, n_dofs, eps):
-    TILE = qd.simt.Tile16x16.SIZE
-    N_BLOCKS = (n_dofs + TILE - 1) // TILE
-    for kb in range(N_BLOCKS):
-        k0 = kb * TILE
-        k1 = qd.min(k0 + TILE, n_dofs)
-
-        # Load diagonal block (identity for padding rows beyond n_dofs)
-        L_kk = qd.simt.Tile16x16.eye(dtype=qd.f32)
-        L_kk[:] = H[k0:k1, k0:k1]
-
-        # Subtract rank-1 contributions from prior column-blocks
-        for jb in range(kb):
-            j0 = jb * TILE
-            for t in range(TILE):
-                v = L[k0:k1, j0 + t]
-                L_kk -= qd.outer(v, v)
-
-        # Factorize diagonal block
-        L_kk.cholesky_(eps)
-
-        # Process off-diagonal blocks below the diagonal
-        for ib in range(kb + 1, N_BLOCKS):
-            i0 = ib * TILE
-            i1 = qd.min(i0 + TILE, n_dofs)
-
-            # Load off-diagonal block (zeros for padding rows)
-            L_ik = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            L_ik[:] = H[i0:i1, k0:k1]
-
-            # Subtract rank-1 contributions from prior column-blocks
-            for jb in range(kb):
-                j0 = jb * TILE
-                for t in range(TILE):
-                    v_own = L[i0:i1, j0 + t]
-                    v_diag = L[k0:k1, j0 + t]
-                    L_ik -= qd.outer(v_own, v_diag)
-
-            L_kk.solve_triangular_(L_ik)
-            L[i0:i1, k0:k1] = L_ik
-
-        L[k0:k1, k0:k1] = L_kk
-```
+See the `cholesky_tile16` kernel in `misc/demos/cholesky_blocked.py` for a complete blocked Cholesky factorization using `Tile16x16`.
 
 ## Method reference
 
