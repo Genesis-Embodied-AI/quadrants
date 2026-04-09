@@ -1,0 +1,6 @@
+quadrants.ad
+============
+
+.. py:module:: quadrants.ad
+
+
