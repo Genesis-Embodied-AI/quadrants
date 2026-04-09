@@ -295,6 +295,27 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
   // that corrupts SubgroupLocalInvocationId after ~11 cycles.
 }
 
+// Create (or reuse) a VkInstance and populate ti_device_ capability flags.
+//
+// Phase 1 — Capability discovery.  Enumerates instance extensions and sets
+//   `surface` and `physical_device_features2` on ti_device_->vk_caps().
+//   This runs every cycle because ti_device_ is freshly constructed (all caps
+//   default to false).  The `physical_device_features2` flag gates whether
+//   create_logical_device() will query and enable f16, i8, atomic float,
+//   variable pointers, shader clock, buffer device address, etc.
+//
+// Phase 2 — VkInstance reuse.  If the VulkanLoader singleton already holds a
+//   live VkInstance (2nd+ qd.init() cycle), copies it into instance_ and
+//   returns early.  This avoids an NVIDIA driver bug that corrupts
+//   SubgroupLocalInvocationId after ~11 vkDestroyInstance/vkCreateInstance
+//   cycles in the same process.
+//
+// Phase 3 — First-time VkInstance creation (first qd.init() only).  Builds
+//   VkInstanceCreateInfo with app info, optional validation layers and debug
+//   printf, collects required + supported instance extensions, calls
+//   vkCreateInstance (with a Vulkan 1.0 fallback on
+//   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
+//   VulkanLoader singleton for future reuse.
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
                                           bool manual_create) {
   // Discover instance extensions and set capability flags on ti_device_.
