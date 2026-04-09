@@ -151,7 +151,7 @@ void GraphManager::ensure_condition_kernel_loaded() {
   if (cc < 90) {
     QD_INFO(
         "CUDA graph conditional nodes require SM 9.0+, but this device is "
-        "SM {}. graph_do_while will use host-side loop.",
+        "SM {}. Falling back to host-side do-while loop, which is slower.",
         cc);
     return;
   }
