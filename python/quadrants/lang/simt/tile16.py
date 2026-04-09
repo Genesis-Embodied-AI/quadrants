@@ -3,20 +3,9 @@
 """
 Internal implementation of register-resident 16x16 tile operations.
 
-Everything in this module is private.  The public user-facing API is
-provided by ``_Tile16x16Proxy`` (exposed as ``qd.simt.Tile16x16``),
-which wraps the raw tile class with:
-
-* **dtype-at-point-of-use** — users write ``Tile16x16.zeros(dtype=qd.f32)``
-  instead of calling the internal ``_make_tile16x16(qd.f32)`` factory;
-* **slice syntax** — users write ``t[:] = arr[r0:r1, c0:c1]`` instead of
-  calling ``_load`` / ``_store`` directly;
-* **outer-product sugar** — users write ``t -= qd.outer(a, b)`` instead of
-  calling ``_ger_sub``.
-
-Keeping this layer private lets the warp-shuffle internals evolve without
-breaking user code.  The only public attribute on the raw tile is ``.SIZE``
-(= 16), re-exported unchanged by the proxy.
+Everything in this module is private. The public user-facing API will be
+added in later PRs. Keeping this layer private lets the warp-shuffle
+internals evolve without breaking user code.
 
 Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
