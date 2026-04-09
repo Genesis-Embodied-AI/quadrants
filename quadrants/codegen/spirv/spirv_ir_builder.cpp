@@ -63,6 +63,13 @@ void IRBuilder::init_header() {
   if (caps_->get(cap::spirv_has_int64)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&header_);
   }
+  if (caps_->get(cap::spirv_has_atomic_int64)) {
+    // Required for OpAtomicLoad/OpAtomicCompareExchange on u64, used by
+    // the CAS-based f64 shared float atomic emulation path.
+    ib_.begin(spv::OpCapability)
+        .add(spv::CapabilityInt64Atomics)
+        .commit(&header_);
+  }
   if (caps_->get(cap::spirv_has_float16)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityFloat16).commit(&header_);
   }
