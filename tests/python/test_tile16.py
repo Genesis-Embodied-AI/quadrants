@@ -52,7 +52,7 @@ def test_tile16_eye_inplace():
         for _ in range(_TILE):
             t = Tile()
             t._load(src_arr, 0, 0, _TILE, _TILE)
-            t.eye_()
+            t._eye_()
             t._store(dst_arr, 0, 0, _TILE, _TILE)
 
     data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 100.0
