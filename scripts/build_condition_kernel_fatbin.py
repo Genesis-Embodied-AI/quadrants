@@ -24,11 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "graph_do_while_cond.cu"
 OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "graph_do_while_cond_fatbin.h"
 
-SM_TARGETS = [
-    "-gencode=arch=compute_90,code=sm_90",
-    "-gencode=arch=compute_100,code=sm_100",
-    "-gencode=arch=compute_120,code=sm_120",
-]
+SM_VERSIONS = [90, 100, 120]
+SM_TARGETS = [f"-gencode=arch=compute_{v},code=sm_{v}" for v in SM_VERSIONS]
 
 
 def find_nvcc() -> str:
