@@ -159,6 +159,16 @@ class QD_DLL_EXPORT Program {
     return program_impl_->get_device_caps();
   }
 
+  uint32_t get_min_subgroup_size() {
+    auto *dev = program_impl_->get_compute_device();
+    return dev ? dev->get_min_subgroup_size() : 32;
+  }
+
+  uint32_t get_max_subgroup_size() {
+    auto *dev = program_impl_->get_compute_device();
+    return dev ? dev->get_max_subgroup_size() : 32;
+  }
+
   Kernel &get_snode_reader(SNode *snode);
 
   Kernel &get_snode_writer(SNode *snode);

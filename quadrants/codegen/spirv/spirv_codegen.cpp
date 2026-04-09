@@ -1957,6 +1957,7 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
     task_attribs_.advisory_total_num_threads = kMaxNumThreadsGridStrideLoop;
   }
   task_attribs_.advisory_num_threads_per_group = stmt->block_dim;
+  task_attribs_.subgroup_size = stmt->subgroup_size;
   ir_->debug_name(spv::OpName, begin_expr_value, "begin_expr_value");
   ir_->debug_name(spv::OpName, total_elems, total_elems_name);
 
@@ -2036,6 +2037,7 @@ void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.task_type = OffloadedTaskType::struct_for;
   task_attribs_.advisory_total_num_threads = 65536;
   task_attribs_.advisory_num_threads_per_group = 128;
+  task_attribs_.subgroup_size = stmt->subgroup_size;
 
   // The computation for a single work is wrapped inside a function, so that
   // we can do grid-strided loop.

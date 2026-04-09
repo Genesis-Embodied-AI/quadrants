@@ -289,6 +289,7 @@ class VulkanPipeline : public Pipeline {
     std::vector<SpirvCodeView> code;
     std::string name{"Pipeline"};
     vkapi::IVkPipelineCache cache{nullptr};
+    uint32_t subgroup_size{0};
   };
 
   explicit VulkanPipeline(const Params &params);
@@ -574,6 +575,8 @@ struct VulkanCapabilities {
   bool present{false};
   bool dynamic_rendering{false};
   bool subgroup_size_control{false};
+  uint32_t min_subgroup_size{0};
+  uint32_t max_subgroup_size{0};
 };
 
 class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {
@@ -595,6 +598,13 @@ class QD_DLL_EXPORT VulkanDevice : public GraphicsDevice {
 
   Arch arch() const override {
     return Arch::vulkan;
+  }
+
+  uint32_t get_min_subgroup_size() const override {
+    return vk_caps_.min_subgroup_size;
+  }
+  uint32_t get_max_subgroup_size() const override {
+    return vk_caps_.max_subgroup_size;
   }
 
   RhiResult create_pipeline_cache(

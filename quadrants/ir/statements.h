@@ -1014,6 +1014,7 @@ class RangeForStmt : public Stmt {
   bool is_bit_vectorized;
   int num_cpu_threads;
   int block_dim;
+  int subgroup_size{0};
   bool strictly_serialized;
   std::string range_hint;
   std::string loop_name;
@@ -1062,6 +1063,7 @@ class StructForStmt : public Stmt {
   bool is_bit_vectorized;
   int num_cpu_threads;
   int block_dim;
+  int subgroup_size{0};
   MemoryAccessOptions mem_access_opt;
   std::string loop_name;
 
@@ -1096,6 +1098,7 @@ class MeshForStmt : public Stmt {
   bool is_bit_vectorized;
   int num_cpu_threads;
   int block_dim;
+  int subgroup_size{0};
   mesh::MeshElementType major_from_type;
   std::unordered_set<mesh::MeshElementType> major_to_types{};
   std::unordered_set<mesh::MeshRelationType> minor_relation_types{};
@@ -1415,6 +1418,7 @@ class OffloadedStmt : public Stmt {
   int32 end_value{0};
   int grid_dim{1};
   int block_dim{1};
+  int subgroup_size{0};
   bool reversed{false};
   bool is_bit_vectorized{false};
   int num_cpu_threads{1};
@@ -1482,6 +1486,7 @@ class OffloadedStmt : public Stmt {
                      end_value,
                      grid_dim,
                      block_dim,
+                     subgroup_size,
                      reversed,
                      num_cpu_threads,
                      index_offsets,

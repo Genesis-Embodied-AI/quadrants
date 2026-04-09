@@ -120,6 +120,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       strictly_serialized(o.strictly_serialized),
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
+      subgroup_size(o.subgroup_size),
       loop_name(o.loop_name) {
 }
 
@@ -128,6 +129,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   strictly_serialized = config.strictly_serialized;
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
+  subgroup_size = config.subgroup_size;
   loop_name = config.loop_name;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;

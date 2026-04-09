@@ -104,6 +104,7 @@ class Offloader {
         } else {
           offloaded->block_dim = s->block_dim;
         }
+        offloaded->subgroup_size = s->subgroup_size;
         if (auto val = s->begin->cast<ConstStmt>()) {
           offloaded->const_begin = true;
           offloaded->begin_value = val->val.val_int32();
@@ -149,6 +150,7 @@ class Offloader {
         } else {
           offloaded->block_dim = st->block_dim;
         }
+        offloaded->subgroup_size = st->subgroup_size;
         offloaded->num_cpu_threads =
             std::min(st->num_cpu_threads, config.cpu_max_num_threads);
         replace_all_usages_with(st, st, offloaded.get());
@@ -245,6 +247,8 @@ class Offloader {
         offloaded_struct_for->block_dim = for_stmt->block_dim;
       }
     }
+
+    offloaded_struct_for->subgroup_size = for_stmt->subgroup_size;
 
     replace_all_usages_with(for_stmt, for_stmt, offloaded_struct_for.get());
 

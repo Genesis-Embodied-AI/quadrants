@@ -77,6 +77,7 @@ struct TaskAttributes {
   // runtime config. This works because grid strided loop is supported.
   int advisory_total_num_threads{0};
   int advisory_num_threads_per_group{0};
+  int subgroup_size{0};
 
   OffloadedTaskType task_type;
 
@@ -108,6 +109,7 @@ struct TaskAttributes {
   QD_IO_DEF(name,
             advisory_total_num_threads,
             advisory_num_threads_per_group,
+            subgroup_size,
             task_type,
             buffer_binds,
             range_for_attribs);

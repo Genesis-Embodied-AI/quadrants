@@ -665,6 +665,14 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
     subgroup_properties.pNext = nullptr;
 
+    VkPhysicalDeviceSubgroupSizeControlProperties size_ctrl_props{};
+    if (ti_device_->vk_caps().subgroup_size_control) {
+      size_ctrl_props.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
+      size_ctrl_props.pNext = nullptr;
+      subgroup_properties.pNext = &size_ctrl_props;
+    }
+
     VkPhysicalDeviceProperties2 physical_device_properties{};
     physical_device_properties.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -690,6 +698,15 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       caps.set(DeviceCapability::spirv_has_subgroup_ballot, true);
     }
 
+    if (ti_device_->vk_caps().subgroup_size_control) {
+      ti_device_->vk_caps().min_subgroup_size = size_ctrl_props.minSubgroupSize;
+      ti_device_->vk_caps().max_subgroup_size = size_ctrl_props.maxSubgroupSize;
+    } else {
+      ti_device_->vk_caps().min_subgroup_size =
+          subgroup_properties.subgroupSize;
+      ti_device_->vk_caps().max_subgroup_size =
+          subgroup_properties.subgroupSize;
+    }
   }
 
   create_info.pEnabledFeatures = &device_features;
@@ -726,6 +743,10 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature{};
   dynamic_rendering_feature.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+
+  VkPhysicalDeviceSubgroupSizeControlFeatures sg_size_feature{};
+  sg_size_feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
 
   if (ti_device_->vk_caps().physical_device_features2) {
     VkPhysicalDeviceFeatures2KHR features2{};
@@ -881,6 +902,21 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       }
       *pNextEnd = &shader_clock_feature;
       pNextEnd = &shader_clock_feature.pNext;
+    }
+
+    // Subgroup size control — must be enabled as a feature to use
+    // VkPipelineShaderStageRequiredSubgroupSizeCreateInfo at pipeline
+    // creation time.
+    if (ti_device_->vk_caps().subgroup_size_control) {
+      features2.pNext = &sg_size_feature;
+      vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+
+      if (sg_size_feature.subgroupSizeControl) {
+        *pNextEnd = &sg_size_feature;
+        pNextEnd = &sg_size_feature.pNext;
+      } else {
+        ti_device_->vk_caps().subgroup_size_control = false;
+      }
     }
 
     // TODO: add atomic min/max feature

@@ -238,6 +238,7 @@ CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
     PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary,
                                    (void *)spirv_bins[i].data(),
                                    spirv_bins[i].size() * sizeof(uint32_t)};
+    source_desc.subgroup_size = task_attribs[i].subgroup_size;
     auto [vp, res] = ti_params.device->create_pipeline_unique(
         source_desc, task_attribs[i].name, ti_params.backend_cache);
     pipelines_.push_back(std::move(vp));

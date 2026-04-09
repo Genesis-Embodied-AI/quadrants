@@ -22,6 +22,7 @@ struct ForLoopConfig {
   bool strictly_serialized{false};
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
+  int subgroup_size{0};
   bool uniform{false};
   std::string loop_name{""};
 };
@@ -208,6 +209,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  int subgroup_size;
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -1100,6 +1102,10 @@ class ASTBuilder {
       QD_ASSERT(bit::is_power_of_two(v));
     }
     for_loop_dec_.config.block_dim = v;
+  }
+
+  void subgroup_size(int v) {
+    for_loop_dec_.config.subgroup_size = v;
   }
 
   void set_loop_name(const std::string &loop_name) {

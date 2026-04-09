@@ -357,6 +357,7 @@ void export_lang(py::module &m) {
       .def("parallelize", &ASTBuilder::parallelize)
       .def("strictly_serialize", &ASTBuilder::strictly_serialize)
       .def("block_dim", &ASTBuilder::block_dim)
+      .def("subgroup_size", &ASTBuilder::subgroup_size)
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag);
 
@@ -497,6 +498,8 @@ void export_lang(py::module &m) {
            py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
+      .def("get_min_subgroup_size", &Program::get_min_subgroup_size)
+      .def("get_max_subgroup_size", &Program::get_max_subgroup_size)
       .def("get_graph_cache_size", &Program::get_graph_cache_size)
       .def("get_graph_cache_used_on_last_call",
            &Program::get_graph_cache_used_on_last_call)

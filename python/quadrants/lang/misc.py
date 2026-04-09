@@ -644,6 +644,7 @@ def loop_config(
     block_dim_adaptive=True,
     bit_vectorize=False,
     name=None,
+    subgroup_size=None,
 ):
     """Sets directives for the next loop
 
@@ -654,6 +655,7 @@ def loop_config(
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
         name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
+        subgroup_size (int): Required subgroup (warp/wavefront/SIMD group) size for Vulkan compute pipelines. Defaults to 32. Ignored on CUDA and Metal (fixed at 32).
 
     Examples::
 
@@ -711,6 +713,9 @@ def loop_config(
 
     if name is not None:
         get_runtime().compiling_callable.ast_builder().set_loop_name(name)
+
+    if subgroup_size is not None:
+        get_runtime().compiling_callable.ast_builder().subgroup_size(subgroup_size)
 
 
 def graph_do_while(condition) -> bool:
