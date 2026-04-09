@@ -23,7 +23,7 @@ Usage example (inside a @qd.kernel or @qd.func)::
     t.eye_()                                     # set to identity matrix (in-place)
     v = arr[r0:r_end, col]                       # load column vector (per-thread scalar, 0 for out-of-range)
     v = arr[i0, r0:r_end, col]                   # load column vector from 3D array
-    t -= qd.outer(v, v)                          # symmetric rank-1 subtract
+    t -= qd.outer(v, v)                          # symmetric rank-1 subtract: t -= v @ v^T
     t -= qd.outer(a, b)                          # general rank-1 subtract: t -= a @ b^T
     t.cholesky_(eps)                             # in-place Cholesky factorization
     L.solve_triangular_(B)                       # triangular solve: X @ L^T = B, result in B
@@ -52,13 +52,12 @@ if _TYPE_CHECKING:
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
-        def load(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
-        def store(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
-        def load3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
-        def store3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
-        def syr_sub(self, v: Any) -> None: ...  # noqa: E704
-        def ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
-        def trsm(self, L: _Tile16x16Proto) -> None: ...  # noqa: E704
+        def _load(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def _store(self, arr: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def _load3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def _store3d(self, arr: Any, i0: Any, row0: Any, col0: Any, n_cols: Any) -> None: ...  # noqa: E704
+        def _ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
+        def _trsm(self, L: _Tile16x16Proto) -> None: ...  # noqa: E704
         def __isub__(self, other: Any) -> _Tile16x16Proto: ...  # noqa: E704
         def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
         def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
@@ -90,8 +89,8 @@ def outer(a, b):
 
     Usage::
 
-        t -= qd.outer(a, b)   # equivalent to t.ger_sub(a, b)
-        t -= qd.outer(v, v)   # equivalent to t.syr_sub(v)
+        t -= qd.outer(a, b)   # equivalent to t._ger_sub(a, b)
+        t -= qd.outer(v, v)   # symmetric case (a == b)
     """
     return _OuterProduct(a, b)
 
@@ -117,9 +116,9 @@ class _TileSliceProxy:
     def _assign(self, tile):
         """Store path: arr[r:r+n_rows, c:c+n_cols] = tile."""
         if self.batch_idx is not None:
-            tile.store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop, self.row_stop)
+            tile._store3d(self.arr, self.batch_idx, self.row_start, self.col_start, self.col_stop, self.row_stop)
         else:
-            tile.store(self.arr, self.row_start, self.col_start, self.col_stop, self.row_stop)
+            tile._store(self.arr, self.row_start, self.col_start, self.col_stop, self.row_stop)
 
 
 class _VecSliceProxy:
@@ -155,9 +154,9 @@ class _TileRefProxy:
     def _assign(self, value):
         if isinstance(value, _TileSliceProxy):
             if value.batch_idx is not None:
-                self.tile.load3d(value.arr, value.batch_idx, value.row_start, value.col_start, value.col_stop, value.row_stop)
+                self.tile._load3d(value.arr, value.batch_idx, value.row_start, value.col_start, value.col_stop, value.row_stop)
             else:
-                self.tile.load(value.arr, value.row_start, value.col_start, value.col_stop, value.row_stop)
+                self.tile._load(value.arr, value.row_start, value.col_start, value.col_stop, value.row_stop)
         else:
             raise TypeError(f"Tile16x16[:] can only be assigned from an array slice, got {type(value)}")
 
@@ -206,7 +205,7 @@ def _make_tile16x16_class(dtype):
         r15: dtype
 
         @qd.func
-        def load(self, arr: qd.template(), row0, col0, n_cols, row_stop):
+        def _load(self, arr: qd.template(), row0, col0, n_cols, row_stop):
             """Load from a 2D array with row and column bounds checking.
 
             Each thread loads arr[row0 + tid, col0:col0+n_cols].
@@ -251,7 +250,7 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[row, col0 + 15]
 
         @qd.func
-        def load3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
+        def _load3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
             """Load from a 3D array with row and column bounds checking.
 
             Each thread loads arr[i0, row0+tid, col0:col0+n_cols].
@@ -296,7 +295,7 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[i0, row, col0 + 15]
 
         @qd.func
-        def store(self, arr: qd.template(), row0, col0, n_cols, row_stop):
+        def _store(self, arr: qd.template(), row0, col0, n_cols, row_stop):
             """Store to a 2D array with row and column bounds checking.
 
             Each thread stores to arr[row0 + tid, col0:col0+n_cols].
@@ -341,7 +340,7 @@ def _make_tile16x16_class(dtype):
                     arr[row, col0 + 15] = self.r15
 
         @qd.func
-        def store3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
+        def _store3d(self, arr: qd.template(), i0, row0, col0, n_cols, row_stop):
             """Store to a 3D array with row and column bounds checking.
 
             Each thread stores to arr[i0, row0+tid, col0:col0+n_cols].
@@ -442,43 +441,7 @@ def _make_tile16x16_class(dtype):
                 self.r15 = 1.0
 
         @qd.func
-        def syr_sub(self, v):
-            """Symmetric rank-1 subtract in-place: self -= v @ v^T."""
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(0))
-            self.r0 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(1))
-            self.r1 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(2))
-            self.r2 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(3))
-            self.r3 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(4))
-            self.r4 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(5))
-            self.r5 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(6))
-            self.r6 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(7))
-            self.r7 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(8))
-            self.r8 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(9))
-            self.r9 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(10))
-            self.r10 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(11))
-            self.r11 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(12))
-            self.r12 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(13))
-            self.r13 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(14))
-            self.r14 -= v * vc
-            vc = qd.simt.subgroup.shuffle(v, qd.u32(15))
-            self.r15 -= v * vc
-
-        @qd.func
-        def ger_sub(self, a, b):
+        def _ger_sub(self, a, b):
             """General rank-1 subtract in-place: self -= a @ b^T."""
             bc = qd.simt.subgroup.shuffle(b, qd.u32(0))
             self.r0 -= a * bc
@@ -740,7 +703,7 @@ def _make_tile16x16_class(dtype):
                         self.r15 = new_val
 
         @qd.func
-        def trsm(self, L):
+        def _trsm(self, L):
             """In-place triangular solve: solve self @ L^T = B (original self).
 
             L is a Tile16x16 holding the lower-triangular Cholesky factor (from potrf).
@@ -926,7 +889,7 @@ def _make_tile16x16_class(dtype):
                     b_orig = other.b
                     a = self._resolve_vec_proxy(a_orig) if isinstance(a_orig, _VecSliceProxy) else a_orig
                     b = a if (b_orig is a_orig) else (self._resolve_vec_proxy(b_orig) if isinstance(b_orig, _VecSliceProxy) else b_orig)
-                    self.ger_sub(a, b)
+                    self._ger_sub(a, b)
                 else:
                     raise TypeError(f"Tile16x16: unsupported augmented assignment op '{op}' with outer product")
             else:
@@ -940,7 +903,7 @@ def _make_tile16x16_class(dtype):
             """
             if not lower:
                 raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
-            B.trsm(self)
+            B._trsm(self)
 
     # StructType.__call__ already defaults missing args to 0, so Tile16x16.zeros()
     # produces a zero-initialized tile without needing default values in the
