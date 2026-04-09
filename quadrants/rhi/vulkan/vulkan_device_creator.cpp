@@ -290,11 +290,23 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
                                       kNoVkAllocCallbacks);
   }
   vkDestroyDevice(device_, kNoVkAllocCallbacks);
-  vkDestroyInstance(instance_, kNoVkAllocCallbacks);
+  // VkInstance is intentionally kept alive in VulkanLoader (process-lifetime).
+  // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
+  // that corrupts SubgroupLocalInvocationId after ~11 cycles.
 }
 
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
                                           bool manual_create) {
+  // Reuse the VkInstance from a previous init/reset cycle if available.
+  // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
+  // that corrupts SubgroupLocalInvocationId after ~11 cycles.
+  VkInstance existing = VulkanLoader::instance().get_instance();
+  if (existing != VK_NULL_HANDLE) {
+    instance_ = existing;
+    ti_device_->vk_caps().vk_api_version = vk_api_version;
+    return;
+  }
+
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.pApplicationName = "Quadrants Vulkan Backend";

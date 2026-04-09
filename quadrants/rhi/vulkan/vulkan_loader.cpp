@@ -78,6 +78,7 @@ bool VulkanLoader::check_vulkan_device() {
 
   if (instance) {
     vkDestroyInstance(instance, kNoVkAllocCallbacks);
+    vulkan_instance_ = VK_NULL_HANDLE;
   }
 
   return found_device_with_compute;
