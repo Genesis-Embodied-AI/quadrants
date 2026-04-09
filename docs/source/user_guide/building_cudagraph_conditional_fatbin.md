@@ -2,14 +2,10 @@
 
 The `graph_do_while` feature uses a tiny CUDA kernel to control conditional
 while nodes on SM 9.0+ GPUs. This kernel calls `cudaGraphSetConditional`, a
-device-side function from NVIDIA's `libcudadevrt.a`.
-
-At runtime, Quadrants can load this kernel in two ways:
-
-1. **Pre-built fatbin** (preferred) — a self-contained binary checked into the
-   repo, with no runtime dependencies beyond the CUDA driver.
-2. **JIT fallback** — links the kernel's PTX with `libcudadevrt.a` at runtime.
-   Requires the CUDA toolkit to be installed on the user's system.
+device-side function from NVIDIA's `libcudadevrt.a`. The call is resolved at
+build time by device-linking with `libcudadevrt.a`, producing a self-contained
+fatbin that is checked into the repo as a C header. At runtime, the fatbin is
+loaded directly — no CUDA toolkit is needed on the user's system.
 
 This page documents how to regenerate the pre-built fatbin.
 
@@ -61,7 +57,6 @@ add the new `-gencode` flag, then regenerate.
 ## How it's used at runtime
 
 `GraphManager::ensure_condition_kernel_loaded()` in
-`quadrants/runtime/cuda/graph_manager.cpp` tries to load the pre-built fatbin
-first. If that fails (e.g. running on an SM architecture not included in the
-fatbin), it falls back to JIT linking the embedded PTX with `libcudadevrt.a`
-from the system's CUDA toolkit.
+`quadrants/runtime/cuda/graph_manager.cpp` loads the fatbin via
+`cuModuleLoadData`. If the fatbin does not contain SASS for the current GPU's
+SM architecture, loading fails with a clear error pointing to this script.

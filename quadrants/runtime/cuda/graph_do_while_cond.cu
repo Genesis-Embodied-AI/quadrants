@@ -1,11 +1,8 @@
 // Source for the graph_do_while condition kernel.
 //
-// This file is the source of truth for the PTX string kConditionKernelPTX
-// in graph_manager.cpp. After editing, regenerate the PTX and paste
-// the entire output into the R"PTX(...)PTX" literal:
+// After editing, regenerate the pre-built fatbin:
 //
-//   nvcc -ptx -arch=sm_90 -rdc=true graph_do_while_cond.cu \
-//        && cat graph_do_while_cond.ptx
+//   ./scripts/build_condition_kernel_fatbin.sh
 
 #include <cstdint>
 #include <cuda_runtime.h>
