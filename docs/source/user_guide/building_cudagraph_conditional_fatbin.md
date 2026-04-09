@@ -30,7 +30,7 @@ You only need to regenerate the fatbin if:
 
 ## Prerequisites
 
-- CUDA toolkit with `nvcc` (12.4 or later, for conditional node support).
+- CUDA toolkit with `nvcc` (12.8 or later, required for SM 120 support).
 - The `nvcc` binary must be on your `PATH`, or set `CUDA_HOME`.
 
 ## Regenerating
@@ -55,8 +55,8 @@ pick up the new fatbin.
 
 ## Adding a new SM architecture
 
-Edit the `SM_TARGETS` list in `scripts/build_condition_kernel_fatbin.py` to
-add the new `-gencode` entry, then regenerate.
+Edit the `SM_VERSIONS` list in `scripts/build_condition_kernel_fatbin.py` to
+add the new SM version number (e.g., `130`), then regenerate.
 
 ## Files
 

@@ -14,6 +14,7 @@ Usage:
 See docs/source/user_guide/building_cudagraph_conditional_fatbin.md
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -32,10 +33,12 @@ def find_nvcc() -> str:
     nvcc = shutil.which("nvcc")
     if nvcc:
         return nvcc
-    for candidate in ["/usr/local/cuda/bin/nvcc"]:
+    candidates = [os.path.join(os.environ[v], "bin", "nvcc") for v in ("CUDA_HOME", "CUDA_PATH") if v in os.environ]
+    candidates.append("/usr/local/cuda/bin/nvcc")
+    for candidate in candidates:
         if Path(candidate).exists():
             return candidate
-    sys.exit("Error: nvcc not found. Install the CUDA toolkit and add it to PATH.")
+    sys.exit("Error: nvcc not found. Install the CUDA toolkit and add it to PATH, or set CUDA_HOME.")
 
 
 def run(cmd: list[str]) -> None:
@@ -66,7 +69,7 @@ def generate_header(fatbin_path: Path, out_path: Path) -> None:
     header_lines.append("")
     header_lines.append(f"static const std::size_t kConditionKernelFatbinSize = {len(fatbin_data)};")
     header_lines.append("")
-    out_path.write_text("\n".join(header_lines))
+    out_path.write_text("\n".join(header_lines), newline="\n")
     print(f"Wrote {out_path} ({len(fatbin_data)} bytes)")
 
 
