@@ -114,6 +114,12 @@ void scan_shared_atomic_allocs(Block *ir_block,
           // Shared array is always modeled as a tensor type.
           if (auto *tensor_type = alloca_dtype->cast<TensorType>()) {
             auto scalar_dtype = tensor_type->get_element_type();
+            if (auto *nested = scalar_dtype->cast<TensorType>()) {
+              scalar_dtype = nested->get_element_type();
+              QD_ASSERT_INFO(
+                  !scalar_dtype->cast<TensorType>(),
+                  "Nested tensor types deeper than 2 levels not supported");
+            }
             if (is_real(scalar_dtype)) {
               bool has_non_add = (atomic_stmt->op_type != AtomicOpType::add);
               auto [it, inserted] = out.emplace(alloca, has_non_add);
@@ -141,8 +147,9 @@ void scan_shared_atomic_allocs(Block *ir_block,
   }
 }
 
-// Callers must NOT pre-initialize elem_num/elem_type - this function
-// initializes them from tensor_type.
+// Callers must NOT pre-initialize elem_num/elem_type - this function handles
+// nested tensor flattening (e.g. array of vec3 -> flat array of f32) which must
+// happen before get_primitive_type is called on the element dtype.
 void maybe_retype_alloca(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
@@ -154,6 +161,13 @@ void maybe_retype_alloca(
     SType &elem_type) {
   elem_num = tensor_type->get_num_elements();
   DataType scalar_dtype = tensor_type->get_element_type();
+  // Flatten nested tensor types (e.g., array of vec3 to flat array of f32)
+  if (auto nested = scalar_dtype->cast<TensorType>()) {
+    elem_num *= nested->get_num_elements();
+    scalar_dtype = nested->get_element_type();
+    QD_ASSERT_INFO(!scalar_dtype->cast<TensorType>(),
+                   "Nested tensor types deeper than 2 levels not supported");
+  }
   elem_type = ir.get_primitive_type(scalar_dtype);
   // Retype to uint if this alloca is targeted by float atomics and the device
   // lacks native shared float atomic support for all ops used.
@@ -173,6 +187,15 @@ void maybe_retype_derived_ptr(IRBuilder &ir,
                               const Stmt *stmt,
                               DataType &dt,
                               std::unordered_set<const Stmt *> &retyped_stmts) {
+  // Flatten nested tensor types to scalar (e.g., vec3 to f32).
+  // This must happen for ALL shared array pointers, not just retyped ones.
+  // Note: this only changes the SPIR-V element type for the access chain, not
+  // the index. The frontend IR (make_tensor_access_single_element) already
+  // emits flat scalar indices (i*vec_size+component), so there is no stride
+  // mismatch despite the storage being flattened in maybe_retype_alloca.
+  if (auto nested = dt->cast<TensorType>()) {
+    dt = nested->get_element_type();
+  }
   if (retyped_stmts.count(origin)) {
     dt = get_atomic_uint_dtype(ir, dt);
     retyped_stmts.insert(stmt);

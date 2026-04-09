@@ -1139,8 +1139,7 @@ Value IRBuilder::atomic_operation(Value addr_ptr,
   // shader due to signed/unsigned type mismatch.
   const bool is_workgroup =
       addr_ptr.stype.storage_class == spv::StorageClassWorkgroup;
-  SType res_type =
-      is_workgroup ? out_type : get_primitive_uint_type(dt);
+  SType res_type = is_workgroup ? out_type : get_primitive_uint_type(dt);
   Value ret_val_int = alloca_variable(res_type);
 
   // do-while

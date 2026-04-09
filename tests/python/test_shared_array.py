@@ -431,7 +431,7 @@ def test_shared_array_dtypes(dtype):
                 assert arr[block_start + tid] == neighbor
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_tensor_type():
     data_type = vec4
     block_dim = 16
@@ -460,7 +460,7 @@ def test_shared_array_tensor_type():
     assert (y.to_numpy() == [[4.0, 8.0, 12.0, 16.0]] * block_dim).all()
 
 
-@test_utils.test(arch=[qd.cuda], debug=True)
+@test_utils.test(arch=qd.gpu, debug=True)
 def test_shared_array_matrix():
     @qd.kernel
     def foo():

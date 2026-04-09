@@ -21,8 +21,9 @@ namespace spirv {
 void scan_shared_atomic_allocs(Block *ir_block,
                                std::unordered_map<const Stmt *, bool> &out);
 
-// Initialize elem_num and elem_type from tensor_type, retyping to uint for
-// CAS-based atomics when the alloca is targeted by float atomic operations.
+// Initialize elem_num and elem_type from tensor_type, flattening nested tensor
+// types (e.g. vec3 -> 3xf32) and retyping to uint for CAS-based atomics when
+// the alloca is targeted by float atomic operations.
 void maybe_retype_alloca(
     IRBuilder &ir,
     const DeviceCapabilityConfig &caps,
@@ -34,7 +35,8 @@ void maybe_retype_alloca(
     SType &elem_type);
 
 // If origin is in retyped_stmts, propagate retyping to stmt and change dt
-// to the uint-backed DataType. Otherwise leave dt unchanged.
+// to the uint-backed DataType (flattening nested tensor types first).
+// Otherwise just flatten dt if it is a nested tensor type.
 void maybe_retype_derived_ptr(IRBuilder &ir,
                               const Stmt *origin,
                               const Stmt *stmt,
