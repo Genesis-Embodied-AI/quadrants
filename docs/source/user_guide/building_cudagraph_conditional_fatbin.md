@@ -2,7 +2,9 @@
 
 The `graph_do_while` feature uses a tiny CUDA kernel that calls
 `cudaGraphSetConditional` (a device-side function from NVIDIA's
-`libcudadevrt.a`) to control conditional while nodes on SM 9.0+ GPUs.
+`libcudadevrt.a`) to control CUDA graph conditional while nodes. These
+conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
+`graph_do_while` falls back to a host-side loop automatically.
 
 There are three distinct phases:
 
