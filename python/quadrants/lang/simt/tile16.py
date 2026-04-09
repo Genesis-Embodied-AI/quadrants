@@ -3,9 +3,8 @@
 """
 Internal implementation of register-resident 16x16 tile operations.
 
-Everything in this module is private. The public user-facing API will be
-added in later PRs. Keeping this layer private lets the warp-shuffle
-internals evolve without breaking user code.
+Everything in this module is private to keep the user-facing API simple.
+The public API will be added in later PRs.
 
 Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
