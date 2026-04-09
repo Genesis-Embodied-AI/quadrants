@@ -48,7 +48,8 @@ This will:
 3. Write the fatbin as a C byte array to
    `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h`.
 
-After regenerating, rebuild Quadrants and commit the updated header.
+After regenerating, commit the updated header. Quadrants must be rebuilt to
+pick up the new fatbin.
 
 ## Adding a new SM architecture
 
