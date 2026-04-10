@@ -108,10 +108,10 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[row, col_start + 15]
 
         @qd.func
-        def _load3d(self, arr: qd.template(), i0, row_start, col_start, col_end, row_end):
+        def _load3d(self, arr: qd.template(), batch, row_start, col_start, col_end, row_end):
             """Load from a 3D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread loads arr[i0, row_start+tid, col_start:col_end].
+            Each thread loads arr[batch, row_start+tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the load (tile row unchanged).
             """
             row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
@@ -120,37 +120,37 @@ def _make_tile16x16_class(dtype):
                 if arr_col_end < col_end:
                     col_end = arr_col_end
                 if col_start + 0 < col_end:
-                    self.r0 = arr[i0, row, col_start + 0]
+                    self.r0 = arr[batch, row, col_start + 0]
                 if col_start + 1 < col_end:
-                    self.r1 = arr[i0, row, col_start + 1]
+                    self.r1 = arr[batch, row, col_start + 1]
                 if col_start + 2 < col_end:
-                    self.r2 = arr[i0, row, col_start + 2]
+                    self.r2 = arr[batch, row, col_start + 2]
                 if col_start + 3 < col_end:
-                    self.r3 = arr[i0, row, col_start + 3]
+                    self.r3 = arr[batch, row, col_start + 3]
                 if col_start + 4 < col_end:
-                    self.r4 = arr[i0, row, col_start + 4]
+                    self.r4 = arr[batch, row, col_start + 4]
                 if col_start + 5 < col_end:
-                    self.r5 = arr[i0, row, col_start + 5]
+                    self.r5 = arr[batch, row, col_start + 5]
                 if col_start + 6 < col_end:
-                    self.r6 = arr[i0, row, col_start + 6]
+                    self.r6 = arr[batch, row, col_start + 6]
                 if col_start + 7 < col_end:
-                    self.r7 = arr[i0, row, col_start + 7]
+                    self.r7 = arr[batch, row, col_start + 7]
                 if col_start + 8 < col_end:
-                    self.r8 = arr[i0, row, col_start + 8]
+                    self.r8 = arr[batch, row, col_start + 8]
                 if col_start + 9 < col_end:
-                    self.r9 = arr[i0, row, col_start + 9]
+                    self.r9 = arr[batch, row, col_start + 9]
                 if col_start + 10 < col_end:
-                    self.r10 = arr[i0, row, col_start + 10]
+                    self.r10 = arr[batch, row, col_start + 10]
                 if col_start + 11 < col_end:
-                    self.r11 = arr[i0, row, col_start + 11]
+                    self.r11 = arr[batch, row, col_start + 11]
                 if col_start + 12 < col_end:
-                    self.r12 = arr[i0, row, col_start + 12]
+                    self.r12 = arr[batch, row, col_start + 12]
                 if col_start + 13 < col_end:
-                    self.r13 = arr[i0, row, col_start + 13]
+                    self.r13 = arr[batch, row, col_start + 13]
                 if col_start + 14 < col_end:
-                    self.r14 = arr[i0, row, col_start + 14]
+                    self.r14 = arr[batch, row, col_start + 14]
                 if col_start + 15 < col_end:
-                    self.r15 = arr[i0, row, col_start + 15]
+                    self.r15 = arr[batch, row, col_start + 15]
 
         @qd.func
         def _store(self, arr: qd.template(), row_start, col_start, col_end, row_end):
@@ -198,10 +198,10 @@ def _make_tile16x16_class(dtype):
                     arr[row, col_start + 15] = self.r15
 
         @qd.func
-        def _store3d(self, arr: qd.template(), i0, row_start, col_start, col_end, row_end):
+        def _store3d(self, arr: qd.template(), batch, row_start, col_start, col_end, row_end):
             """Store to a 3D array within [row_start, row_end) x [col_start, col_end).
 
-            Each thread stores to arr[i0, row_start+tid, col_start:col_end].
+            Each thread stores to arr[batch, row_start+tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the store.
             """
             row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
@@ -210,37 +210,37 @@ def _make_tile16x16_class(dtype):
                 if arr_col_end < col_end:
                     col_end = arr_col_end
                 if col_start + 0 < col_end:
-                    arr[i0, row, col_start + 0] = self.r0
+                    arr[batch, row, col_start + 0] = self.r0
                 if col_start + 1 < col_end:
-                    arr[i0, row, col_start + 1] = self.r1
+                    arr[batch, row, col_start + 1] = self.r1
                 if col_start + 2 < col_end:
-                    arr[i0, row, col_start + 2] = self.r2
+                    arr[batch, row, col_start + 2] = self.r2
                 if col_start + 3 < col_end:
-                    arr[i0, row, col_start + 3] = self.r3
+                    arr[batch, row, col_start + 3] = self.r3
                 if col_start + 4 < col_end:
-                    arr[i0, row, col_start + 4] = self.r4
+                    arr[batch, row, col_start + 4] = self.r4
                 if col_start + 5 < col_end:
-                    arr[i0, row, col_start + 5] = self.r5
+                    arr[batch, row, col_start + 5] = self.r5
                 if col_start + 6 < col_end:
-                    arr[i0, row, col_start + 6] = self.r6
+                    arr[batch, row, col_start + 6] = self.r6
                 if col_start + 7 < col_end:
-                    arr[i0, row, col_start + 7] = self.r7
+                    arr[batch, row, col_start + 7] = self.r7
                 if col_start + 8 < col_end:
-                    arr[i0, row, col_start + 8] = self.r8
+                    arr[batch, row, col_start + 8] = self.r8
                 if col_start + 9 < col_end:
-                    arr[i0, row, col_start + 9] = self.r9
+                    arr[batch, row, col_start + 9] = self.r9
                 if col_start + 10 < col_end:
-                    arr[i0, row, col_start + 10] = self.r10
+                    arr[batch, row, col_start + 10] = self.r10
                 if col_start + 11 < col_end:
-                    arr[i0, row, col_start + 11] = self.r11
+                    arr[batch, row, col_start + 11] = self.r11
                 if col_start + 12 < col_end:
-                    arr[i0, row, col_start + 12] = self.r12
+                    arr[batch, row, col_start + 12] = self.r12
                 if col_start + 13 < col_end:
-                    arr[i0, row, col_start + 13] = self.r13
+                    arr[batch, row, col_start + 13] = self.r13
                 if col_start + 14 < col_end:
-                    arr[i0, row, col_start + 14] = self.r14
+                    arr[batch, row, col_start + 14] = self.r14
                 if col_start + 15 < col_end:
-                    arr[i0, row, col_start + 15] = self.r15
+                    arr[batch, row, col_start + 15] = self.r15
 
         @qd.func
         def _eye_(self):
