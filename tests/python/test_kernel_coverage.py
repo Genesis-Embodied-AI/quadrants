@@ -146,15 +146,22 @@ def test_kernel_coverage_branches_e2e():
 
 @test_utils.test(arch=[qd.gpu])
 def test_kernel_coverage_simt_e2e():
-    """Verify coverage probes work alongside block.sync() and subgroup shuffle."""
+    """Verify coverage probes track branches with block.sync() and subgroup shuffle.
+
+    The if/else is based on a runtime value read from a field, so the compiler
+    cannot constant-fold it away. Only the taken branch's shuffle probe should fire.
+    """
     from quadrants.lang import _kernel_coverage
     from quadrants.lang.simt import subgroup
     _kernel_coverage.ensure_field_allocated()
 
     N = 64
     probe_count_before = _kernel_coverage._probe_counter
+    flag = qd.field(dtype=qd.i32, shape=(1,))
     a = qd.field(dtype=qd.i32, shape=(N,))
     out = qd.field(dtype=qd.i32, shape=(N,))
+
+    flag[0] = 1  # runtime value: take the if-branch
 
     @qd.kernel
     def simt_kernel():
@@ -162,12 +169,15 @@ def test_kernel_coverage_simt_e2e():
         for i in range(N):
             a[i] = i + 1
             qd.simt.block.sync()
-            val = subgroup.shuffle(a[i], qd.u32(0))
-            out[i] = val
+            if flag[0] > 0:
+                val = subgroup.shuffle(a[i], qd.u32(0))
+                out[i] = val
+            else:
+                val = subgroup.shuffle(a[i], qd.u32(1))
+                out[i] = val + 100
 
     simt_kernel()
 
-    # Lanes 0-3 are guaranteed to be in the same subgroup (min size is 4)
     for i in range(4):
         assert out[i] == 1, f"Expected 1 at index {i}, got {out[i]}"
 
@@ -181,4 +191,6 @@ def test_kernel_coverage_simt_e2e():
     }
 
     fired = {pid for pid in probes_for_kernel if arr[pid] != 0}
-    assert len(fired) >= 4, f"Expected probes for all 4 statements, got {len(fired)}"
+    not_fired = {pid for pid in probes_for_kernel if arr[pid] == 0}
+    assert len(fired) >= 4, f"Expected at least 4 probes to fire, got {len(fired)}"
+    assert len(not_fired) >= 2, "The else branch should not have been reached"
