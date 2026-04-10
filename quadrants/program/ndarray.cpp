@@ -34,7 +34,7 @@ Ndarray::Ndarray(Program *prog,
       dbg_info(dbg_info_),
       nelement_(std::accumulate(std::begin(shape_),
                                 std::end(shape_),
-                                1,
+                                (std::size_t)1,
                                 std::multiplies<>())),
       element_size_(data_type_size(dtype)),
       prog_(prog) {
@@ -48,15 +48,6 @@ Ndarray::Ndarray(Program *prog,
   } else if (layout == ExternalArrayLayout::kSOA) {
     total_shape_.insert(total_shape_.begin(), element_shape.begin(),
                         element_shape.end());
-  }
-  auto total_num_scalar =
-      std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL,
-                      std::multiplies<>());
-  if (total_num_scalar > std::numeric_limits<int>::max()) {
-    ErrorEmitter(
-        QuadrantsIndexWarning(), &dbg_info,
-        "Ndarray index might be out of int32 boundary but int64 indexing is "
-        "not supported yet.");
   }
   ndarray_alloc_ = prog->allocate_memory_on_device(nelement_ * element_size_,
                                                    prog->result_buffer);
@@ -74,7 +65,7 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
       dbg_info(dbg_info),
       nelement_(std::accumulate(std::begin(shape),
                                 std::end(shape),
-                                1,
+                                (std::size_t)1,
                                 std::multiplies<>())),
       element_size_(data_type_size(dtype)) {
   // When element_shape is specified but layout is not, default layout is AOS.
@@ -91,15 +82,6 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
   } else if (layout == ExternalArrayLayout::kSOA) {
     total_shape_.insert(total_shape_.begin(), element_shape.begin(),
                         element_shape.end());
-  }
-  auto total_num_scalar =
-      std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL,
-                      std::multiplies<>());
-  if (total_num_scalar > std::numeric_limits<int>::max()) {
-    ErrorEmitter(
-        QuadrantsIndexWarning(), &dbg_info,
-        "Ndarray index might be out of int32 boundary but int64 indexing is "
-        "not supported yet.");
   }
 }
 
