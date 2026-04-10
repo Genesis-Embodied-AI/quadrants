@@ -156,17 +156,14 @@ void GraphManager::ensure_condition_kernel_loaded() {
                 "Condition kernel fatbin is empty — regenerate with "
                 "scripts/build_condition_kernel_fatbin.py");
 
-  uint32_t ret = driver.module_load_data.call(&cond_kernel_module_,
-                                              kConditionKernelFatbin);
-  QD_ERROR_IF(
-      ret != CUDA_SUCCESS,
-      "Failed to load graph_do_while condition kernel fatbin "
-      "(CUDA error {}). This SM ({}) may not be included in the "
-      "fatbin — regenerate with scripts/build_condition_kernel_fatbin.py",
-      ret, cc);
+  uint32_t ret = driver.module_load_data.call(&cond_kernel_module_, kConditionKernelFatbin);
+  QD_ERROR_IF(ret != CUDA_SUCCESS,
+              "Failed to load graph_do_while condition kernel fatbin "
+              "(CUDA error {}). This SM ({}) may not be included in the "
+              "fatbin — regenerate with scripts/build_condition_kernel_fatbin.py",
+              ret, cc);
 
-  driver.module_get_function(&cond_kernel_func_, cond_kernel_module_,
-                             "_qd_graph_do_while_cond");
+  driver.module_get_function(&cond_kernel_func_, cond_kernel_module_, "_qd_graph_do_while_cond");
   QD_TRACE("Loaded graph_do_while condition kernel from pre-built fatbin");
 }
 
