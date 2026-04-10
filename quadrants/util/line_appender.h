@@ -9,8 +9,7 @@ namespace quadrants {
 
 class LineAppender {
  public:
-  explicit LineAppender(int indent_size = 2)
-      : single_indent_(indent_size, ' ') {
+  explicit LineAppender(int indent_size = 2) : single_indent_(indent_size, ' ') {
   }
 
   LineAppender(const LineAppender &) = default;

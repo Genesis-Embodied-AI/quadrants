@@ -30,18 +30,14 @@ class HandleExternalPtrBound : public BasicStmtVisitor {
       auto zero = new_stmts.push_back<ConstStmt>(TypedConstant(0));
       for (int i = 0; i < stmt->indices.size(); i++) {
         auto lower_bound = zero;
-        auto checked_index = new_stmts.push_back<BinaryOpStmt>(
-            BinaryOpType::max, stmt->indices[i], lower_bound);
-        auto upper_bound =
-            new_stmts.push_back<ExternalTensorShapeAlongAxisStmt>(
-                /*axis=*/i,
-                /*arg_id=*/stmt->base_ptr->as<ArgLoadStmt>()->arg_id);
+        auto checked_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::max, stmt->indices[i], lower_bound);
+        auto upper_bound = new_stmts.push_back<ExternalTensorShapeAlongAxisStmt>(
+            /*axis=*/i,
+            /*arg_id=*/stmt->base_ptr->as<ArgLoadStmt>()->arg_id);
         auto one = new_stmts.push_back<ConstStmt>(TypedConstant(1));
-        auto valid_upper = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::sub,
-                                                             upper_bound, one);
+        auto valid_upper = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::sub, upper_bound, one);
 
-        checked_index = new_stmts.push_back<BinaryOpStmt>(
-            BinaryOpType::min, checked_index, valid_upper);
+        checked_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::min, checked_index, valid_upper);
         stmt->indices[i] = checked_index;
       }
 
@@ -56,8 +52,7 @@ class HandleExternalPtrBound : public BasicStmtVisitor {
     if (is_done(stmt) || !stmt->offset_used_as_index())
       return;
 
-    if (stmt->origin->is<ExternalPtrStmt>() &&
-        stmt->origin->as<ExternalPtrStmt>()->boundary == BoundaryMode::kClamp) {
+    if (stmt->origin->is<ExternalPtrStmt>() && stmt->origin->as<ExternalPtrStmt>()->boundary == BoundaryMode::kClamp) {
       auto const &matrix_shape = stmt->get_origin_shape();
       int max_valid_index = 1;
       for (int i = 0; i < matrix_shape.size(); i++) {
@@ -72,12 +67,9 @@ class HandleExternalPtrBound : public BasicStmtVisitor {
 
       auto lower_bound = zero;
 
-      auto checked_index = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::max, index, lower_bound);
-      auto upper_bound =
-          new_stmts.push_back<ConstStmt>(TypedConstant(max_valid_index));
-      checked_index = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::min, checked_index, upper_bound);
+      auto checked_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::max, index, lower_bound);
+      auto upper_bound = new_stmts.push_back<ConstStmt>(TypedConstant(max_valid_index));
+      checked_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::min, checked_index, upper_bound);
 
       stmt->offset = checked_index;
       modifier.insert_before(stmt, std::move(new_stmts));

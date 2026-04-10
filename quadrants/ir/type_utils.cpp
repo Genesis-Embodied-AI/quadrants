@@ -44,12 +44,10 @@ int data_type_size(DataType t) {
   if (t->is<TensorType>()) {
     auto tensor_type = t->cast<TensorType>();
     QD_ASSERT(tensor_type->get_element_type());
-    return tensor_type->get_num_elements() *
-           data_type_size(tensor_type->get_element_type());
+    return tensor_type->get_num_elements() * data_type_size(tensor_type->get_element_type());
   }
 
-#define REGISTER_DATA_TYPE(i, j) \
-  else if (t->is_primitive(PrimitiveTypeID::i)) return sizeof(j)
+#define REGISTER_DATA_TYPE(i, j) else if (t->is_primitive(PrimitiveTypeID::i)) return sizeof(j)
 
   REGISTER_DATA_TYPE(f32, float32);
   REGISTER_DATA_TYPE(f64, float64);
@@ -80,9 +78,7 @@ int data_type_size_gfx(DataType t) {
   }
 }
 
-std::string tensor_type_format_helper(const std::vector<int> &shape,
-                                      std::string format_str,
-                                      int dim) {
+std::string tensor_type_format_helper(const std::vector<int> &shape, std::string format_str, int dim) {
   std::string fmt = "[";
   for (int i = 0; i < shape[dim]; ++i) {
     if (dim != shape.size() - 1) {

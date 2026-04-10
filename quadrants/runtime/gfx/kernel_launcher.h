@@ -14,12 +14,10 @@ class KernelLauncher : public lang::KernelLauncher {
 
   explicit KernelLauncher(Config config);
 
-  void launch_kernel(const lang::CompiledKernelData &compiled_kernel_data,
-                     LaunchContextBuilder &ctx) override;
+  void launch_kernel(const lang::CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) override;
 
  private:
-  void launch_offloaded_tasks_with_do_while(Handle handle,
-                                            LaunchContextBuilder &ctx);
+  void launch_offloaded_tasks_with_do_while(Handle handle, LaunchContextBuilder &ctx);
   Handle register_kernel(const lang::CompiledKernelData &compiled_kernel_data);
 
   Config config_;

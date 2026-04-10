@@ -29,8 +29,7 @@ class KernelCodegen {
 
   explicit KernelCodegen(const Params &params);
 
-  void run(QuadrantsKernelAttributes &kernel_attribs,
-           std::vector<std::vector<uint32_t>> &generated_spirv);
+  void run(QuadrantsKernelAttributes &kernel_attribs, std::vector<std::vector<uint32_t>> &generated_spirv);
 
  private:
   Params params_;

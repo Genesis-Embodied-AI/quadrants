@@ -7,8 +7,7 @@
 
 namespace quadrants::lang {
 
-static inline int get_environ_config(const std::string &name,
-                                     int default_value = 0) {
+static inline int get_environ_config(const std::string &name, int default_value = 0) {
   char *res = std::getenv(name.c_str());
   if (res == nullptr)
     return default_value;

@@ -25,9 +25,7 @@ class SNodeRwAccessorsBank {
  public:
   class Accessors {
    public:
-    explicit Accessors(const SNode *snode,
-                       const RwKernels &kernels,
-                       Program *prog);
+    explicit Accessors(const SNode *snode, const RwKernels &kernels, Program *prog);
 
     // for float and double
     void write_float(const std::vector<int> &I, float64 val);

@@ -138,19 +138,12 @@ Expr expr_rand() {
   return quadrants::lang::expr_rand(get_data_type<T>());
 }
 
-Expr assume_range(const Expr &expr,
-                  const Expr &base,
-                  int low,
-                  int high,
-                  const DebugInfo &dbg_info = DebugInfo());
+Expr assume_range(const Expr &expr, const Expr &base, int low, int high, const DebugInfo &dbg_info = DebugInfo());
 
-Expr loop_unique(const Expr &input,
-                 const std::vector<SNode *> &covers,
-                 const DebugInfo &dbg_info = DebugInfo());
+Expr loop_unique(const Expr &input, const std::vector<SNode *> &covers, const DebugInfo &dbg_info = DebugInfo());
 
 Expr expr_field(Expr id_expr, DataType dt);
 
-Expr expr_matrix_field(const std::vector<Expr> &fields,
-                       const std::vector<int> &element_shape);
+Expr expr_matrix_field(const std::vector<Expr> &fields, const std::vector<int> &element_shape);
 
 }  // namespace quadrants::lang

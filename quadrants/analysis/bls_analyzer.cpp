@@ -5,13 +5,11 @@
 
 namespace quadrants::lang {
 
-BLSAnalyzer::BLSAnalyzer(OffloadedStmt *for_stmt, ScratchPads *pads)
-    : for_stmt_(for_stmt), pads_(pads) {
+BLSAnalyzer::BLSAnalyzer(OffloadedStmt *for_stmt, ScratchPads *pads) : for_stmt_(for_stmt), pads_(pads) {
   QD_AUTO_PROF;
   allow_undefined_visitor = true;
   invoke_default_visitor = false;
-  for (auto &snode : for_stmt->mem_access_opt.get_snodes_with_flag(
-           SNodeAccessFlag::block_local)) {
+  for (auto &snode : for_stmt->mem_access_opt.get_snodes_with_flag(SNodeAccessFlag::block_local)) {
     auto *block = snode->parent;
     if (block_indices_.find(block) == block_indices_.end()) {
       generate_block_indices(block, &block_indices_[block]);
@@ -46,8 +44,7 @@ void BLSAnalyzer::record_access(Stmt *stmt, AccessFlag flag) {
   coeffs.resize(ptr->indices.size());
   const int num_indices = (int)ptr->indices.size();
   for (int i = 0; i < num_indices; i++) {
-    auto diff =
-        irpass::analysis::value_diff_loop_index(ptr->indices[i], for_stmt_, i);
+    auto diff = irpass::analysis::value_diff_loop_index(ptr->indices[i], for_stmt_, i);
     if (diff.related() && diff.coeff > 0) {
       offsets[i].low = diff.low;
       offsets[i].high = diff.high;

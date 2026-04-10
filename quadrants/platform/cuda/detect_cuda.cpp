@@ -21,12 +21,10 @@ bool is_cuda_api_available() {
     // on Ubuntu 24.04, but not on manylinux.
     return instance.detected();
   } catch (const std::exception &e) {
-    std::cerr << "Error occurred while checking CUDA availability: " << e.what()
-              << std::endl;
+    std::cerr << "Error occurred while checking CUDA availability: " << e.what() << std::endl;
     return false;
   } catch (...) {
-    std::cerr << "Unknown error occurred while checking CUDA availability."
-              << std::endl;
+    std::cerr << "Unknown error occurred while checking CUDA availability." << std::endl;
     return false;
   }
 #else

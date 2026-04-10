@@ -20,9 +20,7 @@ class LoopInvariantDetector : public BasicStmtVisitor {
     allow_undefined_visitor = true;
   }
 
-  bool is_operand_loop_invariant_impl(Stmt *operand,
-                                      Block *current_scope,
-                                      Block *loop_block = nullptr) {
+  bool is_operand_loop_invariant_impl(Stmt *operand, Block *current_scope, Block *loop_block = nullptr) {
     if (!loop_block) {
       loop_block = loop_blocks.back();
     }
@@ -56,21 +54,17 @@ class LoopInvariantDetector : public BasicStmtVisitor {
     return true;
   }
 
-  bool is_operand_loop_invariant(Stmt *operand,
-                                 Block *current_scope,
-                                 int depth = -1) {
+  bool is_operand_loop_invariant(Stmt *operand, Block *current_scope, int depth = -1) {
     if (depth == -1) {
       depth = loop_blocks.size() - 1;
     }
     if (depth <= 0)
       return false;
-    return is_operand_loop_invariant_impl(operand, current_scope,
-                                          loop_blocks[depth]);
+    return is_operand_loop_invariant_impl(operand, current_scope, loop_blocks[depth]);
   }
 
   bool is_loop_invariant(Stmt *stmt, Block *current_scope) {
-    if (loop_blocks.size() <= 1 || (!config.move_loop_invariant_outside_if &&
-                                    current_scope != loop_blocks.back()))
+    if (loop_blocks.size() <= 1 || (!config.move_loop_invariant_outside_if && current_scope != loop_blocks.back()))
       return false;
 
     bool is_invariant = true;
@@ -131,8 +125,7 @@ class LoopInvariantDetector : public BasicStmtVisitor {
       stmt->bls_prologue->accept(this);
 
     if (stmt->body) {
-      if (stmt->task_type == OffloadedStmt::TaskType::range_for ||
-          stmt->task_type == OffloadedTaskType::mesh_for ||
+      if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
           stmt->task_type == OffloadedStmt::TaskType::struct_for)
         visit_loop(stmt->body.get());
       else

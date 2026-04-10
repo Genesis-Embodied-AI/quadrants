@@ -15,10 +15,7 @@ ScalarPointerLowerer::ScalarPointerLowerer(SNode *leaf_snode,
                                            const SNodeOpType snode_op,
                                            const bool is_bit_vectorized,
                                            VecStatement *lowered)
-    : indices_(indices),
-      snode_op_(snode_op),
-      is_bit_vectorized_(is_bit_vectorized),
-      lowered_(lowered) {
+    : indices_(indices), snode_op_(snode_op), is_bit_vectorized_(is_bit_vectorized), lowered_(lowered) {
   for (auto *s = leaf_snode; s != nullptr; s = s->parent) {
     snodes_.push_back(s);
   }
@@ -48,8 +45,8 @@ void ScalarPointerLowerer::run() {
   for (int i = 0; i < path_length_; i++) {
     auto *snode = snodes_[i];
     // TODO: Explain this condition
-    if (is_bit_vectorized_ && (snode->type == SNodeType::quant_array) &&
-        (i == path_length_ - 1) && (snodes_[i - 1]->type == SNodeType::dense)) {
+    if (is_bit_vectorized_ && (snode->type == SNodeType::quant_array) && (i == path_length_ - 1) &&
+        (snodes_[i - 1]->type == SNodeType::dense)) {
       continue;
     }
     std::vector<Stmt *> lowered_indices;
@@ -78,8 +75,7 @@ void ScalarPointerLowerer::run() {
       strides.push_back(snode->extractors[k].shape);
     }
     // linearize
-    auto *linearized =
-        lowered_->push_back<LinearizeStmt>(lowered_indices, strides);
+    auto *linearized = lowered_->push_back<LinearizeStmt>(lowered_indices, strides);
 
     last = handle_snode_at_level(i, linearized, last);
   }

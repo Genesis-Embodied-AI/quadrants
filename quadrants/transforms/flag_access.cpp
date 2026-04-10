@@ -60,8 +60,7 @@ class FlagAccess : public IRVisitor {
     }
     if (stmt->dest->is<MatrixPtrStmt>()) {
       if (stmt->dest->as<MatrixPtrStmt>()->is_unlowered_global_ptr()) {
-        stmt->dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>()->activate =
-            true;
+        stmt->dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>()->activate = true;
       }
     }
   }
@@ -113,8 +112,7 @@ class WeakenAccess : public BasicStmtVisitor {
   }
 
   static SNode *least_sparse_ancestor(SNode *a) {
-    while (a->type == SNodeType::place || a->type == SNodeType::dense ||
-           a->type == SNodeType::bit_struct ||
+    while (a->type == SNodeType::place || a->type == SNodeType::dense || a->type == SNodeType::bit_struct ||
            a->type == SNodeType::quant_array) {
       a = a->parent;
     }
@@ -127,10 +125,8 @@ class WeakenAccess : public BasicStmtVisitor {
 
   void visit(GlobalPtrStmt *stmt) override {
     if (stmt->activate) {
-      bool is_struct_for =
-          (current_offload_ && current_offload_->task_type ==
-                                   OffloadedStmt::TaskType::struct_for) ||
-          current_struct_for_;
+      bool is_struct_for = (current_offload_ && current_offload_->task_type == OffloadedStmt::TaskType::struct_for) ||
+                           current_struct_for_;
       if (is_struct_for) {
         bool same_as_loop_snode = true;
         SNode *loop_snode = nullptr;

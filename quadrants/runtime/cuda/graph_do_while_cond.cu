@@ -21,9 +21,7 @@
 //   handle:    conditional node handle (passed to cudaGraphSetConditional)
 //   flag_slot: device pointer to a void* slot holding the address of the
 //              user's qd.i32 counter ndarray
-extern "C" __global__ void _qd_graph_do_while_cond(
-    cudaGraphConditionalHandle handle,
-    int32_t **flag_slot) {
+extern "C" __global__ void _qd_graph_do_while_cond(cudaGraphConditionalHandle handle, int32_t **flag_slot) {
   int32_t *flag = *flag_slot;
   cudaGraphSetConditional(handle, *flag != 0 ? 1u : 0u);
 }
