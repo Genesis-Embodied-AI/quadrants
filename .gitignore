@@ -65,8 +65,11 @@ __pycache__
 /python/test_env
 /CHANGELOG.md
 /.coverage
+/.coverage.*
 /coverage.xml
 /htmlcov
+/diff-cover.*
+/pytest-coverage.txt
 libpython_path.txt
 .vscode
 _build
