@@ -86,7 +86,7 @@ def test_tile16_eye_inplace(qd_dtype):
 @test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @pytest.mark.parametrize(
-    "src_row, src_col, dst_row_dx, dst_col_dx, ncols, nrows",
+    "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
         (0, 0, 0, 0, _TILE, _TILE),
         (3, 7, 0, 0, _TILE, _TILE),
@@ -98,7 +98,7 @@ def test_tile16_eye_inplace(qd_dtype):
         (60, 60, 0, 0, 16, 16),
     ],
 )
-def test_tile16_load_store(qd_dtype, src_row, src_col, dst_row_dx, dst_col_dx, ncols, nrows):
+def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
     _skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
@@ -106,19 +106,20 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, dst_row_dx, dst_col_dx, n
     src = qd.ndarray(qd_dtype, (GRID, GRID))
     dst = qd.ndarray(qd_dtype, (GRID, GRID))
 
-    col_stop = src_col + ncols
-    row_stop = src_row + nrows
-    dr, dc = src_row + dst_row_dx, src_col + dst_col_dx
-    dst_col_stop = dc + ncols
-    dst_row_stop = dr + nrows
+    src_col_end = src_col + ncols
+    src_row_end = src_row + nrows
+    dst_row = src_row + row_offset
+    dst_col = src_col + col_offset
+    dst_col_end = dst_col + ncols
+    dst_row_end = dst_row + nrows
 
     @qd.kernel
     def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, src_row, src_col, col_stop, row_stop)
-            t._store(dst_arr, dr, dc, dst_col_stop, dst_row_stop)
+            t._load(src_arr, src_row, src_col, src_col_end, src_row_end)
+            t._store(dst_arr, dst_row, dst_col, dst_col_end, dst_row_end)
 
     data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
     src.from_numpy(data)
@@ -127,7 +128,9 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, dst_row_dx, dst_col_dx, n
 
     result = dst.to_numpy()
     expected = np.full((GRID, GRID), -1.0, dtype=np_dtype)
-    expected[dr : dr + nrows, dc : dc + ncols] = data[src_row : src_row + nrows, src_col : src_col + ncols]
+    expected[dst_row : dst_row + nrows, dst_col : dst_col + ncols] = data[
+        src_row : src_row + nrows, src_col : src_col + ncols
+    ]
     np.testing.assert_allclose(result, expected)
 
 
@@ -153,16 +156,16 @@ def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
     src = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
     dst = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
 
-    col_stop = src_col + ncols
-    row_stop = src_row + nrows
+    col_end = src_col + ncols
+    row_end = src_row + nrows
 
     @qd.kernel
     def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load3d(src_arr, batch, src_row, src_col, col_stop, row_stop)
-            t._store3d(dst_arr, batch, src_row, src_col, col_stop, row_stop)
+            t._load3d(src_arr, batch, src_row, src_col, col_end, row_end)
+            t._store3d(dst_arr, batch, src_row, src_col, col_end, row_end)
 
     data = np.arange(NBATCH * GRID * GRID, dtype=np_dtype).reshape(NBATCH, GRID, GRID) + 1.0
     src.from_numpy(data)

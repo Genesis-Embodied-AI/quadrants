@@ -69,13 +69,13 @@ def _make_tile16x16_class(dtype):
             Each thread loads arr[row_start + tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the load (tile row unchanged).
             """
-            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            row = row_start + qd.simt.subgroup.invocation_id()
             if row < row_end:
                 arr_col_end = arr.shape[1]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start + 0 < col_end:
-                    self.r0 = arr[row, col_start + 0]
+                if col_start < col_end:
+                    self.r0 = arr[row, col_start]
                 if col_start + 1 < col_end:
                     self.r1 = arr[row, col_start + 1]
                 if col_start + 2 < col_end:
@@ -114,13 +114,13 @@ def _make_tile16x16_class(dtype):
             Each thread loads arr[batch, row_start+tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the load (tile row unchanged).
             """
-            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            row = row_start + qd.simt.subgroup.invocation_id()
             if row < row_end:
                 arr_col_end = arr.shape[2]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start + 0 < col_end:
-                    self.r0 = arr[batch, row, col_start + 0]
+                if col_start < col_end:
+                    self.r0 = arr[batch, row, col_start]
                 if col_start + 1 < col_end:
                     self.r1 = arr[batch, row, col_start + 1]
                 if col_start + 2 < col_end:
@@ -159,13 +159,13 @@ def _make_tile16x16_class(dtype):
             Each thread stores to arr[row_start + tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the store.
             """
-            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            row = row_start + qd.simt.subgroup.invocation_id()
             if row < row_end:
                 arr_col_end = arr.shape[1]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start + 0 < col_end:
-                    arr[row, col_start + 0] = self.r0
+                if col_start < col_end:
+                    arr[row, col_start] = self.r0
                 if col_start + 1 < col_end:
                     arr[row, col_start + 1] = self.r1
                 if col_start + 2 < col_end:
@@ -204,13 +204,13 @@ def _make_tile16x16_class(dtype):
             Each thread stores to arr[batch, row_start+tid, col_start:col_end].
             Threads where row_start + tid >= row_end skip the store.
             """
-            row = row_start + qd.i32(qd.simt.subgroup.invocation_id())
+            row = row_start + qd.simt.subgroup.invocation_id()
             if row < row_end:
                 arr_col_end = arr.shape[2]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start + 0 < col_end:
-                    arr[batch, row, col_start + 0] = self.r0
+                if col_start < col_end:
+                    arr[batch, row, col_start] = self.r0
                 if col_start + 1 < col_end:
                     arr[batch, row, col_start + 1] = self.r1
                 if col_start + 2 < col_end:
@@ -248,7 +248,7 @@ def _make_tile16x16_class(dtype):
 
             Each thread sets its diagonal element to 1.0 and all others to 0.0.
             """
-            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            tid = qd.simt.subgroup.invocation_id()
             self.r0 = 0.0
             self.r1 = 0.0
             self.r2 = 0.0
