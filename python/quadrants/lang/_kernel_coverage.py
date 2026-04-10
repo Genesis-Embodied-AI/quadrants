@@ -10,6 +10,8 @@ so no C++ changes are needed. When disabled, this module is never imported
 and has zero impact on the normal runtime path.
 """
 
+# pylint: disable=import-outside-toplevel
+
 import ast
 import atexit
 import os
@@ -58,6 +60,7 @@ def _install_reset_hook() -> None:
     if _reset_hook_installed:
         return
     from quadrants.lang.impl import PyQuadrants
+
     _original_clear = PyQuadrants.clear
 
     def _hooked_clear(self: Any) -> None:
@@ -73,6 +76,7 @@ def ensure_field_allocated() -> None:
     global _cov_field, _cov_field_prog
     _install_reset_hook()
     from quadrants.lang.impl import get_runtime
+
     current_prog = get_runtime()._prog
     if _cov_field is not None and _cov_field_prog is current_prog:
         return
@@ -81,12 +85,14 @@ def ensure_field_allocated() -> None:
         if _cov_field is not None and _cov_field_prog is current_prog:
             return
         import quadrants as qd
+
         _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
         _cov_field_prog = current_prog
 
 
 def get_field() -> Any:
     from quadrants.lang.impl import get_runtime
+
     if _cov_field_prog is not get_runtime()._prog:
         return None
     return _cov_field
@@ -120,6 +126,7 @@ def _detect_arc_mode() -> bool:
     """Detect whether pytest-cov wrote branch (arc) data by reading .coverage."""
     try:
         from coverage import CoverageData
+
         cd = CoverageData()
         cd.read()
         return cd.has_arcs()

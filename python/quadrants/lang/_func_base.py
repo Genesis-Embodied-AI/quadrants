@@ -219,11 +219,10 @@ class FuncBase:
         func_body = tree.body[0]
         func_body.decorator_list = []  # type: ignore , kick that can down the road...
 
-        from . import _kernel_coverage
+        from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
+
         if _kernel_coverage._ENABLED:
-            tree = _kernel_coverage.rewrite_ast(
-                tree, function_source_info.filepath, function_source_info.start_lineno
-            )
+            tree = _kernel_coverage.rewrite_ast(tree, function_source_info.filepath, function_source_info.start_lineno)
 
         runtime = impl.get_runtime()
 
