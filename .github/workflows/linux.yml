@@ -50,7 +50,7 @@ jobs:
           diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 \
-            --format markdown > diff-cover.md || true
+            --format markdown:diff-cover.md || true
           DIFF_COV=$(diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 2>&1 \
