@@ -324,6 +324,18 @@ def torch_op(*, output_shapes=[(1,)]):
     return inner
 
 
+def skip_if_f64_unsupported(dtype):
+    """Skip the current test if the active backend does not reliably support f64."""
+    if dtype != qd.f64:
+        return
+    arch = qd.lang.impl.current_cfg().arch
+    if arch == qd.metal:
+        pytest.skip("Metal does not support f64")
+    if arch == qd.vulkan:
+        pytest.skip("Vulkan does not reliably support f64")
+
+
 __all__ = [
+    "skip_if_f64_unsupported",
     "test",
 ]

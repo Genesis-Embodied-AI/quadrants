@@ -1,4 +1,5 @@
 # pyright: reportInvalidTypeForm=false
+
 """
 Internal implementation of register-resident 16x16 tile operations.
 
@@ -7,7 +8,7 @@ The public API will be added in later PRs.
 
 Each tile is a 16x16 matrix distributed across 16 threads in a subgroup,
 one row per thread, with each row stored in 16 scalar registers (r0-r15).
-Cross-thread communication uses warp shuffles — no shared memory needed.
+Cross-thread communication uses warp shuffles -- no shared memory needed.
 
 The thread's lane index (tid) is obtained internally via
 ``subgroup.invocation_id()``, so callers never need to pass it.
@@ -17,18 +18,13 @@ import quadrants as qd
 
 _TILE = 16
 
-
-# =============================================================================
-# Tile16x16 factory — creates a Tile16x16 class for the given scalar dtype
-# =============================================================================
-
 _tile16_cache = {}
 
 
 def _make_tile16x16(dtype=qd.f32):
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
-    Returns a @qd.dataclass type with 16 fields (r0–r15), zeros/eye factories, and
+    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and
     _load/_store/_eye_ methods.
     """
     if dtype in _tile16_cache:

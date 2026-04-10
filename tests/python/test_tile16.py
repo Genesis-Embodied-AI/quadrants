@@ -10,20 +10,10 @@ _QD_DTYPES = [qd.f32, qd.f64]
 _NP_DTYPES = {qd.f32: np.float32, qd.f64: np.float64}
 
 
-def _skip_if_f64_unsupported(dtype):
-    if dtype != qd.f64:
-        return
-    arch = qd.lang.impl.current_cfg().arch
-    if arch == qd.metal:
-        pytest.skip("Metal does not support f64")
-    if arch == qd.vulkan:
-        pytest.skip("Vulkan does not reliably support f64")
-
-
 @test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_zeros(qd_dtype):
-    _skip_if_f64_unsupported(qd_dtype)
+    test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
     dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
@@ -43,7 +33,7 @@ def test_tile16_zeros(qd_dtype):
 @test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_eye(qd_dtype):
-    _skip_if_f64_unsupported(qd_dtype)
+    test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
     dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
@@ -62,7 +52,7 @@ def test_tile16_eye(qd_dtype):
 @test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 def test_tile16_eye_inplace(qd_dtype):
-    _skip_if_f64_unsupported(qd_dtype)
+    test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
     src = qd.ndarray(qd_dtype, (_TILE, _TILE))
@@ -99,7 +89,7 @@ def test_tile16_eye_inplace(qd_dtype):
     ],
 )
 def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
-    _skip_if_f64_unsupported(qd_dtype)
+    test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
     Tile = _make_tile16x16(qd_dtype)
@@ -148,7 +138,7 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
     ],
 )
 def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
-    _skip_if_f64_unsupported(qd_dtype)
+    test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
     NBATCH = 6
