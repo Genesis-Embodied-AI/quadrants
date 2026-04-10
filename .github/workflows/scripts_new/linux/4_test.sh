@@ -14,5 +14,6 @@ python tests/run_tests.py -v -r 3 -m "not needs_torch" --coverage
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 python tests/run_tests.py -v -r 3 -m needs_torch --coverage --cov-append
 
-# Generate coverage text report for PR comment
-coverage report --show-missing > pytest-coverage.txt
+# Generate coverage reports
+coverage xml -o coverage.xml
+coverage report --show-missing --skip-covered > pytest-coverage.txt

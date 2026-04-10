@@ -24,6 +24,8 @@ jobs:
     runs-on: ${{ matrix.OS }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Python check
         uses: actions/setup-python@v4
         with:
@@ -40,8 +42,46 @@ jobs:
       - name: Linux test
         run: |
           bash .github/workflows/scripts_new/linux/4_test.sh
-      - name: Pytest coverage comment
+      - name: Generate coverage PR comment
         if: github.event_name == 'pull_request'
-        uses: MishaKav/pytest-coverage-comment@v1
+        run: |
+          pip install diff-cover
+          git fetch origin ${{ github.base_ref }} --depth=1
+          diff-cover coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --md-report=diff-cover.md \
+            --fail-under=0 || true
+          DIFF_COV=$(diff-cover coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=0 2>&1 \
+            | grep -oP 'Diff Coverage: \K[\d.]+%' || echo 'N/A')
+          OVERALL=$(tail -1 pytest-coverage.txt | grep -oP '\d+%' || echo 'N/A')
+          {
+            echo '## Coverage Report'
+            echo ''
+            echo '| Metric | Value |'
+            echo '|--------|-------|'
+            echo "| **Diff coverage** (changed lines only) | **${DIFF_COV}** |"
+            echo "| Overall project coverage | ${OVERALL} |"
+            echo ''
+            echo '<details>'
+            echo '<summary>Changed files coverage details</summary>'
+            echo ''
+            cat diff-cover.md
+            echo ''
+            echo '</details>'
+            echo ''
+            echo '<details>'
+            echo '<summary>Full coverage report (files below 100%)</summary>'
+            echo ''
+            echo '```'
+            head -200 pytest-coverage.txt
+            echo '```'
+            echo ''
+            echo '</details>'
+          } > coverage-comment.md
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          pytest-coverage-path: pytest-coverage.txt
+          path: coverage-comment.md
