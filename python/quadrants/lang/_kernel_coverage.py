@@ -116,20 +116,13 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
     return tree
 
 
-def _is_branch_coverage() -> bool:
-    """Check if the coverage config has branch=True."""
+def _detect_arc_mode() -> bool:
+    """Detect whether pytest-cov wrote branch (arc) data by reading .coverage."""
     try:
-        from coverage import Coverage
-        c = Coverage()
-        c.load()
-        return c.config.branch
-    except Exception:
-        pass
-    try:
-        import tomli
-        with open("pyproject.toml", "rb") as f:
-            cfg = tomli.load(f)
-        return cfg.get("tool", {}).get("coverage", {}).get("run", {}).get("branch", False)
+        from coverage import CoverageData
+        cd = CoverageData()
+        cd.read()
+        return cd.has_arcs()
     except Exception:
         return False
 
@@ -143,8 +136,16 @@ def flush() -> None:
 
     try:
         from coverage import CoverageData
-        use_arcs = _is_branch_coverage()
-        cov = CoverageData(basename=".coverage.kernel")
+
+        # Remove stale file from a previous run
+        kernel_path = ".coverage.kernel"
+        try:
+            os.remove(kernel_path)
+        except FileNotFoundError:
+            pass
+
+        use_arcs = _detect_arc_mode()
+        cov = CoverageData(basename=kernel_path)
         if use_arcs:
             arcs_by_file: dict[str, list[tuple[int, int]]] = {}
             for filepath, lines in _accumulated_lines.items():
