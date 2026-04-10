@@ -1773,26 +1773,33 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
   int num_array_args = num_indices - num_element_indices;
   const size_t element_shape_index_offset = num_array_args;
 
+  auto *i64_ty = llvm::Type::getInt64Ty(*llvm_context);
   for (int i = 0; i < num_array_args; i++) {
     auto raw_arg = builder->CreateGEP(
         struct_type, llvm_val[stmt->base_ptr],
-        {tlctx->get_constant(0), tlctx->get_constant(TypeFactory::SHAPE_POS_IN_NDARRAY), tlctx->get_constant(i)});
-    raw_arg = builder->CreateLoad(tlctx->get_data_type(PrimitiveType::i32), raw_arg);
-    sizes[i] = raw_arg;
+        {tlctx->get_constant(0),
+         tlctx->get_constant(TypeFactory::SHAPE_POS_IN_NDARRAY),
+         tlctx->get_constant(i)});
+    raw_arg =
+        builder->CreateLoad(tlctx->get_data_type(PrimitiveType::i32), raw_arg);
+    sizes[i] = builder->CreateSExt(raw_arg, i64_ty);
   }
 
-  auto linear_index = tlctx->get_constant(0);
+  auto linear_index = tlctx->get_constant(get_data_type<int64>(), 0);
   size_t size_var_index = 0;
   for (int i = 0; i < num_indices; i++) {
     if (i >= element_shape_index_offset && i < element_shape_index_offset + num_element_indices) {
       // Indexing TensorType-elements
-      llvm::Value *size_var = tlctx->get_constant(stmt->element_shape[i - element_shape_index_offset]);
+      llvm::Value *size_var = tlctx->get_constant(
+          get_data_type<int64>(),
+          stmt->element_shape[i - element_shape_index_offset]);
       linear_index = builder->CreateMul(linear_index, size_var);
     } else {
       // Indexing array dimensions
       linear_index = builder->CreateMul(linear_index, sizes[size_var_index++]);
     }
-    linear_index = builder->CreateAdd(linear_index, llvm_val[stmt->indices[i]]);
+    auto index = builder->CreateSExtOrBitCast(llvm_val[stmt->indices[i]], i64_ty);
+    linear_index = builder->CreateAdd(linear_index, index);
   }
   QD_ASSERT(size_var_index == num_indices - num_element_indices);
 
@@ -1808,7 +1815,7 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
   if (operand_dtype->is<TensorType>()) {
     // Access PtrOffset via: base_ptr + offset * sizeof(element)
 
-    auto address_offset = builder->CreateSExt(linear_index, llvm::Type::getInt64Ty(*llvm_context));
+    auto address_offset = linear_index;
 
     auto stmt_ret_type = stmt->ret_type.ptr_removed();
     if (stmt_ret_type->is<TensorType>()) {

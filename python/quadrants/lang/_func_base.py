@@ -727,14 +727,14 @@ class FuncBase:
             # array shapes.
             is_soa = needed_arg_type.layout == Layout.SOA
             array_shape = v.shape
-            if math.prod(array_shape) > np.iinfo(np.int32).max:
-                warnings.warn("Ndarray index might be out of int32 boundary but int64 indexing is not supported yet.")
             needed_arg_dtype = needed_arg_type.dtype
             if needed_arg_dtype is None or id(needed_arg_dtype) in primitive_types.type_ids:
                 element_dim = 0
             else:
                 element_dim = needed_arg_dtype.ndim
                 array_shape = v.shape[element_dim:] if is_soa else v.shape[:-element_dim]
+            if any(dim > np.iinfo(np.int32).max for dim in array_shape):
+                warnings.warn("Ndarray dimensions above int32 are not supported yet.")
             if isinstance(v, np.ndarray):
                 # Check ndarray flags is expensive (~250ns), so it is important to order branches according to hit stats
                 if v.flags.c_contiguous:
