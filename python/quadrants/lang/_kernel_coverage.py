@@ -27,6 +27,22 @@ _cov_field_prog: Any = None  # tracks which Program instance owns _cov_field
 _probe_counter: int = 0
 # {probe_id: (filepath, absolute_lineno)}
 _probe_map: dict[int, tuple[str, int]] = {}
+# Accumulated coverage lines surviving across qd.init() resets
+_accumulated_lines: dict[str, set[int]] = {}
+
+
+def _harvest_field() -> None:
+    """Read probe data from the current field into _accumulated_lines."""
+    global _cov_field
+    if _cov_field is None or not _probe_map:
+        return
+    try:
+        arr = _cov_field.to_numpy()
+    except Exception:
+        return
+    for probe_id, (filepath, lineno) in _probe_map.items():
+        if probe_id < len(arr) and arr[probe_id] != 0:
+            _accumulated_lines.setdefault(filepath, set()).add(lineno)
 
 
 def ensure_field_allocated() -> None:
@@ -40,6 +56,8 @@ def ensure_field_allocated() -> None:
         current_prog = get_runtime()._prog
         if _cov_field is not None and _cov_field_prog is current_prog:
             return
+        # Harvest data from the old field before it's destroyed
+        _harvest_field()
         import quadrants as qd
         _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
         _cov_field_prog = current_prog
@@ -77,26 +95,16 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
 
 
 def flush() -> None:
-    """Read the coverage field and write results to a .coverage file."""
-    if _cov_field is None or not _probe_map:
-        return
-    try:
-        arr = _cov_field.to_numpy()
-    except Exception:
-        return
+    """Harvest any remaining field data and write all results to a .coverage file."""
+    _harvest_field()
 
-    lines_by_file: dict[str, set[int]] = {}
-    for probe_id, (filepath, lineno) in _probe_map.items():
-        if probe_id < len(arr) and arr[probe_id] != 0:
-            lines_by_file.setdefault(filepath, set()).add(lineno)
-
-    if not lines_by_file:
+    if not _accumulated_lines:
         return
 
     try:
         from coverage import CoverageData
         cov = CoverageData(basename=".coverage.kernel")
-        cov.add_lines({f: sorted(lines) for f, lines in lines_by_file.items()})
+        cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
         cov.write()
     except ImportError:
         pass
