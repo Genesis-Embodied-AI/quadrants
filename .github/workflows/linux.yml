@@ -49,8 +49,8 @@ jobs:
           git fetch origin ${{ github.base_ref }} --depth=1
           diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
-            --md-report=diff-cover.md \
-            --fail-under=0 || true
+            --fail-under=0 \
+            --format markdown > diff-cover.md || true
           DIFF_COV=$(diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 2>&1 \
