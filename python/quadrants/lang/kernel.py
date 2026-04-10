@@ -374,6 +374,10 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
+        from . import _kernel_coverage
+        if _kernel_coverage._ENABLED:
+            _kernel_coverage.ensure_field_allocated()
+
         with self.runtime.compilation_lock:
             if key in self.materialized_kernels:
                 return

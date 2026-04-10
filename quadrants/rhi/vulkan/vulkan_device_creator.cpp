@@ -261,10 +261,58 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
     destroy_debug_utils_messenger_ext(instance_, debug_messenger_, kNoVkAllocCallbacks);
   }
   vkDestroyDevice(device_, kNoVkAllocCallbacks);
-  vkDestroyInstance(instance_, kNoVkAllocCallbacks);
+  // VkInstance is intentionally kept alive in VulkanLoader (process-lifetime).
+  // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
+  // that corrupts SubgroupLocalInvocationId after ~11 cycles.
 }
 
+// Create (or reuse) a VkInstance and populate ti_device_ capability flags.
+//
+// Phase 1 — Capability discovery.  Enumerates instance extensions and sets
+//   `surface` and `physical_device_features2` on ti_device_->vk_caps().
+//   This runs every cycle because ti_device_ is freshly constructed (all caps
+//   default to false).  The `physical_device_features2` flag gates whether
+//   create_logical_device() will query and enable f16, i8, atomic float,
+//   variable pointers, shader clock, buffer device address, etc.
+//
+// Phase 2 — VkInstance reuse.  If the VulkanLoader singleton already holds a
+//   live VkInstance (2nd+ qd.init() cycle), copies it into instance_ and
+//   returns early.  This avoids an NVIDIA driver bug that corrupts
+//   SubgroupLocalInvocationId after ~11 vkDestroyInstance/vkCreateInstance
+//   cycles in the same process.
+//
+// Phase 3 — First-time VkInstance creation (first qd.init() only).  Builds
+//   VkInstanceCreateInfo with app info, optional validation layers and debug
+//   printf, collects required + supported instance extensions, calls
+//   vkCreateInstance (with a Vulkan 1.0 fallback on
+//   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
+//   VulkanLoader singleton for future reuse.
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
+  // Discover instance extensions and set capability flags on ti_device_.
+  // This must run every cycle because ti_device_ is freshly created.
+  uint32_t num_instance_extensions = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, nullptr);
+  std::vector<VkExtensionProperties> supported_extensions(num_instance_extensions);
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, supported_extensions.data());
+
+  for (auto &ext : supported_extensions) {
+    std::string name = ext.extensionName;
+    if (name == VK_KHR_SURFACE_EXTENSION_NAME) {
+      ti_device_->vk_caps().surface = true;
+    } else if (name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
+      ti_device_->vk_caps().physical_device_features2 = true;
+    }
+  }
+
+  // Reuse the VkInstance from a previous init/reset cycle if available.
+  // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
+  // that corrupts SubgroupLocalInvocationId after ~11 cycles.
+  VkInstance existing = VulkanLoader::instance().get_instance();
+  if (existing != VK_NULL_HANDLE) {
+    instance_ = existing;
+    ti_device_->vk_caps().vk_api_version = vk_api_version;
+    return;
+  }
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.pApplicationName = "Quadrants Vulkan Backend";
@@ -319,25 +367,11 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
     extensions.insert(std::string(ext));
   }
 
-  uint32_t num_instance_extensions = 0;
-  // FIXME: (penguinliong) This was NOT called when `manual_create` is true.
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, nullptr);
-  std::vector<VkExtensionProperties> supported_extensions(num_instance_extensions);
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, supported_extensions.data());
-
   for (auto &ext : supported_extensions) {
     std::string name = ext.extensionName;
-    if (name == VK_KHR_SURFACE_EXTENSION_NAME) {
-      extensions.insert(name);
-      ti_device_->vk_caps().surface = true;
-    } else if (name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
-      extensions.insert(name);
-      ti_device_->vk_caps().physical_device_features2 = true;
-    } else if (name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME) {
-      extensions.insert(name);
-    } else if (name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME) {
-      extensions.insert(name);
-    } else if (name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
+    if (name == VK_KHR_SURFACE_EXTENSION_NAME || name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME ||
+        name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME ||
+        name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME || name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
       extensions.insert(name);
     }
   }

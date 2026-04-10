@@ -698,3 +698,35 @@ def test_subgroup_invocation_id_range():
 
     for i in range(N):
         assert 0 <= a[i]
+
+
+@test_utils.test(arch=qd.vulkan)
+def test_vulkan_subgroup_id_survives_reinit():
+    """Regression test: SubgroupLocalInvocationId must stay stable across
+    repeated qd.init(vulkan)/qd.reset() cycles.  An NVIDIA driver bug
+    corrupts it after ~11 vkDestroyInstance/vkCreateInstance cycles;
+    the fix is to reuse the VkInstance."""
+    N = 16
+    NUM_CYCLES = 20
+    reference = None
+
+    for cycle in range(NUM_CYCLES):
+        qd.init(arch=qd.vulkan)
+
+        ids = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+        @qd.kernel
+        def read_ids(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+            qd.loop_config(block_dim=N)
+            for i in range(N):
+                out[i] = subgroup.invocation_id()
+
+        read_ids(ids)
+        result = ids.to_numpy().tolist()
+
+        if reference is None:
+            reference = result
+        else:
+            assert result == reference, f"cycle {cycle}: subgroup IDs changed — " f"got {result}, expected {reference}"
+
+        qd.reset()
