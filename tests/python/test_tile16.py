@@ -26,9 +26,10 @@ def test_tile16_zeros(qd_dtype, use_zeros_alias):
         for _ in range(_TILE):
             if qd.static(use_zeros_alias):
                 t = Tile.zeros()
+                t._store(dst_arr, 0, _TILE, 0, _TILE)
             else:
                 t = Tile()
-            t._store(dst_arr, 0, _TILE, 0, _TILE)
+                t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     k1(dst)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
@@ -52,9 +53,10 @@ def test_tile16_eye(qd_dtype, inplace):
                 t = Tile()
                 t._load(src_arr, 0, _TILE, 0, _TILE)
                 t._eye_()
+                t._store(dst_arr, 0, _TILE, 0, _TILE)
             else:
                 t = Tile.eye()
-            t._store(dst_arr, 0, _TILE, 0, _TILE)
+                t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 100.0
     src.from_numpy(data)
