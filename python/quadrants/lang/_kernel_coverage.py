@@ -116,6 +116,24 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
     return tree
 
 
+def _is_branch_coverage() -> bool:
+    """Check if the coverage config has branch=True."""
+    try:
+        from coverage import Coverage
+        c = Coverage()
+        c.load()
+        return c.config.branch
+    except Exception:
+        pass
+    try:
+        import tomli
+        with open("pyproject.toml", "rb") as f:
+            cfg = tomli.load(f)
+        return cfg.get("tool", {}).get("coverage", {}).get("run", {}).get("branch", False)
+    except Exception:
+        return False
+
+
 def flush() -> None:
     """Harvest any remaining field data and write all results to a .coverage file."""
     _harvest_field()
@@ -125,8 +143,20 @@ def flush() -> None:
 
     try:
         from coverage import CoverageData
+        use_arcs = _is_branch_coverage()
         cov = CoverageData(basename=".coverage.kernel")
-        cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
+        if use_arcs:
+            arcs_by_file: dict[str, list[tuple[int, int]]] = {}
+            for filepath, lines in _accumulated_lines.items():
+                sorted_lines = sorted(lines)
+                arcs = [(-1, sorted_lines[0])]
+                for prev, curr in zip(sorted_lines, sorted_lines[1:]):
+                    arcs.append((prev, curr))
+                arcs.append((sorted_lines[-1], -1))
+                arcs_by_file[filepath] = arcs
+            cov.add_arcs(arcs_by_file)
+        else:
+            cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
         cov.write()
     except ImportError:
         pass
