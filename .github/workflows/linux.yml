@@ -85,3 +85,9 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           path: coverage-comment.md
+      - name: Diff coverage check
+        if: github.event_name == 'pull_request'
+        run: |
+          diff-cover coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=80
