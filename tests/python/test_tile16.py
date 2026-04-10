@@ -274,3 +274,95 @@ def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
         batch, src_row : src_row + nrows, src_col : src_col + ncols
     ]
     np.testing.assert_allclose(result, expected)
+
+
+def test_tile16_size_constant():
+    Tile = _make_tile16x16(qd.f32)
+    assert Tile.SIZE == 16
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_zeros_factory(qd_dtype):
+    """Tile.zeros() must produce the same result as Tile()."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst.from_numpy(np.ones((_TILE, _TILE), dtype=np_dtype))
+
+    @qd.kernel
+    def k1(dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile.zeros()
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
+
+    k1(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_clamp_to_array_cols(qd_dtype):
+    """Load from an array narrower than 16 columns. Columns beyond arr width should be zero."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NCOLS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (_TILE, NCOLS))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, 0, _TILE, 0, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
+
+    data = np.arange(_TILE * NCOLS, dtype=np_dtype).reshape(_TILE, NCOLS) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data)
+    np.testing.assert_allclose(result[:, NCOLS:], 0.0)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_store_partial_cols_untouched(qd_dtype):
+    """Load full 16 columns, store only NCOLS. Remaining dst columns must be untouched."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NCOLS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, 0, _TILE, 0, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, NCOLS)
+
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    dst.from_numpy(np.full((_TILE, _TILE), -1.0, dtype=np_dtype))
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
+    np.testing.assert_allclose(result[:, NCOLS:], -1.0)
+
+
+def test_tile16_make_caching():
+    """_make_tile16x16 must return the same object for the same dtype."""
+    a = _make_tile16x16(qd.f32)
+    b = _make_tile16x16(qd.f32)
+    assert a is b
+    c = _make_tile16x16(qd.f64)
+    assert a is not c
+    d = _make_tile16x16(qd.f64)
+    assert c is d
