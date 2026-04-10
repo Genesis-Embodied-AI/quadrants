@@ -10,8 +10,8 @@ _QD_DTYPES = [qd.f32, qd.f64]
 _NP_DTYPES = {qd.f32: np.float32, qd.f64: np.float64}
 
 
-@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_zeros(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -30,8 +30,8 @@ def test_tile16_zeros(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_eye(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -49,8 +49,8 @@ def test_tile16_eye(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.gpu)
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_eye_inplace(qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -73,8 +73,6 @@ def test_tile16_eye_inplace(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
-@test_utils.test(arch=qd.gpu)
-@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @pytest.mark.parametrize(
     "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
@@ -88,6 +86,8 @@ def test_tile16_eye_inplace(qd_dtype):
         (60, 60, 0, 0, 16, 16),
     ],
 )
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -124,8 +124,6 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
     np.testing.assert_allclose(result, expected)
 
 
-@test_utils.test(arch=qd.gpu)
-@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @pytest.mark.parametrize(
     "batch, src_row, src_col, ncols, nrows",
     [
@@ -137,6 +135,8 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
         (0, 16, 16, 12, 8),
     ],
 )
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
 def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
