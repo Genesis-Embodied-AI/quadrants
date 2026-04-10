@@ -1,6 +1,7 @@
 import ast
 import inspect
 import math
+import os
 import sys
 import textwrap
 import types
@@ -219,10 +220,13 @@ class FuncBase:
         func_body = tree.body[0]
         func_body.decorator_list = []  # type: ignore , kick that can down the road...
 
-        from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
+        _kcov = None
+        if os.environ.get("QD_KERNEL_COVERAGE") == "1":
+            from . import (  # pylint: disable=import-outside-toplevel
+                _kernel_coverage as _kcov,
+            )
 
-        if _kernel_coverage._ENABLED:
-            tree = _kernel_coverage.rewrite_ast(tree, function_source_info.filepath, function_source_info.start_lineno)
+            tree = _kcov.rewrite_ast(tree, function_source_info.filepath, function_source_info.start_lineno)
 
         runtime = impl.get_runtime()
 
@@ -250,10 +254,10 @@ class FuncBase:
         quadrants_callable = current_kernel.quadrants_callable
         is_pure = quadrants_callable is not None and quadrants_callable.is_pure
         global_vars = self._get_global_vars(self.func)
-        if _kernel_coverage._ENABLED:
-            cov_field = _kernel_coverage.get_field()
+        if _kcov is not None:
+            cov_field = _kcov.get_field()
             if cov_field is not None:
-                global_vars[_kernel_coverage.FIELD_VAR_NAME] = cov_field
+                global_vars[_kcov.FIELD_VAR_NAME] = cov_field
 
         template_vars = {}
         if is_kernel or is_real_function:

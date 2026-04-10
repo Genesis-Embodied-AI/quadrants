@@ -374,9 +374,9 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
+        if os.environ.get("QD_KERNEL_COVERAGE") == "1":
+            from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
-        if _kernel_coverage._ENABLED:
             _kernel_coverage.ensure_field_allocated()
 
         with self.runtime.compilation_lock:
