@@ -10,6 +10,9 @@ import textwrap
 
 import pytest
 
+import quadrants as qd
+from tests import test_utils
+
 # These tests only run when QD_KERNEL_COVERAGE=1
 pytestmark = pytest.mark.skipif(
     os.environ.get("QD_KERNEL_COVERAGE", "") != "1",
@@ -82,12 +85,10 @@ def test_ast_rewriter_for_loop():
     assert 3 in lines_covered  # x = i
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_kernel_coverage_e2e():
     """End-to-end test: run a kernel and check that coverage probes fired."""
-    import quadrants as qd
     from quadrants.lang import _kernel_coverage
-
-    qd.init(arch=qd.cpu)
     _kernel_coverage.ensure_field_allocated()
 
     result = qd.field(dtype=qd.i32, shape=(1,))
@@ -103,16 +104,13 @@ def test_kernel_coverage_e2e():
     cov_field = _kernel_coverage.get_field()
     assert cov_field is not None
     arr = cov_field.to_numpy()
-    # At least one probe should have fired
     assert arr.sum() > 0
 
 
+@test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_kernel_coverage_branches_e2e():
     """Verify that only the taken branch has its probe fired."""
-    import quadrants as qd
     from quadrants.lang import _kernel_coverage
-
-    qd.init(arch=qd.cpu)
     _kernel_coverage.ensure_field_allocated()
 
     probe_count_before = _kernel_coverage._probe_counter
@@ -133,15 +131,12 @@ def test_kernel_coverage_branches_e2e():
     cov_field = _kernel_coverage.get_field()
     arr = cov_field.to_numpy()
 
-    # Find probes for this kernel (they start at probe_count_before)
     probes_for_kernel = {
         pid: loc
         for pid, loc in _kernel_coverage._probe_map.items()
         if pid >= probe_count_before
     }
 
-    # The "taken" branch (out[0] = 1) should have its probe fired
-    # The "not taken" branch (out[0] = 2) should NOT have its probe fired
     taken_probes = {pid for pid, loc in probes_for_kernel.items() if arr[pid] != 0}
     not_taken_probes = {pid for pid, loc in probes_for_kernel.items() if arr[pid] == 0}
 
