@@ -59,7 +59,7 @@ def _make_tile16x16_class(dtype):
         r15: dtype
 
         @qd.func
-        def _load(self, arr: qd.template(), row_start, col_start, col_end, row_end):
+        def _load(self, arr: qd.template(), row_start, row_end, col_start, col_end):
             """Load from a 2D array within [row_start, row_end) x [col_start, col_end).
 
             Each thread loads arr[row_start + tid, col_start:col_end].
@@ -107,7 +107,7 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[row, col_start + 15]
 
         @qd.func
-        def _load3d(self, arr: qd.template(), batch, row_start, col_start, col_end, row_end):
+        def _load3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
             """Load from a 3D array within [row_start, row_end) x [col_start, col_end).
 
             Each thread loads arr[batch, row_start+tid, col_start:col_end].
@@ -155,7 +155,7 @@ def _make_tile16x16_class(dtype):
                     self.r15 = arr[batch, row, col_start + 15]
 
         @qd.func
-        def _store(self, arr: qd.template(), row_start, col_start, col_end, row_end):
+        def _store(self, arr: qd.template(), row_start, row_end, col_start, col_end):
             """Store to a 2D array within [row_start, row_end) x [col_start, col_end).
 
             Each thread stores to arr[row_start + tid, col_start:col_end].
@@ -203,7 +203,7 @@ def _make_tile16x16_class(dtype):
                     arr[row, col_start + 15] = self.r15
 
         @qd.func
-        def _store3d(self, arr: qd.template(), batch, row_start, col_start, col_end, row_end):
+        def _store3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
             """Store to a 3D array within [row_start, row_end) x [col_start, col_end).
 
             Each thread stores to arr[batch, row_start+tid, col_start:col_end].

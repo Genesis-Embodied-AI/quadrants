@@ -24,7 +24,7 @@ def test_tile16_zeros(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._store(dst_arr, 0, 0, _TILE, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     k1(dst)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
@@ -43,7 +43,7 @@ def test_tile16_eye(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile.eye()
-            t._store(dst_arr, 0, 0, _TILE, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     k1(dst)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
@@ -63,9 +63,9 @@ def test_tile16_eye_inplace(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, 0, 0, _TILE, _TILE)
+            t._load(src_arr, 0, _TILE, 0, _TILE)
             t._eye_()
-            t._store(dst_arr, 0, 0, _TILE, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 100.0
     src.from_numpy(data)
@@ -108,8 +108,8 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, src_row, src_col, src_col_end, src_row_end)
-            t._store(dst_arr, dst_row, dst_col, dst_col_end, dst_row_end)
+            t._load(src_arr, src_row, src_row_end, src_col, src_col_end)
+            t._store(dst_arr, dst_row, dst_row_end, dst_col, dst_col_end)
 
     data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
     src.from_numpy(data)
@@ -140,8 +140,8 @@ def test_tile16_load_clamp_to_array_rows(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, 0, 0, _TILE, _TILE)
-            t._store(dst_arr, 0, 0, _TILE, _TILE)
+            t._load(src_arr, 0, _TILE, 0, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     data = np.arange(NROWS * _TILE, dtype=np_dtype).reshape(NROWS, _TILE) + 1.0
     src.from_numpy(data)
@@ -167,8 +167,8 @@ def test_tile16_store_clamp_to_array_rows(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load(src_arr, 0, 0, _TILE, _TILE)
-            t._store(dst_arr, 0, 0, _TILE, _TILE)
+            t._load(src_arr, 0, _TILE, 0, _TILE)
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 1.0
     src.from_numpy(data)
@@ -193,8 +193,8 @@ def test_tile16_load3d_clamp_to_array_rows(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load3d(src_arr, 0, 0, 0, _TILE, _TILE)
-            t._store3d(dst_arr, 0, 0, 0, _TILE, _TILE)
+            t._load3d(src_arr, 0, 0, _TILE, 0, _TILE)
+            t._store3d(dst_arr, 0, 0, _TILE, 0, _TILE)
 
     data = np.arange(NROWS * _TILE, dtype=np_dtype).reshape(1, NROWS, _TILE) + 1.0
     src.from_numpy(data)
@@ -220,8 +220,8 @@ def test_tile16_store3d_clamp_to_array_rows(qd_dtype):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load3d(src_arr, 0, 0, 0, _TILE, _TILE)
-            t._store3d(dst_arr, 0, 0, 0, _TILE, _TILE)
+            t._load3d(src_arr, 0, 0, _TILE, 0, _TILE)
+            t._store3d(dst_arr, 0, 0, _TILE, 0, _TILE)
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(1, _TILE, _TILE) + 1.0
     src.from_numpy(data)
@@ -260,8 +260,8 @@ def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
-            t._load3d(src_arr, batch, src_row, src_col, col_end, row_end)
-            t._store3d(dst_arr, batch, src_row, src_col, col_end, row_end)
+            t._load3d(src_arr, batch, src_row, row_end, src_col, col_end)
+            t._store3d(dst_arr, batch, src_row, row_end, src_col, col_end)
 
     data = np.arange(NBATCH * GRID * GRID, dtype=np_dtype).reshape(NBATCH, GRID, GRID) + 1.0
     src.from_numpy(data)
