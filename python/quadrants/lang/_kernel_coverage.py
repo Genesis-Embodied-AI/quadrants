@@ -128,7 +128,11 @@ def _detect_arc_mode() -> bool:
 
 
 def flush() -> None:
-    """Harvest any remaining field data and write all results to a .coverage file."""
+    """Harvest any remaining field data and write all results to a .coverage file.
+
+    If .coverage.kernel already exists (e.g. from a prior test phase), the new
+    data is merged into it so nothing is lost across multiple invocations.
+    """
     _harvest_field()
 
     if not _accumulated_lines:
@@ -137,18 +141,31 @@ def flush() -> None:
     try:
         from coverage import CoverageData
 
-        # Remove stale file from a previous run
         kernel_path = ".coverage.kernel"
-        try:
-            os.remove(kernel_path)
-        except FileNotFoundError:
-            pass
-
         use_arcs = _detect_arc_mode()
+
+        # Read any pre-existing kernel coverage data (from a prior test phase)
+        merged_lines: dict[str, set[int]] = {}
+        if os.path.exists(kernel_path):
+            try:
+                existing = CoverageData(basename=kernel_path)
+                existing.read()
+                for f in existing.measured_files():
+                    merged_lines[f] = set(existing.lines(f) or [])
+            except Exception:
+                pass
+            try:
+                os.remove(kernel_path)
+            except FileNotFoundError:
+                pass
+
+        for filepath, lines in _accumulated_lines.items():
+            merged_lines.setdefault(filepath, set()).update(lines)
+
         cov = CoverageData(basename=kernel_path)
         if use_arcs:
             arcs_by_file: dict[str, list[tuple[int, int]]] = {}
-            for filepath, lines in _accumulated_lines.items():
+            for filepath, lines in merged_lines.items():
                 sorted_lines = sorted(lines)
                 arcs = [(-1, sorted_lines[0])]
                 for prev, curr in zip(sorted_lines, sorted_lines[1:]):
@@ -157,7 +174,7 @@ def flush() -> None:
                 arcs_by_file[filepath] = arcs
             cov.add_arcs(arcs_by_file)
         else:
-            cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
+            cov.add_lines({f: sorted(lines) for f, lines in merged_lines.items()})
         cov.write()
     except ImportError:
         pass
