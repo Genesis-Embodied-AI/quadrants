@@ -29,25 +29,49 @@ _probe_counter: int = 0
 _probe_map: dict[int, tuple[str, int]] = {}
 # Accumulated coverage lines surviving across qd.init() resets
 _accumulated_lines: dict[str, set[int]] = {}
+_reset_hook_installed: bool = False
 
 
 def _harvest_field() -> None:
-    """Read probe data from the current field into _accumulated_lines."""
-    global _cov_field
+    """Read probe data from the current field into _accumulated_lines.
+
+    Must be called while the runtime is still alive (before clear()).
+    """
+    global _cov_field, _cov_field_prog
     if _cov_field is None or not _probe_map:
         return
     try:
         arr = _cov_field.to_numpy()
     except Exception:
+        pass
+    else:
+        for probe_id, (filepath, lineno) in _probe_map.items():
+            if probe_id < len(arr) and arr[probe_id] != 0:
+                _accumulated_lines.setdefault(filepath, set()).add(lineno)
+    _cov_field = None
+    _cov_field_prog = None
+
+
+def _install_reset_hook() -> None:
+    """Monkey-patch PyQuadrants.clear() to harvest probes before destruction."""
+    global _reset_hook_installed
+    if _reset_hook_installed:
         return
-    for probe_id, (filepath, lineno) in _probe_map.items():
-        if probe_id < len(arr) and arr[probe_id] != 0:
-            _accumulated_lines.setdefault(filepath, set()).add(lineno)
+    from quadrants.lang.impl import PyQuadrants
+    _original_clear = PyQuadrants.clear
+
+    def _hooked_clear(self: Any) -> None:
+        _harvest_field()
+        _original_clear(self)
+
+    PyQuadrants.clear = _hooked_clear  # type: ignore[assignment]
+    _reset_hook_installed = True
 
 
 def ensure_field_allocated() -> None:
     """Allocate (or re-allocate after qd.init()) the global coverage field."""
     global _cov_field, _cov_field_prog
+    _install_reset_hook()
     from quadrants.lang.impl import get_runtime
     current_prog = get_runtime()._prog
     if _cov_field is not None and _cov_field_prog is current_prog:
@@ -56,8 +80,6 @@ def ensure_field_allocated() -> None:
         current_prog = get_runtime()._prog
         if _cov_field is not None and _cov_field_prog is current_prog:
             return
-        # Harvest data from the old field before it's destroyed
-        _harvest_field()
         import quadrants as qd
         _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
         _cov_field_prog = current_prog
