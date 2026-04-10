@@ -14,16 +14,13 @@ std::atomic<int> SNode::counter{0};
 SNode &SNode::insert_children(SNodeType t) {
   QD_ASSERT(t != SNodeType::root);
 
-  auto new_ch = std::make_unique<SNode>(depth + 1, t, snode_to_fields_,
-                                        snode_rw_accessors_bank_);
+  auto new_ch = std::make_unique<SNode>(depth + 1, t, snode_to_fields_, snode_rw_accessors_bank_);
   new_ch->parent = this;
   new_ch->is_path_all_dense = (is_path_all_dense && !new_ch->need_activation());
   for (int i = 0; i < quadrants_max_num_indices; i++) {
-    new_ch->extractors[i].num_elements_from_root *=
-        extractors[i].num_elements_from_root;
+    new_ch->extractors[i].num_elements_from_root *= extractors[i].num_elements_from_root;
   }
-  std::memcpy(new_ch->physical_index_position, physical_index_position,
-              sizeof(physical_index_position));
+  std::memcpy(new_ch->physical_index_position, physical_index_position, sizeof(physical_index_position));
   new_ch->num_active_indices = num_active_indices;
   if (type == SNodeType::bit_struct || type == SNodeType::quant_array) {
     new_ch->is_bit_level = true;
@@ -34,19 +31,13 @@ SNode &SNode::insert_children(SNodeType t) {
   return *ch.back();
 }
 
-SNode &SNode::create_node(std::vector<Axis> axes,
-                          std::vector<int> sizes,
-                          SNodeType type,
-                          const DebugInfo &dbg_info) {
+SNode &SNode::create_node(std::vector<Axis> axes, std::vector<int> sizes, SNodeType type, const DebugInfo &dbg_info) {
   if (sizes.size() == 1) {
     sizes = std::vector<int>(axes.size(), sizes[0]);
   }
   if (axes.size() != sizes.size()) {
-    ErrorEmitter(
-        QuadrantsRuntimeError(), &dbg_info,
-        fmt::format(
-            "axes and sizes must have the same size, but got {} and {}.",
-            axes.size(), sizes.size()));
+    ErrorEmitter(QuadrantsRuntimeError(), &dbg_info,
+                 fmt::format("axes and sizes must have the same size, but got {} and {}.", axes.size(), sizes.size()));
   }
 
   if (type == SNodeType::hash && depth != 0) {
@@ -66,25 +57,21 @@ SNode &SNode::create_node(std::vector<Axis> axes,
 
     int ind = axes[i].value;
     auto end = new_node.physical_index_position + new_node.num_active_indices;
-    bool is_first_division =
-        std::find(new_node.physical_index_position, end, ind) == end;
+    bool is_first_division = std::find(new_node.physical_index_position, end, ind) == end;
     if (is_first_division) {
       new_node.physical_index_position[new_node.num_active_indices++] = ind;
     } else if (!bit::is_power_of_two(sizes[i])) {
-      ErrorEmitter(
-          QuadrantsRuntimeWarning(), &dbg_info,
-          fmt::format(
-              "Shape {} is detected on non-first division of axis {}. For "
-              "best performance, we recommend that you set it to a power of "
-              "two.",
-              sizes[i], char('i' + ind)));
+      ErrorEmitter(QuadrantsRuntimeWarning(), &dbg_info,
+                   fmt::format("Shape {} is detected on non-first division of axis {}. For "
+                               "best performance, we recommend that you set it to a power of "
+                               "two.",
+                               sizes[i], char('i' + ind)));
     }
     new_node.extractors[ind].active = true;
     new_node.extractors[ind].num_elements_from_root *= sizes[i];
     new_node.extractors[ind].shape = sizes[i];
   }
-  std::sort(new_node.physical_index_position,
-            new_node.physical_index_position + new_node.num_active_indices);
+  std::sort(new_node.physical_index_position, new_node.physical_index_position + new_node.num_active_indices);
   // infer extractors
   int64 acc_shape = 1;
   for (int i = quadrants_max_num_indices - 1; i >= 0; i--) {
@@ -93,10 +80,9 @@ SNode &SNode::create_node(std::vector<Axis> axes,
     acc_shape *= new_node.extractors[i].shape;
   }
   if (acc_shape > std::numeric_limits<int>::max()) {
-    ErrorEmitter(
-        QuadrantsIndexWarning(), &dbg_info,
-        "SNode index might be out of int32 boundary but int64 indexing is not "
-        "supported yet. Struct fors might not work either.");
+    ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
+                 "SNode index might be out of int32 boundary but int64 indexing is not "
+                 "supported yet. Struct fors might not work either.");
   }
   new_node.num_cells_per_container = acc_shape;
 
@@ -108,33 +94,26 @@ SNode &SNode::create_node(std::vector<Axis> axes,
         SNode *p = new_node.parent;
         while (p) {
           if (p->extractors[i].active) {
-            ErrorEmitter(
-                QuadrantsRuntimeError(), &dbg_info,
-                "Dynamic SNode must have a standalone dimensionality.");
+            ErrorEmitter(QuadrantsRuntimeError(), &dbg_info, "Dynamic SNode must have a standalone dimensionality.");
           }
           p = p->parent;
         }
       }
     }
     if (active_extractor_counder != 1) {
-      ErrorEmitter(QuadrantsRuntimeError(), &dbg_info,
-                   "Dynamic SNode can have only one index extractor.");
+      ErrorEmitter(QuadrantsRuntimeError(), &dbg_info, "Dynamic SNode can have only one index extractor.");
     }
   }
   return new_node;
 }
 
-SNode &SNode::dynamic(const Axis &expr,
-                      int n,
-                      int chunk_size,
-                      const DebugInfo &dbg_info) {
+SNode &SNode::dynamic(const Axis &expr, int n, int chunk_size, const DebugInfo &dbg_info) {
   auto &snode = create_node({expr}, {n}, SNodeType::dynamic, dbg_info);
   snode.chunk_size = chunk_size;
   return snode;
 }
 
-SNode &SNode::bit_struct(BitStructType *bit_struct_type,
-                         const DebugInfo &dbg_info) {
+SNode &SNode::bit_struct(BitStructType *bit_struct_type, const DebugInfo &dbg_info) {
   auto &snode = create_node({}, {}, SNodeType::bit_struct, dbg_info);
   snode.dt = bit_struct_type;
   snode.physical_type = bit_struct_type->get_physical_type();
@@ -146,8 +125,7 @@ SNode &SNode::quant_array(const std::vector<Axis> &axes,
                           int bits,
                           const DebugInfo &dbg_info) {
   auto &snode = create_node(axes, sizes, SNodeType::quant_array, dbg_info);
-  snode.physical_type =
-      TypeFactory::get_instance().get_primitive_int_type(bits, false);
+  snode.physical_type = TypeFactory::get_instance().get_primitive_int_type(bits, false);
   return snode;
 }
 
@@ -204,19 +182,12 @@ Expr SNode::get_expr() const {
   return Expr(snode_to_fields_->at(this));
 }
 
-SNode::SNode(SNodeFieldMap *snode_to_fields,
-             SNodeRwAccessorsBank *snode_rw_accessors_bank)
+SNode::SNode(SNodeFieldMap *snode_to_fields, SNodeRwAccessorsBank *snode_rw_accessors_bank)
     : SNode(0, SNodeType::undefined, snode_to_fields, snode_rw_accessors_bank) {
 }
 
-SNode::SNode(int depth,
-             SNodeType t,
-             SNodeFieldMap *snode_to_fields,
-             SNodeRwAccessorsBank *snode_rw_accessors_bank)
-    : depth(depth),
-      type(t),
-      snode_to_fields_(snode_to_fields),
-      snode_rw_accessors_bank_(snode_rw_accessors_bank) {
+SNode::SNode(int depth, SNodeType t, SNodeFieldMap *snode_to_fields, SNodeRwAccessorsBank *snode_rw_accessors_bank)
+    : depth(depth), type(t), snode_to_fields_(snode_to_fields), snode_rw_accessors_bank_(snode_rw_accessors_bank) {
   id = counter++;
   node_type_name = get_node_type_name();
   num_active_indices = 0;
@@ -266,42 +237,32 @@ void SNode::set_index_offsets(std::vector<int> index_offsets_) {
 
 // TODO: rename to is_sparse?
 bool SNode::need_activation() const {
-  return type == SNodeType::pointer || type == SNodeType::hash ||
-         type == SNodeType::bitmasked || type == SNodeType::dynamic;
+  return type == SNodeType::pointer || type == SNodeType::hash || type == SNodeType::bitmasked ||
+         type == SNodeType::dynamic;
 }
 
 void SNode::lazy_grad() {
-  make_lazy_place(
-      this, snode_to_fields_,
-      [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_grads) {
-        if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) &&
-            !c->has_adjoint()) {
-          new_grads.push_back(snode_to_fields_->at(c.get())->adjoint);
-        }
-      });
+  make_lazy_place(this, snode_to_fields_, [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_grads) {
+    if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) && !c->has_adjoint()) {
+      new_grads.push_back(snode_to_fields_->at(c.get())->adjoint);
+    }
+  });
 }
 
 void SNode::lazy_dual() {
-  make_lazy_place(
-      this, snode_to_fields_,
-      [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_duals) {
-        if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) &&
-            !c->has_dual()) {
-          new_duals.push_back(snode_to_fields_->at(c.get())->dual);
-        }
-      });
+  make_lazy_place(this, snode_to_fields_, [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_duals) {
+    if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) && !c->has_dual()) {
+      new_duals.push_back(snode_to_fields_->at(c.get())->dual);
+    }
+  });
 }
 
 void SNode::allocate_adjoint_checkbit() {
-  make_lazy_place(this, snode_to_fields_,
-                  [this](std::unique_ptr<SNode> &c,
-                         std::vector<Expr> &new_adjoint_checkbits) {
-                    if (c->type == SNodeType::place && c->is_primal() &&
-                        is_real(c->dt) && c->has_adjoint()) {
-                      new_adjoint_checkbits.push_back(
-                          snode_to_fields_->at(c.get())->adjoint_checkbit);
-                    }
-                  });
+  make_lazy_place(this, snode_to_fields_, [this](std::unique_ptr<SNode> &c, std::vector<Expr> &new_adjoint_checkbits) {
+    if (c->type == SNodeType::place && c->is_primal() && is_real(c->dt) && c->has_adjoint()) {
+      new_adjoint_checkbits.push_back(snode_to_fields_->at(c.get())->adjoint_checkbit);
+    }
+  });
 }
 
 bool SNode::is_primal() const {

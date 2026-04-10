@@ -40,10 +40,8 @@ class GatherImmutableLocalVars : public BasicStmtVisitor {
     if (stmt->dest->is<AllocaStmt>()) {
       auto status_iter = alloca_status_.find(stmt->dest);
       QD_ASSERT(status_iter != alloca_status_.end());
-      if (stmt->parent != stmt->dest->parent ||
-          status_iter->second == AllocaStatus::kStoredOnce ||
-          stmt->val->ret_type.ptr_removed() !=
-              stmt->dest->ret_type.ptr_removed()) {
+      if (stmt->parent != stmt->dest->parent || status_iter->second == AllocaStatus::kStoredOnce ||
+          stmt->val->ret_type.ptr_removed() != stmt->dest->ret_type.ptr_removed()) {
         // FIXME: ptr_removed() is a workaround for the fact that
         //   the type of the alloca is the type of the element instead of the
         //   type of the pointer.

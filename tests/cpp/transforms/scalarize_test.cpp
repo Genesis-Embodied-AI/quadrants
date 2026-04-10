@@ -15,8 +15,7 @@ TEST(Scalarize, ScalarizeGlobalStore) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto &type_factory = TypeFactory::get_instance();
 
@@ -25,27 +24,21 @@ TEST(Scalarize, ScalarizeGlobalStore) {
     TensorType<4 x i32>  %2 = MatrixInitStmt([1, 1, 2, 2])
     StoreStmt(%1, %2)
   */
-  Type *tensor_type = type_factory.get_tensor_type(
-      {2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
+  Type *tensor_type = type_factory.get_tensor_type({2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
   auto const_1_stmt = block->push_back<ConstStmt>(TypedConstant(1));
   auto const_2_stmt = block->push_back<ConstStmt>(TypedConstant(2));
-  auto type =
-      TypeFactory::get_instance().get_ndarray_struct_type(tensor_type, 1);
+  auto type = TypeFactory::get_instance().get_ndarray_struct_type(tensor_type, 1);
 
-  auto argload_stmt = block->push_back<ArgLoadStmt>(
-      std::vector<int>{0} /*arg_id*/, type, /*is_ptr*/ true,
-      /*create_load*/ false);
+  auto argload_stmt = block->push_back<ArgLoadStmt>(std::vector<int>{0} /*arg_id*/, type, /*is_ptr*/ true,
+                                                    /*create_load*/ false);
 
   std::vector<Stmt *> indices = {};
-  Stmt *dest_stmt = block->push_back<ExternalPtrStmt>(
-      argload_stmt, indices);  // fake ExternalPtrStmt
+  Stmt *dest_stmt = block->push_back<ExternalPtrStmt>(argload_stmt, indices);  // fake ExternalPtrStmt
 
   dest_stmt->ret_type = type_factory.get_pointer_type(tensor_type);
 
-  std::vector<Stmt *> matrix_init_vals = {const_1_stmt, const_1_stmt,
-                                          const_2_stmt, const_2_stmt};
-  auto matrix_init_stmt =
-      block->push_back<MatrixInitStmt>(std::move(matrix_init_vals));
+  std::vector<Stmt *> matrix_init_vals = {const_1_stmt, const_1_stmt, const_2_stmt, const_2_stmt};
+  auto matrix_init_stmt = block->push_back<MatrixInitStmt>(std::move(matrix_init_vals));
   matrix_init_stmt->ret_type = tensor_type;
 
   block->push_back<GlobalStoreStmt>(dest_stmt, matrix_init_stmt);
@@ -54,8 +47,7 @@ TEST(Scalarize, ScalarizeGlobalStore) {
   irpass::lower_matrix_ptr(block.get());
   irpass::die(block.get());
 
-  EXPECT_EQ(block->size(), 2 /*const*/ + 1 /*argload*/ + 4 /*const*/ +
-                               4 /*external_ptr*/ + 4 /*store*/);
+  EXPECT_EQ(block->size(), 2 /*const*/ + 1 /*argload*/ + 4 /*const*/ + 4 /*external_ptr*/ + 4 /*store*/);
 
   // Check for scalarized statements
   EXPECT_EQ(block->statements[3]->is<ConstStmt>(), true);
@@ -82,8 +74,7 @@ TEST(Scalarize, ScalarizeGlobalLoad) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto &type_factory = TypeFactory::get_instance();
 
@@ -92,18 +83,14 @@ TEST(Scalarize, ScalarizeGlobalLoad) {
     TensorType<4 x i32>  %2 = LoadStmt(%1)
     StoreStmt(%1, %2)
   */
-  Type *tensor_type = type_factory.get_tensor_type(
-      {2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
-  auto type =
-      TypeFactory::get_instance().get_ndarray_struct_type(tensor_type, 1);
+  Type *tensor_type = type_factory.get_tensor_type({2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
+  auto type = TypeFactory::get_instance().get_ndarray_struct_type(tensor_type, 1);
 
-  auto argload_stmt = block->push_back<ArgLoadStmt>(
-      std::vector<int>{0} /*arg_id*/, type, /*is_ptr*/ true,
-      /*create_load*/ false);
+  auto argload_stmt = block->push_back<ArgLoadStmt>(std::vector<int>{0} /*arg_id*/, type, /*is_ptr*/ true,
+                                                    /*create_load*/ false);
 
   std::vector<Stmt *> indices = {};
-  Stmt *src_stmt = block->push_back<ExternalPtrStmt>(
-      argload_stmt, indices);  // fake ExternalPtrStmt
+  Stmt *src_stmt = block->push_back<ExternalPtrStmt>(argload_stmt, indices);  // fake ExternalPtrStmt
   src_stmt->ret_type = type_factory.get_pointer_type(tensor_type);
 
   auto load_stmt = block->push_back<GlobalLoadStmt>(src_stmt);
@@ -115,9 +102,8 @@ TEST(Scalarize, ScalarizeGlobalLoad) {
   irpass::lower_matrix_ptr(block.get());
   irpass::die(block.get());
 
-  EXPECT_EQ(block->size(), 1 /*argload*/ + 4 /*const*/ + 4 /*external_ptr*/ +
-                               4 /*load*/ + 4 /*const*/ + 4 /*external_ptr*/ +
-                               4 /*store*/);
+  EXPECT_EQ(block->size(), 1 /*argload*/ + 4 /*const*/ + 4 /*external_ptr*/ + 4 /*load*/ + 4 /*const*/ +
+                               4 /*external_ptr*/ + 4 /*store*/);
 
   // Check for scalarized statements
   EXPECT_EQ(block->statements[1]->is<ConstStmt>(), true);
@@ -145,8 +131,7 @@ TEST(Scalarize, ScalarizeLocalStore) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto &type_factory = TypeFactory::get_instance();
 
@@ -155,17 +140,14 @@ TEST(Scalarize, ScalarizeLocalStore) {
     TensorType<4 x i32>  %2 = MatrixInitStmt([1, 1, 2, 2])
     StoreStmt(%1, %2)
   */
-  Type *tensor_type = type_factory.get_tensor_type(
-      {2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
+  Type *tensor_type = type_factory.get_tensor_type({2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
   Stmt *dest_stmt = block->push_back<AllocaStmt>(tensor_type);
   dest_stmt->ret_type = type_factory.get_pointer_type(tensor_type);
 
   auto const_1_stmt = block->push_back<ConstStmt>(TypedConstant(1));
   auto const_2_stmt = block->push_back<ConstStmt>(TypedConstant(2));
-  std::vector<Stmt *> matrix_init_vals = {const_1_stmt, const_1_stmt,
-                                          const_2_stmt, const_2_stmt};
-  auto matrix_init_stmt =
-      block->push_back<MatrixInitStmt>(std::move(matrix_init_vals));
+  std::vector<Stmt *> matrix_init_vals = {const_1_stmt, const_1_stmt, const_2_stmt, const_2_stmt};
+  auto matrix_init_stmt = block->push_back<MatrixInitStmt>(std::move(matrix_init_vals));
   matrix_init_stmt->ret_type = tensor_type;
 
   // LocalStoreStmt survives irpass::die()
@@ -199,8 +181,7 @@ TEST(Scalarize, ScalarizeLocalLoad) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto &type_factory = TypeFactory::get_instance();
 
@@ -208,8 +189,7 @@ TEST(Scalarize, ScalarizeLocalLoad) {
     TensorType<4 x i32>* %1 = AllocaStmt()
     LoadStmt(%1)
   */
-  Type *tensor_type = type_factory.get_tensor_type(
-      {2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
+  Type *tensor_type = type_factory.get_tensor_type({2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
   Stmt *src_stmt = block->push_back<AllocaStmt>(tensor_type);
   src_stmt->ret_type = type_factory.get_pointer_type(tensor_type);
 
@@ -244,26 +224,22 @@ TEST(Scalarize, ScalarizeBugInvalidRedundantConstantRemoval) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   // create vector type
   std::vector<int> vector_shape = {4};
   auto vector_type = TypeFactory::get_instance().get_tensor_type(
-      vector_shape,
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f32));
+      vector_shape, TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f32));
 
   // create offloaded1
-  block->push_back<OffloadedStmt>(OffloadedStmt::TaskType::range_for,
-                                  Arch::vulkan, kernel.get());
+  block->push_back<OffloadedStmt>(OffloadedStmt::TaskType::range_for, Arch::vulkan, kernel.get());
   auto offloaded1 = block->statements.back()->as<OffloadedStmt>();
   auto zero1 = offloaded1->body->push_back<ConstStmt>(TypedConstant(0));
   auto vector_alloc1 = offloaded1->body->push_back<AllocaStmt>(vector_type);
   offloaded1->body->push_back<MatrixPtrStmt>(vector_alloc1, zero1);
 
   // create offloaded2
-  block->push_back<OffloadedStmt>(OffloadedStmt::TaskType::range_for,
-                                  Arch::vulkan, kernel.get());
+  block->push_back<OffloadedStmt>(OffloadedStmt::TaskType::range_for, Arch::vulkan, kernel.get());
   auto offloaded2 = block->statements.back()->as<OffloadedStmt>();
 
   auto vector_alloca2 = offloaded2->body->push_back<AllocaStmt>(vector_type);

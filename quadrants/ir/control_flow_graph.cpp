@@ -63,8 +63,7 @@ void CFGNode::erase(int location) {
   QD_ASSERT(location >= begin_location && location < end_location);
   block->erase(location);
   end_location--;
-  for (auto node = next_node_in_same_block; node != nullptr;
-       node = node->next_node_in_same_block) {
+  for (auto node = next_node_in_same_block; node != nullptr; node = node->next_node_in_same_block) {
     node->begin_location--;
     node->end_location--;
   }
@@ -74,38 +73,30 @@ void CFGNode::insert(std::unique_ptr<Stmt> &&new_stmt, int location) {
   QD_ASSERT(location >= begin_location && location <= end_location);
   block->insert(std::move(new_stmt), location);
   end_location++;
-  for (auto node = next_node_in_same_block; node != nullptr;
-       node = node->next_node_in_same_block) {
+  for (auto node = next_node_in_same_block; node != nullptr; node = node->next_node_in_same_block) {
     node->begin_location++;
     node->end_location++;
   }
 }
 
-void CFGNode::replace_with(int location,
-                           std::unique_ptr<Stmt> &&new_stmt,
-                           bool replace_usages) const {
+void CFGNode::replace_with(int location, std::unique_ptr<Stmt> &&new_stmt, bool replace_usages) const {
   QD_ASSERT(location >= begin_location && location < end_location);
-  block->replace_with(block->statements[location].get(), std::move(new_stmt),
-                      replace_usages);
+  block->replace_with(block->statements[location].get(), std::move(new_stmt), replace_usages);
 }
 
-bool CFGNode::contain_variable(const std::unordered_set<Stmt *> &var_set,
-                               Stmt *var) {
+bool CFGNode::contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *var) {
   if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
     return var_set.find(var) != var_set.end();
   } else {
     // TODO: How to optimize this?
     if (var_set.find(var) != var_set.end())
       return true;
-    return std::any_of(var_set.begin(), var_set.end(), [&](Stmt *set_var) {
-      return irpass::analysis::definitely_same_address(var, set_var);
-    });
+    return std::any_of(var_set.begin(), var_set.end(),
+                       [&](Stmt *set_var) { return irpass::analysis::definitely_same_address(var, set_var); });
   }
 }
 
-bool CFGNode::contain_variable(
-    const std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &var_set,
-    Stmt *var) {
+bool CFGNode::contain_variable(const std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &var_set, Stmt *var) {
   if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
     if (var_set.find(var) != var_set.end()) {
       return var_set.at(var) != CFGNode::UseDefineStatus::PARTIAL;
@@ -116,43 +107,36 @@ bool CFGNode::contain_variable(
     if (var_set.find(var) != var_set.end()) {
       return var_set.at(var) != CFGNode::UseDefineStatus::PARTIAL;
     }
-    return std::any_of(
-        var_set.begin(), var_set.end(), [&](const auto &set_var) {
-          if (irpass::analysis::definitely_same_address(var, set_var.first)) {
-            return set_var.second != CFGNode::UseDefineStatus::PARTIAL;
-          }
-          return false;
-        });
-  }
-}
-
-bool CFGNode::may_contain_variable(
-    const std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &var_set,
-    Stmt *var) {
-  if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
-    return var_set.find(var) != var_set.end();
-  } else {
-    // TODO: How to optimize this?
-    if (var_set.find(var) != var_set.end())
-      return true;
-    return std::any_of(
-        var_set.begin(), var_set.end(), [&](const auto &set_var) {
-          return irpass::analysis::maybe_same_address(var, set_var.first);
-        });
-  }
-}
-
-bool CFGNode::may_contain_variable(const std::unordered_set<Stmt *> &var_set,
-                                   Stmt *var) {
-  if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
-    return var_set.find(var) != var_set.end();
-  } else {
-    // TODO: How to optimize this?
-    if (var_set.find(var) != var_set.end())
-      return true;
-    return std::any_of(var_set.begin(), var_set.end(), [&](Stmt *set_var) {
-      return irpass::analysis::maybe_same_address(var, set_var);
+    return std::any_of(var_set.begin(), var_set.end(), [&](const auto &set_var) {
+      if (irpass::analysis::definitely_same_address(var, set_var.first)) {
+        return set_var.second != CFGNode::UseDefineStatus::PARTIAL;
+      }
+      return false;
     });
+  }
+}
+
+bool CFGNode::may_contain_variable(const std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &var_set, Stmt *var) {
+  if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
+    return var_set.find(var) != var_set.end();
+  } else {
+    // TODO: How to optimize this?
+    if (var_set.find(var) != var_set.end())
+      return true;
+    return std::any_of(var_set.begin(), var_set.end(),
+                       [&](const auto &set_var) { return irpass::analysis::maybe_same_address(var, set_var.first); });
+  }
+}
+
+bool CFGNode::may_contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *var) {
+  if (var->is<AllocaStmt>() || var->is<AdStackAllocaStmt>()) {
+    return var_set.find(var) != var_set.end();
+  } else {
+    // TODO: How to optimize this?
+    if (var_set.find(var) != var_set.end())
+      return true;
+    return std::any_of(var_set.begin(), var_set.end(),
+                       [&](Stmt *set_var) { return irpass::analysis::maybe_same_address(var, set_var); });
   }
 }
 
@@ -170,8 +154,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   for (int i = position - 1; i >= begin_location; i--) {
     // Find previous store stmt to the same dest_addr, stop at the closest one.
     // store_ptr: prev-store dest_addr
-    for (auto store_ptr :
-         irpass::analysis::get_store_destination(block->statements[i].get())) {
+    for (auto store_ptr : irpass::analysis::get_store_destination(block->statements[i].get())) {
       // Exclude `store_ptr` as a potential store destination due to mixed
       // semantics of store statements for quant types. The store operation
       // involves implicit casting before storing, which may result in a loss of
@@ -186,8 +169,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
       // $3.
       // TODO: Still forward the store if the value can be statically proven to
       // fit into the quant type.
-      if (!is_quant(store_ptr->ret_type.ptr_removed()) &&
-          irpass::analysis::definitely_same_address(var, store_ptr)) {
+      if (!is_quant(store_ptr->ret_type.ptr_removed()) && irpass::analysis::definitely_same_address(var, store_ptr)) {
         last_def_position = i;
         break;
       }
@@ -198,14 +180,12 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
       // $2 = matrix ptr $0, offset
       // $3 = load $2
       // We can forward MatrixInitStmt->values[offset] to $3
-      if (var->is<MatrixPtrStmt>() &&
-          var->as<MatrixPtrStmt>()->offset->is<ConstStmt>()) {
+      if (var->is<MatrixPtrStmt>() && var->as<MatrixPtrStmt>()->offset->is<ConstStmt>()) {
         auto var_origin = var->as<MatrixPtrStmt>()->origin;
         // Check for same origin address
         if (irpass::analysis::definitely_same_address(var_origin, store_ptr)) {
           // Check for MatrixInitStmt
-          Stmt *store_data =
-              irpass::analysis::get_store_data(block->statements[i].get());
+          Stmt *store_data = irpass::analysis::get_store_data(block->statements[i].get());
           if (store_data->is<MatrixInitStmt>()) {
             last_def_position = i;
             break;
@@ -223,16 +203,14 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     for (auto store_ptr : irpass::analysis::get_store_destination(store_stmt)) {
       if (var->is<MatrixPtrStmt>() && !store_ptr->is<MatrixPtrStmt>()) {
         // check for aliased address with var
-        if (irpass::analysis::maybe_same_address(
-                var->as<MatrixPtrStmt>()->origin, store_ptr)) {
+        if (irpass::analysis::maybe_same_address(var->as<MatrixPtrStmt>()->origin, store_ptr)) {
           return true;
         }
       }
 
       if (!var->is<MatrixPtrStmt>() && store_ptr->is<MatrixPtrStmt>()) {
         // check for aliased address with store_ptr
-        if (irpass::analysis::maybe_same_address(
-                store_ptr->as<MatrixPtrStmt>()->origin, var)) {
+        if (irpass::analysis::maybe_same_address(store_ptr->as<MatrixPtrStmt>()->origin, var)) {
           return true;
         }
       }
@@ -248,17 +226,14 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   // There's a store to the same dest_addr before this stmt
   if (last_def_position != -1) {
     // result: the value to store
-    Stmt *result = irpass::analysis::get_store_data(
-        block->statements[last_def_position].get());
+    Stmt *result = irpass::analysis::get_store_data(block->statements[last_def_position].get());
     bool is_tensor_involved = var->ret_type.ptr_removed()->is<TensorType>();
     if (!(var->is<AllocaStmt>() && !is_tensor_involved)) {
       // In between the store stmt and current stmt,
       // if there's a third-stmt that "may" have stored a "different value" to
       // the "same dest_addr", then we can't forward the stored data.
       for (int i = last_def_position + 1; i < position; i++) {
-        if (!irpass::analysis::same_value(
-                result,
-                irpass::analysis::get_store_data(block->statements[i].get()))) {
+        if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
           if (may_contain_address(block->statements[i].get(), var)) {
             return nullptr;
           }
@@ -301,8 +276,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     }
     if (!irpass::analysis::same_value(result, data)) {
       // check the special case of alloca (initialized to 0)
-      if (!(result->is<AllocaStmt>() && data->is<ConstStmt>() &&
-            data->as<ConstStmt>()->val.equal_value(0))) {
+      if (!(result->is<AllocaStmt>() && data->is<ConstStmt>() && data->as<ConstStmt>()->val.equal_value(0))) {
         return false;  // return nullptr
       }
     }
@@ -333,8 +307,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   // reach_gen)
   //  if the store values are the same, then return the value
   for (auto stmt : reach_gen) {
-    if (may_contain_address(stmt, var) &&
-        stmt->parent->locate(stmt) < position) {
+    if (may_contain_address(stmt, var) && stmt->parent->locate(stmt) < position) {
       if (!update_result(stmt))
         return nullptr;
       else
@@ -344,10 +317,8 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
   if (!result) {
     // The UD-chain is empty.
     auto offending_load = block->statements[position].get();
-    ErrorEmitter(
-        QuadrantsIrWarning(), offending_load,
-        fmt::format("Loading variable {} before anything is stored to it.",
-                    var->id));
+    ErrorEmitter(QuadrantsIrWarning(), offending_load,
+                 fmt::format("Loading variable {} before anything is stored to it.", var->id));
     return nullptr;
   }
   if (!result_visible) {
@@ -367,9 +338,7 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     // if there's a third-stmt that "may" have stored a "different value" to
     // the "same dest_addr", then we can't forward the stored data.
     for (int i = last_def_position; i < position; i++) {
-      if (!irpass::analysis::same_value(
-              result,
-              irpass::analysis::get_store_data(block->statements[i].get()))) {
+      if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
         if (may_contain_address(block->statements[i].get(), var)) {
           return nullptr;
         }
@@ -391,11 +360,9 @@ void CFGNode::reaching_definition_analysis(bool after_lower_access) {
     for (auto data_source_ptr : data_source_ptrs) {
       // stmt provides a data source
       if (after_lower_access &&
-          !((data_source_ptr->is<MatrixPtrStmt>() &&
-             data_source_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          !((data_source_ptr->is<MatrixPtrStmt>() && data_source_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
             (data_source_ptr->is<MatrixPtrStmt>() &&
-             data_source_ptr->as<MatrixPtrStmt>()
-                 ->origin->is<MatrixPtrStmt>()) ||
+             data_source_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
             data_source_ptr->is<AllocaStmt>())) {
         // After lower_access, we only analyze local variables.
         continue;
@@ -408,8 +375,7 @@ void CFGNode::reaching_definition_analysis(bool after_lower_access) {
   }
 }
 
-bool CFGNode::store_to_load_forwarding(bool after_lower_access,
-                                       bool autodiff_enabled) {
+bool CFGNode::store_to_load_forwarding(bool after_lower_access, bool autodiff_enabled) {
   // Contains two separate parts:
   // 1. Store-to-load Forwarding: for each load stmt, find the closest previous
   // store stmt
@@ -452,19 +418,14 @@ bool CFGNode::store_to_load_forwarding(bool after_lower_access,
           continue;
 
         // special case of alloca (initialized to 0)
-        auto zero = Stmt::make<ConstStmt>(
-            TypedConstant(result->ret_type.ptr_removed(), 0));
+        auto zero = Stmt::make<ConstStmt>(TypedConstant(result->ret_type.ptr_removed(), 0));
         replace_with(i, std::move(zero), true);
       } else {
-        if (result->ret_type.ptr_removed()->is<TensorType>() &&
-            !stmt->ret_type->is<TensorType>()) {
-          QD_ASSERT(load_src->is<MatrixPtrStmt>() &&
-                    load_src->as<MatrixPtrStmt>()->offset->is<ConstStmt>());
+        if (result->ret_type.ptr_removed()->is<TensorType>() && !stmt->ret_type->is<TensorType>()) {
+          QD_ASSERT(load_src->is<MatrixPtrStmt>() && load_src->as<MatrixPtrStmt>()->offset->is<ConstStmt>());
           QD_ASSERT(result->is<MatrixInitStmt>());
 
-          int offset = load_src->as<MatrixPtrStmt>()
-                           ->offset->as<ConstStmt>()
-                           ->val.val_int32();
+          int offset = load_src->as<MatrixPtrStmt>()->offset->as<ConstStmt>()->val.val_int32();
 
           result = result->as<MatrixInitStmt>()->values[offset];
         }
@@ -536,8 +497,7 @@ void CFGNode::gather_loaded_snodes(std::unordered_set<SNode *> &snodes) const {
         if (snodes.count(snode) > 0) {
           continue;
         }
-        if (reach_in.find(global_ptr) != reach_in.end() &&
-            !contain_variable(killed_in_this_node, global_ptr)) {
+        if (reach_in.find(global_ptr) != reach_in.end() && !contain_variable(killed_in_this_node, global_ptr)) {
           // The UD-chain contains the value before this offloaded task.
           snodes.insert(snode);
         }
@@ -561,14 +521,11 @@ void CFGNode::live_variable_analysis(bool after_lower_access) {
     // If stmt is a MatrixPtrStmt, the load only partially uses the original
     // address. Since MatrixPtrStmt relies on the original address, we need to
     // gen the aliased orginal address as well.
-    auto load_ptrs =
-        irpass::analysis::get_load_pointers(stmt, true /*get_alias*/);
+    auto load_ptrs = irpass::analysis::get_load_pointers(stmt, true /*get_alias*/);
     for (auto &load_ptr : load_ptrs) {
       if (!after_lower_access ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (load_ptr->is<AllocaStmt>() || load_ptr->is<AdStackAllocaStmt>())) {
         // After lower_access, we only analyze local variables and stacks.
         if (!contain_variable(live_kill, load_ptr)) {
@@ -593,10 +550,8 @@ void CFGNode::live_variable_analysis(bool after_lower_access) {
     }
     for (auto store_ptr : store_ptrs) {
       if (!after_lower_access ||
-          (store_ptr->is<MatrixPtrStmt>() &&
-           store_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (store_ptr->is<MatrixPtrStmt>() &&
-           store_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (store_ptr->is<AllocaStmt>() || store_ptr->is<AdStackAllocaStmt>())) {
         // After lower_access, we only analyze local variables and stacks.
         live_kill.insert(store_ptr);
@@ -606,8 +561,7 @@ void CFGNode::live_variable_analysis(bool after_lower_access) {
 }
 
 static void recursive_update_aliased_elements(
-    const std::unordered_map<Stmt *, std::vector<Stmt *>>
-        &tensor_to_matrix_ptrs_map,
+    const std::unordered_map<Stmt *, std::vector<Stmt *>> &tensor_to_matrix_ptrs_map,
     std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
     Stmt *key,
     bool to_erase) {
@@ -627,17 +581,15 @@ static void recursive_update_aliased_elements(
       }
 
       // Recursively update aliased addresses
-      recursive_update_aliased_elements(tensor_to_matrix_ptrs_map, container,
-                                        element_address, to_erase);
+      recursive_update_aliased_elements(tensor_to_matrix_ptrs_map, container, element_address, to_erase);
     }
   }
 }
 
-static void recursive_update_aliased_parent(
-    const std::unordered_map<Stmt *, Stmt *> &matrix_ptr_to_tensor_map,
-    std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
-    Stmt *key,
-    bool to_erase) {
+static void recursive_update_aliased_parent(const std::unordered_map<Stmt *, Stmt *> &matrix_ptr_to_tensor_map,
+                                            std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
+                                            Stmt *key,
+                                            bool to_erase) {
   if (matrix_ptr_to_tensor_map.find(key) != matrix_ptr_to_tensor_map.end()) {
     const auto &tensor_address = matrix_ptr_to_tensor_map.at(key);
     // no matter to_erase or not, the tensor_address is only partially defined
@@ -651,25 +603,20 @@ static void recursive_update_aliased_parent(
     }
 
     // Recursively update aliased addresses
-    recursive_update_aliased_parent(matrix_ptr_to_tensor_map, container,
-                                    tensor_address, to_erase);
+    recursive_update_aliased_parent(matrix_ptr_to_tensor_map, container, tensor_address, to_erase);
   }
 }
 
-static void update_aliased_stmts(
-    const std::unordered_map<Stmt *, std::vector<Stmt *>>
-        &tensor_to_matrix_ptrs_map,
-    const std::unordered_map<Stmt *, Stmt *> &matrix_ptr_to_tensor_map,
-    std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
-    Stmt *key,
-    bool to_erase) {
+static void update_aliased_stmts(const std::unordered_map<Stmt *, std::vector<Stmt *>> &tensor_to_matrix_ptrs_map,
+                                 const std::unordered_map<Stmt *, Stmt *> &matrix_ptr_to_tensor_map,
+                                 std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
+                                 Stmt *key,
+                                 bool to_erase) {
   // Update aliased MatrixPtrStmt for TensorType<>*
-  recursive_update_aliased_elements(tensor_to_matrix_ptrs_map, container, key,
-                                    to_erase);
+  recursive_update_aliased_elements(tensor_to_matrix_ptrs_map, container, key, to_erase);
 
   // Update aliased TensorType<>* for MatrixPtrStmt
-  recursive_update_aliased_parent(matrix_ptr_to_tensor_map, container, key,
-                                  to_erase);
+  recursive_update_aliased_parent(matrix_ptr_to_tensor_map, container, key, to_erase);
 }
 
 // Insert or erase "key" to "container".
@@ -680,8 +627,7 @@ static void update_aliased_stmts(
 // CFGNode::UseDefineStatus is used to mark whether a TensorType'd address
 // is fully or partially modified.
 static void update_container_with_alias(
-    const std::unordered_map<Stmt *, std::vector<Stmt *>>
-        &tensor_to_matrix_ptrs_map,
+    const std::unordered_map<Stmt *, std::vector<Stmt *>> &tensor_to_matrix_ptrs_map,
     const std::unordered_map<Stmt *, Stmt *> &matrix_ptr_to_tensor_map,
     std::unordered_map<Stmt *, CFGNode::UseDefineStatus> &container,
     Stmt *key,
@@ -694,8 +640,7 @@ static void update_container_with_alias(
     container[key] = CFGNode::UseDefineStatus::NONE;
   }
   // Recursively update aliased addresses
-  update_aliased_stmts(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map,
-                       container, key, to_erase);
+  update_aliased_stmts(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, container, key, to_erase);
 }
 
 bool CFGNode::dead_store_elimination(bool after_lower_access) {
@@ -759,10 +704,8 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
       auto store_ptr = *store_ptrs.begin();
 
       if (!after_lower_access ||
-          (store_ptr->is<MatrixPtrStmt>() &&
-           store_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (store_ptr->is<MatrixPtrStmt>() &&
-           store_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (store_ptr->is<MatrixPtrStmt>() && store_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (store_ptr->is<AllocaStmt>() || store_ptr->is<AdStackAllocaStmt>())) {
         // !may_contain_variable(live_in_this_node, store_ptr): address is not
         //      loaded after this store
@@ -775,12 +718,10 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
           is_used_in_next_nodes |= may_contain_variable(live_out, ptr);
         }
 
-        bool is_killed_in_current_node =
-            contain_variable(killed_in_this_node, store_ptr);
+        bool is_killed_in_current_node = contain_variable(killed_in_this_node, store_ptr);
         bool is_dead = is_killed_in_current_node || !is_used_in_next_nodes;
         is_dead &= !may_contain_variable(live_in_this_node, store_ptr);
-        if (!stmt->is<AllocaStmt>() && !stmt->is<AdStackAllocaStmt>() &&
-            !stmt->is<ExternalFuncCallStmt>() && is_dead) {
+        if (!stmt->is<AllocaStmt>() && !stmt->is<AdStackAllocaStmt>() && !stmt->is<ExternalFuncCallStmt>() && is_dead) {
           // If an address is neither used in this node, nor used in the next
           // nodes, then we can consider eliminating any stores to this address
           // (it's not used anyway). There's two different scenerios though:
@@ -801,20 +742,17 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
             local_load->ret_type = atomic->ret_type;
             // Notice that we have a load here
             // (the return value of AtomicOpStmt).
-            update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                        matrix_ptr_to_tensor_map,
-                                        live_in_this_node, atomic->dest, false);
-            update_container_with_alias(
-                tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map,
-                killed_in_this_node, atomic->dest, true);
+            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
+                                        atomic->dest, false);
+            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
+                                        atomic->dest, true);
             live_load_in_this_node[atomic->dest] = local_load.get();
 
             replace_with(i, std::move(local_load), true);
             modified = true;
             continue;
           } else if (!is_parallel_executed ||
-                     (atomic->dest->is<GlobalPtrStmt>() &&
-                      atomic->dest->as<GlobalPtrStmt>()->snode->is_scalar())) {
+                     (atomic->dest->is<GlobalPtrStmt>() && atomic->dest->as<GlobalPtrStmt>()->snode->is_scalar())) {
             // If this node is parallel executed, we can't weaken a global
             // atomic operation to a global load.
             // TODO: we can weaken it if it's element-wise (i.e. never
@@ -823,12 +761,10 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
             global_load->ret_type = atomic->ret_type;
             // Notice that we have a load here
             // (the return value of AtomicOpStmt).
-            update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                        matrix_ptr_to_tensor_map,
-                                        live_in_this_node, atomic->dest, false);
-            update_container_with_alias(
-                tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map,
-                killed_in_this_node, atomic->dest, true);
+            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
+                                        atomic->dest, false);
+            update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
+                                        atomic->dest, true);
             live_load_in_this_node[atomic->dest] = global_load.get();
 
             replace_with(i, std::move(global_load), true);
@@ -838,19 +774,16 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
         } else {
           // A non-eliminated store.
           // Insert to killed_in_this_node if it's stored in this node.
-          update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                      matrix_ptr_to_tensor_map,
-                                      killed_in_this_node, store_ptr, false);
+          update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node,
+                                      store_ptr, false);
 
           // Remove the address from live_in_this_node if it's stored in this
           // node.
           auto old_live_in_this_node = live_in_this_node;
           for (auto &var : old_live_in_this_node) {
-            if (irpass::analysis::definitely_same_address(store_ptr,
-                                                          var.first)) {
-              update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                          matrix_ptr_to_tensor_map,
-                                          live_in_this_node, store_ptr, true);
+            if (irpass::analysis::definitely_same_address(store_ptr, var.first)) {
+              update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node,
+                                          store_ptr, true);
             }
           }
         }
@@ -862,17 +795,14 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
       auto load_ptr = load_ptrs.begin()[0];
 
       if (!after_lower_access ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (load_ptr->is<AllocaStmt>() || load_ptr->is<AdStackAllocaStmt>())) {
         // live_load_in_this_node[addr]: tracks the
         //        next load to the same address
         // "!may_contain_variable(killed_in_this_node, load_ptr)": means it's
         //        not been stored in between the two loads
-        if (live_load_in_this_node.find(load_ptr) !=
-                live_load_in_this_node.end() &&
+        if (live_load_in_this_node.find(load_ptr) != live_load_in_this_node.end() &&
             !may_contain_variable(killed_in_this_node, load_ptr)) {
           // Only perform identical load elimination within a CFGNode.
           auto next_load_stmt = live_load_in_this_node[load_ptr];
@@ -883,9 +813,8 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
           }
         }
 
-        update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                    matrix_ptr_to_tensor_map,
-                                    killed_in_this_node, load_ptr, true);
+        update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, killed_in_this_node, load_ptr,
+                                    true);
         live_load_in_this_node[load_ptr] = stmt;
       }
     }
@@ -893,15 +822,12 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
     // Update live_in_this_node
     for (auto &load_ptr : load_ptrs) {
       if (!after_lower_access ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (load_ptr->is<MatrixPtrStmt>() &&
-           load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (load_ptr->is<MatrixPtrStmt>() && load_ptr->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (load_ptr->is<AllocaStmt>() || load_ptr->is<AdStackAllocaStmt>())) {
         // Addr is used in this node, so it's live in this node
-        update_container_with_alias(tensor_to_matrix_ptrs_map,
-                                    matrix_ptr_to_tensor_map, live_in_this_node,
-                                    load_ptr, false);
+        update_container_with_alias(tensor_to_matrix_ptrs_map, matrix_ptr_to_tensor_map, live_in_this_node, load_ptr,
+                                    false);
       }
     }
   }
@@ -913,20 +839,16 @@ void ControlFlowGraph::erase(int node_id) {
   QD_ASSERT(node_id >= 0 && node_id < (int)size());
   QD_ASSERT(nodes[node_id] && nodes[node_id]->empty());
   if (nodes[node_id]->prev_node_in_same_block) {
-    nodes[node_id]->prev_node_in_same_block->next_node_in_same_block =
-        nodes[node_id]->next_node_in_same_block;
+    nodes[node_id]->prev_node_in_same_block->next_node_in_same_block = nodes[node_id]->next_node_in_same_block;
   }
   if (nodes[node_id]->next_node_in_same_block) {
-    nodes[node_id]->next_node_in_same_block->prev_node_in_same_block =
-        nodes[node_id]->prev_node_in_same_block;
+    nodes[node_id]->next_node_in_same_block->prev_node_in_same_block = nodes[node_id]->prev_node_in_same_block;
   }
   for (auto &prev_node : nodes[node_id]->prev) {
-    prev_node->next.erase(std::find(
-        prev_node->next.begin(), prev_node->next.end(), nodes[node_id].get()));
+    prev_node->next.erase(std::find(prev_node->next.begin(), prev_node->next.end(), nodes[node_id].get()));
   }
   for (auto &next_node : nodes[node_id]->next) {
-    next_node->prev.erase(std::find(
-        next_node->prev.begin(), next_node->prev.end(), nodes[node_id].get()));
+    next_node->prev.erase(std::find(next_node->prev.begin(), next_node->prev.end(), nodes[node_id].get()));
   }
   for (auto &prev_node : nodes[node_id]->prev) {
     for (auto &next_node : nodes[node_id]->next) {
@@ -949,8 +871,7 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
                                           const std::string &suffix) const {
   std::filesystem::path ir_dump_dir = config.debug_dump_path;
   std::filesystem::create_directories(ir_dump_dir);
-  std::filesystem::path filename =
-      ir_dump_dir / (kernel_name + "_CFG" + suffix + ".txt");
+  std::filesystem::path filename = ir_dump_dir / (kernel_name + "_CFG" + suffix + ".txt");
 
   std::ofstream out_file(filename.string());
   if (!out_file) {
@@ -970,11 +891,8 @@ void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
     if (nodes[i]->empty()) {
       out_file << "empty";
     } else {
-      out_file << fmt::format(
-          "{}~{} (size={})",
-          nodes[i]->block->statements[nodes[i]->begin_location]->name(),
-          nodes[i]->block->statements[nodes[i]->end_location - 1]->name(),
-          nodes[i]->size());
+      out_file << fmt::format("{}~{} (size={})", nodes[i]->block->statements[nodes[i]->begin_location]->name(),
+                              nodes[i]->block->statements[nodes[i]->end_location - 1]->name(), nodes[i]->size());
     }
     if (!nodes[i]->prev.empty()) {
       std::vector<std::string> indices;
@@ -1056,16 +974,12 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
   for (int i = 0; i < num_nodes; i++) {
     for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
       auto stmt = nodes[i]->block->statements[j].get();
-      if ((stmt->is<MatrixPtrStmt>() &&
-           stmt->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
-          (stmt->is<MatrixPtrStmt>() &&
-           stmt->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
+      if ((stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<AllocaStmt>()) ||
+          (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<MatrixPtrStmt>()) ||
           (!after_lower_access &&
-           (stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() ||
-            stmt->is<BlockLocalPtrStmt>() || stmt->is<ThreadLocalPtrStmt>() ||
-            stmt->is<GlobalTemporaryStmt>() || stmt->is<MatrixPtrStmt>() ||
-            stmt->is<GetChStmt>() || stmt->is<MatrixOfGlobalPtrStmt>() ||
-            stmt->is<MatrixOfMatrixPtrStmt>()))) {
+           (stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<BlockLocalPtrStmt>() ||
+            stmt->is<ThreadLocalPtrStmt>() || stmt->is<GlobalTemporaryStmt>() || stmt->is<MatrixPtrStmt>() ||
+            stmt->is<GetChStmt>() || stmt->is<MatrixOfGlobalPtrStmt>() || stmt->is<MatrixOfMatrixPtrStmt>()))) {
         // TODO: unify them
         // A global pointer that may contain some data before this kernel.
         nodes[start_node]->reach_gen.insert(stmt);
@@ -1095,8 +1009,7 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
 
     now->reach_in.clear();
     for (auto prev_node : now->prev) {
-      now->reach_in.insert(prev_node->reach_out.begin(),
-                           prev_node->reach_out.end());
+      now->reach_in.insert(prev_node->reach_out.begin(), prev_node->reach_out.end());
     }
     auto old_out = std::move(now->reach_out);
     now->reach_out = now->reach_gen;
@@ -1130,9 +1043,8 @@ void ControlFlowGraph::reaching_definition_analysis(bool after_lower_access) {
   }
 }
 
-void ControlFlowGraph::live_variable_analysis(
-    bool after_lower_access,
-    const std::optional<LiveVarAnalysisConfig> &config_opt) {
+void ControlFlowGraph::live_variable_analysis(bool after_lower_access,
+                                              const std::optional<LiveVarAnalysisConfig> &config_opt) {
   // [live_variable_analysis]
   // live_gen: address loaded with no previous stored in this node. One cannot
   // load before storing so
@@ -1152,12 +1064,10 @@ void ControlFlowGraph::live_variable_analysis(
     if (stmt->is<AllocaStmt>() || stmt->is<AdStackAllocaStmt>()) {
       return false;
     }
-    if (stmt->is<MatrixPtrStmt>() &&
-        stmt->cast<MatrixPtrStmt>()->origin->is<AllocaStmt>()) {
+    if (stmt->is<MatrixPtrStmt>() && stmt->cast<MatrixPtrStmt>()->origin->is<AllocaStmt>()) {
       return false;
     }
-    if (auto *gptr = stmt->cast<GlobalPtrStmt>();
-        gptr && config_opt.has_value()) {
+    if (auto *gptr = stmt->cast<GlobalPtrStmt>(); gptr && config_opt.has_value()) {
       const bool res = (config_opt->eliminable_snodes.count(gptr->snode) == 0);
       return res;
     }
@@ -1168,8 +1078,7 @@ void ControlFlowGraph::live_variable_analysis(
     for (int i = 0; i < num_nodes; i++) {
       for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
         auto stmt = nodes[i]->block->statements[j].get();
-        for (auto store_ptr : irpass::analysis::get_store_destination(
-                 stmt, true /*get_alias*/)) {
+        for (auto store_ptr : irpass::analysis::get_store_destination(stmt, true /*get_alias*/)) {
           if (in_final_node_live_gen(store_ptr)) {
             nodes[final_node]->live_gen.insert(store_ptr);
           }
@@ -1197,8 +1106,7 @@ void ControlFlowGraph::live_variable_analysis(
 
     now->live_out.clear();
     for (auto next_node : now->next) {
-      now->live_out.insert(next_node->live_in.begin(),
-                           next_node->live_in.end());
+      now->live_out.insert(next_node->live_in.begin(), next_node->live_in.end());
     }
     auto old_in = std::move(now->live_in);
     now->live_in = now->live_gen;
@@ -1284,8 +1192,7 @@ bool ControlFlowGraph::unreachable_code_elimination() {
   return modified;
 }
 
-bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access,
-                                                bool autodiff_enabled) {
+bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access, bool autodiff_enabled) {
   // The key idea of load-store-forwarding is to find a use-define-chain,
   // which is essentially the load-store-chain in CHI IR.
   //
@@ -1302,16 +1209,14 @@ bool ControlFlowGraph::store_to_load_forwarding(bool after_lower_access,
   const int num_nodes = size();
   bool modified = false;
   for (int i = 0; i < num_nodes; i++) {
-    if (nodes[i]->store_to_load_forwarding(after_lower_access,
-                                           autodiff_enabled))
+    if (nodes[i]->store_to_load_forwarding(after_lower_access, autodiff_enabled))
       modified = true;
   }
   return modified;
 }
 
-bool ControlFlowGraph::dead_store_elimination(
-    bool after_lower_access,
-    const std::optional<LiveVarAnalysisConfig> &lva_config_opt) {
+bool ControlFlowGraph::dead_store_elimination(bool after_lower_access,
+                                              const std::optional<LiveVarAnalysisConfig> &lva_config_opt) {
   QD_AUTO_PROF;
   live_variable_analysis(after_lower_access, lva_config_opt);
   const int num_nodes = size();
@@ -1381,10 +1286,8 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
       Stmt *stmt = nodes[i]->block->statements[j].get();
       if (auto *stack = stmt->cast<AdStackAllocaStmt>()) {
         all_stacks.insert(stack);
-        max_increased_size.insert(
-            std::make_pair(stack, std::vector<int>(num_nodes, 0)));
-        increased_size.insert(
-            std::make_pair(stack, std::vector<int>(num_nodes, 0)));
+        max_increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
+        increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
       }
     }
   }
@@ -1450,16 +1353,14 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
 
       // Inside this CFGNode -- update the answer |max_size|
       const auto max_size_inside_this_node = max_increased_size[stack][node_id];
-      const auto current_max_size =
-          max_size_at_node_begin[node_id] + max_size_inside_this_node;
+      const auto current_max_size = max_size_at_node_begin[node_id] + max_size_inside_this_node;
       if (current_max_size > max_size) {
         max_size = current_max_size;
       }
       // At the end of this CFGNode -- update the state
       // |max_size_at_node_begin| of other CFGNodes
       const auto increase_in_this_node = increased_size[stack][node_id];
-      const auto current_size =
-          max_size_at_node_begin[node_id] + increase_in_this_node;
+      const auto current_size = max_size_at_node_begin[node_id] + increase_in_this_node;
       for (auto *next_node : now->next) {
         int next_node_id = node_ids[next_node];
         if (current_size > max_size_at_node_begin[next_node_id]) {
@@ -1489,9 +1390,7 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
       // with maximum capacity indeed equal to 0.
-      QD_WARN_IF(max_size == 0,
-                 "Unused autodiff stack {} should have been eliminated.",
-                 stack->name());
+      QD_WARN_IF(max_size == 0, "Unused autodiff stack {} should have been eliminated.", stack->name());
       stack->max_size = max_size;
     }
   }

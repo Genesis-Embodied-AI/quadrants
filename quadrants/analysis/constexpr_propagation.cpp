@@ -15,8 +15,7 @@ class ConstExprPropagation : public IRVisitor {
  public:
   using is_const_seed_func = std::function<bool(Stmt *)>;
 
-  explicit ConstExprPropagation(const is_const_seed_func &is_const_seed)
-      : is_const_seed_(is_const_seed) {
+  explicit ConstExprPropagation(const is_const_seed_func &is_const_seed) : is_const_seed_(is_const_seed) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -59,8 +58,7 @@ class ConstExprPropagation : public IRVisitor {
   void visit(TernaryOpStmt *stmt) override {
     if (generic_test(stmt))
       return;
-    if (is_inferred_const(stmt->op1) && is_inferred_const(stmt->op2) &&
-        is_inferred_const(stmt->op3)) {
+    if (is_inferred_const(stmt->op1) && is_inferred_const(stmt->op2) && is_inferred_const(stmt->op3)) {
       const_stmts_.insert(stmt);
     }
   }
@@ -83,9 +81,7 @@ class ConstExprPropagation : public IRVisitor {
 
   // TODO: how do we rigorously define constexpr in RangeFor loops?
 
-  static std::unordered_set<Stmt *> run(
-      Block *block,
-      const std::function<bool(Stmt *)> &is_const_seed) {
+  static std::unordered_set<Stmt *> run(Block *block, const std::function<bool(Stmt *)> &is_const_seed) {
     ConstExprPropagation prop(is_const_seed);
     block->accept(&prop);
     return prop.const_stmts_;
@@ -99,9 +95,7 @@ class ConstExprPropagation : public IRVisitor {
 }  // namespace
 
 namespace irpass::analysis {
-std::unordered_set<Stmt *> constexpr_prop(
-    Block *block,
-    std::function<bool(Stmt *)> is_const_seed) {
+std::unordered_set<Stmt *> constexpr_prop(Block *block, std::function<bool(Stmt *)> is_const_seed) {
   return ConstExprPropagation::run(block, is_const_seed);
 }
 }  // namespace irpass::analysis

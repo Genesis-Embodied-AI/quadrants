@@ -32,10 +32,8 @@ class CreateBitStructStores : public BasicStmtVisitor {
 
     // We only handle bit_struct pointers here.
 
-    auto s = Stmt::make<BitStructStoreStmt>(
-        get_ch->input_ptr,
-        std::vector<int>{get_ch->output_snode->id_in_bit_struct},
-        std::vector<Stmt *>{stmt->val});
+    auto s = Stmt::make<BitStructStoreStmt>(get_ch->input_ptr, std::vector<int>{get_ch->output_snode->id_in_bit_struct},
+                                            std::vector<Stmt *>{stmt->val});
     stmt->replace_with(VecStatement(std::move(s)));
   }
 };
@@ -60,8 +58,7 @@ class MergeBitStructStores : public BasicStmtVisitor {
 
   void visit(Block *block) override {
     auto &statements = block->statements;
-    std::unordered_map<Stmt *, std::vector<BitStructStoreStmt *>>
-        ptr_to_bit_struct_stores;
+    std::unordered_map<Stmt *, std::vector<BitStructStoreStmt *>> ptr_to_bit_struct_stores;
     std::unordered_set<Stmt *> loaded_after_store;
     std::vector<Stmt *> statements_to_delete;
     for (int i = 0; i <= (int)statements.size(); i++) {
@@ -94,8 +91,7 @@ class MergeBitStructStores : public BasicStmtVisitor {
           for (int j = 0; j < (int)stores.size() - 1; j++) {
             statements_to_delete.push_back(stores[j]);
           }
-          stores.back()->replace_with(
-              Stmt::make<BitStructStoreStmt>(ptr, ch_ids, store_values));
+          stores.back()->replace_with(Stmt::make<BitStructStoreStmt>(ptr, ch_ids, store_values));
           modified_ = true;
         }
         ptr_to_bit_struct_stores.clear();
@@ -127,8 +123,7 @@ class MergeBitStructStores : public BasicStmtVisitor {
         // Phase 1: Find and mark any global loads after bit_struct_store
         auto const &load_ops = load_stmt->src->get_operands();
         auto load_src = load_ops.empty() ? nullptr : load_ops.front();
-        if (ptr_to_bit_struct_stores.find(load_src) !=
-            ptr_to_bit_struct_stores.end()) {
+        if (ptr_to_bit_struct_stores.find(load_src) != ptr_to_bit_struct_stores.end()) {
           loaded_after_store.insert(load_src);
         }
       }
@@ -149,12 +144,10 @@ class MergeBitStructStores : public BasicStmtVisitor {
 
 class DemoteAtomicBitStructStores : public BasicStmtVisitor {
  private:
-  const std::unordered_map<OffloadedStmt *,
-                           std::unordered_map<const SNode *, GlobalPtrStmt *>>
+  const std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>>
       &uniquely_accessed_bit_structs_;
-  std::unordered_map<OffloadedStmt *,
-                     std::unordered_map<const SNode *, GlobalPtrStmt *>>::
-      const_iterator current_iterator_;
+  std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>>::const_iterator
+      current_iterator_;
   bool modified_{false};
 
  public:
@@ -162,12 +155,9 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
   OffloadedStmt *current_offloaded;
 
   explicit DemoteAtomicBitStructStores(
-      const std::unordered_map<
-          OffloadedStmt *,
-          std::unordered_map<const SNode *, GlobalPtrStmt *>>
+      const std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>>
           &uniquely_accessed_bit_structs)
-      : uniquely_accessed_bit_structs_(uniquely_accessed_bit_structs),
-        current_offloaded(nullptr) {
+      : uniquely_accessed_bit_structs_(uniquely_accessed_bit_structs), current_offloaded(nullptr) {
     allow_undefined_visitor = true;
     invoke_default_visitor = false;
   }
@@ -186,8 +176,7 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
         snode = snode->parent;
       }
       auto accessed_ptr_iterator = current_iterator_->second.find(snode);
-      if (accessed_ptr_iterator != current_iterator_->second.end() &&
-          accessed_ptr_iterator->second != nullptr) {
+      if (accessed_ptr_iterator != current_iterator_->second.end() && accessed_ptr_iterator->second != nullptr) {
         demote = true;
       }
     }
@@ -199,11 +188,9 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
 
   void visit(OffloadedStmt *stmt) override {
     current_offloaded = stmt;
-    if (stmt->task_type == OffloadedTaskType::range_for ||
-        stmt->task_type == OffloadedTaskType::mesh_for ||
+    if (stmt->task_type == OffloadedTaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
         stmt->task_type == OffloadedTaskType::struct_for) {
-      current_iterator_ =
-          uniquely_accessed_bit_structs_.find(current_offloaded);
+      current_iterator_ = uniquely_accessed_bit_structs_.find(current_offloaded);
     }
     // We don't need to visit TLS/BLS prologues/epilogues.
     if (stmt->body) {
@@ -213,9 +200,7 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
   }
 
   static bool run(IRNode *node,
-                  const std::unordered_map<
-                      OffloadedStmt *,
-                      std::unordered_map<const SNode *, GlobalPtrStmt *>>
+                  const std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>>
                       &uniquely_accessed_bit_structs) {
     DemoteAtomicBitStructStores demoter(uniquely_accessed_bit_structs);
     node->accept(&demoter);
@@ -228,9 +213,7 @@ class DemoteAtomicBitStructStores : public BasicStmtVisitor {
 namespace quadrants::lang {
 
 namespace irpass {
-void optimize_bit_struct_stores(IRNode *root,
-                                const CompileConfig &config,
-                                AnalysisManager *amgr) {
+void optimize_bit_struct_stores(IRNode *root, const CompileConfig &config, AnalysisManager *amgr) {
   QD_AUTO_PROF;
   CreateBitStructStores::run(root);
   die(root);  // remove unused GetCh

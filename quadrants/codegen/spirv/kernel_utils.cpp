@@ -43,13 +43,10 @@ std::string TaskAttributes::debug_string() const {
 }
 
 std::string TaskAttributes::BufferBind::debug_string() const {
-  return fmt::format("<type={} binding={}>",
-                     TaskAttributes::buffers_name(buffer), binding);
+  return fmt::format("<type={} binding={}>", TaskAttributes::buffers_name(buffer), binding);
 }
 
-KernelContextAttributes::KernelContextAttributes(
-    const Kernel &kernel,
-    const DeviceCapabilityConfig *caps)
+KernelContextAttributes::KernelContextAttributes(const Kernel &kernel, const DeviceCapabilityConfig *caps)
     : args_bytes_(0), rets_bytes_(0) {
   arr_access.reserve(kernel.nested_parameters.size());
   arg_attribs_vec_.reserve(kernel.nested_parameters.size());
@@ -64,8 +61,7 @@ KernelContextAttributes::KernelContextAttributes(
     aa.indices = k;
     if (ka.is_array && ka.get_dtype()->is<StructType>()) {
       auto struct_type = ka.get_dtype()->as<StructType>();
-      aa.dtype = DataType(struct_type->get_element_type(
-                              std::array{TypeFactory::DATA_PTR_POS_IN_NDARRAY}))
+      aa.dtype = DataType(struct_type->get_element_type(std::array{TypeFactory::DATA_PTR_POS_IN_NDARRAY}))
                      .ptr_removed()
                      ->as<PrimitiveType>()
                      ->type;

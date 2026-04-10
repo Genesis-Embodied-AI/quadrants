@@ -83,8 +83,7 @@ class JITModuleCPU : public JITModule {
   JITDylib *dylib_;
 
  public:
-  JITModuleCPU(JITSessionCPU *session, JITDylib *dylib)
-      : session_(session), dylib_(dylib) {
+  JITModuleCPU(JITSessionCPU *session, JITDylib *dylib) : session_(session), dylib_(dylib) {
   }
 
   void *lookup_function(const std::string &name) override;
@@ -124,9 +123,7 @@ class JITSessionCPU : public JITSession {
                         return smgr;
                       }),
 #endif
-        compile_layer_(es_,
-                       object_layer_,
-                       std::make_unique<ConcurrentIRCompiler>(JTMB)),
+        compile_layer_(es_, object_layer_, std::make_unique<ConcurrentIRCompiler>(JTMB)),
         dl_(DL),
         mangle_(es_, this->dl_),
         module_counter_(0),
@@ -167,14 +164,9 @@ class JITSessionCPU : public JITSession {
     auto dylib_expect = es_.createJITDylib(fmt::format("{}", module_counter_));
     QD_ASSERT(dylib_expect);
     auto &dylib = dylib_expect.get();
-    dylib.addGenerator(
-        cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            dl_.getGlobalPrefix())));
-    auto *thread_safe_context =
-        this->tlctx_->get_this_thread_thread_safe_context();
-    cantFail(compile_layer_.add(
-        dylib,
-        llvm::orc::ThreadSafeModule(std::move(M), *thread_safe_context)));
+    dylib.addGenerator(cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(dl_.getGlobalPrefix())));
+    auto *thread_safe_context = this->tlctx_->get_this_thread_thread_safe_context();
+    cantFail(compile_layer_.add(dylib, llvm::orc::ThreadSafeModule(std::move(M), *thread_safe_context)));
     all_libs_.push_back(&dylib);
     auto new_module = std::make_unique<JITModuleCPU>(this, &dylib);
     auto new_module_raw_ptr = new_module.get();
@@ -212,16 +204,14 @@ void *JITModuleCPU::lookup_function(const std::string &name) {
   return session_->lookup_in_module(dylib_, name);
 }
 
-std::unique_ptr<JITSession> create_llvm_jit_session_cpu(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch) {
+std::unique_ptr<JITSession> create_llvm_jit_session_cpu(QuadrantsLLVMContext *tlctx,
+                                                        const CompileConfig &config,
+                                                        Arch arch) {
   QD_ASSERT(arch_is_cpu(arch));
   auto target_info = get_host_target_info();
   auto EPC = SelfExecutorProcessControl::Create();
   QD_ASSERT(EPC);
-  return std::make_unique<JITSessionCPU>(tlctx, std::move(*EPC), config,
-                                         target_info.first, target_info.second);
+  return std::make_unique<JITSessionCPU>(tlctx, std::move(*EPC), config, target_info.first, target_info.second);
 }
 
 }  // namespace quadrants::lang

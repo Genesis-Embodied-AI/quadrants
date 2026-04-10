@@ -33,10 +33,7 @@ class BasicBlockSimplify : public IRVisitor {
                      std::set<int> &visited,
                      StructForStmt *current_struct_for,
                      const CompileConfig &config)
-      : block(block),
-        visited(visited),
-        current_struct_for(current_struct_for),
-        config(config) {
+      : block(block), visited(visited), current_struct_for(current_struct_for), config(config) {
     allow_undefined_visitor = true;
     invoke_default_visitor = false;
   }
@@ -89,8 +86,7 @@ class BasicBlockSimplify : public IRVisitor {
             auto advanced_optimization = config.advanced_optimization;
             for (int j = i + 1; j < current_stmt_id; j++) {
               if (!advanced_optimization) {
-                if (block->statements[j]
-                        ->is_container_statement()) {  // no if, while, etc..
+                if (block->statements[j]->is_container_statement()) {  // no if, while, etc..
                   has_store = true;
                   break;
                 }
@@ -99,21 +95,16 @@ class BasicBlockSimplify : public IRVisitor {
                 }
                 continue;
               }
-              if (!irpass::analysis::gather_statements(
-                       block->statements[j].get(),
-                       [&](Stmt *s) {
-                         if (auto store = s->cast<GlobalStoreStmt>())
-                           return irpass::analysis::maybe_same_address(
-                               store->dest, stmt->src);
-                         else if (auto atomic = s->cast<AtomicOpStmt>())
-                           return irpass::analysis::maybe_same_address(
-                               atomic->dest, stmt->src);
-                         else if (auto func_call = s->cast<FuncCallStmt>())
-                           return true;
-                         else
-                           return false;
-                       })
-                       .empty()) {
+              if (!irpass::analysis::gather_statements(block->statements[j].get(), [&](Stmt *s) {
+                     if (auto store = s->cast<GlobalStoreStmt>())
+                       return irpass::analysis::maybe_same_address(store->dest, stmt->src);
+                     else if (auto atomic = s->cast<AtomicOpStmt>())
+                       return irpass::analysis::maybe_same_address(atomic->dest, stmt->src);
+                     else if (auto func_call = s->cast<FuncCallStmt>())
+                       return true;
+                     else
+                       return false;
+                   }).empty()) {
                 has_store = true;
                 break;
               }
@@ -148,8 +139,7 @@ class BasicBlockSimplify : public IRVisitor {
     }
   }
   template <typename T>
-  static bool identical_vectors(const std::vector<T> &a,
-                                const std::vector<T> &b) {
+  static bool identical_vectors(const std::vector<T> &a, const std::vector<T> &b) {
     if (a.size() != b.size()) {
       return false;
     } else {
@@ -165,8 +155,7 @@ class BasicBlockSimplify : public IRVisitor {
     if (!stmt->inputs.empty() && stmt->inputs.back()->is<IntegerOffsetStmt>()) {
       auto previous_offset = stmt->inputs.back()->as<IntegerOffsetStmt>();
       // push forward offset
-      auto offset_stmt =
-          Stmt::make<IntegerOffsetStmt>(stmt, previous_offset->offset);
+      auto offset_stmt = Stmt::make<IntegerOffsetStmt>(stmt, previous_offset->offset);
 
       stmt->inputs.back() = previous_offset->input;
       stmt->replace_usages_with(offset_stmt.get());
@@ -180,10 +169,8 @@ class BasicBlockSimplify : public IRVisitor {
     auto stride_product = 1;
     for (int i = (int)stmt->inputs.size() - 1; i >= 0; i--) {
       auto stride_stmt = Stmt::make<ConstStmt>(TypedConstant(stride_product));
-      auto mul = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, stmt->inputs[i],
-                                          stride_stmt.get());
-      auto newsum =
-          Stmt::make<BinaryOpStmt>(BinaryOpType::add, sum.get(), mul.get());
+      auto mul = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, stmt->inputs[i], stride_stmt.get());
+      auto newsum = Stmt::make<BinaryOpStmt>(BinaryOpType::add, sum.get(), mul.get());
       modifier.insert_before(stmt, std::move(sum));
       sum = std::move(newsum);
       modifier.insert_before(stmt, std::move(stride_stmt));
@@ -195,19 +182,15 @@ class BasicBlockSimplify : public IRVisitor {
     bool debug = config.debug;
     if (debug) {
       auto zero = Stmt::make<ConstStmt>(TypedConstant(0));
-      auto check_sum =
-          Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ge, sum.get(), zero.get());
-      auto assert = Stmt::make<AssertStmt>(
-          check_sum.get(),
-          "The indices provided are too big!\n" + stmt->get_tb(),
-          std::vector<Stmt *>());
+      auto check_sum = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ge, sum.get(), zero.get());
+      auto assert = Stmt::make<AssertStmt>(check_sum.get(), "The indices provided are too big!\n" + stmt->get_tb(),
+                                           std::vector<Stmt *>());
       // Because Quadrants's assertion is checked only after the execution of
       // the kernel, when the linear index overflows and goes negative, we have
       // to replace that with 0 to make sure that the rest of the kernel can
       // still complete. Otherwise, Quadrants would crash due to illegal mem
       // address.
-      auto select = Stmt::make<TernaryOpStmt>(
-          TernaryOpType::select, check_sum.get(), sum.get(), zero.get());
+      auto select = Stmt::make<TernaryOpStmt>(TernaryOpType::select, check_sum.get(), sum.get(), zero.get());
 
       modifier.insert_before(stmt, std::move(zero));
       modifier.insert_before(stmt, std::move(sum));
@@ -240,8 +223,8 @@ class BasicBlockSimplify : public IRVisitor {
                   snode->ch[i]->dt->is_primitive(PrimitiveTypeID::f32));
       }
 
-      auto offset_stmt = Stmt::make<IntegerOffsetStmt>(
-          stmt, previous_offset->offset * sizeof(int32) * (snode->ch.size()));
+      auto offset_stmt =
+          Stmt::make<IntegerOffsetStmt>(stmt, previous_offset->offset * sizeof(int32) * (snode->ch.size()));
 
       stmt->input_index = previous_offset->input;
       stmt->replace_usages_with(offset_stmt.get());
@@ -262,8 +245,7 @@ class BasicBlockSimplify : public IRVisitor {
       // push forward offset
 
       // auto snode = stmt->input_snode;
-      auto offset_stmt = Stmt::make<IntegerOffsetStmt>(
-          stmt, stmt->chid * sizeof(int32) + previous_offset->offset);
+      auto offset_stmt = Stmt::make<IntegerOffsetStmt>(stmt, stmt->chid * sizeof(int32) + previous_offset->offset);
 
       stmt->input_ptr = previous_offset->input;
       stmt->replace_usages_with(offset_stmt.get());
@@ -289,16 +271,14 @@ class BasicBlockSimplify : public IRVisitor {
     return stmt->is<GlobalStoreStmt>() || stmt->is<AtomicOpStmt>();
   }
 
-  static bool is_atomic_value_used(const stmt_vector &clause,
-                                   int atomic_stmt_i) {
+  static bool is_atomic_value_used(const stmt_vector &clause, int atomic_stmt_i) {
     // Cast type to check precondition
     const auto *stmt = clause[atomic_stmt_i]->as<AtomicOpStmt>();
     auto alloca = stmt->dest;
 
     for (std::size_t i = atomic_stmt_i + 1; i < clause.size(); ++i) {
       for (const auto &op : clause[i]->get_operands()) {
-        if (op && (op->instance_id == stmt->instance_id ||
-                   op->instance_id == alloca->instance_id)) {
+        if (op && (op->instance_id == stmt->instance_id || op->instance_id == alloca->instance_id)) {
           return true;
         }
       }
@@ -316,8 +296,7 @@ class BasicBlockSimplify : public IRVisitor {
 
       bool global_state_changed = false;
       for (int i = 0; i < (int)clause.size() && plain_clause; i++) {
-        bool has_side_effects = clause[i]->is_container_statement() ||
-                                clause[i]->has_global_side_effect();
+        bool has_side_effects = clause[i]->is_container_statement() || clause[i]->has_global_side_effect();
 
         if (global_state_changed && clause[i]->is<GlobalLoadStmt>()) {
           // This clause cannot be trivially simplified, since there's a global
@@ -325,8 +304,7 @@ class BasicBlockSimplify : public IRVisitor {
           plain_clause = false;
         }
 
-        if (clause[i]->is<GlobalStoreStmt>() ||
-            clause[i]->is<LocalStoreStmt>() || !has_side_effects) {
+        if (clause[i]->is<GlobalStoreStmt>() || clause[i]->is<LocalStoreStmt>() || !has_side_effects) {
           // This stmt can be kept.
         } else if (clause[i]->is<AtomicOpStmt>()) {
           plain_clause = plain_clause && !is_atomic_value_used(clause, i);
@@ -347,10 +325,9 @@ class BasicBlockSimplify : public IRVisitor {
             auto store = clause[i]->as<LocalStoreStmt>();
             auto load = Stmt::make<LocalLoadStmt>(store->dest);
             modifier.type_check(load.get(), config);
-            auto select = Stmt::make<TernaryOpStmt>(
-                TernaryOpType::select, if_stmt->cond,
-                true_branch ? store->val : load.get(),
-                true_branch ? load.get() : store->val);
+            auto select =
+                Stmt::make<TernaryOpStmt>(TernaryOpType::select, if_stmt->cond, true_branch ? store->val : load.get(),
+                                          true_branch ? load.get() : store->val);
             modifier.type_check(select.get(), config);
             store->val = select.get();
             modifier.insert_before(if_stmt, std::move(load));
@@ -376,13 +353,11 @@ class BasicBlockSimplify : public IRVisitor {
     };
 
     if (config.flatten_if) {
-      if (if_stmt->true_statements &&
-          flatten(if_stmt->true_statements->statements, true)) {
+      if (if_stmt->true_statements && flatten(if_stmt->true_statements->statements, true)) {
         modifier.mark_as_modified();
         return;
       }
-      if (if_stmt->false_statements &&
-          flatten(if_stmt->false_statements->statements, false)) {
+      if (if_stmt->false_statements && flatten(if_stmt->false_statements->statements, false)) {
         modifier.mark_as_modified();
         return;
       }
@@ -412,12 +387,10 @@ class BasicBlockSimplify : public IRVisitor {
     if (config.advanced_optimization) {
       // Merge adjacent if's with the identical condition.
       // TODO: What about IfStmt::true_mask and IfStmt::false_mask?
-      if (current_stmt_id < block->size() - 1 &&
-          block->statements[current_stmt_id + 1]->is<IfStmt>()) {
+      if (current_stmt_id < block->size() - 1 && block->statements[current_stmt_id + 1]->is<IfStmt>()) {
         auto bstmt = block->statements[current_stmt_id + 1]->as<IfStmt>();
         if (bstmt->cond == if_stmt->cond) {
-          auto concatenate = [](std::unique_ptr<Block> &clause1,
-                                std::unique_ptr<Block> &clause2) {
+          auto concatenate = [](std::unique_ptr<Block> &clause1, std::unique_ptr<Block> &clause2) {
             if (clause1 == nullptr) {
               clause1 = std::move(clause2);
               return;
@@ -524,25 +497,19 @@ bool simplify(IRNode *root, const CompileConfig &config) {
   return modified;
 }
 
-void full_simplify(IRNode *root,
-                   const CompileConfig &config,
-                   const FullSimplifyPass::Args &args) {
-  auto print = make_pass_printer(args.verbose, config.print_ir_dbg_info,
-                                 args.kernel_name + ".simplify", root);
+void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplifyPass::Args &args) {
+  auto print = make_pass_printer(args.verbose, config.print_ir_dbg_info, args.kernel_name + ".simplify", root);
   QD_AUTO_PROF;
 
   // Track which call to full_simplify this is, for debugging purposes.
   static int call_counter = 0;
   int this_call = call_counter++;
   const char *dump_simplify_env = std::getenv(DUMP_SIMPLIFY_ENV.data());
-  bool should_dump =
-      (dump_simplify_env && std::string(dump_simplify_env) == "1");
+  bool should_dump = (dump_simplify_env && std::string(dump_simplify_env) == "1");
   auto dump_step = [&](const std::string &step_name, int iteration) {
     std::filesystem::path ir_dump_dir = config.debug_dump_path;
-    std::filesystem::path filename =
-        ir_dump_dir /
-        (args.kernel_name + ".simplify_I_call" + std::to_string(this_call) +
-         "_iter" + std::to_string(iteration) + "_" + step_name + ".ir");
+    std::filesystem::path filename = ir_dump_dir / (args.kernel_name + ".simplify_I_call" + std::to_string(this_call) +
+                                                    "_iter" + std::to_string(iteration) + "_" + step_name + ".ir");
     std::string ir_str;
     irpass::print(root, &ir_str);
     std::ofstream ofs(filename);
@@ -603,10 +570,9 @@ void full_simplify(IRNode *root,
       // Don't do this time-consuming optimization pass again if the IR is
       // not modified.
       if (config.opt_level > 0 && first_iteration && config.cfg_optimization &&
-          cfg_optimization(
-              config, root, args.after_lower_access, args.autodiff_enabled,
-              !config.real_matrix_scalarize && !config.force_scalarize_matrix,
-              std::nullopt, args.kernel_name, args.phase))
+          cfg_optimization(config, root, args.after_lower_access, args.autodiff_enabled,
+                           !config.real_matrix_scalarize && !config.force_scalarize_matrix, std::nullopt,
+                           args.kernel_name, args.phase))
         modified = true;
       if (should_dump)
         dump_step("12_cfg_optimization", iteration);

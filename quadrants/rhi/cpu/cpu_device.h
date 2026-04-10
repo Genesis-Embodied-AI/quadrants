@@ -22,52 +22,26 @@ class CpuCommandList : public CommandList {
   }
 
   void bind_pipeline(Pipeline *p) noexcept override { QD_NOT_IMPLEMENTED };
-  RhiResult bind_shader_resources(ShaderResourceSet *res,
-                                  int set_index = 0) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
-  RhiResult bind_raster_resources(RasterResources *res) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
-  void buffer_barrier(DevicePtr ptr, size_t size) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
-  void buffer_barrier(DeviceAllocation alloc) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
+  RhiResult bind_shader_resources(ShaderResourceSet *res, int set_index = 0) noexcept override { QD_NOT_IMPLEMENTED };
+  RhiResult bind_raster_resources(RasterResources *res) noexcept override { QD_NOT_IMPLEMENTED };
+  void buffer_barrier(DevicePtr ptr, size_t size) noexcept override { QD_NOT_IMPLEMENTED };
+  void buffer_barrier(DeviceAllocation alloc) noexcept override { QD_NOT_IMPLEMENTED };
   void memory_barrier() noexcept override { QD_NOT_IMPLEMENTED };
-  void buffer_copy(DevicePtr dst,
-                   DevicePtr src,
-                   size_t size) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
-  void buffer_fill(DevicePtr ptr,
-                   size_t size,
-                   uint32_t data) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
-  RhiResult dispatch(uint32_t x,
-                     uint32_t y = 1,
-                     uint32_t z = 1) noexcept override {
-    QD_NOT_IMPLEMENTED
-  };
+  void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept override { QD_NOT_IMPLEMENTED };
+  void buffer_fill(DevicePtr ptr, size_t size, uint32_t data) noexcept override { QD_NOT_IMPLEMENTED };
+  RhiResult dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1) noexcept override { QD_NOT_IMPLEMENTED };
 };
 
 class CpuStream : public Stream {
  public:
   ~CpuStream() override {};
 
-  RhiResult new_command_list(CommandList **out_cmdlist) noexcept override {
+  RhiResult new_command_list(CommandList **out_cmdlist) noexcept override { QD_NOT_IMPLEMENTED };
+  StreamSemaphore submit(CommandList *cmdlist, const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
     QD_NOT_IMPLEMENTED
   };
-  StreamSemaphore submit(
-      CommandList *cmdlist,
-      const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
-    QD_NOT_IMPLEMENTED
-  };
-  StreamSemaphore submit_synced(
-      CommandList *cmdlist,
-      const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
+  StreamSemaphore submit_synced(CommandList *cmdlist,
+                                const std::vector<StreamSemaphore> &wait_semaphores = {}) override {
     QD_NOT_IMPLEMENTED
   };
 
@@ -87,26 +61,19 @@ class CpuDevice : public LlvmDevice {
   CpuDevice();
   ~CpuDevice() override {};
 
-  RhiResult allocate_memory(const AllocParams &params,
-                            DeviceAllocation *out_devalloc) override;
-  DeviceAllocation allocate_memory_runtime(
-      const LlvmRuntimeAllocParams &params) override;
+  RhiResult allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) override;
+  DeviceAllocation allocate_memory_runtime(const LlvmRuntimeAllocParams &params) override;
   void dealloc_memory(DeviceAllocation handle) override;
 
-  uint64_t *allocate_llvm_runtime_memory_jit(
-      const LlvmRuntimeAllocParams &params) override;
+  uint64_t *allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) override;
 
-  RhiResult upload_data(DevicePtr *device_ptr,
-                        const void **data,
-                        size_t *size,
-                        int num_alloc = 1) noexcept override;
+  RhiResult upload_data(DevicePtr *device_ptr, const void **data, size_t *size, int num_alloc = 1) noexcept override;
 
-  RhiResult readback_data(
-      DevicePtr *device_ptr,
-      void **data,
-      size_t *size,
-      int num_alloc = 1,
-      const std::vector<StreamSemaphore> &wait_sema = {}) noexcept override;
+  RhiResult readback_data(DevicePtr *device_ptr,
+                          void **data,
+                          size_t *size,
+                          int num_alloc = 1,
+                          const std::vector<StreamSemaphore> &wait_sema = {}) noexcept override;
 
   ShaderResourceSet *create_resource_set() override { QD_NOT_IMPLEMENTED };
 

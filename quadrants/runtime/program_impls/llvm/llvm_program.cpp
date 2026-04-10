@@ -25,24 +25,18 @@
 #include "quadrants/codegen/llvm/compiled_kernel_data.h"
 
 namespace quadrants::lang {
-LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_,
-                                 KernelProfilerBase *profiler)
-    : ProgramImpl(config_),
-      compilation_workers("compile",
-                          config_.print_ir ? 1 : config_.num_compile_threads) {
-  runtime_exec_ =
-      std::make_unique<LlvmRuntimeExecutor>(config_, profiler, this);
+LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *profiler)
+    : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
+  runtime_exec_ = std::make_unique<LlvmRuntimeExecutor>(config_, profiler, this);
   cache_data_ = std::make_unique<LlvmOfflineCache>();
 }
 
-std::unique_ptr<StructCompiler> LlvmProgramImpl::compile_snode_tree_types_impl(
-    SNodeTree *tree) {
+std::unique_ptr<StructCompiler> LlvmProgramImpl::compile_snode_tree_types_impl(SNodeTree *tree) {
   auto *const root = tree->root();
   std::unique_ptr<StructCompiler> struct_compiler{nullptr};
   auto module = runtime_exec_->llvm_context_.get()->new_module("struct");
-  struct_compiler = std::make_unique<StructCompilerLLVM>(
-      arch_is_cpu(config->arch) ? host_arch() : config->arch, this,
-      std::move(module), tree->id());
+  struct_compiler = std::make_unique<StructCompilerLLVM>(arch_is_cpu(config->arch) ? host_arch() : config->arch, this,
+                                                         std::move(module), tree->id());
   struct_compiler->run(*root);
   ++num_snode_trees_processed_;
   return struct_compiler;
@@ -57,20 +51,15 @@ void LlvmProgramImpl::compile_snode_tree_types(SNodeTree *tree) {
   cache_field(snode_tree_id, root_id, *struct_compiler);
 }
 
-void LlvmProgramImpl::materialize_snode_tree(SNodeTree *tree,
-                                             uint64 *result_buffer) {
+void LlvmProgramImpl::materialize_snode_tree(SNodeTree *tree, uint64 *result_buffer) {
   compile_snode_tree_types(tree);
   int snode_tree_id = tree->id();
 
-  QD_ASSERT(cache_data_->fields.find(snode_tree_id) !=
-            cache_data_->fields.end());
-  initialize_llvm_runtime_snodes(cache_data_->fields.at(snode_tree_id),
-                                 result_buffer);
+  QD_ASSERT(cache_data_->fields.find(snode_tree_id) != cache_data_->fields.end());
+  initialize_llvm_runtime_snodes(cache_data_->fields.at(snode_tree_id), result_buffer);
 }
 
-void LlvmProgramImpl::cache_field(int snode_tree_id,
-                                  int root_id,
-                                  const StructCompiler &struct_compiler) {
+void LlvmProgramImpl::cache_field(int snode_tree_id, int root_id, const StructCompiler &struct_compiler) {
   if (cache_data_->fields.find(snode_tree_id) != cache_data_->fields.end()) {
     // [TODO] check and update the Cache, instead of simply return.
     return;
@@ -121,8 +110,7 @@ std::unique_ptr<KernelLauncher> LlvmProgramImpl::make_kernel_launcher() {
 }
 
 LlvmProgramImpl *get_llvm_program(Program *prog) {
-  LlvmProgramImpl *llvm_prog =
-      dynamic_cast<LlvmProgramImpl *>(prog->get_program_impl());
+  LlvmProgramImpl *llvm_prog = dynamic_cast<LlvmProgramImpl *>(prog->get_program_impl());
   QD_ASSERT(llvm_prog != nullptr);
   return llvm_prog;
 }
