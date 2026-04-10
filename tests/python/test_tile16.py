@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang.simt.tile16 import _TILE, _make_tile16x16
+from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
 
 from tests import test_utils
 
