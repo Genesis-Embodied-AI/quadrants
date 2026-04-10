@@ -23,23 +23,32 @@ _MAX_PROBES = 100_000
 
 _lock = threading.Lock()
 _cov_field: Any = None
+_cov_field_prog: Any = None  # tracks which Program instance owns _cov_field
 _probe_counter: int = 0
 # {probe_id: (filepath, absolute_lineno)}
 _probe_map: dict[int, tuple[str, int]] = {}
 
 
 def ensure_field_allocated() -> None:
-    global _cov_field
-    if _cov_field is not None:
+    """Allocate (or re-allocate after qd.init()) the global coverage field."""
+    global _cov_field, _cov_field_prog
+    from quadrants.lang.impl import get_runtime
+    current_prog = get_runtime()._prog
+    if _cov_field is not None and _cov_field_prog is current_prog:
         return
     with _lock:
-        if _cov_field is not None:
+        current_prog = get_runtime()._prog
+        if _cov_field is not None and _cov_field_prog is current_prog:
             return
         import quadrants as qd
         _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
+        _cov_field_prog = current_prog
 
 
 def get_field() -> Any:
+    from quadrants.lang.impl import get_runtime
+    if _cov_field_prog is not get_runtime()._prog:
+        return None
     return _cov_field
 
 
