@@ -144,7 +144,7 @@ def test_kernel_coverage_branches_e2e():
     assert len(not_taken_probes) > 0, "The else branch should not have been reached"
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan])
+@test_utils.test(arch=qd.gpu)
 def test_kernel_coverage_simt_e2e():
     """Verify coverage probes track branches with block.sync() and subgroup shuffle.
 
