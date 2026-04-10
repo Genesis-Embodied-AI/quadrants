@@ -332,8 +332,9 @@ class ASTTransformerFuncContext:
             found_name = True
         elif name in self.global_vars:
             var = self.global_vars[name]
-            reason = f"{name} is in global vars, therefore violates pure"
-            violates_pure = True
+            if name != "_qd_cov":
+                reason = f"{name} is in global vars, therefore violates pure"
+                violates_pure = True
             found_name = True
             if self.raise_on_templated_floats and isinstance(var, float):
                 raise ValueError("Not permitted to access floats as global values")
