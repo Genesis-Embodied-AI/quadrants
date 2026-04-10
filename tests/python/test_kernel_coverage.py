@@ -37,9 +37,9 @@ def test_ast_rewriter_inserts_probes():
     tree = rewriter.visit(tree)
 
     assert rewriter.next_probe_id == 3
-    assert (0, ("test.py", 12)) in rewriter.probe_map.items()
-    assert (1, ("test.py", 13)) in rewriter.probe_map.items()
-    assert (2, ("test.py", 14)) in rewriter.probe_map.items()
+    assert (0, ("test.py", 11)) in rewriter.probe_map.items()
+    assert (1, ("test.py", 12)) in rewriter.probe_map.items()
+    assert (2, ("test.py", 13)) in rewriter.probe_map.items()
 
 
 def test_ast_rewriter_branches():
