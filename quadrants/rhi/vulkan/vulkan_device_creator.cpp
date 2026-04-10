@@ -287,17 +287,13 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 //   vkCreateInstance (with a Vulkan 1.0 fallback on
 //   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
 //   VulkanLoader singleton for future reuse.
-void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
-                                          bool manual_create) {
+void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
   // Discover instance extensions and set capability flags on ti_device_.
   // This must run every cycle because ti_device_ is freshly created.
   uint32_t num_instance_extensions = 0;
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
-                                         nullptr);
-  std::vector<VkExtensionProperties> supported_extensions(
-      num_instance_extensions);
-  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions,
-                                         supported_extensions.data());
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, nullptr);
+  std::vector<VkExtensionProperties> supported_extensions(num_instance_extensions);
+  vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, supported_extensions.data());
 
   for (auto &ext : supported_extensions) {
     std::string name = ext.extensionName;
@@ -373,11 +369,9 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version,
 
   for (auto &ext : supported_extensions) {
     std::string name = ext.extensionName;
-    if (name == VK_KHR_SURFACE_EXTENSION_NAME ||
-        name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME ||
+    if (name == VK_KHR_SURFACE_EXTENSION_NAME || name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME ||
         name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME ||
-        name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME ||
-        name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
+        name == VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME || name == VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
       extensions.insert(name);
     }
   }
