@@ -124,6 +124,112 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_clamp_to_array_rows(qd_dtype):
+    """Load from an array shorter than 16 rows. Rows beyond arr height should be zero."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (NROWS, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, 0, 0, _TILE, _TILE)
+            t._store(dst_arr, 0, 0, _TILE, _TILE)
+
+    data = np.arange(NROWS * _TILE, dtype=np_dtype).reshape(NROWS, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[:NROWS, :], data)
+    np.testing.assert_allclose(result[NROWS:, :], 0.0)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_store_clamp_to_array_rows(qd_dtype):
+    """Store to an array shorter than 16 rows. Must not write out of bounds."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (NROWS, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, 0, 0, _TILE, _TILE)
+            t._store(dst_arr, 0, 0, _TILE, _TILE)
+
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result, data[:NROWS, :])
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load3d_clamp_to_array_rows(qd_dtype):
+    """Load from a 3D array shorter than 16 rows. Extra tile rows should be zero."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (1, NROWS, _TILE))
+    dst = qd.ndarray(qd_dtype, (1, _TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load3d(src_arr, 0, 0, 0, _TILE, _TILE)
+            t._store3d(dst_arr, 0, 0, 0, _TILE, _TILE)
+
+    data = np.arange(NROWS * _TILE, dtype=np_dtype).reshape(1, NROWS, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[0, :NROWS, :], data[0])
+    np.testing.assert_allclose(result[0, NROWS:, :], 0.0)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_store3d_clamp_to_array_rows(qd_dtype):
+    """Store to a 3D array shorter than 16 rows. Must not write out of bounds."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    NROWS = 10
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (1, _TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (1, NROWS, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load3d(src_arr, 0, 0, 0, _TILE, _TILE)
+            t._store3d(dst_arr, 0, 0, 0, _TILE, _TILE)
+
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(1, _TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    result = dst.to_numpy()
+    np.testing.assert_allclose(result[0], data[0, :NROWS, :])
+
+
 @pytest.mark.parametrize(
     "batch, src_row, src_col, ncols, nrows",
     [
