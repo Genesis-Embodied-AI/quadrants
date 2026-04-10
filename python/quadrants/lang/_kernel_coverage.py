@@ -15,7 +15,7 @@ import atexit
 import os
 import threading
 
-from coverage import CoverageData
+from coverage import CoverageData  # type: ignore[import-not-found]
 
 import quadrants as qd
 from quadrants.lang.impl import PyQuadrants, get_runtime
