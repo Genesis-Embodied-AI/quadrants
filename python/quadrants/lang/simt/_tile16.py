@@ -1,5 +1,4 @@
-# type: ignore
-
+# pyright: reportInvalidTypeForm=false
 """
 Internal implementation of register-resident 16x16 tile operations.
 
@@ -303,15 +302,15 @@ def _make_tile16x16_class(dtype):
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile16x16)
-    result.SIZE = _TILE
-    result._quadrants_internal = True
-    result.zeros = result
+    result.SIZE = _TILE  # type: ignore[reportAttributeAccessIssue]
+    result._quadrants_internal = True  # type: ignore[reportAttributeAccessIssue]
+    result.zeros = result  # type: ignore[reportAttributeAccessIssue]
 
     @qd.func
     def _eye():
         t = result()
-        t._eye_()
+        t._eye_()  # type: ignore[reportAttributeAccessIssue]
         return t
 
-    result.eye = _eye
+    result.eye = _eye  # type: ignore[reportAttributeAccessIssue]
     return result
