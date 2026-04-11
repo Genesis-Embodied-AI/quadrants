@@ -24,8 +24,9 @@ python tests/run_tests.py -v -r 3 -m "not needs_torch" -k "not ($NO_KCOV)" --cov
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 python tests/run_tests.py -v -r 3 -m needs_torch --coverage --cov-append
 
-# Merge kernel coverage data into the main .coverage produced by pytest-cov
-coverage combine --append .coverage.kernel 2>/dev/null || true
+# Merge per-worker kernel coverage data into the main .coverage produced by pytest-cov
+# Each xdist worker writes .coverage.kernel.<pid> to avoid SQLite races
+coverage combine --append .coverage.kernel.* 2>/dev/null || true
 
 # Generate coverage reports
 coverage xml -o coverage.xml

@@ -135,24 +135,10 @@ def flush() -> None:
     if not _accumulated_lines:
         return
 
-    kernel_path = ".coverage.kernel"
+    kernel_path = f".coverage.kernel.{os.getpid()}"
     use_arcs = _detect_arc_mode()
 
-    # Read any pre-existing kernel coverage data (from a prior test phase)
     merged_lines: dict[str, set[int]] = {}
-    if os.path.exists(kernel_path):
-        try:
-            existing = CoverageData(basename=kernel_path)
-            existing.read()
-            for f in existing.measured_files():
-                merged_lines[f] = set(existing.lines(f) or [])
-        except Exception:
-            pass
-        try:
-            os.remove(kernel_path)
-        except FileNotFoundError:
-            pass
-
     for filepath, lines in _accumulated_lines.items():
         merged_lines.setdefault(filepath, set()).update(lines)
 
