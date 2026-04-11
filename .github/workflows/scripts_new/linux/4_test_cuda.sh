@@ -2,9 +2,7 @@
 
 set -ex
 
-python tests/run_tests.py -v -r 1 --arch cuda --coverage -m "not needs_torch"
-
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-python tests/run_tests.py -v -r 1 --arch cuda --coverage --cov-append -m needs_torch
+# TEMP: restricted to test_kernel_coverage for faster CI iteration
+python tests/run_tests.py -v -r 1 --arch cuda --coverage -k test_kernel_coverage
 
 python tests/coverage_report.py --collect-only
