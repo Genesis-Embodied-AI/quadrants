@@ -134,6 +134,6 @@ jobs:
             --coverage-xml $COV_XMLS \
             --format markdown > coverage-comment.md
       - name: Post coverage comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          path: coverage-comment.md
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file coverage-comment.md
+        env:
+          GH_TOKEN: ${{ github.token }}
