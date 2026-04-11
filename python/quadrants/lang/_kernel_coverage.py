@@ -117,13 +117,14 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
 def _detect_arc_mode() -> bool:
     """Detect whether pytest-cov wrote branch (arc) data by reading .coverage.
 
-    Defaults to True (arc mode) when .coverage doesn't exist yet, since
-    run_tests.py --coverage always enables --cov-branch.  Writing arcs is
-    forward-compatible: coverage combine can merge arc data with arc data.
+    Defaults to True (arc mode) when .coverage doesn't exist or is empty,
+    since run_tests.py --coverage always enables --cov-branch.
     """
     try:
         cd = CoverageData()
         cd.read()
+        if not cd.measured_files():
+            return True
         return cd.has_arcs()
     except Exception:
         return True
