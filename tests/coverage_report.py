@@ -207,11 +207,20 @@ def _print_markdown(files_report, total_hit, total_miss, total_pct):
     if overall:
         print(f"| Overall project coverage | {overall} |")
     print()
-    print("### Changed files\n")
+    print(f"**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered\n")
     for fr in files_report:
-        missing_str = f": Missing lines {_format_ranges(fr['missing'])}" if fr["missing"] else ""
-        print(f"- {fr['filename']} ({fr['pct']:.0f}%){missing_str}")
-    print(f"\n**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered")
+        icon = "🟢" if fr["pct"] >= 80 else "🔴"
+        print(f"<details><summary>{icon} <code>{fr['filename']}</code> ({fr['pct']:.0f}%)</summary>\n")
+        print("```")
+        for lineno, text, status in fr["lines"]:
+            if status == "hit":
+                marker = "✓"
+            elif status == "miss":
+                marker = "✗"
+            else:
+                marker = " "
+            print(f"{marker} {lineno:4d}  {text}")
+        print("```\n</details>\n")
 
 
 def _write_html(files_report, total_hit, total_miss, total_pct, output_path=None):
