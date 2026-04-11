@@ -107,7 +107,7 @@ def get_covered_lines(xml_paths):
     return result
 
 
-def generate_report(compare_branch, coverage_xmls, output_format="terminal"):
+def generate_report(compare_branch, coverage_xmls, output_format="terminal", output_path=None):
     """Generate the diff coverage report."""
     diff_lines = get_diff_lines(compare_branch)
     coverage = get_covered_lines(coverage_xmls)
@@ -167,7 +167,7 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal"):
     elif output_format == "markdown":
         _print_markdown(files_report, total_hit, total_miss, total_pct)
     elif output_format == "html":
-        _write_html(files_report, total_hit, total_miss, total_pct)
+        _write_html(files_report, total_hit, total_miss, total_pct, output_path=output_path)
 
     return total_pct
 
@@ -214,14 +214,15 @@ def _print_markdown(files_report, total_hit, total_miss, total_pct):
     print(f"\n**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered")
 
 
-def _write_html(files_report, total_hit, total_miss, total_pct):
+def _write_html(files_report, total_hit, total_miss, total_pct, output_path=None):
     import html as html_mod
 
-    out_path = REPO_ROOT / "coverage-report.html"
+    out_path = Path(output_path) if output_path else REPO_ROOT / "coverage-report.html"
     overall = _get_overall_coverage()
 
     lines = []
-    lines.append("""<!DOCTYPE html>
+    lines.append(
+        """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Diff Coverage Report</title>
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
@@ -248,20 +249,17 @@ pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overf
 .status-hit { color: #4ec9b0; }
 .status-miss { color: #f44747; }
 </style></head><body>
-<h1>Diff Coverage Report</h1>""")
+<h1>Diff Coverage Report</h1>"""
+    )
 
     lines.append('<table class="summary"><tr><th>Metric</th><th>Value</th></tr>')
     pct_cls = "pct-good" if total_pct >= 80 else "pct-bad"
     lines.append(
-        f'<tr><td>Diff coverage (changed lines)</td>'
-        f'<td class="{pct_cls}"><b>{total_pct:.0f}%</b></td></tr>'
+        f"<tr><td>Diff coverage (changed lines)</td>" f'<td class="{pct_cls}"><b>{total_pct:.0f}%</b></td></tr>'
     )
     if overall:
         lines.append(f"<tr><td>Overall project coverage</td><td>{overall}</td></tr>")
-    lines.append(
-        f"<tr><td>Total lines</td><td>{total_hit + total_miss} "
-        f"({total_miss} missing)</td></tr></table>"
-    )
+    lines.append(f"<tr><td>Total lines</td><td>{total_hit + total_miss} " f"({total_miss} missing)</td></tr></table>")
 
     for fr in files_report:
         pct_cls = "pct-good" if fr["pct"] >= 80 else "pct-bad"
@@ -283,10 +281,7 @@ pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overf
             else:
                 icon = '<span class="status"> </span>'
                 cls = "no-data"
-            lines.append(
-                f'<span class="line {cls}">'
-                f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>'
-            )
+            lines.append(f'<span class="line {cls}">' f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>')
         lines.append("</pre></details>")
 
     lines.append("</body></html>")
@@ -358,6 +353,12 @@ def main():
         choices=["html", "terminal", "annotated", "markdown"],
         help="Output format (default: html)",
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Output file path for HTML format (default: coverage-report.html in repo root)",
+    )
 
     args = parser.parse_args()
 
@@ -374,7 +375,7 @@ def main():
         print("No coverage.xml found. Run tests first or specify --coverage-xml.", file=sys.stderr)
         sys.exit(1)
 
-    generate_report(args.compare_branch, xml_paths, args.output_format)
+    generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
     return 0
 
 
