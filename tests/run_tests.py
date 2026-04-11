@@ -37,7 +37,10 @@ def _test_python(args, default_dir="python"):
         pytest_args += ["--reruns", args.rerun]
     try:
         if args.coverage:
-            pytest_args += ["--cov-branch", "--cov=python/quadrants"]
+            import quadrants as _qd
+
+            _cov_src = os.path.dirname(_qd.__file__)
+            pytest_args += ["--cov-branch", f"--cov={_cov_src}"]
         if args.cov_append:
             pytest_args += ["--cov-append"]
         if args.keys:

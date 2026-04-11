@@ -24,9 +24,10 @@ python tests/run_tests.py -v -r 3 -m "not needs_torch" -k "not ($NO_KCOV)" --cov
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 python tests/run_tests.py -v -r 3 -m needs_torch --coverage --cov-append
 
-# Merge per-worker kernel coverage data into the main .coverage produced by pytest-cov
-# Each xdist worker writes _qd_kcov.<pid> (not .coverage.* to avoid pytest-cov conflicts)
-coverage combine --append _qd_kcov.* 2>/dev/null || true
+# Remap paths (site-packages → python/quadrants) and merge kernel coverage data.
+# coverage combine applies [tool.coverage.paths] from pyproject.toml.
+mv .coverage .coverage.pytest
+coverage combine .coverage.pytest _qd_kcov.* 2>/dev/null || coverage combine .coverage.pytest
 
 # Generate coverage reports (--ignore-errors skips temp-file sources from kernel probes)
 coverage xml -o coverage.xml --ignore-errors

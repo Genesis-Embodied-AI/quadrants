@@ -19,8 +19,9 @@ python tests/run_tests.py -v -r 1 --arch cuda -m "not needs_torch" -k "not ($NO_
 pip install torch --index-url https://download.pytorch.org/whl/cu128
 python tests/run_tests.py -v -r 1 --arch cuda -m needs_torch --coverage --cov-append
 
-# Merge per-worker kernel coverage data into the main .coverage
-coverage combine --append _qd_kcov.* 2>/dev/null || true
+# Remap paths (site-packages → python/quadrants) and merge kernel coverage data.
+mv .coverage .coverage.pytest
+coverage combine .coverage.pytest _qd_kcov.* 2>/dev/null || coverage combine .coverage.pytest
 
 # Generate coverage XML for merging (--ignore-errors skips temp-file sources from kernel probes)
 coverage xml -o coverage.xml --ignore-errors
