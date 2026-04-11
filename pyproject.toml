@@ -120,6 +120,12 @@ requires = [
 # things, without doing full c++ build
 build-backend = "setuptools.build_meta"
 
+[tool.coverage.paths]
+source = [
+    "python/quadrants",
+    "*/site-packages/quadrants",
+]
+
 [tool.coverage.report]
 exclude_also = [
     "@qd\\.func",
