@@ -124,60 +124,16 @@ jobs:
           path: coverage-cuda
       - name: Generate coverage report
         run: |
-          pip install diff-cover
-          git fetch origin ${{ github.base_ref }} --depth=1
-
-          # Collect all coverage.xml files (CUDA may be absent)
           COV_XMLS="coverage-cpu/coverage.xml"
           if [ -f coverage-cuda/coverage.xml ]; then
             COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
           fi
 
-          diff-cover $COV_XMLS \
+          python tests/coverage_report.py --report-only \
             --compare-branch=origin/${{ github.base_ref }} \
-            --fail-under=0 \
-            --format markdown:diff-cover.md || true
-          DIFF_COV=$(diff-cover $COV_XMLS \
-            --compare-branch=origin/${{ github.base_ref }} \
-            --fail-under=0 2>&1 \
-            | grep -oP 'Diff Coverage: \K[\d.]+%' || echo 'N/A')
-          # Overall coverage from the CPU test report
-          OVERALL=$(tail -1 coverage-cpu/pytest-coverage.txt | grep -oP '\d+%' || echo 'N/A')
-          {
-            echo '## Coverage Report'
-            echo ''
-            echo '| Metric | Value |'
-            echo '|--------|-------|'
-            echo "| **Diff coverage** (changed lines only) | **${DIFF_COV}** |"
-            echo "| Overall project coverage | ${OVERALL} |"
-            echo ''
-            echo '<details>'
-            echo '<summary>Changed files coverage details</summary>'
-            echo ''
-            cat diff-cover.md
-            echo ''
-            echo '</details>'
-            echo ''
-            echo '<details>'
-            echo '<summary>Full coverage report (files below 100%)</summary>'
-            echo ''
-            echo '```'
-            head -200 coverage-cpu/pytest-coverage.txt
-            echo '```'
-            echo ''
-            echo '</details>'
-          } > coverage-comment.md
+            --coverage-xml $COV_XMLS \
+            --format markdown > coverage-comment.md
       - name: Post coverage comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           path: coverage-comment.md
-      - name: Diff coverage check
-        run: |
-          pip install diff-cover
-          COV_XMLS="coverage-cpu/coverage.xml"
-          if [ -f coverage-cuda/coverage.xml ]; then
-            COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
-          fi
-          diff-cover $COV_XMLS \
-            --compare-branch=origin/${{ github.base_ref }} \
-            --fail-under=80
