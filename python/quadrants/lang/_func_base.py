@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
+_KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
+
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
@@ -221,7 +223,7 @@ class FuncBase:
         func_body.decorator_list = []  # type: ignore , kick that can down the road...
 
         _kcov = None
-        if os.environ.get("QD_KERNEL_COVERAGE") == "1":
+        if _KERNEL_COVERAGE:
             from . import (  # pylint: disable=import-outside-toplevel
                 _kernel_coverage as _kcov,
             )

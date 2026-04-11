@@ -15,6 +15,7 @@ from weakref import ReferenceType
 from quadrants import _logging
 
 _GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
+_KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 
 from quadrants._lib.core.quadrants_python import (
     Arch,
@@ -374,7 +375,7 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        if os.environ.get("QD_KERNEL_COVERAGE") == "1":
+        if _KERNEL_COVERAGE:
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
             _kernel_coverage.ensure_field_allocated()
