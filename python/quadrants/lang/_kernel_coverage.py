@@ -13,7 +13,6 @@ and has zero impact on the normal runtime path.
 import ast
 import atexit
 import os
-import sys
 import threading
 
 from coverage import CoverageData  # type: ignore[import-not-found]
@@ -122,31 +121,12 @@ def _detect_arc_mode() -> bool:
     since run_tests.py --coverage always enables --cov-branch.
     """
     try:
-        cov_exists = os.path.exists(".coverage")
         cd = CoverageData()
         cd.read()
-        has_files = bool(cd.measured_files())
-        has_arcs = cd.has_arcs()
-        if has_files:
-            result = has_arcs
-        else:
-            result = True
-        print(
-            f"[kcov PID={os.getpid()}] _detect_arc_mode:"
-            f" .coverage exists={cov_exists},"
-            f" measured_files={has_files},"
-            f" has_arcs={has_arcs},"
-            f" => {result}",
-            file=sys.stderr,
-            flush=True,
-        )
-        return result
-    except Exception as exc:
-        print(
-            f"[kcov PID={os.getpid()}] _detect_arc_mode: exception={exc}, => True",
-            file=sys.stderr,
-            flush=True,
-        )
+        if not cd.measured_files():
+            return True
+        return cd.has_arcs()
+    except Exception:
         return True
 
 
