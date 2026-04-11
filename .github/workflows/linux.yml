@@ -135,10 +135,12 @@ jobs:
 
           diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
+            --exclude 'tests/*' \
             --fail-under=0 \
             --format markdown:diff-cover.md || true
           DIFF_COV=$(diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
+            --exclude 'tests/*' \
             --fail-under=0 2>&1 \
             | grep -oP 'Diff Coverage: \K[\d.]+%' || echo 'N/A')
           # Overall coverage from the CPU test report
@@ -180,4 +182,5 @@ jobs:
           fi
           diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
+            --exclude 'tests/*' \
             --fail-under=80
