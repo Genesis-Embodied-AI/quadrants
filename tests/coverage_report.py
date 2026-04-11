@@ -200,7 +200,14 @@ def _print_annotated(files_report, total_hit, total_miss, total_pct):
 
 def _print_markdown(files_report, total_hit, total_miss, total_pct):
     overall = _get_overall_coverage()
-    print("## Coverage Report\n")
+    commit = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    ).stdout.strip()
+    heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
+    print(heading)
     print("| Metric | Value |")
     print("|--------|-------|")
     print(f"| **Diff coverage** (changed lines only) | **{total_pct:.0f}%** |")
