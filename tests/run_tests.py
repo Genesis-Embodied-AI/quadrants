@@ -40,7 +40,7 @@ def _test_python(args, default_dir="python"):
             import quadrants as _qd
 
             _cov_src = os.path.dirname(_qd.__file__)
-            pytest_args += ["--cov-branch", f"--cov={_cov_src}", f"--cov={test_dir}"]
+            pytest_args += ["--cov-branch", f"--cov={_cov_src}"]
         if args.cov_append:
             pytest_args += ["--cov-append"]
         if args.keys:
