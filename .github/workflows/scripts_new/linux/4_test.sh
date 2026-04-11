@@ -28,6 +28,6 @@ python tests/run_tests.py -v -r 3 -m needs_torch --coverage --cov-append
 # Each xdist worker writes _qd_kcov.<pid> (not .coverage.* to avoid pytest-cov conflicts)
 coverage combine --append _qd_kcov.* 2>/dev/null || true
 
-# Generate coverage reports
-coverage xml -o coverage.xml
-coverage report --show-missing --skip-covered > pytest-coverage.txt
+# Generate coverage reports (--ignore-errors skips temp-file sources from kernel probes)
+coverage xml -o coverage.xml --ignore-errors
+coverage report --show-missing --skip-covered --ignore-errors > pytest-coverage.txt

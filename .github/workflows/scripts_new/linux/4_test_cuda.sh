@@ -22,5 +22,5 @@ python tests/run_tests.py -v -r 1 --arch cuda -m needs_torch --coverage --cov-ap
 # Merge per-worker kernel coverage data into the main .coverage
 coverage combine --append _qd_kcov.* 2>/dev/null || true
 
-# Generate coverage XML for merging
-coverage xml -o coverage.xml
+# Generate coverage XML for merging (--ignore-errors skips temp-file sources from kernel probes)
+coverage xml -o coverage.xml --ignore-errors
