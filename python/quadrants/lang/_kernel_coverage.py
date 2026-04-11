@@ -198,6 +198,8 @@ class _CoverageASTRewriter(ast.NodeTransformer):
             value=ast.Constant(value=1),
             lineno=rel_lineno,
             col_offset=col_offset,
+            end_lineno=rel_lineno,
+            end_col_offset=col_offset,
         )
         return node
 
