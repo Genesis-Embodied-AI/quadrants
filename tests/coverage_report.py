@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
-"""Generate a coverage report showing diff coverage for changed lines.
+"""Run tests with coverage and generate diff coverage reports.
 
-Usage:
-    # Run tests with coverage and show diff report (default: compare against main)
-    python tests/coverage_report.py
+Used by both CI and developers locally. Three modes:
 
-    # Compare against a different branch
-    python tests/coverage_report.py --compare-branch origin/my-branch
+  # Local dev: run tests, collect coverage, show annotated diff report
+  python tests/coverage_report.py -k "test_kernel_coverage"
 
-    # Skip running tests, just generate report from existing coverage data
-    python tests/coverage_report.py --report-only
+  # CI collect: run tests and generate coverage.xml (no report)
+  python tests/coverage_report.py --collect-only -v -r 3 --with-torch
 
-    # Run only specific tests
-    python tests/coverage_report.py -k "test_kernel_coverage"
-
-    # CI mode: output markdown for PR comment
-    python tests/coverage_report.py --ci --coverage-xml coverage-cpu/coverage.xml coverage-cuda/coverage.xml
+  # CI report: merge multiple coverage.xml files into a diff report
+  python tests/coverage_report.py --report-only --format markdown \\
+      --coverage-xml coverage-cpu/coverage.xml coverage-cuda/coverage.xml
 """
 
 import argparse
 import glob
 import os
 import re
-import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -49,57 +44,78 @@ def _clean_coverage_files():
 
 
 def _run(cmd, **kwargs):
-    print(f"{DIM}$ {cmd}{RESET}")
+    print(f"{DIM}$ {cmd}{RESET}", flush=True)
     return subprocess.run(cmd, shell=True, cwd=REPO_ROOT, **kwargs)
+
+
+def _run_tests_phase(*, verbose, rerun, threads, arch, keys=None, marks=None, append=False):
+    """Run a single pytest phase via run_tests.py."""
+    parts = ["python tests/run_tests.py"]
+    if verbose:
+        parts.append("-v")
+    if rerun:
+        parts.append(f"-r {rerun}")
+    if threads:
+        parts.append(f"-t {threads}")
+    if arch:
+        parts.append(f"--arch {arch}")
+    if keys:
+        parts.append(f'-k "{keys}"')
+    if marks:
+        parts.append(f'-m "{marks}"')
+    parts.append("--coverage")
+    if append:
+        parts.append("--cov-append")
+    _run(" ".join(parts))
+
+
+def _combine_coverage():
+    """Combine pytest-cov and kernel coverage data, applying path remapping."""
+    pytest_cov = REPO_ROOT / ".coverage"
+    if not pytest_cov.exists():
+        return
+    pytest_cov.rename(REPO_ROOT / ".coverage.pytest")
+    kcov_files = glob.glob(str(REPO_ROOT / "_qd_kcov.*"))
+    combine_args = [".coverage.pytest"] + [os.path.basename(f) for f in kcov_files]
+    result = _run(f"coverage combine {' '.join(combine_args)}")
+    if result.returncode != 0 and not kcov_files:
+        _run("coverage combine .coverage.pytest")
+
+
+def _generate_artifacts():
+    """Generate coverage.xml and pytest-coverage.txt from the combined .coverage."""
+    _run("coverage xml -o coverage.xml --ignore-errors")
+    _run("coverage report --show-missing --skip-covered --ignore-errors > pytest-coverage.txt")
 
 
 def run_tests(args):
     """Run tests in phases with coverage collection."""
     _clean_coverage_files()
 
-    extra = ""
+    common = dict(verbose=args.verbose, rerun=args.rerun, threads=args.threads, arch=args.arch)
+
     if args.keys:
-        kcov_filter = f"not ({NO_KCOV_TESTS})" if args.keys is None else args.keys
-    else:
-        kcov_filter = None
-
-    threads = f"-t {args.threads}" if args.threads else ""
-    arch = f"--arch {args.arch}" if args.arch else ""
-    verbose = "-v" if args.verbose else ""
-    rerun = f"-r {args.rerun}" if args.rerun else ""
-
-    if kcov_filter:
-        # User specified -k, run everything in one phase with KCOV
         os.environ["QD_KERNEL_COVERAGE"] = "1"
-        _run(
-            f"python tests/run_tests.py {verbose} {rerun} {threads} {arch}"
-            f' -k "{kcov_filter}" --coverage'
-        )
+        _run_tests_phase(**common, keys=args.keys)
     else:
         # Phase 1: coverage-incompatible tests (no kernel coverage)
-        _run(
-            f"python tests/run_tests.py {verbose} {rerun} {threads} {arch}"
-            f' -k "{NO_KCOV_TESTS}" --coverage'
-        )
+        _run_tests_phase(**common, keys=NO_KCOV_TESTS)
 
         # Phase 2: remaining tests with kernel coverage
         os.environ["QD_KERNEL_COVERAGE"] = "1"
-        _run(
-            f"python tests/run_tests.py {verbose} {rerun} {threads} {arch}"
-            f' -m "not needs_torch" -k "not ({NO_KCOV_TESTS})" --coverage --cov-append'
-        )
+        _run_tests_phase(**common, marks="not needs_torch", keys=f"not ({NO_KCOV_TESTS})", append=True)
 
-    # Combine coverage data (triggers path remapping via pyproject.toml)
-    pytest_cov = REPO_ROOT / ".coverage"
-    if pytest_cov.exists():
-        pytest_cov.rename(REPO_ROOT / ".coverage.pytest")
-        kcov_files = glob.glob(str(REPO_ROOT / "_qd_kcov.*"))
-        combine_args = [".coverage.pytest"] + [os.path.basename(f) for f in kcov_files]
-        _run(f"coverage combine {' '.join(combine_args)}")
+        # Phase 3: torch tests (if requested and torch is available)
+        if args.with_torch:
+            _run_tests_phase(**common, marks="needs_torch", append=True)
 
-    _run("coverage xml -o coverage.xml --ignore-errors")
-    _run("coverage report --show-missing --skip-covered --ignore-errors > pytest-coverage.txt")
+    _combine_coverage()
+    _generate_artifacts()
 
+
+# ---------------------------------------------------------------------------
+# Report generation
+# ---------------------------------------------------------------------------
 
 def get_diff_lines(compare_branch):
     """Return {filename: [(lineno, text)]} for added/modified lines."""
@@ -155,7 +171,6 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal"):
     files_report = []
     total_hit = 0
     total_miss = 0
-    total_lines = 0
 
     for filename in sorted(diff_lines):
         lines = diff_lines[filename]
@@ -185,7 +200,6 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal"):
         pct = (hit / measurable * 100) if measurable else 0
         total_hit += hit
         total_miss += miss
-        total_lines += measurable
         missing = [ln for ln, _, s in line_details if s == "miss"]
 
         files_report.append({
@@ -281,14 +295,24 @@ def _format_ranges(numbers):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate diff coverage report")
+    parser = argparse.ArgumentParser(
+        description="Run tests with coverage and generate diff coverage reports",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--collect-only", action="store_true",
+        help="Run tests and generate coverage.xml, but skip the diff report",
+    )
+    mode.add_argument(
+        "--report-only", action="store_true",
+        help="Skip running tests, generate report from existing coverage.xml",
+    )
+
     parser.add_argument(
         "--compare-branch", default="origin/main",
         help="Branch to compare against (default: origin/main)",
-    )
-    parser.add_argument(
-        "--report-only", action="store_true",
-        help="Skip running tests, use existing coverage.xml",
     )
     parser.add_argument(
         "--coverage-xml", nargs="+", default=None,
@@ -300,8 +324,8 @@ def main():
         help="Output format (default: annotated)",
     )
     parser.add_argument(
-        "--ci", action="store_true",
-        help="CI mode: output markdown format",
+        "--with-torch", action="store_true",
+        help="Run torch-dependent tests as an additional phase",
     )
     parser.add_argument("-k", dest="keys", default=None, help="Test filter expression")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -311,11 +335,11 @@ def main():
 
     args = parser.parse_args()
 
-    if args.ci:
-        args.output_format = "markdown"
-
     if not args.report_only:
         run_tests(args)
+
+    if args.collect_only:
+        return 0
 
     xml_paths = args.coverage_xml or [str(REPO_ROOT / "coverage.xml")]
     xml_paths = [p for p in xml_paths if os.path.exists(p)]
@@ -323,7 +347,7 @@ def main():
         print("No coverage.xml found. Run tests first or specify --coverage-xml.", file=sys.stderr)
         sys.exit(1)
 
-    pct = generate_report(args.compare_branch, xml_paths, args.output_format)
+    generate_report(args.compare_branch, xml_paths, args.output_format)
     return 0
 
 
