@@ -11,7 +11,7 @@ export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' |
 #  - test_offline_cache: coverage field creates internal kernels breaking cache counts
 #  - test_concurrent_kernels: coverage field triggers add_struct_module from worker thread
 #  - test_src_ll_cache_with_corruption: recompile after corruption yields different LLVM IR
-NO_KCOV="test_offline_cache or test_concurrent_kernels or test_src_ll_cache_with_corruption"
+NO_KCOV="test_offline_cache or test_concurrent_kernels or test_src_ll_cache_with_corruption or test_fe_ll_observations"
 python tests/run_tests.py -v -r 3 -k "$NO_KCOV" --coverage
 
 # Enable kernel coverage instrumentation (writes .coverage.kernel at exit)
