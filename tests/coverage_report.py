@@ -3,7 +3,7 @@
 
 Run tests first with run_tests.py --coverage, then use this script:
 
-  # Local dev: combine coverage data and show annotated diff report
+  # Local dev: combine coverage data and generate HTML diff report
   python tests/coverage_report.py
 
   # CI: combine coverage data and generate coverage.xml (no diff report)
@@ -166,6 +166,8 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal"):
         _print_annotated(files_report, total_hit, total_miss, total_pct)
     elif output_format == "markdown":
         _print_markdown(files_report, total_hit, total_miss, total_pct)
+    elif output_format == "html":
+        _write_html(files_report, total_hit, total_miss, total_pct)
 
     return total_pct
 
@@ -210,6 +212,86 @@ def _print_markdown(files_report, total_hit, total_miss, total_pct):
         missing_str = f": Missing lines {_format_ranges(fr['missing'])}" if fr["missing"] else ""
         print(f"- {fr['filename']} ({fr['pct']:.0f}%){missing_str}")
     print(f"\n**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered")
+
+
+def _write_html(files_report, total_hit, total_miss, total_pct):
+    import html as html_mod
+
+    out_path = REPO_ROOT / "coverage-report.html"
+    overall = _get_overall_coverage()
+
+    lines = []
+    lines.append("""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Diff Coverage Report</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+       max-width: 960px; margin: 2rem auto; padding: 0 1rem; background: #1e1e1e; color: #d4d4d4; }
+h1 { color: #e0e0e0; }
+table.summary { border-collapse: collapse; margin: 1rem 0; }
+table.summary td, table.summary th { padding: 0.4rem 1rem; border: 1px solid #444; }
+table.summary th { background: #2d2d2d; text-align: left; }
+details { margin: 0.5rem 0; }
+summary { cursor: pointer; padding: 0.4rem; background: #2d2d2d; border-radius: 4px; }
+summary:hover { background: #363636; }
+.file-header { font-weight: bold; }
+.pct-good { color: #4ec9b0; }
+.pct-bad { color: #f44747; }
+pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overflow-x: auto;
+      font-size: 13px; line-height: 1.5; }
+.line { display: block; }
+.hit { background: #1e3a1e; }
+.miss { background: #3a1e1e; }
+.no-data { opacity: 0.5; }
+.lineno { display: inline-block; width: 4em; text-align: right; color: #858585;
+          margin-right: 1em; user-select: none; }
+.status { display: inline-block; width: 1.5em; text-align: center; }
+.status-hit { color: #4ec9b0; }
+.status-miss { color: #f44747; }
+</style></head><body>
+<h1>Diff Coverage Report</h1>""")
+
+    lines.append('<table class="summary"><tr><th>Metric</th><th>Value</th></tr>')
+    pct_cls = "pct-good" if total_pct >= 80 else "pct-bad"
+    lines.append(
+        f'<tr><td>Diff coverage (changed lines)</td>'
+        f'<td class="{pct_cls}"><b>{total_pct:.0f}%</b></td></tr>'
+    )
+    if overall:
+        lines.append(f"<tr><td>Overall project coverage</td><td>{overall}</td></tr>")
+    lines.append(
+        f"<tr><td>Total lines</td><td>{total_hit + total_miss} "
+        f"({total_miss} missing)</td></tr></table>"
+    )
+
+    for fr in files_report:
+        pct_cls = "pct-good" if fr["pct"] >= 80 else "pct-bad"
+        missing_str = ""
+        if fr["missing"]:
+            missing_str = f' &mdash; missing: {_format_ranges(fr["missing"])}'
+        lines.append(
+            f'<details><summary><span class="file-header">{html_mod.escape(fr["filename"])}</span>'
+            f' <span class="{pct_cls}">{fr["pct"]:.0f}%</span>{missing_str}</summary><pre>'
+        )
+        for lineno, text, status in fr["lines"]:
+            escaped = html_mod.escape(text)
+            if status == "hit":
+                icon = '<span class="status status-hit">&#10003;</span>'
+                cls = "hit"
+            elif status == "miss":
+                icon = '<span class="status status-miss">&#10007;</span>'
+                cls = "miss"
+            else:
+                icon = '<span class="status"> </span>'
+                cls = "no-data"
+            lines.append(
+                f'<span class="line {cls}">'
+                f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>'
+            )
+        lines.append("</pre></details>")
+
+    lines.append("</body></html>")
+    out_path.write_text("\n".join(lines))
+    print(f"Coverage report written to {out_path}")
 
 
 def _get_overall_coverage():
@@ -272,9 +354,9 @@ def main():
     parser.add_argument(
         "--format",
         dest="output_format",
-        default="annotated",
-        choices=["terminal", "annotated", "markdown"],
-        help="Output format (default: annotated)",
+        default="html",
+        choices=["html", "terminal", "annotated", "markdown"],
+        help="Output format (default: html)",
     )
 
     args = parser.parse_args()

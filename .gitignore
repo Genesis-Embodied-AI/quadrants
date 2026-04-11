@@ -68,6 +68,7 @@ __pycache__
 /.coverage.*
 _qd_kcov.*
 /coverage.xml
+/coverage-report.html
 /htmlcov
 /diff-cover.*
 /pytest-coverage.txt
