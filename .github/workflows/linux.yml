@@ -54,6 +54,7 @@ jobs:
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 2>&1 \
             | grep -oP 'Diff Coverage: \K[\d.]+%' || echo 'N/A')
+          # Last line of coverage report is "TOTAL ... NN%"
           OVERALL=$(tail -1 pytest-coverage.txt | grep -oP '\d+%' || echo 'N/A')
           {
             echo '## Coverage Report'
