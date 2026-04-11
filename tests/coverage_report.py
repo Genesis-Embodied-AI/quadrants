@@ -266,10 +266,7 @@ pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overf
         missing_str = ""
         if fr["missing"]:
             missing_str = f' &mdash; missing: {_format_ranges(fr["missing"])}'
-        lines.append(
-            f'<details><summary><span class="file-header">{html_mod.escape(fr["filename"])}</span>'
-            f' <span class="{pct_cls}">{fr["pct"]:.0f}%</span>{missing_str}</summary><pre>'
-        )
+        pre_parts = []
         for lineno, text, status in fr["lines"]:
             escaped = html_mod.escape(text)
             if status == "hit":
@@ -281,8 +278,12 @@ pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overf
             else:
                 icon = '<span class="status"> </span>'
                 cls = "no-data"
-            lines.append(f'<span class="line {cls}">' f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>')
-        lines.append("</pre></details>")
+            pre_parts.append(f'<span class="line {cls}">' f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>')
+        lines.append(
+            f'<details><summary><span class="file-header">{html_mod.escape(fr["filename"])}</span>'
+            f' <span class="{pct_cls}">{fr["pct"]:.0f}%</span>{missing_str}</summary>'
+            f'<pre>{"".join(pre_parts)}</pre></details>'
+        )
 
     lines.append("</body></html>")
     out_path.write_text("\n".join(lines))
