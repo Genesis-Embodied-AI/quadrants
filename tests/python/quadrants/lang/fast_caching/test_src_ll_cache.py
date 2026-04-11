@@ -8,6 +8,8 @@ import pydantic
 import pytest
 
 import quadrants as qd
+
+_KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
 import quadrants.lang
 from quadrants._test_tools import qd_init_same_arch
 from quadrants.lang._kernel_types import SrcLlCacheObservations
@@ -62,6 +64,10 @@ def test_src_ll_cache1(tmp_path: pathlib.Path) -> None:
         assert has_pure._primal._last_compiled_kernel_data._debug_dump_to_string() == last_compiled_kernel_data_str
 
 
+@pytest.mark.skipif(
+    _KERNEL_COVERAGE,
+    reason="Coverage probes change LLVM IR addresses after reinit, breaking recompile comparison",
+)
 @test_utils.test()
 def test_src_ll_cache_with_corruption(tmp_path: pathlib.Path) -> None:
     qd_init_same_arch(offline_cache_file_path=str(tmp_path), offline_cache=True)

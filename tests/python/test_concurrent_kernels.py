@@ -1,12 +1,22 @@
+import os
 import sys
 import threading
 import time
+
+import pytest
 
 import quadrants as qd
 from quadrants.lang import impl
 from quadrants.lang.ast import transform_tree as _original_transform_tree
 
 from tests import test_utils
+
+# Coverage field allocation calls add_struct_module from a worker thread,
+# violating its main-thread assertion. CI runs this test without QD_KERNEL_COVERAGE.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("QD_KERNEL_COVERAGE") == "1",
+    reason="Kernel coverage field triggers add_struct_module from worker thread",
+)
 
 _kernel_module = sys.modules["quadrants.lang.kernel"]
 
