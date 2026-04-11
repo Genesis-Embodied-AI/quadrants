@@ -135,7 +135,7 @@ def flush() -> None:
     if not _accumulated_lines:
         return
 
-    kernel_path = f".coverage.kernel.{os.getpid()}"
+    kernel_path = f"_qd_kcov.{os.getpid()}"
     use_arcs = _detect_arc_mode()
 
     merged_lines: dict[str, set[int]] = {}

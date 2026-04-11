@@ -25,8 +25,8 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 python tests/run_tests.py -v -r 3 -m needs_torch --coverage --cov-append
 
 # Merge per-worker kernel coverage data into the main .coverage produced by pytest-cov
-# Each xdist worker writes .coverage.kernel.<pid> to avoid SQLite races
-coverage combine --append .coverage.kernel.* 2>/dev/null || true
+# Each xdist worker writes _qd_kcov.<pid> (not .coverage.* to avoid pytest-cov conflicts)
+coverage combine --append _qd_kcov.* 2>/dev/null || true
 
 # Generate coverage reports
 coverage xml -o coverage.xml
