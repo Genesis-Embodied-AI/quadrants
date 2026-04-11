@@ -214,11 +214,11 @@ def _print_markdown(files_report, total_hit, total_miss, total_pct):
         print("```")
         for lineno, text, status in fr["lines"]:
             if status == "hit":
-                marker = "✓"
+                marker = "🟢"
             elif status == "miss":
-                marker = "✗"
+                marker = "🔴"
             else:
-                marker = " "
+                marker = "  "
             print(f"{marker} {lineno:4d}  {text}")
         print("```\n</details>\n")
 
