@@ -127,12 +127,6 @@ source = [
 ]
 
 [tool.coverage.report]
-exclude_also = [
-    "@qd\\.func",
-    "@qd\\.kernel",
-    "@ti\\.func",
-    "@ti\\.kernel",
-]
 
 [tool.pytest.ini_options]
 filterwarnings = [
