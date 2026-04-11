@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  pull-requests: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -80,14 +79,37 @@ jobs:
             echo ''
             echo '</details>'
           } > coverage-comment.md
-      - name: Post coverage comment
+      - name: Upload coverage artifacts
         if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-artifacts
+          path: |
+            coverage-comment.md
+            coverage.xml
+
+  coverage-comment:
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-artifacts
+      - name: Post coverage comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           path: coverage-comment.md
       - name: Diff coverage check
-        if: github.event_name == 'pull_request'
         run: |
+          pip install diff-cover
+          git fetch origin ${{ github.base_ref }} --depth=1
           diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=80
