@@ -41,10 +41,102 @@ jobs:
       - name: Linux test
         run: |
           bash .github/workflows/scripts_new/linux/4_test.sh
-      - name: Generate coverage PR comment
-        if: github.event_name == 'pull_request'
+      - name: Upload wheel for CUDA job
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-wheel
+          path: dist/*.whl
+      - name: Upload CPU coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-cpu
+          path: |
+            .coverage
+            coverage.xml
+            pytest-coverage.txt
+
+  test-cuda:
+    name: Linux CUDA Test
+    needs: build
+    runs-on: gpu-t4-4-core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Python check
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install CUDA libraries
         run: |
-          pip install diff-cover
+          sudo apt-get install -y libcusolver-dev-12-8 libcusolver-12-8 libcusparse-dev-12-8 libcusparse-12-8 libnvjitlink-12-8 libcublas-12-8
+          echo "/usr/local/cuda/targets/x86_64-linux/lib" | sudo tee /etc/ld.so.conf.d/cuda-targets.conf
+          sudo ldconfig
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-wheel
+      - name: Install quadrants
+        run: |
+          set -x
+          mkdir -p dist
+          mv *.whl dist/
+          pip install dist/*.whl
+      - name: Install test requirements
+        run: |
+          pip install --group test
+          pip install -r requirements_test_xdist.txt
+      - name: Run CUDA tests with coverage
+        run: |
+          bash .github/workflows/scripts_new/linux/4_test_cuda.sh
+      - name: Upload CUDA coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-cuda
+          path: |
+            .coverage
+            coverage.xml
+
+  coverage-comment:
+    if: github.event_name == 'pull_request' && always()
+    needs: [build, test-cuda]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Python check
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Download CPU coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-cpu
+          path: coverage-cpu
+      - name: Download CUDA coverage
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coverage-cuda
+          path: coverage-cuda
+      - name: Merge coverage and generate report
+        run: |
+          pip install coverage diff-cover
+          # Combine CPU and CUDA coverage data (CUDA may be absent if that job failed)
+          COV_FILES="coverage-cpu/.coverage"
+          if [ -f coverage-cuda/.coverage ]; then
+            COV_FILES="$COV_FILES coverage-cuda/.coverage"
+          fi
+          coverage combine $COV_FILES
+          coverage xml -o coverage.xml
+          coverage report --show-missing --skip-covered > pytest-coverage.txt
+
           git fetch origin ${{ github.base_ref }} --depth=1
           diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
@@ -80,29 +172,6 @@ jobs:
             echo ''
             echo '</details>'
           } > coverage-comment.md
-      - name: Upload coverage artifacts
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-artifacts
-          path: |
-            coverage-comment.md
-            coverage.xml
-
-  coverage-comment:
-    if: github.event_name == 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-artifacts
       - name: Post coverage comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
@@ -110,7 +179,6 @@ jobs:
       - name: Diff coverage check
         run: |
           pip install diff-cover
-          git fetch origin ${{ github.base_ref }} --depth=1
           diff-cover coverage.xml \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=80
