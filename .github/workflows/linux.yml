@@ -52,9 +52,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-cpu
-          include-hidden-files: true
           path: |
-            .coverage
             coverage.xml
             pytest-coverage.txt
 
@@ -97,10 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-cuda
-          include-hidden-files: true
-          path: |
-            .coverage
-            coverage.xml
+          path: coverage.xml
 
   coverage-comment:
     if: github.event_name == 'pull_request' && always()
@@ -127,29 +122,27 @@ jobs:
         with:
           name: coverage-cuda
           path: coverage-cuda
-      - name: Merge coverage and generate report
+      - name: Generate coverage report
         run: |
-          pip install "coverage[toml]" diff-cover
-          # Combine CPU and CUDA coverage data (CUDA may be absent if that job failed)
-          COV_FILES="coverage-cpu/.coverage"
-          if [ -f coverage-cuda/.coverage ]; then
-            COV_FILES="$COV_FILES coverage-cuda/.coverage"
-          fi
-          coverage combine $COV_FILES
-          coverage xml -o coverage.xml --ignore-errors
-          coverage report --show-missing --skip-covered --ignore-errors > pytest-coverage.txt
-
+          pip install diff-cover
           git fetch origin ${{ github.base_ref }} --depth=1
-          diff-cover coverage.xml \
+
+          # Collect all coverage.xml files (CUDA may be absent)
+          COV_XMLS="coverage-cpu/coverage.xml"
+          if [ -f coverage-cuda/coverage.xml ]; then
+            COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
+          fi
+
+          diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 \
             --format markdown:diff-cover.md || true
-          DIFF_COV=$(diff-cover coverage.xml \
+          DIFF_COV=$(diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=0 2>&1 \
             | grep -oP 'Diff Coverage: \K[\d.]+%' || echo 'N/A')
-          # Last line of coverage report is "TOTAL ... NN%"
-          OVERALL=$(tail -1 pytest-coverage.txt | grep -oP '\d+%' || echo 'N/A')
+          # Overall coverage from the CPU test report
+          OVERALL=$(tail -1 coverage-cpu/pytest-coverage.txt | grep -oP '\d+%' || echo 'N/A')
           {
             echo '## Coverage Report'
             echo ''
@@ -169,7 +162,7 @@ jobs:
             echo '<summary>Full coverage report (files below 100%)</summary>'
             echo ''
             echo '```'
-            head -200 pytest-coverage.txt
+            head -200 coverage-cpu/pytest-coverage.txt
             echo '```'
             echo ''
             echo '</details>'
@@ -181,6 +174,10 @@ jobs:
       - name: Diff coverage check
         run: |
           pip install diff-cover
-          diff-cover coverage.xml \
+          COV_XMLS="coverage-cpu/coverage.xml"
+          if [ -f coverage-cuda/coverage.xml ]; then
+            COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
+          fi
+          diff-cover $COV_XMLS \
             --compare-branch=origin/${{ github.base_ref }} \
             --fail-under=80
