@@ -13,6 +13,12 @@ import quadrants as qd
 
 from tests import test_utils
 
+# Coverage field allocation creates extra internal kernels that change cache file counts
+pytestmark = pytest.mark.skipif(
+    os.environ.get("QD_KERNEL_COVERAGE") == "1",
+    reason="Kernel coverage adds internal kernels that invalidate cache file count assertions",
+)
+
 OFFLINE_CACHE_TEMP_DIR = pathlib.Path(mkdtemp())
 atexit.register(lambda: shutil.rmtree(OFFLINE_CACHE_TEMP_DIR))
 
