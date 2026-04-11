@@ -66,6 +66,7 @@ __pycache__
 /CHANGELOG.md
 /.coverage
 /.coverage.*
+_qd_kcov.*
 /coverage.xml
 /htmlcov
 /diff-cover.*
