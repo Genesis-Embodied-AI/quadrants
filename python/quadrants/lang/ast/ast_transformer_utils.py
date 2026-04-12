@@ -332,7 +332,7 @@ class ASTTransformerFuncContext:
             found_name = True
         elif name in self.global_vars:
             var = self.global_vars[name]
-            if name != "_qd_cov":
+            if not name.startswith("_qd_"):
                 reason = f"{name} is in global vars, therefore violates pure"
                 violates_pure = True
             found_name = True

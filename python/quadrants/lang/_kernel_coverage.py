@@ -12,6 +12,7 @@ and has zero impact on the normal runtime path.
 
 import ast
 import atexit
+import logging
 import os
 import threading
 import warnings
@@ -46,7 +47,10 @@ def _harvest_field() -> None:
     try:
         arr = _cov_field.to_numpy()
     except Exception:
-        pass
+        logging.debug("Failed to read coverage field, coverage data for this session will be lost", exc_info=True)
+        _cov_field = None
+        _cov_field_prog = None
+        return
     else:
         for probe_id, (filepath, lineno) in _probe_map.items():
             if probe_id < len(arr) and arr[probe_id] != 0:
@@ -128,6 +132,7 @@ def _detect_arc_mode() -> bool:
             return True
         return cd.has_arcs()
     except Exception:
+        logging.debug("Failed to detect arc mode from .coverage file, defaulting to arc mode", exc_info=True)
         return True
 
 
