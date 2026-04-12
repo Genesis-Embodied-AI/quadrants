@@ -234,8 +234,9 @@ def test_kernel_coverage_survives_reinit():
     _hooked_clear harvest), runs another kernel, harvests again, and checks that
     _accumulated_lines contains data from both sessions.
     """
-    from quadrants.lang import _kernel_coverage
+    from quadrants.lang import impl, _kernel_coverage
 
+    current_arch = impl.get_runtime()._arch
     _kernel_coverage.ensure_field_allocated()
 
     probe_count_before = _kernel_coverage._probe_counter
@@ -264,7 +265,7 @@ def test_kernel_coverage_survives_reinit():
     for f, lines in _kernel_coverage._accumulated_lines.items():
         lines_before[f] = set(lines)
 
-    qd.init(arch=qd.cpu)
+    qd.init(arch=current_arch)
 
     _kernel_coverage.ensure_field_allocated()
 
