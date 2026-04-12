@@ -2,7 +2,9 @@
 
 GPU threads execute in groups called **subgroups** (also known as warps on NVIDIA, wavefronts on AMD, or SIMD groups on Apple). The subgroup size determines how many threads run in lockstep and share shuffle/ballot operations.
 
-By default, Quadrants requests a subgroup size of 32 on Vulkan. You can override this per-loop with `qd.loop_config(subgroup_size=N)`, or query the device's supported range at runtime.
+When the `VK_EXT_subgroup_size_control` extension is available, Quadrants pins the subgroup size to 32 by default. This matches the native warp size on NVIDIA and covers all common desktop GPUs (NVIDIA, AMD, Intel, Apple/MoltenVK all support 32). On devices where 32 is outside the supported range, you must set an explicit subgroup size via `qd.loop_config(subgroup_size=N)`.
+
+You can query the device's supported range at runtime, and override the default per-loop.
 
 ## Querying the device's subgroup size range
 
