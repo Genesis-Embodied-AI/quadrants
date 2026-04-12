@@ -224,3 +224,148 @@ def test_kernel_coverage_simt_e2e():
     not_fired = {pid for pid in probes_for_kernel if arr[pid] == 0}
     assert len(fired) >= 4, f"Expected at least 4 probes to fire, got {len(fired)}"
     assert len(not_fired) >= 2, "The else branch should not have been reached"
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_kernel_coverage_survives_reinit():
+    """Verify that coverage data accumulated before qd.init() reset is preserved.
+
+    Runs a kernel, resets via qd.init(), runs another kernel, and checks that
+    _accumulated_lines contains data from both runs.
+    """
+    from quadrants.lang import _kernel_coverage
+
+    _kernel_coverage.ensure_field_allocated()
+
+    probe_count_before = _kernel_coverage._probe_counter
+    out1 = qd.field(dtype=qd.i32, shape=(1,))
+
+    @qd.kernel
+    def kernel_before_reset():
+        out1[0] = 1
+
+    kernel_before_reset()
+
+    cov_field = _kernel_coverage.get_field()
+    assert cov_field is not None
+    arr = cov_field.to_numpy()
+    probes_first = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_before}
+    fired_first = {pid for pid in probes_first if arr[pid] != 0}
+    assert len(fired_first) > 0, "Probes from first kernel should have fired"
+
+    _kernel_coverage._harvest_field()
+    files_before = set(_kernel_coverage._accumulated_lines.keys())
+    lines_before = {}
+    for f, lines in _kernel_coverage._accumulated_lines.items():
+        lines_before[f] = set(lines)
+
+    qd.reset()
+    qd.init(arch=qd.cpu)
+
+    _kernel_coverage.ensure_field_allocated()
+
+    probe_count_mid = _kernel_coverage._probe_counter
+    out2 = qd.field(dtype=qd.i32, shape=(1,))
+
+    @qd.kernel
+    def kernel_after_reset():
+        out2[0] = 2
+
+    kernel_after_reset()
+
+    _kernel_coverage._harvest_field()
+
+    for f in files_before:
+        assert f in _kernel_coverage._accumulated_lines, (
+            f"File {f} from before reset should still be in _accumulated_lines"
+        )
+        assert lines_before[f].issubset(_kernel_coverage._accumulated_lines[f]), (
+            "Lines from before reset should be preserved"
+        )
+
+    probes_second = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_mid}
+    second_files = {loc[0] for loc in probes_second.values()}
+    for f in second_files:
+        assert f in _kernel_coverage._accumulated_lines, (
+            f"File {f} from second kernel should be in _accumulated_lines"
+        )
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_kernel_coverage_autodiff_forward_covered():
+    """Verify that kernel lines are covered during the forward pass of autodiff."""
+    from quadrants.lang import _kernel_coverage
+
+    _kernel_coverage.ensure_field_allocated()
+
+    probe_count_before = _kernel_coverage._probe_counter
+
+    x = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        loss[None] = x[None] * 2.0
+
+    x[None] = 3.0
+
+    with qd.ad.Tape(loss):
+        compute()
+
+    assert loss[None] == pytest.approx(6.0)
+    assert x.grad[None] == pytest.approx(2.0)
+
+    cov_field = _kernel_coverage.get_field()
+    assert cov_field is not None
+    arr = cov_field.to_numpy()
+
+    probes_for_kernel = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_before}
+    fired = {pid for pid in probes_for_kernel if arr[pid] != 0}
+    assert len(fired) > 0, "Forward pass inside Tape should produce coverage probes"
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_kernel_coverage_autodiff_no_extra_probes_for_grad():
+    """Verify that the backward pass does not insert additional coverage probes.
+
+    The kernel is compiled once for NONE mode (forward, with probes) and once for
+    REVERSE mode (backward, without probes). The probe counter should only increase
+    from the forward compilation.
+    """
+    from quadrants.lang import _kernel_coverage
+
+    _kernel_coverage.ensure_field_allocated()
+
+    x = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+    loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        loss[None] = x[None] * x[None]
+
+    x[None] = 5.0
+
+    probe_count_before_forward = _kernel_coverage._probe_counter
+
+    with qd.ad.Tape(loss):
+        compute()
+
+    probe_count_after_tape = _kernel_coverage._probe_counter
+
+    forward_probes = probe_count_after_tape - probe_count_before_forward
+    assert forward_probes > 0, "Forward compilation should have inserted probes"
+
+    assert x.grad[None] == pytest.approx(10.0)
+
+    probe_count_after_grad = _kernel_coverage._probe_counter
+    assert probe_count_after_grad == probe_count_after_tape, (
+        f"Backward pass should not insert additional probes, but probe counter went from "
+        f"{probe_count_after_tape} to {probe_count_after_grad}"
+    )
+
+
+def test_env_var_max_probes():
+    """Verify that QD_COVERAGE_MAX_PROBES env var is read at import time."""
+    import quadrants.lang._kernel_coverage as kcov
+
+    assert kcov._MAX_PROBES == int(os.environ.get("QD_COVERAGE_MAX_PROBES", "100000"))
