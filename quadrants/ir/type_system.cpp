@@ -7,8 +7,7 @@ namespace quadrants::lang {
 void TyVar::unify(int pos, DataType dt, Solutions &solutions) const {
   if (solutions.find(name_) != solutions.end()) {
     if (solutions[name_].first != dt) {
-      throw TyVarMismatch(solutions[name_].second, pos, solutions[name_].first,
-                          dt);
+      throw TyVarMismatch(solutions[name_].second, pos, solutions[name_].first, dt);
     }
   } else {
     solutions[name_] = std::make_pair(dt, pos);
@@ -36,8 +35,7 @@ void TyLub::unify(int pos, DataType dt, Solutions &solutions) const {
 }
 
 DataType TyLub::resolve(const Solutions &solutions) const {
-  return promoted_type(lhs_->resolve(solutions)->get_compute_type(),
-                       rhs_->resolve(solutions)->get_compute_type());
+  return promoted_type(lhs_->resolve(solutions)->get_compute_type(), rhs_->resolve(solutions)->get_compute_type());
 }
 
 std::string TyLub::to_string() const {
@@ -83,15 +81,14 @@ bool TyMono::contains_tyvar(const TyVar &tyvar) const {
 }
 
 std::string TyVarMismatch::to_string() const {
-  return "argument #" + std::to_string(solved_position_ + 1) + " and #" +
-         std::to_string(current_position_ + 1) +
-         " should be the same type, but they are different: " +
-         original_.to_string() + " and " + conflicting_.to_string();
+  return "argument #" + std::to_string(solved_position_ + 1) + " and #" + std::to_string(current_position_ + 1) +
+         " should be the same type, but they are different: " + original_.to_string() + " and " +
+         conflicting_.to_string();
 }
 
 std::string TypeMismatch::to_string() const {
-  return "expected " + param_.to_string() + " for argument #" +
-         std::to_string(position_ + 1) + ", but got " + arg_.to_string();
+  return "expected " + param_.to_string() + " for argument #" + std::to_string(position_ + 1) + ", but got " +
+         arg_.to_string();
 }
 
 std::string TyVarUnsolved::to_string() const {
@@ -100,14 +97,12 @@ std::string TyVarUnsolved::to_string() const {
 }
 
 std::string TraitMismatch::to_string() const {
-  return "the inferred type of argument #" + std::to_string(occurrence_ + 1) +
-         " is " + dt_.to_string() + ", which is not a " +
-         constraint_.trait->to_string();
+  return "the inferred type of argument #" + std::to_string(occurrence_ + 1) + " is " + dt_.to_string() +
+         ", which is not a " + constraint_.trait->to_string();
 }
 
 std::string ArgLengthMismatch::to_string() const {
-  return std::to_string(arg_) + " arguments were passed in but expected " +
-         std::to_string(param_) +
+  return std::to_string(arg_) + " arguments were passed in but expected " + std::to_string(param_) +
          ". this is not supposed to happen; please report this as a bug";
 }
 
@@ -158,9 +153,7 @@ namespace {
 
 int var_counter_ = 0;
 
-#define PRIM(dt) \
-  DataType dt =  \
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::dt);
+#define PRIM(dt) DataType dt = TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::dt);
 
 PRIM(i32)
 PRIM(i64)
@@ -178,8 +171,7 @@ Trait *Integral = StaticTraits::get(StaticTraitID::integral);
 Trait *Primitive = StaticTraits::get(StaticTraitID::primitive);
 Trait *Scalar = StaticTraits::get(StaticTraitID::scalar);
 
-[[maybe_unused]] Constraint operator<(std::shared_ptr<TyVar> tyvar,
-                                      Trait *trait) {
+[[maybe_unused]] Constraint operator<(std::shared_ptr<TyVar> tyvar, Trait *trait) {
   return Constraint(tyvar, trait);
 }
 
@@ -207,8 +199,7 @@ std::vector<TypeExpr> type_exprs_from_dts(const std::vector<DataType> &params) {
   return exprs;
 }
 
-std::vector<Stmt *> get_all_rvalues(const std::vector<Expr> &args,
-                                    Expression::FlattenContext *ctx) {
+std::vector<Stmt *> get_all_rvalues(const std::vector<Expr> &args, Expression::FlattenContext *ctx) {
   std::vector<Stmt *> stmts;
   for (auto arg : args) {
     stmts.push_back(flatten_rvalue(arg, ctx));
@@ -234,14 +225,12 @@ Trait *StaticTraits::get(StaticTraitID traitId) {
 }
 
 void StaticTraits::init_traits() {
-  traits_[StaticTraitID::real] =
-      std::make_unique<DynamicTrait>("Real", is_real);
-  traits_[StaticTraitID::integral] =
-      std::make_unique<DynamicTrait>("Integral", is_integral);
-  traits_[StaticTraitID::primitive] = std::make_unique<DynamicTrait>(
-      "Primitive", [](DataType dt) { return dt->is<PrimitiveType>(); });
-  traits_[StaticTraitID::scalar] = std::make_unique<DynamicTrait>(
-      "Scalar", [](DataType dt) { return is_real(dt) || is_integral(dt); });
+  traits_[StaticTraitID::real] = std::make_unique<DynamicTrait>("Real", is_real);
+  traits_[StaticTraitID::integral] = std::make_unique<DynamicTrait>("Integral", is_integral);
+  traits_[StaticTraitID::primitive] =
+      std::make_unique<DynamicTrait>("Primitive", [](DataType dt) { return dt->is<PrimitiveType>(); });
+  traits_[StaticTraitID::scalar] =
+      std::make_unique<DynamicTrait>("Scalar", [](DataType dt) { return is_real(dt) || is_integral(dt); });
 }
 
 class InternalCallOperation : public Operation {
@@ -253,25 +242,17 @@ class InternalCallOperation : public Operation {
                         const std::vector<DataType> &params,
                         DataType result,
                         bool with_runtime_context)
-      : Operation(internal_name,
-                  Signature(type_exprs_from_dts(params), !result)),
+      : Operation(internal_name, Signature(type_exprs_from_dts(params), !result)),
         internal_call_name_(internal_name),
         with_runtime_context_(with_runtime_context) {
   }
-  InternalCallOperation(const std::string &internal_name,
-                        Signature sig,
-                        bool with_runtime_context)
-      : Operation(internal_name, sig),
-        internal_call_name_(internal_name),
-        with_runtime_context_(with_runtime_context) {
+  InternalCallOperation(const std::string &internal_name, Signature sig, bool with_runtime_context)
+      : Operation(internal_name, sig), internal_call_name_(internal_name), with_runtime_context_(with_runtime_context) {
   }
 
-  Stmt *flatten(Expression::FlattenContext *ctx,
-                const std::vector<Expr> &args,
-                DataType ret_type) const override {
+  Stmt *flatten(Expression::FlattenContext *ctx, const std::vector<Expr> &args, DataType ret_type) const override {
     auto rargs = get_all_rvalues(args, ctx);
-    return ctx->push_back<InternalFuncStmt>(
-        internal_call_name_, rargs, (Type *)ret_type, with_runtime_context_);
+    return ctx->push_back<InternalFuncStmt>(internal_call_name_, rargs, (Type *)ret_type, with_runtime_context_);
   }
 };
 
@@ -283,23 +264,19 @@ Operation *Operations::get(InternalOp opcode) {
 }
 
 void Operations::init_internals() {
-#define PLAIN_OP(name, ret, ctx, ...)                                     \
-  internals_[InternalOp::name] = std::make_unique<InternalCallOperation>( \
-      #name, std::vector<DataType>{__VA_ARGS__}, ret, ctx)
-#define POLY_OP(name, ctx, sig)  \
-  internals_[InternalOp::name] = \
-      std::make_unique<InternalCallOperation>(#name, sig, ctx)
+#define PLAIN_OP(name, ret, ctx, ...) \
+  internals_[InternalOp::name] =      \
+      std::make_unique<InternalCallOperation>(#name, std::vector<DataType>{__VA_ARGS__}, ret, ctx)
+#define POLY_OP(name, ctx, sig) internals_[InternalOp::name] = std::make_unique<InternalCallOperation>(#name, sig, ctx)
 
-#define COMPOSITE_EXTRACT(n) \
-  PLAIN_OP(composite_extract_##n, f32, false, f32_ptr);
+#define COMPOSITE_EXTRACT(n) PLAIN_OP(composite_extract_##n, f32, false, f32_ptr);
   COMPOSITE_EXTRACT(0);
   COMPOSITE_EXTRACT(1);
   COMPOSITE_EXTRACT(2);
   COMPOSITE_EXTRACT(3);
 #undef COMPOSITE_EXTRACT
 
-#define INSERT_TRIPLET(dt) \
-  PLAIN_OP(insert_triplet_##dt, i32_void, true, u64, i32, i32, dt);
+#define INSERT_TRIPLET(dt) PLAIN_OP(insert_triplet_##dt, i32_void, true, u64, i32, i32, dt);
   INSERT_TRIPLET(f32);
   INSERT_TRIPLET(f64);
 #undef INSERT_TRIPLET
@@ -321,12 +298,9 @@ void Operations::init_internals() {
   // cuda_shfl_xor_sync, cuda_match_any_sync, cuda_match_all_sync,
   // cuda_active_mask, warp_barrier, cuda_clock_i64
 
-#define CUDA_VOTE_SYNC(name) \
-  PLAIN_OP(cuda_##name##_sync_i32, i32, false, u32, i32)
-#define CUDA_SHFL_SYNC(name, dt) \
-  PLAIN_OP(cuda_##name##_sync_##dt, dt, false, u32, dt, i32, i32)
-#define CUDA_MATCH_SYNC(name, dt) \
-  PLAIN_OP(cuda_match_##name##_sync_##dt, u32, false, u32, dt)
+#define CUDA_VOTE_SYNC(name) PLAIN_OP(cuda_##name##_sync_i32, i32, false, u32, i32)
+#define CUDA_SHFL_SYNC(name, dt) PLAIN_OP(cuda_##name##_sync_##dt, dt, false, u32, dt, i32, i32)
+#define CUDA_MATCH_SYNC(name, dt) PLAIN_OP(cuda_match_##name##_sync_##dt, u32, false, u32, dt)
 
   // Clock intrinsics (per-backend)
   PLAIN_OP(cuda_clock_i64, i64, false);

@@ -1071,6 +1071,10 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_int64, 1);
     caps.set(DeviceCapability::spirv_has_physical_storage_buffer, 1);
   }
+  // Metal supports 64-bit atomics (atomic<ulong>) on Apple7+ and Mac2+.
+  if (feature_floating_point_atomics) {
+    caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
+  }
   if (feature_floating_point_atomics) {
     // FIXME: (penguinliong) For some reason floating point atomics doesn't
     // work and breaks the FEM99/FEM128 examples. Should consider add them back

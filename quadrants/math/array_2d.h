@@ -32,11 +32,7 @@ class IndexND<2> {
   IndexND() {
   }
 
-  IndexND(int x0,
-          int x1,
-          int y0,
-          int y1,
-          Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
+  IndexND(int x0, int x1, int y0, int y1, Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
     x_[0] = x0;
     x_[1] = x1;
     y_[0] = y0;
@@ -48,9 +44,7 @@ class IndexND<2> {
     this->storage_offset = storage_offset;
   }
 
-  IndexND(Vector2i start,
-          Vector2i end,
-          Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
+  IndexND(Vector2i start, Vector2i end, Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
     x_[0] = start[0];
     x_[1] = end[0];
     y_[0] = start[1];
@@ -157,11 +151,7 @@ class RegionND<2> {
   RegionND() {
   }
 
-  RegionND(int x0,
-           int x1,
-           int y0,
-           int y1,
-           Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
+  RegionND(int x0, int x1, int y0, int y1, Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
     x_[0] = x0;
     x_[1] = x1;
     y_[0] = y0;
@@ -171,9 +161,7 @@ class RegionND<2> {
     this->storage_offset_ = storage_offset;
   }
 
-  RegionND(Vector2i start,
-           Vector2i end,
-           Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
+  RegionND(Vector2i start, Vector2i end, Vector2 storage_offset = Vector2(0.5f, 0.5f)) {
     x_[0] = start[0];
     x_[1] = end[0];
     y_[0] = start[1];
@@ -226,15 +214,11 @@ class ArrayND<2, T> {
     return region;
   }
 
-  explicit ArrayND(const Vector2i &res,
-                   T init = T(0),
-                   Vector2 storage_offset = Vector2(0.5f)) {
+  explicit ArrayND(const Vector2i &res, T init = T(0), Vector2 storage_offset = Vector2(0.5f)) {
     initialize(res, init, storage_offset);
   }
 
-  void initialize(const Vector2i &res,
-                  T init = T(0),
-                  Vector2 storage_offset = Vector2(0.5f)) {
+  void initialize(const Vector2i &res, T init = T(0), Vector2 storage_offset = Vector2(0.5f)) {
     this->res = res;
     region = Region2D(0, res[0], 0, res[1], storage_offset);
     size = res[0] * res[1];
@@ -418,8 +402,7 @@ class ArrayND<2, T> {
     return ret;
   }
 
-  template <typename TT = T,
-            typename std::enable_if_t<!std::is_class<TT>::value, int> = 0>
+  template <typename TT = T, typename std::enable_if_t<!std::is_class<TT>::value, int> = 0>
   T abs_max() const {
     T ret(0);
     for (int i = 0; i < size; i++) {
@@ -462,8 +445,7 @@ class ArrayND<2, T> {
     }
   }
 
-  template <typename TT = T,
-            typename std::enable_if_t<!std::is_class<TT>::value, int> = 0>
+  template <typename TT = T, typename std::enable_if_t<!std::is_class<TT>::value, int> = 0>
   void print(std::string name = "", const char *temp = "%f") const {
     if (name.size())
       printf("%s[%dx%d]=", name.c_str(), res[0], res[1]);
@@ -528,8 +510,7 @@ class ArrayND<2, T> {
     int y_i = clamp(int(y), 0, res[1] - 2);
     real x_r = x - x_i;
     real y_r = y - y_i;
-    return lerp(x_r, lerp(y_r, get(x_i, y_i), get(x_i, y_i + 1)),
-                lerp(y_r, get(x_i + 1, y_i), get(x_i + 1, y_i + 1)));
+    return lerp(x_r, lerp(y_r, get(x_i, y_i), get(x_i, y_i + 1)), lerp(y_r, get(x_i + 1, y_i), get(x_i + 1, y_i + 1)));
   }
 
   T sample(const Vector2 &v) const {
@@ -615,17 +596,14 @@ class ArrayND<2, T> {
   }
 
   bool inside(const Vector2 &pos, real tolerance = 1e-4f) const {
-    return (-tolerance <= pos.x && pos.x <= res[0] + tolerance &&
-            -tolerance <= pos.y && pos.y < res[1] + tolerance);
+    return (-tolerance <= pos.x && pos.x <= res[0] + tolerance && -tolerance <= pos.y && pos.y < res[1] + tolerance);
   }
 
   Region2D get_rasterization_region(Vector2 pos, int half_extent) const {
     int x = (int)floor(pos.x - storage_offset.x);
     int y = (int)floor(pos.y - storage_offset.y);
-    return Region2D(std::max(0, x - half_extent + 1),
-                    std::min(res[0], x + half_extent + 1),
-                    std::max(0, y - half_extent + 1),
-                    std::min(res[1], y + half_extent + 1), storage_offset);
+    return Region2D(std::max(0, x - half_extent + 1), std::min(res[0], x + half_extent + 1),
+                    std::max(0, y - half_extent + 1), std::min(res[1], y + half_extent + 1), storage_offset);
   }
 
   bool is_normal() const {

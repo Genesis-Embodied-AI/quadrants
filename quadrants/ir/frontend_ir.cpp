@@ -9,14 +9,12 @@
 
 namespace quadrants::lang {
 
-#define QD_ASSERT_TYPE_CHECKED(x)                                          \
-  do {                                                                     \
-    if (x->ret_type == PrimitiveType::unknown) {                           \
-      ErrorEmitter(                                                        \
-          QuadrantsTypeError(), x.expr.get(),                              \
-          fmt::format("[{}] was not type-checked",                         \
-                      ExpressionHumanFriendlyPrinter::expr_to_string(x))); \
-    }                                                                      \
+#define QD_ASSERT_TYPE_CHECKED(x)                                                                                \
+  do {                                                                                                           \
+    if (x->ret_type == PrimitiveType::unknown) {                                                                 \
+      ErrorEmitter(QuadrantsTypeError(), x.expr.get(),                                                           \
+                   fmt::format("[{}] was not type-checked", ExpressionHumanFriendlyPrinter::expr_to_string(x))); \
+    }                                                                                                            \
   } while (false)
 
 static bool is_primitive_or_tensor_type(DataType &type) {
@@ -28,11 +26,7 @@ FrontendSNodeOpStmt::FrontendSNodeOpStmt(SNodeOpType op_type,
                                          const ExprGroup &indices,
                                          const Expr &val,
                                          const DebugInfo &dbg_info)
-    : Stmt(dbg_info),
-      op_type(op_type),
-      snode(snode),
-      indices(indices),
-      val(val) {
+    : Stmt(dbg_info), op_type(op_type), snode(snode), indices(indices), val(val) {
   if (val.expr != nullptr) {
     QD_ASSERT(op_type == SNodeOpType::append);
   } else {
@@ -40,19 +34,15 @@ FrontendSNodeOpStmt::FrontendSNodeOpStmt(SNodeOpType op_type,
   }
 }
 
-FrontendReturnStmt::FrontendReturnStmt(const ExprGroup &group,
-                                       const DebugInfo &dbg_info)
+FrontendReturnStmt::FrontendReturnStmt(const ExprGroup &group, const DebugInfo &dbg_info)
     : Stmt(dbg_info), values(group) {
 }
 
-FrontendAssignStmt::FrontendAssignStmt(const Expr &lhs,
-                                       const Expr &rhs,
-                                       const DebugInfo &dbg_info)
+FrontendAssignStmt::FrontendAssignStmt(const Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info)
     : Stmt(dbg_info), lhs(lhs), rhs(rhs) {
   QD_ASSERT(lhs->is_lvalue());
   if (lhs.is<IdExpression>() && lhs->ret_type == PrimitiveType::unknown) {
-    lhs.expr->ret_type =
-        TypeFactory::get_instance().get_pointer_type(rhs.get_rvalue_type());
+    lhs.expr->ret_type = TypeFactory::get_instance().get_pointer_type(rhs.get_rvalue_type());
   }
 }
 
@@ -152,12 +142,10 @@ void FrontendForStmt::init_loop_vars(const ExprGroup &loop_vars) {
 
 void FrontendForStmt::add_loop_var(const Expr &loop_var) {
   loop_var_ids.push_back(loop_var.cast<IdExpression>()->id);
-  loop_var.expr->ret_type =
-      TypeFactory::get_instance().get_pointer_type(PrimitiveType::i32);
+  loop_var.expr->ret_type = TypeFactory::get_instance().get_pointer_type(PrimitiveType::i32);
 }
 
-FrontendFuncDefStmt::FrontendFuncDefStmt(const FrontendFuncDefStmt &o)
-    : funcid(o.funcid), body(o.body->clone()) {
+FrontendFuncDefStmt::FrontendFuncDefStmt(const FrontendFuncDefStmt &o) : funcid(o.funcid), body(o.body->clone()) {
 }
 
 FrontendWhileStmt::FrontendWhileStmt(const FrontendWhileStmt &o)
@@ -175,8 +163,7 @@ void ArgLoadExpression::type_check(const CompileConfig *) {
 }
 
 void ArgLoadExpression::flatten(FlattenContext *ctx) {
-  auto arg_load =
-      std::make_unique<ArgLoadStmt>(arg_id, dt, is_ptr, create_load, dbg_info);
+  auto arg_load = std::make_unique<ArgLoadStmt>(arg_id, dt, is_ptr, create_load, dbg_info);
   arg_load->ret_type = ret_type;
   ctx->push_back(std::move(arg_load));
   stmt = ctx->back_stmt();
@@ -184,9 +171,7 @@ void ArgLoadExpression::flatten(FlattenContext *ctx) {
 
 void RandExpression::type_check(const CompileConfig *) {
   if (!(dt->is<PrimitiveType>() && dt != PrimitiveType::unknown)) {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("Invalid dt [{}] for RandExpression", dt->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this, fmt::format("Invalid dt [{}] for RandExpression", dt->to_string()));
   }
   ret_type = dt;
 }
@@ -213,35 +198,28 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
 
   if (!operand_primitive_type->is<PrimitiveType>()) {
     ErrorEmitter(QuadrantsTypeError(), this,
-                 fmt::format("unsupported operand type(s) for '{}': '{}'",
-                             unary_op_type_name(type),
+                 fmt::format("unsupported operand type(s) for '{}': '{}'", unary_op_type_name(type),
                              operand_primitive_type->to_string()));
   }
 
-  if ((type == UnaryOpType::round || type == UnaryOpType::floor ||
-       type == UnaryOpType::ceil || is_trigonometric(type)) &&
+  if ((type == UnaryOpType::round || type == UnaryOpType::floor || type == UnaryOpType::ceil ||
+       is_trigonometric(type)) &&
       !is_real(operand_primitive_type))
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("'{}' takes real inputs only, however '{}' is provided",
-                    unary_op_type_name(type),
-                    operand_primitive_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("'{}' takes real inputs only, however '{}' is provided", unary_op_type_name(type),
+                             operand_primitive_type->to_string()));
 
-  if ((type == UnaryOpType::sqrt || type == UnaryOpType::exp ||
-       type == UnaryOpType::log) &&
+  if ((type == UnaryOpType::sqrt || type == UnaryOpType::exp || type == UnaryOpType::log) &&
       !is_real(operand_primitive_type)) {
     ret_primitive_type = config->default_fp;
   } else {
     ret_primitive_type = is_cast() ? cast_type : operand_primitive_type;
   }
 
-  if ((type == UnaryOpType::bit_not || type == UnaryOpType::logic_not) &&
-      is_real(operand_primitive_type)) {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("'{}' takes integral inputs only, however '{}' is provided",
-                    unary_op_type_name(type),
-                    operand_primitive_type->to_string()));
+  if ((type == UnaryOpType::bit_not || type == UnaryOpType::logic_not) && is_real(operand_primitive_type)) {
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("'{}' takes integral inputs only, however '{}' is provided", unary_op_type_name(type),
+                             operand_primitive_type->to_string()));
   }
 
   if (type == UnaryOpType::logic_not) {
@@ -253,27 +231,22 @@ void UnaryOpExpression::type_check(const CompileConfig *config) {
     QD_ASSERT(operand_primitive_type->is_primitive(PrimitiveTypeID::f32) ||
               operand_primitive_type->is_primitive(PrimitiveTypeID::f64));
     elements.push_back({operand_primitive_type, "mantissa", 0});
-    elements.push_back(
-        {quadrants::lang::TypeFactory::get_instance().get_primitive_int_type(
-             32, /*is_signed=*/true),
-         "exponent", (size_t)data_type_size(operand_primitive_type)});
-    ret_type =
-        quadrants::lang::TypeFactory::get_instance().get_struct_type(elements);
+    elements.push_back({quadrants::lang::TypeFactory::get_instance().get_primitive_int_type(32, /*is_signed=*/true),
+                        "exponent", (size_t)data_type_size(operand_primitive_type)});
+    ret_type = quadrants::lang::TypeFactory::get_instance().get_struct_type(elements);
     ret_type.set_is_pointer(true);
     return;
   }
 
   if (type == UnaryOpType::popcnt && is_real(operand_primitive_type)) {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("'{}' takes integral inputs only, however '{}' is provided",
-                    unary_op_type_name(type),
-                    operand_primitive_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("'{}' takes integral inputs only, however '{}' is provided", unary_op_type_name(type),
+                             operand_primitive_type->to_string()));
   }
 
   if (operand_type->is<TensorType>()) {
-    ret_type = quadrants::lang::TypeFactory::get_instance().get_tensor_type(
-        operand_type.get_shape(), ret_primitive_type);
+    ret_type =
+        quadrants::lang::TypeFactory::get_instance().get_tensor_type(operand_type.get_shape(), ret_primitive_type);
   } else {
     QD_ASSERT(operand_type->is<PrimitiveType>());
     ret_type = ret_primitive_type;
@@ -286,8 +259,7 @@ bool UnaryOpExpression::is_cast() const {
 
 void UnaryOpExpression::flatten(FlattenContext *ctx) {
   auto operand_stmt = flatten_rvalue(operand, ctx);
-  auto unary =
-      std::make_unique<UnaryOpStmt>(type, operand_stmt, operand_stmt->dbg_info);
+  auto unary = std::make_unique<UnaryOpStmt>(type, operand_stmt, operand_stmt->dbg_info);
   if (is_cast()) {
     unary->cast_type = cast_type;
   }
@@ -305,8 +277,7 @@ Expr to_broadcast_tensor(const Expr &elt, const DataType &dt) {
     // Only tensor shape will be checked here, since the dtype will
     // be promoted later at irpass::type_check()
     if (elt_type.get_shape() != dt.get_shape()) {
-      ErrorEmitter(QuadrantsTypeError(), elt.expr.get(),
-                   "Cannot broadcast tensor to tensor");
+      ErrorEmitter(QuadrantsTypeError(), elt.expr.get(), "Cannot broadcast tensor to tensor");
     } else {
       return elt;
     }
@@ -315,14 +286,11 @@ Expr to_broadcast_tensor(const Expr &elt, const DataType &dt) {
   auto tensor_type = dt->as<TensorType>();
   auto tensor_elt_type = tensor_type->get_element_type();
   if (!tensor_elt_type->is<PrimitiveType>()) {
-    ErrorEmitter(
-        QuadrantsTypeError(), elt.expr.get(),
-        fmt::format("Only primitive types are supported in Tensors, got {}",
-                    tensor_elt_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), elt.expr.get(),
+                 fmt::format("Only primitive types are supported in Tensors, got {}", tensor_elt_type->to_string()));
   }
   std::vector<Expr> broadcast_values(tensor_type->get_num_elements(), elt);
-  auto matrix_expr = Expr::make<MatrixExpression>(
-      broadcast_values, tensor_type->get_shape(), elt_type, elt->dbg_info);
+  auto matrix_expr = Expr::make<MatrixExpression>(broadcast_values, tensor_type->get_shape(), elt_type, elt->dbg_info);
   matrix_expr->type_check(nullptr);
   return matrix_expr;
 }
@@ -346,14 +314,11 @@ void BinaryOpExpression::type_check(const CompileConfig *config) {
   auto lhs_type = lhs.get_rvalue_type();
   auto rhs_type = rhs.get_rvalue_type();
   auto error = [&]() {
-    throw QuadrantsTypeError(
-        fmt::format("unsupported operand type(s) for '{}': '{}' and '{}'",
-                    binary_op_type_symbol(type), lhs_type->to_string(),
-                    rhs_type->to_string()));
+    throw QuadrantsTypeError(fmt::format("unsupported operand type(s) for '{}': '{}' and '{}'",
+                                         binary_op_type_symbol(type), lhs_type->to_string(), rhs_type->to_string()));
   };
 
-  if (!is_primitive_or_tensor_type(lhs_type) ||
-      !is_primitive_or_tensor_type(rhs_type)) {
+  if (!is_primitive_or_tensor_type(lhs_type) || !is_primitive_or_tensor_type(rhs_type)) {
     error();
   }
 
@@ -378,33 +343,30 @@ void BinaryOpExpression::type_check(const CompileConfig *config) {
   if (lhs_type->is<TensorType>()) {
     is_tensor_op = true;
     auto rhs_tensor_type = rhs_type->cast<TensorType>();
-    if (rhs_tensor_type->get_shape() !=
-        lhs_type->cast<TensorType>()->get_shape())
+    if (rhs_tensor_type->get_shape() != lhs_type->cast<TensorType>()->get_shape())
       // current assume element-wise binary op
       error();
   }
 
   auto make_dt = [&is_tensor_op, lhs_type](DataType dt) {
     if (is_tensor_op) {
-      return TypeFactory::create_tensor_type(
-          lhs_type->cast<TensorType>()->get_shape(), dt);
+      return TypeFactory::create_tensor_type(lhs_type->cast<TensorType>()->get_shape(), dt);
     } else {
       return dt;
     }
   };
 
-  if (binary_is_bitwise(type) && (!is_integral(lhs_type.get_element_type()) ||
-                                  !is_integral(rhs_type.get_element_type())))
+  if (binary_is_bitwise(type) &&
+      (!is_integral(lhs_type.get_element_type()) || !is_integral(rhs_type.get_element_type())))
     error();
-  if (binary_is_logical(type) && !(is_integral(lhs_type.get_element_type()) &&
-                                   is_integral(rhs_type.get_element_type())))
+  if (binary_is_logical(type) &&
+      !(is_integral(lhs_type.get_element_type()) && is_integral(rhs_type.get_element_type())))
     error();
   if (is_comparison(type)) {
     ret_type = make_dt(PrimitiveType::u1);
     return;
   }
-  if (is_shift_op(type) ||
-      (type == BinaryOpType::pow && is_integral(rhs_type))) {
+  if (is_shift_op(type) || (type == BinaryOpType::pow && is_integral(rhs_type))) {
     ret_type = lhs_type;
     return;
   }
@@ -469,8 +431,7 @@ void BinaryOpExpression::flatten(FlattenContext *ctx) {
     return;
   }
   auto rhs_stmt = flatten_rvalue(rhs, ctx);
-  ctx->push_back(std::make_unique<BinaryOpStmt>(
-      type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info));
+  ctx->push_back(std::make_unique<BinaryOpStmt>(type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info));
   stmt = ctx->back_stmt();
   stmt->ret_type = ret_type;
 }
@@ -507,9 +468,7 @@ void make_ifte(Expression::FlattenContext *ctx,
   return;
 }
 
-static std::tuple<Expr, Expr, Expr> unify_ternaryop_operands(const Expr &e1,
-                                                             const Expr &e2,
-                                                             const Expr &e3) {
+static std::tuple<Expr, Expr, Expr> unify_ternaryop_operands(const Expr &e1, const Expr &e2, const Expr &e3) {
   auto target_dtype = PrimitiveType::unknown;
   // Since we don't support broadcasting between two TensorTypes,
   // we can simply use the first TensorType's dtype as the target dtype.
@@ -528,8 +487,7 @@ static std::tuple<Expr, Expr, Expr> unify_ternaryop_operands(const Expr &e1,
     return std::tuple(e1, e2, e3);
   }
 
-  return std::tuple(e1, to_broadcast_tensor(e2, target_dtype),
-                    to_broadcast_tensor(e3, target_dtype));
+  return std::tuple(e1, to_broadcast_tensor(e2, target_dtype), to_broadcast_tensor(e3, target_dtype));
 }
 
 void TernaryOpExpression::type_check(const CompileConfig *config) {
@@ -540,8 +498,7 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
   bool is_valid = true;
   bool is_tensor = false;
 
-  auto [unified_cond, unified_l, unified_r] =
-      unify_ternaryop_operands(op1, op2, op3);
+  auto [unified_cond, unified_l, unified_r] = unify_ternaryop_operands(op1, op2, op3);
   op1 = unified_cond;
   op2 = unified_l;
   op3 = unified_r;
@@ -550,23 +507,19 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
   auto op3_type = op3.get_rvalue_type();
 
   auto error = [&]() {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("unsupported operand type(s) for '{}': '{}', '{}' and '{}'",
-                    ternary_type_name(type), op1_type->to_string(),
-                    op2_type->to_string(), op3_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("unsupported operand type(s) for '{}': '{}', '{}' and '{}'", ternary_type_name(type),
+                             op1_type->to_string(), op2_type->to_string(), op3_type->to_string()));
   };
   std::vector<int> shape;
   if (op2_type->is<TensorType>() && op3_type->is<TensorType>()) {
     // valid
     is_tensor = true;
     if (op1_type->is<TensorType>() &&
-        op1_type->cast<TensorType>()->get_shape() !=
-            op2_type->cast<TensorType>()->get_shape()) {
+        op1_type->cast<TensorType>()->get_shape() != op2_type->cast<TensorType>()->get_shape()) {
       is_valid = false;
     }
-    if (op2_type->cast<TensorType>()->get_shape() !=
-        op3_type->cast<TensorType>()->get_shape()) {
+    if (op2_type->cast<TensorType>()->get_shape() != op3_type->cast<TensorType>()->get_shape()) {
       is_valid = false;
     }
 
@@ -577,8 +530,7 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
     op2_type = op2_type->cast<TensorType>()->get_element_type();
     op3_type = op3_type->cast<TensorType>()->get_element_type();
 
-  } else if (op1_type->is<PrimitiveType>() && op2_type->is<PrimitiveType>() &&
-             op3_type->is<PrimitiveType>()) {
+  } else if (op1_type->is<PrimitiveType>() && op2_type->is<PrimitiveType>() && op3_type->is<PrimitiveType>()) {
     // valid
   } else {
     is_valid = false;
@@ -609,8 +561,7 @@ void TernaryOpExpression::flatten(FlattenContext *ctx) {
     auto op1_stmt = flatten_rvalue(op1, ctx);
     auto op2_stmt = flatten_rvalue(op2, ctx);
     auto op3_stmt = flatten_rvalue(op3, ctx);
-    ctx->push_back(std::make_unique<TernaryOpStmt>(type, op1_stmt, op2_stmt,
-                                                   op3_stmt, dbg_info));
+    ctx->push_back(std::make_unique<TernaryOpStmt>(type, op1_stmt, op2_stmt, op3_stmt, dbg_info));
   } else if (type == TernaryOpType::ifte) {
     make_ifte(ctx, ret_type, op1, op2, op3, dbg_info);
   }
@@ -633,13 +584,11 @@ void InternalFuncCallExpression::flatten(FlattenContext *ctx) {
 }
 
 void ExternalTensorExpression::flatten(FlattenContext *ctx) {
-  auto type =
-      TypeFactory::get_instance().get_ndarray_struct_type(dt, ndim, needs_grad);
+  auto type = TypeFactory::get_instance().get_ndarray_struct_type(dt, ndim, needs_grad);
   type = TypeFactory::get_instance().get_pointer_type((Type *)type);
 
-  auto ptr =
-      Stmt::make<ArgLoadStmt>(arg_id, type, /*is_ptr=*/true,
-                              /*create_load=*/false, /*dbg_info=*/dbg_info);
+  auto ptr = Stmt::make<ArgLoadStmt>(arg_id, type, /*is_ptr=*/true,
+                                     /*create_load=*/false, /*dbg_info=*/dbg_info);
 
   ctx->push_back(std::move(ptr));
   stmt = ctx->back_stmt();
@@ -660,11 +609,9 @@ std::vector<Stmt *> make_index_stmts(Expression::FlattenContext *ctx,
   return index_stmts;
 }
 
-Stmt *make_field_access(Expression::FlattenContext *ctx,
-                        const FieldExpression &field,
-                        ExprGroup indices) {
-  return ctx->push_back(std::make_unique<GlobalPtrStmt>(
-      field.snode, make_index_stmts(ctx, indices, field.snode->index_offsets)));
+Stmt *make_field_access(Expression::FlattenContext *ctx, const FieldExpression &field, ExprGroup indices) {
+  return ctx->push_back(
+      std::make_unique<GlobalPtrStmt>(field.snode, make_index_stmts(ctx, indices, field.snode->index_offsets)));
 }
 
 Stmt *make_matrix_field_access(Expression::FlattenContext *ctx,
@@ -677,14 +624,11 @@ Stmt *make_matrix_field_access(Expression::FlattenContext *ctx,
   }
   ret_type.set_is_pointer(true);
   return ctx->push_back(std::make_unique<MatrixOfGlobalPtrStmt>(
-      snodes, make_index_stmts(ctx, indices, snodes[0]->index_offsets),
-      matrix_field.dynamic_indexable, matrix_field.dynamic_index_stride,
-      ret_type));
+      snodes, make_index_stmts(ctx, indices, snodes[0]->index_offsets), matrix_field.dynamic_indexable,
+      matrix_field.dynamic_index_stride, ret_type));
 }
 
-Stmt *make_ndarray_access(Expression::FlattenContext *ctx,
-                          Expr var,
-                          ExprGroup indices) {
+Stmt *make_ndarray_access(Expression::FlattenContext *ctx, Expr var, ExprGroup indices) {
   std::vector<Stmt *> index_stmts;
   for (int i = 0; i < (int)indices.size(); i++) {
     Stmt *ind = flatten_rvalue(indices.exprs[i], ctx);
@@ -694,9 +638,8 @@ Stmt *make_ndarray_access(Expression::FlattenContext *ctx,
   auto expr = var.cast<ExternalTensorExpression>();
   // FIXME: No need to make it negative since we only support AOS
   auto element_dim = -expr->dt.get_shape().size();
-  auto external_ptr_stmt = std::make_unique<ExternalPtrStmt>(
-      var_stmt, index_stmts, indices.size(), expr->dt.get_shape(),
-      expr->is_grad, expr->boundary);
+  auto external_ptr_stmt = std::make_unique<ExternalPtrStmt>(var_stmt, index_stmts, indices.size(),
+                                                             expr->dt.get_shape(), expr->is_grad, expr->boundary);
   if (expr->ndim - element_dim == indices.size()) {
     // Indexing into an scalar element
     external_ptr_stmt->ret_type = expr->dt.ptr_removed().get_element_type();
@@ -725,16 +668,13 @@ Stmt *make_tensor_access_single_element(Expression::FlattenContext *ctx,
     for (int i = 0; i < (int)indices.size(); ++i) {
       auto index_stmt = flatten_rvalue(indices[i], ctx);
       Stmt *shape_stmt = ctx->push_back<ConstStmt>(TypedConstant(shape[i]));
-      Stmt *mul_stmt = ctx->push_back<BinaryOpStmt>(BinaryOpType::mul,
-                                                    offset_stmt, shape_stmt);
-      offset_stmt =
-          ctx->push_back<BinaryOpStmt>(BinaryOpType::add, mul_stmt, index_stmt);
+      Stmt *mul_stmt = ctx->push_back<BinaryOpStmt>(BinaryOpType::mul, offset_stmt, shape_stmt);
+      offset_stmt = ctx->push_back<BinaryOpStmt>(BinaryOpType::add, mul_stmt, index_stmt);
     }
   } else {
     int offset = 0;
     for (int i = 0; i < (int)indices.size(); ++i) {
-      offset =
-          offset * shape[i] + indices[i].cast<ConstExpression>()->val.val_int();
+      offset = offset * shape[i] + indices[i].cast<ConstExpression>()->val.val_int();
     }
     offset_stmt = ctx->push_back<ConstStmt>(TypedConstant(offset));
   }
@@ -754,19 +694,16 @@ Stmt *make_tensor_access(Expression::FlattenContext *ctx,
     var_stmt = alloca_stmt;
   }
 
-  bool is_shared_array =
-      (var_stmt->is<AllocaStmt>() && var_stmt->as<AllocaStmt>()->is_shared);
+  bool is_shared_array = (var_stmt->is<AllocaStmt>() && var_stmt->as<AllocaStmt>()->is_shared);
 
   if (ret_type.ptr_removed()->is<TensorType>() && !is_shared_array) {
     std::vector<Stmt *> stmts;
     for (auto &indices : indices_group) {
-      stmts.push_back(make_tensor_access_single_element(ctx, var_stmt, indices,
-                                                        shape, dbg_info));
+      stmts.push_back(make_tensor_access_single_element(ctx, var_stmt, indices, shape, dbg_info));
     }
     return ctx->push_back<MatrixOfMatrixPtrStmt>(stmts, ret_type);
   }
-  return make_tensor_access_single_element(ctx, var_stmt, indices_group[0],
-                                           shape, dbg_info);
+  return make_tensor_access_single_element(ctx, var_stmt, indices_group[0], shape, dbg_info);
 }
 
 void MatrixExpression::type_check(const CompileConfig *config) {
@@ -793,9 +730,7 @@ void MatrixExpression::flatten(FlattenContext *ctx) {
   stmt->ret_type = dt;
 }
 
-IndexExpression::IndexExpression(const Expr &var,
-                                 const ExprGroup &indices,
-                                 const DebugInfo &dbg_info)
+IndexExpression::IndexExpression(const Expr &var, const ExprGroup &indices, const DebugInfo &dbg_info)
     : Expression(dbg_info), var(var), indices_group({indices}) {
 }
 
@@ -803,10 +738,7 @@ IndexExpression::IndexExpression(const Expr &var,
                                  const std::vector<ExprGroup> &indices_group,
                                  const std::vector<int> &ret_shape,
                                  const DebugInfo &dbg_info)
-    : Expression(dbg_info),
-      var(var),
-      indices_group(indices_group),
-      ret_shape(ret_shape) {
+    : Expression(dbg_info), var(var), indices_group(indices_group), ret_shape(ret_shape) {
   // IndexExpression with ret_shape is used for matrix slicing, where each entry
   // of ExprGroup is interpreted as a group of indices to return within each
   // axis. For example, mat[0, 3:5] has indices_group={0, [3, 4]}, where [3, 4]
@@ -852,26 +784,21 @@ static void field_validation(FieldExpression *field_expr, int index_dim) {
   int field_dim = field_expr->snode->num_active_indices;
 
   if (field_dim != index_dim) {
-    ErrorEmitter(
-        QuadrantsIndexError(), field_expr,
-        fmt::format("Field with dim {} accessed with indices of dim {}",
-                    field_dim, index_dim));
+    ErrorEmitter(QuadrantsIndexError(), field_expr,
+                 fmt::format("Field with dim {} accessed with indices of dim {}", field_dim, index_dim));
   }
 }
 
 void IndexExpression::type_check(const CompileConfig *) {
   // TODO: Change to type-based solution
   // Currently, dimension compatibility check happens in Python
-  QD_ASSERT(indices_group.size() == std::accumulate(begin(ret_shape),
-                                                    end(ret_shape), 1,
-                                                    std::multiplies<>()));
+  QD_ASSERT(indices_group.size() == std::accumulate(begin(ret_shape), end(ret_shape), 1, std::multiplies<>()));
   int index_dim = indices_group.empty() ? 0 : indices_group[0].size();
   bool has_slice = !ret_shape.empty();
   auto var_type = var.get_rvalue_type();
   if (has_slice) {
     if (!is_tensor()) {
-      ErrorEmitter(QuadrantsTypeError(), this,
-                   "Slice or swizzle can only apply on matrices");
+      ErrorEmitter(QuadrantsTypeError(), this, "Slice or swizzle can only apply on matrices");
     }
     auto element_type = var_type->as<TensorType>()->get_element_type();
     ret_type = TypeFactory::create_tensor_type(ret_shape, element_type);
@@ -886,10 +813,8 @@ void IndexExpression::type_check(const CompileConfig *) {
     auto field_expr = matrix_field_expr->fields[0].cast<FieldExpression>();
     field_validation(field_expr.get(), index_dim);
 
-    ret_type = TypeFactory::create_tensor_type(matrix_field_expr->element_shape,
-                                               matrix_field_expr->fields[0]
-                                                   .cast<FieldExpression>()
-                                                   ->dt->get_compute_type());
+    ret_type = TypeFactory::create_tensor_type(
+        matrix_field_expr->element_shape, matrix_field_expr->fields[0].cast<FieldExpression>()->dt->get_compute_type());
   } else if (is_ndarray()) {  // ndarray
     auto external_tensor_expr = var.cast<ExternalTensorExpression>();
     int ndim = external_tensor_expr->ndim;
@@ -898,8 +823,7 @@ void IndexExpression::type_check(const CompileConfig *) {
     if (total_dim != index_dim + element_dim) {
       ErrorEmitter(
           QuadrantsIndexError(), this,
-          fmt::format("Array with dim {} accessed with indices of dim {}",
-                      total_dim - element_dim, index_dim));
+          fmt::format("Array with dim {} accessed with indices of dim {}", total_dim - element_dim, index_dim));
     }
 
     if (index_dim == total_dim) {
@@ -914,15 +838,13 @@ void IndexExpression::type_check(const CompileConfig *) {
     auto shape = tensor_type->get_shape();
     if (indices_group[0].size() != shape.size()) {
       ErrorEmitter(QuadrantsIndexError(), this,
-                   fmt::format("Expected {} indices, got {}.", shape.size(),
-                               indices_group[0].size()));
+                   fmt::format("Expected {} indices, got {}.", shape.size(), indices_group[0].size()));
     }
     ret_type = tensor_type->get_element_type();
   } else {
-    ErrorEmitter(
-        QuadrantsIndexError(), this,
-        "Invalid IndexExpression: the source is not among field, ndarray or "
-        "local tensor");
+    ErrorEmitter(QuadrantsIndexError(), this,
+                 "Invalid IndexExpression: the source is not among field, ndarray or "
+                 "local tensor");
   }
   ret_type = TypeFactory::get_instance().get_pointer_type(ret_type);
   for (auto &indices : indices_group) {
@@ -941,22 +863,18 @@ void IndexExpression::type_check(const CompileConfig *) {
 
 void IndexExpression::flatten(FlattenContext *ctx) {
   if (is_field()) {
-    stmt =
-        make_field_access(ctx, *var.cast<FieldExpression>(), indices_group[0]);
+    stmt = make_field_access(ctx, *var.cast<FieldExpression>(), indices_group[0]);
   } else if (is_matrix_field()) {
-    stmt = make_matrix_field_access(ctx, *var.cast<MatrixFieldExpression>(),
-                                    indices_group[0], ret_type);
+    stmt = make_matrix_field_access(ctx, *var.cast<MatrixFieldExpression>(), indices_group[0], ret_type);
   } else if (is_ndarray()) {
     stmt = make_ndarray_access(ctx, var, indices_group[0]);
   } else if (is_tensor()) {
-    stmt = make_tensor_access(
-        ctx, var, indices_group, ret_type,
-        var->ret_type.ptr_removed()->as<TensorType>()->get_shape(), dbg_info);
+    stmt = make_tensor_access(ctx, var, indices_group, ret_type,
+                              var->ret_type.ptr_removed()->as<TensorType>()->get_shape(), dbg_info);
   } else {
-    ErrorEmitter(
-        QuadrantsIndexError(), this,
-        "Invalid IndexExpression: the source is not among field, ndarray or "
-        "local tensor");
+    ErrorEmitter(QuadrantsIndexError(), this,
+                 "Invalid IndexExpression: the source is not among field, ndarray or "
+                 "local tensor");
   }
   stmt->dbg_info = dbg_info;
 }
@@ -966,8 +884,7 @@ void RangeAssumptionExpression::type_check(const CompileConfig *) {
   QD_ASSERT_TYPE_CHECKED(base);
   auto input_type = input.get_rvalue_type();
   auto base_type = base.get_rvalue_type();
-  if (!input_type->is<PrimitiveType>() || !base_type->is<PrimitiveType>() ||
-      input_type != base_type)
+  if (!input_type->is<PrimitiveType>() || !base_type->is<PrimitiveType>() || input_type != base_type)
     ErrorEmitter(QuadrantsTypeError(), this,
                  fmt::format("unsupported operand type(s) for "
                              "'range_assumption': '{}' and '{}'",
@@ -978,8 +895,7 @@ void RangeAssumptionExpression::type_check(const CompileConfig *) {
 void RangeAssumptionExpression::flatten(FlattenContext *ctx) {
   auto input_stmt = flatten_rvalue(input, ctx);
   auto base_stmt = flatten_rvalue(base, ctx);
-  ctx->push_back(Stmt::make<RangeAssumptionStmt>(input_stmt, base_stmt, low,
-                                                 high, dbg_info));
+  ctx->push_back(Stmt::make<RangeAssumptionStmt>(input_stmt, base_stmt, low, high, dbg_info));
   stmt = ctx->back_stmt();
 }
 
@@ -988,10 +904,8 @@ void LoopUniqueExpression::type_check(const CompileConfig *) {
   auto input_type = input.get_rvalue_type();
 
   if (!input_type->is<PrimitiveType>())
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format("unsupported operand type(s) for 'loop_unique': '{}'",
-                    input_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("unsupported operand type(s) for 'loop_unique': '{}'", input_type->to_string()));
   ret_type = input_type;
 }
 
@@ -1012,12 +926,9 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
   QD_ASSERT_TYPE_CHECKED(dest);
   QD_ASSERT_TYPE_CHECKED(val);
   auto error = [&]() {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format(
-            "unsupported operand type(s) for 'atomic_{}': '{}' and '{}'",
-            atomic_op_type_name(op_type), dest->ret_type->to_string(),
-            val->ret_type->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("unsupported operand type(s) for 'atomic_{}': '{}' and '{}'", atomic_op_type_name(op_type),
+                             dest->ret_type->to_string(), val->ret_type->to_string()));
   };
 
   // Broadcast val to dest if neccessary
@@ -1054,11 +965,9 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
   if (ret_element_type != val_dtype) {
     auto promoted = promoted_type(ret_element_type, val_dtype);
     if (ret_element_type != promoted) {
-      ErrorEmitter(
-          QuadrantsCastWarning(), this,
-          fmt::format("Atomic {} may lose precision: {} <- {}",
-                      atomic_op_type_name(op_type),
-                      ret_element_type->to_string(), val_dtype->to_string()));
+      ErrorEmitter(QuadrantsCastWarning(), this,
+                   fmt::format("Atomic {} may lose precision: {} <- {}", atomic_op_type_name(op_type),
+                               ret_element_type->to_string(), val_dtype->to_string()));
     }
   }
 }
@@ -1068,12 +977,10 @@ void AtomicOpExpression::flatten(FlattenContext *ctx) {
   // replace atomic sub with negative atomic add
   if (op_type == AtomicOpType::sub) {
     if (val->ret_type != ret_type) {
-      val.set(Expr::make<UnaryOpExpression>(UnaryOpType::cast_value, val,
-                                            ret_type, val->dbg_info));
+      val.set(Expr::make<UnaryOpExpression>(UnaryOpType::cast_value, val, ret_type, val->dbg_info));
     }
 
-    val.set(
-        Expr::make<UnaryOpExpression>(UnaryOpType::neg, val, val->dbg_info));
+    val.set(Expr::make<UnaryOpExpression>(UnaryOpType::neg, val, val->dbg_info));
     op_type = AtomicOpType::add;
   }
   // expand rhs
@@ -1083,9 +990,7 @@ void AtomicOpExpression::flatten(FlattenContext *ctx) {
   stmt->ret_type = stmt->as<AtomicOpStmt>()->dest->ret_type;
 }
 
-SNodeOpExpression::SNodeOpExpression(SNode *snode,
-                                     SNodeOpType op_type,
-                                     const ExprGroup &indices)
+SNodeOpExpression::SNodeOpExpression(SNode *snode, SNodeOpType op_type, const ExprGroup &indices)
     : snode(snode), op_type(op_type), indices(indices) {
 }
 
@@ -1115,8 +1020,7 @@ void SNodeOpExpression::type_check(const CompileConfig *config) {
       if (dst_type != promoted) {
         ErrorEmitter(
             QuadrantsCastWarning(), this,
-            fmt::format("Append may lose precision: {} <- {}",
-                        dst_type->to_string(), value_type->to_string()));
+            fmt::format("Append may lose precision: {} <- {}", dst_type->to_string(), value_type->to_string()));
       }
       values[i] = cast(values[i], dst_type);
       values[i]->type_check(config);
@@ -1129,39 +1033,28 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
   for (int i = 0; i < (int)indices.size(); i++) {
     indices_stmt.push_back(flatten_rvalue(indices[i], ctx));
   }
-  auto is_cell_access = SNodeOpStmt::activation_related(op_type) &&
-                        snode->type != SNodeType::dynamic;
-  auto ptr = ctx->push_back<GlobalPtrStmt>(snode, indices_stmt, true,
-                                           is_cell_access, dbg_info);
+  auto is_cell_access = SNodeOpStmt::activation_related(op_type) && snode->type != SNodeType::dynamic;
+  auto ptr = ctx->push_back<GlobalPtrStmt>(snode, indices_stmt, true, is_cell_access, dbg_info);
   if (op_type == SNodeOpType::is_active) {
-    if (!(snode->type == SNodeType::pointer || snode->type == SNodeType::hash ||
-          snode->type == SNodeType::bitmasked)) {
-      ErrorEmitter(
-          QuadrantsTypeError(), this,
-          "ti.is_active only works on pointer, hash or bitmasked nodes.");
+    if (!(snode->type == SNodeType::pointer || snode->type == SNodeType::hash || snode->type == SNodeType::bitmasked)) {
+      ErrorEmitter(QuadrantsTypeError(), this, "ti.is_active only works on pointer, hash or bitmasked nodes.");
     }
-    ctx->push_back<SNodeOpStmt>(SNodeOpType::is_active, snode, ptr, nullptr,
-                                dbg_info);
+    ctx->push_back<SNodeOpStmt>(SNodeOpType::is_active, snode, ptr, nullptr, dbg_info);
   } else if (op_type == SNodeOpType::length) {
-    ctx->push_back<SNodeOpStmt>(SNodeOpType::length, snode, ptr, nullptr,
-                                dbg_info);
+    ctx->push_back<SNodeOpStmt>(SNodeOpType::length, snode, ptr, nullptr, dbg_info);
   } else if (op_type == SNodeOpType::get_addr) {
-    ctx->push_back<SNodeOpStmt>(SNodeOpType::get_addr, snode, ptr, nullptr,
-                                dbg_info);
+    ctx->push_back<SNodeOpStmt>(SNodeOpType::get_addr, snode, ptr, nullptr, dbg_info);
   } else if (op_type == SNodeOpType::append) {
     auto alloca = ctx->push_back<AllocaStmt>(PrimitiveType::i32, dbg_info);
-    auto addr = ctx->push_back<SNodeOpStmt>(SNodeOpType::allocate, snode, ptr,
-                                            alloca, dbg_info);
+    auto addr = ctx->push_back<SNodeOpStmt>(SNodeOpType::allocate, snode, ptr, alloca, dbg_info);
     for (int i = 0; i < values.size(); i++) {
       auto value_stmt = flatten_rvalue(values[i], ctx);
-      auto ch_addr = ctx->push_back<GetChStmt>(
-          addr, snode, i, /*is_bit_vectorized = */ false, dbg_info);
+      auto ch_addr = ctx->push_back<GetChStmt>(addr, snode, i, /*is_bit_vectorized = */ false, dbg_info);
       ctx->push_back<GlobalStoreStmt>(ch_addr, value_stmt, dbg_info);
     }
     ctx->push_back<LocalLoadStmt>(alloca, dbg_info);
     if (snode->type != SNodeType::dynamic) {
-      ErrorEmitter(QuadrantsTypeError(), this,
-                   "ti.append only works on dynamic nodes.");
+      ErrorEmitter(QuadrantsTypeError(), this, "ti.append only works on dynamic nodes.");
     }
   }
   stmt = ctx->back_stmt();
@@ -1169,9 +1062,7 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
 
 void ConstExpression::type_check(const CompileConfig *) {
   if (!(val.dt->is<PrimitiveType>() && val.dt != PrimitiveType::unknown)) {
-    ErrorEmitter(QuadrantsTypeError(), this,
-                 fmt::format("Invalid dt [{}] for ConstExpression",
-                             val.dt->to_string()));
+    ErrorEmitter(QuadrantsTypeError(), this, fmt::format("Invalid dt [{}] for ConstExpression", val.dt->to_string()));
   }
   ret_type = val.dt;
 }
@@ -1183,11 +1074,9 @@ void ConstExpression::flatten(FlattenContext *ctx) {
 
 void ExternalTensorShapeAlongAxisExpression::type_check(const CompileConfig *) {
   if (!(ptr.is<ExternalTensorExpression>())) {
-    ErrorEmitter(
-        QuadrantsTypeError(), this,
-        fmt::format(
-            "Invalid ptr [{}] for ExternalTensorShapeAlongAxisExpression",
-            ExpressionHumanFriendlyPrinter::expr_to_string(ptr)));
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("Invalid ptr [{}] for ExternalTensorShapeAlongAxisExpression",
+                             ExpressionHumanFriendlyPrinter::expr_to_string(ptr)));
   }
   ret_type = PrimitiveType::i32;
 }
@@ -1195,14 +1084,12 @@ void ExternalTensorShapeAlongAxisExpression::type_check(const CompileConfig *) {
 void ExternalTensorShapeAlongAxisExpression::flatten(FlattenContext *ctx) {
   auto temp = ptr.cast<ExternalTensorExpression>();
   QD_ASSERT(0 <= axis && axis < temp->ndim);
-  ctx->push_back<ExternalTensorShapeAlongAxisStmt>(axis, temp->arg_id,
-                                                   dbg_info);
+  ctx->push_back<ExternalTensorShapeAlongAxisStmt>(axis, temp->arg_id, dbg_info);
   stmt = ctx->back_stmt();
 }
 
 void ExternalTensorBasePtrExpression::type_check(const CompileConfig *) {
-  QD_ASSERT_INFO(ptr.is<ExternalTensorExpression>(),
-                 "Invalid ptr [{}] for ExternalTensorBasePtrExpression",
+  QD_ASSERT_INFO(ptr.is<ExternalTensorExpression>(), "Invalid ptr [{}] for ExternalTensorBasePtrExpression",
                  ExpressionHumanFriendlyPrinter::expr_to_string(ptr));
   ret_type = ptr.cast<ExternalTensorExpression>()->dt.get_element_type();
   ret_type.set_is_pointer(true);
@@ -1221,8 +1108,7 @@ void GetElementExpression::type_check(const CompileConfig *config) {
   if (!src_type->is<PointerType>()) {
     ErrorEmitter(
         QuadrantsTypeError(), this,
-        fmt::format("Invalid src [{}] for GetElementExpression",
-                    ExpressionHumanFriendlyPrinter::expr_to_string(src)));
+        fmt::format("Invalid src [{}] for GetElementExpression", ExpressionHumanFriendlyPrinter::expr_to_string(src)));
   }
 
   ret_type = src_type.ptr_removed()->as<StructType>()->get_element_type(index);
@@ -1252,26 +1138,19 @@ void MeshRelationAccessExpression::flatten(FlattenContext *ctx) {
   auto mesh_idx_stmt = flatten_rvalue(mesh_idx, ctx);
   if (neighbor_idx) {
     auto neighbor_idx_stmt = flatten_rvalue(neighbor_idx, ctx);
-    ctx->push_back<MeshRelationAccessStmt>(mesh, mesh_idx_stmt, to_type,
-                                           neighbor_idx_stmt, dbg_info);
+    ctx->push_back<MeshRelationAccessStmt>(mesh, mesh_idx_stmt, to_type, neighbor_idx_stmt, dbg_info);
   } else {
-    ctx->push_back<MeshRelationAccessStmt>(mesh, mesh_idx_stmt, to_type,
-                                           dbg_info);
+    ctx->push_back<MeshRelationAccessStmt>(mesh, mesh_idx_stmt, to_type, dbg_info);
   }
   stmt = ctx->back_stmt();
 }
 
-MeshIndexConversionExpression::MeshIndexConversionExpression(
-    mesh::Mesh *mesh,
-    mesh::MeshElementType idx_type,
-    const Expr idx,
-    mesh::ConvType conv_type,
-    const DebugInfo &dbg_info)
-    : Expression(dbg_info),
-      mesh(mesh),
-      idx_type(idx_type),
-      idx(idx),
-      conv_type(conv_type) {
+MeshIndexConversionExpression::MeshIndexConversionExpression(mesh::Mesh *mesh,
+                                                             mesh::MeshElementType idx_type,
+                                                             const Expr idx,
+                                                             mesh::ConvType conv_type,
+                                                             const DebugInfo &dbg_info)
+    : Expression(dbg_info), mesh(mesh), idx_type(idx_type), idx(idx), conv_type(conv_type) {
 }
 
 void MeshIndexConversionExpression::type_check(const CompileConfig *) {
@@ -1280,8 +1159,7 @@ void MeshIndexConversionExpression::type_check(const CompileConfig *) {
 
 void MeshIndexConversionExpression::flatten(FlattenContext *ctx) {
   auto idx_stmt = flatten_rvalue(idx, ctx);
-  ctx->push_back<MeshIndexConversionStmt>(mesh, idx_type, idx_stmt, conv_type,
-                                          dbg_info);
+  ctx->push_back<MeshIndexConversionStmt>(mesh, idx_type, idx_stmt, conv_type, dbg_info);
   stmt = ctx->back_stmt();
 }
 
@@ -1317,9 +1195,7 @@ void ASTBuilder::stop_gradient(SNode *snode) {
   stack_.back()->stop_gradients.push_back(snode);
 }
 
-void ASTBuilder::insert_assignment(Expr &lhs,
-                                   const Expr &rhs,
-                                   const DebugInfo &dbg_info) {
+void ASTBuilder::insert_assignment(Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info) {
   // Inside a kernel or a function
   // Create an assignment in the IR
   if (lhs.expr == nullptr) {
@@ -1329,10 +1205,8 @@ void ASTBuilder::insert_assignment(Expr &lhs,
     this->insert(std::move(stmt));
 
   } else {
-    ErrorEmitter(
-        QuadrantsRuntimeError(), lhs.expr.get(),
-        fmt::format("Cannot assign to non-lvalue: {}",
-                    ExpressionHumanFriendlyPrinter::expr_to_string(lhs)));
+    ErrorEmitter(QuadrantsRuntimeError(), lhs.expr.get(),
+                 fmt::format("Cannot assign to non-lvalue: {}", ExpressionHumanFriendlyPrinter::expr_to_string(lhs)));
   }
 }
 
@@ -1346,12 +1220,9 @@ Expr ASTBuilder::make_id_expr(const std::string &name) {
   return Expr::make<IdExpression>(get_next_id(name));
 }
 
-void ASTBuilder::insert_for(const Expr &s,
-                            const Expr &e,
-                            const std::function<void(Expr)> &func) {
+void ASTBuilder::insert_for(const Expr &s, const Expr &e, const std::function<void(Expr)> &func) {
   auto i = Expr(std::make_shared<IdExpression>(get_next_id()));
-  auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, this->arch_,
-                                                       for_loop_dec_.config);
+  auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, this->arch_, for_loop_dec_.config);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
@@ -1362,9 +1233,8 @@ void ASTBuilder::insert_for(const Expr &s,
 
 Expr ASTBuilder::insert_thread_idx_expr() {
   auto loop = stack_.size() ? stack_.back()->parent_stmt() : nullptr;
-  QD_ERROR_IF(
-      arch_ != Arch::cuda && !arch_is_cpu(arch_) && arch_ != Arch::amdgpu,
-      "ti.thread_idx() is only available in cuda or cpu or amdgpu context.");
+  QD_ERROR_IF(arch_ != Arch::cuda && !arch_is_cpu(arch_) && arch_ != Arch::amdgpu,
+              "ti.thread_idx() is only available in cuda or cpu or amdgpu context.");
   if (loop != nullptr) {
     auto i = stack_.size() - 1;
     while (!(loop->is<FrontendForStmt>())) {
@@ -1373,10 +1243,8 @@ Expr ASTBuilder::insert_thread_idx_expr() {
         break;
     }
   }
-  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()),
-              "ti.thread_idx() is only valid within loops.");
-  return Expr::make<InternalFuncCallExpression>(
-      Operations::get(InternalOp::linear_thread_idx), std::vector<Expr>{});
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()), "ti.thread_idx() is only valid within loops.");
+  return Expr::make<InternalFuncCallExpression>(Operations::get(InternalOp::linear_thread_idx), std::vector<Expr>{});
 }
 
 Expr ASTBuilder::insert_patch_idx_expr(const DebugInfo &dbg_info) {
@@ -1389,26 +1257,22 @@ Expr ASTBuilder::insert_patch_idx_expr(const DebugInfo &dbg_info) {
         break;
     }
   }
-  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>() &&
-                loop->as<FrontendForStmt>()->mesh),
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>() && loop->as<FrontendForStmt>()->mesh),
               "ti.mesh_patch_idx() is only valid within mesh-for loops.");
   return Expr::make<MeshPatchIndexExpression>(dbg_info);
 }
 
-void ASTBuilder::create_kernel_exprgroup_return(const ExprGroup &group,
-                                                const DebugInfo &dbg_info) {
+void ASTBuilder::create_kernel_exprgroup_return(const ExprGroup &group, const DebugInfo &dbg_info) {
   auto expanded_exprs = this->expand_exprs(group.exprs);
   ExprGroup expanded_expr_group;
   expanded_expr_group.exprs = std::move(expanded_exprs);
   this->insert(Stmt::make<FrontendReturnStmt>(expanded_expr_group, dbg_info));
 }
 
-void ASTBuilder::create_print(
-    std::vector<std::variant<Expr, std::string>> contents,
-    std::vector<std::optional<std::string>> formats,
-    const DebugInfo &dbg_info) {
-  this->insert(
-      std::make_unique<FrontendPrintStmt>(contents, formats, dbg_info));
+void ASTBuilder::create_print(std::vector<std::variant<Expr, std::string>> contents,
+                              std::vector<std::optional<std::string>> formats,
+                              const DebugInfo &dbg_info) {
+  this->insert(std::make_unique<FrontendPrintStmt>(contents, formats, dbg_info));
 }
 
 void ASTBuilder::begin_func(const std::string &funcid) {
@@ -1422,8 +1286,7 @@ void ASTBuilder::end_func(const std::string &funcid) {
   this->pop_scope();
 }
 
-void ASTBuilder::begin_frontend_if(const Expr &cond,
-                                   const DebugInfo &dbg_info) {
+void ASTBuilder::begin_frontend_if(const Expr &cond, const DebugInfo &dbg_info) {
   auto stmt_tmp = std::make_unique<FrontendIfStmt>(cond, dbg_info);
   this->insert(std::move(stmt_tmp));
 }
@@ -1445,36 +1308,30 @@ void ASTBuilder::insert_external_func_call(std::size_t func_addr,
                                            const ExprGroup &args,
                                            const ExprGroup &outputs,
                                            const DebugInfo &dbg_info) {
-  auto stmt = Stmt::make<FrontendExternalFuncStmt>(
-      (void *)func_addr, source, filename, funcname, args.exprs, outputs.exprs,
-      dbg_info);
+  auto stmt = Stmt::make<FrontendExternalFuncStmt>((void *)func_addr, source, filename, funcname, args.exprs,
+                                                   outputs.exprs, dbg_info);
   this->insert(std::move(stmt));
 }
 
 Expr ASTBuilder::expr_alloca(const DebugInfo &dbg_info) {
   auto var = Expr(std::make_shared<IdExpression>(get_next_id()));
-  this->insert(std::make_unique<FrontendAllocaStmt>(
-      std::static_pointer_cast<IdExpression>(var.expr)->id,
-      PrimitiveType::unknown, dbg_info));
+  this->insert(std::make_unique<FrontendAllocaStmt>(std::static_pointer_cast<IdExpression>(var.expr)->id,
+                                                    PrimitiveType::unknown, dbg_info));
   return var;
 }
 
-std::optional<Expr> ASTBuilder::insert_func_call(Function *func,
-                                                 const ExprGroup &args,
-                                                 const DebugInfo &dbg_info) {
+std::optional<Expr> ASTBuilder::insert_func_call(Function *func, const ExprGroup &args, const DebugInfo &dbg_info) {
   ExprGroup expanded_args;
   expanded_args.exprs = this->expand_exprs(args.exprs);
   if (!func->rets.empty()) {
     auto var = Expr(std::make_shared<IdExpression>(get_next_id()));
     this->insert(std::make_unique<FrontendFuncCallStmt>(
-        func, expanded_args,
-        std::static_pointer_cast<IdExpression>(var.expr)->id, dbg_info));
+        func, expanded_args, std::static_pointer_cast<IdExpression>(var.expr)->id, dbg_info));
     var.expr->ret_type = func->ret_type;
     var.expr->ret_type.set_is_pointer(true);
     return var;
   } else {
-    this->insert(std::make_unique<FrontendFuncCallStmt>(
-        func, expanded_args, /*id=*/std::nullopt, dbg_info));
+    this->insert(std::make_unique<FrontendFuncCallStmt>(func, expanded_args, /*id=*/std::nullopt, dbg_info));
     return std::nullopt;
   }
 }
@@ -1490,8 +1347,7 @@ Expr ASTBuilder::make_matrix_expr(const std::vector<int> &shape,
   */
   QD_ASSERT(dt->is<PrimitiveType>());
   auto expanded_elements = this->expand_exprs(elements);
-  auto mat = Expr(std::make_shared<MatrixExpression>(expanded_elements, shape,
-                                                     dt, dbg_info));
+  auto mat = Expr(std::make_shared<MatrixExpression>(expanded_elements, shape, dt, dbg_info));
   return mat;
 }
 
@@ -1499,26 +1355,20 @@ Expr ASTBuilder::expr_alloca_shared_array(const std::vector<int> &shape,
                                           const DataType &element_type,
                                           const DebugInfo &dbg_info) {
   auto var = Expr(std::make_shared<IdExpression>(get_next_id()));
-  this->insert(std::make_unique<FrontendAllocaStmt>(
-      std::static_pointer_cast<IdExpression>(var.expr)->id, shape, element_type,
-      true, dbg_info));
+  this->insert(std::make_unique<FrontendAllocaStmt>(std::static_pointer_cast<IdExpression>(var.expr)->id, shape,
+                                                    element_type, true, dbg_info));
   var->ret_type = this->get_last_stmt()->ret_type;
   return var;
 }
 
-void ASTBuilder::expr_assign(const Expr &lhs,
-                             const Expr &rhs,
-                             const DebugInfo &dbg_info) {
+void ASTBuilder::expr_assign(const Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info) {
   QD_ASSERT(lhs->is_lvalue());
   auto stmt = std::make_unique<FrontendAssignStmt>(lhs, rhs, dbg_info);
   this->insert(std::move(stmt));
 }
 
-Expr ASTBuilder::expr_subscript(const Expr &expr,
-                                const ExprGroup &indices,
-                                const DebugInfo &dbg_info) {
-  QD_ASSERT(expr.is<FieldExpression>() || expr.is<MatrixFieldExpression>() ||
-            expr.is<ExternalTensorExpression>() ||
+Expr ASTBuilder::expr_subscript(const Expr &expr, const ExprGroup &indices, const DebugInfo &dbg_info) {
+  QD_ASSERT(expr.is<FieldExpression>() || expr.is<MatrixFieldExpression>() || expr.is<ExternalTensorExpression>() ||
             is_tensor(expr.expr->ret_type.ptr_removed()));
 
   // IndexExpression without ret_shape is used for matrix indexing,
@@ -1537,75 +1387,61 @@ void ASTBuilder::create_assert_stmt(const Expr &cond,
                                     const std::string &msg,
                                     const std::vector<Expr> &args,
                                     const DebugInfo &dbg_info) {
-  auto stmt_unique =
-      std::make_unique<FrontendAssertStmt>(cond, msg, args, dbg_info);
+  auto stmt_unique = std::make_unique<FrontendAssertStmt>(cond, msg, args, dbg_info);
   this->insert(std::move(stmt_unique));
 }
 
-void ASTBuilder::begin_frontend_range_for(const Expr &i,
-                                          const Expr &s,
-                                          const Expr &e,
-                                          const DebugInfo &dbg_info) {
-  auto stmt_unique = std::make_unique<FrontendForStmt>(
-      i, s, e, arch_, for_loop_dec_.config, dbg_info);
+void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
+  auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
-  this->create_scope(stmt->body,
-                     for_loop_dec_.config.strictly_serialized ? While : For);
+  this->create_scope(stmt->body, for_loop_dec_.config.strictly_serialized ? While : For);
   for_loop_dec_.reset();
 }
 
 void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
                                                     SNode *snode,
                                                     const DebugInfo &dbg_info) {
-  QD_WARN_IF(
-      for_loop_dec_.config.strictly_serialized,
-      "ti.loop_config(serialize=True) does not have effect on the struct for. "
-      "The execution order is not guaranteed.");
-  auto stmt_unique = std::make_unique<FrontendForStmt>(
-      loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
+  QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
+             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "The execution order is not guaranteed.");
+  auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
   this->create_scope(stmt->body, For);
 }
 
-void ASTBuilder::begin_frontend_struct_for_on_external_tensor(
-    const ExprGroup &loop_vars,
-    const Expr &external_tensor,
-    const DebugInfo &dbg_info) {
-  QD_WARN_IF(
-      for_loop_dec_.config.strictly_serialized,
-      "ti.loop_config(serialize=True) does not have effect on the struct for. "
-      "The execution order is not guaranteed.");
-  auto stmt_unique = std::make_unique<FrontendForStmt>(
-      loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
-  for_loop_dec_.reset();
-  auto stmt = stmt_unique.get();
-  this->insert(std::move(stmt_unique));
-  this->create_scope(stmt->body, For);
-}
-
-void ASTBuilder::begin_frontend_mesh_for(
-    const Expr &i,
-    const mesh::MeshPtr &mesh_ptr,
-    const mesh::MeshElementType &element_type,
-    const DebugInfo &dbg_info) {
-  QD_WARN_IF(
-      for_loop_dec_.config.strictly_serialized,
-      "ti.loop_config(serialize=True) does not have effect on the mesh for. "
-      "The execution order is not guaranteed.");
+void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &loop_vars,
+                                                              const Expr &external_tensor,
+                                                              const DebugInfo &dbg_info) {
+  QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
+             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "The execution order is not guaranteed.");
   auto stmt_unique =
-      std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type,
-                                        arch_, for_loop_dec_.config, dbg_info);
+      std::make_unique<FrontendForStmt>(loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
   this->create_scope(stmt->body, For);
 }
 
-void ASTBuilder::begin_frontend_while(const Expr &cond,
-                                      const DebugInfo &dbg_info) {
+void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
+                                         const mesh::MeshPtr &mesh_ptr,
+                                         const mesh::MeshElementType &element_type,
+                                         const DebugInfo &dbg_info) {
+  QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
+             "ti.loop_config(serialize=True) does not have effect on the mesh for. "
+             "The execution order is not guaranteed.");
+  auto stmt_unique =
+      std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type, arch_, for_loop_dec_.config, dbg_info);
+  for_loop_dec_.reset();
+  auto stmt = stmt_unique.get();
+  this->insert(std::move(stmt_unique));
+  this->create_scope(stmt->body, For);
+}
+
+void ASTBuilder::begin_frontend_while(const Expr &cond, const DebugInfo &dbg_info) {
   auto stmt_unique = std::make_unique<FrontendWhileStmt>(cond, dbg_info);
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
@@ -1627,55 +1463,43 @@ void ASTBuilder::insert_expr_stmt(const Expr &val) {
   this->insert(Stmt::make<FrontendExprStmt>(val));
 }
 
-void ASTBuilder::insert_snode_activate(SNode *snode,
-                                       const ExprGroup &expr_group,
-                                       const DebugInfo &dbg_info) {
+void ASTBuilder::insert_snode_activate(SNode *snode, const ExprGroup &expr_group, const DebugInfo &dbg_info) {
   ExprGroup expanded_group;
   expanded_group.exprs = this->expand_exprs(expr_group.exprs);
-  this->insert(Stmt::make<FrontendSNodeOpStmt>(
-      SNodeOpType::activate, snode, expanded_group,
-      /*val = */ Expr(std::shared_ptr<Expression>(nullptr)), dbg_info));
+  this->insert(Stmt::make<FrontendSNodeOpStmt>(SNodeOpType::activate, snode, expanded_group,
+                                               /*val = */ Expr(std::shared_ptr<Expression>(nullptr)), dbg_info));
 }
 
-void ASTBuilder::insert_snode_deactivate(SNode *snode,
-                                         const ExprGroup &expr_group,
-                                         const DebugInfo &dbg_info) {
+void ASTBuilder::insert_snode_deactivate(SNode *snode, const ExprGroup &expr_group, const DebugInfo &dbg_info) {
   ExprGroup expanded_group;
   expanded_group.exprs = this->expand_exprs(expr_group.exprs);
-  this->insert(Stmt::make<FrontendSNodeOpStmt>(
-      SNodeOpType::deactivate, snode, expanded_group,
-      /*val = */ Expr(std::shared_ptr<Expression>(nullptr)), dbg_info));
+  this->insert(Stmt::make<FrontendSNodeOpStmt>(SNodeOpType::deactivate, snode, expanded_group,
+                                               /*val = */ Expr(std::shared_ptr<Expression>(nullptr)), dbg_info));
 }
 
-Expr ASTBuilder::snode_append(SNode *snode,
-                              const ExprGroup &indices,
-                              const std::vector<Expr> &vals) {
+Expr ASTBuilder::snode_append(SNode *snode, const ExprGroup &indices, const std::vector<Expr> &vals) {
   ExprGroup expanded_exprs;
   expanded_exprs.exprs = this->expand_exprs(indices.exprs);
   std::vector<Expr> expanded_vals = this->expand_exprs(vals);
-  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::append,
-                                       expanded_exprs, expanded_vals);
+  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::append, expanded_exprs, expanded_vals);
 }
 
 Expr ASTBuilder::snode_is_active(SNode *snode, const ExprGroup &indices) {
   ExprGroup expanded_exprs;
   expanded_exprs.exprs = this->expand_exprs(indices.exprs);
-  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::is_active,
-                                       expanded_exprs);
+  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::is_active, expanded_exprs);
 }
 
 Expr ASTBuilder::snode_length(SNode *snode, const ExprGroup &indices) {
   ExprGroup expanded_exprs;
   expanded_exprs.exprs = this->expand_exprs(indices.exprs);
-  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::length,
-                                       expanded_exprs);
+  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::length, expanded_exprs);
 }
 
 Expr ASTBuilder::snode_get_addr(SNode *snode, const ExprGroup &indices) {
   ExprGroup expanded_exprs;
   expanded_exprs.exprs = this->expand_exprs(indices.exprs);
-  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::get_addr,
-                                       expanded_exprs);
+  return Expr::make<SNodeOpExpression>(snode, SNodeOpType::get_addr, expanded_exprs);
 }
 
 std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
@@ -1719,8 +1543,7 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
         auto shape = tensor_type->get_shape();
         if (shape.size() == 1) {
           for (int i = 0; i < shape[0]; i++) {
-            auto ind = Expr(std::make_shared<IndexExpression>(
-                id_expr, ExprGroup(Expr(i)), expr->dbg_info));
+            auto ind = Expr(std::make_shared<IndexExpression>(id_expr, ExprGroup(Expr(i)), expr->dbg_info));
             ind->type_check(nullptr);
             expanded_exprs.push_back(ind);
           }
@@ -1728,8 +1551,7 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
           QD_ASSERT(shape.size() == 2);
           for (int i = 0; i < shape[0]; i++) {
             for (int j = 0; j < shape[1]; j++) {
-              auto ind = Expr(std::make_shared<IndexExpression>(
-                  id_expr, ExprGroup(Expr(i), Expr(j)), expr->dbg_info));
+              auto ind = Expr(std::make_shared<IndexExpression>(id_expr, ExprGroup(Expr(i), Expr(j)), expr->dbg_info));
               ind->type_check(nullptr);
               expanded_exprs.push_back(ind);
             }
@@ -1738,9 +1560,8 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
       }
     };
 
-    std::function<void(const Expr &, const StructType *, std::vector<int> &)>
-        expand_struct = [&](const Expr &expr, const StructType *struct_type,
-                            std::vector<int> &indices) {
+    std::function<void(const Expr &, const StructType *, std::vector<int> &)> expand_struct =
+        [&](const Expr &expr, const StructType *struct_type, std::vector<int> &indices) {
           auto num_elem = struct_type->elements().size();
           for (int i = 0; i < num_elem; i++) {
             indices.push_back(i);
@@ -1748,8 +1569,7 @@ std::vector<Expr> ASTBuilder::expand_exprs(const std::vector<Expr> &exprs) {
             if (auto element_struct_type = element_type->cast<StructType>()) {
               expand_struct(expr, element_struct_type, indices);
             } else {
-              auto elem = Expr(std::make_shared<GetElementExpression>(
-                  expr, indices, expr->dbg_info));
+              auto elem = Expr(std::make_shared<GetElementExpression>(expr, indices, expr->dbg_info));
               elem.expr->ret_type = element_type;
               expand_tensor_or_scalar(elem);
             }
@@ -1777,14 +1597,12 @@ Expr ASTBuilder::mesh_index_conversion(mesh::MeshPtr mesh_ptr,
     expanded_idx = idx;
   } else {
     if (idx.expr->ret_type->is<TensorType>()) {
-      QD_ASSERT(idx.expr->ret_type->cast<TensorType>()->get_num_elements() ==
-                1);
+      QD_ASSERT(idx.expr->ret_type->cast<TensorType>()->get_num_elements() == 1);
     }
     expanded_idx = this->expand_exprs({idx})[0];
   }
 
-  return Expr::make<MeshIndexConversionExpression>(
-      mesh_ptr.ptr.get(), idx_type, expanded_idx, conv_type, dbg_info);
+  return Expr::make<MeshIndexConversionExpression>(mesh_ptr.ptr.get(), idx_type, expanded_idx, conv_type, dbg_info);
 }
 
 void ASTBuilder::create_scope(std::unique_ptr<Block> &list, LoopType tp) {
@@ -1817,8 +1635,7 @@ Stmt *flatten_lvalue(Expr expr, Expression::FlattenContext *ctx) {
 }
 
 Stmt *flatten_global_load(Stmt *ptr_stmt, Expression::FlattenContext *ctx) {
-  auto load_stmt =
-      std::make_unique<GlobalLoadStmt>(ptr_stmt, ptr_stmt->dbg_info);
+  auto load_stmt = std::make_unique<GlobalLoadStmt>(ptr_stmt, ptr_stmt->dbg_info);
   auto pointee_type = load_stmt->src->ret_type.ptr_removed();
   load_stmt->ret_type = pointee_type->get_compute_type();
   ctx->push_back(std::move(load_stmt));
@@ -1846,8 +1663,7 @@ Stmt *flatten_rvalue(Expr ptr, Expression::FlattenContext *ctx) {
     } else {
       return flatten_global_load(ptr_stmt, ctx);
     }
-  } else if (ptr.is<ArgLoadExpression>() &&
-             ptr.cast<ArgLoadExpression>()->is_ptr) {
+  } else if (ptr.is<ArgLoadExpression>() && ptr.cast<ArgLoadExpression>()->is_ptr) {
     return flatten_global_load(ptr_stmt, ctx);
   }
 

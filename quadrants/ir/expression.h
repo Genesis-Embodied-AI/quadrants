@@ -141,10 +141,8 @@ inline ExprGroup operator,(const ExprGroup &a, const Expr &b) {
 
 class ExpressionVisitor {
  public:
-  explicit ExpressionVisitor(bool allow_undefined_visitor = false,
-                             bool invoke_default_visitor = false)
-      : allow_undefined_visitor_(allow_undefined_visitor),
-        invoke_default_visitor_(invoke_default_visitor) {
+  explicit ExpressionVisitor(bool allow_undefined_visitor = false, bool invoke_default_visitor = false)
+      : allow_undefined_visitor_(allow_undefined_visitor), invoke_default_visitor_(invoke_default_visitor) {
   }
 
   virtual ~ExpressionVisitor() = default;

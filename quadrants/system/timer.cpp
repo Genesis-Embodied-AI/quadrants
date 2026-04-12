@@ -77,8 +77,7 @@ void win_msleep(DWORD ms) {
     Sleep(0);
   else {
     HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    timeSetEvent(ms, 1, (LPTIMECALLBACK)hEvent, 0,
-                 TIME_ONESHOT | TIME_CALLBACK_EVENT_SET);
+    timeSetEvent(ms, 1, (LPTIMECALLBACK)hEvent, 0, TIME_ONESHOT | TIME_CALLBACK_EVENT_SET);
     WaitForSingleObject(hEvent, INFINITE);
     CloseHandle(hEvent);
   }
@@ -138,9 +137,7 @@ double Time::Timer::get_time() {
   return Time::get_time();
 }
 
-void Time::Timer::print_record(const char *left,
-                               double elapsed,
-                               double average) {
+void Time::Timer::print_record(const char *left, double elapsed, double average) {
   if (elapsed < 1e-3) {
     printf("%s ==> %6.3f us ~ %6.3f us\n", left, elapsed * 1e6, average * 1e6);
   } else {
@@ -174,9 +171,7 @@ double Time::TickTimer::get_time() {
   return Time::get_time();
 }
 
-void Time::TickTimer::print_record(const char *left,
-                                   double elapsed,
-                                   double average) {
+void Time::TickTimer::print_record(const char *left, double elapsed, double average) {
   string unit;
   double measurement;
   if (elapsed < 1e3) {
@@ -192,8 +187,8 @@ void Time::TickTimer::print_record(const char *left,
     measurement = 1e9;
     unit = "G cycles";
   }
-  printf("%s ==> %4.2f %s ~ %4.2f %s\n", left, elapsed / measurement,
-         unit.c_str(), average / measurement, unit.c_str());
+  printf("%s ==> %4.2f %s ~ %4.2f %s\n", left, elapsed / measurement, unit.c_str(), average / measurement,
+         unit.c_str());
 }
 
 Time::Timer::Timer(std::string name) {

@@ -110,8 +110,7 @@ int main() {
       fd<<<n / bs, bs>>>(a, b, c, n);
       cudaDeviceSynchronize();
       t = get_time() - t;
-      printf("%.2f ms   bw %.3f GB/s\n", t * 1000,
-             n * 2.0f * 4 / t / (1024 * 1024 * 1024.0f));
+      printf("%.2f ms   bw %.3f GB/s\n", t * 1000, n * 2.0f * 4 / t / (1024 * 1024 * 1024.0f));
     }
     std::cout << std::endl;
   }

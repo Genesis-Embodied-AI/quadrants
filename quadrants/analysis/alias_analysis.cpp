@@ -14,8 +14,7 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
   if (!var1 || !var2)
     return AliasResult::different;
 
-  if (var1->is<ExternalTensorBasePtrStmt>() ||
-      var2->is<ExternalTensorBasePtrStmt>()) {
+  if (var1->is<ExternalTensorBasePtrStmt>() || var2->is<ExternalTensorBasePtrStmt>()) {
     auto *base = var1->cast<ExternalTensorBasePtrStmt>();
     Stmt *other = var2;
     if (!base) {
@@ -43,8 +42,7 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
   auto retrieve_local = [&](Stmt *var) {
     if (var->is<AllocaStmt>()) {
       return var;
-    } else if (var->is<MatrixPtrStmt>() &&
-               var->cast<MatrixPtrStmt>()->offset_used_as_index()) {
+    } else if (var->is<MatrixPtrStmt>() && var->cast<MatrixPtrStmt>()->offset_used_as_index()) {
       return var->cast<MatrixPtrStmt>()->origin;
     } else {
       return (Stmt *)nullptr;
@@ -54,13 +52,10 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
   Stmt *origin2 = retrieve_local(var2);
   if (origin1 != nullptr && origin2 != nullptr) {
     if (var1->is<MatrixPtrStmt>() && var2->is<MatrixPtrStmt>()) {
-      if (origin1 == origin2 ||
-          alias_analysis(origin1, origin2) == AliasResult::same) {
-        auto diff = value_diff_ptr_index(var1->cast<MatrixPtrStmt>()->offset,
-                                         var2->cast<MatrixPtrStmt>()->offset);
+      if (origin1 == origin2 || alias_analysis(origin1, origin2) == AliasResult::same) {
+        auto diff = value_diff_ptr_index(var1->cast<MatrixPtrStmt>()->offset, var2->cast<MatrixPtrStmt>()->offset);
         if (diff.is_diff_certain) {
-          return diff.diff_range == 0 ? AliasResult::same
-                                      : AliasResult::different;
+          return diff.diff_range == 0 ? AliasResult::same : AliasResult::different;
         }
       } else {
         return AliasResult::different;
@@ -73,10 +68,8 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
 
     if (origin1->is<AllocaStmt>() || origin2->is<AllocaStmt>())
       return AliasResult::different;
-    QD_ASSERT(origin1->is<GlobalTemporaryStmt>() &&
-              origin2->is<GlobalTemporaryStmt>());
-    if (origin1->cast<GlobalTemporaryStmt>()->offset ==
-        origin2->cast<GlobalTemporaryStmt>()->offset) {
+    QD_ASSERT(origin1->is<GlobalTemporaryStmt>() && origin2->is<GlobalTemporaryStmt>());
+    if (origin1->cast<GlobalTemporaryStmt>()->offset == origin2->cast<GlobalTemporaryStmt>()->offset) {
       return AliasResult::uncertain;
     } else {
       return AliasResult::different;
@@ -97,27 +90,22 @@ AliasResult alias_analysis(Stmt *var1, Stmt *var2) {
   if (var1->is<GlobalTemporaryStmt>() || var2->is<GlobalTemporaryStmt>()) {
     if (!var1->is<GlobalTemporaryStmt>() || !var2->is<GlobalTemporaryStmt>())
       return AliasResult::different;
-    return var1->as<GlobalTemporaryStmt>()->offset ==
-                   var2->as<GlobalTemporaryStmt>()->offset
-               ? AliasResult::same
-               : AliasResult::different;
+    return var1->as<GlobalTemporaryStmt>()->offset == var2->as<GlobalTemporaryStmt>()->offset ? AliasResult::same
+                                                                                              : AliasResult::different;
   }
 
   if (var1->is<ThreadLocalPtrStmt>() || var2->is<ThreadLocalPtrStmt>()) {
     if (!var1->is<ThreadLocalPtrStmt>() || !var2->is<ThreadLocalPtrStmt>())
       return AliasResult::different;
-    return var1->as<ThreadLocalPtrStmt>()->offset ==
-                   var2->as<ThreadLocalPtrStmt>()->offset
-               ? AliasResult::same
-               : AliasResult::different;
+    return var1->as<ThreadLocalPtrStmt>()->offset == var2->as<ThreadLocalPtrStmt>()->offset ? AliasResult::same
+                                                                                            : AliasResult::different;
   }
 
   if (var1->is<BlockLocalPtrStmt>() || var2->is<BlockLocalPtrStmt>()) {
     if (!var1->is<BlockLocalPtrStmt>() || !var2->is<BlockLocalPtrStmt>())
       return AliasResult::different;
-    return irpass::analysis::same_statements(
-               var1->as<BlockLocalPtrStmt>()->offset,
-               var2->as<BlockLocalPtrStmt>()->offset)
+    return irpass::analysis::same_statements(var1->as<BlockLocalPtrStmt>()->offset,
+                                             var2->as<BlockLocalPtrStmt>()->offset)
                ? AliasResult::same
                : AliasResult::uncertain;
   }

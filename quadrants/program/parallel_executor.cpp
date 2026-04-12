@@ -4,10 +4,7 @@
 namespace quadrants::lang {
 
 ParallelExecutor::ParallelExecutor(const std::string &name, int num_threads)
-    : name_(name),
-      num_threads_(num_threads),
-      status_(ExecutorStatus::uninitialized),
-      running_threads_(0) {
+    : name_(name), num_threads_(num_threads), status_(ExecutorStatus::uninitialized), running_threads_(0) {
   if (num_threads <= 0) {
     return;
   }

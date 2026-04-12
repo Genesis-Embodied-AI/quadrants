@@ -125,10 +125,8 @@ class Type : public Node {
 class LayoutContext : public Polymorphic {
  private:
   std::unordered_map<const MemRefElementTypeInterface *, size_t> size_cache_;
-  std::unordered_map<const MemRefElementTypeInterface *, size_t>
-      alignment_cache_;
-  std::unordered_map<const MemRefAggregateTypeInterface *, std::vector<size_t>>
-      elem_offset_cache_;
+  std::unordered_map<const MemRefElementTypeInterface *, size_t> alignment_cache_;
+  std::unordered_map<const MemRefAggregateTypeInterface *, std::vector<size_t>> elem_offset_cache_;
 
  public:
   void register_size(const MemRefElementTypeInterface *t, size_t size) {
@@ -146,9 +144,7 @@ class LayoutContext : public Polymorphic {
     elem_offset_cache_[t].resize(num_elem, 0);
   }
 
-  void register_elem_offset(const MemRefAggregateTypeInterface *t,
-                            int n,
-                            size_t offset) {
+  void register_elem_offset(const MemRefAggregateTypeInterface *t, int n, size_t offset) {
     QD_ASSERT(elem_offset_cache_.find(t) != elem_offset_cache_.end());
     elem_offset_cache_[t][n] = offset;
   }

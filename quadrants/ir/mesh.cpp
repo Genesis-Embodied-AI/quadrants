@@ -18,8 +18,8 @@ std::string element_type_name(MeshElementType type) {
 }
 
 std::string relation_type_name(MeshRelationType type) {
-  return element_type_name(MeshElementType(from_end_element_order(type))) +
-         "-" + element_type_name(MeshElementType(to_end_element_order(type)));
+  return element_type_name(MeshElementType(from_end_element_order(type))) + "-" +
+         element_type_name(MeshElementType(to_end_element_order(type)));
 }
 
 std::string conv_type_name(ConvType type) {
@@ -51,8 +51,7 @@ MeshRelationType relation_by_orders(int from_order, int to_order) {
 }
 
 MeshRelationType inverse_relation(MeshRelationType rel) {
-  return relation_by_orders(to_end_element_order(rel),
-                            from_end_element_order(rel));
+  return relation_by_orders(to_end_element_order(rel), from_end_element_order(rel));
 }
 
 }  // namespace mesh

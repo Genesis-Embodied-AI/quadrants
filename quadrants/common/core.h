@@ -225,8 +225,7 @@ std::vector<uint8> read(const std::string fn, bool verbose = false);
 //                               String Utils
 //******************************************************************************
 
-inline std::vector<std::string> split_string(const std::string &s,
-                                             const std::string &separators) {
+inline std::vector<std::string> split_string(const std::string &s, const std::string &separators) {
   std::vector<std::string> ret;
   bool is_seperator[256] = {false};
   for (auto &ch : separators) {
@@ -292,8 +291,7 @@ class DeferedExecution {
   std::function<void(void)> statement_;
 
  public:
-  explicit DeferedExecution(const std::function<void(void)> &statement)
-      : statement_(statement) {
+  explicit DeferedExecution(const std::function<void(void)> &statement) : statement_(statement) {
   }
 
   ~DeferedExecution() {

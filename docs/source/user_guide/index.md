@@ -51,3 +51,11 @@ debug
 quirks
 troubleshooting
 ```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
+```

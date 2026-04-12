@@ -10,13 +10,11 @@ static std::unique_ptr<CompiledKernelData> new_llvm_compiled_kernel_data() {
   return std::make_unique<LLVM::CompiledKernelData>();
 }
 
-CompiledKernelData::Creator *const CompiledKernelData::llvm_creator =
-    new_llvm_compiled_kernel_data;
+CompiledKernelData::Creator *const CompiledKernelData::llvm_creator = new_llvm_compiled_kernel_data;
 
 namespace LLVM {
 
-CompiledKernelData::CompiledKernelData(Arch arch, InternalData data)
-    : arch_(arch), data_(std::move(data)) {
+CompiledKernelData::CompiledKernelData(Arch arch, InternalData data) : arch_(arch), data_(std::move(data)) {
 }
 
 Arch CompiledKernelData::arch() const {
@@ -50,8 +48,7 @@ std::string CompiledKernelData::debug_dump_to_string() const {
   return oss.str();
 }
 
-CompiledKernelData::Err CompiledKernelData::load_impl(
-    const CompiledKernelDataFile &file) {
+CompiledKernelData::Err CompiledKernelData::load_impl(const CompiledKernelDataFile &file) {
   arch_ = file.arch();
   if (!arch_uses_llvm(arch_)) {
     return Err::kArchNotMatched;
@@ -64,8 +61,7 @@ CompiledKernelData::Err CompiledKernelData::load_impl(
   llvm::SMDiagnostic err;
   auto ret = llvm::parseAssemblyString(file.src_code(), err, llvm_ctx_);
   if (!ret) {  // File not found or Parse failed
-    QD_DEBUG("Fail to parse llvm::Module from string: {}",
-             err.getMessage().str());
+    QD_DEBUG("Fail to parse llvm::Module from string: {}", err.getMessage().str());
     return Err::kParseSrcCodeFailed;
   }
   data_.compiled_data.module = std::move(ret);
@@ -74,8 +70,7 @@ CompiledKernelData::Err CompiledKernelData::load_impl(
   return Err::kNoError;
 }
 
-CompiledKernelData::Err CompiledKernelData::dump_impl(
-    CompiledKernelDataFile &file) const {
+CompiledKernelData::Err CompiledKernelData::dump_impl(CompiledKernelDataFile &file) const {
   file.set_arch(arch_);
   try {
     file.set_metadata(liong::json::print(liong::json::serialize(data_)));
