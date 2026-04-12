@@ -762,6 +762,23 @@ def test_subgroup_size_validation(sg_size):
         k()
 
 
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+def test_subgroup_size_invocation_ids():
+    """With explicit subgroup_size=32, invocation_id() must return 0..31."""
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel
+    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=N, subgroup_size=N)
+        for i in range(N):
+            result[i] = qd.simt.subgroup.invocation_id()
+
+    read_ids(out)
+    ids = out.to_numpy()
+    assert set(ids) == set(range(N)), f"Expected invocation IDs 0..{N-1}, got {sorted(set(ids))}"
+
+
 @test_utils.test(arch=qd.vulkan)
 def test_vulkan_subgroup_id_survives_reinit():
     """Regression test: SubgroupLocalInvocationId must stay stable across
