@@ -66,6 +66,40 @@ def test_ast_rewriter_branches():
     assert 5 in lines_covered  # b = 2
 
 
+def test_ast_rewriter_capacity_limit():
+    """Verify that probes stop being inserted when the capacity limit is hit."""
+    import warnings
+
+    import quadrants.lang._kernel_coverage as kcov
+    from quadrants.lang._kernel_coverage import _CoverageASTRewriter
+
+    src = textwrap.dedent(
+        """\
+        def f():
+            a = 1
+            b = 2
+            c = 3
+    """
+    )
+    tree = ast.parse(src)
+    old_warning_state = kcov._capacity_warning_emitted
+    kcov._capacity_warning_emitted = False
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rewriter = _CoverageASTRewriter(
+                field_name="_qd_cov", filepath="test.py", start_lineno=1, probe_id_start=kcov._MAX_PROBES - 1
+            )
+            rewriter.visit(tree)
+
+        assert rewriter.next_probe_id == kcov._MAX_PROBES
+        assert len(rewriter.probe_map) == 1, f"Only 1 probe should fit, got {len(rewriter.probe_map)}"
+        assert len(w) == 1
+        assert "exceeded" in str(w[0].message).lower()
+    finally:
+        kcov._capacity_warning_emitted = old_warning_state
+
+
 def test_ast_rewriter_for_loop():
     """Verify probes inside for loop body."""
     from quadrants.lang._kernel_coverage import _CoverageASTRewriter

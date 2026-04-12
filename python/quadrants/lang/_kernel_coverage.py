@@ -14,6 +14,7 @@ import ast
 import atexit
 import os
 import threading
+import warnings
 
 from coverage import CoverageData  # type: ignore[import-not-found]
 
@@ -164,6 +165,9 @@ def flush() -> None:
     cov.write()
 
 
+_capacity_warning_emitted = False
+
+
 class _CoverageASTRewriter(ast.NodeTransformer):
     """Insert coverage probes before each statement at a new source line."""
 
@@ -175,8 +179,19 @@ class _CoverageASTRewriter(ast.NodeTransformer):
         self._seen_lines: set[int] = set()
         self.probe_map: dict[int, tuple[str, int]] = {}
 
-    def _make_probe(self, abs_lineno: int, rel_lineno: int, col_offset: int) -> ast.Assign:
+    def _make_probe(self, abs_lineno: int, rel_lineno: int, col_offset: int) -> ast.Assign | None:
+        global _capacity_warning_emitted
         probe_id = self.next_probe_id
+        if probe_id >= _MAX_PROBES:
+            if not _capacity_warning_emitted:
+                warnings.warn(
+                    f"Kernel coverage probe capacity ({_MAX_PROBES}) exceeded. "
+                    f"Additional kernel lines will not be tracked. "
+                    f"Set QD_COVERAGE_MAX_PROBES to a higher value.",
+                    stacklevel=2,
+                )
+                _capacity_warning_emitted = True
+            return None
         self.probe_map[probe_id] = (self._filepath, abs_lineno)
         self.next_probe_id += 1
         node = ast.Assign(
@@ -204,7 +219,9 @@ class _CoverageASTRewriter(ast.NodeTransformer):
                 if abs_lineno not in self._seen_lines:
                     self._seen_lines.add(abs_lineno)
                     col = getattr(stmt, "col_offset", 0)
-                    result.append(self._make_probe(abs_lineno, rel_lineno, col))
+                    probe = self._make_probe(abs_lineno, rel_lineno, col)
+                    if probe is not None:
+                        result.append(probe)
             result.append(self.visit(stmt))
         return result
 
