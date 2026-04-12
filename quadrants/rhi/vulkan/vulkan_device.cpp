@@ -373,8 +373,7 @@ void VulkanPipeline::create_shader_stages(const Params &params) {
     if (code_view.stage == VK_SHADER_STAGE_COMPUTE_BIT &&
         ti_device_.vk_caps().subgroup_size_control) {
       uint32_t sg = params.subgroup_size > 0 ? params.subgroup_size : 32;
-      subgroup_size_info_.sType =
-          VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO;
+      subgroup_size_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO;
       subgroup_size_info_.pNext = nullptr;
       subgroup_size_info_.requiredSubgroupSize = sg;
       shader_stage_info.pNext = &subgroup_size_info_;

@@ -640,8 +640,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
 
     VkPhysicalDeviceSubgroupSizeControlProperties size_ctrl_props{};
     if (ti_device_->vk_caps().subgroup_size_control) {
-      size_ctrl_props.sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
+      size_ctrl_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
       size_ctrl_props.pNext = nullptr;
       subgroup_properties.pNext = &size_ctrl_props;
     }
@@ -669,10 +668,8 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       ti_device_->vk_caps().min_subgroup_size = size_ctrl_props.minSubgroupSize;
       ti_device_->vk_caps().max_subgroup_size = size_ctrl_props.maxSubgroupSize;
     } else {
-      ti_device_->vk_caps().min_subgroup_size =
-          subgroup_properties.subgroupSize;
-      ti_device_->vk_caps().max_subgroup_size =
-          subgroup_properties.subgroupSize;
+      ti_device_->vk_caps().min_subgroup_size = subgroup_properties.subgroupSize;
+      ti_device_->vk_caps().max_subgroup_size = subgroup_properties.subgroupSize;
     }
   }
 
@@ -705,8 +702,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
 
   VkPhysicalDeviceSubgroupSizeControlFeatures sg_size_feature{};
-  sg_size_feature.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+  sg_size_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
 
   if (ti_device_->vk_caps().physical_device_features2) {
     VkPhysicalDeviceFeatures2KHR features2{};
