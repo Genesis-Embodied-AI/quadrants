@@ -1,7 +1,7 @@
 """Tests for kernel code coverage instrumentation.
 
-These tests verify that the AST rewriter correctly inserts coverage probes
-and that the probes fire when kernel code executes on the device.
+These tests verify that the AST rewriter correctly inserts coverage probes and that the probes fire when kernel
+code executes on the device.
 """
 
 import ast
@@ -242,8 +242,8 @@ def test_kernel_coverage_branches_e2e():
 def test_kernel_coverage_simt_e2e():
     """Verify coverage probes track branches with block.sync() and subgroup shuffle.
 
-    The if/else is based on a runtime value read from a field, so the compiler
-    cannot constant-fold it away. Only the taken branch's shuffle probe should fire.
+    The if/else is based on a runtime value read from a field, so the compiler cannot constant-fold it away.
+    Only the taken branch's shuffle probe should fire.
     """
     from quadrants.lang import _kernel_coverage
     from quadrants.lang.simt import subgroup
@@ -291,9 +291,8 @@ def test_kernel_coverage_simt_e2e():
 def test_kernel_coverage_survives_reinit():
     """Verify that coverage data accumulated before qd.init() reset is preserved.
 
-    Runs a kernel, then resets via qd.reset()/qd.init() (which triggers the
-    _hooked_clear harvest), runs another kernel, harvests again, and checks that
-    _accumulated_lines contains data from both sessions.
+    Runs a kernel, then resets via qd.reset()/qd.init() (which triggers the _hooked_clear harvest), runs another
+    kernel, harvests again, and checks that _accumulated_lines contains data from both sessions.
     """
     from quadrants.lang import impl, _kernel_coverage
 
@@ -361,8 +360,8 @@ def test_kernel_coverage_survives_reinit():
 def test_kernel_coverage_autodiff():
     """Verify that autodiff forward pass produces probes but backward does not.
 
-    The forward compilation (AutodiffMode.NONE) should insert probes that fire.
-    The backward compilation (AutodiffMode.REVERSE) should not add any probes.
+    The forward compilation (AutodiffMode.NONE) should insert probes that fire. The backward compilation
+    (AutodiffMode.REVERSE) should not add any probes.
     """
     from quadrants.lang import _kernel_coverage
 

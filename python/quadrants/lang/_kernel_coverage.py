@@ -1,13 +1,11 @@
 """Kernel code coverage via Python AST rewriting.
 
-When enabled (QD_KERNEL_COVERAGE=1), this module rewrites kernel and func ASTs
-to insert coverage probes — field stores that record which source lines
-actually execute on the GPU. At process exit, the collected data is written
+When enabled (QD_KERNEL_COVERAGE=1), this module rewrites kernel and func ASTs to insert coverage probes — field
+stores that record which source lines actually execute on the GPU. At process exit, the collected data is written
 to a .coverage file compatible with coverage.py / pytest-cov / diff-cover.
 
-The probes are compiled as ordinary field stores by the existing pipeline,
-so no C++ changes are needed. When disabled, this module is never imported
-and has zero impact on the normal runtime path.
+The probes are compiled as ordinary field stores by the existing pipeline, so no C++ changes are needed. When
+disabled, this module is never imported and has zero impact on the normal runtime path.
 """
 
 import ast
@@ -107,11 +105,8 @@ def get_field() -> "ScalarField | None":
 def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Module:
     """Rewrite a kernel/func AST to insert coverage probes.
 
-    Each executable statement at a new source line gets a probe:
-        _qd_cov[<probe_id>] = 1
-
-    Probes inside if/else bodies only fire when that branch is taken,
-    giving true runtime branch coverage.
+    Each executable statement at a new source line gets a probe: ``_qd_cov[<probe_id>] = 1``.
+    Probes inside if/else bodies only fire when that branch is taken, giving true runtime branch coverage.
     """
     global _probe_counter
     with _lock:
@@ -131,8 +126,8 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
 def _detect_arc_mode() -> bool:
     """Detect whether pytest-cov wrote branch (arc) data by reading .coverage.
 
-    Defaults to True (arc mode) when .coverage doesn't exist or is empty,
-    since run_tests.py --coverage always enables --cov-branch.
+    Defaults to True (arc mode) when .coverage doesn't exist or is empty, since run_tests.py --coverage always
+    enables --cov-branch.
     """
     try:
         cov_path = os.path.join(_coverage_dir, ".coverage") if _coverage_dir else ".coverage"
@@ -149,8 +144,8 @@ def _detect_arc_mode() -> bool:
 def flush() -> None:
     """Harvest any remaining field data and write all results to a .coverage file.
 
-    If .coverage.kernel already exists (e.g. from a prior test phase), the new
-    data is merged into it so nothing is lost across multiple invocations.
+    If .coverage.kernel already exists (e.g. from a prior test phase), the new data is merged into it so nothing
+    is lost across multiple invocations.
     """
     _harvest_field()
 
@@ -165,9 +160,8 @@ def flush() -> None:
     if use_arcs:
         arcs_by_file: dict[str, list[tuple[int, int]]] = {}
         for filepath, lines in _accumulated_lines.items():
-            # Emit only entry/exit arcs per line — we know which lines ran but
-            # not the actual transitions between them, so we avoid fabricating
-            # inter-line arcs that would misrepresent branch coverage.
+            # Emit only entry/exit arcs per line — we know which lines ran but not the actual transitions
+            # between them, so we avoid fabricating inter-line arcs that would misrepresent branch coverage.
             arcs = []
             for line in sorted(lines):
                 arcs.append((-1, line))
