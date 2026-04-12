@@ -52,7 +52,7 @@ def _harvest_field() -> None:
     try:
         arr = _cov_field.to_numpy()
     except Exception:
-        logging.debug("Failed to read coverage field, coverage data for this session will be lost", exc_info=True)
+        logging.warning("Failed to read coverage field, coverage data for this session will be lost", exc_info=True)
         _cov_field = None
         _cov_field_prog = None
         return
@@ -155,14 +155,10 @@ def flush() -> None:
     kernel_path = f"_qd_kcov.{os.getpid()}"
     use_arcs = _detect_arc_mode()
 
-    merged_lines: dict[str, set[int]] = {}
-    for filepath, lines in _accumulated_lines.items():
-        merged_lines.setdefault(filepath, set()).update(lines)
-
     cov = CoverageData(basename=kernel_path)
     if use_arcs:
         arcs_by_file: dict[str, list[tuple[int, int]]] = {}
-        for filepath, lines in merged_lines.items():
+        for filepath, lines in _accumulated_lines.items():
             sorted_lines = sorted(lines)
             arcs = [(-1, sorted_lines[0])]
             for prev, curr in zip(sorted_lines, sorted_lines[1:]):
@@ -171,7 +167,7 @@ def flush() -> None:
             arcs_by_file[filepath] = arcs
         cov.add_arcs(arcs_by_file)
     else:
-        cov.add_lines({f: sorted(lines) for f, lines in merged_lines.items()})
+        cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
     cov.write()
 
 

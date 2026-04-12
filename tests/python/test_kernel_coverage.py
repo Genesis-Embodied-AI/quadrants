@@ -230,8 +230,9 @@ def test_kernel_coverage_simt_e2e():
 def test_kernel_coverage_survives_reinit():
     """Verify that coverage data accumulated before qd.init() reset is preserved.
 
-    Runs a kernel, resets via qd.init(), runs another kernel, and checks that
-    _accumulated_lines contains data from both runs.
+    Runs a kernel, then resets via qd.reset()/qd.init() (which triggers the
+    _hooked_clear harvest), runs another kernel, harvests again, and checks that
+    _accumulated_lines contains data from both sessions.
     """
     from quadrants.lang import _kernel_coverage
 
@@ -253,13 +254,16 @@ def test_kernel_coverage_survives_reinit():
     fired_first = {pid for pid in probes_first if arr[pid] != 0}
     assert len(fired_first) > 0, "Probes from first kernel should have fired"
 
-    _kernel_coverage._harvest_field()
+    # Don't call _harvest_field() manually — let qd.reset() trigger it via the _hooked_clear hook
+    qd.reset()
+
+    # Verify the hook harvested data from the first session
     files_before = set(_kernel_coverage._accumulated_lines.keys())
+    assert len(files_before) > 0, "Hook should have harvested data during reset"
     lines_before = {}
     for f, lines in _kernel_coverage._accumulated_lines.items():
         lines_before[f] = set(lines)
 
-    qd.reset()
     qd.init(arch=qd.cpu)
 
     _kernel_coverage.ensure_field_allocated()
