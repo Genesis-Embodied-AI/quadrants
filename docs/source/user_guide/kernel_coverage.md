@@ -89,15 +89,28 @@ and the `else` branch was missed.
 - **Survives `qd.init()` resets.** Coverage data is accumulated across multiple `qd.init()` calls within the same
   process.
 
+## Advanced usage
+
+### Probe capacity
+
+There is a fixed limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). This
+is sufficient for most programs. If you hit the limit — for example in a very large codebase with many kernels — you
+can increase it by setting the `_MAX_PROBES` constant before any kernels are compiled:
+
+```python
+from quadrants.lang import _kernel_coverage
+_kernel_coverage._MAX_PROBES = 500_000
+```
+
 ## Limitations
 
-- **Autodiff kernels are skipped.** Coverage probes are not inserted into autodiff kernels, since the extra field
-  stores would interfere with gradient computation.
+- **Autodiff backward passes are skipped.** Coverage probes are inserted into your kernel during its normal (forward)
+  execution. The automatically generated backward and forward-mode AD replay passes do not receive probes, since the
+  extra field stores would interfere with gradient computation. In practice this means your kernel source lines are
+  still covered — only the AD-generated replay compilations are excluded.
 - **Offline cache interaction.** Coverage probes change the compiled kernel, so the offline cache will see them as
   new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled
   will be slower if you normally rely on cached kernels.
-- **Probe capacity.** There is a fixed limit of 100,000 probes per process. This is sufficient for most programs but
-  may need increasing for very large codebases with many kernels.
 
 ## Under the hood
 
