@@ -14,7 +14,6 @@ import logging
 import os
 import threading
 import warnings
-
 from typing import TYPE_CHECKING
 
 from coverage import CoverageData  # type: ignore[import-not-found]
@@ -56,10 +55,9 @@ def _harvest_field() -> None:
         _cov_field = None
         _cov_field_prog = None
         return
-    else:
-        for probe_id, (filepath, lineno) in _probe_map.items():
-            if probe_id < len(arr) and arr[probe_id] != 0:
-                _accumulated_lines.setdefault(filepath, set()).add(lineno)
+    for probe_id, (filepath, lineno) in _probe_map.items():
+        if probe_id < len(arr) and arr[probe_id] != 0:
+            _accumulated_lines.setdefault(filepath, set()).add(lineno)
     _cov_field = None
     _cov_field_prog = None
 

@@ -137,7 +137,10 @@ class _MarkdownRenderer(_Renderer):
 
     def begin(self, total_hit, total_miss, total_pct):
         commit = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=REPO_ROOT,
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
         ).stdout.strip()
         heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
         print(heading)
@@ -202,7 +205,7 @@ class _HtmlRenderer(_Renderer):
     def begin(self, total_hit, total_miss, total_pct):
         overall = _get_overall_coverage()
         self._parts.append(
-            f"<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Diff Coverage Report</title>\n"
+            f'<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Diff Coverage Report</title>\n'
             f"<style>\n{_HTML_CSS}\n</style></head><body>\n<h1>Diff Coverage Report</h1>"
         )
         pct_cls = "pct-good" if total_pct >= 80 else "pct-bad"
@@ -218,7 +221,7 @@ class _HtmlRenderer(_Renderer):
 
     def begin_file(self, filename, pct, missing):
         pct_cls = "pct-good" if pct >= 80 else "pct-bad"
-        missing_str = f' &mdash; missing: {_format_ranges(missing)}' if missing else ""
+        missing_str = f" &mdash; missing: {_format_ranges(missing)}" if missing else ""
         self._parts.append(
             f'<details><summary><span class="file-header">{html_mod.escape(filename)}</span>'
             f' <span class="{pct_cls}">{pct:.0f}%</span>{missing_str}</summary><pre>'
@@ -228,9 +231,7 @@ class _HtmlRenderer(_Renderer):
     def write_line(self, lineno, text, status):
         cls, icon = _HTML_STATUS[status]
         escaped = html_mod.escape(text)
-        self._line_parts.append(
-            f'<span class="line {cls}"><span class="lineno">{lineno}</span>{icon}{escaped}</span>'
-        )
+        self._line_parts.append(f'<span class="line {cls}"><span class="lineno">{lineno}</span>{icon}{escaped}</span>')
 
     def end_file(self):
         self._parts.append("".join(self._line_parts) + "</pre></details>")

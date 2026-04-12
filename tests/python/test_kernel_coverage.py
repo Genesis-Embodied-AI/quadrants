@@ -113,9 +113,7 @@ def test_ast_rewriter(src, expected_lines, start_lineno):
     rewriter.visit(tree)
 
     covered_lines = {lineno for _, (_, lineno) in rewriter.probe_map.items()}
-    assert expected_lines.issubset(covered_lines), (
-        f"Expected lines {expected_lines} to be probed, got {covered_lines}"
-    )
+    assert expected_lines.issubset(covered_lines), f"Expected lines {expected_lines} to be probed, got {covered_lines}"
 
 
 def test_ast_rewriter_capacity_limit():
@@ -294,7 +292,7 @@ def test_kernel_coverage_survives_reinit():
     Runs a kernel, then resets via qd.reset()/qd.init() (which triggers the _hooked_clear harvest), runs another
     kernel, harvests again, and checks that _accumulated_lines contains data from both sessions.
     """
-    from quadrants.lang import impl, _kernel_coverage
+    from quadrants.lang import _kernel_coverage, impl
 
     current_arch = impl.get_runtime()._arch
     _kernel_coverage.ensure_field_allocated()
@@ -341,19 +339,17 @@ def test_kernel_coverage_survives_reinit():
     _kernel_coverage._harvest_field()
 
     for f in files_before:
-        assert f in _kernel_coverage._accumulated_lines, (
-            f"File {f} from before reset should still be in _accumulated_lines"
-        )
-        assert lines_before[f].issubset(_kernel_coverage._accumulated_lines[f]), (
-            "Lines from before reset should be preserved"
-        )
+        assert (
+            f in _kernel_coverage._accumulated_lines
+        ), f"File {f} from before reset should still be in _accumulated_lines"
+        assert lines_before[f].issubset(
+            _kernel_coverage._accumulated_lines[f]
+        ), "Lines from before reset should be preserved"
 
     probes_second = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_mid}
     second_files = {loc[0] for loc in probes_second.values()}
     for f in second_files:
-        assert f in _kernel_coverage._accumulated_lines, (
-            f"File {f} from second kernel should be in _accumulated_lines"
-        )
+        assert f in _kernel_coverage._accumulated_lines, f"File {f} from second kernel should be in _accumulated_lines"
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
@@ -434,9 +430,9 @@ def test_kernel_coverage_qd_func():
     fired = {pid for pid in probes if arr[pid] != 0}
     # The kernel body has one statement (helper()), and the func body has one (out[0] = 99).
     # Both should produce probes that fire.
-    assert len(fired) >= 2, (
-        f"Expected probes from both kernel and func to fire, got {len(fired)} fired out of {len(probes)}"
-    )
+    assert (
+        len(fired) >= 2
+    ), f"Expected probes from both kernel and func to fire, got {len(fired)} fired out of {len(probes)}"
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
@@ -468,10 +464,10 @@ def test_kernel_coverage_multiple_kernels_same_session():
     cov_field = _kernel_coverage.get_field()
     arr = cov_field.to_numpy()
 
-    probes_a = {pid: loc for pid, loc in _kernel_coverage._probe_map.items()
-                if probe_count_before <= pid < probe_count_after_a}
-    probes_b = {pid: loc for pid, loc in _kernel_coverage._probe_map.items()
-                if pid >= probe_count_after_a}
+    probes_a = {
+        pid: loc for pid, loc in _kernel_coverage._probe_map.items() if probe_count_before <= pid < probe_count_after_a
+    }
+    probes_b = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_after_a}
 
     fired_a = {pid for pid in probes_a if arr[pid] != 0}
     fired_b = {pid for pid in probes_b if arr[pid] != 0}
