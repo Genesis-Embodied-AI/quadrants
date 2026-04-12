@@ -47,8 +47,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
  private:
   std::unordered_set<int> visited_;
   // each scope corresponds to an unordered_set
-  std::vector<std::unordered_map<std::size_t, std::unordered_set<Stmt *> > >
-      visible_stmts_;
+  std::vector<std::unordered_map<std::size_t, std::unordered_set<Stmt *> > > visible_stmts_;
   DelayedIRModifier modifier_;
 
  public:
@@ -69,8 +68,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
 
   static std::size_t operand_hash(const Stmt *stmt) {
     std::size_t hash_code{0};
-    auto hash_type =
-        std::hash<std::type_index>{}(std::type_index(typeid(stmt)));
+    auto hash_type = std::hash<std::type_index>{}(std::type_index(typeid(stmt)));
     if (stmt->is<GlobalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
       // special cases in common_statement_eliminable()
       return hash_type;
@@ -80,9 +78,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
       if (x == nullptr)
         continue;
       // Hash the addresses of the operand pointers.
-      hash_code =
-          (hash_code * 33) ^
-          (std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(x)));
+      hash_code = (hash_code * 33) ^ (std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(x)));
     }
     return hash_type ^ hash_code;
   }
@@ -106,12 +102,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (this_stmt->is<LoopUniqueStmt>()) {
       auto this_loop_unique = this_stmt->as<LoopUniqueStmt>();
       auto prev_loop_unique = prev_stmt->as<LoopUniqueStmt>();
-      if (irpass::analysis::same_value(this_loop_unique->input,
-                                       prev_loop_unique->input)) {
+      if (irpass::analysis::same_value(this_loop_unique->input, prev_loop_unique->input)) {
         // Merge the "covers" information into prev_loop_unique.
         // Notice that this_loop_unique->covers is corrupted here.
-        prev_loop_unique->covers.insert(this_loop_unique->covers.begin(),
-                                        this_loop_unique->covers.end());
+        prev_loop_unique->covers.insert(this_loop_unique->covers.begin(), this_loop_unique->covers.end());
         return true;
       }
       return false;
@@ -171,27 +165,19 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
-      if (irpass::analysis::same_statements(
-              true_clause->statements[0].get(),
-              false_clause->statements[0].get())) {
+      if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
         // Directly modify this because it won't invalidate any iterators.
         auto common_stmt = true_clause->extract(0);
-        irpass::replace_all_usages_with(false_clause.get(),
-                                        false_clause->statements[0].get(),
-                                        common_stmt.get());
+        irpass::replace_all_usages_with(false_clause.get(), false_clause->statements[0].get(), common_stmt.get());
         modifier_.insert_before(if_stmt, std::move(common_stmt));
         false_clause->erase(0);
       }
-      if (!true_clause->statements.empty() &&
-          !false_clause->statements.empty() &&
-          irpass::analysis::same_statements(
-              true_clause->statements.back().get(),
-              false_clause->statements.back().get())) {
+      if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
+          irpass::analysis::same_statements(true_clause->statements.back().get(),
+                                            false_clause->statements.back().get())) {
         // Directly modify this because it won't invalidate any iterators.
         auto common_stmt = true_clause->extract((int)true_clause->size() - 1);
-        irpass::replace_all_usages_with(false_clause.get(),
-                                        false_clause->statements.back().get(),
-                                        common_stmt.get());
+        irpass::replace_all_usages_with(false_clause.get(), false_clause->statements.back().get(), common_stmt.get());
         modifier_.insert_after(if_stmt, std::move(common_stmt));
         false_clause->erase((int)false_clause->size() - 1);
       }

@@ -10,9 +10,8 @@ namespace quadrants::lang {
 // manage its ownership more systematically.
 
 // This part doesn't look good, but we will remove it soon anyway.
-#define PER_TYPE(x)                     \
-  DataType PrimitiveType::x = DataType( \
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::x));
+#define PER_TYPE(x) \
+  DataType PrimitiveType::x = DataType(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::x));
 
 #include "quadrants/inc/data_type.inc.h"
 #undef PER_TYPE
@@ -106,8 +105,7 @@ std::string PointerType::to_string() const {
 }
 
 const Type *PointerType::get_type() const {
-  return TypeFactory::get_instance().get_pointer_type(pointee_,
-                                                      is_bit_pointer_);
+  return TypeFactory::get_instance().get_pointer_type(pointee_, is_bit_pointer_);
 }
 
 std::string TensorType::to_string() const {
@@ -128,8 +126,7 @@ const Type *TensorType::get_type() const {
 }
 
 template <std::size_t N>
-const Type *AbstractDictionaryType::get_element_type(
-    const std::array<int, N> &indices) const {
+const Type *AbstractDictionaryType::get_element_type(const std::array<int, N> &indices) const {
   const Type *type_now = this;
   for (auto ind : indices) {
     if (auto tensor_type = type_now->cast<TensorType>()) {
@@ -144,26 +141,20 @@ const Type *AbstractDictionaryType::get_element_type(
   return type_now;
 }
 
-template const Type *AbstractDictionaryType::get_element_type(
-    const std::array<int, 1> &) const;
-template const Type *AbstractDictionaryType::get_element_type(
-    const std::array<int, 2> &) const;
-template const Type *AbstractDictionaryType::get_element_type(
-    const std::array<int, 3> &) const;
+template const Type *AbstractDictionaryType::get_element_type(const std::array<int, 1> &) const;
+template const Type *AbstractDictionaryType::get_element_type(const std::array<int, 2> &) const;
+template const Type *AbstractDictionaryType::get_element_type(const std::array<int, 3> &) const;
 
 template <std::size_t... I>
-constexpr auto vec_to_array(const std::vector<int> &v,
-                            std::index_sequence<I...>) {
+constexpr auto vec_to_array(const std::vector<int> &v, std::index_sequence<I...>) {
   return std::array<int, sizeof...(I)>{v[I]...};
 }
 
-const Type *AbstractDictionaryType::get_element_type(
-    const std::vector<int> &indices) const {
+const Type *AbstractDictionaryType::get_element_type(const std::vector<int> &indices) const {
   switch (indices.size()) {
-#define CASE(N)                                                \
-  case N: {                                                    \
-    return get_element_type(                                   \
-        vec_to_array(indices, std::make_index_sequence<N>{})); \
+#define CASE(N)                                                                    \
+  case N: {                                                                        \
+    return get_element_type(vec_to_array(indices, std::make_index_sequence<N>{})); \
   }
     CASE(1)
     CASE(2)
@@ -184,8 +175,7 @@ std::string StructType::to_string() const {
     if (i) {
       s += ", ";
     }
-    s += fmt::format("{}({}, at {}B): {}", i, elements_[i].name,
-                     elements_[i].offset, elements_[i].type->to_string());
+    s += fmt::format("{}({}, at {}B): {}", i, elements_[i].name, elements_[i].offset, elements_[i].type->to_string());
   }
   s += "}";
   return s;
@@ -211,19 +201,15 @@ size_t StructType::get_element_offset(const std::array<int, N> &indices) const {
   return offset;
 }
 
-template size_t StructType::get_element_offset(
-    const std::array<int, 1> &) const;
-template size_t StructType::get_element_offset(
-    const std::array<int, 2> &) const;
-template size_t StructType::get_element_offset(
-    const std::array<int, 3> &) const;
+template size_t StructType::get_element_offset(const std::array<int, 1> &) const;
+template size_t StructType::get_element_offset(const std::array<int, 2> &) const;
+template size_t StructType::get_element_offset(const std::array<int, 3> &) const;
 
 size_t StructType::get_element_offset(const std::vector<int> &indices) const {
   switch (indices.size()) {
-#define CASE(N)                                                \
-  case N: {                                                    \
-    return get_element_offset(                                 \
-        vec_to_array(indices, std::make_index_sequence<N>{})); \
+#define CASE(N)                                                                      \
+  case N: {                                                                          \
+    return get_element_offset(vec_to_array(indices, std::make_index_sequence<N>{})); \
   }
     CASE(1)
     CASE(2)
@@ -255,37 +241,26 @@ std::string QuantIntType::to_string() const {
 }
 
 QuantIntType::QuantIntType(int num_bits, bool is_signed, Type *compute_type)
-    : Type(TypeKind::QuantInt),
-      compute_type_(compute_type),
-      num_bits_(num_bits),
-      is_signed_(is_signed) {
+    : Type(TypeKind::QuantInt), compute_type_(compute_type), num_bits_(num_bits), is_signed_(is_signed) {
   if (compute_type == nullptr) {
     auto type_id = is_signed ? PrimitiveTypeID::i32 : PrimitiveTypeID::u32;
-    this->compute_type_ =
-        TypeFactory::get_instance().get_primitive_type(type_id);
+    this->compute_type_ = TypeFactory::get_instance().get_primitive_type(type_id);
   }
 }
 
 const Type *QuantIntType::get_type() const {
-  return TypeFactory::get_instance().get_quant_int_type(num_bits_, is_signed_,
-                                                        compute_type_);
+  return TypeFactory::get_instance().get_quant_int_type(num_bits_, is_signed_, compute_type_);
 }
 
-QuantFixedType::QuantFixedType(Type *digits_type,
-                               Type *compute_type,
-                               float64 scale)
-    : Type(TypeKind::QuantFixed),
-      digits_type_(digits_type),
-      compute_type_(compute_type),
-      scale_(scale) {
+QuantFixedType::QuantFixedType(Type *digits_type, Type *compute_type, float64 scale)
+    : Type(TypeKind::QuantFixed), digits_type_(digits_type), compute_type_(compute_type), scale_(scale) {
   QD_ASSERT(digits_type->is<QuantIntType>());
   QD_ASSERT(compute_type->is<PrimitiveType>());
   QD_ASSERT(is_real(compute_type));
 }
 
 std::string QuantFixedType::to_string() const {
-  return fmt::format("qfx(d={} c={} s={})", digits_type_->to_string(),
-                     compute_type_->to_string(), scale_);
+  return fmt::format("qfx(d={} c={} s={})", digits_type_->to_string(), compute_type_->to_string(), scale_);
 }
 
 bool QuantFixedType::get_is_signed() const {
@@ -293,13 +268,10 @@ bool QuantFixedType::get_is_signed() const {
 }
 
 const Type *QuantFixedType::get_type() const {
-  return TypeFactory::get_instance().get_quant_fixed_type(
-      digits_type_, compute_type_, scale_);
+  return TypeFactory::get_instance().get_quant_fixed_type(digits_type_, compute_type_, scale_);
 }
 
-QuantFloatType::QuantFloatType(Type *digits_type,
-                               Type *exponent_type,
-                               Type *compute_type)
+QuantFloatType::QuantFloatType(Type *digits_type, Type *exponent_type, Type *compute_type)
     : Type(TypeKind::QuantFloat),
       digits_type_(digits_type),
       exponent_type_(exponent_type),
@@ -315,36 +287,32 @@ QuantFloatType::QuantFloatType(Type *digits_type,
 }
 
 const Type *QuantFloatType::get_type() const {
-  return TypeFactory::get_instance().get_quant_float_type(
-      digits_type_, exponent_type_, compute_type_);
+  return TypeFactory::get_instance().get_quant_float_type(digits_type_, exponent_type_, compute_type_);
 }
 
 std::string QuantFloatType::to_string() const {
-  return fmt::format("qfl(d={} e={} c={})", digits_type_->to_string(),
-                     exponent_type_->to_string(), compute_type_->to_string());
+  return fmt::format("qfl(d={} e={} c={})", digits_type_->to_string(), exponent_type_->to_string(),
+                     compute_type_->to_string());
 }
 
 int QuantFloatType::get_exponent_conversion_offset() const {
   // Note that f32 has exponent offset -127
-  return 127 - (1 << (exponent_type_->as<QuantIntType>()->get_num_bits() - 1)) +
-         1;
+  return 127 - (1 << (exponent_type_->as<QuantIntType>()->get_num_bits() - 1)) + 1;
 }
 
 int QuantFloatType::get_digit_bits() const {
-  return digits_type_->as<QuantIntType>()->get_num_bits() -
-         (int)get_is_signed();
+  return digits_type_->as<QuantIntType>()->get_num_bits() - (int)get_is_signed();
 }
 
 bool QuantFloatType::get_is_signed() const {
   return digits_type_->as<QuantIntType>()->get_is_signed();
 }
 
-BitStructType::BitStructType(
-    PrimitiveType *physical_type,
-    const std::vector<Type *> &member_types,
-    const std::vector<int> &member_bit_offsets,
-    const std::vector<int> &member_exponents,
-    const std::vector<std::vector<int>> &member_exponent_users)
+BitStructType::BitStructType(PrimitiveType *physical_type,
+                             const std::vector<Type *> &member_types,
+                             const std::vector<int> &member_bit_offsets,
+                             const std::vector<int> &member_exponents,
+                             const std::vector<std::vector<int>> &member_exponent_users)
     : Type(TypeKind::BitStruct),
       physical_type_(physical_type),
       member_types_(member_types),
@@ -374,9 +342,8 @@ BitStructType::BitStructType(
   for (auto i = 0; i < member_types_.size(); ++i) {
     auto exponent = member_exponents_[i];
     if (exponent != -1) {
-      QD_ASSERT(std::find(member_exponent_users_[exponent].begin(),
-                          member_exponent_users_[exponent].end(),
-                          i) != member_exponent_users_[exponent].end());
+      QD_ASSERT(std::find(member_exponent_users_[exponent].begin(), member_exponent_users_[exponent].end(), i) !=
+                member_exponent_users_[exponent].end());
     }
     for (auto user : member_exponent_users_[i]) {
       QD_ASSERT(member_exponents_[user] == i);
@@ -388,12 +355,9 @@ std::string BitStructType::to_string() const {
   std::string str = "bs(";
   int num_members = (int)member_bit_offsets_.size();
   for (int i = 0; i < num_members; i++) {
-    str += fmt::format("{}: {}@{}", i, member_types_[i]->to_string(),
-                       member_bit_offsets_[i]);
+    str += fmt::format("{}: {}@{}", i, member_types_[i]->to_string(), member_bit_offsets_[i]);
     if (member_exponents_[i] != -1) {
-      str += fmt::format(" {}exp={}",
-                         get_member_owns_shared_exponent(i) ? "shared_" : "",
-                         member_exponents_[i]);
+      str += fmt::format(" {}exp={}", get_member_owns_shared_exponent(i) ? "shared_" : "", member_exponents_[i]);
     }
     if (i + 1 < num_members) {
       str += ", ";
@@ -403,9 +367,8 @@ std::string BitStructType::to_string() const {
 }
 
 const Type *BitStructType::get_type() const {
-  return TypeFactory::get_instance().get_bit_struct_type(
-      physical_type_, member_types_, member_bit_offsets_, member_exponents_,
-      member_exponent_users_);
+  return TypeFactory::get_instance().get_bit_struct_type(physical_type_, member_types_, member_bit_offsets_,
+                                                         member_exponents_, member_exponent_users_);
 }
 
 std::string QuantArrayType::to_string() const {
@@ -413,8 +376,7 @@ std::string QuantArrayType::to_string() const {
 }
 
 const Type *QuantArrayType::get_type() const {
-  return TypeFactory::get_instance().get_quant_array_type(
-      physical_type_, element_type_, num_elements_);
+  return TypeFactory::get_instance().get_quant_array_type(physical_type_, element_type_, num_elements_);
 }
 
 std::string TypedConstant::stringify() const {

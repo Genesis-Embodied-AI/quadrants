@@ -8,8 +8,7 @@ class LoopInvariantCodeMotion : public LoopInvariantDetector {
 
   DelayedIRModifier modifier;
 
-  explicit LoopInvariantCodeMotion(const CompileConfig &config)
-      : LoopInvariantDetector(config) {
+  explicit LoopInvariantCodeMotion(const CompileConfig &config) : LoopInvariantDetector(config) {
   }
 
   void visit(BinaryOpStmt *stmt) override {
@@ -33,8 +32,7 @@ class LoopInvariantCodeMotion : public LoopInvariantDetector {
   }
 
   void visit(GlobalPtrStmt *stmt) override {
-    if (config.cache_loop_invariant_global_vars &&
-        is_loop_invariant(stmt, stmt->parent)) {
+    if (config.cache_loop_invariant_global_vars && is_loop_invariant(stmt, stmt->parent)) {
       auto replacement = stmt->clone();
       stmt->replace_usages_with(replacement.get());
 
@@ -44,8 +42,7 @@ class LoopInvariantCodeMotion : public LoopInvariantDetector {
   }
 
   void visit(ExternalPtrStmt *stmt) override {
-    if (config.cache_loop_invariant_global_vars &&
-        is_loop_invariant(stmt, stmt->parent)) {
+    if (config.cache_loop_invariant_global_vars && is_loop_invariant(stmt, stmt->parent)) {
       auto replacement = stmt->clone();
       stmt->replace_usages_with(replacement.get());
 
@@ -55,8 +52,7 @@ class LoopInvariantCodeMotion : public LoopInvariantDetector {
   }
 
   void visit(ArgLoadStmt *stmt) override {
-    if (config.cache_loop_invariant_global_vars &&
-        is_loop_invariant(stmt, stmt->parent)) {
+    if (config.cache_loop_invariant_global_vars && is_loop_invariant(stmt, stmt->parent)) {
       auto replacement = stmt->clone();
       stmt->replace_usages_with(replacement.get());
 

@@ -81,9 +81,7 @@ int test_throw(const std::string &seq) {
   return 0;
 }
 
-auto test_exception_handling = [](const std::vector<std::string> &params) {
-  test_throw(params[0]);
-};
+auto test_exception_handling = [](const std::vector<std::string> &params) { test_throw(params[0]); };
 
 auto test_exception_handling_auto = []() {
   QD_ASSERT(test_throw("A") == 0);

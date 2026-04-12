@@ -6,17 +6,15 @@
 #include "quadrants/rhi/cuda/cuda_driver.h"
 #include "quadrants/program/program.h"
 
-#define DECLARE_EIGEN_LLT_SOLVER(dt, type, order)                    \
-  typedef EigenSparseSolver<                                         \
-      Eigen::Simplicial##type<Eigen::SparseMatrix<dt>, Eigen::Lower, \
-                              Eigen::order##Ordering<int>>,          \
-      Eigen::SparseMatrix<dt>>                                       \
+#define DECLARE_EIGEN_LLT_SOLVER(dt, type, order)                                                  \
+  typedef EigenSparseSolver<                                                                       \
+      Eigen::Simplicial##type<Eigen::SparseMatrix<dt>, Eigen::Lower, Eigen::order##Ordering<int>>, \
+      Eigen::SparseMatrix<dt>>                                                                     \
       EigenSparseSolver##dt##type##order;
 
-#define DECLARE_EIGEN_LU_SOLVER(dt, type, order)                              \
-  typedef EigenSparseSolver<Eigen::Sparse##type<Eigen::SparseMatrix<dt>,      \
-                                                Eigen::order##Ordering<int>>, \
-                            Eigen::SparseMatrix<dt>>                          \
+#define DECLARE_EIGEN_LU_SOLVER(dt, type, order)                                                       \
+  typedef EigenSparseSolver<Eigen::Sparse##type<Eigen::SparseMatrix<dt>, Eigen::order##Ordering<int>>, \
+                            Eigen::SparseMatrix<dt>>                                                   \
       EigenSparseSolver##dt##type##order;
 
 namespace quadrants::lang {
@@ -55,10 +53,7 @@ class EigenSparseSolver : public SparseSolver {
   T solve(const T &b);
 
   template <typename T, typename V>
-  void solve_rf(Program *prog,
-                const SparseMatrix &sm,
-                const Ndarray &b,
-                const Ndarray &x);
+  void solve_rf(Program *prog, const SparseMatrix &sm, const Ndarray &b, const Ndarray &x);
   bool info() override;
 };
 
@@ -92,8 +87,7 @@ class CuSparseSolver : public SparseSolver {
   bool is_factorized_{false};
 
   // NOLINTBEGIN
-  int *h_Q_{
-      nullptr}; /* <int> n,  B = Q*A*Q' or B = A(Q,Q) by MATLAB notation */
+  int *h_Q_{nullptr}; /* <int> n,  B = Q*A*Q' or B = A(Q,Q) by MATLAB notation */
   int *d_Q_{nullptr};
   int *h_csr_row_ptr_B_{nullptr}; /* <int> n+1 */
   int *h_csr_col_ind_B_{nullptr}; /* <int> nnzA */
@@ -115,10 +109,7 @@ class CuSparseSolver : public SparseSolver {
   void analyze_pattern(const SparseMatrix &sm) override;
 
   void factorize(const SparseMatrix &sm) override;
-  void solve_rf(Program *prog,
-                const SparseMatrix &sm,
-                const Ndarray &b,
-                const Ndarray &x);
+  void solve_rf(Program *prog, const SparseMatrix &sm, const Ndarray &b, const Ndarray &x);
 
   bool info() override {
     QD_NOT_IMPLEMENTED;
@@ -131,22 +122,15 @@ class CuSparseSolver : public SparseSolver {
   void analyze_pattern_lu(const SparseMatrix &sm);
   void factorize_cholesky(const SparseMatrix &sm);
   void factorize_lu(const SparseMatrix &sm);
-  void solve_cholesky(Program *prog,
-                      const SparseMatrix &sm,
-                      const Ndarray &b,
-                      const Ndarray &x);
-  void solve_lu(Program *prog,
-                const SparseMatrix &sm,
-                const Ndarray &b,
-                const Ndarray &x);
+  void solve_cholesky(Program *prog, const SparseMatrix &sm, const Ndarray &b, const Ndarray &x);
+  void solve_lu(Program *prog, const SparseMatrix &sm, const Ndarray &b, const Ndarray &x);
 };
 
 std::unique_ptr<SparseSolver> make_sparse_solver(DataType dt,
                                                  const std::string &solver_type,
                                                  const std::string &ordering);
 
-std::unique_ptr<SparseSolver> make_cusparse_solver(
-    DataType dt,
-    const std::string &solver_type,
-    const std::string &ordering);
+std::unique_ptr<SparseSolver> make_cusparse_solver(DataType dt,
+                                                   const std::string &solver_type,
+                                                   const std::string &ordering);
 }  // namespace quadrants::lang

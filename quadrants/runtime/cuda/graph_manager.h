@@ -47,9 +47,7 @@ struct GraphNodeParams {
   char _pad[232 - 8 - 4 - 4 - 8 - 8];
   long long reserved2;
 };
-static_assert(
-    sizeof(GraphNodeParams) == 256,
-    "GraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
+static_assert(sizeof(GraphNodeParams) == 256, "GraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
 struct CachedGraph {
   // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
@@ -85,13 +83,12 @@ class GraphManager {
   // host-resident ndarrays) and the caller should fall back to normal launch.
   // Internally tracks whether the graph was used, queryable via
   // used_on_last_call().
-  bool try_launch(
-      int launch_id,
-      LaunchContextBuilder &ctx,
-      JITModule *cuda_module,
-      const std::vector<std::pair<int, Callable::Parameter>> &parameters,
-      const std::vector<OffloadedTask> &offloaded_tasks,
-      LlvmRuntimeExecutor *executor);
+  bool try_launch(int launch_id,
+                  LaunchContextBuilder &ctx,
+                  JITModule *cuda_module,
+                  const std::vector<std::pair<int, Callable::Parameter>> &parameters,
+                  const std::vector<OffloadedTask> &offloaded_tasks,
+                  LlvmRuntimeExecutor *executor);
 
   // cache_size and used_on_last_call used for tests
   void mark_not_used() {
@@ -112,16 +109,12 @@ class GraphManager {
   }
 
  private:
-  bool launch_cached_graph(CachedGraph &cached,
-                           LaunchContextBuilder &ctx,
-                           bool use_graph_do_while);
-  void resolve_ctx_ndarray_ptrs(
-      LaunchContextBuilder &ctx,
-      const std::vector<std::pair<int, Callable::Parameter>> &parameters,
-      LlvmRuntimeExecutor *executor);
+  bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while);
+  void resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
+                                const std::vector<std::pair<int, Callable::Parameter>> &parameters,
+                                LlvmRuntimeExecutor *executor);
   void ensure_condition_kernel_loaded();
-  void *add_conditional_while_node(void *graph,
-                                   unsigned long long *cond_handle_out);
+  void *add_conditional_while_node(void *graph, unsigned long long *cond_handle_out);
   void *add_kernel_node(void *graph,
                         void *prev_node,
                         void *func,

@@ -34,8 +34,7 @@ std::string c_quoted(std::string const &str) {
   return ss.str();
 }
 
-std::string format_error_message(const std::string &error_message_template,
-                                 const std::function<uint64(int)> &fetcher) {
+std::string format_error_message(const std::string &error_message_template, const std::function<uint64(int)> &fetcher) {
   std::string error_message_formatted;
   int argument_id = 0;
   for (int i = 0; i < (int)error_message_template.size(); i++) {
@@ -45,11 +44,9 @@ std::string format_error_message(const std::string &error_message_template,
       const auto dtype = error_message_template[i + 1];
       const auto argument = fetcher(argument_id);
       if (dtype == 'd') {
-        error_message_formatted += fmt::format(
-            "{}", quadrants_union_cast_with_different_sizes<int32>(argument));
+        error_message_formatted += fmt::format("{}", quadrants_union_cast_with_different_sizes<int32>(argument));
       } else if (dtype == 'f') {
-        error_message_formatted += fmt::format(
-            "{}", quadrants_union_cast_with_different_sizes<float32>(argument));
+        error_message_formatted += fmt::format("{}", quadrants_union_cast_with_different_sizes<float32>(argument));
       } else {
         QD_ERROR("Data type identifier %{} is not supported", dtype);
       }

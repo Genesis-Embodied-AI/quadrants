@@ -18,8 +18,7 @@ class Function;
  */
 class AllocaStmt : public Stmt, public ir_traits::Store {
  public:
-  explicit AllocaStmt(DataType type, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), is_shared(false) {
+  explicit AllocaStmt(DataType type, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), is_shared(false) {
     if (type->is_primitive(PrimitiveTypeID::unknown)) {
       ret_type = type;
     } else {
@@ -33,8 +32,7 @@ class AllocaStmt : public Stmt, public ir_traits::Store {
              bool is_shared = false,
              const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), is_shared(is_shared) {
-    ret_type = TypeFactory::get_instance().get_pointer_type(
-        TypeFactory::create_tensor_type(shape, type));
+    ret_type = TypeFactory::get_instance().get_pointer_type(TypeFactory::create_tensor_type(shape, type));
     QD_STMT_REG_FIELDS;
   }
 
@@ -158,9 +156,7 @@ class UnaryOpStmt : public Stmt {
   Stmt *operand;
   DataType cast_type;
 
-  UnaryOpStmt(UnaryOpType op_type,
-              Stmt *operand,
-              const DebugInfo &dbg_info = DebugInfo());
+  UnaryOpStmt(UnaryOpType op_type, Stmt *operand, const DebugInfo &dbg_info = DebugInfo());
 
   bool same_operation(UnaryOpStmt *o) const;
   bool is_cast() const;
@@ -203,10 +199,7 @@ class ArgLoadStmt : public Stmt {
               bool is_ptr,
               bool create_load,
               const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        arg_id(arg_id),
-        is_ptr(is_ptr),
-        create_load(create_load) {
+      : Stmt(dbg_info), arg_id(arg_id), is_ptr(is_ptr), create_load(create_load) {
     this->ret_type = dt;
     QD_STMT_REG_FIELDS;
   }
@@ -230,8 +223,7 @@ class ArgLoadStmt : public Stmt {
  */
 class RandStmt : public Stmt {
  public:
-  explicit RandStmt(const DataType &dt, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info) {
+  explicit RandStmt(const DataType &dt, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info) {
     ret_type = dt;
     QD_STMT_REG_FIELDS;
   }
@@ -262,11 +254,7 @@ class BinaryOpStmt : public Stmt {
                Stmt *rhs,
                bool is_bit_vectorized = false,
                const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        op_type(op_type),
-        lhs(lhs),
-        rhs(rhs),
-        is_bit_vectorized(is_bit_vectorized) {
+      : Stmt(dbg_info), op_type(op_type), lhs(lhs), rhs(rhs), is_bit_vectorized(is_bit_vectorized) {
     QD_ASSERT(!lhs->is<AllocaStmt>());
     QD_ASSERT(!rhs->is<AllocaStmt>());
     QD_STMT_REG_FIELDS;
@@ -289,11 +277,7 @@ class TernaryOpStmt : public Stmt {
   TernaryOpType op_type;
   Stmt *op1, *op2, *op3;
 
-  TernaryOpStmt(TernaryOpType op_type,
-                Stmt *op1,
-                Stmt *op2,
-                Stmt *op3,
-                const DebugInfo &dbg_info = DebugInfo())
+  TernaryOpStmt(TernaryOpType op_type, Stmt *op1, Stmt *op2, Stmt *op3, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), op_type(op_type), op1(op1), op2(op2), op3(op3) {
     QD_ASSERT(!op1->is<AllocaStmt>());
     QD_ASSERT(!op2->is<AllocaStmt>());
@@ -312,29 +296,18 @@ class TernaryOpStmt : public Stmt {
 /**
  * An atomic operation.
  */
-class AtomicOpStmt : public Stmt,
-                     public ir_traits::Store,
-                     public ir_traits::Load {
+class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Load {
  public:
   AtomicOpType op_type;
   Stmt *dest, *val;
   bool is_reduction;
 
-  AtomicOpStmt(AtomicOpType op_type,
-               Stmt *dest,
-               Stmt *val,
-               const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        op_type(op_type),
-        dest(dest),
-        val(val),
-        is_reduction(false) {
+  AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
+      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), is_reduction(false) {
     QD_STMT_REG_FIELDS;
   }
 
-  static std::unique_ptr<AtomicOpStmt> make_for_reduction(AtomicOpType op_type,
-                                                          Stmt *dest,
-                                                          Stmt *val) {
+  static std::unique_ptr<AtomicOpStmt> make_for_reduction(AtomicOpType op_type, Stmt *dest, Stmt *val) {
     auto stmt = std::make_unique<AtomicOpStmt>(op_type, dest, val);
     stmt->is_reduction = true;
     return stmt;
@@ -467,13 +440,7 @@ class MatrixOfGlobalPtrStmt : public Stmt {
     return true;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type,
-                     snodes,
-                     indices,
-                     ptr_base,
-                     dynamic_indexable,
-                     dynamic_index_stride,
-                     activate);
+  QD_STMT_DEF_FIELDS(ret_type, snodes, indices, ptr_base, dynamic_indexable, dynamic_index_stride, activate);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 
@@ -515,8 +482,8 @@ class MatrixPtrStmt : public Stmt {
     "offset"'s semantic, but in the end we should unify these two semantics.
   */
   bool offset_used_as_index() const {
-    if (origin->is<AllocaStmt>() || origin->is<GlobalTemporaryStmt>() ||
-        origin->is<ExternalPtrStmt>() || origin->is<MatrixPtrStmt>()) {
+    if (origin->is<AllocaStmt>() || origin->is<GlobalTemporaryStmt>() || origin->is<ExternalPtrStmt>() ||
+        origin->is<MatrixPtrStmt>()) {
       QD_ASSERT_INFO(origin->ret_type.ptr_removed()->is<TensorType>(),
                      "MatrixPtrStmt can only be used for TensorType.");
       return true;
@@ -593,9 +560,7 @@ class ExternalTensorShapeAlongAxisStmt : public Stmt {
   int axis;
   std::vector<int> arg_id;
 
-  ExternalTensorShapeAlongAxisStmt(int axis,
-                                   const std::vector<int> &arg_id,
-                                   const DebugInfo &dbg_info = DebugInfo());
+  ExternalTensorShapeAlongAxisStmt(int axis, const std::vector<int> &arg_id, const DebugInfo &dbg_info = DebugInfo());
 
   bool has_global_side_effect() const override {
     return false;
@@ -610,9 +575,7 @@ class ExternalTensorBasePtrStmt : public Stmt {
   std::vector<int> arg_id;
   bool is_grad;
 
-  ExternalTensorBasePtrStmt(const std::vector<int> &arg_id,
-                            bool is_grad,
-                            const DebugInfo &dbg_info = DebugInfo());
+  ExternalTensorBasePtrStmt(const std::vector<int> &arg_id, bool is_grad, const DebugInfo &dbg_info = DebugInfo());
 
   bool has_global_side_effect() const override {
     return false;
@@ -649,9 +612,7 @@ class AssertStmt : public Stmt {
 /**
  * Call an external (C++) function.
  */
-class ExternalFuncCallStmt : public Stmt,
-                             public ir_traits::Store,
-                             public ir_traits::Load {
+class ExternalFuncCallStmt : public Stmt, public ir_traits::Store, public ir_traits::Load {
  public:
   enum Type { SHARED_OBJECT = 0, ASSEMBLY = 1, BITCODE = 2 };
 
@@ -698,13 +659,7 @@ class ExternalFuncCallStmt : public Stmt,
     return arg_stmts;
   }
 
-  QD_STMT_DEF_FIELDS(type,
-                     so_func,
-                     asm_source,
-                     bc_filename,
-                     bc_funcname,
-                     arg_stmts,
-                     output_stmts);
+  QD_STMT_DEF_FIELDS(type, so_func, asm_source, bc_filename, bc_funcname, arg_stmts, output_stmts);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 
@@ -720,11 +675,7 @@ class RangeAssumptionStmt : public Stmt {
   Stmt *base;
   int low, high;
 
-  RangeAssumptionStmt(Stmt *input,
-                      Stmt *base,
-                      int low,
-                      int high,
-                      const DebugInfo &dbg_info = DebugInfo())
+  RangeAssumptionStmt(Stmt *input, Stmt *base, int low, int high, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), input(input), base(base), low(low), high(high) {
     QD_STMT_REG_FIELDS;
   }
@@ -754,9 +705,7 @@ class LoopUniqueStmt : public Stmt {
   // std::unordered_set<> provides operator==, and StmtFieldManager will
   // use that to check if two LoopUniqueStmts are the same.
 
-  LoopUniqueStmt(Stmt *input,
-                 const std::vector<SNode *> &covers,
-                 const DebugInfo &dbg_info = DebugInfo());
+  LoopUniqueStmt(Stmt *input, const std::vector<SNode *> &covers, const DebugInfo &dbg_info = DebugInfo());
 
   bool has_global_side_effect() const override {
     return false;
@@ -774,8 +723,7 @@ class GlobalLoadStmt : public Stmt, public ir_traits::Load {
  public:
   Stmt *src;
 
-  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), src(src) {
+  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), src(src) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -805,9 +753,7 @@ class GlobalStoreStmt : public Stmt, public ir_traits::Store {
   Stmt *dest;
   Stmt *val;
 
-  GlobalStoreStmt(Stmt *dest,
-                  Stmt *val,
-                  const DebugInfo &dbg_info = DebugInfo())
+  GlobalStoreStmt(Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), dest(dest), val(val) {
     QD_STMT_REG_FIELDS;
   }
@@ -836,8 +782,7 @@ class LocalLoadStmt : public Stmt, public ir_traits::Load {
  public:
   Stmt *src;
 
-  explicit LocalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), src(src) {
+  explicit LocalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), src(src) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -866,10 +811,9 @@ class LocalStoreStmt : public Stmt, public ir_traits::Store {
   Stmt *dest;
   Stmt *val;
 
-  LocalStoreStmt(Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
-      : dest(dest), val(val) {
-    QD_ASSERT(dest->is<AllocaStmt>() || dest->is<MatrixPtrStmt>() ||
-              dest->is<MatrixOfMatrixPtrStmt>() || dest->is<GetElementStmt>());
+  LocalStoreStmt(Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo()) : dest(dest), val(val) {
+    QD_ASSERT(dest->is<AllocaStmt>() || dest->is<MatrixPtrStmt>() || dest->is<MatrixOfMatrixPtrStmt>() ||
+              dest->is<GetElementStmt>());
     QD_STMT_REG_FIELDS;
   }
 
@@ -935,15 +879,13 @@ class PrintStmt : public Stmt {
   const std::vector<EntryType> contents;
   const std::vector<FormatType> formats;
 
-  PrintStmt(const std::vector<EntryType> &contents_,
-            const std::vector<FormatType> &formats_)
+  PrintStmt(const std::vector<EntryType> &contents_, const std::vector<FormatType> &formats_)
       : contents(contents_), formats(formats_) {
     QD_STMT_REG_FIELDS;
   }
 
   template <typename... Args>
-  explicit PrintStmt(Stmt *t, Args &&...args)
-      : contents(make_entries(t, std::forward<Args>(args)...)) {
+  explicit PrintStmt(Stmt *t, Args &&...args) : contents(make_entries(t, std::forward<Args>(args)...)) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -961,9 +903,7 @@ class PrintStmt : public Stmt {
   }
 
   template <typename T, typename... Args>
-  static void make_entries_helper(std::vector<PrintStmt::EntryType> &entries,
-                                  T &&t,
-                                  Args &&...values) {
+  static void make_entries_helper(std::vector<PrintStmt::EntryType> &entries, T &&t, Args &&...values) {
     entries.push_back(EntryType{t});
     make_entries_helper(entries, std::forward<Args>(values)...);
   }
@@ -983,9 +923,7 @@ class ConstStmt : public Stmt {
  public:
   TypedConstant val;
 
-  explicit ConstStmt(const TypedConstant &val,
-                     const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), val(val) {
+  explicit ConstStmt(const TypedConstant &val, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), val(val) {
     ret_type = val.dt;
     QD_STMT_REG_FIELDS;
   }
@@ -1038,13 +976,7 @@ class RangeForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(begin,
-                     end,
-                     reversed,
-                     is_bit_vectorized,
-                     num_cpu_threads,
-                     block_dim,
-                     strictly_serialized);
+  QD_STMT_DEF_FIELDS(begin, end, reversed, is_bit_vectorized, num_cpu_threads, block_dim, strictly_serialized);
   QD_DEFINE_ACCEPT
 };
 
@@ -1077,12 +1009,7 @@ class StructForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(snode,
-                     index_offsets,
-                     is_bit_vectorized,
-                     num_cpu_threads,
-                     block_dim,
-                     mem_access_opt);
+  QD_STMT_DEF_FIELDS(snode, index_offsets, is_bit_vectorized, num_cpu_threads, block_dim, mem_access_opt);
   QD_DEFINE_ACCEPT
 };
 
@@ -1159,8 +1086,7 @@ class ReferenceStmt : public Stmt, public ir_traits::Load {
   Stmt *var;
   bool global_side_effect{false};
 
-  explicit ReferenceStmt(Stmt *var, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), var(var) {
+  explicit ReferenceStmt(Stmt *var, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), var(var) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -1184,9 +1110,7 @@ class GetElementStmt : public Stmt {
  public:
   Stmt *src;
   std::vector<int> index;
-  GetElementStmt(Stmt *src,
-                 const std::vector<int> &index,
-                 const DebugInfo &dbg_info = DebugInfo())
+  GetElementStmt(Stmt *src, const std::vector<int> &index, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), src(src), index(index) {
     QD_STMT_REG_FIELDS;
   }
@@ -1278,9 +1202,7 @@ class LinearizeStmt : public Stmt {
   std::vector<Stmt *> inputs;
   std::vector<int> strides;
 
-  LinearizeStmt(const std::vector<Stmt *> &inputs,
-                const std::vector<int> &strides)
-      : inputs(inputs), strides(strides) {
+  LinearizeStmt(const std::vector<Stmt *> &inputs, const std::vector<int> &strides) : inputs(inputs), strides(strides) {
     QD_ASSERT(inputs.size() == strides.size());
     QD_STMT_REG_FIELDS;
   }
@@ -1336,14 +1258,8 @@ class SNodeLookupStmt : public Stmt {
   Stmt *input_index;
   bool activate;
 
-  SNodeLookupStmt(SNode *snode,
-                  Stmt *input_snode,
-                  Stmt *input_index,
-                  bool activate)
-      : snode(snode),
-        input_snode(input_snode),
-        input_index(input_index),
-        activate(activate) {
+  SNodeLookupStmt(SNode *snode, Stmt *input_snode, Stmt *input_index, bool activate)
+      : snode(snode), input_snode(input_snode), input_index(input_index), activate(activate) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -1373,10 +1289,7 @@ class GetChStmt : public Stmt {
   // irpass::type_check()
   bool overrided_dtype = false;
 
-  GetChStmt(Stmt *input_ptr,
-            int chid,
-            bool is_bit_vectorized = false,
-            const DebugInfo &dbg_info = DebugInfo());
+  GetChStmt(Stmt *input_ptr, int chid, bool is_bit_vectorized = false, const DebugInfo &dbg_info = DebugInfo());
   GetChStmt(Stmt *input_ptr,
             SNode *snode,
             int chid,
@@ -1387,12 +1300,7 @@ class GetChStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type,
-                     input_ptr,
-                     input_snode,
-                     output_snode,
-                     chid,
-                     is_bit_vectorized);
+  QD_STMT_DEF_FIELDS(ret_type, input_ptr, input_snode, output_snode, chid, is_bit_vectorized);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 
@@ -1427,14 +1335,10 @@ class OffloadedStmt : public Stmt {
   std::unordered_set<mesh::MeshElementType> major_to_types;
   std::unordered_set<mesh::MeshRelationType> minor_relation_types;
 
-  std::unordered_map<mesh::MeshElementType, Stmt *>
-      owned_offset_local;  // |owned_offset[idx]|
-  std::unordered_map<mesh::MeshElementType, Stmt *>
-      total_offset_local;  // |total_offset[idx]|
-  std::unordered_map<mesh::MeshElementType, Stmt *>
-      owned_num_local;  // |owned_offset[idx+1] - owned_offset[idx]|
-  std::unordered_map<mesh::MeshElementType, Stmt *>
-      total_num_local;  // |total_offset[idx+1] - total_offset[idx]|
+  std::unordered_map<mesh::MeshElementType, Stmt *> owned_offset_local;  // |owned_offset[idx]|
+  std::unordered_map<mesh::MeshElementType, Stmt *> total_offset_local;  // |total_offset[idx]|
+  std::unordered_map<mesh::MeshElementType, Stmt *> owned_num_local;     // |owned_offset[idx+1] - owned_offset[idx]|
+  std::unordered_map<mesh::MeshElementType, Stmt *> total_num_local;     // |total_offset[idx+1] - total_offset[idx]|
 
   std::vector<int> index_offsets;
 
@@ -1596,8 +1500,7 @@ class GlobalTemporaryStmt : public Stmt {
  public:
   std::size_t offset;
 
-  GlobalTemporaryStmt(std::size_t offset, const DataType &ret_type)
-      : offset(offset) {
+  GlobalTemporaryStmt(std::size_t offset, const DataType &ret_type) : offset(offset) {
     this->ret_type = ret_type;
     QD_STMT_REG_FIELDS;
   }
@@ -1617,8 +1520,7 @@ class ThreadLocalPtrStmt : public Stmt {
  public:
   std::size_t offset;
 
-  ThreadLocalPtrStmt(std::size_t offset, const DataType &ret_type)
-      : offset(offset) {
+  ThreadLocalPtrStmt(std::size_t offset, const DataType &ret_type) : offset(offset) {
     this->ret_type = ret_type;
     QD_STMT_REG_FIELDS;
   }
@@ -1677,9 +1579,7 @@ class InternalFuncStmt : public Stmt {
                             const std::vector<Stmt *> &args,
                             Type *ret_type = nullptr,
                             bool with_runtime_context = true)
-      : func_name(func_name),
-        args(args),
-        with_runtime_context(with_runtime_context) {
+      : func_name(func_name), args(args), with_runtime_context(with_runtime_context) {
     if (ret_type == nullptr) {
       this->ret_type = PrimitiveType::i32;
     } else {
@@ -1700,8 +1600,7 @@ class AdStackAllocaStmt : public Stmt {
   DataType dt;
   std::size_t max_size{0};  // 0 = adaptive
 
-  AdStackAllocaStmt(const DataType &dt, std::size_t max_size)
-      : dt(dt), max_size(max_size) {
+  AdStackAllocaStmt(const DataType &dt, std::size_t max_size) : dt(dt), max_size(max_size) {
     ret_type = dt;
     QD_STMT_REG_FIELDS;
   }
@@ -1888,9 +1787,7 @@ class BitStructStoreStmt : public Stmt {
   std::vector<Stmt *> values;
   bool is_atomic;
 
-  BitStructStoreStmt(Stmt *ptr,
-                     const std::vector<int> &ch_ids,
-                     const std::vector<Stmt *> &values)
+  BitStructStoreStmt(Stmt *ptr, const std::vector<int> &ch_ids, const std::vector<Stmt *> &values)
       : ptr(ptr), ch_ids(ch_ids), values(values), is_atomic(true) {
     QD_ASSERT(ch_ids.size() == values.size());
     QD_STMT_REG_FIELDS;
@@ -1925,11 +1822,7 @@ class MeshRelationAccessStmt : public Stmt {
                          mesh::MeshElementType to_type,
                          Stmt *neighbor_idx,
                          const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        mesh(mesh),
-        mesh_idx(mesh_idx),
-        to_type(to_type),
-        neighbor_idx(neighbor_idx) {
+      : Stmt(dbg_info), mesh(mesh), mesh_idx(mesh_idx), to_type(to_type), neighbor_idx(neighbor_idx) {
     this->ret_type = PrimitiveType::u16;
     QD_STMT_REG_FIELDS;
   }
@@ -1938,11 +1831,7 @@ class MeshRelationAccessStmt : public Stmt {
                          Stmt *mesh_idx,
                          mesh::MeshElementType to_type,
                          const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        mesh(mesh),
-        mesh_idx(mesh_idx),
-        to_type(to_type),
-        neighbor_idx(nullptr) {
+      : Stmt(dbg_info), mesh(mesh), mesh_idx(mesh_idx), to_type(to_type), neighbor_idx(nullptr) {
     this->ret_type = PrimitiveType::u16;
     QD_STMT_REG_FIELDS;
   }
@@ -1987,11 +1876,7 @@ class MeshIndexConversionStmt : public Stmt {
                           Stmt *idx,
                           mesh::ConvType conv_type,
                           const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info),
-        mesh(mesh),
-        idx_type(idx_type),
-        idx(idx),
-        conv_type(conv_type) {
+      : Stmt(dbg_info), mesh(mesh), idx_type(idx_type), idx(idx), conv_type(conv_type) {
     this->ret_type = PrimitiveType::i32;
     QD_STMT_REG_FIELDS;
   }
@@ -2009,8 +1894,7 @@ class MeshIndexConversionStmt : public Stmt {
  */
 class MeshPatchIndexStmt : public Stmt {
  public:
-  explicit MeshPatchIndexStmt(const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info) {
+  explicit MeshPatchIndexStmt(const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info) {
     this->ret_type = PrimitiveType::i32;
     QD_STMT_REG_FIELDS;
   }
@@ -2042,8 +1926,7 @@ class MatrixInitStmt : public Stmt {
 };
 
 template <typename T>
-std::vector<std::unique_ptr<Stmt>> get_const_stmt_with_value(DataType dt,
-                                                             T value) {
+std::vector<std::unique_ptr<Stmt>> get_const_stmt_with_value(DataType dt, T value) {
   if (dt->is<PrimitiveType>()) {
     TypedConstant constant(dt, value);
     auto const_stmt = std::make_unique<ConstStmt>(constant);
@@ -2054,12 +1937,10 @@ std::vector<std::unique_ptr<Stmt>> get_const_stmt_with_value(DataType dt,
 
   } else if (dt->is<TensorType>()) {
     DataType element_dt = dt.get_element_type();
-    std::vector<std::unique_ptr<Stmt>> stmts =
-        get_const_stmt_with_value(element_dt, value);
+    std::vector<std::unique_ptr<Stmt>> stmts = get_const_stmt_with_value(element_dt, value);
 
     Stmt *elem_stmt = stmts.back().get();
-    std::vector<Stmt *> elem_stmts(dt->as<TensorType>()->get_num_elements(),
-                                   elem_stmt);
+    std::vector<Stmt *> elem_stmts(dt->as<TensorType>()->get_num_elements(), elem_stmt);
 
     auto matrix_init_stmt = std::make_unique<MatrixInitStmt>(elem_stmts);
     matrix_init_stmt->ret_type = dt;

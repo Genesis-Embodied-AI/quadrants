@@ -49,20 +49,18 @@ class KernelCodeGen {
 
   virtual ~KernelCodeGen() = default;
 
-  static std::unique_ptr<KernelCodeGen> create(
-      const CompileConfig &compile_config,
-      const Kernel *kernel,
-      IRNode *ir,
-      QuadrantsLLVMContext &tlctx);
+  static std::unique_ptr<KernelCodeGen> create(const CompileConfig &compile_config,
+                                               const Kernel *kernel,
+                                               IRNode *ir,
+                                               QuadrantsLLVMContext &tlctx);
 
 #ifdef QD_WITH_LLVM
   virtual LLVMCompiledKernel compile_kernel_to_module();
 
-  virtual LLVMCompiledTask compile_task(
-      int task_codegen_id,
-      const CompileConfig &config,
-      std::unique_ptr<llvm::Module> &&module = nullptr,
-      IRNode *block = nullptr) {
+  virtual LLVMCompiledTask compile_task(int task_codegen_id,
+                                        const CompileConfig &config,
+                                        std::unique_ptr<llvm::Module> &&module = nullptr,
+                                        IRNode *block = nullptr) {
     QD_NOT_IMPLEMENTED
   }
 

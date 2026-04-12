@@ -52,49 +52,40 @@ class LoopUniqueStmtSearcher : public BasicStmtVisitor {
     }
 
     // op loop-unique -> loop-unique
-    if (loop_unique_.count(stmt->operand) > 0 &&
-        (stmt->op_type == UnaryOpType::neg)) {
+    if (loop_unique_.count(stmt->operand) > 0 && (stmt->op_type == UnaryOpType::neg)) {
       // TODO: Other injective unary operations
       loop_unique_[stmt] = loop_unique_[stmt->operand];
     }
   }
 
   void visit(DecorationStmt *stmt) override {
-    if (stmt->decoration.size() == 2 &&
-        stmt->decoration[0] ==
-            uint32_t(DecorationStmt::Decoration::kLoopUnique)) {
+    if (stmt->decoration.size() == 2 && stmt->decoration[0] == uint32_t(DecorationStmt::Decoration::kLoopUnique)) {
       if (loop_unique_.find(stmt->operand) == loop_unique_.end()) {
         // This decoration exists IFF we are looping over NDArray (or any other
         // cases where the array index is linearized by the codegen) In that
         // case the original loop dimensions have been reduced to 1D.
         loop_unique_[stmt->operand] = stmt->decoration[1];
-        num_different_loop_indices = std::max(loop_unique_[stmt->operand] + 1,
-                                              num_different_loop_indices);
+        num_different_loop_indices = std::max(loop_unique_[stmt->operand] + 1, num_different_loop_indices);
       }
     }
   }
 
   void visit(BinaryOpStmt *stmt) override {
-    if (loop_invariant_.count(stmt->lhs) > 0 &&
-        loop_invariant_.count(stmt->rhs) > 0) {
+    if (loop_invariant_.count(stmt->lhs) > 0 && loop_invariant_.count(stmt->rhs) > 0) {
       loop_invariant_.insert(stmt);
     }
 
     // loop-unique op loop-invariant -> loop-unique
-    if ((loop_unique_.count(stmt->lhs) > 0 &&
-         loop_invariant_.count(stmt->rhs) > 0) &&
-        (stmt->op_type == BinaryOpType::add ||
-         stmt->op_type == BinaryOpType::sub ||
+    if ((loop_unique_.count(stmt->lhs) > 0 && loop_invariant_.count(stmt->rhs) > 0) &&
+        (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
          stmt->op_type == BinaryOpType::bit_xor)) {
       // TODO: Other operations
       loop_unique_[stmt] = loop_unique_[stmt->lhs];
     }
 
     // loop-invariant op loop-unique -> loop-unique
-    if ((loop_invariant_.count(stmt->lhs) > 0 &&
-         loop_unique_.count(stmt->rhs) > 0) &&
-        (stmt->op_type == BinaryOpType::add ||
-         stmt->op_type == BinaryOpType::sub ||
+    if ((loop_invariant_.count(stmt->lhs) > 0 && loop_unique_.count(stmt->rhs) > 0) &&
+        (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
          stmt->op_type == BinaryOpType::bit_xor)) {
       loop_unique_[stmt] = loop_unique_[stmt->rhs];
     }
@@ -145,8 +136,7 @@ class LoopUniqueStmtSearcher : public BasicStmtVisitor {
     }
     std::sort(loop_indices.begin(), loop_indices.end());
     auto current_num_different_loop_indices =
-        std::unique(loop_indices.begin(), loop_indices.end()) -
-        loop_indices.begin();
+        std::unique(loop_indices.begin(), loop_indices.end()) - loop_indices.begin();
     // for i, j in x:
     //     a[j, i] is loop-unique
     //     b[i, i] is not loop-unique (because there's no j)
@@ -173,8 +163,7 @@ class LoopUniqueStmtSearcher : public BasicStmtVisitor {
     }
     std::sort(loop_indices.begin(), loop_indices.end());
     auto current_num_different_loop_indices =
-        std::unique(loop_indices.begin(), loop_indices.end()) -
-        loop_indices.begin();
+        std::unique(loop_indices.begin(), loop_indices.end()) - loop_indices.begin();
 
     // for i, j in x:
     //     a[j, i] is loop-unique
@@ -195,10 +184,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
   std::unordered_map<const SNode *, GlobalPtrStmt *> rel_access_pointer_;
 
   // Search any_arrs that are uniquely accessed. Maps: ArgID -> ExternalPtrStmt
-  std::unordered_map<std::vector<int>,
-                     ExternalPtrStmt *,
-                     hashing::Hasher<std::vector<int>>>
-      accessed_arr_pointer_;
+  std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>> accessed_arr_pointer_;
 
   // Search for MatrixPtrstmt that are uniquely accessed.
   std::unordered_set<MatrixPtrStmt *> accessed_matrix_pointer_;
@@ -217,17 +203,13 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
       auto snode = stmt->origin->as<GlobalPtrStmt>()->snode;
       accessed &= (accessed_pointer_.find(snode) != accessed_pointer_.end());
     } else if (stmt->origin->is<ExternalPtrStmt>()) {
-      auto arg_id = stmt->origin->as<ExternalPtrStmt>()
-                        ->base_ptr->as<ArgLoadStmt>()
-                        ->arg_id;
-      accessed &=
-          (accessed_arr_pointer_.find(arg_id) != accessed_arr_pointer_.end());
+      auto arg_id = stmt->origin->as<ExternalPtrStmt>()->base_ptr->as<ArgLoadStmt>()->arg_id;
+      accessed &= (accessed_arr_pointer_.find(arg_id) != accessed_arr_pointer_.end());
     } else {
       return;
     }
 
-    accessed &=
-        loop_unique_stmt_searcher_.is_matrix_ptr_indices_loop_unique(stmt);
+    accessed &= loop_unique_stmt_searcher_.is_matrix_ptr_indices_loop_unique(stmt);
 
     if (accessed) {
       accessed_matrix_pointer_.insert(stmt);
@@ -237,25 +219,21 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
   void visit(GlobalPtrStmt *stmt) override {
     auto snode = stmt->snode;
     // mesh-for loop unique
-    if (stmt->indices.size() == 1 &&
-        stmt->indices[0]->is<MeshIndexConversionStmt>()) {
+    if (stmt->indices.size() == 1 && stmt->indices[0]->is<MeshIndexConversionStmt>()) {
       auto idx = stmt->indices[0]->as<MeshIndexConversionStmt>()->idx;
       while (idx->is<MeshIndexConversionStmt>()) {  // special case: l2g +
                                                     // g2r
         idx = idx->as<MeshIndexConversionStmt>()->idx;
       }
-      if (idx->is<LoopIndexStmt>() &&
-          idx->as<LoopIndexStmt>()->is_mesh_index()) {  // from-end access
-        if (rel_access_pointer_.find(snode) ==
-            rel_access_pointer_.end()) {  // not accessed by neibhours yet
+      if (idx->is<LoopIndexStmt>() && idx->as<LoopIndexStmt>()->is_mesh_index()) {  // from-end access
+        if (rel_access_pointer_.find(snode) == rel_access_pointer_.end()) {         // not accessed by neibhours yet
           accessed_pointer_[snode] = stmt;
         } else {  // accessed by neibhours, so it's not unique
           accessed_pointer_[snode] = nullptr;
         }
       } else {  // to-end access
         rel_access_pointer_[snode] = stmt;
-        accessed_pointer_[snode] =
-            nullptr;  // from-end access should not be unique
+        accessed_pointer_[snode] = nullptr;  // from-end access should not be unique
       }
     }
     // Range-for / struct-for
@@ -267,8 +245,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
         accessed_pointer_[snode] = nullptr;  // not loop-unique
       }
     } else {
-      if (!irpass::analysis::definitely_same_address(accessed_ptr->second,
-                                                     stmt)) {
+      if (!irpass::analysis::definitely_same_address(accessed_ptr->second, stmt)) {
         accessed_ptr->second = nullptr;  // not uniquely accessed
       }
     }
@@ -283,8 +260,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
 
     auto accessed_ptr = accessed_arr_pointer_.find(arg_id);
 
-    bool stmt_loop_unique =
-        loop_unique_stmt_searcher_.is_ptr_indices_loop_unique(stmt);
+    bool stmt_loop_unique = loop_unique_stmt_searcher_.is_ptr_indices_loop_unique(stmt);
 
     if (!stmt_loop_unique) {
       accessed_arr_pointer_[arg_id] = nullptr;  // not loop-unique
@@ -314,8 +290,7 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
             // We only compare unique indices here.
             // Since both pointers are loop-unique, all the unique indices
             // need to be the same for both to be uniquely accessed
-            if (loop_unique_stmt_searcher_.is_partially_loop_unique(
-                    this_index)) {
+            if (loop_unique_stmt_searcher_.is_partially_loop_unique(this_index)) {
               if (!irpass::analysis::same_value(this_index, other_index)) {
                 // Not equal -> not uniquely accessed
                 accessed_arr_pointer_[arg_id] = nullptr;
@@ -329,20 +304,16 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
   }
 
   static std::tuple<std::unordered_map<const SNode *, GlobalPtrStmt *>,
-                    std::unordered_map<std::vector<int>,
-                                       ExternalPtrStmt *,
-                                       hashing::Hasher<std::vector<int>>>,
+                    std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>>,
                     std::unordered_set<MatrixPtrStmt *>>
   run(IRNode *root) {
     QD_ASSERT(root->is<OffloadedStmt>());
     auto offload = root->as<OffloadedStmt>();
     UniquelyAccessedSNodeSearcher searcher;
-    if (offload->task_type == OffloadedTaskType::range_for ||
-        offload->task_type == OffloadedTaskType::mesh_for) {
+    if (offload->task_type == OffloadedTaskType::range_for || offload->task_type == OffloadedTaskType::mesh_for) {
       searcher.loop_unique_stmt_searcher_.num_different_loop_indices = 1;
     } else if (offload->task_type == OffloadedTaskType::struct_for) {
-      searcher.loop_unique_stmt_searcher_.num_different_loop_indices =
-          offload->snode->num_active_indices;
+      searcher.loop_unique_stmt_searcher_.num_different_loop_indices = offload->snode->num_active_indices;
     } else {
       // serial
       searcher.loop_unique_stmt_searcher_.num_different_loop_indices = 0;
@@ -350,17 +321,14 @@ class UniquelyAccessedSNodeSearcher : public BasicStmtVisitor {
     root->accept(&searcher.loop_unique_stmt_searcher_);
     root->accept(&searcher);
 
-    return std::make_tuple(searcher.accessed_pointer_,
-                           searcher.accessed_arr_pointer_,
+    return std::make_tuple(searcher.accessed_pointer_, searcher.accessed_arr_pointer_,
                            searcher.accessed_matrix_pointer_);
   }
 };
 
 class UniquelyAccessedBitStructGatherer : public BasicStmtVisitor {
  private:
-  std::unordered_map<OffloadedStmt *,
-                     std::unordered_map<const SNode *, GlobalPtrStmt *>>
-      result_;
+  std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>> result_;
 
  public:
   using BasicStmtVisitor::visit;
@@ -371,17 +339,14 @@ class UniquelyAccessedBitStructGatherer : public BasicStmtVisitor {
   }
 
   void visit(OffloadedStmt *stmt) override {
-    if (stmt->task_type == OffloadedTaskType::range_for ||
-        stmt->task_type == OffloadedTaskType::mesh_for ||
+    if (stmt->task_type == OffloadedTaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
         stmt->task_type == OffloadedTaskType::struct_for) {
       auto &loop_unique_bit_struct = result_[stmt];
-      auto loop_unique_ptr = std::get<0>(
-          irpass::analysis::gather_uniquely_accessed_pointers(stmt));
+      auto loop_unique_ptr = std::get<0>(irpass::analysis::gather_uniquely_accessed_pointers(stmt));
       for (auto &it : loop_unique_ptr) {
         auto *snode = it.first;
         auto *ptr1 = it.second;
-        if (ptr1 != nullptr && ptr1->indices.size() > 0 &&
-            ptr1->indices[0]->is<MeshIndexConversionStmt>()) {
+        if (ptr1 != nullptr && ptr1->indices.size() > 0 && ptr1->indices[0]->is<MeshIndexConversionStmt>()) {
           continue;
         }
         if (snode->is_bit_level) {
@@ -401,8 +366,7 @@ class UniquelyAccessedBitStructGatherer : public BasicStmtVisitor {
             auto *ptr2 = accessed_ptr->second;
             QD_ASSERT(ptr1->indices.size() == ptr2->indices.size());
             for (int id = 0; id < (int)ptr1->indices.size(); id++) {
-              if (!irpass::analysis::same_value(ptr1->indices[id],
-                                                ptr2->indices[id])) {
+              if (!irpass::analysis::same_value(ptr1->indices[id], ptr2->indices[id])) {
                 accessed_ptr->second = nullptr;  // not uniquely accessed
               }
             }
@@ -413,23 +377,18 @@ class UniquelyAccessedBitStructGatherer : public BasicStmtVisitor {
     // Do not dive into OffloadedStmt
   }
 
-  static std::unordered_map<OffloadedStmt *,
-                            std::unordered_map<const SNode *, GlobalPtrStmt *>>
-  run(IRNode *root) {
+  static std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>> run(IRNode *root) {
     UniquelyAccessedBitStructGatherer gatherer;
     root->accept(&gatherer);
     return gatherer.result_;
   }
 };
 
-const std::string GatherUniquelyAccessedBitStructsPass::id =
-    "GatherUniquelyAccessedBitStructsPass";
+const std::string GatherUniquelyAccessedBitStructsPass::id = "GatherUniquelyAccessedBitStructsPass";
 
 namespace irpass::analysis {
 std::tuple<std::unordered_map<const SNode *, GlobalPtrStmt *>,
-           std::unordered_map<std::vector<int>,
-                              ExternalPtrStmt *,
-                              hashing::Hasher<std::vector<int>>>,
+           std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>>,
            std::unordered_set<MatrixPtrStmt *>>
 gather_uniquely_accessed_pointers(IRNode *root) {
   // TODO: What about SNodeOpStmts?
@@ -437,8 +396,7 @@ gather_uniquely_accessed_pointers(IRNode *root) {
 }
 
 void gather_uniquely_accessed_bit_structs(IRNode *root, AnalysisManager *amgr) {
-  amgr->put_pass_result<GatherUniquelyAccessedBitStructsPass>(
-      {UniquelyAccessedBitStructGatherer::run(root)});
+  amgr->put_pass_result<GatherUniquelyAccessedBitStructsPass>({UniquelyAccessedBitStructGatherer::run(root)});
 }
 }  // namespace irpass::analysis
 

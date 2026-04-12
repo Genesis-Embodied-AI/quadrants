@@ -75,12 +75,10 @@ struct RhiReturn {
   RhiReturn(RhiResult &result, T &object) : result(result), object(object) {
   }
 
-  RhiReturn(const RhiResult &result, const T &object)
-      : result(result), object(object) {
+  RhiReturn(const RhiResult &result, const T &object) : result(result), object(object) {
   }
 
-  RhiReturn(RhiResult &&result, T &&object)
-      : result(result), object(std::move(object)) {
+  RhiReturn(RhiResult &&result, T &&object) : result(result), object(std::move(object)) {
   }
 
   RhiReturn &operator=(const RhiReturn &other) = default;
@@ -147,8 +145,7 @@ class SyncedPtrStableObjectList {
     std::lock_guard<std::mutex> _(lock_);
 
     // Transfer to quick look-up
-    std::unordered_set<void *> free_nodes_set(free_nodes_.begin(),
-                                              free_nodes_.end());
+    std::unordered_set<void *> free_nodes_set(free_nodes_.begin(), free_nodes_.end());
     free_nodes_.clear();
     // Destroy live objects
     for (auto &storage : objects_) {

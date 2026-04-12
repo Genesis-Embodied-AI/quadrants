@@ -12,8 +12,7 @@ std::unique_ptr<Kernel> setup_kernel1(Program *prog) {
     auto *two = builder1.get_int32(2);
     auto *a1ptr = builder1.create_external_ptr(arg, {one});
     builder1.create_global_store(a1ptr, one);  // a[1] = 1
-    auto *a0 =
-        builder1.create_global_load(builder1.create_external_ptr(arg, {zero}));
+    auto *a0 = builder1.create_global_load(builder1.create_external_ptr(arg, {zero}));
     auto *a2ptr = builder1.create_external_ptr(arg, {two});
     auto *a2 = builder1.create_global_load(a2ptr);
     auto *a0plusa2 = builder1.create_add(a0, a2);

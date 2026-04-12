@@ -19,10 +19,7 @@ class OffloadedTask {
                          int block_dim = 0,
                          int grid_dim = 0,
                          int dynamic_shared_array_bytes = 0)
-      : name(name),
-        block_dim(block_dim),
-        grid_dim(grid_dim),
-        dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
+      : name(name), block_dim(block_dim), grid_dim(grid_dim), dynamic_shared_array_bytes(dynamic_shared_array_bytes) {};
   QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes);
 };
 
@@ -53,8 +50,7 @@ struct LLVMCompiledKernel {
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;
-  LLVMCompiledKernel(std::vector<OffloadedTask> tasks,
-                     std::unique_ptr<llvm::Module> module)
+  LLVMCompiledKernel(std::vector<OffloadedTask> tasks, std::unique_ptr<llvm::Module> module)
       : tasks(std::move(tasks)), module(std::move(module)) {
   }
   LLVMCompiledKernel clone() const;

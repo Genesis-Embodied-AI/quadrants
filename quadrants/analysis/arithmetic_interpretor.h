@@ -91,8 +91,7 @@ class ArithmeticInterpretor {
    * @param init_ctx: This context can mock the result for certain types of
    *   statements that are not supported, or cannot be evaluated statically.
    */
-  std::optional<TypedConstant> evaluate(const CodeRegion &region,
-                                        const EvalContext &init_ctx) const;
+  std::optional<TypedConstant> evaluate(const CodeRegion &region, const EvalContext &init_ctx) const;
 };
 
 }  // namespace quadrants::lang
