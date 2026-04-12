@@ -21,7 +21,7 @@ The returned values depend on the backend:
 | Backend | min | max | Notes |
 |---------|-----|-----|-------|
 | CUDA    | 32  | 32  | Fixed warp size |
-| Vulkan  | 8–32 | 32–128 | Device-dependent |
+| Vulkan  | 1–32 | 32–128 | Device-dependent (MoltenVK may report min=4) |
 | Metal   | 32  | 32  | Fixed SIMD group width |
 | AMDGPU  | 32+ | 32+ | Typically 32 or 64 |
 

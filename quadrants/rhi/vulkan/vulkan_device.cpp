@@ -370,8 +370,7 @@ void VulkanPipeline::create_shader_stages(const Params &params) {
     // Defense-in-depth: the primary fix (VkInstance reuse) prevents the
     // NVIDIA driver bug, but this ensures correctness on drivers that
     // support variable subgroup sizes (e.g. Intel Xe: 8/16/32).
-    if (code_view.stage == VK_SHADER_STAGE_COMPUTE_BIT &&
-        ti_device_.vk_caps().subgroup_size_control) {
+    if (code_view.stage == VK_SHADER_STAGE_COMPUTE_BIT && ti_device_.vk_caps().subgroup_size_control) {
       uint32_t sg = params.subgroup_size > 0 ? params.subgroup_size : 32;
       subgroup_size_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO;
       subgroup_size_info_.pNext = nullptr;

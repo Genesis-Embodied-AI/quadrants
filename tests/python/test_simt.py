@@ -710,7 +710,7 @@ def test_subgroup_size_range():
     if arch == qd.cuda:
         assert min_sg == 32 and max_sg == 32
     elif arch == qd.vulkan:
-        assert 8 <= min_sg <= max_sg <= 128
+        assert 1 <= min_sg <= max_sg <= 128
     elif arch == qd.metal:
         assert min_sg == 32 and max_sg == 32
     elif arch == qd.amdgpu:

@@ -786,8 +786,12 @@ class RHI_DLL_EXPORT Device {
   inline const DeviceCapabilityConfig &get_caps() const {
     return caps_;
   }
-  virtual uint32_t get_min_subgroup_size() const { return 32; }
-  virtual uint32_t get_max_subgroup_size() const { return 32; }
+  virtual uint32_t get_min_subgroup_size() const {
+    return 32;
+  }
+  virtual uint32_t get_max_subgroup_size() const {
+    return 32;
+  }
   inline void set_caps(DeviceCapabilityConfig &&caps) {
     caps_ = std::move(caps);
   }
