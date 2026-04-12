@@ -93,13 +93,11 @@ and the `else` branch was missed.
 
 ### Probe capacity
 
-There is a fixed limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). This
-is sufficient for most programs. If you hit the limit — for example in a very large codebase with many kernels — you
-can increase it by setting the `_MAX_PROBES` constant before any kernels are compiled:
+There is a limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). If you hit
+the limit — for example in a very large codebase with many kernels — increase it via the environment variable:
 
-```python
-from quadrants.lang import _kernel_coverage
-_kernel_coverage._MAX_PROBES = 500_000
+```bash
+QD_COVERAGE_MAX_PROBES=500000 QD_KERNEL_COVERAGE=1 python my_simulation.py
 ```
 
 ## Limitations

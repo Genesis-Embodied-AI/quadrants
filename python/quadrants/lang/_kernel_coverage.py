@@ -21,7 +21,7 @@ import quadrants as qd
 from quadrants.lang.impl import PyQuadrants, get_runtime
 
 FIELD_VAR_NAME = "_qd_cov"
-_MAX_PROBES = 100_000
+_MAX_PROBES = int(os.environ.get("QD_COVERAGE_MAX_PROBES", "100000"))
 
 _lock = threading.Lock()
 _cov_field = None
