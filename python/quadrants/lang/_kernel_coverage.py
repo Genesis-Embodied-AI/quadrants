@@ -17,10 +17,15 @@ import os
 import threading
 import warnings
 
+from typing import TYPE_CHECKING
+
 from coverage import CoverageData  # type: ignore[import-not-found]
 
 import quadrants as qd
-from quadrants.lang.impl import PyQuadrants, get_runtime
+from quadrants.lang import impl
+
+if TYPE_CHECKING:
+    from quadrants.lang.field import ScalarField
 
 FIELD_VAR_NAME = "_qd_cov"
 _MAX_PROBES = int(os.environ.get("QD_COVERAGE_MAX_PROBES", "100000"))
@@ -64,13 +69,13 @@ def _install_reset_hook() -> None:
     global _reset_hook_installed
     if _reset_hook_installed:
         return
-    _original_clear = PyQuadrants.clear
+    _original_clear = impl.PyQuadrants.clear
 
     def _hooked_clear(self) -> None:
         _harvest_field()
         _original_clear(self)
 
-    PyQuadrants.clear = _hooked_clear  # type: ignore[assignment]
+    impl.PyQuadrants.clear = _hooked_clear  # type: ignore[assignment]
     _reset_hook_installed = True
 
 
@@ -78,19 +83,19 @@ def ensure_field_allocated() -> None:
     """Allocate (or re-allocate after qd.init()) the global coverage field."""
     global _cov_field, _cov_field_prog
     _install_reset_hook()
-    current_prog = get_runtime()._prog
+    current_prog = impl.get_runtime()._prog
     if _cov_field is not None and _cov_field_prog is current_prog:
         return
     with _lock:
-        current_prog = get_runtime()._prog
+        current_prog = impl.get_runtime()._prog
         if _cov_field is not None and _cov_field_prog is current_prog:
             return
         _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
         _cov_field_prog = current_prog
 
 
-def get_field():
-    if _cov_field_prog is not get_runtime()._prog:
+def get_field() -> "ScalarField | None":
+    if _cov_field_prog is not impl.get_runtime()._prog:
         return None
     return _cov_field
 
@@ -176,7 +181,7 @@ _capacity_warning_emitted = False
 class _CoverageASTRewriter(ast.NodeTransformer):
     """Insert coverage probes before each statement at a new source line."""
 
-    def __init__(self, field_name: str, filepath: str, start_lineno: int, probe_id_start: int):
+    def __init__(self, field_name: str, filepath: str, start_lineno: int, probe_id_start: int) -> None:
         self._field_name = field_name
         self._filepath = filepath
         self._start_lineno = start_lineno
