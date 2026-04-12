@@ -139,9 +139,7 @@ of your kernel source lines is accurate and complete.
 ### Edge case
 
 If you have a kernel that is *only* ever called inside a `qd.ad.Tape` with `validation=True` and never called
-outside one, it will be compiled exclusively in validation mode and will not receive coverage probes. In practice
-this is rare — most kernels are also called outside of tape contexts, or at minimum the tape itself runs the forward
-pass in a mode that receives probes.
+outside one, it will be compiled exclusively in validation mode and will not receive coverage probes.
 
 ## Limitations
 
