@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
@@ -296,3 +297,71 @@ def test_tile16_make_caching():
     assert a is not c
     d = _make_tile16x16(qd.f64)
     assert c is d
+
+
+def _make_spd(seed: int = 42):
+    """Return a well-conditioned 16x16 symmetric positive-definite matrix."""
+    rng = np.random.RandomState(seed)
+    B = rng.randn(_TILE, _TILE).astype(np.float64)
+    return (B @ B.T + _TILE * np.eye(_TILE)).astype(np.float32)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_ger_sub():
+    Tile = _make_tile16x16(qd.f32)
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    vec_a = qd.ndarray(qd.f32, (_TILE,))
+    vec_b = qd.ndarray(qd.f32, (_TILE,))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        a_arr: qd.types.NDArray[qd.f32, 1],
+        b_arr: qd.types.NDArray[qd.f32, 1],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(mat_arr, 0, _TILE, 0, _TILE)
+            tid = qd.simt.subgroup.invocation_id()
+            a_val = a_arr[tid]
+            b_val = b_arr[tid]
+            t._ger_sub(a_val, b_val)
+            t._store(out_arr, 0, _TILE, 0, _TILE)
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    mat.from_numpy(M)
+    vec_a.from_numpy(a)
+    vec_b.from_numpy(b)
+    k1(mat, vec_a, vec_b, out)
+
+    expected = M - np.outer(a, b)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_cholesky():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, 0, _TILE, 0, _TILE)
+            t.cholesky_(qd.f32(1e-6))
+            t._store(dst_arr, 0, _TILE, 0, _TILE)
+
+    A = _make_spd()
+    src.from_numpy(A)
+    k1(src, dst)
+
+    L_gpu = np.tril(dst.to_numpy())
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np.float32)
+    np.testing.assert_allclose(L_gpu, L_ref, atol=1e-5)

@@ -306,6 +306,268 @@ def _make_tile16x16_class(dtype):
             if tid == 15:
                 self.r15 = 1.0
 
+        @qd.func
+        def _ger_sub(self, a, b):
+            """General rank-1 subtract in-place: self -= a @ b^T."""
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(0))
+            self.r0 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(1))
+            self.r1 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(2))
+            self.r2 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(3))
+            self.r3 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(4))
+            self.r4 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(5))
+            self.r5 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(6))
+            self.r6 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(7))
+            self.r7 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(8))
+            self.r8 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(9))
+            self.r9 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(10))
+            self.r10 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(11))
+            self.r11 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(12))
+            self.r12 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(13))
+            self.r13 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(14))
+            self.r14 -= a * bc
+            bc = qd.simt.subgroup.shuffle(b, qd.u32(15))
+            self.r15 -= a * bc
+
+        @qd.func
+        def cholesky_(self, eps):
+            """In-place 16x16 Cholesky factorization via subgroup shuffles.
+
+            On return, the lower triangle holds L such that A = L @ L^T.
+            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
+            """
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            for k in range(_TILE):
+                diag_val = qd.cast(0.0, dtype)
+                if tid == k:
+                    s = qd.cast(0.0, dtype)
+                    if k > 0:
+                        s += self.r0 * self.r0
+                    if k > 1:
+                        s += self.r1 * self.r1
+                    if k > 2:
+                        s += self.r2 * self.r2
+                    if k > 3:
+                        s += self.r3 * self.r3
+                    if k > 4:
+                        s += self.r4 * self.r4
+                    if k > 5:
+                        s += self.r5 * self.r5
+                    if k > 6:
+                        s += self.r6 * self.r6
+                    if k > 7:
+                        s += self.r7 * self.r7
+                    if k > 8:
+                        s += self.r8 * self.r8
+                    if k > 9:
+                        s += self.r9 * self.r9
+                    if k > 10:
+                        s += self.r10 * self.r10
+                    if k > 11:
+                        s += self.r11 * self.r11
+                    if k > 12:
+                        s += self.r12 * self.r12
+                    if k > 13:
+                        s += self.r13 * self.r13
+                    if k > 14:
+                        s += self.r14 * self.r14
+                    cur = qd.cast(0.0, dtype)
+                    if k == 0:
+                        cur = self.r0
+                    if k == 1:
+                        cur = self.r1
+                    if k == 2:
+                        cur = self.r2
+                    if k == 3:
+                        cur = self.r3
+                    if k == 4:
+                        cur = self.r4
+                    if k == 5:
+                        cur = self.r5
+                    if k == 6:
+                        cur = self.r6
+                    if k == 7:
+                        cur = self.r7
+                    if k == 8:
+                        cur = self.r8
+                    if k == 9:
+                        cur = self.r9
+                    if k == 10:
+                        cur = self.r10
+                    if k == 11:
+                        cur = self.r11
+                    if k == 12:
+                        cur = self.r12
+                    if k == 13:
+                        cur = self.r13
+                    if k == 14:
+                        cur = self.r14
+                    if k == 15:
+                        cur = self.r15
+                    diag_val = qd.sqrt(qd.max(cur - s, eps))
+                    if k == 0:
+                        self.r0 = diag_val
+                    if k == 1:
+                        self.r1 = diag_val
+                    if k == 2:
+                        self.r2 = diag_val
+                    if k == 3:
+                        self.r3 = diag_val
+                    if k == 4:
+                        self.r4 = diag_val
+                    if k == 5:
+                        self.r5 = diag_val
+                    if k == 6:
+                        self.r6 = diag_val
+                    if k == 7:
+                        self.r7 = diag_val
+                    if k == 8:
+                        self.r8 = diag_val
+                    if k == 9:
+                        self.r9 = diag_val
+                    if k == 10:
+                        self.r10 = diag_val
+                    if k == 11:
+                        self.r11 = diag_val
+                    if k == 12:
+                        self.r12 = diag_val
+                    if k == 13:
+                        self.r13 = diag_val
+                    if k == 14:
+                        self.r14 = diag_val
+                    if k == 15:
+                        self.r15 = diag_val
+
+                diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
+
+                dot = qd.cast(0.0, dtype)
+                if k > 0:
+                    Lkj = qd.simt.subgroup.shuffle(self.r0, qd.u32(k))
+                    dot += Lkj * self.r0
+                if k > 1:
+                    Lkj = qd.simt.subgroup.shuffle(self.r1, qd.u32(k))
+                    dot += Lkj * self.r1
+                if k > 2:
+                    Lkj = qd.simt.subgroup.shuffle(self.r2, qd.u32(k))
+                    dot += Lkj * self.r2
+                if k > 3:
+                    Lkj = qd.simt.subgroup.shuffle(self.r3, qd.u32(k))
+                    dot += Lkj * self.r3
+                if k > 4:
+                    Lkj = qd.simt.subgroup.shuffle(self.r4, qd.u32(k))
+                    dot += Lkj * self.r4
+                if k > 5:
+                    Lkj = qd.simt.subgroup.shuffle(self.r5, qd.u32(k))
+                    dot += Lkj * self.r5
+                if k > 6:
+                    Lkj = qd.simt.subgroup.shuffle(self.r6, qd.u32(k))
+                    dot += Lkj * self.r6
+                if k > 7:
+                    Lkj = qd.simt.subgroup.shuffle(self.r7, qd.u32(k))
+                    dot += Lkj * self.r7
+                if k > 8:
+                    Lkj = qd.simt.subgroup.shuffle(self.r8, qd.u32(k))
+                    dot += Lkj * self.r8
+                if k > 9:
+                    Lkj = qd.simt.subgroup.shuffle(self.r9, qd.u32(k))
+                    dot += Lkj * self.r9
+                if k > 10:
+                    Lkj = qd.simt.subgroup.shuffle(self.r10, qd.u32(k))
+                    dot += Lkj * self.r10
+                if k > 11:
+                    Lkj = qd.simt.subgroup.shuffle(self.r11, qd.u32(k))
+                    dot += Lkj * self.r11
+                if k > 12:
+                    Lkj = qd.simt.subgroup.shuffle(self.r12, qd.u32(k))
+                    dot += Lkj * self.r12
+                if k > 13:
+                    Lkj = qd.simt.subgroup.shuffle(self.r13, qd.u32(k))
+                    dot += Lkj * self.r13
+                if k > 14:
+                    Lkj = qd.simt.subgroup.shuffle(self.r14, qd.u32(k))
+                    dot += Lkj * self.r14
+
+                if tid > k:
+                    cur = qd.cast(0.0, dtype)
+                    if k == 0:
+                        cur = self.r0
+                    if k == 1:
+                        cur = self.r1
+                    if k == 2:
+                        cur = self.r2
+                    if k == 3:
+                        cur = self.r3
+                    if k == 4:
+                        cur = self.r4
+                    if k == 5:
+                        cur = self.r5
+                    if k == 6:
+                        cur = self.r6
+                    if k == 7:
+                        cur = self.r7
+                    if k == 8:
+                        cur = self.r8
+                    if k == 9:
+                        cur = self.r9
+                    if k == 10:
+                        cur = self.r10
+                    if k == 11:
+                        cur = self.r11
+                    if k == 12:
+                        cur = self.r12
+                    if k == 13:
+                        cur = self.r13
+                    if k == 14:
+                        cur = self.r14
+                    if k == 15:
+                        cur = self.r15
+                    new_val = (cur - dot) / diag_k
+                    if k == 0:
+                        self.r0 = new_val
+                    if k == 1:
+                        self.r1 = new_val
+                    if k == 2:
+                        self.r2 = new_val
+                    if k == 3:
+                        self.r3 = new_val
+                    if k == 4:
+                        self.r4 = new_val
+                    if k == 5:
+                        self.r5 = new_val
+                    if k == 6:
+                        self.r6 = new_val
+                    if k == 7:
+                        self.r7 = new_val
+                    if k == 8:
+                        self.r8 = new_val
+                    if k == 9:
+                        self.r9 = new_val
+                    if k == 10:
+                        self.r10 = new_val
+                    if k == 11:
+                        self.r11 = new_val
+                    if k == 12:
+                        self.r12 = new_val
+                    if k == 13:
+                        self.r13 = new_val
+                    if k == 14:
+                        self.r14 = new_val
+                    if k == 15:
+                        self.r15 = new_val
+
     # StructType.__call__ already defaults missing args to 0, so Tile()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
