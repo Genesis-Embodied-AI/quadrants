@@ -100,12 +100,51 @@ the limit — for example in a very large codebase with many kernels — increas
 QD_COVERAGE_MAX_PROBES=500000 QD_KERNEL_COVERAGE=1 python my_simulation.py
 ```
 
+## Coverage and autodiff
+
+Quadrants compiles each kernel multiple times when autodiff is used: once for the normal forward execution, and
+again for the backward (or forward-mode AD) replay pass. Coverage probes are only inserted into the normal forward
+compilation — they are excluded from the AD replay compilations because the extra field stores would interfere with
+gradient computation.
+
+### What is covered
+
+When you call a kernel inside a `qd.ad.Tape` context, the forward pass runs first with coverage probes active. This
+means every line of your kernel source code that executes during the forward pass is tracked normally, including
+branch coverage.
+
+```python
+@qd.kernel
+def compute_loss():
+    for i in range(n):
+        if x[i] > 0:          # covered: probe fires during forward pass
+            loss[None] += x[i] # covered
+        else:
+            loss[None] += 0.0  # covered only if this branch is taken during forward
+
+with qd.ad.Tape(loss):
+    compute_loss()             # forward pass: probes active
+                               # backward pass: runs automatically, no probes
+```
+
+### What is not covered
+
+The backward pass is an automatically generated transformation of the same kernel — it is not separate source code
+you wrote. Since it replays the same control flow as the forward pass, there are no user-written lines that would
+only appear in the backward pass.
+
+In short: as long as your test exercises the forward pass (which is always required before a backward pass), coverage
+of your kernel source lines is accurate and complete.
+
+### Edge case
+
+If you have a kernel that is *only* ever called inside a `qd.ad.Tape` with `validation=True` and never called
+outside one, it will be compiled exclusively in validation mode and will not receive coverage probes. In practice
+this is rare — most kernels are also called outside of tape contexts, or at minimum the tape itself runs the forward
+pass in a mode that receives probes.
+
 ## Limitations
 
-- **Autodiff backward passes are skipped.** Coverage probes are inserted into your kernel during its normal (forward)
-  execution. The automatically generated backward and forward-mode AD replay passes do not receive probes, since the
-  extra field stores would interfere with gradient computation. In practice this means your kernel source lines are
-  still covered — only the AD-generated replay compilations are excluded.
 - **Offline cache interaction.** Coverage probes change the compiled kernel, so the offline cache will see them as
   new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled
   will be slower if you normally rely on cached kernels.
