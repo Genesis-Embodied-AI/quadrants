@@ -103,23 +103,33 @@ class _TerminalRenderer(_Renderer):
 
 
 class _AnnotatedRenderer(_TerminalRenderer):
+    """Print grouped summary table first, then all annotated file blocks."""
+
     _STATUS_FMT = {"hit": (GREEN, "\u2713"), "miss": (RED, "\u2717"), "no_data": (DIM, " ")}
+
+    def begin(self, total_hit, total_miss, total_pct):
+        super().begin(total_hit, total_miss, total_pct)
+        self._file_blocks: list[tuple[str, float, list[tuple[int, str, str]]]] = []
 
     def begin_file(self, filename, pct, missing):
         super().begin_file(filename, pct, missing)
-        self._filename, self._pct = filename, pct
-        self._lines = []
+        self._cur_filename, self._cur_pct = filename, pct
+        self._cur_lines: list[tuple[int, str, str]] = []
 
     def write_line(self, lineno, text, status):
-        self._lines.append((lineno, text, status))
+        self._cur_lines.append((lineno, text, status))
 
     def end_file(self):
-        if not self._lines:
-            return
-        print(f"\n{BOLD}=== {self._filename} ({self._pct:.0f}%) ==={RESET}")
-        for lineno, text, status in self._lines:
-            color, marker = self._STATUS_FMT[status]
-            print(f"{color} {marker} {lineno:4d}{RESET} {color}{text}{RESET}")
+        if self._cur_lines:
+            self._file_blocks.append((self._cur_filename, self._cur_pct, self._cur_lines))
+
+    def finish(self):
+        super().finish()
+        for filename, pct, lines in self._file_blocks:
+            print(f"\n{BOLD}=== {filename} ({pct:.0f}%) ==={RESET}")
+            for lineno, text, status in lines:
+                color, marker = self._STATUS_FMT[status]
+                print(f"{color} {marker} {lineno:4d}{RESET} {color}{text}{RESET}")
 
 
 class _MarkdownRenderer(_Renderer):
