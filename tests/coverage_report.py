@@ -16,6 +16,7 @@ Run tests first with run_tests.py --coverage, then use this script:
 
 import argparse
 import glob
+import html as html_mod
 import os
 import re
 import subprocess
@@ -54,6 +55,188 @@ def generate_artifacts():
     """Generate coverage.xml and pytest-coverage.txt from the combined .coverage."""
     _run("coverage xml -o coverage.xml --ignore-errors")
     _run("coverage report --show-missing --skip-covered --ignore-errors > pytest-coverage.txt")
+
+
+# ---------------------------------------------------------------------------
+# Report rendering
+# ---------------------------------------------------------------------------
+
+
+class _Renderer:
+    """Base class for coverage report renderers."""
+
+    def begin(self, total_hit, total_miss, total_pct):
+        pass
+
+    def begin_file(self, filename, pct, missing):
+        pass
+
+    def write_line(self, lineno, text, status):
+        pass
+
+    def end_file(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def output(self):
+        return None
+
+
+class _TerminalRenderer(_Renderer):
+    def begin(self, total_hit, total_miss, total_pct):
+        self._total_hit, self._total_miss, self._total_pct = total_hit, total_miss, total_pct
+        print(f"\n{BOLD}Diff Coverage Report{RESET}")
+        print("=" * 70)
+
+    def begin_file(self, filename, pct, missing):
+        color = GREEN if pct >= 80 else RED
+        missing_str = f"  Missing: {_format_ranges(missing)}" if missing else ""
+        print(f"  {filename}: {color}{pct:.0f}%{RESET}{missing_str}")
+
+    def finish(self):
+        print("-" * 70)
+        color = GREEN if self._total_pct >= 80 else RED
+        total = self._total_hit + self._total_miss
+        print(f"  {BOLD}Total: {total} lines, {self._total_miss} missing, {color}{self._total_pct:.0f}%{RESET}")
+
+
+class _AnnotatedRenderer(_TerminalRenderer):
+    _STATUS_FMT = {"hit": (GREEN, "\u2713"), "miss": (RED, "\u2717"), "no_data": (DIM, " ")}
+
+    def begin_file(self, filename, pct, missing):
+        super().begin_file(filename, pct, missing)
+        self._filename, self._pct = filename, pct
+        self._lines = []
+
+    def write_line(self, lineno, text, status):
+        self._lines.append((lineno, text, status))
+
+    def end_file(self):
+        if not self._lines:
+            return
+        print(f"\n{BOLD}=== {self._filename} ({self._pct:.0f}%) ==={RESET}")
+        for lineno, text, status in self._lines:
+            color, marker = self._STATUS_FMT[status]
+            print(f"{color} {marker} {lineno:4d}{RESET} {color}{text}{RESET}")
+
+
+class _MarkdownRenderer(_Renderer):
+    _STATUS_MARKER = {"hit": "🟢", "miss": "🔴", "no_data": "  "}
+
+    def begin(self, total_hit, total_miss, total_pct):
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=REPO_ROOT,
+        ).stdout.strip()
+        heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
+        print(heading)
+        print("| Metric | Value |")
+        print("|--------|-------|")
+        print(f"| **Diff coverage** (changed lines only) | **{total_pct:.0f}%** |")
+        overall = _get_overall_coverage()
+        if overall:
+            print(f"| Overall project coverage | {overall} |")
+        print()
+        print(f"**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered\n")
+
+    def begin_file(self, filename, pct, missing):
+        icon = "🟢" if pct >= 80 else "🔴"
+        print(f"<details><summary>{icon} <code>{filename}</code> ({pct:.0f}%)</summary>\n")
+        print("```")
+
+    def write_line(self, lineno, text, status):
+        print(f"{self._STATUS_MARKER[status]} {lineno:4d}  {text}")
+
+    def end_file(self):
+        print("```\n</details>\n")
+
+
+_HTML_CSS = """\
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+       max-width: 960px; margin: 2rem auto; padding: 0 1rem; background: #1e1e1e; color: #d4d4d4; }
+h1 { color: #e0e0e0; }
+table.summary { border-collapse: collapse; margin: 1rem 0; }
+table.summary td, table.summary th { padding: 0.4rem 1rem; border: 1px solid #444; }
+table.summary th { background: #2d2d2d; text-align: left; }
+details { margin: 0.5rem 0; }
+summary { cursor: pointer; padding: 0.4rem; background: #2d2d2d; border-radius: 4px; }
+summary:hover { background: #363636; }
+.file-header { font-weight: bold; }
+.pct-good { color: #4ec9b0; }
+.pct-bad { color: #f44747; }
+pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overflow-x: auto;
+      font-size: 13px; line-height: 1.5; }
+.line { display: block; }
+.hit { background: #1e3a1e; }
+.miss { background: #3a1e1e; }
+.no-data { opacity: 0.5; }
+.lineno { display: inline-block; width: 4em; text-align: right; color: #858585;
+          margin-right: 1em; user-select: none; }
+.status { display: inline-block; width: 1.5em; text-align: center; }
+.status-hit { color: #4ec9b0; }
+.status-miss { color: #f44747; }"""
+
+_HTML_STATUS = {
+    "hit": ("hit", '<span class="status status-hit">&#10003;</span>'),
+    "miss": ("miss", '<span class="status status-miss">&#10007;</span>'),
+    "no_data": ("no-data", '<span class="status"> </span>'),
+}
+
+
+class _HtmlRenderer(_Renderer):
+    def __init__(self, output_path=None):
+        self._out_path = Path(output_path) if output_path else REPO_ROOT / "coverage-report.html"
+        self._parts = []
+
+    def begin(self, total_hit, total_miss, total_pct):
+        overall = _get_overall_coverage()
+        self._parts.append(
+            f"<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Diff Coverage Report</title>\n"
+            f"<style>\n{_HTML_CSS}\n</style></head><body>\n<h1>Diff Coverage Report</h1>"
+        )
+        pct_cls = "pct-good" if total_pct >= 80 else "pct-bad"
+        self._parts.append('<table class="summary"><tr><th>Metric</th><th>Value</th></tr>')
+        self._parts.append(
+            f'<tr><td>Diff coverage (changed lines)</td><td class="{pct_cls}"><b>{total_pct:.0f}%</b></td></tr>'
+        )
+        if overall:
+            self._parts.append(f"<tr><td>Overall project coverage</td><td>{overall}</td></tr>")
+        self._parts.append(
+            f"<tr><td>Total lines</td><td>{total_hit + total_miss} ({total_miss} missing)</td></tr></table>"
+        )
+
+    def begin_file(self, filename, pct, missing):
+        pct_cls = "pct-good" if pct >= 80 else "pct-bad"
+        missing_str = f' &mdash; missing: {_format_ranges(missing)}' if missing else ""
+        self._parts.append(
+            f'<details><summary><span class="file-header">{html_mod.escape(filename)}</span>'
+            f' <span class="{pct_cls}">{pct:.0f}%</span>{missing_str}</summary><pre>'
+        )
+        self._line_parts = []
+
+    def write_line(self, lineno, text, status):
+        cls, icon = _HTML_STATUS[status]
+        escaped = html_mod.escape(text)
+        self._line_parts.append(
+            f'<span class="line {cls}"><span class="lineno">{lineno}</span>{icon}{escaped}</span>'
+        )
+
+    def end_file(self):
+        self._parts.append("".join(self._line_parts) + "</pre></details>")
+
+    def finish(self):
+        self._parts.append("</body></html>")
+        self._out_path.write_text("\n".join(self._parts))
+        print(f"Coverage report written to {self._out_path}")
+
+
+_RENDERERS = {
+    "terminal": _TerminalRenderer,
+    "annotated": _AnnotatedRenderer,
+    "markdown": _MarkdownRenderer,
+    "html": _HtmlRenderer,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -149,9 +332,6 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal", out
         files_report.append(
             {
                 "filename": filename,
-                "hit": hit,
-                "miss": miss,
-                "no_data": no_data,
                 "pct": pct,
                 "missing": missing,
                 "lines": line_details,
@@ -160,150 +340,17 @@ def generate_report(compare_branch, coverage_xmls, output_format="terminal", out
 
     total_pct = (total_hit / (total_hit + total_miss) * 100) if (total_hit + total_miss) else 0
 
-    if output_format == "terminal":
-        _print_terminal(files_report, total_hit, total_miss, total_pct)
-    elif output_format == "annotated":
-        _print_annotated(files_report, total_hit, total_miss, total_pct)
-    elif output_format == "markdown":
-        _print_markdown(files_report, total_hit, total_miss, total_pct)
-    elif output_format == "html":
-        _write_html(files_report, total_hit, total_miss, total_pct, output_path=output_path)
+    renderer_cls = _RENDERERS[output_format]
+    renderer = renderer_cls(output_path=output_path) if output_format == "html" else renderer_cls()
+    renderer.begin(total_hit, total_miss, total_pct)
+    for fr in files_report:
+        renderer.begin_file(fr["filename"], fr["pct"], fr["missing"])
+        for lineno, text, status in fr["lines"]:
+            renderer.write_line(lineno, text, status)
+        renderer.end_file()
+    renderer.finish()
 
     return total_pct
-
-
-def _print_terminal(files_report, total_hit, total_miss, total_pct):
-    print(f"\n{BOLD}Diff Coverage Report{RESET}")
-    print("=" * 70)
-    for fr in files_report:
-        color = GREEN if fr["pct"] >= 80 else RED
-        missing_str = f"  Missing: {_format_ranges(fr['missing'])}" if fr["missing"] else ""
-        print(f"  {fr['filename']}: {color}{fr['pct']:.0f}%{RESET}{missing_str}")
-    print("-" * 70)
-    color = GREEN if total_pct >= 80 else RED
-    print(f"  {BOLD}Total: {total_hit + total_miss} lines, {total_miss} missing, {color}{total_pct:.0f}%{RESET}")
-
-
-def _print_annotated(files_report, total_hit, total_miss, total_pct):
-    _print_terminal(files_report, total_hit, total_miss, total_pct)
-    print()
-    for fr in files_report:
-        print(f"\n{BOLD}=== {fr['filename']} ({fr['pct']:.0f}%) ==={RESET}")
-        for lineno, text, status in fr["lines"]:
-            if status == "hit":
-                print(f"{GREEN} \u2713 {lineno:4d}{RESET} {GREEN}{text}{RESET}")
-            elif status == "miss":
-                print(f"{RED} \u2717 {lineno:4d}{RESET} {RED}{text}{RESET}")
-            else:
-                print(f"{DIM}   {lineno:4d}{RESET} {DIM}{text}{RESET}")
-
-
-def _print_markdown(files_report, total_hit, total_miss, total_pct):
-    overall = _get_overall_coverage()
-    commit = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    ).stdout.strip()
-    heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
-    print(heading)
-    print("| Metric | Value |")
-    print("|--------|-------|")
-    print(f"| **Diff coverage** (changed lines only) | **{total_pct:.0f}%** |")
-    if overall:
-        print(f"| Overall project coverage | {overall} |")
-    print()
-    print(f"**Total**: {total_hit + total_miss} lines, {total_miss} missing, {total_pct:.0f}% covered\n")
-    for fr in files_report:
-        icon = "🟢" if fr["pct"] >= 80 else "🔴"
-        print(f"<details><summary>{icon} <code>{fr['filename']}</code> ({fr['pct']:.0f}%)</summary>\n")
-        print("```")
-        for lineno, text, status in fr["lines"]:
-            if status == "hit":
-                marker = "🟢"
-            elif status == "miss":
-                marker = "🔴"
-            else:
-                marker = "  "
-            print(f"{marker} {lineno:4d}  {text}")
-        print("```\n</details>\n")
-
-
-def _write_html(files_report, total_hit, total_miss, total_pct, output_path=None):
-    import html as html_mod
-
-    out_path = Path(output_path) if output_path else REPO_ROOT / "coverage-report.html"
-    overall = _get_overall_coverage()
-
-    lines = []
-    lines.append(
-        """<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Diff Coverage Report</title>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-       max-width: 960px; margin: 2rem auto; padding: 0 1rem; background: #1e1e1e; color: #d4d4d4; }
-h1 { color: #e0e0e0; }
-table.summary { border-collapse: collapse; margin: 1rem 0; }
-table.summary td, table.summary th { padding: 0.4rem 1rem; border: 1px solid #444; }
-table.summary th { background: #2d2d2d; text-align: left; }
-details { margin: 0.5rem 0; }
-summary { cursor: pointer; padding: 0.4rem; background: #2d2d2d; border-radius: 4px; }
-summary:hover { background: #363636; }
-.file-header { font-weight: bold; }
-.pct-good { color: #4ec9b0; }
-.pct-bad { color: #f44747; }
-pre { margin: 0; padding: 0.5rem; background: #1a1a1a; border-radius: 4px; overflow-x: auto;
-      font-size: 13px; line-height: 1.5; }
-.line { display: block; }
-.hit { background: #1e3a1e; }
-.miss { background: #3a1e1e; }
-.no-data { opacity: 0.5; }
-.lineno { display: inline-block; width: 4em; text-align: right; color: #858585;
-          margin-right: 1em; user-select: none; }
-.status { display: inline-block; width: 1.5em; text-align: center; }
-.status-hit { color: #4ec9b0; }
-.status-miss { color: #f44747; }
-</style></head><body>
-<h1>Diff Coverage Report</h1>"""
-    )
-
-    lines.append('<table class="summary"><tr><th>Metric</th><th>Value</th></tr>')
-    pct_cls = "pct-good" if total_pct >= 80 else "pct-bad"
-    lines.append(
-        f"<tr><td>Diff coverage (changed lines)</td>" f'<td class="{pct_cls}"><b>{total_pct:.0f}%</b></td></tr>'
-    )
-    if overall:
-        lines.append(f"<tr><td>Overall project coverage</td><td>{overall}</td></tr>")
-    lines.append(f"<tr><td>Total lines</td><td>{total_hit + total_miss} " f"({total_miss} missing)</td></tr></table>")
-
-    for fr in files_report:
-        pct_cls = "pct-good" if fr["pct"] >= 80 else "pct-bad"
-        missing_str = ""
-        if fr["missing"]:
-            missing_str = f' &mdash; missing: {_format_ranges(fr["missing"])}'
-        pre_parts = []
-        for lineno, text, status in fr["lines"]:
-            escaped = html_mod.escape(text)
-            if status == "hit":
-                icon = '<span class="status status-hit">&#10003;</span>'
-                cls = "hit"
-            elif status == "miss":
-                icon = '<span class="status status-miss">&#10007;</span>'
-                cls = "miss"
-            else:
-                icon = '<span class="status"> </span>'
-                cls = "no-data"
-            pre_parts.append(f'<span class="line {cls}">' f'<span class="lineno">{lineno}</span>{icon}{escaped}</span>')
-        lines.append(
-            f'<details><summary><span class="file-header">{html_mod.escape(fr["filename"])}</span>'
-            f' <span class="{pct_cls}">{fr["pct"]:.0f}%</span>{missing_str}</summary>'
-            f'<pre>{"".join(pre_parts)}</pre></details>'
-        )
-
-    lines.append("</body></html>")
-    out_path.write_text("\n".join(lines))
-    print(f"Coverage report written to {out_path}")
 
 
 def _get_overall_coverage():
