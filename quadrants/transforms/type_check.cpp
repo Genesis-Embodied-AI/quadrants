@@ -521,11 +521,6 @@ class TypeCheck : public IRVisitor {
     stmt->ret_type.set_is_pointer(true);
   }
 
-  void visit(InternalFuncStmt *stmt) override {
-    // TODO: support return type specification
-    stmt->ret_type = PrimitiveType::i32;
-  }
-
   void visit(BitStructStoreStmt *stmt) override {
     // do nothing
   }
