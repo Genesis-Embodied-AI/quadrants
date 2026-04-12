@@ -374,3 +374,209 @@ def test_env_var_max_probes():
     import quadrants.lang._kernel_coverage as kcov
 
     assert kcov._MAX_PROBES == int(os.environ.get("QD_COVERAGE_MAX_PROBES", "100000"))
+
+
+def test_ast_rewriter_while_loop():
+    """Verify probes inside while loop body and else clause."""
+    from quadrants.lang._kernel_coverage import _CoverageASTRewriter
+
+    src = textwrap.dedent(
+        """\
+        def f():
+            while x > 0:
+                x = x - 1
+            else:
+                y = 0
+    """
+    )
+    tree = ast.parse(src)
+    rewriter = _CoverageASTRewriter(field_name="_qd_cov", filepath="test.py", start_lineno=1, probe_id_start=0)
+    tree = rewriter.visit(tree)
+
+    lines_covered = {lineno for _, (_, lineno) in rewriter.probe_map.items()}
+    assert 2 in lines_covered  # while x > 0
+    assert 3 in lines_covered  # x = x - 1
+    assert 5 in lines_covered  # y = 0
+
+
+def test_ast_rewriter_with_statement():
+    """Verify probes inside with statement body."""
+    from quadrants.lang._kernel_coverage import _CoverageASTRewriter
+
+    src = textwrap.dedent(
+        """\
+        def f():
+            with ctx:
+                a = 1
+                b = 2
+    """
+    )
+    tree = ast.parse(src)
+    rewriter = _CoverageASTRewriter(field_name="_qd_cov", filepath="test.py", start_lineno=1, probe_id_start=0)
+    tree = rewriter.visit(tree)
+
+    lines_covered = {lineno for _, (_, lineno) in rewriter.probe_map.items()}
+    assert 2 in lines_covered  # with ctx
+    assert 3 in lines_covered  # a = 1
+    assert 4 in lines_covered  # b = 2
+
+
+def test_ast_rewriter_try_except_finally():
+    """Verify probes in try body, except handler, else, and finally."""
+    from quadrants.lang._kernel_coverage import _CoverageASTRewriter
+
+    src = textwrap.dedent(
+        """\
+        def f():
+            try:
+                a = 1
+            except:
+                b = 2
+            else:
+                c = 3
+            finally:
+                d = 4
+    """
+    )
+    tree = ast.parse(src)
+    rewriter = _CoverageASTRewriter(field_name="_qd_cov", filepath="test.py", start_lineno=1, probe_id_start=0)
+    tree = rewriter.visit(tree)
+
+    lines_covered = {lineno for _, (_, lineno) in rewriter.probe_map.items()}
+    assert 3 in lines_covered   # a = 1 (try body)
+    assert 5 in lines_covered   # b = 2 (except handler)
+    assert 7 in lines_covered   # c = 3 (else)
+    assert 9 in lines_covered   # d = 4 (finally)
+
+
+def test_ast_rewriter_deduplicates_same_line():
+    """Verify that two statements on the same source line get only one probe."""
+    from quadrants.lang._kernel_coverage import _CoverageASTRewriter
+
+    src = "def f():\n    a = 1; b = 2\n"
+    tree = ast.parse(src)
+    rewriter = _CoverageASTRewriter(field_name="_qd_cov", filepath="test.py", start_lineno=1, probe_id_start=0)
+    tree = rewriter.visit(tree)
+
+    abs_lines = [lineno for _, (_, lineno) in rewriter.probe_map.items()]
+    assert abs_lines.count(2) == 1, f"Line 2 should have exactly one probe, got {abs_lines.count(2)}"
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_kernel_coverage_qd_func():
+    """Verify that probes fire inside a @qd.func called from a kernel."""
+    from quadrants.lang import _kernel_coverage
+
+    _kernel_coverage.ensure_field_allocated()
+
+    probe_count_before = _kernel_coverage._probe_counter
+    out = qd.field(dtype=qd.i32, shape=(1,))
+
+    @qd.func
+    def helper():
+        out[0] = 99
+
+    @qd.kernel
+    def caller():
+        helper()
+
+    caller()
+
+    assert out[0] == 99
+
+    cov_field = _kernel_coverage.get_field()
+    assert cov_field is not None
+    arr = cov_field.to_numpy()
+
+    probes = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_before}
+    fired = {pid for pid in probes if arr[pid] != 0}
+    # The kernel body has one statement (helper()), and the func body has one (out[0] = 99).
+    # Both should produce probes that fire.
+    assert len(fired) >= 2, (
+        f"Expected probes from both kernel and func to fire, got {len(fired)} fired out of {len(probes)}"
+    )
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_kernel_coverage_multiple_kernels_same_session():
+    """Verify that probes from two different kernels both fire in the same session."""
+    from quadrants.lang import _kernel_coverage
+
+    _kernel_coverage.ensure_field_allocated()
+
+    probe_count_before = _kernel_coverage._probe_counter
+    a = qd.field(dtype=qd.i32, shape=(1,))
+    b = qd.field(dtype=qd.i32, shape=(1,))
+
+    @qd.kernel
+    def kernel_a():
+        a[0] = 10
+
+    @qd.kernel
+    def kernel_b():
+        b[0] = 20
+
+    kernel_a()
+    probe_count_after_a = _kernel_coverage._probe_counter
+    kernel_b()
+
+    assert a[0] == 10
+    assert b[0] == 20
+
+    cov_field = _kernel_coverage.get_field()
+    arr = cov_field.to_numpy()
+
+    probes_a = {pid: loc for pid, loc in _kernel_coverage._probe_map.items()
+                if probe_count_before <= pid < probe_count_after_a}
+    probes_b = {pid: loc for pid, loc in _kernel_coverage._probe_map.items()
+                if pid >= probe_count_after_a}
+
+    fired_a = {pid for pid in probes_a if arr[pid] != 0}
+    fired_b = {pid for pid in probes_b if arr[pid] != 0}
+
+    assert len(fired_a) > 0, "Probes from kernel_a should have fired"
+    assert len(fired_b) > 0, "Probes from kernel_b should have fired"
+
+
+def test_harvest_field_exception_path():
+    """Verify that _harvest_field handles to_numpy() failure gracefully."""
+    from unittest.mock import MagicMock
+
+    import quadrants.lang._kernel_coverage as kcov
+
+    old_field = kcov._cov_field
+    old_prog = kcov._cov_field_prog
+    old_map = kcov._probe_map.copy()
+    try:
+        mock_field = MagicMock()
+        mock_field.to_numpy.side_effect = RuntimeError("runtime destroyed")
+        kcov._cov_field = mock_field
+        kcov._cov_field_prog = object()
+        kcov._probe_map[999999] = ("fake.py", 1)
+
+        # Should not raise — the exception is caught and logged
+        kcov._harvest_field()
+
+        assert kcov._cov_field is None, "Field should be cleared after failure"
+        assert kcov._cov_field_prog is None, "Field prog should be cleared after failure"
+    finally:
+        kcov._cov_field = old_field
+        kcov._cov_field_prog = old_prog
+        kcov._probe_map = old_map
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda])
+def test_qd_prefix_exemption_pure_kernel():
+    """Verify that _qd_-prefixed globals don't violate pure kernel checks.
+
+    With kernel coverage enabled, _qd_cov is injected as a global. This test
+    verifies that a pure (fastcache) kernel still compiles without error.
+    """
+    out = qd.field(dtype=qd.i32, shape=(1,))
+
+    @qd.kernel(fastcache=True)
+    def pure_kernel():
+        out[0] = 42
+
+    pure_kernel()
+    assert out[0] == 42
