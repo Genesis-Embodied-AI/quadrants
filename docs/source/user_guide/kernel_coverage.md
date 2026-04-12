@@ -7,6 +7,14 @@ blocks are taken at runtime.
 The coverage data is written in the standard `coverage.py` format, so it works with `coverage report`, `diff-cover`,
 and IDE coverage viewers out of the box.
 
+## Prerequisites
+
+Kernel coverage requires the `coverage` Python package:
+
+```bash
+pip install coverage
+```
+
 ## Enabling kernel coverage
 
 Set the `QD_KERNEL_COVERAGE` environment variable before running your program:
@@ -48,24 +56,6 @@ QD_KERNEL_COVERAGE=1 pytest --cov=my_package --cov-branch tests/
 
 After the run, `coverage combine _qd_kcov.* .coverage` merges the kernel and Python data into a single report.
 
-## How it works
-
-When `QD_KERNEL_COVERAGE=1` is set, quadrants rewrites the Python AST of each `@qd.kernel` and `@qd.func` before
-compilation. It inserts lightweight probe statements (`field[probe_id] = 1`) at each source line. These probes compile
-as ordinary field stores and execute on the device alongside your kernel code.
-
-At process exit, the probe data is read back from the device and written to a `.coverage`-compatible file.
-
-Key properties:
-
-- **Zero overhead when disabled.** The coverage module is never imported unless `QD_KERNEL_COVERAGE=1` is set. There
-  is no cost in normal operation.
-- **Branch coverage.** Probes inside `if`/`else` bodies only fire when that branch is taken, giving true runtime
-  branch coverage — not just line coverage.
-- **Works with pytest-xdist.** Each worker writes to a separate file; combine them afterward.
-- **Survives `qd.init()` resets.** Coverage data is accumulated across multiple `qd.init()` calls within the same
-  process.
-
 ## Example
 
 ```python
@@ -89,6 +79,16 @@ my_kernel()
 Running with `QD_KERNEL_COVERAGE=1` and then inspecting the report will show that only the `if` branch was executed,
 and the `else` branch was missed.
 
+## Key properties
+
+- **Zero overhead when disabled.** The coverage module is never imported unless `QD_KERNEL_COVERAGE=1` is set. There
+  is no cost in normal operation.
+- **Branch coverage.** Probes inside `if`/`else` bodies only fire when that branch is taken, giving true runtime
+  branch coverage — not just line coverage.
+- **Works with pytest-xdist.** Each worker writes to a separate file; combine them afterward.
+- **Survives `qd.init()` resets.** Coverage data is accumulated across multiple `qd.init()` calls within the same
+  process.
+
 ## Limitations
 
 - **Autodiff kernels are skipped.** Coverage probes are not inserted into autodiff kernels, since the extra field
@@ -99,15 +99,10 @@ and the `else` branch was missed.
 - **Probe capacity.** There is a fixed limit of 100,000 probes per process. This is sufficient for most programs but
   may need increasing for very large codebases with many kernels.
 
-## Prerequisites
+## Under the hood
 
-Kernel coverage requires the `coverage` Python package:
+When `QD_KERNEL_COVERAGE=1` is set, quadrants rewrites the Python AST of each `@qd.kernel` and `@qd.func` before
+compilation. It inserts lightweight probe statements (`field[probe_id] = 1`) at each source line. These probes compile
+as ordinary field stores and execute on the device alongside your kernel code.
 
-```bash
-pip install coverage
-```
-
-## See also
-
-- [Debug mode](./debug.md) — runtime bounds checking and assertions
-- [Troubleshooting](./troubleshooting.md)
+At process exit, the probe data is read back from the device and written to a `.coverage`-compatible file.
