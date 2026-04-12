@@ -38,6 +38,7 @@ interop
 
 graph
 perf_dispatch
+subgroup_size
 ```
 
 ```{toctree}
