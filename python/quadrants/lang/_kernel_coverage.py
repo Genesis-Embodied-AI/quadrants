@@ -165,11 +165,13 @@ def flush() -> None:
     if use_arcs:
         arcs_by_file: dict[str, list[tuple[int, int]]] = {}
         for filepath, lines in _accumulated_lines.items():
-            sorted_lines = sorted(lines)
-            arcs = [(-1, sorted_lines[0])]
-            for prev, curr in zip(sorted_lines, sorted_lines[1:]):
-                arcs.append((prev, curr))
-            arcs.append((sorted_lines[-1], -1))
+            # Emit only entry/exit arcs per line — we know which lines ran but
+            # not the actual transitions between them, so we avoid fabricating
+            # inter-line arcs that would misrepresent branch coverage.
+            arcs = []
+            for line in sorted(lines):
+                arcs.append((-1, line))
+                arcs.append((line, -1))
             arcs_by_file[filepath] = arcs
         cov.add_arcs(arcs_by_file)
     else:
