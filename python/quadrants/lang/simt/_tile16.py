@@ -18,6 +18,104 @@ import quadrants as qd
 
 _TILE = 16
 
+
+class _OuterProduct:
+    """Deferred outer product proxy for use with augmented assignment on Tile16x16.
+
+    Created by qd.outer(a, b). Not a quadrants expression -- only valid as the
+    RHS of ``tile -= qd.outer(a, b)``.
+    """
+
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+    def __add__(self, other):
+        raise TypeError("OuterProduct does not support composition; apply each update separately")
+
+    def __radd__(self, other):
+        raise TypeError("OuterProduct does not support composition; apply each update separately")
+
+
+def outer(a, b):
+    """Create a deferred outer product for use with Tile16x16 augmented assignment.
+
+    Usage::
+
+        t -= qd.outer(a, b)   # equivalent to t._ger_sub(a, b)
+        t -= qd.outer(v, v)   # symmetric case (a == b)
+    """
+    return _OuterProduct(a, b)
+
+
+class _TileSliceProxy:
+    """Deferred 2D/3D array slice for tile load/store.
+
+    Created by subscripting a Field or ndarray with 2D slices, e.g.
+    ``arr[k0:k0+16, k0:k0+16]``.  Not a quadrants expression -- only valid
+    as the RHS of a tile assignment (load) or as the LHS target (store).
+    """
+
+    _is_deferred = True
+
+    def __init__(self, arr, row_start, col_start, col_stop, batch_idx=None, row_stop=None):
+        self.arr = arr
+        self.row_start = row_start
+        self.row_stop = row_stop if row_stop is not None else row_start + 16
+        self.col_start = col_start
+        self.col_stop = col_stop
+        self.batch_idx = batch_idx
+
+    def _assign(self, tile):
+        """Store path: arr[r:r+n_rows, c:c+n_cols] = tile."""
+        if self.batch_idx is not None:
+            tile._store3d(self.arr, self.batch_idx, self.row_start, self.row_stop, self.col_start, self.col_stop)
+        else:
+            tile._store(self.arr, self.row_start, self.row_stop, self.col_start, self.col_stop)
+
+
+class _VecSliceProxy:
+    """Deferred column-vector load from a 2D/3D array.
+
+    Created by ``arr[r0:r_end, col]`` or ``arr[batch, r0:r_end, col]``.
+    Each subgroup thread loads one element; out-of-range threads get 0.
+    Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
+    """
+
+    _is_deferred = True
+
+    def __init__(self, arr, row_start, row_stop, col, batch_idx=None):
+        self.arr = arr
+        self.row_start = row_start
+        self.row_stop = row_stop
+        self.col = col
+        self.batch_idx = batch_idx
+
+
+class _TileRefProxy:
+    """Proxy returned by tile[:] for the LHS of a load assignment.
+
+    Enables ``tile[:] = arr[r:r+16, c:n]``.  The ``[:]`` is required to
+    distinguish in-place tile loads from variable rebinding.
+    """
+
+    _is_deferred = True
+
+    def __init__(self, tile):
+        self.tile = tile
+
+    def _assign(self, value):
+        if isinstance(value, _TileSliceProxy):
+            if value.batch_idx is not None:
+                self.tile._load3d(
+                    value.arr, value.batch_idx, value.row_start, value.row_stop, value.col_start, value.col_stop
+                )
+            else:
+                self.tile._load(value.arr, value.row_start, value.row_stop, value.col_start, value.col_stop)
+        else:
+            raise TypeError(f"Tile16x16[:] can only be assigned from an array slice, got {type(value)}")
+
+
 _tile16_cache = {}
 
 
@@ -288,11 +386,50 @@ def _make_tile16x16_class(dtype):
                 raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
             B._trsm(self)
 
+        @qd.func
+        def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            v = dtype(0.0)
+            if row_start + tid < row_stop:
+                v = arr[row_start + tid, col]
+            return v
+
+        @qd.func
+        def _resolve_vec3d(self, arr: qd.template(), batch, row_start, row_stop, col):
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            v = dtype(0.0)
+            if row_start + tid < row_stop:
+                v = arr[batch, row_start + tid, col]
+            return v
+
+        def _resolve_vec_proxy(self, proxy):
+            if proxy.batch_idx is not None:
+                return self._resolve_vec3d(proxy.arr, proxy.batch_idx, proxy.row_start, proxy.row_stop, proxy.col)
+            return self._resolve_vec2d(proxy.arr, proxy.row_start, proxy.row_stop, proxy.col)
+
+        def _augassign(self, other, op):
+            if isinstance(other, _OuterProduct):
+                if op == "Sub":
+                    a_orig = other.a
+                    b_orig = other.b
+                    a = self._resolve_vec_proxy(a_orig) if isinstance(a_orig, _VecSliceProxy) else a_orig
+                    b = (
+                        a
+                        if (b_orig is a_orig)
+                        else (self._resolve_vec_proxy(b_orig) if isinstance(b_orig, _VecSliceProxy) else b_orig)
+                    )
+                    self._ger_sub(a, b)
+                else:
+                    raise TypeError(f"Tile16x16: unsupported augmented assignment op '{op}' with outer product")
+            else:
+                raise TypeError(f"Tile16x16: unsupported augmented assignment with {type(other)}")
+
     # StructType.__call__ already defaults missing args to 0, so Tile()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile16x16)
     result.SIZE = _TILE  # type: ignore[reportAttributeAccessIssue]
+    result._quadrants_internal = True  # type: ignore[reportAttributeAccessIssue]
     result.zeros = result  # type: ignore[reportAttributeAccessIssue]
 
     @qd.func

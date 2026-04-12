@@ -3,7 +3,8 @@ import pytest
 import scipy.linalg
 
 import quadrants as qd
-from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
+from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16, outer
 
 from tests import test_utils
 
@@ -432,3 +433,203 @@ def test_tile16_trsm(qd_dtype):
     )
     atol = 1e-10 if qd_dtype == qd.f64 else 1e-4
     np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
+
+
+# =============================================================================
+# Slice-syntax tests (PR 3: arr[r0:r1, c0:c1])
+# =============================================================================
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_slice_load_store_roundtrip():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = src_arr[0:_TILE, 0:_TILE]
+            dst_arr[0:_TILE, 0:_TILE] = t
+
+    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_slice_partial_cols():
+    Tile = _make_tile16x16(qd.f32)
+    NCOLS = 7
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = src_arr[0:_TILE, 0:NCOLS]
+            dst_arr[0:_TILE, 0:NCOLS] = t
+
+    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    dst.from_numpy(np.full((_TILE, _TILE), -1.0, dtype=np.float32))
+    k1(src, dst)
+
+    result = dst.to_numpy()
+    expected = np.full((_TILE, _TILE), -1.0, dtype=np.float32)
+    expected[:, :NCOLS] = data[:, :NCOLS]
+    np.testing.assert_allclose(result, expected)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_slice_3d_batch():
+    Tile = _make_tile16x16(qd.f32)
+    NBATCH = 3
+    src = qd.ndarray(qd.f32, (NBATCH, _TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (NBATCH, _TILE, _TILE))
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd.f32, 3], dst_arr: qd.types.NDArray[qd.f32, 3]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            for b in range(NBATCH):
+                t = Tile()
+                t[:] = src_arr[b, 0:_TILE, 0:_TILE]
+                dst_arr[b, 0:_TILE, 0:_TILE] = t
+
+    data = np.arange(NBATCH * _TILE * _TILE, dtype=np.float32).reshape(NBATCH, _TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    k1(src, dst)
+    np.testing.assert_allclose(dst.to_numpy(), data)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_slice_ger_sub_via_outer():
+    Tile = _make_tile16x16(qd.f32)
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    vec_a = qd.ndarray(qd.f32, (_TILE,))
+    vec_b = qd.ndarray(qd.f32, (_TILE,))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        a_arr: qd.types.NDArray[qd.f32, 1],
+        b_arr: qd.types.NDArray[qd.f32, 1],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = mat_arr[0:_TILE, 0:_TILE]
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            a_val = a_arr[tid]
+            b_val = b_arr[tid]
+            t -= outer(a_val, b_val)
+            out_arr[0:_TILE, 0:_TILE] = t
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    mat.from_numpy(M)
+    vec_a.from_numpy(a)
+    vec_b.from_numpy(b)
+    k1(mat, vec_a, vec_b, out)
+
+    expected = M - np.outer(a, b)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_vec_proxy_ger_sub_2d():
+    Tile = _make_tile16x16(qd.f32)
+    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
+    vecs = qd.ndarray(qd.f32, (_TILE, 2))
+    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd.f32, 2],
+        vecs_arr: qd.types.NDArray[qd.f32, 2],
+        out_arr: qd.types.NDArray[qd.f32, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = mat_arr[0:_TILE, 0:_TILE]
+            t -= outer(vecs_arr[0:_TILE, 0], vecs_arr[0:_TILE, 1])
+            out_arr[0:_TILE, 0:_TILE] = t
+
+    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np.float32) + 1.0
+    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    mat.from_numpy(M)
+    vecs.from_numpy(np.column_stack([a, b]))
+    k1(mat, vecs, out)
+
+    expected = M - np.outer(a, b)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+
+
+# =============================================================================
+# Error-raising tests
+# =============================================================================
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_negative_row_raises():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[-1:_TILE, 0:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="Negative indices"):
+        k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_negative_col_raises():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[0:_TILE, -1:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="Negative indices"):
+        k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_missing_start_raises():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[:_TILE, 0:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="start index is required"):
+        k1(src, dst)

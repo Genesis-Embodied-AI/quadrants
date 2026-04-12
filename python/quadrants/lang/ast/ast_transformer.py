@@ -6,6 +6,7 @@ import dataclasses
 import enum
 import itertools
 import math
+import os
 import platform
 import warnings
 from ast import unparse
@@ -73,6 +74,22 @@ def boundary_type_cast_warning(expression: Expr) -> None:
         )
 
 
+def _quadrants_package_dir():
+    import quadrants as _qd_pkg  # pylint: disable=import-outside-toplevel
+
+    return os.path.realpath(os.path.dirname(_qd_pkg.__file__))
+
+
+_QUADRANTS_PKG_DIR: str | None = None
+
+
+def _is_quadrants_internal_file(filepath: str) -> bool:
+    global _QUADRANTS_PKG_DIR  # noqa: PLW0603
+    if _QUADRANTS_PKG_DIR is None:
+        _QUADRANTS_PKG_DIR = _quadrants_package_dir()
+    return os.path.realpath(filepath).startswith(_QUADRANTS_PKG_DIR + os.sep)
+
+
 class ASTTransformer(Builder):
     @staticmethod
     def build_Name(ctx: ASTTransformerFuncContext, node: ast.Name):
@@ -85,11 +102,12 @@ class ASTTransformer(Builder):
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
             if isinstance(node.ptr, (float, int, Field)):
-                message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                if node.id.upper() == node.id:
-                    warnings.warn(message)
-                else:
-                    raise exception.QuadrantsCompilationError(message)
+                if not _is_quadrants_internal_file(ctx.file):
+                    message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
+                    if node.id.upper() == node.id:
+                        warnings.warn(message)
+                    else:
+                        raise exception.QuadrantsCompilationError(message)
         if isinstance(node.ptr, Generator):
             raise ValueError("Cannot store generators in variables, inside kernels or functions")
         return node.ptr
@@ -673,7 +691,10 @@ class ASTTransformer(Builder):
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
-                        # ignore this built-in module
+                        violation = False
+                    if violation and getattr(node.value.ptr, "_quadrants_internal", False):
+                        violation = False
+                    if violation and _is_quadrants_internal_file(ctx.file):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
