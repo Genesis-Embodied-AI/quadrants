@@ -39,6 +39,8 @@ _probe_map: dict[int, tuple[str, int]] = {}
 # Accumulated coverage lines surviving across qd.init() resets
 _accumulated_lines: dict[str, set[int]] = {}
 _reset_hook_installed: bool = False
+# Directory for .coverage and _qd_kcov.* files, captured when coverage is first enabled
+_coverage_dir: str | None = None
 
 
 def _harvest_field() -> None:
@@ -81,8 +83,10 @@ def _install_reset_hook() -> None:
 
 def ensure_field_allocated() -> None:
     """Allocate (or re-allocate after qd.init()) the global coverage field."""
-    global _cov_field, _cov_field_prog
+    global _cov_field, _cov_field_prog, _coverage_dir
     _install_reset_hook()
+    if _coverage_dir is None:
+        _coverage_dir = os.getcwd()
     current_prog = impl.get_runtime()._prog
     if _cov_field is not None and _cov_field_prog is current_prog:
         return
@@ -131,7 +135,8 @@ def _detect_arc_mode() -> bool:
     since run_tests.py --coverage always enables --cov-branch.
     """
     try:
-        cd = CoverageData()
+        cov_path = os.path.join(_coverage_dir, ".coverage") if _coverage_dir else ".coverage"
+        cd = CoverageData(basename=cov_path)
         cd.read()
         if not cd.measured_files():
             return True
@@ -152,7 +157,8 @@ def flush() -> None:
     if not _accumulated_lines:
         return
 
-    kernel_path = f"_qd_kcov.{os.getpid()}"
+    base_dir = _coverage_dir or os.getcwd()
+    kernel_path = os.path.join(base_dir, f"_qd_kcov.{os.getpid()}")
     use_arcs = _detect_arc_mode()
 
     cov = CoverageData(basename=kernel_path)
