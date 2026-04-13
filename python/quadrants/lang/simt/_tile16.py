@@ -306,6 +306,119 @@ def _make_tile16x16_class(dtype):
             if tid == 15:
                 self.r15 = 1.0
 
+        @qd.func
+        def _get_col(self, k):
+            """Return the value of register (column) k."""
+            val = qd.cast(0.0, dtype)
+            if k == 0:
+                val = self.r0
+            if k == 1:
+                val = self.r1
+            if k == 2:
+                val = self.r2
+            if k == 3:
+                val = self.r3
+            if k == 4:
+                val = self.r4
+            if k == 5:
+                val = self.r5
+            if k == 6:
+                val = self.r6
+            if k == 7:
+                val = self.r7
+            if k == 8:
+                val = self.r8
+            if k == 9:
+                val = self.r9
+            if k == 10:
+                val = self.r10
+            if k == 11:
+                val = self.r11
+            if k == 12:
+                val = self.r12
+            if k == 13:
+                val = self.r13
+            if k == 14:
+                val = self.r14
+            if k == 15:
+                val = self.r15
+            return val
+
+        @qd.func
+        def _set_col(self, k, val):
+            """Set register (column) k to val."""
+            if k == 0:
+                self.r0 = val
+            if k == 1:
+                self.r1 = val
+            if k == 2:
+                self.r2 = val
+            if k == 3:
+                self.r3 = val
+            if k == 4:
+                self.r4 = val
+            if k == 5:
+                self.r5 = val
+            if k == 6:
+                self.r6 = val
+            if k == 7:
+                self.r7 = val
+            if k == 8:
+                self.r8 = val
+            if k == 9:
+                self.r9 = val
+            if k == 10:
+                self.r10 = val
+            if k == 11:
+                self.r11 = val
+            if k == 12:
+                self.r12 = val
+            if k == 13:
+                self.r13 = val
+            if k == 14:
+                self.r14 = val
+            if k == 15:
+                self.r15 = val
+
+        @qd.func
+        def _ger_sub(self, a, b):
+            """General rank-1 subtract in-place: self -= a @ b^T."""
+            for j in range(_TILE):
+                bc = qd.simt.subgroup.shuffle(b, qd.u32(j))
+                self._set_col(j, self._get_col(j) - a * bc)
+
+        @qd.func
+        def cholesky_(self, eps):
+            """In-place 16x16 Cholesky factorization via subgroup shuffles.
+
+            On return, the lower triangle holds L such that A = L @ L^T.
+            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
+            """
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            for k in range(_TILE):
+                diag_val = qd.cast(0.0, dtype)
+                if tid == k:
+                    s = qd.cast(0.0, dtype)
+                    for j in range(_TILE):
+                        if k > j:
+                            c = self._get_col(j)
+                            s += c * c
+                    diag_val = qd.sqrt(qd.max(self._get_col(k) - s, eps))
+                    self._set_col(k, diag_val)
+
+                diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
+
+                dot = qd.cast(0.0, dtype)
+                for j in range(_TILE):
+                    if k > j:
+                        my_col = self._get_col(j)
+                        Lkj = qd.simt.subgroup.shuffle(my_col, qd.u32(k))
+                        dot += Lkj * my_col  # type: ignore[reportOperatorIssue]
+
+                if tid > k:  # type: ignore[reportOperatorIssue]
+                    new_val = (self._get_col(k) - dot) / diag_k  # type: ignore[reportOperatorIssue]
+                    self._set_col(k, new_val)
+
     # StructType.__call__ already defaults missing args to 0, so Tile()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
