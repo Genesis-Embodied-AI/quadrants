@@ -263,7 +263,12 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
 
                 row_slice, col_slice = slice_indices
-                if row_slice.start is None or row_slice.stop is None or col_slice.start is None or col_slice.stop is None:
+                if (
+                    row_slice.start is None
+                    or row_slice.stop is None
+                    or col_slice.start is None
+                    or col_slice.stop is None
+                ):
                     raise QuadrantsSyntaxError("Tile16x16 slice: both start and stop indices are required")
                 row_stop = row_slice.stop
                 col_stop = col_slice.stop

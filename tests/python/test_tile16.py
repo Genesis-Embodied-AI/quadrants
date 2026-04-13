@@ -654,5 +654,5 @@ def test_tile16_load_missing_start_raises():
             t[:] = s[:_TILE, 0:_TILE]
             d[0:_TILE, 0:_TILE] = t
 
-    with pytest.raises(QuadrantsSyntaxError, match="start index is required"):
+    with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
         k1(src, dst)
