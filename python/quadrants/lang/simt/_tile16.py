@@ -431,10 +431,10 @@ def _make_tile16x16_class(dtype):
                 for j in range(_TILE):
                     if c > j:
                         Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
-                        dot += self._get_col(j) * Lkj
+                        dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
 
                 diag_c = qd.simt.subgroup.shuffle(L._get_col(c), qd.u32(c))
-                new_val = (self._get_col(c) - dot) / diag_c
+                new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
                 self._set_col(c, new_val)
 
         def solve_triangular_(self, B, lower=True):

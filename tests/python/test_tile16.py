@@ -427,8 +427,8 @@ def test_tile16_trsm(qd_dtype):
     b_arr.from_numpy(B)
     k1(a_arr, b_arr, dst)
 
-    X_ref = scipy.linalg.solve_triangular(
-        L_ref.astype(np.float64), B.astype(np.float64), lower=True, trans="T"
-    ).T.astype(np_dtype)
+    X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
+        np_dtype
+    )
     atol = 1e-10 if qd_dtype == qd.f64 else 1e-4
     np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
