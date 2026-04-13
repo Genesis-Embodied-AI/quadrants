@@ -71,6 +71,13 @@ Expr precise(const Expr &input) {
       un->precise = true;
       stack.push_back(un->operand);
     } else if (auto tri = cur.cast<TernaryOpExpression>()) {
+      // Intentional: TernaryOpExpression is not itself tagged. The only ternary op today is `select`
+      // (a control-flow-shaped conditional move, not FP arithmetic), so there is nothing for codegen
+      // to strip FMF / NoContraction from on the ternary node. Correctness relies on the inner
+      // Binary/Unary ops in the branches carrying their own `precise` tag, which they will because
+      // we recurse into op1/op2/op3 below. As a consequence, the offline cache key generator does not
+      // emit `precise` for ternary nodes - which is fine since the ternary's children distinguish
+      // themselves via their own keys.
       stack.push_back(tri->op1);
       stack.push_back(tri->op2);
       stack.push_back(tri->op3);

@@ -23,14 +23,19 @@ bool UnaryOpStmt::is_cast() const {
 }
 
 bool UnaryOpStmt::same_operation(UnaryOpStmt *o) const {
-  if (op_type == o->op_type) {
-    if (is_cast()) {
-      return cast_type == o->cast_type;
-    } else {
-      return true;
-    }
+  if (op_type != o->op_type) {
+    return false;
   }
-  return false;
+  // Two unary ops that differ only in their `precise` flag are NOT the same operation: CSE or similar
+  // passes relying on `same_operation` alone must not merge a precise op with a non-precise one, or
+  // the `qd.precise(...)` tag is silently dropped on the merged representative.
+  if (precise != o->precise) {
+    return false;
+  }
+  if (is_cast()) {
+    return cast_type == o->cast_type;
+  }
+  return true;
 }
 
 ExternalPtrStmt::ExternalPtrStmt(Stmt *base_ptr,
