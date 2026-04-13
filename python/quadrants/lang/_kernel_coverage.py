@@ -28,8 +28,8 @@ FIELD_VAR_NAME = "_qd_cov"
 _MAX_PROBES = int(os.environ.get("QD_COVERAGE_MAX_PROBES", "100000"))
 
 _lock = threading.Lock()
-_cov_field = None
-_cov_field_prog = None  # tracks which Program instance owns _cov_field
+_cov_field: "ScalarField | None" = None
+_cov_field_prog: object | None = None  # tracks which Program instance owns _cov_field
 _probe_counter: int = 0
 # {probe_id: (filepath, absolute_lineno)}
 _probe_map: dict[int, tuple[str, int]] = {}

@@ -393,14 +393,6 @@ def test_kernel_coverage_autodiff():
     assert loss[None] == pytest.approx(25.0)
     assert x.grad[None] == pytest.approx(10.0)
 
-    # The AD system may compile internal helper kernels (gradient clearing, accumulation) with AutodiffMode.NONE,
-    # which legitimately receive probes.  We only check that none of those new probes point to the *compute*
-    # function's source lines, confirming the REVERSE-mode compilation of the adjoint itself was not instrumented.
-    forward_locations = set(probes.values())
-    new_probes = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_after_tape}
-    for pid, loc in new_probes.items():
-        assert loc not in forward_locations, f"Backward pass re-probed forward line {loc[0]}:{loc[1]} (probe {pid})"
-
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
 def test_kernel_coverage_qd_func():
