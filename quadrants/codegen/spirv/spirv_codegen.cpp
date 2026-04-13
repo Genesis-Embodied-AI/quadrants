@@ -885,9 +885,13 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   else {
     QD_NOT_IMPLEMENTED
   }
-  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set, so downstream
-  // shader compilers (including MoltenVK's SPIRV-Cross → MSL translation, which maps it to MSL's `precise`
-  // qualifier) don't substitute approximate hardware variants (e.g. fast `sqrt`, `rsqrt`, `sin`, `exp`).
+  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set. This is
+  // meaningful on actual arithmetic instructions (`OpFNegate` from `neg`, `OpFDiv` synthesized by `inv`)
+  // where SPIRV-Cross maps it to MSL's `precise` qualifier. For transcendentals emitted via
+  // `OpExtInst GLSL.std.450 Sin/Cos/Log/Sqrt/...`, the SPIR-V spec scopes `NoContraction` to arithmetic
+  // instructions so most consumers will ignore it -- there is no standard SPIR-V mechanism to force
+  // correctly-rounded transcendentals, so on those paths we rely on the driver's default (non-fast-math)
+  // stdlib being accurate enough. The decoration is kept as best-effort future-proofing.
   if (stmt->precise && is_real(stmt->element_type())) {
     ir_->maybe_no_contraction(val, /*precise=*/true);
   }

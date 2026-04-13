@@ -99,7 +99,7 @@ def precise(obj):
     """Mark a floating-point expression as IEEE-strict.
 
     Every binary FP op inside ``obj`` is evaluated in source order with no
-    reassociation, no FMA contraction, and no algebraic simplification —
+    reassociation, no FMA contraction, and no algebraic simplification,
     regardless of the module-level :attr:`fast_math` setting. This is the
     moral equivalent of MSL's / HLSL's ``precise`` keyword and lets you
     keep ``fast_math=True`` globally while protecting compensated-arithmetic
@@ -111,14 +111,14 @@ def precise(obj):
     binary ops are reached even when wrapped, e.g.
     ``qd.precise(qd.bit_cast(a + b, qd.f32))``. It stops at loads,
     constants, ``qd.func`` calls, ndarray accesses, etc.; semantics inside
-    a ``qd.func`` body are governed by that body's own ops — wrap calls
+    a ``qd.func`` body are governed by that body's own ops -- wrap calls
     separately if needed.
 
     Notes:
         * Tagging is in-place on the underlying ``Expression`` nodes
           (which are shared via ``shared_ptr``). If you alias a
           subexpression and then wrap one alias in ``qd.precise``, the
-          tag travels with the value — both uses get IEEE semantics.
+          tag travels with the value -- both uses get IEEE semantics.
 
     Args:
         obj: A scalar Quadrants expression (typically a chain of FP ops).
@@ -131,7 +131,7 @@ def precise(obj):
 
         >>> @qd.func
         >>> def fast_two_sum(a, b):
-        >>>     # Local IEEE region — survives even with fast_math=True.
+        >>>     # Local IEEE region, survives even with fast_math=True.
         >>>     s = qd.precise(a + b)
         >>>     e = qd.precise(b - (s - a))
         >>>     return s, e
@@ -1560,8 +1560,8 @@ __all__ = [
     "atomic_mul",
     "bit_cast",
     "bit_shr",
-    "precise",
     "cast",
+    "precise",
     "ceil",
     "cos",
     "exp",

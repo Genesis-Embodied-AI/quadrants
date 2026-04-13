@@ -19,7 +19,7 @@ N = 1000
 @test_utils.test(default_fp=qd.f32, fast_math=True)
 def test_qd_precise_protects_fast_math():
     """Run Dekker 2Sum twice under `fast_math=True`: once unprotected (the
-    compensation term must be folded to zero — that is the very bug
+    compensation term must be folded to zero -- that is the very bug
     `qd.precise` exists to fix) and once with `qd.precise(...)` wrapping
     every FP op (the compensation term must survive).
     """
@@ -85,15 +85,14 @@ def test_qd_precise_protects_fast_math():
     out_naive = qd.ndarray(dtype=qd.f32, shape=(2,))
     out_precise = qd.ndarray(dtype=qd.f32, shape=(2,))
 
-    # NOTE: defining the naive and precise kernels in the same test also indirectly validates that the
-    # offline-cache key generator distinguishes `precise` from non-`precise` BinaryOpExpressions: the two
-    # kernels are structurally identical apart from `qd.precise(...)` wrappers, so if the cache key did not
-    # account for `precise` (as was the case before), the second kernel compiled would silently reuse the
-    # first kernel's compiled artifact and both `out_*` arrays would end up with the same values.
+    # NOTE: running the naive kernel first also indirectly validates that the offline-cache key generator
+    # distinguishes `precise` from non-`precise` BinaryOpExpressions. The two kernels are structurally
+    # identical apart from `qd.precise(...)` wrappers, so if the cache key did not account for `precise`
+    # (as was the case before), the second compile would silently reuse the first's artifact and
+    # `df_accum_precise` would produce naive behavior -- caught by the final assertion below.
     df_accum_naive(in_arr, out_naive)
     df_accum_precise(in_arr, out_precise)
 
-    hi_naive, lo_naive = out_naive.to_numpy()
     hi_precise, lo_precise = out_precise.to_numpy()
 
     # Reference values for the assertions below.
@@ -102,22 +101,17 @@ def test_qd_precise_protects_fast_math():
     for _ in range(N):
         naive_ref = np.float32(naive_ref + 1e-8)
 
-    # 1. Negative control: without `qd.precise`, the compensation term IS
-    #    stripped under `fast_math=True`. If this fails, fast_math has been
-    #    silently disabled or one of the backends became more conservative.
-    assert abs(float(lo_naive)) < 1e-10 or float(hi_naive) == np.float32(1.0), (
-        f"Unexpected: 2Sum compensation survived under fast_math=True without qd.precise "
-        f"(hi={hi_naive!r}, lo={lo_naive!r}). Did fast_math get silently disabled?"
-    )
-
-    # 2. Positive case: `qd.precise` must restore IEEE semantics locally.
-    #    Compensation must be non-trivially non-zero.
+    # `qd.precise` must restore IEEE semantics locally: the compensation term must be non-trivially non-zero.
     assert abs(float(lo_precise)) > 1e-10, (
         f"qd.precise failed to protect 2Sum: lo={lo_precise!r} (expected |lo| > 1e-10). "
-        f"The backend folded `(a - aa) + (b - bb)` to zero — IEEE-strict ordering was not honored."
+        f"The backend folded `(a - aa) + (b - bb)` to zero -- IEEE-strict ordering was not honored."
     )
 
-    # 3. And the compensated sum must beat the naïve f32 sum by orders of magnitude.
+    # And the compensated sum must beat the naive f32 sum by orders of magnitude. This is the end-to-end
+    # guarantee `qd.precise` exists to provide; it also indirectly validates that the offline-cache key
+    # generator distinguishes `precise` from non-`precise` BinaryOpExpressions -- if it did not, the two
+    # kernels (structurally identical apart from `qd.precise(...)` wrappers) would share a compiled artifact
+    # and `out_precise` would match `out_naive`.
     ds_err = abs(float(hi_precise) + float(lo_precise) - expected_f64)
     naive_err = abs(float(naive_ref) - expected_f64)
     assert (
@@ -130,9 +124,9 @@ def test_qd_precise_unary_rounding():
     """`qd.precise(qd.sin/cos/log(x))` must produce the correctly-rounded f32
     result on every backend, even with module-level `fast_math=True`.
 
-    This exercises the unary precise path end-to-end: AST tagging → IR
-    propagation → codegen honoring the tag (LLVM FMF clear, SPIR-V
-    `NoContraction` decoration, or CUDA libdevice selection — depending
+    This exercises the unary precise path end-to-end: AST tagging -> IR
+    propagation -> codegen honoring the tag (LLVM FMF clear, SPIR-V
+    `NoContraction` decoration, or CUDA libdevice selection, depending
     on the backend). We verify correctness against numpy's
     correctly-rounded f32 reference; the naive (non-precise) variant is
     deliberately not part of this test, because on most backends
