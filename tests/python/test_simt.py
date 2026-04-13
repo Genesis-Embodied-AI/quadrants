@@ -824,7 +824,7 @@ def test_subgroup_size_with_adaptive_block_dim():
     assert all(0 <= v < 32 for v in ids), f"Got out-of-range invocation IDs: {ids}"
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_size_survives_second_call():
     """subgroup_size must produce correct results on second call (exercises
     offline cache serialization round-trip for the kernel)."""
