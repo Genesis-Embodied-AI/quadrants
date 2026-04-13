@@ -371,7 +371,7 @@ def test_qd_precise_clones_shared_subexpression():
 # `qd.precise` is explicitly set. Thus the "fast_math=False is equivalent to qd.precise everywhere"
 # idempotency claim holds on LLVM backends but not on SPIR-V; see `docs/source/user_guide/precise.md`
 # (Interaction with fast_math) for the backend-specific nuance.
-@test_utils.test(arch=[qd.cpu, qd.cuda], default_fp=qd.f32, fast_math=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], default_fp=qd.f32, fast_math=False)
 def test_qd_precise_idempotent_when_fast_math_off():
     """With `fast_math=False`, every reassociation / algebraic rewrite that `qd.precise` gates is
     already skipped at the module level, so wrapping in `qd.precise(...)` must be a bit-exact
