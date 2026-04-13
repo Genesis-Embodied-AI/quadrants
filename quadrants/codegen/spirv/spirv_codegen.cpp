@@ -838,11 +838,10 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
-      // Forward `stmt->precise` explicitly: the post-hoc `maybe_no_contraction(val, stmt->precise)` below happens to
-      // decorate the same SPIR-V value ID, so the OpFDiv is already tagged, but relying on that is fragile - if anyone
-      // adds an early return before the decorator runs, the tag is silently lost. Passing it at creation time makes the
-      // intent robust.
-      val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val, stmt->precise);
+      // Do not pass `stmt->precise` to the builder here: the post-hoc `maybe_no_contraction(val, stmt->precise)`
+      // block at the end of this visit() is the single source of truth for decoration, so passing `precise` at
+      // creation time would emit a duplicate OpDecorate on the same OpFDiv value ID.
+      val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
     } else {
       QD_NOT_IMPLEMENTED
     }
@@ -1064,10 +1063,13 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     }
     bin_value = ir_->cast(dst_type, bin_value);
   }
-#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)                \
-  else if (op_type == BinaryOpType::op) {                      \
-    bin_value = ir_->func(lhs_value, rhs_value, bin->precise); \
-    bin_value = ir_->cast(dst_type, bin_value);                \
+  // `bin->precise` is deliberately not threaded into the builder calls below; the post-hoc block at the end of
+  // visit(BinaryOpStmt*) is the single source of truth for `NoContraction` decoration, so threading it here would
+  // emit a duplicate OpDecorate on the same arithmetic result ID when the subsequent cast is a no-op.
+#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
+  else if (op_type == BinaryOpType::op) {        \
+    bin_value = ir_->func(lhs_value, rhs_value); \
+    bin_value = ir_->cast(dst_type, bin_value);  \
   }
 
   BINARY_OP_TO_SPIRV_ARTHIMATIC(add, add)
@@ -1160,26 +1162,23 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   else if (op_type == BinaryOpType::truediv) {
     lhs_value = ir_->cast(dst_type, lhs_value);
     rhs_value = ir_->cast(dst_type, rhs_value);
-    bin_value = ir_->div(lhs_value, rhs_value, bin->precise);
+    // As with the arithmetic macro above, leave decoration to the post-hoc block.
+    bin_value = ir_->div(lhs_value, rhs_value);
   }
   else {
     QD_NOT_IMPLEMENTED;
   }
-  // Mirror the post-hoc block in visit(UnaryOpStmt*): FP binary transcendentals (atan2, pow) go through
-  // `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` which calls `ir_->call_glsl450(...)` without any `maybe_no_contraction`
-  // plumbing, so `qd.precise(qd.atan2(y, x))` and `qd.precise(x ** y)` on SPIR-V backends would otherwise silently get
-  // no decoration - inconsistent with the best-effort coverage applied to unary transcendentals. The SPIR-V spec scopes
-  // `NoContraction` to arithmetic instructions and most consumers ignore it on `OpExtInst` anyway, so the decoration is
-  // best-effort future-proofing, but it should be applied uniformly.
-  //
-  // Note on the arithmetic path (add/sub/mul/div/mod/truediv): the `ir_->{add,sub,mul,div,mod}(... bin->precise)`
-  // call above already decorates the arithmetic SPIR-V instruction (OpFAdd/OpFSub/...) at creation time via the
-  // `precise` parameter threaded into the helper. The intervening `bin_value = ir_->cast(dst_type, bin_value)` then
-  // rebinds `bin_value` to the FConvert, so the post-hoc `maybe_no_contraction(bin_value, true)` below decorates the
-  // FConvert - which is silently no-op per spec (NoContraction is scoped to arithmetic, not type conversion). The two
-  // layers are therefore complementary, not redundant: arithmetic instructions are covered at creation time, and the
-  // post-hoc pass is hygiene that also catches the non-arithmetic extinst transcendentals. Do not "simplify" by
-  // dropping either layer.
+  // Single source of truth for `NoContraction` on FP-producing binary ops. Covers:
+  //   - arithmetic (add/sub/mul/div/mod/truediv): the intervening `ir_->cast(dst_type, bin_value)` is a no-op in the
+  //     common post-type_check case where operand type already matches `dst_type`, so this decorates the
+  //     OpF{Add,Sub,...} itself; in the rare non-no-op case it decorates the FConvert, which per spec drops the
+  //     decoration silently.
+  //   - FP binary transcendentals (atan2, pow): emitted by `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` through
+  //     `ir_->call_glsl450(...)` with no internal `maybe_no_contraction`; SPIR-V scopes `NoContraction` to arithmetic
+  //     instructions so most consumers ignore it on `OpExtInst`, but the decoration is best-effort future-proofing and
+  //     should be applied uniformly with the unary transcendental path.
+  // Do NOT thread `bin->precise` into the builder calls above; the builders would then emit a duplicate OpDecorate on
+  // the same result ID.
   if (bin->precise && is_real(bin->element_type())) {
     ir_->maybe_no_contraction(bin_value, /*precise=*/true);
   }
