@@ -389,15 +389,17 @@ def test_kernel_coverage_autodiff():
     fired = {pid for pid in probes if arr[pid] != 0}
     assert len(fired) > 0, "Forward pass inside Tape should produce fired coverage probes"
 
-    # Verify backward pass didn't add probes
+    # Verify backward pass computes correct gradients
     assert loss[None] == pytest.approx(25.0)
     assert x.grad[None] == pytest.approx(10.0)
 
-    probe_count_after_grad = _kernel_coverage._probe_counter
-    assert probe_count_after_grad == probe_count_after_tape, (
-        f"Backward pass should not insert additional probes, but probe counter went from "
-        f"{probe_count_after_tape} to {probe_count_after_grad}"
-    )
+    # The AD system may compile internal helper kernels (gradient clearing, accumulation) with AutodiffMode.NONE,
+    # which legitimately receive probes.  We only check that none of those new probes point to the *compute*
+    # function's source lines, confirming the REVERSE-mode compilation of the adjoint itself was not instrumented.
+    forward_locations = set(probes.values())
+    new_probes = {pid: loc for pid, loc in _kernel_coverage._probe_map.items() if pid >= probe_count_after_tape}
+    for pid, loc in new_probes.items():
+        assert loc not in forward_locations, f"Backward pass re-probed forward line {loc[0]}:{loc[1]} (probe {pid})"
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda])
@@ -480,14 +482,15 @@ def test_kernel_coverage_multiple_kernels_same_session():
 def test_qd_prefix_exemption_pure_kernel():
     """Verify that _qd_-prefixed globals don't violate pure kernel checks.
 
-    With kernel coverage enabled, _qd_cov is injected as a global. This test
-    verifies that a pure (fastcache) kernel still compiles without error.
+    With kernel coverage enabled, _qd_cov is injected as a global. This test verifies that a pure (fastcache)
+    kernel still compiles without error. The kernel uses ndarray arguments (not global fields) because pure
+    kernels prohibit non-_qd_ globals.
     """
-    out = qd.field(dtype=qd.i32, shape=(1,))
+    a = qd.ndarray(qd.i32, (1,))
 
     @qd.kernel(fastcache=True)
-    def pure_kernel():
-        out[0] = 42
+    def pure_kernel(arr: qd.types.NDArray) -> None:
+        arr[0] = 42
 
-    pure_kernel()
-    assert out[0] == 42
+    pure_kernel(a)
+    assert a[0] == 42
