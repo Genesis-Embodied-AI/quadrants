@@ -526,9 +526,14 @@ class AlgSimp : public BasicStmtVisitor {
         modifier.erase(stmt);
       }
     } else if (is_comparison(stmt->op_type)) {
-      if (((fast_math && !stmt->precise) || is_integral(stmt->lhs->ret_type.get_element_type())) &&
+      // Strict inequalities `a > a` / `a < a` are `false` for every input under IEEE 754 (including NaN, since
+      // the ordered relations are false on unordered operands), so their self-fold does not need the `!precise`
+      // gate that the other comparisons need to preserve NaN semantics.
+      const bool is_strict_ineq = stmt->op_type == BinaryOpType::cmp_gt || stmt->op_type == BinaryOpType::cmp_lt;
+      if (((fast_math && (is_strict_ineq || !stmt->precise)) || is_integral(stmt->lhs->ret_type.get_element_type())) &&
           irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-        // fast_math or integral operands: a == a -> 1, a != a -> 0. Skipped when `stmt->precise` is set.
+        // fast_math or integral operands: a == a -> 1, a != a -> 0. Skipped for `stmt->precise` except on
+        // strict inequalities where the fold is IEEE-exact regardless of the precise tag.
         if (stmt->op_type == BinaryOpType::cmp_eq || stmt->op_type == BinaryOpType::cmp_ge ||
             stmt->op_type == BinaryOpType::cmp_le) {
           replace_with_one(stmt);
