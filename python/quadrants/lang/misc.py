@@ -722,7 +722,7 @@ def loop_config(
         _valid_subgroup_sizes = {
             cuda: {32},
             metal: {32},
-            amdgpu: {32, 64},
+            amdgpu: {32},
         }
         if arch in _valid_subgroup_sizes:
             valid = _valid_subgroup_sizes[arch]

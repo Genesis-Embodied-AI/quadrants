@@ -727,7 +727,7 @@ def test_subgroup_size_validation(sg_size):
     _valid = {
         qd.cuda: {32},
         qd.metal: {32},
-        qd.amdgpu: {32, 64},
+        qd.amdgpu: {32},
     }
 
     if arch in (qd.cpu, qd.x64, qd.arm64):
