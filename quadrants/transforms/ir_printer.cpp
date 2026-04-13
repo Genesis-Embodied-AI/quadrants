@@ -400,29 +400,36 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(RangeForStmt *for_stmt) override {
-    const std::string loop_name_suffix =
-        for_stmt->loop_name.empty() ? std::string() : fmt::format(" loop_name={}", for_stmt->loop_name);
+    std::string suffix;
+    if (!for_stmt->loop_name.empty())
+      suffix += fmt::format(" loop_name={}", for_stmt->loop_name);
+    if (for_stmt->subgroup_size > 0)
+      suffix += fmt::format(" subgroup_size={}", for_stmt->subgroup_size);
     print("{} : {}for in range({}, {}) {}{}{}{{", for_stmt->name(), for_stmt->reversed ? "reversed " : "",
           for_stmt->begin->name(), for_stmt->end->name(), for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "",
-          block_dim_info(for_stmt->block_dim), loop_name_suffix);
+          block_dim_info(for_stmt->block_dim), suffix);
     for_stmt->body->accept(this);
     print("}}");
     dbg_info_printer_(for_stmt);
   }
 
   void visit(StructForStmt *for_stmt) override {
-    print("{} : struct for in {} {}{}{}{{", for_stmt->name(), for_stmt->snode->get_node_type_name_hinted(),
+    const std::string sg_suffix =
+        for_stmt->subgroup_size > 0 ? fmt::format("subgroup_size={} ", for_stmt->subgroup_size) : "";
+    print("{} : struct for in {} {}{}{}{}{{", for_stmt->name(), for_stmt->snode->get_node_type_name_hinted(),
           for_stmt->is_bit_vectorized ? "(bit_vectorized) " : "", scratch_pad_info(for_stmt->mem_access_opt),
-          block_dim_info(for_stmt->block_dim));
+          block_dim_info(for_stmt->block_dim), sg_suffix);
     for_stmt->body->accept(this);
     print("}}");
     dbg_info_printer_(for_stmt);
   }
 
   void visit(MeshForStmt *for_stmt) override {
-    print("{} : mesh for ({} -> {}) {}{{", for_stmt->name(), mesh::element_type_name(for_stmt->major_from_type),
+    const std::string sg_suffix =
+        for_stmt->subgroup_size > 0 ? fmt::format("subgroup_size={} ", for_stmt->subgroup_size) : "";
+    print("{} : mesh for ({} -> {}) {}{}{{", for_stmt->name(), mesh::element_type_name(for_stmt->major_from_type),
           for_stmt->major_to_types.size() == 0 ? "Unknown" : mesh::element_type_name(*for_stmt->major_to_types.begin()),
-          scratch_pad_info(for_stmt->mem_access_opt));
+          scratch_pad_info(for_stmt->mem_access_opt), sg_suffix);
     for_stmt->body->accept(this);
     print("}}");
     dbg_info_printer_(for_stmt);
@@ -637,11 +644,17 @@ class IRPrinter : public IRVisitor {
       if (!stmt->loop_name.empty()) {
         details += fmt::format(" loop_name={}", stmt->loop_name);
       }
+      if (stmt->subgroup_size > 0) {
+        details += fmt::format(" subgroup_size={}", stmt->subgroup_size);
+      }
     } else if (stmt->task_type == OffloadedTaskType::struct_for) {
       details = fmt::format("struct_for({}) grid_dim={} block_dim={} bls={}", stmt->snode->get_node_type_name_hinted(),
                             stmt->grid_dim, stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
       if (!stmt->loop_name.empty()) {
         details += fmt::format(" loop_name={}", stmt->loop_name);
+      }
+      if (stmt->subgroup_size > 0) {
+        details += fmt::format(" subgroup_size={}", stmt->subgroup_size);
       }
     } else if (stmt->task_type == OffloadedTaskType::mesh_for) {
       details = fmt::format(
@@ -649,6 +662,9 @@ class IRPrinter : public IRVisitor {
           mesh::element_type_name(stmt->major_from_type),
           stmt->major_to_types.size() == 0 ? "Unknown" : mesh::element_type_name(*stmt->major_to_types.begin()),
           stmt->mesh->num_patches, stmt->grid_dim, stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
+      if (stmt->subgroup_size > 0) {
+        details += fmt::format(" subgroup_size={}", stmt->subgroup_size);
+      }
     }
     if (stmt->task_type == OffloadedTaskType::listgen) {
       print("{} = offloaded listgen {}->{}", stmt->name(), stmt->snode->parent->get_node_type_name_hinted(),
