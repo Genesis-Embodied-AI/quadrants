@@ -363,6 +363,7 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->end_value = end_value;
   new_stmt->grid_dim = grid_dim;
   new_stmt->block_dim = block_dim;
+  new_stmt->subgroup_size = subgroup_size;
   new_stmt->reversed = reversed;
   new_stmt->is_bit_vectorized = is_bit_vectorized;
   new_stmt->num_cpu_threads = num_cpu_threads;
