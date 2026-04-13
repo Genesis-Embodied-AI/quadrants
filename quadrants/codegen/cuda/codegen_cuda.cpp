@@ -287,9 +287,11 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
     } else if (op == UnaryOpType::log) {
+      // The fast-math libdevice variants (__nv_fast_*) bypass LLVM FMF entirely (they're plain function
+      // calls, not FP intrinsics), so qd.precise(...) has to opt out of them at the call site here.
+      const bool use_fast = compile_config.fast_math && !stmt->precise;
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // logf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_logf" : "__nv_logf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_logf" : "__nv_logf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_log", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -298,9 +300,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_ERROR("log() for type {} is not supported", input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::sin) {
+      const bool use_fast = compile_config.fast_math && !stmt->precise;
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // sinf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_sinf" : "__nv_sinf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_sinf" : "__nv_sinf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_sin", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -309,9 +311,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         QD_ERROR("sin() for type {} is not supported", input_quadrants_type.to_string());
       }
     } else if (op == UnaryOpType::cos) {
+      const bool use_fast = compile_config.fast_math && !stmt->precise;
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // cosf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_cosf" : "__nv_cosf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_cosf" : "__nv_cosf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_cos", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {

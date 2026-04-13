@@ -882,7 +882,16 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   UNARY_OP_TO_SPIRV(log, Log, 28, 32)
   UNARY_OP_TO_SPIRV(sqrt, Sqrt, 31, 64)
 #undef UNARY_OP_TO_SPIRV
-  else {QD_NOT_IMPLEMENTED} ir_->register_value(stmt->raw_name(), val);
+  else {
+    QD_NOT_IMPLEMENTED
+  }
+  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set, so downstream
+  // shader compilers (including MoltenVK's SPIRV-Cross → MSL translation, which maps it to MSL's `precise`
+  // qualifier) don't substitute approximate hardware variants (e.g. fast `sqrt`, `rsqrt`, `sin`, `exp`).
+  if (stmt->precise && is_real(stmt->element_type())) {
+    ir_->maybe_no_contraction(val, /*precise=*/true);
+  }
+  ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std::string &op, const std::string &tb) {

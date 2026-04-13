@@ -115,11 +115,8 @@ def precise(obj):
     separately if needed.
 
     Notes:
-        * Only **binary** FP ops carry the ``precise`` tag today; unary FP
-          ops (e.g. ``qd.sqrt``, ``qd.rsqrt``) are not yet IEEE-protected
-          even when wrapped — this is a planned follow-up.
-        * Tagging is in-place on the underlying ``BinaryOpExpression``
-          nodes (which are shared via ``shared_ptr``). If you alias a
+        * Tagging is in-place on the underlying ``Expression`` nodes
+          (which are shared via ``shared_ptr``). If you alias a
           subexpression and then wrap one alias in ``qd.precise``, the
           tag travels with the value — both uses get IEEE semantics.
 
