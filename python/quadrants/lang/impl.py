@@ -263,20 +263,20 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 from quadrants.lang.simt._tile16 import _TileSliceProxy  # noqa: I001
 
                 row_slice, col_slice = slice_indices
-                if row_slice.start is None or col_slice.start is None:
-                    raise QuadrantsSyntaxError("Tile16x16 slice: start index is required")
-                row_stop = row_slice.stop if row_slice.stop is not None else row_slice.start + 16
-                col_stop = col_slice.stop if col_slice.stop is not None else col_slice.start + 16
+                if row_slice.start is None or row_slice.stop is None or col_slice.start is None or col_slice.stop is None:
+                    raise QuadrantsSyntaxError("Tile16x16 slice: both start and stop indices are required")
+                row_stop = row_slice.stop
+                col_stop = col_slice.stop
                 batch_idx = non_slice_indices[0] if non_slice_indices else None
-                return _TileSliceProxy(value, row_slice.start, col_slice.start, col_stop, batch_idx, row_stop=row_stop)
+                return _TileSliceProxy(value, row_slice.start, row_stop, col_slice.start, col_stop, batch_idx)
             if len(slice_indices) == 1:
                 # pylint: disable-next=import-outside-toplevel
                 from quadrants.lang.simt._tile16 import _VecSliceProxy  # noqa: I001
 
                 row_slice = slice_indices[0]
-                if row_slice.start is None:
-                    raise QuadrantsSyntaxError("Vec slice: start index is required")
-                row_stop = row_slice.stop if row_slice.stop is not None else row_slice.start + 16
+                if row_slice.start is None or row_slice.stop is None:
+                    raise QuadrantsSyntaxError("Vec slice: both start and stop indices are required")
+                row_stop = row_slice.stop
                 if len(non_slice_indices) == 1:
                     col = non_slice_indices[0]
                     batch_idx = None

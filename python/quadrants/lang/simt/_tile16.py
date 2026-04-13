@@ -57,10 +57,10 @@ class _TileSliceProxy:
 
     _is_deferred = True
 
-    def __init__(self, arr, row_start, col_start, col_stop, batch_idx=None, row_stop=None):
+    def __init__(self, arr, row_start, row_stop, col_start, col_stop, batch_idx=None):
         self.arr = arr
         self.row_start = row_start
-        self.row_stop = row_stop if row_stop is not None else row_start + 16
+        self.row_stop = row_stop
         self.col_start = col_start
         self.col_stop = col_stop
         self.batch_idx = batch_idx

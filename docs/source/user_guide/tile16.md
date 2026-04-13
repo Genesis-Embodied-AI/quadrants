@@ -13,13 +13,14 @@ import quadrants as qd
 from quadrants.lang.simt._tile16 import _make_tile16x16
 
 Tile = _make_tile16x16(qd.f32)
+N = Tile.SIZE  # 16
 
 @qd.func
 def my_blocked_op(A, row0, col0, eps):
     t = Tile.zeros()
-    t[:] = A[row0:row0+16, col0:col0+16]
+    t[:] = A[row0:row0+N, col0:col0+N]
     t.cholesky_(eps)
-    A[row0:row0+16, col0:col0+16] = t
+    A[row0:row0+N, col0:col0+N] = t
 ```
 
 ## Creating a tile
@@ -49,10 +50,9 @@ arr[batch, row0:row1, col0:col1] = t       # store to 3D array
 
 ### Slice value rules
 
-- **Start indices are required.** `arr[:16, :16]` is not allowed; write `arr[0:16, 0:16]`.
-- **Stop indices are optional.** If omitted, they default to `start + 16`. So `arr[row0:, col0:]` is equivalent to `arr[row0:row0+16, col0:col0+16]`.
-- **Row range** `[row0, row1)`: thread `tid` accesses row `row0 + tid`. Threads where `row0 + tid >= row1` are skipped. Additionally, rows beyond the array's shape are skipped. Typically `row1 = row0 + 16`, but smaller ranges work for partial tiles.
-- **Column range** `[col0, col1)`: each active thread loads/stores columns `col0` through `min(col1, arr.shape[-1]) - 1`. Tile columns beyond this range are left as zero (load) or skipped (store). At most 16 columns are accessed (tile registers `r0`–`r15` map to `col0`, `col0+1`, …, `col0+15`).
+- **Both start and stop indices are required.** `arr[:N, :N]` and `arr[0:, 0:]` are not allowed; write `arr[0:N, 0:N]`.
+- **Row range** `[row0, row1)`: thread `tid` accesses row `row0 + tid`. Threads where `row0 + tid >= row1` are skipped. Additionally, rows beyond the array's shape are skipped. Typically `row1 = row0 + Tile.SIZE`, but smaller ranges work for partial tiles.
+- **Column range** `[col0, col1)`: each active thread loads/stores columns `col0` through `min(col1, arr.shape[-1]) - 1`. Tile columns beyond this range are left as zero (load) or skipped (store). At most `Tile.SIZE` columns are accessed (tile registers `r0`–`r15` map to `col0`, `col0+1`, …, `col0+15`).
 - **Batch index** (3D only): a scalar integer indexing the leading dimension.
 
 ### Notes
@@ -89,7 +89,7 @@ v = arr[batch, row0:row1, col]   # 3D: same, with batch index
 t -= qd.outer(v, v)
 ```
 
-The row slice follows the same rules as tile slices: start is required, stop defaults to `start + 16` if omitted. `col` is a scalar column index. Each thread loads `arr[row0 + tid, col]`; threads where `row0 + tid >= row1` get zero.
+The row slice follows the same rules as tile slices: both start and stop are required. `col` is a scalar column index. Each thread loads `arr[row0 + tid, col]`; threads where `row0 + tid >= row1` get zero.
 
 ## Cholesky factorization
 
@@ -109,17 +109,19 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-trian
 
 ## Kernel structure
 
-Tile16x16 requires exactly 16 threads per subgroup. Use `qd.loop_config(block_dim=16)` before the parallel loop:
+Each tile operation uses 16 lanes of a subgroup. Set `block_dim=Tile.SIZE` so that each thread block is one 16-thread group:
 
 ```python
+N = Tile.SIZE
+
 @qd.kernel
 def my_kernel(A: qd.types.NDArray[qd.f32, 3]):
-    qd.loop_config(block_dim=16)
+    qd.loop_config(block_dim=N)
     for i in range(A.shape[0]):
         t = Tile.zeros()
-        t[:] = A[i, 0:16, 0:16]
+        t[:] = A[i, 0:N, 0:N]
         t.cholesky_(1e-6)
-        A[i, 0:16, 0:16] = t
+        A[i, 0:N, 0:N] = t
 ```
 
 ## f64 support
