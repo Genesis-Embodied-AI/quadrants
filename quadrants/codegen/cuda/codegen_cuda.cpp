@@ -703,9 +703,18 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
     }
 
-    // Convert back to f16 if applicable.
+    // Convert back to f16 if applicable. Mirror the base class's pattern: clear FMF on the actual
+    // FP call *before* the FPTrunc overwrites its handle (FPTrunc is not an FPMathOperator). The
+    // AMDGPU override does the same; this branch of CUDA override previously skipped the clear
+    // entirely because the base class never runs for pow/atan2.
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
+      if (stmt->precise) {
+        disable_fast_math(llvm_val[stmt]);
+      }
       llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
+    }
+    if (stmt->precise) {
+      disable_fast_math(llvm_val[stmt]);
     }
   }
 
