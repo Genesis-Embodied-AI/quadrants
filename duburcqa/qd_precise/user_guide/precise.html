@@ -484,16 +484,16 @@
 </tr>
 <tr class="row-odd"><td><p>Vulkan / MoltenVK</p></td>
 <td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">NoContraction</span></code> decoration</p></td>
-<td><p>best-effort: driver stdlib default (typ. 1-2 ULP)</p></td>
+<td><p>best-effort: driver stdlib default (spec only guarantees 2^-11 absolute error)</p></td>
 </tr>
 <tr class="row-even"><td><p>Metal</p></td>
 <td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">NoContraction</span></code> decoration</p></td>
-<td><p>best-effort: driver stdlib default (typ. 1-2 ULP)</p></td>
+<td><p>best-effort: driver stdlib default (spec only guarantees 2^-11 absolute error)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>On SPIR-V backends, <code class="docutils literal notranslate"><span class="pre">NoContraction</span></code> is defined by the spec to apply to arithmetic instructions only; most consumers ignore it on the <code class="docutils literal notranslate"><span class="pre">OpExtInst</span></code> calls used for transcendentals. The decoration is still emitted (it is harmless and future-proofs against downstream toolchains that start honoring it), but correctness of <code class="docutils literal notranslate"><span class="pre">qd.precise(qd.sin(x))</span></code> on Metal / Vulkan currently relies on the driver’s default (non-fast-math) transcendental implementation being accurate enough for your use case.</p>
+<p>On SPIR-V backends, <code class="docutils literal notranslate"><span class="pre">NoContraction</span></code> is defined by the spec to apply to arithmetic instructions only; most consumers ignore it on the <code class="docutils literal notranslate"><span class="pre">OpExtInst</span></code> calls used for transcendentals. The decoration is still emitted (it is harmless and future-proofs against downstream toolchains that start honoring it), but correctness of <code class="docutils literal notranslate"><span class="pre">qd.precise(qd.sin(x))</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.precise(qd.cos(x))</span></code> on Metal / Vulkan cannot be guaranteed through the tag: the Vulkan precision requirements for GLSL.std.450 <code class="docutils literal notranslate"><span class="pre">Sin</span></code>/<code class="docutils literal notranslate"><span class="pre">Cos</span></code> are stated as 2^-11 absolute error, which on inputs whose reference magnitude is smaller than 1 is thousands of ULPs, and drivers are within their rights to saturate that latitude. If you need correctly-rounded sin/cos, use the CPU / CUDA / AMDGPU backends.</p>
 </section>
 <section id="example-dekker-2sum">
 <h2>Example: Dekker 2Sum<a class="headerlink" href="#example-dekker-2sum" title="Link to this heading">#</a></h2>
