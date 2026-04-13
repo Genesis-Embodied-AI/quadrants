@@ -847,7 +847,7 @@ def test_subgroup_size_survives_second_call():
     np.testing.assert_array_equal(first_ids, second_ids)
 
 
-@test_utils.test(offline_cache=False)
+@test_utils.test(arch=qd.gpu, offline_cache=False)
 def test_subgroup_size_in_ir_dump(tmp_path, monkeypatch):
     """subgroup_size should appear in IR dumps when set."""
     monkeypatch.setenv("QD_DUMP_IR", "1")
