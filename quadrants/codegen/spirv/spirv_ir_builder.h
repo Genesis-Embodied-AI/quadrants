@@ -417,7 +417,14 @@ class IRBuilder {
   Value mod(Value a, Value b, bool precise = false);
 
   // Decorate `v` with `NoContraction` when `precise` is true. Helper used by the FP arithmetic builders.
-  void maybe_no_contraction(Value v, bool precise);
+  // Defined inline so the `precise=false` branch folds away at every arithmetic call site (otherwise
+  // every add / sub / mul / div on FP types would pay a function-call + branch even when the op is
+  // not tagged).
+  void maybe_no_contraction(Value v, bool precise) {
+    if (precise) {
+      this->decorate(spv::OpDecorate, v, spv::DecorationNoContraction);
+    }
+  }
   Value eq(Value a, Value b);
   Value ne(Value a, Value b);
   Value lt(Value a, Value b);

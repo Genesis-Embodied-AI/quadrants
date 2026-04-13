@@ -838,7 +838,11 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
-      val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
+      // Forward `stmt->precise` explicitly: the post-hoc `maybe_no_contraction(val, stmt->precise)`
+      // below happens to decorate the same SPIR-V value ID, so the OpFDiv is already tagged, but
+      // relying on that is fragile - if anyone adds an early return before the decorator runs, the
+      // tag is silently lost. Passing it at creation time makes the intent robust.
+      val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val, stmt->precise);
     } else {
       QD_NOT_IMPLEMENTED
     }
@@ -1159,7 +1163,10 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     rhs_value = ir_->cast(dst_type, rhs_value);
     bin_value = ir_->div(lhs_value, rhs_value, bin->precise);
   }
-  else {QD_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
+  else {
+    QD_NOT_IMPLEMENTED;
+  }
+  ir_->register_value(bin_name, bin_value);
 }
 
 void TaskCodegen::visit(TernaryOpStmt *tri) {
