@@ -1,6 +1,6 @@
 # qd.precise
 
-`qd.precise(expr)` marks a floating-point expression as IEEE-strict. Every binary and unary FP op inside the wrapped subtree is evaluated in source order with no reassociation, no FMA contraction, and no algebraic simplification, regardless of the module-level `fast_math` setting. It is the moral equivalent of the `precise` keyword in MSL / HLSL.
+`qd.precise(expr)` marks a floating-point expression as IEEE-strict. Every binary and unary FP op inside the wrapped subtree is evaluated in source order with no reassociation, no FMA contraction, and no algebraic simplification, regardless of the module-level `fast_math` setting. It is equivalent to the `precise` keyword in MSL / HLSL.
 
 ## Why
 
@@ -109,4 +109,3 @@ Without the `qd.precise` wrappers, under `fast_math=True` the compiler recognize
 
 - `qd.precise` is a scalar primitive. Passing a `Vector` / `Matrix` will raise. Apply it to individual components instead, or refactor your expression to use scalar ops inside.
 - The tag is a property of the expression value, not the use site. If you alias a subexpression and then wrap one alias, both uses get IEEE semantics.
-- Caching: a kernel that uses `qd.precise` has a different offline-cache key than a structurally-identical kernel without it, so the two can coexist without collisions.

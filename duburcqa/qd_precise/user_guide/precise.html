@@ -374,7 +374,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="qd-precise">
 <h1>qd.precise<a class="headerlink" href="#qd-precise" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">qd.precise(expr)</span></code> marks a floating-point expression as IEEE-strict. Every binary and unary FP op inside the wrapped subtree is evaluated in source order with no reassociation, no FMA contraction, and no algebraic simplification, regardless of the module-level <code class="docutils literal notranslate"><span class="pre">fast_math</span></code> setting. It is the moral equivalent of the <code class="docutils literal notranslate"><span class="pre">precise</span></code> keyword in MSL / HLSL.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.precise(expr)</span></code> marks a floating-point expression as IEEE-strict. Every binary and unary FP op inside the wrapped subtree is evaluated in source order with no reassociation, no FMA contraction, and no algebraic simplification, regardless of the module-level <code class="docutils literal notranslate"><span class="pre">fast_math</span></code> setting. It is equivalent to the <code class="docutils literal notranslate"><span class="pre">precise</span></code> keyword in MSL / HLSL.</p>
 <section id="why">
 <h2>Why<a class="headerlink" href="#why" title="Link to this heading">#</a></h2>
 <p>Quadrants compiles kernels with <code class="docutils literal notranslate"><span class="pre">fast_math=True</span></code> by default. Under that mode the compiler is free to:</p>
@@ -513,7 +513,6 @@
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> is a scalar primitive. Passing a <code class="docutils literal notranslate"><span class="pre">Vector</span></code> / <code class="docutils literal notranslate"><span class="pre">Matrix</span></code> will raise. Apply it to individual components instead, or refactor your expression to use scalar ops inside.</p></li>
 <li><p>The tag is a property of the expression value, not the use site. If you alias a subexpression and then wrap one alias, both uses get IEEE semantics.</p></li>
-<li><p>Caching: a kernel that uses <code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> has a different offline-cache key than a structurally-identical kernel without it, so the two can coexist without collisions.</p></li>
 </ul>
 </section>
 </section>
