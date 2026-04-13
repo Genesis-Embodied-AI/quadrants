@@ -374,12 +374,12 @@ class AlgSimp : public BasicStmtVisitor {
       if (alg_is_two(lhs))
         a = stmt->rhs;
       cast_to_result_type(a, stmt);
-      auto sum = Stmt::make<BinaryOpStmt>(BinaryOpType::add, a, a);
+      auto sum = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, a, a);
       sum->ret_type = a->ret_type;
       sum->dbg_info = stmt->dbg_info;
       // `2 * a` and `a + a` are IEEE-equivalent, but the synthesized add must carry `precise` so the
       // downstream FMF clear / NoContraction plumbing still sees the user's opt-in tag.
-      static_cast<BinaryOpStmt *>(sum.get())->precise = stmt->precise;
+      sum->precise = stmt->precise;
       stmt->replace_usages_with(sum.get());
       modifier.insert_before(stmt, std::move(sum));
       modifier.erase(stmt);
