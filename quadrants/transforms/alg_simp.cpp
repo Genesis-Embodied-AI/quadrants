@@ -13,11 +13,15 @@ class AlgSimp : public BasicStmtVisitor {
   static constexpr int max_weaken_exponent = 32;
 
  private:
-  void cast_to_result_type(Stmt *&a, Stmt *stmt) {
+  void cast_to_result_type(Stmt *&a, Stmt *stmt, bool precise = false) {
     if (stmt->ret_type != a->ret_type) {
       auto cast = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, a);
       cast->cast_type = stmt->ret_type;
       cast->ret_type = stmt->ret_type;
+      // Propagate the user's `qd.precise(...)` tag: a cast chain inside a precise op (e.g. the `f64
+      // -> f32` cast on `a` for `qd.precise(f32_var ** 2.0)`) must stay IEEE-strict so codegen's FMF
+      // clear / NoContraction reaches it.
+      cast->precise = precise;
       a = cast.get();
       modifier.insert_before(stmt, std::move(cast));
     }
@@ -182,9 +186,12 @@ class AlgSimp : public BasicStmtVisitor {
       }
     }
     auto a = stmt->lhs;
-    cast_to_result_type(a, stmt);
-    auto result = Stmt::make<UnaryOpStmt>(UnaryOpType::sqrt, a);
+    cast_to_result_type(a, stmt, stmt->precise);
+    auto result = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::sqrt, a);
     result->ret_type = a->ret_type;
+    // `a ** 0.5 -> sqrt(a)` is IEEE-equivalent, but the synthesized sqrt must carry `precise` so
+    // codegen clears FMF on it; otherwise `qd.precise(x ** 0.5)` silently gets `afn`-approximated.
+    result->precise = stmt->precise;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(result));
     modifier.erase(stmt);
@@ -211,7 +218,7 @@ class AlgSimp : public BasicStmtVisitor {
 
     // a ** n -> Exponentiation by squaring
     auto a = stmt->lhs;
-    cast_to_result_type(a, stmt);
+    cast_to_result_type(a, stmt, stmt->precise);
     const int exp = exponent;
     Stmt *result = nullptr;
     auto a_power_of_2 = a;
@@ -221,8 +228,11 @@ class AlgSimp : public BasicStmtVisitor {
         if (!result)
           result = a_power_of_2;
         else {
-          auto new_result = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
+          auto new_result = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
           new_result->ret_type = a->ret_type;
+          // Propagate `qd.precise(...)`: the mul chain is IEEE-equivalent to `pow(a, n)`, but every
+          // mul must carry the tag so codegen clears FMF on them.
+          new_result->precise = stmt->precise;
           result = new_result.get();
           modifier.insert_before(stmt, std::move(new_result));
         }
@@ -230,8 +240,9 @@ class AlgSimp : public BasicStmtVisitor {
       current_exponent <<= 1;
       if (current_exponent > exp)
         break;
-      auto new_a_power = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, a_power_of_2, a_power_of_2);
+      auto new_a_power = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, a_power_of_2, a_power_of_2);
       new_a_power->ret_type = a->ret_type;
+      new_a_power->precise = stmt->precise;
       a_power_of_2 = new_a_power.get();
       modifier.insert_before(stmt, std::move(new_a_power));
     }
@@ -264,13 +275,21 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.insert_before(stmt, std::move(s));
     }
 
-    cast_to_result_type(one, stmt);
-    auto new_exponent = Stmt::make<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
+    cast_to_result_type(one, stmt, stmt->precise);
+    auto new_exponent = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
     new_exponent->ret_type = stmt->rhs->ret_type;
-    auto a_to_n = Stmt::make<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
+    // `a ** -n -> 1 / (a ** n)` is IEEE-equivalent, but the synthesized neg / pow / div must carry
+    // `precise` so the subsequent `a ** n -> mul chain` rewrite (exponent_n_optimize) and codegen
+    // see the IEEE-strict tag. `neg` on the integer exponent is tagged for completeness - the flag
+    // has no effect on integer ops but keeps the chain self-consistent for future FP ternary-style
+    // exponents.
+    new_exponent->precise = stmt->precise;
+    auto a_to_n = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
     a_to_n->ret_type = stmt->ret_type;
-    auto result = Stmt::make<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
+    a_to_n->precise = stmt->precise;
+    auto result = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
     result->ret_type = stmt->ret_type;
+    result->precise = stmt->precise;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(new_exponent));
     modifier.insert_before(stmt, std::move(a_to_n));
@@ -467,10 +486,10 @@ class AlgSimp : public BasicStmtVisitor {
         replace_with_zero(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::pow) {
-      if (stmt->precise) {
-        // Preserve the user's `pow()` call verbatim. The helpers below rewrite into sqrt/mul/div chains
-        // whose synthesized stmts inherit `precise=false`, stripping the IEEE-strict tag.
-      } else if (exponent_one_optimize(stmt)) {
+      // Each exponent_* helper propagates `stmt->precise` onto its synthesized stmts (sqrt for ** 0.5,
+      // the mul chain for ** n, and neg/pow/div for ** -n), so `qd.precise(x ** n)` keeps the fast
+      // rewritten form AND the IEEE-strict tag that reaches codegen's FMF clear / NoContraction.
+      if (exponent_one_optimize(stmt)) {
         // a ** 1 -> a
       } else if (exponent_zero_optimize(stmt)) {
         // a ** 0 -> 1
