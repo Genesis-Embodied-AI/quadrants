@@ -806,7 +806,7 @@ def test_subgroup_size_with_struct_for():
     assert all(0 <= v < 32 for v in ids), f"Got out-of-range invocation IDs: {ids}"
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_size_with_adaptive_block_dim():
     """subgroup_size should work when block_dim is not explicitly set
     (i.e. block_dim_adaptive=True, the default)."""
