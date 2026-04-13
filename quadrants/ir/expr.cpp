@@ -56,7 +56,7 @@ Expr precise(const Expr &input) {
   // Walk the subtree; tag every BinaryOpExpression we find. We also recurse through UnaryOpExpression and
   // TernaryOpExpression so users can write things like `qd.precise(qd.bit_cast(a + b, qd.f32))` or
   // `qd.precise(qd.select(c, a + b, x - y))` and still have the inner FP ops tagged. Recursion stops at
-  // any other Expression kind (loads, constants, qd.func calls, etc.) -- semantics inside e.g. a qd.func
+  // any other Expression kind (loads, constants, qd.func calls, etc.) - semantics inside e.g. a qd.func
   // body are governed by that body's own ops. A worklist keeps stack depth bounded since deep AST chains
   // in scientific code aren't rare.
   std::vector<Expr> stack{input};

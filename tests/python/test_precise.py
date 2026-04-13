@@ -19,7 +19,7 @@ N = 1000
 @test_utils.test(default_fp=qd.f32, fast_math=True)
 def test_qd_precise_protects_fast_math():
     """Run Dekker 2Sum twice under `fast_math=True`: once unprotected (the
-    compensation term must be folded to zero -- that is the very bug
+    compensation term must be folded to zero - that is the very bug
     `qd.precise` exists to fix) and once with `qd.precise(...)` wrapping
     every FP op (the compensation term must survive).
     """
@@ -91,7 +91,7 @@ def test_qd_precise_protects_fast_math():
     # distinguishes `precise` from non-`precise` BinaryOpExpressions. The two kernels are structurally
     # identical apart from `qd.precise(...)` wrappers, so if the cache key did not account for `precise`
     # (as was the case before), the second compile would silently reuse the first's artifact and
-    # `df_accum_precise` would produce naive behavior -- caught by the final assertion below.
+    # `df_accum_precise` would produce naive behavior - caught by the final assertion below.
     df_accum_naive(in_arr, out_naive)
     df_accum_precise(in_arr, out_precise)
 
@@ -106,12 +106,12 @@ def test_qd_precise_protects_fast_math():
     # `qd.precise` must restore IEEE semantics locally: the compensation term must be non-trivially non-zero.
     assert abs(float(lo_precise)) > 1e-10, (
         f"qd.precise failed to protect 2Sum: lo={lo_precise!r} (expected |lo| > 1e-10). "
-        f"The backend folded `(a - aa) + (b - bb)` to zero -- IEEE-strict ordering was not honored."
+        f"The backend folded `(a - aa) + (b - bb)` to zero - IEEE-strict ordering was not honored."
     )
 
     # And the compensated sum must beat the naive f32 sum by orders of magnitude. This is the end-to-end
     # guarantee `qd.precise` exists to provide; it also indirectly validates that the offline-cache key
-    # generator distinguishes `precise` from non-`precise` BinaryOpExpressions -- if it did not, the two
+    # generator distinguishes `precise` from non-`precise` BinaryOpExpressions - if it did not, the two
     # kernels (structurally identical apart from `qd.precise(...)` wrappers) would share a compiled artifact
     # and `out_precise` would match `out_naive`.
     ds_err = abs(float(hi_precise) + float(lo_precise) - expected_f64)
@@ -135,7 +135,7 @@ def test_qd_precise_unary_rounding():
     `fast_math=True` happens to give correctly-rounded transcendentals
     anyway and a comparison against it would be uninformative. `sqrt`
     is included because LLVM FMF's `afn` can substitute `rsqrt+refine`
-    which is ~2-3 ULP -- the precise tag must defeat that substitution.
+    which is ~2-3 ULP - the precise tag must defeat that substitution.
     """
 
     @qd.kernel

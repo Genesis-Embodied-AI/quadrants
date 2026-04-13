@@ -111,14 +111,14 @@ def precise(obj):
     binary ops are reached even when wrapped, e.g.
     ``qd.precise(qd.bit_cast(a + b, qd.f32))``. It stops at loads,
     constants, ``qd.func`` calls, ndarray accesses, etc.; semantics inside
-    a ``qd.func`` body are governed by that body's own ops -- wrap calls
+    a ``qd.func`` body are governed by that body's own ops - wrap calls
     separately if needed.
 
     Notes:
         * Tagging is in-place on the underlying ``Expression`` nodes
           (which are shared via ``shared_ptr``). If you alias a
           subexpression and then wrap one alias in ``qd.precise``, the
-          tag travels with the value -- both uses get IEEE semantics.
+          tag travels with the value - both uses get IEEE semantics.
 
     Args:
         obj: A scalar Quadrants expression (typically a chain of FP ops).
