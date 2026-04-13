@@ -429,7 +429,9 @@ void BinaryOpExpression::flatten(FlattenContext *ctx) {
     return;
   }
   auto rhs_stmt = flatten_rvalue(rhs, ctx);
-  ctx->push_back(std::make_unique<BinaryOpStmt>(type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info));
+  auto bin_stmt = std::make_unique<BinaryOpStmt>(type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info);
+  bin_stmt->precise = precise;
+  ctx->push_back(std::move(bin_stmt));
   stmt = ctx->back_stmt();
   stmt->ret_type = ret_type;
 }

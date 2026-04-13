@@ -345,8 +345,9 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.erase(stmt);
       return true;
     }
-    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) && (alg_is_zero(lhs) || alg_is_zero(rhs))) {
-      // fast_math or integral operands: 0 * a -> 0, a * 0 -> 0
+    if (((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
+        (alg_is_zero(lhs) || alg_is_zero(rhs))) {
+      // fast_math or integral operands: 0 * a -> 0, a * 0 -> 0. Skipped when `stmt->precise` is set.
       replace_with_zero(stmt);
       return true;
     }
@@ -395,13 +396,13 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.erase(stmt);
       return true;
     }
-    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) &&
+    if (((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
         irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-      // fast_math or integral operands: a / a -> 1
+      // fast_math or integral operands: a / a -> 1. Skipped when `stmt->precise` is set.
       replace_with_one(stmt);
       return true;
     }
-    if (fast_math && alg_is_optimizable(rhs) && is_real(rhs->ret_type.get_element_type()) &&
+    if (fast_math && !stmt->precise && alg_is_optimizable(rhs) && is_real(rhs->ret_type.get_element_type()) &&
         stmt->op_type != BinaryOpType::floordiv) {
       if (alg_is_zero(rhs)) {
         QD_WARN("Potential division by 0\n{}", stmt->get_tb());
@@ -454,9 +455,9 @@ class AlgSimp : public BasicStmtVisitor {
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
       } else if ((stmt->op_type == BinaryOpType::sub || stmt->op_type == BinaryOpType::bit_xor) &&
-                 (fast_math || is_integral(stmt->ret_type.get_element_type())) &&
+                 ((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
                  irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-        // fast_math or integral operands: a -^ a -> 0
+        // fast_math or integral operands: a -^ a -> 0. Skipped when `stmt->precise` is set.
         replace_with_zero(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::pow) {
@@ -500,9 +501,9 @@ class AlgSimp : public BasicStmtVisitor {
         modifier.erase(stmt);
       }
     } else if (is_comparison(stmt->op_type)) {
-      if ((fast_math || is_integral(stmt->lhs->ret_type.get_element_type())) &&
+      if (((fast_math && !stmt->precise) || is_integral(stmt->lhs->ret_type.get_element_type())) &&
           irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-        // fast_math or integral operands: a == a -> 1, a != a -> 0
+        // fast_math or integral operands: a == a -> 1, a != a -> 0. Skipped when `stmt->precise` is set.
         if (stmt->op_type == BinaryOpType::cmp_eq || stmt->op_type == BinaryOpType::cmp_ge ||
             stmt->op_type == BinaryOpType::cmp_le) {
           replace_with_one(stmt);

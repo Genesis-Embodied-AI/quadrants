@@ -747,6 +747,24 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
       llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
     }
   }
+
+  // qd.precise(...) marks this op as IEEE-strict: clear every fast-math flag (inherited from the module-level
+  // `fast_math` setting via the IRBuilder default) so LLVM can't reassociate, contract, or otherwise simplify
+  // this instruction. Note: `setFastMathFlags(empty)` only OR's in flags on this LLVM version, so we have to
+  // clear each individual flag.
+  if (stmt->precise) {
+    if (auto *inst = llvm::dyn_cast<llvm::Instruction>(llvm_val[stmt])) {
+      if (llvm::isa<llvm::FPMathOperator>(inst)) {
+        inst->setHasAllowReassoc(false);
+        inst->setHasNoNaNs(false);
+        inst->setHasNoInfs(false);
+        inst->setHasNoSignedZeros(false);
+        inst->setHasAllowReciprocal(false);
+        inst->setHasAllowContract(false);
+        inst->setHasApproxFunc(false);
+      }
+    }
+  }
 }
 
 void TaskCodeGenLLVM::visit(TernaryOpStmt *stmt) {

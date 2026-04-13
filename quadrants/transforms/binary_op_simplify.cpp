@@ -82,9 +82,8 @@ class BinaryOpSimp : public BasicStmtVisitor {
       stmt->rhs = const_lhs;
       operand_swapped = true;
     }
-    // Disable other optimizations if fast_math=True and the data type is not
-    // integral.
-    if (!fast_math && !is_integral(stmt->ret_type)) {
+    // Disable other optimizations if fast_math=False (or this op is `precise`) and the data type is not integral.
+    if ((!fast_math || stmt->precise) && !is_integral(stmt->ret_type)) {
       return;
     }
 

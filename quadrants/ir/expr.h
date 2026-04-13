@@ -125,6 +125,11 @@ Expr bit_cast(const Expr &input) {
   return quadrants::lang::bit_cast(input, get_data_type<T>());
 }
 
+// Recursively tag every BinaryOpExpression in `input`'s subtree as `precise` (IEEE-strict; no reassociation,
+// contraction, or algebraic simplification), regardless of module-level `fast_math`. Recursion stops at any
+// non-binary-op node (loads, constants, function calls, casts, ...). Mirrors MSL/HLSL `precise`.
+Expr precise(const Expr &input);
+
 // like Expr::Expr, but allows to explicitly specify the type
 template <typename T>
 Expr value(const T &val) {
