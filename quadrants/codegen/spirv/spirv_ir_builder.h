@@ -407,7 +407,7 @@ class IRBuilder {
 
   // Expressions
   // For FP operands, when `precise` is true, the result is decorated with `NoContraction` so downstream shader
-  // compilers (including MoltenVK's SPIRV-Cross → MSL translation, which maps it to MSL's `precise` qualifier)
+  // compilers (including MoltenVK's SPIRV-Cross -> MSL translation, which maps it to MSL's `precise` qualifier)
   // preserve source-order arithmetic. Without this, compensated-arithmetic algorithms like Dekker / Kahan 2Sum
   // get folded away under fast-math. Integer ops ignore `precise`.
   Value add(Value a, Value b, bool precise = false);
