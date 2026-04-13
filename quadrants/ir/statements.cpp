@@ -223,6 +223,7 @@ std::unique_ptr<Stmt> RangeForStmt::clone() const {
                                                  block_dim, strictly_serialized);
   new_stmt->reversed = reversed;
   new_stmt->loop_name = loop_name;
+  new_stmt->subgroup_size = subgroup_size;
   return new_stmt;
 }
 
@@ -244,6 +245,7 @@ std::unique_ptr<Stmt> StructForStmt::clone() const {
   auto new_stmt = std::make_unique<StructForStmt>(snode, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim);
   new_stmt->mem_access_opt = mem_access_opt;
   new_stmt->loop_name = loop_name;
+  new_stmt->subgroup_size = subgroup_size;
   return new_stmt;
 }
 
@@ -269,6 +271,7 @@ std::unique_ptr<Stmt> MeshForStmt::clone() const {
   new_stmt->major_to_types = major_to_types;
   new_stmt->minor_relation_types = minor_relation_types;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->subgroup_size = subgroup_size;
   return new_stmt;
 }
 
