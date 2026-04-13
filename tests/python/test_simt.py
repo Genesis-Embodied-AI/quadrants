@@ -780,6 +780,134 @@ def test_subgroup_size_invocation_ids():
 
 
 @test_utils.test(arch=qd.vulkan)
+def test_vulkan_default_subgroup_size_32():
+    """Without explicit subgroup_size, Vulkan should pin subgroup size to 32
+    (when VK_EXT_subgroup_size_control is available), producing IDs 0..31."""
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel
+    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            result[i] = qd.simt.subgroup.invocation_id()
+
+    read_ids(out)
+    ids = out.to_numpy()
+    assert set(ids) == set(range(N)), f"Expected IDs 0..{N-1}, got {sorted(set(ids))}"
+
+
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+def test_subgroup_size_with_struct_for():
+    """subgroup_size should propagate through struct-for loops over fields."""
+    N = 32
+    x = qd.field(qd.i32, shape=(N,))
+    ids_field = qd.field(qd.i32, shape=(N,))
+
+    @qd.kernel
+    def fill():
+        for i in x:
+            x[i] = i
+
+    @qd.kernel
+    def read_ids():
+        qd.loop_config(block_dim=N, subgroup_size=32)
+        for i in x:
+            ids_field[i] = qd.simt.subgroup.invocation_id()
+
+    fill()
+    read_ids()
+    ids = ids_field.to_numpy()
+    assert all(0 <= v < 32 for v in ids), f"Got out-of-range invocation IDs: {ids}"
+
+
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+def test_subgroup_size_with_adaptive_block_dim():
+    """subgroup_size should work when block_dim is not explicitly set
+    (i.e. block_dim_adaptive=True, the default)."""
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel
+    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(subgroup_size=32)
+        for i in range(N):
+            result[i] = qd.simt.subgroup.invocation_id()
+
+    read_ids(out)
+    ids = out.to_numpy()
+    assert all(0 <= v < 32 for v in ids), f"Got out-of-range invocation IDs: {ids}"
+
+
+@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+def test_subgroup_size_survives_second_call():
+    """subgroup_size must produce correct results on second call (exercises
+    offline cache serialization round-trip for the kernel)."""
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel
+    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=N, subgroup_size=N)
+        for i in range(N):
+            result[i] = qd.simt.subgroup.invocation_id()
+
+    read_ids(out)
+    first_ids = out.to_numpy().copy()
+    assert set(first_ids) == set(range(N))
+
+    read_ids(out)
+    second_ids = out.to_numpy()
+    assert set(second_ids) == set(range(N))
+    np.testing.assert_array_equal(first_ids, second_ids)
+
+
+@test_utils.test(offline_cache=False)
+def test_subgroup_size_in_ir_dump(tmp_path, monkeypatch):
+    """subgroup_size should appear in IR dumps when set."""
+    monkeypatch.setenv("QD_DUMP_IR", "1")
+    qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
+
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel
+    def k(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=N, subgroup_size=32)
+        for i in range(N):
+            result[i] = i
+
+    k(out)
+    qd.sync()
+
+    offload_files = list(tmp_path.glob("*after_offload*"))
+    assert len(offload_files) > 0, f"No after_offload IR dumps in {tmp_path}"
+    combined = "\n".join(f.read_text() for f in offload_files)
+    assert "subgroup_size=32" in combined, f"subgroup_size=32 not found in IR dump:\n{combined}"
+
+
+@test_utils.test(arch=[qd.cuda])
+def test_subgroup_size_with_graph():
+    """subgroup_size should work with CUDA graphs (graph=True)."""
+    N = 32
+    out = qd.ndarray(dtype=qd.i32, shape=(N,))
+
+    @qd.kernel(graph=True)
+    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=N, subgroup_size=32)
+        for i in range(N):
+            result[i] = qd.simt.subgroup.invocation_id()
+
+    read_ids(out)
+    ids = out.to_numpy()
+    assert set(ids) == set(range(N)), f"Expected IDs 0..{N-1}, got {sorted(set(ids))}"
+
+    read_ids(out)
+    ids2 = out.to_numpy()
+    np.testing.assert_array_equal(ids, ids2)
+
+
+@test_utils.test(arch=qd.vulkan)
 def test_vulkan_subgroup_id_survives_reinit():
     """Regression test: SubgroupLocalInvocationId must stay stable across
     repeated qd.init(vulkan)/qd.reset() cycles.  An NVIDIA driver bug
