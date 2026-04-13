@@ -90,7 +90,7 @@ def ensure_field_allocated() -> None:
         current_prog = impl.get_runtime()._prog
         if _cov_field is not None and _cov_field_prog is current_prog:
             return
-        _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))
+        _cov_field = qd.field(dtype=qd.i32, shape=(_MAX_PROBES,))  # type: ignore[assignment]
         _cov_field_prog = current_prog
 
 
