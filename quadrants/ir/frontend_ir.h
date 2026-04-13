@@ -888,6 +888,7 @@ class ASTBuilder {
       config.uniform = false;
       config.mem_access_opt.clear();
       config.block_dim = 0;
+      config.subgroup_size = 0;
       config.strictly_serialized = false;
       config.loop_name.clear();
     }
