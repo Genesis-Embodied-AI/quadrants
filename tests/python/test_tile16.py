@@ -392,3 +392,50 @@ def test_tile16_cholesky(qd_dtype, src_offset, dst_delta):
         dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE
     ]
     np.testing.assert_allclose(result, untouched)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_trsm(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    a_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    b_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        a_in: qd.types.NDArray[qd_dtype, 2],
+        b_in: qd.types.NDArray[qd_dtype, 2],
+        out: qd.types.NDArray[qd_dtype, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            L = Tile()
+            L._load(a_in, 0, _TILE, 0, _TILE)
+            B = Tile()
+            B._load(b_in, 0, _TILE, 0, _TILE)
+            L.solve_triangular_(B)
+            B._store(out, 0, _TILE, 0, _TILE)
+
+    A = _make_spd(np_dtype)
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
+    B = np.random.RandomState(123).randn(_TILE, _TILE).astype(np_dtype)
+
+    a_arr.from_numpy(L_ref)
+    b_arr.from_numpy(B)
+    k1(a_arr, b_arr, dst)
+
+    X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
+        np_dtype
+    )
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-4
+    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_solve_triangular_upper_raises():
+    Tile = _make_tile16x16(qd.f32)
+    with pytest.raises(TypeError, match="only lower=True"):
+        Tile().solve_triangular_(Tile(), lower=False)

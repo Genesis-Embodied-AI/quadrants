@@ -419,6 +419,34 @@ def _make_tile16x16_class(dtype):
                     new_val = (self._get_col(k) - dot) / diag_k  # type: ignore[reportOperatorIssue]
                     self._set_col(k, new_val)
 
+        @qd.func
+        def _trsm(self, L):
+            """In-place triangular solve: solve self @ L^T = B (original self).
+
+            L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).
+            On return, self holds the solution X.
+            """
+            for c in range(_TILE):
+                dot = qd.cast(0.0, dtype)
+                for j in range(_TILE):
+                    if c > j:
+                        Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
+                        dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
+
+                diag_c = qd.simt.subgroup.shuffle(L._get_col(c), qd.u32(c))
+                new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
+                self._set_col(c, new_val)
+
+        def solve_triangular_(self, B, lower=True):
+            """Triangular solve: X @ self^T = B, storing result X in B in-place.
+
+            self must be lower-triangular (e.g. from cholesky_()).
+            Only lower=True is supported.
+            """
+            if not lower:
+                raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
+            B._trsm(self)
+
     # StructType.__call__ already defaults missing args to 0, so Tile()
     # produces a zero-initialized tile without needing default values in the
     # class definition (which @qd.dataclass doesn't support).
