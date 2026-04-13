@@ -68,8 +68,7 @@ Expr precise(const Expr &input) {
       stack.push_back(bin->lhs);
       stack.push_back(bin->rhs);
     } else if (auto un = cur.cast<UnaryOpExpression>()) {
-      // Unary ops (cast, bit_cast, sqrt, ...) themselves aren't yet tagged — UnaryOpStmt has no `precise`
-      // field. But we still recurse so any wrapped binary ops are reached.
+      un->precise = true;
       stack.push_back(un->operand);
     } else if (auto tri = cur.cast<TernaryOpExpression>()) {
       stack.push_back(tri->op1);

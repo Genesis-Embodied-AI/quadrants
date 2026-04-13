@@ -372,6 +372,9 @@ class UnaryOpExpression : public Expression {
   UnaryOpType type;
   Expr operand;
   DataType cast_type;
+  // Set by `qd.precise(...)` to mark the resulting UnaryOpStmt as IEEE-strict regardless of the module-level
+  // `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  bool precise{false};
 
   UnaryOpExpression(UnaryOpType type, const Expr &operand, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), type(type), operand(operand) {

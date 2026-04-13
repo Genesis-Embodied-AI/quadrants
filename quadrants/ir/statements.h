@@ -155,6 +155,9 @@ class UnaryOpStmt : public Stmt {
   UnaryOpType op_type;
   Stmt *operand;
   DataType cast_type;
+  // When true, this op must be evaluated in source order with IEEE semantics (no contraction, no approximate
+  // implementations) regardless of the module-level `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  bool precise{false};
 
   UnaryOpStmt(UnaryOpType op_type, Stmt *operand, const DebugInfo &dbg_info = DebugInfo());
 
@@ -165,7 +168,7 @@ class UnaryOpStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type, precise);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

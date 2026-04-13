@@ -261,6 +261,7 @@ void UnaryOpExpression::flatten(FlattenContext *ctx) {
   if (is_cast()) {
     unary->cast_type = cast_type;
   }
+  unary->precise = precise;
   stmt = unary.get();
   stmt->ret_type = ret_type;
   ctx->push_back(std::move(unary));

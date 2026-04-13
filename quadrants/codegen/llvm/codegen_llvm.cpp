@@ -471,6 +471,23 @@ void TaskCodeGenLLVM::visit(UnaryOpStmt *stmt) {
     emit_extra_unary(stmt);
   }
 #undef UNARY_INTRINSIC
+
+  // qd.precise(...) marks this op as IEEE-strict: clear every fast-math flag (inherited from the module-level
+  // `fast_math` setting via the IRBuilder default) so LLVM cannot substitute approximate variants (e.g.
+  // sqrt → rsqrt+refine, sin → libm fast variant) or otherwise simplify this instruction.
+  if (stmt->precise) {
+    if (auto *inst = llvm::dyn_cast<llvm::Instruction>(llvm_val[stmt])) {
+      if (llvm::isa<llvm::FPMathOperator>(inst)) {
+        inst->setHasAllowReassoc(false);
+        inst->setHasNoNaNs(false);
+        inst->setHasNoInfs(false);
+        inst->setHasNoSignedZeros(false);
+        inst->setHasAllowReciprocal(false);
+        inst->setHasAllowContract(false);
+        inst->setHasApproxFunc(false);
+      }
+    }
+  }
 }
 
 void TaskCodeGenLLVM::create_elementwise_binary(BinaryOpStmt *stmt,
