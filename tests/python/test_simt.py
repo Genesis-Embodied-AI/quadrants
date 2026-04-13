@@ -871,7 +871,7 @@ def test_subgroup_size_in_ir_dump(tmp_path, monkeypatch):
     assert "subgroup_size=32" in combined, f"subgroup_size=32 not found in IR dump:\n{combined}"
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_size_with_graph():
     """subgroup_size should work with CUDA graphs (graph=True)."""
     N = 32
