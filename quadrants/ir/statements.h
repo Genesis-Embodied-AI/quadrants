@@ -248,6 +248,9 @@ class BinaryOpStmt : public Stmt {
   BinaryOpType op_type;
   Stmt *lhs, *rhs;
   bool is_bit_vectorized;  // TODO: remove this field
+  // When true, this op must be evaluated in source order with IEEE semantics (no reassociation, no contraction,
+  // no algebraic folds), regardless of the module-level `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  bool precise{false};
 
   BinaryOpStmt(BinaryOpType op_type,
                Stmt *lhs,
@@ -264,7 +267,7 @@ class BinaryOpStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized, precise);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

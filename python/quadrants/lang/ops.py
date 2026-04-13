@@ -95,6 +95,55 @@ def cast(obj, dtype):
     return expr.Expr(_qd_core.value_cast(expr.Expr(obj).ptr, dtype))
 
 
+def precise(obj):
+    """Mark a floating-point expression as IEEE-strict.
+
+    Every binary FP op inside ``obj`` is evaluated in source order with no
+    reassociation, no FMA contraction, and no algebraic simplification —
+    regardless of the module-level :attr:`fast_math` setting. This is the
+    moral equivalent of MSL's / HLSL's ``precise`` keyword and lets you
+    keep ``fast_math=True`` globally while protecting compensated-arithmetic
+    blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
+    away.
+
+    Recursion descends through ``BinaryOp``, ``UnaryOp`` (cast, bit_cast,
+    neg, sqrt, ...), and ``TernaryOp`` (select) wrappers so that inner
+    binary ops are reached even when wrapped, e.g.
+    ``qd.precise(qd.bit_cast(a + b, qd.f32))``. It stops at loads,
+    constants, ``qd.func`` calls, ndarray accesses, etc.; semantics inside
+    a ``qd.func`` body are governed by that body's own ops — wrap calls
+    separately if needed.
+
+    Notes:
+        * Only **binary** FP ops carry the ``precise`` tag today; unary FP
+          ops (e.g. ``qd.sqrt``, ``qd.rsqrt``) are not yet IEEE-protected
+          even when wrapped — this is a planned follow-up.
+        * Tagging is in-place on the underlying ``BinaryOpExpression``
+          nodes (which are shared via ``shared_ptr``). If you alias a
+          subexpression and then wrap one alias in ``qd.precise``, the
+          tag travels with the value — both uses get IEEE semantics.
+
+    Args:
+        obj: A scalar Quadrants expression (typically a chain of FP ops).
+
+    Returns:
+        The same expression, with every reachable binary op tagged as
+        ``precise``. Constants and non-FP ops are unaffected.
+
+    Example::
+
+        >>> @qd.func
+        >>> def fast_two_sum(a, b):
+        >>>     # Local IEEE region — survives even with fast_math=True.
+        >>>     s = qd.precise(a + b)
+        >>>     e = qd.precise(b - (s - a))
+        >>>     return s, e
+    """
+    if is_quadrants_class(obj):
+        raise ValueError("Cannot apply precise on Quadrants classes")
+    return expr.Expr(_qd_core.precise(expr.Expr(obj).ptr))
+
+
 def bit_cast(obj, dtype):
     """Copy and cast a scalar to a specified data type with its underlying
     bits preserved. Must be called in quadrants scope.
@@ -1514,6 +1563,7 @@ __all__ = [
     "atomic_mul",
     "bit_cast",
     "bit_shr",
+    "precise",
     "cast",
     "ceil",
     "cos",

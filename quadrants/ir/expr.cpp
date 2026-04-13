@@ -52,6 +52,34 @@ Expr bit_cast(const Expr &input, DataType dt) {
   return Expr::make<UnaryOpExpression>(UnaryOpType::cast_bits, input, dt);
 }
 
+Expr precise(const Expr &input) {
+  // Walk the subtree; tag every BinaryOpExpression we find. We also recurse through UnaryOpExpression and
+  // TernaryOpExpression so users can write things like `qd.precise(qd.bit_cast(a + b, qd.f32))` or
+  // `qd.precise(qd.select(c, a + b, x - y))` and still have the inner FP ops tagged. Recursion stops at
+  // any other Expression kind (loads, constants, qd.func calls, etc.) — semantics inside e.g. a qd.func
+  // body are governed by that body's own ops. A worklist keeps stack depth bounded since deep AST chains
+  // in scientific code aren't rare.
+  std::vector<Expr> stack{input};
+  while (!stack.empty()) {
+    Expr cur = std::move(stack.back());
+    stack.pop_back();
+    if (auto bin = cur.cast<BinaryOpExpression>()) {
+      bin->precise = true;
+      stack.push_back(bin->lhs);
+      stack.push_back(bin->rhs);
+    } else if (auto un = cur.cast<UnaryOpExpression>()) {
+      // Unary ops (cast, bit_cast, sqrt, ...) themselves aren't yet tagged — UnaryOpStmt has no `precise`
+      // field. But we still recurse so any wrapped binary ops are reached.
+      stack.push_back(un->operand);
+    } else if (auto tri = cur.cast<TernaryOpExpression>()) {
+      stack.push_back(tri->op1);
+      stack.push_back(tri->op2);
+      stack.push_back(tri->op3);
+    }
+  }
+  return input;
+}
+
 Expr &Expr::operator=(const Expr &o) {
   set(o);
   return *this;

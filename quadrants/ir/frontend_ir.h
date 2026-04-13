@@ -395,6 +395,9 @@ class BinaryOpExpression : public Expression {
  public:
   BinaryOpType type;
   Expr lhs, rhs;
+  // Set by `qd.precise(...)` to mark the resulting BinaryOpStmt as IEEE-strict regardless of the module-level
+  // `fast_math` setting. Mirrors MSL/HLSL `precise`.
+  bool precise{false};
 
   BinaryOpExpression(const BinaryOpType &type, const Expr &lhs, const Expr &rhs) : type(type), lhs(lhs), rhs(rhs) {
   }

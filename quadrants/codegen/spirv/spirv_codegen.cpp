@@ -1048,10 +1048,10 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     }
     bin_value = ir_->cast(dst_type, bin_value);
   }
-#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
-  else if (op_type == BinaryOpType::op) {        \
-    bin_value = ir_->func(lhs_value, rhs_value); \
-    bin_value = ir_->cast(dst_type, bin_value);  \
+#define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)                \
+  else if (op_type == BinaryOpType::op) {                      \
+    bin_value = ir_->func(lhs_value, rhs_value, bin->precise); \
+    bin_value = ir_->cast(dst_type, bin_value);                \
   }
 
   BINARY_OP_TO_SPIRV_ARTHIMATIC(add, add)
@@ -1144,7 +1144,7 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   else if (op_type == BinaryOpType::truediv) {
     lhs_value = ir_->cast(dst_type, lhs_value);
     rhs_value = ir_->cast(dst_type, rhs_value);
-    bin_value = ir_->div(lhs_value, rhs_value);
+    bin_value = ir_->div(lhs_value, rhs_value, bin->precise);
   }
   else {QD_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
 }
