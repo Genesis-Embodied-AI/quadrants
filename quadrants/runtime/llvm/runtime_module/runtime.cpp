@@ -51,68 +51,6 @@ __asm__(".symver powf,powf@GLIBC_2.2.5");
 __asm__(".symver expf,expf@GLIBC_2.2.5");
 #endif
 
-#if (defined(__linux___) && defined(__aarch64__) && defined(__clang__))
-// JIT session error: Symbols not found: [ __aarch64_ldadd4_acq_rel, ... ]
-// This is an issue with newer clang versions (>13) on aarch64, where
-// atomics are outlined by default. The JIT environment does not
-// automatically link libatomic/libgcc.
-//
-// We provide the implementations here using inline assembly. The
-// implementations use a load-exclusive/store-exclusive loop to be compatible
-// with all ARMv8-A processors, including those that do not support the LSE
-// (Large System Extensions) instructions.
-__asm__(
-    // Atomic swap for 4 bytes (32-bit integer)
-    // Arguments: x0 = pointer, w1 = new value
-    // Returns: original value in w0
-    ".globl __aarch64_swp4_acq_rel\n"
-    "__aarch64_swp4_acq_rel:\n"
-    "1:\n"
-    "  ldaxr w2, [x0]\n"      // Load-acquire exclusive
-    "  stlxr w3, w1, [x0]\n"  // Store-release exclusive
-    "  cbnz w3, 1b\n"         // Retry if store failed
-    "  mov w0, w2\n"          // Return original value
-    "  ret\n"
-
-    // Atomic swap for 8 bytes (64-bit integer)
-    // Arguments: x0 = pointer, x1 = new value
-    // Returns: original value in x0
-    ".globl __aarch64_swp8_acq_rel\n"
-    "__aarch64_swp8_acq_rel:\n"
-    "1:\n"
-    "  ldaxr x2, [x0]\n"
-    "  stlxr w3, x1, [x0]\n"
-    "  cbnz w3, 1b\n"
-    "  mov x0, x2\n"
-    "  ret\n"
-
-    // Atomic load-add for 4 bytes (32-bit integer)
-    // Arguments: x0 = pointer, w1 = value to add
-    // Returns: original value in w0
-    ".globl __aarch64_ldadd4_acq_rel\n"
-    "__aarch64_ldadd4_acq_rel:\n"
-    "1:\n"
-    "  ldaxr w2, [x0]\n"
-    "  add w3, w2, w1\n"
-    "  stlxr w4, w3, [x0]\n"
-    "  cbnz w4, 1b\n"
-    "  mov w0, w2\n"
-    "  ret\n"
-
-    // Atomic load-add for 8 bytes (64-bit integer)
-    // Arguments: x0 = pointer, x1 = value to add
-    // Returns: original value in x0
-    ".globl __aarch64_ldadd8_acq_rel\n"
-    "__aarch64_ldadd8_acq_rel:\n"
-    "1:\n"
-    "  ldaxr x2, [x0]\n"
-    "  add x3, x2, x1\n"
-    "  stlxr w4, x3, [x0]\n"
-    "  cbnz w4, 1b\n"
-    "  mov x0, x2\n"
-    "  ret\n");
-#endif
-
 // For accessing struct fields
 #define STRUCT_FIELD(S, F)                              \
   extern "C" decltype(S::F) S##_get_##F(S *s) {         \
