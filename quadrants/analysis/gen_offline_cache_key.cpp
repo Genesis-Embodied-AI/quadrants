@@ -106,6 +106,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   void visit(TernaryOpExpression *expr) override {
     emit(ExprOpCode::TernaryOpExpression);
     emit(expr->type);
+    emit(expr->precise);
     emit(expr->op1);
     emit(expr->op2);
     emit(expr->op3);

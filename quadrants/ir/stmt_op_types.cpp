@@ -77,6 +77,7 @@ std::string ternary_type_name(TernaryOpType type) {
 
     REGISTER_TYPE(select);
     REGISTER_TYPE(ifte);
+    REGISTER_TYPE(fma);
 
 #undef REGISTER_TYPE
     default:

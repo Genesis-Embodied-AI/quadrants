@@ -823,6 +823,17 @@ def clz(x):
     return ops.clz(x)
 
 
+@func
+def fma(a, b, c):
+    """Fused multiply-add: ``a * b + c`` as a single rounded operation.
+
+    Wraps :func:`quadrants.lang.ops.fma`. Primary use case is compensated
+    FP arithmetic (TwoProd error-free transform, Fast2Sum + FMA for
+    double-single types); see the ``ops.fma`` docstring for details.
+    """
+    return ops.fma(a, b, c)
+
+
 __all__ = [
     "acos",
     "asin",
@@ -840,6 +851,7 @@ __all__ = [
     "exp",
     "eye",
     "floor",
+    "fma",
     "fract",
     "inf",
     "inverse",

@@ -280,6 +280,9 @@ class TernaryOpStmt : public Stmt {
  public:
   TernaryOpType op_type;
   Stmt *op1, *op2, *op3;
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
+  // Only FP ternaries (currently `fma`) honor this; for `select`/`ifte` it is ignored.
+  bool precise{false};
 
   TernaryOpStmt(TernaryOpType op_type, Stmt *op1, Stmt *op2, Stmt *op3, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), op_type(op_type), op1(op1), op2(op2), op3(op3) {
@@ -293,7 +296,7 @@ class TernaryOpStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op1, op2, op3);
+  QD_STMT_DEF_FIELDS(ret_type, op1, op2, op3, precise);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

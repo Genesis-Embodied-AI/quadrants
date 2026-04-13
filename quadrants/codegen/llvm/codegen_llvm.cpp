@@ -789,9 +789,22 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
 }
 
 void TaskCodeGenLLVM::visit(TernaryOpStmt *stmt) {
-  QD_ASSERT(stmt->op_type == TernaryOpType::select);
-  llvm_val[stmt] =
-      builder->CreateSelect(builder->CreateIsNotNull(llvm_val[stmt->op1]), llvm_val[stmt->op2], llvm_val[stmt->op3]);
+  if (stmt->op_type == TernaryOpType::select) {
+    llvm_val[stmt] =
+        builder->CreateSelect(builder->CreateIsNotNull(llvm_val[stmt->op1]), llvm_val[stmt->op2], llvm_val[stmt->op3]);
+    return;
+  }
+  QD_ASSERT(stmt->op_type == TernaryOpType::fma);
+  // Use the strict `llvm.fma.*` intrinsic (single rounding) rather than `llvm.fmuladd.*` (may fuse or not).
+  // `qd.fma(a, b, c)` guarantees a single rounded multiply-add regardless of backend fast-math flags, which
+  // is precisely the contract compensated-arithmetic primitives (TwoProd, Fast2Sum + FMA, ...) rely on.
+  auto v0 = llvm_val[stmt->op1];
+  auto v1 = llvm_val[stmt->op2];
+  auto v2 = llvm_val[stmt->op3];
+  llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::fma, {v0->getType()}, {v0, v1, v2});
+  if (stmt->precise) {
+    disable_fast_math(llvm_val[stmt]);
+  }
 }
 
 void TaskCodeGenLLVM::visit(IfStmt *if_stmt) {

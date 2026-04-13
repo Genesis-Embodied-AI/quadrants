@@ -414,6 +414,10 @@ class TernaryOpExpression : public Expression {
  public:
   TernaryOpType type;
   Expr op1, op2, op3;
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
+  // Only meaningful for FP ternaries (currently `fma`); `select`/`ifte` are control-flow-shaped and
+  // leave this at the default.
+  bool precise{false};
 
   TernaryOpExpression(TernaryOpType type, const Expr &op1, const Expr &op2, const Expr &op3) : type(type) {
     this->op1.set(op1);

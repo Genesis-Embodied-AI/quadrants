@@ -112,3 +112,18 @@ Without the `qd.precise` wrappers, under `fast_math=True` the compiler recognize
 
 - `qd.precise` is a scalar primitive. Passing a `Vector` / `Matrix` will raise. Apply it to individual components instead, or refactor your expression to use scalar ops inside.
 - `qd.precise` does not mutate its input. It returns a fresh expression subtree with every reachable FP op tagged; the original expression is unchanged. Reusing the original elsewhere is safe and never inherits the tag.
+
+## Companion: `qd.math.fma`
+
+Compensated-arithmetic blocks typically need two things: (1) IEEE-strict ordering on ordinary ops (provided by `qd.precise`) and (2) a guaranteed single-rounding fused multiply-add for error-free transforms. The second is exposed separately as `qd.math.fma(a, b, c)`:
+
+```python
+# Two-product error-free transform (TwoProd).
+# Returns p = round(a*b) and e such that a*b = p + e exactly.
+p = a * b
+e = qd.math.fma(a, b, -p)     # single rounding: exact residual of p
+```
+
+`qd.math.fma` is lowered to the native FMA on every backend: `llvm.fma` on CPU, `__nv_fma` / `__nv_fmaf` (libdevice) on CUDA, `GLSL.std.450 Fma` on Vulkan / Metal. Unlike relying on the compiler to contract `mul; add` into FMA (which requires both fast-math flags to permit contraction *and* the inputs to survive algebraic simplification), this is an explicit instruction - so the TwoProd residual, Fast2Sum, and double-single multiply patterns port over directly without needing per-backend contraction hints.
+
+Backends without hardware FMA fall back to a regular mul-then-add and lose the single-rounding guarantee; on those targets compensated algorithms should be rewritten to the Dekker / Veltkamp-split form.

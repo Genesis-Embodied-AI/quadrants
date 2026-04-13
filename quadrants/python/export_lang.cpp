@@ -687,6 +687,7 @@ void export_lang(py::module &m) {
 
   DEFINE_EXPRESSION_OP(select)
   DEFINE_EXPRESSION_OP(ifte)
+  DEFINE_EXPRESSION_OP(fma)
 
   DEFINE_EXPRESSION_OP(cmp_le)
   DEFINE_EXPRESSION_OP(cmp_lt)

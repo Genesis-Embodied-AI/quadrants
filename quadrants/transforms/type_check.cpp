@@ -376,6 +376,25 @@ class TypeCheck : public IRVisitor {
         stmt->op3 = cast_stmt;
       }
       stmt->ret_type = ret_type;
+    } else if (stmt->op_type == TernaryOpType::fma) {
+      // FMA is FP-only and homogeneous. TernaryOpExpression::type_check already inserted casts so the
+      // three operands match; re-promote here so scalarize/cloning paths that construct a raw stmt still
+      // land on a coherent ret_type.
+      auto ret_type = promoted_type(promoted_type(stmt->op1->ret_type, stmt->op2->ret_type), stmt->op3->ret_type);
+      QD_ASSERT(is_real(ret_type.get_element_type()));
+      if (ret_type != stmt->op1->ret_type) {
+        auto cast_stmt = insert_type_cast_before(stmt, stmt->op1, ret_type);
+        stmt->op1 = cast_stmt;
+      }
+      if (ret_type != stmt->op2->ret_type) {
+        auto cast_stmt = insert_type_cast_before(stmt, stmt->op2, ret_type);
+        stmt->op2 = cast_stmt;
+      }
+      if (ret_type != stmt->op3->ret_type) {
+        auto cast_stmt = insert_type_cast_before(stmt, stmt->op3, ret_type);
+        stmt->op3 = cast_stmt;
+      }
+      stmt->ret_type = ret_type;
     } else {
       QD_NOT_IMPLEMENTED
     }

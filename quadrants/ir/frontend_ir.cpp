@@ -496,6 +496,39 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
   QD_ASSERT_TYPE_CHECKED(op2);
   QD_ASSERT_TYPE_CHECKED(op3);
 
+  auto error = [&](const DataType &t1, const DataType &t2, const DataType &t3) {
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 fmt::format("unsupported operand type(s) for '{}': '{}', '{}' and '{}'", ternary_type_name(type),
+                             t1->to_string(), t2->to_string(), t3->to_string()));
+  };
+
+  if (type == TernaryOpType::fma) {
+    // FMA is FP-only and takes three homogeneous FP operands. Scalar-only for now; tensor/broadcast paths
+    // are not plumbed through scalarize for fma.
+    auto op1_type = op1.get_rvalue_type();
+    auto op2_type = op2.get_rvalue_type();
+    auto op3_type = op3.get_rvalue_type();
+    if (!op1_type->is<PrimitiveType>() || !op2_type->is<PrimitiveType>() || !op3_type->is<PrimitiveType>() ||
+        !is_real(op1_type) || !is_real(op2_type) || !is_real(op3_type)) {
+      error(op1_type, op2_type, op3_type);
+    }
+    auto promoted = promoted_type(promoted_type(op1_type, op2_type), op3_type);
+    if (op1_type != promoted) {
+      op1 = cast(op1, promoted);
+      op1.type_check(config);
+    }
+    if (op2_type != promoted) {
+      op2 = cast(op2, promoted);
+      op2.type_check(config);
+    }
+    if (op3_type != promoted) {
+      op3 = cast(op3, promoted);
+      op3.type_check(config);
+    }
+    ret_type = promoted;
+    return;
+  }
+
   bool is_valid = true;
   bool is_tensor = false;
 
@@ -507,11 +540,6 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
   auto op2_type = op2.get_rvalue_type();
   auto op3_type = op3.get_rvalue_type();
 
-  auto error = [&]() {
-    ErrorEmitter(QuadrantsTypeError(), this,
-                 fmt::format("unsupported operand type(s) for '{}': '{}', '{}' and '{}'", ternary_type_name(type),
-                             op1_type->to_string(), op2_type->to_string(), op3_type->to_string()));
-  };
   std::vector<int> shape;
   if (op2_type->is<TensorType>() && op3_type->is<TensorType>()) {
     // valid
@@ -545,7 +573,7 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
   }
 
   if (!is_valid)
-    error();
+    error(op1_type, op2_type, op3_type);
 
   if (is_tensor) {
     auto primitive_dtype = promoted_type(op2_type, op3_type);
@@ -558,11 +586,13 @@ void TernaryOpExpression::type_check(const CompileConfig *config) {
 void TernaryOpExpression::flatten(FlattenContext *ctx) {
   // if (stmt)
   //  return;
-  if (type == TernaryOpType::select) {
+  if (type == TernaryOpType::select || type == TernaryOpType::fma) {
     auto op1_stmt = flatten_rvalue(op1, ctx);
     auto op2_stmt = flatten_rvalue(op2, ctx);
     auto op3_stmt = flatten_rvalue(op3, ctx);
-    ctx->push_back(std::make_unique<TernaryOpStmt>(type, op1_stmt, op2_stmt, op3_stmt, dbg_info));
+    auto tri = std::make_unique<TernaryOpStmt>(type, op1_stmt, op2_stmt, op3_stmt, dbg_info);
+    tri->precise = precise;
+    ctx->push_back(std::move(tri));
   } else if (type == TernaryOpType::ifte) {
     make_ifte(ctx, ret_type, op1, op2, op3, dbg_info);
   }

@@ -441,3 +441,49 @@ def test_qd_precise_idempotent_when_fast_math_off():
 # original `pow()` call on the inputs exposed by any plain-pytest kernel, so there is no observable difference between
 # `qd.precise(x ** n)` and `x ** n` at runtime today. Propagating `stmt->precise` onto the synthesized sqrt / mul / div
 # chain remains valuable as future-proofing (keeps the rewritten chain tagged consistently with what the user wrote).
+
+
+@test_utils.test(default_fp=qd.f32, fast_math=True)
+def test_qd_fma_twoprod():
+    """`qd.math.fma(a, b, c)` must compute `a*b + c` with a single rounding, so the TwoProd
+    error-free transform `p = a*b; e = fma(a, b, -p)` recovers the exact residual of the
+    multiplication. Without a real FMA this reduces to `(a*b) - (a*b) = 0` under fast-math.
+    """
+
+    @qd.kernel
+    def k(
+        a: qd.types.ndarray(qd.f32, ndim=1), b: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.f32, ndim=2)
+    ):
+        for i in range(a.shape[0]):
+            p = a[i] * b[i]
+            e = qd.math.fma(a[i], b[i], -p)
+            out[i, 0] = p
+            out[i, 1] = e
+
+    # Inputs chosen so `a*b` does not fit in the f32 mantissa (24 bits). Each product has a non-zero
+    # rounding residual that f64 recovers trivially. Note: `1.0 + 2**-24` sits exactly halfway between
+    # `1.0` and `1.0 + 2**-23` in f32 and round-to-even snaps it to `1.0` (zero residual), so we use
+    # `1.0 + 3 * 2**-24` which cleanly rounds up to `1.0 + 2**-23`; combined with `b = 1.0 + 2**-23`
+    # the square exposes a `2**-46` residual.
+    a_vals = np.array([1.0 + 3 * 2**-24, 3.1415927, 1.2345678e10, 0.1], dtype=np.float32)
+    b_vals = np.array([1.0 + 2**-23, 2.7182817, 9.8765433e-9, 0.2], dtype=np.float32)
+    a_in = qd.ndarray(dtype=qd.f32, shape=(len(a_vals),))
+    a_in.from_numpy(a_vals)
+    b_in = qd.ndarray(dtype=qd.f32, shape=(len(b_vals),))
+    b_in.from_numpy(b_vals)
+    out = qd.ndarray(dtype=qd.f32, shape=(len(a_vals), 2))
+    k(a_in, b_in, out)
+    res = out.to_numpy()
+
+    # Reference: p_ref = round(a*b, f32), e_ref = round(a*b - p_ref, f32) computed in f64.
+    exact = a_vals.astype(np.float64) * b_vals.astype(np.float64)
+    p_ref = exact.astype(np.float32)
+    e_ref = (exact - p_ref.astype(np.float64)).astype(np.float32)
+
+    np.testing.assert_array_equal(res[:, 0], p_ref)
+    np.testing.assert_array_equal(res[:, 1], e_ref)
+    # At least one residual must be non-zero; a naive `(a*b) - (a*b)` would collapse all to 0.
+    assert np.any(res[:, 1] != 0.0), (
+        f"TwoProd residuals all collapsed to zero: the backend is not honoring qd.math.fma as a single-"
+        f"rounding FMA. Got residuals: {res[:, 1]!r}"
+    )

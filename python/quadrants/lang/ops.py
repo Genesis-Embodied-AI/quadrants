@@ -1170,6 +1170,42 @@ def select(cond, x1, x2):
     return _ternary_operation(_qd_core.expr_select, py_select, cond, x1, x2)
 
 
+def fma(a, b, c):
+    """Fused multiply-add: return ``a * b + c`` computed as a single rounded
+    operation.
+
+    Unlike a plain ``a * b + c``, the intermediate product is not rounded:
+    the result is ``round(a * b + c, 1 ULP)``. This is the hardware FMA
+    available on every modern FP pipeline (x86 FMA3, ARM, Apple Silicon,
+    NVIDIA ``fma``, AMD, RISC-V Zfa). Exposed here primarily to let
+    compensated-arithmetic primitives (TwoProd, Fast2Sum + FMA,
+    double-single accumulators) get the single-rounding guarantee without
+    relying on backend-specific FMF contraction.
+
+    Classic two-product error-free transform:
+
+        p = a * b
+        e = qd.fma(a, b, -p)        # exact residual of p
+
+    Each backend maps this to its native FMA (LLVM ``llvm.fma`` intrinsic
+    on CPU, ``__nv_fma/__nv_fmaf`` on CUDA via libdevice, GLSL.std.450
+    ``Fma`` on Vulkan/Metal). Backends without hardware FMA fall back to
+    a regular mul-then-add and lose the single-rounding guarantee.
+
+    Args:
+        a, b, c: Homogeneous FP scalars (``f16``/``f32``/``f64``). Integer
+            inputs are rejected.
+
+    Returns:
+        ``round(a * b + c, 1 ULP)`` as a single rounded operation.
+    """
+
+    def py_fma(a, b, c):
+        return a * b + c
+
+    return _ternary_operation(_qd_core.expr_fma, py_fma, a, b, c)
+
+
 def ifte(cond, x1, x2):
     """Evaluate and return `x1` if `cond` is true; otherwise evaluate and return `x2`. This operator guarantees
     short-circuit semantics: exactly one of `x1` or `x2` will be evaluated.

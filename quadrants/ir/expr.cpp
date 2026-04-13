@@ -57,9 +57,10 @@ namespace {
 // Bottom-up clone of every BinaryOp / UnaryOp / TernaryOp expression reachable from `input`, tagging the fresh Binary /
 // Unary nodes `precise`. Non-walked kinds (loads, constants, qd.func calls, ndarray accesses, ...) carry no `precise`
 // field and are passed through by reference - aliasing them is safe. TernaryOp nodes are cloned structurally so the
-// walk can recurse into their branches, but the TernaryOp itself does not carry a `precise` flag (the only ternary
-// today is `select`, a control-flow-shaped conditional move, not FP arithmetic; see also the matching comment in expr.h
-// and the `precise` fields in frontend_ir.h / statements.h).
+// walk can recurse into their branches; of the TernaryOp variants, `fma` is FP arithmetic and gets tagged (codegen
+// uses the tag to disable fast-math folds around the fused multiply-add), while `select` / `ifte` are control-flow-
+// shaped and ignore `precise`. See also the matching comment in expr.h and the `precise` fields in frontend_ir.h /
+// statements.h.
 //
 // Implemented as an explicit worklist (not C++ recursion) so stack depth stays bounded for deep AST chains common in
 // scientific code (e.g. programmatically generated compensated-arithmetic unrolls). Each frame has a `children_pushed`
@@ -128,6 +129,11 @@ Expr clone_and_tag_precise(const Expr &input) {
       Expr new_op3 = results.at(tri->op3.expr.get());
       Expr out = Expr::make<TernaryOpExpression>(tri->type, new_op1, new_op2, new_op3);
       auto new_tri = out.cast<TernaryOpExpression>();
+      // `fma` is the only FP-arithmetic ternary; tag it so codegen disables fast-math folds around the
+      // fused multiply-add. `select`/`ifte` are control-flow-shaped and leave the field at its default.
+      if (tri->type == TernaryOpType::fma) {
+        new_tri->precise = true;
+      }
       new_tri->dbg_info = tri->dbg_info;
       new_tri->attributes = tri->attributes;
       new_tri->ret_type = tri->ret_type;

@@ -724,6 +724,33 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     }
   }
 
+  void visit(TernaryOpStmt *stmt) override {
+    if (stmt->op_type != TernaryOpType::fma) {
+      return TaskCodeGenLLVM::visit(stmt);
+    }
+    // Route `fma` through libdevice on CUDA so the resulting PTX is guaranteed to be `fma.rn.f{32,64}`
+    // (single rounding), independent of the module-level fast-math / FMF state. Mirrors how `sqrt`, `sin`,
+    // `cos`, etc. are routed above.
+    auto dt = stmt->ret_type;
+    auto v0 = llvm_val[stmt->op1];
+    auto v1 = llvm_val[stmt->op2];
+    auto v2 = llvm_val[stmt->op3];
+    if (dt->is_primitive(PrimitiveTypeID::f16)) {
+      v0 = builder->CreateFPExt(v0, llvm::Type::getFloatTy(*llvm_context));
+      v1 = builder->CreateFPExt(v1, llvm::Type::getFloatTy(*llvm_context));
+      v2 = builder->CreateFPExt(v2, llvm::Type::getFloatTy(*llvm_context));
+      auto v = call("__nv_fmaf", v0, v1, v2);
+      llvm_val[stmt] = builder->CreateFPTrunc(v, llvm::Type::getHalfTy(*llvm_context));
+    } else if (dt->is_primitive(PrimitiveTypeID::f32)) {
+      llvm_val[stmt] = call("__nv_fmaf", v0, v1, v2);
+    } else if (dt->is_primitive(PrimitiveTypeID::f64)) {
+      llvm_val[stmt] = call("__nv_fma", v0, v1, v2);
+    } else {
+      QD_P(data_type_name(dt));
+      QD_NOT_IMPLEMENTED
+    }
+  }
+
   void visit(InternalFuncStmt *stmt) override {
     if (stmt->func_name == "subgroupShuffle" || stmt->func_name == "subgroupBroadcast") {
       llvm_val[stmt] = emit_cuda_shuffle(

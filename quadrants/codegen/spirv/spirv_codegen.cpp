@@ -1186,12 +1186,27 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
 }
 
 void TaskCodegen::visit(TernaryOpStmt *tri) {
-  QD_ASSERT(tri->op_type == TernaryOpType::select);
   spirv::Value op1 = ir_->query_value(tri->op1->raw_name());
   spirv::Value op2 = ir_->query_value(tri->op2->raw_name());
   spirv::Value op3 = ir_->query_value(tri->op3->raw_name());
-  spirv::Value tri_val =
-      ir_->cast(ir_->get_primitive_type(tri->element_type()), ir_->select(ir_->cast(ir_->bool_type(), op1), op2, op3));
+  if (tri->op_type == TernaryOpType::select) {
+    spirv::Value tri_val = ir_->cast(ir_->get_primitive_type(tri->element_type()),
+                                     ir_->select(ir_->cast(ir_->bool_type(), op1), op2, op3));
+    ir_->register_value(tri->raw_name(), tri_val);
+    return;
+  }
+  QD_ASSERT(tri->op_type == TernaryOpType::fma);
+  // GLSL.std.450 `Fma` (opcode 50): single-rounded a*b + c. We decorate the result with `NoContraction`
+  // when `precise` is set so downstream SPIRV-Cross -> MSL translation preserves source-order arithmetic
+  // (mapped to MSL's `precise` qualifier). On backends that lack hardware FMA, the driver expands this
+  // into a regular `mul; add`, losing the single-rounding guarantee - there is no portable SPIR-V way to
+  // enforce hardware FMA, so we emit the standard instruction and rely on the target supporting it.
+  const uint32_t Fma_id = 50;
+  auto dst_type = ir_->get_primitive_type(tri->element_type());
+  spirv::Value tri_val = ir_->call_glsl450(dst_type, Fma_id, op1, op2, op3);
+  if (tri->precise) {
+    ir_->maybe_no_contraction(tri_val, /*precise=*/true);
+  }
   ir_->register_value(tri->raw_name(), tri_val);
 }
 

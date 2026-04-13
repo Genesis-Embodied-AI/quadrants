@@ -58,7 +58,7 @@ inline bool is_bit_op(BinaryOpType type) {
 
 std::string binary_op_type_symbol(BinaryOpType type);
 
-enum class TernaryOpType : int { select, ifte, undefined };
+enum class TernaryOpType : int { select, ifte, fma, undefined };
 
 std::string ternary_type_name(TernaryOpType type);
 
