@@ -11,15 +11,11 @@ MTLPrimitiveType primtype2mtl(TopologyType type) {
 }
 
 MTLPrimitiveTopologyClass topotype2mtl(TopologyType type) {
-  static const std::unordered_map<TopologyType, MTLPrimitiveTopologyClass> map =
-      {
-          {TopologyType::Triangles,
-           MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassTriangle},
-          {TopologyType::Lines,
-           MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassLine},
-          {TopologyType::Points,
-           MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassPoint},
-      };
+  static const std::unordered_map<TopologyType, MTLPrimitiveTopologyClass> map = {
+      {TopologyType::Triangles, MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassTriangle},
+      {TopologyType::Lines, MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassLine},
+      {TopologyType::Points, MTLPrimitiveTopologyClass::MTLPrimitiveTopologyClassPoint},
+  };
   auto it = map.find(type);
   RHI_ASSERT(it != map.end());
   return it->second;
@@ -29,8 +25,7 @@ MTLBlendOperation blendop2mtl(BlendOp op) {
   static const std::unordered_map<BlendOp, MTLBlendOperation> map = {
       {BlendOp::add, MTLBlendOperation::MTLBlendOperationAdd},
       {BlendOp::subtract, MTLBlendOperation::MTLBlendOperationSubtract},
-      {BlendOp::reverse_subtract,
-       MTLBlendOperation::MTLBlendOperationReverseSubtract},
+      {BlendOp::reverse_subtract, MTLBlendOperation::MTLBlendOperationReverseSubtract},
       {BlendOp::min, MTLBlendOperation::MTLBlendOperationMin},
       {BlendOp::max, MTLBlendOperation::MTLBlendOperationMax},
   };
@@ -44,17 +39,13 @@ MTLBlendFactor blendfactor2mtl(BlendFactor factor) {
       {BlendFactor::zero, MTLBlendFactor::MTLBlendFactorZero},
       {BlendFactor::one, MTLBlendFactor::MTLBlendFactorOne},
       {BlendFactor::src_color, MTLBlendFactor::MTLBlendFactorSourceColor},
-      {BlendFactor::one_minus_src_color,
-       MTLBlendFactor::MTLBlendFactorOneMinusSourceColor},
+      {BlendFactor::one_minus_src_color, MTLBlendFactor::MTLBlendFactorOneMinusSourceColor},
       {BlendFactor::dst_color, MTLBlendFactor::MTLBlendFactorDestinationColor},
-      {BlendFactor::one_minus_dst_color,
-       MTLBlendFactor::MTLBlendFactorOneMinusDestinationColor},
+      {BlendFactor::one_minus_dst_color, MTLBlendFactor::MTLBlendFactorOneMinusDestinationColor},
       {BlendFactor::src_alpha, MTLBlendFactor::MTLBlendFactorSourceAlpha},
-      {BlendFactor::one_minus_src_alpha,
-       MTLBlendFactor::MTLBlendFactorOneMinusSourceAlpha},
+      {BlendFactor::one_minus_src_alpha, MTLBlendFactor::MTLBlendFactorOneMinusSourceAlpha},
       {BlendFactor::dst_alpha, MTLBlendFactor::MTLBlendFactorDestinationAlpha},
-      {BlendFactor::one_minus_dst_alpha,
-       MTLBlendFactor::MTLBlendFactorOneMinusDestinationAlpha},
+      {BlendFactor::one_minus_dst_alpha, MTLBlendFactor::MTLBlendFactorOneMinusDestinationAlpha},
   };
   auto it = map.find(factor);
   RHI_ASSERT(it != map.end());
@@ -221,8 +212,7 @@ BufferFormat mtl2format(MTLPixelFormat format) {
       {BufferFormat::depth24stencil8, MTLPixelFormatInvalid},
       {BufferFormat::depth32f, MTLPixelFormatDepth32Float},
   };
-  auto it = std::find_if(map.begin(), map.end(),
-                         [&format](auto &&p) { return p.second == format; });
+  auto it = std::find_if(map.begin(), map.end(), [&format](auto &&p) { return p.second == format; });
   RHI_ASSERT(it != map.end());
   return it->first;
 }
@@ -252,24 +242,18 @@ MTLTextureUsage usage2mtl(ImageAllocUsage usage) {
 
 uint32_t mtlformat2size(MTLPixelFormat format) {
   static const std::map<MTLPixelFormat, uint32_t> map{
-      {MTLPixelFormatInvalid, 0},         {MTLPixelFormatR8Unorm, 1},
-      {MTLPixelFormatRG8Unorm, 2},        {MTLPixelFormatRGBA8Unorm, 4},
-      {MTLPixelFormatRGBA8Unorm_sRGB, 4}, {MTLPixelFormatBGRA8Unorm, 4},
-      {MTLPixelFormatBGRA8Unorm_sRGB, 4}, {MTLPixelFormatR8Uint, 1},
-      {MTLPixelFormatRG8Uint, 2},         {MTLPixelFormatRGBA8Uint, 4},
-      {MTLPixelFormatR8Sint, 1},          {MTLPixelFormatRG8Sint, 2},
-      {MTLPixelFormatRGBA8Sint, 4},       {MTLPixelFormatR16Unorm, 2},
-      {MTLPixelFormatRG16Unorm, 4},       {MTLPixelFormatRGBA16Unorm, 8},
-      {MTLPixelFormatR16Uint, 2},         {MTLPixelFormatRG16Uint, 4},
-      {MTLPixelFormatRGBA16Uint, 8},      {MTLPixelFormatR16Sint, 2},
-      {MTLPixelFormatRG16Sint, 4},        {MTLPixelFormatRGBA16Sint, 8},
-      {MTLPixelFormatR16Float, 2},        {MTLPixelFormatRG16Float, 4},
-      {MTLPixelFormatRGBA16Float, 8},     {MTLPixelFormatR32Uint, 4},
-      {MTLPixelFormatRG32Uint, 8},        {MTLPixelFormatRGBA32Uint, 16},
-      {MTLPixelFormatR32Sint, 4},         {MTLPixelFormatRG32Sint, 8},
-      {MTLPixelFormatRGBA32Sint, 16},     {MTLPixelFormatR32Float, 4},
-      {MTLPixelFormatRG32Float, 8},       {MTLPixelFormatRGBA32Float, 16},
-      {MTLPixelFormatDepth16Unorm, 2},    {MTLPixelFormatDepth32Float, 4},
+      {MTLPixelFormatInvalid, 0},         {MTLPixelFormatR8Unorm, 1},         {MTLPixelFormatRG8Unorm, 2},
+      {MTLPixelFormatRGBA8Unorm, 4},      {MTLPixelFormatRGBA8Unorm_sRGB, 4}, {MTLPixelFormatBGRA8Unorm, 4},
+      {MTLPixelFormatBGRA8Unorm_sRGB, 4}, {MTLPixelFormatR8Uint, 1},          {MTLPixelFormatRG8Uint, 2},
+      {MTLPixelFormatRGBA8Uint, 4},       {MTLPixelFormatR8Sint, 1},          {MTLPixelFormatRG8Sint, 2},
+      {MTLPixelFormatRGBA8Sint, 4},       {MTLPixelFormatR16Unorm, 2},        {MTLPixelFormatRG16Unorm, 4},
+      {MTLPixelFormatRGBA16Unorm, 8},     {MTLPixelFormatR16Uint, 2},         {MTLPixelFormatRG16Uint, 4},
+      {MTLPixelFormatRGBA16Uint, 8},      {MTLPixelFormatR16Sint, 2},         {MTLPixelFormatRG16Sint, 4},
+      {MTLPixelFormatRGBA16Sint, 8},      {MTLPixelFormatR16Float, 2},        {MTLPixelFormatRG16Float, 4},
+      {MTLPixelFormatRGBA16Float, 8},     {MTLPixelFormatR32Uint, 4},         {MTLPixelFormatRG32Uint, 8},
+      {MTLPixelFormatRGBA32Uint, 16},     {MTLPixelFormatR32Sint, 4},         {MTLPixelFormatRG32Sint, 8},
+      {MTLPixelFormatRGBA32Sint, 16},     {MTLPixelFormatR32Float, 4},        {MTLPixelFormatRG32Float, 8},
+      {MTLPixelFormatRGBA32Float, 16},    {MTLPixelFormatDepth16Unorm, 2},    {MTLPixelFormatDepth32Float, 4},
   };
   auto it = map.find(format);
   RHI_ASSERT(it != map.end());

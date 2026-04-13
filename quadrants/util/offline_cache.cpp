@@ -5,8 +5,7 @@ namespace quadrants::lang::offline_cache {
 constexpr std::size_t offline_cache_key_length = 65;
 constexpr std::size_t min_mangled_name_length = offline_cache_key_length + 2;
 
-std::string mangle_name(const std::string &primal_name,
-                        const std::string &key) {
+std::string mangle_name(const std::string &primal_name, const std::string &key) {
   // Result: {primal_name}{key: char[65]}_{(checksum(primal_name)) ^
   // checksum(key)}
   if (key.size() != offline_cache_key_length) {
@@ -22,9 +21,7 @@ std::string mangle_name(const std::string &primal_name,
   return fmt::format("{}{}_{}", primal_name, key, checksum1 ^ checksum2);
 }
 
-bool try_demangle_name(const std::string &mangled_name,
-                       std::string &primal_name,
-                       std::string &key) {
+bool try_demangle_name(const std::string &mangled_name, std::string &primal_name, std::string &key) {
   if (mangled_name.size() < min_mangled_name_length) {
     return false;
   }

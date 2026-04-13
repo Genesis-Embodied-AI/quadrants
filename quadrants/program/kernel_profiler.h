@@ -33,8 +33,7 @@ struct KernelProfileStatisticalResult {
   double max;
   double total;
 
-  explicit KernelProfileStatisticalResult(const std::string &name)
-      : name(name), counter(0), min(0), max(0), total(0) {
+  explicit KernelProfileStatisticalResult(const std::string &name) : name(name), counter(0), min(0), max(0), total(0) {
   }
 
   void insert_record(double t);  // TODO replace `double time` with
@@ -70,12 +69,9 @@ class KernelProfilerBase {
   // TODO: remove start and always use start_with_handle
   virtual void start(const std::string &kernel_name) { QD_NOT_IMPLEMENTED };
 
-  virtual TaskHandle start_with_handle(const std::string &kernel_name) {
-    QD_NOT_IMPLEMENTED
-  };
+  virtual TaskHandle start_with_handle(const std::string &kernel_name) { QD_NOT_IMPLEMENTED };
 
-  static void profiler_start(KernelProfilerBase *profiler,
-                             const char *kernel_name);
+  static void profiler_start(KernelProfilerBase *profiler, const char *kernel_name);
 
   virtual void stop() { QD_NOT_IMPLEMENTED };
 
@@ -83,11 +79,7 @@ class KernelProfilerBase {
 
   static void profiler_stop(KernelProfilerBase *profiler);
 
-  void query(const std::string &kernel_name,
-             int &counter,
-             double &min,
-             double &max,
-             double &avg);
+  void query(const std::string &kernel_name, int &counter, double &min, double &max, double &avg);
 
   std::vector<KernelProfileTracedRecord> get_traced_records() {
     return traced_records_;

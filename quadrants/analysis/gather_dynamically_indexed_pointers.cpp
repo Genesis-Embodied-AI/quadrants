@@ -26,8 +26,7 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     dynamically_indexed_ptrs_.insert(extern_ptr);
     // Find aliased ExternPtrStmt
     for (auto *other_extern_ptr : extern_ptrs_) {
-      if (other_extern_ptr != extern_ptr &&
-          other_extern_ptr->base_ptr == extern_ptr->base_ptr) {
+      if (other_extern_ptr != extern_ptr && other_extern_ptr->base_ptr == extern_ptr->base_ptr) {
         // Aliased ExternalPtrStmt, with same base_ptr and outter index
         dynamically_indexed_ptrs_.insert(other_extern_ptr);
       }
@@ -38,9 +37,7 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     dynamically_indexed_ptrs_.insert(global_ptr);
     // Find aliased GlobalPtrStmt
     for (auto *other_global_ptr : global_ptrs_) {
-      if (other_global_ptr != global_ptr &&
-          is_leaf_nodes_on_same_branch(other_global_ptr->snode,
-                                       global_ptr->snode)) {
+      if (other_global_ptr != global_ptr && is_leaf_nodes_on_same_branch(other_global_ptr->snode, global_ptr->snode)) {
         dynamically_indexed_ptrs_.insert(other_global_ptr);
       }
     }

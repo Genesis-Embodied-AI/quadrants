@@ -22,36 +22,26 @@ class TypeFactory {
 
   Type *get_tensor_type(std::vector<int> shape, Type *element);
 
-  const Type *get_struct_type(
-      const std::vector<AbstractDictionaryMember> &elements,
-      const std::string &layout = "none");
+  const Type *get_struct_type(const std::vector<AbstractDictionaryMember> &elements,
+                              const std::string &layout = "none");
 
-  const Type *get_ndarray_struct_type(DataType dt,
-                                      int ndim,
-                                      bool needs_grad = false);
+  const Type *get_ndarray_struct_type(DataType dt, int ndim, bool needs_grad = false);
 
   Type *get_pointer_type(Type *element, bool is_bit_pointer = false);
 
   Type *get_quant_int_type(int num_bits, bool is_signed, Type *compute_type);
 
-  Type *get_quant_fixed_type(Type *digits_type,
-                             Type *compute_type,
-                             float64 scale);
+  Type *get_quant_fixed_type(Type *digits_type, Type *compute_type, float64 scale);
 
-  Type *get_quant_float_type(Type *digits_type,
-                             Type *exponent_type,
-                             Type *compute_type);
+  Type *get_quant_float_type(Type *digits_type, Type *exponent_type, Type *compute_type);
 
-  BitStructType *get_bit_struct_type(
-      PrimitiveType *physical_type,
-      const std::vector<Type *> &member_types,
-      const std::vector<int> &member_bit_offsets,
-      const std::vector<int> &member_exponents,
-      const std::vector<std::vector<int>> &member_exponent_users);
+  BitStructType *get_bit_struct_type(PrimitiveType *physical_type,
+                                     const std::vector<Type *> &member_types,
+                                     const std::vector<int> &member_bit_offsets,
+                                     const std::vector<int> &member_exponents,
+                                     const std::vector<std::vector<int>> &member_exponent_users);
 
-  Type *get_quant_array_type(PrimitiveType *physical_type,
-                             Type *element_type,
-                             int num_elements);
+  Type *get_quant_array_type(PrimitiveType *physical_type, Type *element_type, int num_elements);
 
   static DataType create_tensor_type(std::vector<int> shape, DataType element);
 
@@ -71,11 +61,9 @@ class TypeFactory {
       tensor_types_;
   std::mutex tensor_mut_;
 
-  std::unordered_map<
-      std::pair<std::vector<AbstractDictionaryMember>, std::string>,
-      std::unique_ptr<Type>,
-      hashing::Hasher<
-          std::pair<std::vector<AbstractDictionaryMember>, std::string>>>
+  std::unordered_map<std::pair<std::vector<AbstractDictionaryMember>, std::string>,
+                     std::unique_ptr<Type>,
+                     hashing::Hasher<std::pair<std::vector<AbstractDictionaryMember>, std::string>>>
       struct_types_;
   std::mutex struct_mut_;
 

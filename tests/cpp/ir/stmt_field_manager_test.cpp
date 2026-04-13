@@ -27,9 +27,7 @@ class TestStmtVector : public Stmt {
   std::vector<Stmt *> vec2;
 
  public:
-  TestStmtVector(const std::vector<Stmt *> &vec1,
-                 const std::vector<Stmt *> &vec2)
-      : vec1(vec1), vec2(vec2) {
+  TestStmtVector(const std::vector<Stmt *> &vec1, const std::vector<Stmt *> &vec2) : vec1(vec1), vec2(vec2) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -56,19 +54,16 @@ TEST(StmtFieldManager, TestStmtFieldManager) {
 
 TEST(StmtFieldManager, TestStmtFieldManagerWithVector) {
   auto one = Stmt::make<ConstStmt>(TypedConstant(1));
-  auto a = Stmt::make<TestStmtVector>(std::vector<Stmt *>(),
-                                      std::vector<Stmt *>(1, one.get()));
+  auto a = Stmt::make<TestStmtVector>(std::vector<Stmt *>(), std::vector<Stmt *>(1, one.get()));
 
   EXPECT_EQ(a->num_operands(), 1);
   EXPECT_EQ(a->field_manager.fields.size(), 2);
 
-  auto b = Stmt::make<TestStmtVector>(std::vector<Stmt *>(),
-                                      std::vector<Stmt *>(1, one.get()));
+  auto b = Stmt::make<TestStmtVector>(std::vector<Stmt *>(), std::vector<Stmt *>(1, one.get()));
 
   EXPECT_EQ(a->field_manager.equal(b->field_manager), true);
 
-  auto c = Stmt::make<TestStmtVector>(std::vector<Stmt *>(1, one.get()),
-                                      std::vector<Stmt *>());
+  auto c = Stmt::make<TestStmtVector>(std::vector<Stmt *>(1, one.get()), std::vector<Stmt *>());
 
   EXPECT_EQ(a->field_manager.equal(c->field_manager), false);
 }

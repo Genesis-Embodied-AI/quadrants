@@ -27,11 +27,7 @@ StructCompilerLLVM::StructCompilerLLVM(Arch arch,
                                        LlvmProgramImpl *prog,
                                        std::unique_ptr<llvm::Module> &&module,
                                        int snode_tree_id)
-    : StructCompilerLLVM(arch,
-                         *prog->config,
-                         prog->get_llvm_context(),
-                         std::move(module),
-                         snode_tree_id) {
+    : StructCompilerLLVM(arch, *prog->config, prog->get_llvm_context(), std::move(module), snode_tree_id) {
 }
 
 void StructCompilerLLVM::generate_types(SNode &snode) {
@@ -55,15 +51,13 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
     }
   }
 
-  auto ch_type =
-      llvm::StructType::create(*ctx, ch_types, snode.node_type_name + "_ch");
+  auto ch_type = llvm::StructType::create(*ctx, ch_types, snode.node_type_name + "_ch");
 
   snode.cell_size_bytes = tlctx_->get_type_size(ch_type);
 
   for (int i = 0; i < snode.ch.size(); i++) {
     if (!snode.ch[i]->is_bit_level) {
-      snode.ch[i]->offset_bytes_in_parent_cell =
-          tlctx_->get_struct_element_offset(ch_type, i);
+      snode.ch[i]->offset_bytes_in_parent_cell = tlctx_->get_struct_element_offset(ch_type, i);
     }
   }
 
@@ -72,8 +66,7 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
     QD_ASSERT(snode._morton == false);
     body_type = llvm::ArrayType::get(ch_type, snode.max_num_elements());
     if (type == SNodeType::bitmasked) {
-      aux_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(*llvm_ctx_),
-                                      (snode.max_num_elements() + 31) / 32);
+      aux_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(*llvm_ctx_), (snode.max_num_elements() + 31) / 32);
     }
   } else if (type == SNodeType::root) {
     body_type = ch_type;
@@ -96,22 +89,18 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
                   "quant_array physical type must be at least 32 bits on "
                   "non-CPU backends.");
     }
-    snode.dt = TypeFactory::get_instance().get_quant_array_type(
-        snode.physical_type, ch_type, snode.num_cells_per_container);
+    snode.dt =
+        TypeFactory::get_instance().get_quant_array_type(snode.physical_type, ch_type, snode.num_cells_per_container);
 
     DataType container_primitive_type(snode.physical_type);
     body_type = tlctx_->get_data_type(container_primitive_type);
   } else if (type == SNodeType::pointer) {
     // mutex
-    aux_type = llvm::ArrayType::get(llvm::PointerType::getInt64Ty(*ctx),
-                                    snode.max_num_elements());
-    body_type = llvm::ArrayType::get(llvm::PointerType::getUnqual(*ctx),
-                                     snode.max_num_elements());
+    aux_type = llvm::ArrayType::get(llvm::PointerType::getInt64Ty(*ctx), snode.max_num_elements());
+    body_type = llvm::ArrayType::get(llvm::PointerType::getUnqual(*ctx), snode.max_num_elements());
   } else if (type == SNodeType::dynamic) {
     // mutex and n (number of elements)
-    aux_type =
-        llvm::StructType::get(*ctx, {llvm::PointerType::getInt32Ty(*ctx),
-                                     llvm::PointerType::getInt32Ty(*ctx)});
+    aux_type = llvm::StructType::get(*ctx, {llvm::PointerType::getInt32Ty(*ctx), llvm::PointerType::getInt32Ty(*ctx)});
     body_type = llvm::PointerType::getUnqual(*ctx);
   } else {
     QD_P(snode.type_name());
@@ -131,12 +120,11 @@ void StructCompilerLLVM::generate_types(SNode &snode) {
   // these types using this name. This decouples them from the LLVM context.
   // Note that body_type might not have a unique name, since literal structs
   // (such as {i32, i32}) cannot be aliased in LLVM.
-  auto stub = llvm::StructType::create(
-      *ctx,
-      {node_type, body_type, aux_type ? aux_type : llvm::Type::getInt8Ty(*ctx),
-       // aux_type might be null
-       ch_type},
-      type_stub_name(&snode));
+  auto stub = llvm::StructType::create(*ctx,
+                                       {node_type, body_type, aux_type ? aux_type : llvm::Type::getInt8Ty(*ctx),
+                                        // aux_type might be null
+                                        ch_type},
+                                       type_stub_name(&snode));
 
   // Create a dummy function in the module with the type stub as return type
   // so that the type is referenced in the module
@@ -149,10 +137,8 @@ void StructCompilerLLVM::generate_refine_coordinates(SNode *snode) {
   auto coord_type = get_runtime_type("PhysicalCoordinates");
   auto coord_type_ptr = llvm::PointerType::get(coord_type, 0);
 
-  auto ft = llvm::FunctionType::get(
-      llvm::Type::getVoidTy(*llvm_ctx_),
-      {coord_type_ptr, coord_type_ptr, llvm::Type::getInt32Ty(*llvm_ctx_)},
-      false);
+  auto ft = llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_ctx_),
+                                    {coord_type_ptr, coord_type_ptr, llvm::Type::getInt32Ty(*llvm_ctx_)}, false);
 
   auto func = create_function(ft, snode->refine_coordinates_func_name());
 
@@ -172,20 +158,16 @@ void StructCompilerLLVM::generate_refine_coordinates(SNode *snode) {
   for (int i = 0; i < quadrants_max_num_indices; i++) {
     auto addition = tlctx_->get_constant(0);
     if (snode->extractors[i].shape > 1) {
-      auto prev = tlctx_->get_constant(snode->extractors[i].acc_shape *
-                                       snode->extractors[i].shape);
+      auto prev = tlctx_->get_constant(snode->extractors[i].acc_shape * snode->extractors[i].shape);
       auto next = tlctx_->get_constant(snode->extractors[i].acc_shape);
       // Use UDiv/URem instead of SDiv/SRem so that LLVM can optimize them
       // into bitwise operations when the divisor is a power of two.
       addition = builder.CreateUDiv(builder.CreateURem(l, prev), next);
     }
-    auto in = call(&builder, "PhysicalCoordinates_get_val", inp_coords,
-                   tlctx_->get_constant(i));
-    in =
-        builder.CreateMul(in, tlctx_->get_constant(snode->extractors[i].shape));
+    auto in = call(&builder, "PhysicalCoordinates_get_val", inp_coords, tlctx_->get_constant(i));
+    in = builder.CreateMul(in, tlctx_->get_constant(snode->extractors[i].shape));
     auto added = builder.CreateAdd(in, addition);
-    call(&builder, "PhysicalCoordinates_set_val", outp_coords,
-         tlctx_->get_constant(i), added);
+    call(&builder, "PhysicalCoordinates_set_val", outp_coords, tlctx_->get_constant(i), added);
   }
   builder.CreateRetVoid();
 }
@@ -205,12 +187,10 @@ void StructCompilerLLVM::generate_child_accessors(SNode &snode) {
     // create the get ch function
     auto parent = snode.parent;
 
-    auto inp_type =
-        llvm::PointerType::get(get_llvm_element_type(module.get(), parent), 0);
+    auto inp_type = llvm::PointerType::get(get_llvm_element_type(module.get(), parent), 0);
 
-    auto ft = llvm::FunctionType::get(
-        llvm::PointerType::getUnqual(*llvm_ctx_),
-        {llvm::PointerType::getUnqual(*llvm_ctx_)}, false);
+    auto ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*llvm_ctx_),
+                                      {llvm::PointerType::getUnqual(*llvm_ctx_)}, false);
 
     auto func = create_function(ft, snode.get_ch_from_parent_func_name());
 
@@ -223,14 +203,10 @@ void StructCompilerLLVM::generate_child_accessors(SNode &snode) {
       args.push_back(&arg);
     }
     llvm::Value *ret;
-    ret = builder.CreateGEP(get_llvm_element_type(module.get(), parent),
-                            builder.CreateBitCast(args[0], inp_type),
-                            {tlctx_->get_constant(0),
-                             tlctx_->get_constant(parent->child_id(&snode))},
-                            "getch");
+    ret = builder.CreateGEP(get_llvm_element_type(module.get(), parent), builder.CreateBitCast(args[0], inp_type),
+                            {tlctx_->get_constant(0), tlctx_->get_constant(parent->child_id(&snode))}, "getch");
 
-    builder.CreateRet(
-        builder.CreateBitCast(ret, llvm::PointerType::getUnqual(*llvm_ctx_)));
+    builder.CreateRet(builder.CreateBitCast(ret, llvm::PointerType::getUnqual(*llvm_ctx_)));
   }
 
   for (auto &ch : snode.ch) {
@@ -259,8 +235,7 @@ void StructCompilerLLVM::run(SNode &root) {
   generate_child_accessors(root);
 
   if (config_.print_struct_llvm_ir) {
-    static FileSequenceWriter writer("quadrants_struct_llvm_ir_{:04d}.ll",
-                                     "struct LLVM IR");
+    static FileSequenceWriter writer("quadrants_struct_llvm_ir_{:04d}.ll", "struct LLVM IR");
     writer.write(module.get());
   }
 
@@ -269,8 +244,7 @@ void StructCompilerLLVM::run(SNode &root) {
   if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1") {
     std::filesystem::create_directories(ir_dump_dir);
 
-    std::filesystem::path filename =
-        ir_dump_dir / (std::string(module->getName()) + "_{:04d}_llvm.ll");
+    std::filesystem::path filename = ir_dump_dir / (std::string(module->getName()) + "_{:04d}_llvm.ll");
     static FileSequenceWriter writer(filename.string(), "struct LLVM IR");
     writer.write(module.get());
   }
@@ -283,13 +257,10 @@ void StructCompilerLLVM::run(SNode &root) {
   tlctx_->add_struct_module(std::move(module), root.get_snode_tree_id());
 }
 
-llvm::Type *StructCompilerLLVM::get_stub(llvm::Module *module,
-                                         SNode *snode,
-                                         uint32 index) {
+llvm::Type *StructCompilerLLVM::get_stub(llvm::Module *module, SNode *snode, uint32 index) {
   QD_ASSERT(module);
   QD_ASSERT(snode);
-  auto stub = llvm::StructType::getTypeByName(module->getContext(),
-                                              type_stub_name(snode));
+  auto stub = llvm::StructType::getTypeByName(module->getContext(), type_stub_name(snode));
   QD_ASSERT(stub);
   QD_ASSERT(stub->getStructNumElements() == 4);
   QD_ASSERT(0 <= index && index < 4);
@@ -298,30 +269,24 @@ llvm::Type *StructCompilerLLVM::get_stub(llvm::Module *module,
   return type;
 }
 
-llvm::Type *StructCompilerLLVM::get_llvm_node_type(llvm::Module *module,
-                                                   SNode *snode) {
+llvm::Type *StructCompilerLLVM::get_llvm_node_type(llvm::Module *module, SNode *snode) {
   return get_stub(module, snode, 0);
 }
 
-llvm::Type *StructCompilerLLVM::get_llvm_body_type(llvm::Module *module,
-                                                   SNode *snode) {
+llvm::Type *StructCompilerLLVM::get_llvm_body_type(llvm::Module *module, SNode *snode) {
   return get_stub(module, snode, 1);
 }
 
-llvm::Type *StructCompilerLLVM::get_llvm_aux_type(llvm::Module *module,
-                                                  SNode *snode) {
+llvm::Type *StructCompilerLLVM::get_llvm_aux_type(llvm::Module *module, SNode *snode) {
   return get_stub(module, snode, 2);
 }
 
-llvm::Type *StructCompilerLLVM::get_llvm_element_type(llvm::Module *module,
-                                                      SNode *snode) {
+llvm::Type *StructCompilerLLVM::get_llvm_element_type(llvm::Module *module, SNode *snode) {
   return get_stub(module, snode, 3);
 }
 
-llvm::Function *StructCompilerLLVM::create_function(llvm::FunctionType *ft,
-                                                    std::string func_name) {
-  return llvm::Function::Create(ft, llvm::Function::ExternalLinkage, func_name,
-                                *module);
+llvm::Function *StructCompilerLLVM::create_function(llvm::FunctionType *ft, std::string func_name) {
+  return llvm::Function::Create(ft, llvm::Function::ExternalLinkage, func_name, *module);
 }
 
 }  // namespace quadrants::lang

@@ -13,6 +13,9 @@ from typing import Any, Callable
 from weakref import ReferenceType
 
 from quadrants import _logging
+
+_GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
+
 from quadrants._lib.core.quadrants_python import (
     Arch,
     ASTBuilder,
@@ -291,7 +294,7 @@ class Kernel(FuncBase):
         # and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
-        self.use_gpu_graph: bool = False
+        self.use_graph: bool = False
         self.graph_do_while_arg: str | None = None
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
@@ -332,9 +335,12 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
+            cached_graph_do_while_arg: str | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key = src_hasher.load(self.fast_checksum)
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(
+                    self.fast_checksum
+                )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
                 self.src_ll_cache_observations.cache_validated = True
                 prog = impl.get_runtime().prog
@@ -348,6 +354,8 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
+                    if cached_graph_do_while_arg is not None:
+                        self.graph_do_while_arg = cached_graph_do_while_arg
                     return used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
@@ -504,10 +512,11 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
+                        graph_do_while_arg=self.graph_do_while_arg,
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
-            launch_ctx.use_gpu_graph = self.use_gpu_graph
+            launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             prog.launch_kernel(compiled_kernel_data, launch_ctx)

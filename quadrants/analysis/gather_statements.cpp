@@ -22,8 +22,7 @@ class StmtSearcher : public BasicStmtVisitor {
       results_.push_back(stmt);
   }
 
-  static std::vector<Stmt *> run(IRNode *root,
-                                 const std::function<bool(Stmt *)> &test) {
+  static std::vector<Stmt *> run(IRNode *root, const std::function<bool(Stmt *)> &test) {
     StmtSearcher searcher(test);
     root->accept(&searcher);
     return searcher.results_;
@@ -31,8 +30,7 @@ class StmtSearcher : public BasicStmtVisitor {
 };
 
 namespace irpass::analysis {
-std::vector<Stmt *> gather_statements(IRNode *root,
-                                      const std::function<bool(Stmt *)> &test) {
+std::vector<Stmt *> gather_statements(IRNode *root, const std::function<bool(Stmt *)> &test) {
   return StmtSearcher::run(root, test);
 }
 }  // namespace irpass::analysis

@@ -36,8 +36,7 @@ int main() {
   }
   cudaDeviceSynchronize();
   t = (get_time() - t) / repeat;
-  printf("cuMemcpyAsync 8GB data bw %.3f GB/s\n",
-         n * 8.0 / t / (1024 * 1024 * 1024.0f));
+  printf("cuMemcpyAsync 8GB data bw %.3f GB/s\n", n * 8.0 / t / (1024 * 1024 * 1024.0f));
 
   for (auto bs : {32, 64, 128, 256, 512, 1024}) {
     for (int i = 0; i < 10; i++) {
@@ -50,7 +49,7 @@ int main() {
     }
     cudaDeviceSynchronize();
     t = (get_time() - t) / repeat;
-    printf("reducing 4 GB data, block_dim %d, %.2f ms   bw %.3f GB/s\n", bs,
-           t * 1000, n * 4.0 / t / (1024 * 1024 * 1024.0f));
+    printf("reducing 4 GB data, block_dim %d, %.2f ms   bw %.3f GB/s\n", bs, t * 1000,
+           n * 4.0 / t / (1024 * 1024 * 1024.0f));
   }
 }

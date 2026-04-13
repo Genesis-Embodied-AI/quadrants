@@ -20,8 +20,7 @@ namespace quadrants {
 namespace lang {
 
 void validate_arch(Arch arch) {
-  if (!arch_is_cpu(arch) && !arch_is_cuda(arch) && !arch_is_metal(arch) &&
-      !arch_is_amdgpu(arch)) {
+  if (!arch_is_cpu(arch) && !arch_is_cuda(arch) && !arch_is_metal(arch) && !arch_is_amdgpu(arch)) {
     QD_ERROR(
         "DLPack conversion is only supported on CPU, Metal, CUDA or AMDGPU "
         "archs");
@@ -57,47 +56,36 @@ bool torch_supports_byte_offset() {
   return supports;
 }
 
-std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch,
-                                             Program *program,
-                                             DeviceAllocation dev_alloc) {
+std::tuple<void *, DLDeviceType> get_raw_ptr(Arch arch, Program *program, DeviceAllocation dev_alloc) {
   void *raw_ptr = nullptr;
   DLDeviceType device_type = DLDeviceType::kDLCPU;
   if (arch_is_cpu(arch)) {
-    cpu::CpuDevice *cpu_device =
-        static_cast<cpu::CpuDevice *>(dev_alloc.device);
+    cpu::CpuDevice *cpu_device = static_cast<cpu::CpuDevice *>(dev_alloc.device);
     device_type = DLDeviceType::kDLCPU;
-    cpu::CpuDevice::AllocInfo alloc_info =
-        cpu_device->get_alloc_info(dev_alloc);
+    cpu::CpuDevice::AllocInfo alloc_info = cpu_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
 #if QD_WITH_CUDA
   else if (arch_is_cuda(arch)) {
-    cuda::CudaDevice *cuda_device =
-        static_cast<cuda::CudaDevice *>(dev_alloc.device);
+    cuda::CudaDevice *cuda_device = static_cast<cuda::CudaDevice *>(dev_alloc.device);
     device_type = DLDeviceType::kDLCUDA;
-    cuda::CudaDevice::AllocInfo alloc_info =
-        cuda_device->get_alloc_info(dev_alloc);
+    cuda::CudaDevice::AllocInfo alloc_info = cuda_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
 #endif  // QD_WITH_CUDA
 #if QD_WITH_AMDGPU
   else if (arch_is_amdgpu(arch)) {
-    amdgpu::AmdgpuDevice *amdgpu_device =
-        static_cast<amdgpu::AmdgpuDevice *>(dev_alloc.device);
-    device_type =
-        DLDeviceType::kDLROCM;  // AMDGPU uses the same device type as CUDA
-    amdgpu::AmdgpuDevice::AllocInfo alloc_info =
-        amdgpu_device->get_alloc_info(dev_alloc);
+    amdgpu::AmdgpuDevice *amdgpu_device = static_cast<amdgpu::AmdgpuDevice *>(dev_alloc.device);
+    device_type = DLDeviceType::kDLROCM;  // AMDGPU uses the same device type as CUDA
+    amdgpu::AmdgpuDevice::AllocInfo alloc_info = amdgpu_device->get_alloc_info(dev_alloc);
     raw_ptr = alloc_info.ptr;
   }
 #endif  // QD_WITH_AMDGPU
 #if QD_WITH_METAL
   else if (arch_is_metal(arch)) {
-    metal::MetalDevice *metal_device =
-        static_cast<metal::MetalDevice *>(dev_alloc.device);
+    metal::MetalDevice *metal_device = static_cast<metal::MetalDevice *>(dev_alloc.device);
     device_type = DLDeviceType::kDLMetal;
-    const metal::MetalMemory &memory =
-        metal_device->get_memory(dev_alloc.alloc_id);
+    const metal::MetalMemory &memory = metal_device->get_memory(dev_alloc.alloc_id);
 
     RhiResult result = memory.mapped_ptr(&raw_ptr);
     if (result != RhiResult::success || raw_ptr == nullptr) {
@@ -170,8 +158,7 @@ void validate_axis_ordering(SNode *snode, int ndim) {
 
   for (const SNode *node : path) {
     if (node->type == SNodeType::dense) {
-      for (int phys_axis = 0; phys_axis < quadrants_max_num_indices;
-           phys_axis++) {
+      for (int phys_axis = 0; phys_axis < quadrants_max_num_indices; phys_axis++) {
         if (node->extractors[phys_axis].active) {
           bool was_in_parent = false;
           if (node->parent != nullptr) {
@@ -197,8 +184,7 @@ void validate_axis_ordering(SNode *snode, int ndim) {
     }
   }
   if (has_non_ijk_ordering) {
-    QD_ERROR(
-        "SNode must have axes in order i, j, k, ... in order to use to_dlpack")
+    QD_ERROR("SNode must have axes in order i, j, k, ... in order to use to_dlpack")
   }
 }
 
@@ -214,11 +200,7 @@ int64_t *calc_strides(int64_t *shape, int full_ndim) {
   return strides;
 }
 
-pybind11::capsule field_to_dlpack(Program *program,
-                                  SNode *snode,
-                                  int element_ndim,
-                                  int n,
-                                  int m) {
+pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, int n, int m) {
   if (!snode->is_path_all_dense) {
     QD_ERROR("Only dense fields are supported for dlpack conversion");
   }
@@ -229,8 +211,7 @@ pybind11::capsule field_to_dlpack(Program *program,
 #if QD_WITH_AMDGPU
   std::unique_ptr<AMDGPUContext::ContextGuard> amdgpu_guard;
   if (arch_is_amdgpu(arch)) {
-    amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(
-        &AMDGPUContext::get_instance());
+    amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(&AMDGPUContext::get_instance());
   }
 #endif
 
@@ -259,8 +240,7 @@ pybind11::capsule field_to_dlpack(Program *program,
             "DLPack conversion with fields is not supported on Metal "
             "with PyTorch <= 2.9.1.");
       }
-      raw_ptr =
-          reinterpret_cast<void *>((uint64_t)raw_ptr + field_in_tree_offset);
+      raw_ptr = reinterpret_cast<void *>((uint64_t)raw_ptr + field_in_tree_offset);
     }
   }
 
@@ -312,22 +292,18 @@ pybind11::capsule field_to_dlpack(Program *program,
   };
   auto capsule_deleter = [](PyObject *capsule) {};
 
-  pybind11::capsule capsule =
-      pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
+  pybind11::capsule capsule = pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
   return capsule;
 }
 
-pybind11::capsule ndarray_to_dlpack(Program *program,
-                                    pybind11::object owner,
-                                    Ndarray *ndarray) {
+pybind11::capsule ndarray_to_dlpack(Program *program, pybind11::object owner, Ndarray *ndarray) {
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
 #if QD_WITH_AMDGPU
   std::unique_ptr<AMDGPUContext::ContextGuard> amdgpu_guard;
   if (arch_is_amdgpu(arch)) {
-    amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(
-        &AMDGPUContext::get_instance());
+    amdgpu_guard = std::make_unique<AMDGPUContext::ContextGuard>(&AMDGPUContext::get_instance());
   }
 #endif
 
@@ -353,8 +329,7 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   DataType ndarray_data_type = ndarray->get_element_data_type();
   uint8_t data_type_code = kDLInt;
   uint8_t element_bits = 0;
-  std::tie(data_type_code, element_bits) =
-      get_type_info(arch, ndarray_data_type);
+  std::tie(data_type_code, element_bits) = get_type_info(arch, ndarray_data_type);
 
   DLManagedTensor *managed_tensor = new DLManagedTensor();
 
@@ -381,8 +356,7 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   };
   auto capsule_deleter = [](PyObject *capsule) {};
 
-  pybind11::capsule capsule =
-      pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
+  pybind11::capsule capsule = pybind11::capsule(managed_tensor, "dltensor", capsule_deleter);
   return capsule;
 }
 }  // namespace lang

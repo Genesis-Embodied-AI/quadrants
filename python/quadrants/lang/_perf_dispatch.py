@@ -98,6 +98,9 @@ class PerformanceDispatcher(Generic[P, R]):
         )
         self._calls_since_last_update_by_geometry_hash: dict[int, int] = defaultdict(int)
         self._last_check_time_by_geometry_hash: dict[int, float] = defaultdict(float)
+        self._cached_args: tuple | None = None
+        self._cached_kwargs: dict | None = None
+        self._cached_impl: DispatchImpl | None = None
 
     def register(
         self, implementation: Callable | None = None, *, is_compatible: Callable[[dict], bool] | None = None
@@ -252,6 +255,17 @@ class PerformanceDispatcher(Generic[P, R]):
         if self._forced_impl is not None:
             return self._forced_impl(*args, **kwargs)
 
+        if self._cached_impl is not None:
+            ca, ck = self._cached_args, self._cached_kwargs
+            assert ca is not None and ck is not None
+            if (
+                len(args) == len(ca)
+                and len(kwargs) == len(ck)
+                and all(a is b for a, b in zip(args, ca))
+                and all(k in ck and v is ck[k] for k, v in kwargs.items())
+            ):
+                return self._cached_impl(*args, **kwargs)
+
         geometry_hash = self._get_geometry_hash(*args, **kwargs)
         fastest = self._fastest_dispatch_impl_by_geometry_hash.get(geometry_hash)
         if fastest:
@@ -280,10 +294,10 @@ class PerformanceDispatcher(Generic[P, R]):
             raise QuadrantsRuntimeError("No suitable functions were found.")
 
         elif len(compatible_set) == 1:
-            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = next(iter(compatible_set))
+            dispatch_impl_ = next(iter(compatible_set))
+            self._fastest_dispatch_impl_by_geometry_hash[geometry_hash] = dispatch_impl_
             self._last_check_time_by_geometry_hash[geometry_hash] = time.time()
-            dispatch_impl_ = self._fastest_dispatch_impl_by_geometry_hash[geometry_hash]
-            assert dispatch_impl_ is not None
+            self._cached_args, self._cached_kwargs, self._cached_impl = args, kwargs, dispatch_impl_
             log_str = (
                 f"perf_dispatch '{self._name}': chose '{dispatch_impl_.get_implementation2().__name__}' "
                 f"out of {len(self._dispatch_impls)} registered functions. Only 1 was compatible."

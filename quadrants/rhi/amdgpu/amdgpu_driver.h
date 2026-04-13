@@ -66,8 +66,7 @@ class AMDGPUFunction {
   }
 
   std::string get_error_message(uint32 err) {
-    return get_amdgpu_error_message(err) +
-           fmt::format(" while calling {} ({})", name_, symbol_name_);
+    return get_amdgpu_error_message(err) + fmt::format(" while calling {} ({})", name_, symbol_name_);
   }
 
   uint32 call_with_warning(Args... args) {
@@ -104,8 +103,7 @@ class AMDGPUDriverBase {
 
 class AMDGPUDriver : protected AMDGPUDriverBase {
  public:
-#define PER_AMDGPU_FUNCTION(name, symbol_name, ...) \
-  AMDGPUFunction<__VA_ARGS__> name;
+#define PER_AMDGPU_FUNCTION(name, symbol_name, ...) AMDGPUFunction<__VA_ARGS__> name;
 #include "quadrants/rhi/amdgpu/amdgpu_driver_functions.inc.h"
 #undef PER_AMDGPU_FUNCTION
 

@@ -56,22 +56,19 @@ inline std::array<std::string, 5> parse_printf_specifier(std::string spec) {
 //   d. '%.2f',
 //   e. '%.12f',
 // accordingly.
-inline std::string merge_printf_specifier(
-    std::optional<std::string> const &from_user,
-    std::string const &from_data_type) {
+inline std::string merge_printf_specifier(std::optional<std::string> const &from_user,
+                                          std::string const &from_data_type) {
   if (!from_user.has_value()) {
     return from_data_type;
   }
   std::string const &user = from_user.value();
 
-  auto &&[user_flags, user_width, user_precision, user_length,
-          user_conversion] = parse_printf_specifier(user);
+  auto &&[user_flags, user_width, user_precision, user_length, user_conversion] = parse_printf_specifier(user);
   if (user_width == "*" || user_precision == ".*" || user_conversion == "n") {
     QD_ERROR("The {} printf specifier is not supported", user)
   }
 
-  auto &&[_, __, dt_precision, dt_length, dt_conversion] =
-      parse_printf_specifier(from_data_type);
+  auto &&[_, __, dt_precision, dt_length, dt_conversion] = parse_printf_specifier(from_data_type);
 
   // Replace user_precision with dt_precision if the former is empty,
   // otherwise use user specified precision.
@@ -82,8 +79,7 @@ inline std::string merge_printf_specifier(
   // Discard user_length and give warning if it doesn't match with dt_length.
   if (user_length != dt_length) {
     if (!user_length.empty()) {
-      QD_WARN("The printf length specifier '{}' is overritten by '{}'",
-              user_length, dt_length);
+      QD_WARN("The printf length specifier '{}' is overritten by '{}'", user_length, dt_length);
     }
     user_length = dt_length;
   }
@@ -95,8 +91,7 @@ inline std::string merge_printf_specifier(
 
   // Override user_conversion with dt_conversion.
   if (user_conversion != dt_conversion) {
-    if (!user_conversion.empty() &&
-        user_conversion.back() != dt_conversion.back()) {
+    if (!user_conversion.empty() && user_conversion.back() != dt_conversion.back()) {
       // Preserves user_conversion when user and dt conversions belong to the
       // same group, e.g., when printing unsigned decimal numbers in hexadecimal
       // or octal format, or floating point numbers in exponential notation.
@@ -108,15 +103,13 @@ inline std::string merge_printf_specifier(
            float_group.find(dt_conversion.back()) != std::string::npos)) {
         dt_conversion.back() = user_conversion.back();
       } else {
-        QD_WARN("The printf conversion specifier '{}' is overritten by '{}'",
-                user_conversion, dt_conversion);
+        QD_WARN("The printf conversion specifier '{}' is overritten by '{}'", user_conversion, dt_conversion);
       }
     }
     user_conversion = dt_conversion;
   }
 
-  std::string res = "%" + user_flags + user_width + user_precision +
-                    user_length + user_conversion;
+  std::string res = "%" + user_flags + user_width + user_precision + user_length + user_conversion;
   QD_TRACE("Merge %{} and {} into {}.", user, from_data_type, res);
   return res;
 }
