@@ -86,10 +86,10 @@ The recommended workflow is to leave `fast_math=True` globally for throughput an
 | CPU | LLVM FMF cleared | libc `sinf` is already correctly rounded |
 | CUDA | LLVM FMF cleared | libdevice `__nv_<fn>f` (non-fast) selected |
 | AMDGPU | LLVM FMF cleared | `__ocml_<fn>` already correctly rounded |
-| Vulkan / MoltenVK | SPIR-V `NoContraction` decoration | best-effort: driver stdlib default (typ. 1-2 ULP) |
-| Metal | SPIR-V `NoContraction` decoration | best-effort: driver stdlib default (typ. 1-2 ULP) |
+| Vulkan / MoltenVK | SPIR-V `NoContraction` decoration | best-effort: driver stdlib default (spec only guarantees 2^-11 absolute error) |
+| Metal | SPIR-V `NoContraction` decoration | best-effort: driver stdlib default (spec only guarantees 2^-11 absolute error) |
 
-On SPIR-V backends, `NoContraction` is defined by the spec to apply to arithmetic instructions only; most consumers ignore it on the `OpExtInst` calls used for transcendentals. The decoration is still emitted (it is harmless and future-proofs against downstream toolchains that start honoring it), but correctness of `qd.precise(qd.sin(x))` on Metal / Vulkan currently relies on the driver's default (non-fast-math) transcendental implementation being accurate enough for your use case.
+On SPIR-V backends, `NoContraction` is defined by the spec to apply to arithmetic instructions only; most consumers ignore it on the `OpExtInst` calls used for transcendentals. The decoration is still emitted (it is harmless and future-proofs against downstream toolchains that start honoring it), but correctness of `qd.precise(qd.sin(x))` / `qd.precise(qd.cos(x))` on Metal / Vulkan cannot be guaranteed through the tag: the Vulkan precision requirements for GLSL.std.450 `Sin`/`Cos` are stated as 2^-11 absolute error, which on inputs whose reference magnitude is smaller than 1 is thousands of ULPs, and drivers are within their rights to saturate that latitude. If you need correctly-rounded sin/cos, use the CPU / CUDA / AMDGPU backends.
 
 ## Example: Dekker 2Sum
 

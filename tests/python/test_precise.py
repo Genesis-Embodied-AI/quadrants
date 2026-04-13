@@ -126,7 +126,8 @@ def test_qd_precise_protects_fast_math():
 @test_utils.test(default_fp=qd.f32, fast_math=True)
 def test_qd_precise_unary_rounding(op_name):
     """`qd.precise(qd.<op>(x))` must produce the correctly-rounded f32 result on every
-    backend, even with module-level `fast_math=True`.
+    backend where the precise tag can reach codegen in a form the backend honors, even with
+    module-level `fast_math=True`.
 
     This exercises the unary precise path end-to-end: AST tagging -> IR propagation -> codegen
     honoring the tag (LLVM FMF clear, SPIR-V `NoContraction` decoration, or CUDA libdevice
@@ -138,7 +139,18 @@ def test_qd_precise_unary_rounding(op_name):
     `sqrt` is included because LLVM FMF's `afn` can substitute `rsqrt+refine` which is ~2-3 ULP -
     the precise tag must defeat that substitution. Parametrized per op so each failure reports the
     specific function that regressed instead of a batched max-ULP over all four.
+
+    On SPIR-V backends (vulkan/metal) the `sin` / `cos` cases are skipped: the SPIR-V spec scopes
+    `NoContraction` to arithmetic instructions, so the decoration is ignored on the `OpExtInst
+    GLSL.std.450 Sin/Cos` calls, and GLSL.std.450 Sin/Cos are spec-required only to 2^-11 absolute
+    error (thousands of ULPs for inputs where the reference has magnitude < 1). No amount of tagging
+    can force a correctly-rounded sin/cos through the driver on SPIR-V. See
+    `docs/source/user_guide/precise.md` (Backend coverage). `log` and `sqrt` remain in-scope on every
+    backend because their spec precision fits within the 2 ULP bound here.
     """
+    if op_name in ("sin", "cos") and qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal):
+        pytest.skip(f"SPIR-V does not provide a correctly-rounded `{op_name}`; tag is a no-op on OpExtInst")
+
     qd_op = getattr(qd, op_name)
     np_op = getattr(np, op_name)
 
@@ -317,61 +329,13 @@ def test_qd_precise_stops_at_qd_func_call():
 
 
 @test_utils.test(default_fp=qd.f32, fast_math=True)
-def test_qd_precise_does_not_mutate_input():
-    """`qd.precise` must NOT mutate its input. It returns a fresh subtree with every reachable
-    FP op tagged; the original expression value is unchanged, so reusing it elsewhere is safe
-    and never retroactively inherits the `precise` tag.
-
-    Observable via the signed-zero rule: the *same* Python expression value is used in two
-    stores - one through `qd.precise(...)`, one raw. Under the clone-based contract, the raw use
-    must stay unprotected (alg_simp strips `-0.0 + 0.0 -> -0.0`, bit pattern 0x80000000) while
-    the `qd.precise(...)` use gets IEEE semantics (bit pattern 0x00000000). If `qd.precise` still
-    mutated the input in place, the raw use would also pick up the tag and both would read
-    0x00000000 - i.e. a bug report of "I called qd.precise once, why is the other use also
-    protected?".
-    """
-
-    @qd.kernel
-    def k(x: qd.types.ndarray(qd.f32, ndim=1), out: qd.types.ndarray(qd.i32, ndim=1)):
-        zero = qd.f32(0.0)
-        # Build the expression once, then reuse it two different ways: one raw, one wrapped.
-        # Python's AST transformer wraps the RHS of a `var = rhs` assignment via `expr_init`, so
-        # `ab` binds to an IdExpression for an alloca whose rvalue is the original (untagged)
-        # BinaryOp. That BinaryOp must remain untagged after `qd.precise(ab)` is applied to the
-        # alias below - which is exactly the non-mutation contract this test pins down.
-        ab = x[0] + zero
-        # (a) Raw use: must stay unprotected -> alg_simp strips `-0.0 + 0.0` -> 0x80000000.
-        out[0] = qd.bit_cast(ab, qd.i32)
-        # (b) Wrapped use: the returned Expr carries the tag; storing through it reaches a precise
-        # add at flatten time -> IEEE `-0.0 + 0.0 = +0.0` -> 0x00000000.
-        out[1] = qd.bit_cast(qd.precise(x[0] + zero), qd.i32)
-
-    x_in = qd.ndarray(dtype=qd.f32, shape=(1,))
-    x_in.from_numpy(np.array([-0.0], dtype=np.float32))
-    out = qd.ndarray(dtype=qd.i32, shape=(2,))
-    k(x_in, out)
-    raw_bits, wrapped_bits = (int(v) & 0xFFFFFFFF for v in out.to_numpy())
-    assert raw_bits == 0x80000000, (
-        f"Raw (non-precise) use of an expression aliased through a Python variable must remain "
-        f"unprotected; got 0x{raw_bits:08x}, expected 0x80000000. qd.precise may still be mutating "
-        f"its input subtree in place."
-    )
-    assert wrapped_bits == 0x00000000, (
-        f"Wrapped `qd.precise(...)` use must produce IEEE semantics (bit pattern 0x00000000); "
-        f"got 0x{wrapped_bits:08x}."
-    )
-
-
-@test_utils.test(default_fp=qd.f32, fast_math=True)
 def test_qd_precise_clones_shared_subexpression():
-    """Stronger form of the non-mutation contract: when the SAME BinaryOp subtree appears twice in
-    a single expression (shared via an intermediate Python variable), wrapping one position in
-    `qd.precise(...)` must not propagate the tag to the other position.
+    """Non-mutation contract: when the same subtree appears twice in a single kernel (shared via an intermediate
+    Python variable), wrapping one position in `qd.precise(...)` must not propagate the tag to the other position.
 
-    Under the old in-place-mutation design this test would fail: tagging one alias would reach
-    through the shared `BinaryOpExpression` and retroactively tag every other reference to it.
-    The clone-based contract produces a fresh subtree for the `qd.precise` side and leaves the
-    raw side bit-exactly untouched.
+    Under the old in-place-mutation design this test would fail: tagging one alias would reach through the shared
+    `BinaryOpExpression` and retroactively tag every other reference to it. The clone-based contract produces a fresh
+    subtree for the `qd.precise` side and leaves the raw side bit-exactly untouched.
     """
 
     @qd.kernel
@@ -476,8 +440,8 @@ def test_qd_precise_idempotent_when_fast_math_off():
     )
 
 
-# NOTE: a behavioral test for the `pow` precise-bail (alg_simp.cpp:463) is deliberately omitted. The
-# rewrites `a**1 -> a`, `a**0 -> 1`, `a**0.5 -> sqrt(a)`, and `a**n -> (a*a)...` are all IEEE-equivalent to
-# the original `pow()` call on the inputs exposed by any plain-pytest kernel, so there is no observable
-# difference between `qd.precise(x ** n)` and `x ** n` at runtime today. The gate remains valuable as
-# future-proofing (keeps the synthesized mul/div/sqrt chain tagged consistently with what the user wrote).
+# NOTE: a behavioral test for `pow` precise-propagation (alg_simp.cpp pow branch, ~line 485) is deliberately omitted.
+# The rewrites `a**1 -> a`, `a**0 -> 1`, `a**0.5 -> sqrt(a)`, and `a**n -> (a*a)...` are all IEEE-equivalent to the
+# original `pow()` call on the inputs exposed by any plain-pytest kernel, so there is no observable difference between
+# `qd.precise(x ** n)` and `x ** n` at runtime today. Propagating `stmt->precise` onto the synthesized sqrt / mul / div
+# chain remains valuable as future-proofing (keeps the rewritten chain tagged consistently with what the user wrote).
