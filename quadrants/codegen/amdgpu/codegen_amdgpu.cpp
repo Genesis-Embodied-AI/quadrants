@@ -389,6 +389,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (op != BinaryOpType::atan2 && op != BinaryOpType::pow) {
       return TaskCodeGenLLVM::visit(stmt);
     }
+    // The base-class `visit(BinaryOpStmt*)` terminates with `if (stmt->precise) disable_fast_math(...)`
+    // so LLVM cannot substitute approximate variants for precise-tagged FP ops. The AMDGPU override
+    // below returns without chaining to the base, so we mirror that same guard on the __ocml_* call
+    // results. AMDGPU's `__ocml_*` transcendentals are currently correctly-rounded (no `__ocml_fast_*`
+    // variants), so this is defensive against future libocml changes rather than a bug today.
     auto lhs = llvm_val[stmt->lhs];
     auto rhs = llvm_val[stmt->rhs];
 
@@ -417,6 +422,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else {
         QD_NOT_IMPLEMENTED
       }
+    }
+    if (stmt->precise) {
+      disable_fast_math(llvm_val[stmt]);
     }
   }
 
