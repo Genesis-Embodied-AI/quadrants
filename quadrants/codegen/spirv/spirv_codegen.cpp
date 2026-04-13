@@ -1166,6 +1166,16 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   else {
     QD_NOT_IMPLEMENTED;
   }
+  // Mirror the post-hoc block in visit(UnaryOpStmt*): FP binary transcendentals (atan2, pow) go
+  // through `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` which calls `ir_->call_glsl450(...)` without any
+  // `maybe_no_contraction` plumbing, so `qd.precise(qd.atan2(y, x))` and `qd.precise(x ** y)` on
+  // SPIR-V backends would otherwise silently get no decoration - inconsistent with the best-effort
+  // coverage applied to unary transcendentals. The SPIR-V spec scopes `NoContraction` to
+  // arithmetic instructions and most consumers ignore it on `OpExtInst` anyway, so the decoration
+  // is best-effort future-proofing, but it should be applied uniformly.
+  if (bin->precise && is_real(bin->element_type())) {
+    ir_->maybe_no_contraction(bin_value, /*precise=*/true);
+  }
   ir_->register_value(bin_name, bin_value);
 }
 
