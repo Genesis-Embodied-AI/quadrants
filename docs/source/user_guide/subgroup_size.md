@@ -46,7 +46,7 @@ Invalid subgroup sizes are rejected at kernel launch with a `ValueError`:
 | CUDA    | 32 only   | All others raise `ValueError` |
 | Metal   | 32 only   | All others raise `ValueError` |
 | AMDGPU  | 32, 64    | All others raise `ValueError` |
-| Vulkan  | Any value in `[min_subgroup_size, max_subgroup_size]` | Out-of-range values cause a driver error |
+| Vulkan  | Any value in `[min_subgroup_size, max_subgroup_size]` | Out-of-range values raise `ValueError` |
 | CPU     | Not supported | Any value raises `ValueError` |
 
 ### Example: verifying subgroup IDs

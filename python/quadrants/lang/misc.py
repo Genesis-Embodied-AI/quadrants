@@ -732,6 +732,13 @@ def loop_config(
                 )
         elif arch in (cpu, x64, arm64):
             raise ValueError("subgroup_size is not supported on CPU backends")
+        elif arch == vulkan:
+            min_sg = get_runtime().prog.get_min_subgroup_size()
+            max_sg = get_runtime().prog.get_max_subgroup_size()
+            if subgroup_size < min_sg or subgroup_size > max_sg:
+                raise ValueError(
+                    f"subgroup_size={subgroup_size} is not valid for Vulkan. " f"Device supports [{min_sg}, {max_sg}]"
+                )
         get_runtime().compiling_callable.ast_builder().subgroup_size(subgroup_size)
 
 

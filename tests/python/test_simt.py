@@ -739,11 +739,8 @@ def test_subgroup_size_validation(sg_size):
     elif arch == qd.vulkan:
         min_sg = qd.simt.min_subgroup_size()
         max_sg = qd.simt.max_subgroup_size()
-        if not (min_sg <= sg_size <= max_sg):
-            pytest.skip(f"subgroup_size={sg_size} outside device range [{min_sg}, {max_sg}]")
-            return
-        should_raise = False
-        match = None
+        should_raise = not (min_sg <= sg_size <= max_sg)
+        match = "not valid for Vulkan"
     else:
         pytest.skip(f"untested arch {arch}")
         return
