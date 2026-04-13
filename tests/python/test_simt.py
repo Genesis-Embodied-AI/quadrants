@@ -720,11 +720,10 @@ def test_subgroup_size_range():
 @pytest.mark.parametrize("sg_size", [8, 16, 32, 64])
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
 def test_subgroup_size_validation(sg_size):
-    """For each subgroup size, check it's accepted or rejected depending on arch."""
+    """For each subgroup size, check it's accepted or rejected depending on arch.
+    When accepted on a GPU backend, also verify invocation_id() correctness."""
     arch = qd.lang.impl.current_cfg().arch
 
-    # Expected valid sizes per backend (Python-side validation).
-    # Vulkan delegates to the driver — use device-reported range.
     _valid = {
         qd.cuda: {32},
         qd.metal: {32},
@@ -749,34 +748,23 @@ def test_subgroup_size_validation(sg_size):
         pytest.skip(f"untested arch {arch}")
         return
 
+    out = qd.ndarray(dtype=qd.i32, shape=(sg_size,))
+
     @qd.kernel
-    def k():
-        qd.loop_config(block_dim=32, subgroup_size=sg_size)
-        for i in range(32):
-            pass
+    def k(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(block_dim=sg_size, subgroup_size=sg_size)
+        for i in range(sg_size):
+            result[i] = qd.simt.subgroup.invocation_id()
 
     if should_raise:
         with pytest.raises(ValueError, match=match):
-            k()
+            k(out)
     else:
-        k()
-
-
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
-def test_subgroup_size_invocation_ids():
-    """With explicit subgroup_size=32, invocation_id() must return 0..31."""
-    N = 32
-    out = qd.ndarray(dtype=qd.i32, shape=(N,))
-
-    @qd.kernel
-    def read_ids(result: qd.types.ndarray(dtype=qd.i32, ndim=1)):
-        qd.loop_config(block_dim=N, subgroup_size=N)
-        for i in range(N):
-            result[i] = qd.simt.subgroup.invocation_id()
-
-    read_ids(out)
-    ids = out.to_numpy()
-    assert set(ids) == set(range(N)), f"Expected invocation IDs 0..{N-1}, got {sorted(set(ids))}"
+        k(out)
+        ids = out.to_numpy()
+        assert set(ids) == set(
+            range(sg_size)
+        ), f"subgroup_size={sg_size}: expected IDs 0..{sg_size - 1}, got {sorted(set(ids))}"
 
 
 @test_utils.test(arch=qd.vulkan)
