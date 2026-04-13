@@ -442,12 +442,12 @@ class AlgSimp : public BasicStmtVisitor {
       optimize_division(stmt);
     } else if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
                stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
-      if (alg_is_zero(rhs)) {
-        // a +-|^ 0 -> a
+      if (alg_is_zero(rhs) && !stmt->precise) {
+        // a +-|^ 0 -> a. Skipped when `stmt->precise` is set: `(-0.0) + 0.0` yields `+0.0` under IEEE.
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
-      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs)) {
-        // 0 +|^ a -> a
+      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs) && !stmt->precise) {
+        // 0 +|^ a -> a. Skipped when `stmt->precise` is set (same signed-zero reasoning).
         stmt->replace_usages_with(stmt->rhs);
         modifier.erase(stmt);
       } else if (stmt->op_type == BinaryOpType::bit_or && irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
@@ -461,7 +461,10 @@ class AlgSimp : public BasicStmtVisitor {
         replace_with_zero(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::pow) {
-      if (exponent_one_optimize(stmt)) {
+      if (stmt->precise) {
+        // Preserve the user's `pow()` call verbatim. The helpers below rewrite into sqrt/mul/div chains
+        // whose synthesized stmts inherit `precise=false`, stripping the IEEE-strict tag.
+      } else if (exponent_one_optimize(stmt)) {
         // a ** 1 -> a
       } else if (exponent_zero_optimize(stmt)) {
         // a ** 0 -> 1
