@@ -656,3 +656,42 @@ def test_tile16_load_missing_start_raises():
 
     with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
         k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_missing_stop_raises():
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[0:, 0:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
+        k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_load_without_slice_rebinds():
+    """Omitting [:] on the LHS rebinds the variable to a proxy, not a tile."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t = s[0:_TILE, 0:_TILE]
+            d[0:_TILE, 0:_TILE] = t
+
+    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
+    src.from_numpy(data)
+    with pytest.raises(Exception):
+        k1(src, dst)
