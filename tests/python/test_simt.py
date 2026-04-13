@@ -782,7 +782,7 @@ def test_vulkan_default_subgroup_size_32():
     assert set(ids) == set(range(N)), f"Expected IDs 0..{N-1}, got {sorted(set(ids))}"
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_subgroup_size_with_struct_for():
     """subgroup_size should propagate through struct-for loops over fields."""
     N = 32
