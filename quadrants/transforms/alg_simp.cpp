@@ -462,7 +462,8 @@ class AlgSimp : public BasicStmtVisitor {
       optimize_division(stmt);
     } else if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
                stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
-      const bool precise_fp_add = stmt->precise && stmt->op_type == BinaryOpType::add;
+      const bool precise_fp_add =
+          stmt->precise && stmt->op_type == BinaryOpType::add && is_real(stmt->ret_type.get_element_type());
       if (alg_is_zero(rhs) && !precise_fp_add) {
         // a +-|^ 0 -> a. Skipped only for `precise` FP adds: `(-0.0) + 0.0` yields `+0.0` under IEEE. `a - 0 -> a` is
         // IEEE-exact for every `a` and `bit_or`/`bit_xor` are integer ops, so they stay unconditional.
