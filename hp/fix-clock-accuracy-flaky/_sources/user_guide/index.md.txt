@@ -36,7 +36,7 @@ interop
 :maxdepth: 1
 :titlesonly:
 
-gpu_graph
+graph
 perf_dispatch
 ```
 
@@ -50,4 +50,12 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
 ```

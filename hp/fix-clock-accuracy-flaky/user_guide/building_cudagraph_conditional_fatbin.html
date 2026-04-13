@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>API Reference &#8212; Quadrants 0.6.3 documentation</title>
+    <title>Building the CUDA graph conditional fatbin &#8212; Quadrants 0.6.3 documentation</title>
   
   
   
@@ -55,14 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
-    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/building_cudagraph_conditional_fatbin';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="quadrants" href="quadrants/index.html" />
-    <link rel="prev" title="Building the CUDA graph conditional fatbin" href="../user_guide/building_cudagraph_conditional_fatbin.html" />
+    <link rel="next" title="API Reference" href="../autoapi/index.html" />
+    <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.6.3" />
@@ -145,15 +143,15 @@
 <nav>
   <ul class="bd-navbar-elements navbar-nav">
     
-<li class="nav-item ">
-  <a class="nav-link nav-internal" href="../user_guide/index.html">
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
     User guide
   </a>
 </li>
 
 
-<li class="nav-item current active">
-  <a class="nav-link nav-internal" href="#">
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
     API Reference
   </a>
 </li>
@@ -231,15 +229,15 @@
 <nav>
   <ul class="bd-navbar-elements navbar-nav">
     
-<li class="nav-item ">
-  <a class="nav-link nav-internal" href="../user_guide/index.html">
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
     User guide
   </a>
 </li>
 
 
-<li class="nav-item current active">
-  <a class="nav-link nav-internal" href="#">
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
     API Reference
   </a>
 </li>
@@ -278,8 +276,41 @@
 <nav class="bd-docs-nav bd-links"
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
-  <div class="bd-toc-item navbar-nav"><ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="quadrants/index.html">quadrants</a></li>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -320,7 +351,10 @@
         <i class="fa-solid fa-home"></i>
       </a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">API Reference</span></li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Building the CUDA graph conditional fatbin</span></li>
   </ul>
 </nav>
 </div>
@@ -337,106 +371,94 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="api-reference">
-<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">#</a></h1>
-<p>This page contains auto-generated API reference documentation <a class="footnote-reference brackets" href="#f1" id="id1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>.</p>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="quadrants/index.html">quadrants</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/ad/index.html">quadrants.ad</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/algorithms/index.html">quadrants.algorithms</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/experimental/index.html">quadrants.experimental</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/lang/index.html">quadrants.lang</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/any_array/index.html">quadrants.lang.any_array</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/ast/index.html">quadrants.lang.ast</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/ast_transformer/index.html">quadrants.lang.ast.ast_transformer</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/ast_transformer_utils/index.html">quadrants.lang.ast.ast_transformer_utils</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/ast_transformers/index.html">quadrants.lang.ast.ast_transformers</a><ul>
-<li class="toctree-l5"><a class="reference internal" href="quadrants/lang/ast/ast_transformers/call_transformer/index.html">quadrants.lang.ast.ast_transformers.call_transformer</a></li>
-<li class="toctree-l5"><a class="reference internal" href="quadrants/lang/ast/ast_transformers/function_def_transformer/index.html">quadrants.lang.ast.ast_transformers.function_def_transformer</a></li>
+  <section class="tex2jax_ignore mathjax_ignore" id="building-the-cuda-graph-conditional-fatbin">
+<h1>Building the CUDA graph conditional fatbin<a class="headerlink" href="#building-the-cuda-graph-conditional-fatbin" title="Link to this heading">#</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> feature uses a tiny CUDA kernel that calls
+<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s
+<code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These
+conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
+<code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
+<p>There are three distinct phases:</p>
+<ol class="arabic simple">
+<li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs
+<code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code>, which compiles the kernel and
+device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>.
+The output is a self-contained fatbin, committed to git as a C header.
+Requires <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> and the CUDA toolkit.</p></li>
+<li><p><strong>Quadrants build</strong> (CI / developers) — The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as a
+plain byte array. No CUDA toolkit needed.</p></li>
+<li><p><strong>Runtime</strong> (end users) — The fatbin is loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>.
+No CUDA toolkit needed.</p></li>
+</ol>
+<p>This page documents phase 1: regenerating the pre-built fatbin.</p>
+<section id="when-to-regenerate">
+<h2>When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Link to this heading">#</a></h2>
+<p>You only need to regenerate the fatbin if:</p>
+<ul class="simple">
+<li><p>The condition kernel source (<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code>)
+changes.</p></li>
+<li><p>You need to add support for a new SM architecture.</p></li>
 </ul>
-</li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/checkers/index.html">quadrants.lang.ast.checkers</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/symbol_resolver/index.html">quadrants.lang.ast.symbol_resolver</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/ast/transform/index.html">quadrants.lang.ast.transform</a></li>
+</section>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>CUDA toolkit with <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> (12.8 or later, required for SM 120 support).</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> binary must be on your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, or set <code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code>.</p></li>
 </ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/common_ops/index.html">quadrants.lang.common_ops</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/exception/index.html">quadrants.lang.exception</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/expr/index.html">quadrants.lang.expr</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/field/index.html">quadrants.lang.field</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/func/index.html">quadrants.lang.func</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/impl/index.html">quadrants.lang.impl</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/intrinsics/index.html">quadrants.lang.intrinsics</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/kernel/index.html">quadrants.lang.kernel</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/kernel_arguments/index.html">quadrants.lang.kernel_arguments</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/kernel_impl/index.html">quadrants.lang.kernel_impl</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/matrix/index.html">quadrants.lang.matrix</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/matrix_ops/index.html">quadrants.lang.matrix_ops</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/matrix_ops_utils/index.html">quadrants.lang.matrix_ops_utils</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/mesh/index.html">quadrants.lang.mesh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/misc/index.html">quadrants.lang.misc</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/ops/index.html">quadrants.lang.ops</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/runtime_ops/index.html">quadrants.lang.runtime_ops</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/shell/index.html">quadrants.lang.shell</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/simt/index.html">quadrants.lang.simt</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/simt/block/index.html">quadrants.lang.simt.block</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/simt/grid/index.html">quadrants.lang.simt.grid</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/simt/subgroup/index.html">quadrants.lang.simt.subgroup</a></li>
-<li class="toctree-l4"><a class="reference internal" href="quadrants/lang/simt/warp/index.html">quadrants.lang.simt.warp</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/snode/index.html">quadrants.lang.snode</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/source_builder/index.html">quadrants.lang.source_builder</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/struct/index.html">quadrants.lang.struct</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/lang/util/index.html">quadrants.lang.util</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/linalg/index.html">quadrants.linalg</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/linalg/matrixfree_cg/index.html">quadrants.linalg.matrixfree_cg</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/linalg/sparse_cg/index.html">quadrants.linalg.sparse_cg</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/linalg/sparse_matrix/index.html">quadrants.linalg.sparse_matrix</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/linalg/sparse_solver/index.html">quadrants.linalg.sparse_solver</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/math/index.html">quadrants.math</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/math/mathimpl/index.html">quadrants.math.mathimpl</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/profiler/index.html">quadrants.profiler</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/profiler/kernel_metrics/index.html">quadrants.profiler.kernel_metrics</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/profiler/kernel_profiler/index.html">quadrants.profiler.kernel_profiler</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/profiler/memory_profiler/index.html">quadrants.profiler.memory_profiler</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/profiler/scoped_profiler/index.html">quadrants.profiler.scoped_profiler</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/sparse/index.html">quadrants.sparse</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/tools/index.html">quadrants.tools</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/tools/diagnose/index.html">quadrants.tools.diagnose</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/tools/np2ply/index.html">quadrants.tools.np2ply</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/tools/vtk/index.html">quadrants.tools.vtk</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="quadrants/types/index.html">quadrants.types</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/annotations/index.html">quadrants.types.annotations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/compound_types/index.html">quadrants.types.compound_types</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/enums/index.html">quadrants.types.enums</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/ndarray_type/index.html">quadrants.types.ndarray_type</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/primitive_types/index.html">quadrants.types.primitive_types</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/quant/index.html">quadrants.types.quant</a></li>
-<li class="toctree-l3"><a class="reference internal" href="quadrants/types/utils/index.html">quadrants.types.utils</a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
+</section>
+<section id="regenerating">
+<h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">#</a></h2>
+<p>Run the script from the repo root:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>scripts/build_condition_kernel_fatbin.py
+</pre></div>
 </div>
-<aside class="footnote-list brackets">
-<aside class="footnote brackets" id="f1" role="doc-footnote">
-<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
-<p>Created with <a class="reference external" href="https://github.com/readthedocs/sphinx-autoapi">sphinx-autoapi</a></p>
-</aside>
-</aside>
+<p>This will:</p>
+<ol class="arabic simple">
+<li><p>Compile <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code> with relocatable device
+code for each target SM architecture.</p></li>
+<li><p>Device-link the result with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve the
+<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> extern.</p></li>
+<li><p>Write the fatbin as a C byte array to
+<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code>.</p></li>
+</ol>
+<p>After regenerating, commit the updated header. Quadrants must be rebuilt to
+pick up the new fatbin.</p>
+</section>
+<section id="adding-a-new-sm-architecture">
+<h2>Adding a new SM architecture<a class="headerlink" href="#adding-a-new-sm-architecture" title="Link to this heading">#</a></h2>
+<p>Edit the <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list in <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code> to
+add the new SM version number (e.g., <code class="docutils literal notranslate"><span class="pre">130</span></code>), then regenerate.</p>
+</section>
+<section id="files">
+<h2>Files<a class="headerlink" href="#files" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code></p></td>
+<td><p>CUDA C source for the condition kernel</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code></p></td>
+<td><p>Regeneration script</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code></p></td>
+<td><p>Generated C header (checked into git)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="how-it-s-used-at-runtime">
+<h2>How it’s used at runtime<a class="headerlink" href="#how-it-s-used-at-runtime" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">GraphManager::ensure_condition_kernel_loaded()</span></code> in
+<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_manager.cpp</span></code> loads the fatbin via
+<code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>. If the fatbin does not contain SASS for the current GPU’s
+SM architecture, loading fails with a clear error pointing to this script.</p>
+</section>
 </section>
 
 
@@ -450,20 +472,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../user_guide/building_cudagraph_conditional_fatbin.html"
+       href="troubleshooting.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Building the CUDA graph conditional fatbin</p>
+        <p class="prev-next-title">Troubleshooting</p>
       </div>
     </a>
     <a class="right-next"
-       href="quadrants/index.html"
+       href="../autoapi/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants</p>
+        <p class="prev-next-title">API Reference</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -479,9 +501,26 @@
 
 
   <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-regenerate">When to regenerate</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#regenerating">Regenerating</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adding-a-new-sm-architecture">Adding a new SM architecture</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#files">Files</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-it-s-used-at-runtime">How it’s used at runtime</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/autoapi/index.rst.txt">
+    <a href="../_sources/user_guide/building_cudagraph_conditional_fatbin.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
