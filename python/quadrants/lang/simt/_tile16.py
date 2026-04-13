@@ -388,6 +388,9 @@ def _make_tile16x16_class(dtype):
         @qd.func
         def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
             tid = qd.i32(qd.simt.subgroup.invocation_id())
+            arr_row_end = arr.shape[0]
+            if arr_row_end < row_stop:
+                row_stop = arr_row_end
             v = dtype(0.0)
             if row_start + tid < row_stop:
                 v = arr[row_start + tid, col]
@@ -396,6 +399,9 @@ def _make_tile16x16_class(dtype):
         @qd.func
         def _resolve_vec3d(self, arr: qd.template(), batch, row_start, row_stop, col):
             tid = qd.i32(qd.simt.subgroup.invocation_id())
+            arr_row_end = arr.shape[1]
+            if arr_row_end < row_stop:
+                row_stop = arr_row_end
             v = dtype(0.0)
             if row_start + tid < row_stop:
                 v = arr[batch, row_start + tid, col]
