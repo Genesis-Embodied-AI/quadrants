@@ -718,7 +718,7 @@ def test_subgroup_size_range():
 
 
 @pytest.mark.parametrize("sg_size", [8, 16, 32, 64])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal, qd.amdgpu])
+@test_utils.test()
 def test_subgroup_size_validation(sg_size):
     """For each subgroup size, check it's accepted or rejected depending on arch.
     When accepted on a GPU backend, also verify invocation_id() correctness."""
