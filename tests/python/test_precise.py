@@ -122,35 +122,30 @@ def test_qd_precise_protects_fast_math():
     ), f"qd.precise Dekker sum no more accurate than naive f32: ds_err={ds_err:.2e}, naive_err={naive_err:.2e}"
 
 
+# Restricted to LLVM backends. The SPIR-V spec scopes `NoContraction` to arithmetic instructions, so the
+# decoration is ignored on the `OpExtInst GLSL.std.450 Sin/Cos/Log/Sqrt/...` calls used for transcendentals.
+# The Vulkan precision requirements for those ExtInsts also leave the driver latitude that exceeds the 2 ULP
+# bound below (GLSL.std.450 Sin/Cos: 2^-11 absolute error; Log: 3 ULP outside [0.5, 2.0]; Sqrt: 2.5 ULP), so
+# no amount of tagging can force correctly-rounded transcendentals through the driver on SPIR-V. See
+# `docs/source/user_guide/precise.md` (Backend coverage) for the backend-specific nuance.
 @pytest.mark.parametrize("op_name", ["sin", "cos", "log", "sqrt"])
-@test_utils.test(default_fp=qd.f32, fast_math=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], default_fp=qd.f32, fast_math=True)
 def test_qd_precise_unary_rounding(op_name):
-    """`qd.precise(qd.<op>(x))` must produce the correctly-rounded f32 result on every
-    backend where the precise tag can reach codegen in a form the backend honors, even with
-    module-level `fast_math=True`.
+    """Contract check: on every LLVM backend, `qd.precise(qd.<op>(x))` must produce the correctly-rounded f32 result
+    even with module-level `fast_math=True`.
 
-    This exercises the unary precise path end-to-end: AST tagging -> IR propagation -> codegen
-    honoring the tag (LLVM FMF clear, SPIR-V `NoContraction` decoration, or CUDA libdevice
-    selection, depending on the backend). We verify correctness against numpy's correctly-rounded
-    f32 reference; the naive (non-precise) variant is deliberately not part of this test, because
-    on most backends `fast_math=True` happens to give correctly-rounded transcendentals anyway
-    and a comparison against it would be uninformative.
+    This pins the precise path end-to-end: AST tagging -> IR propagation -> codegen honoring the tag (LLVM FMF clear
+    and CUDA libdevice non-fast selection). Whether the naive (non-precise) path happens to also satisfy the 2 ULP
+    bound on a given backend is incidental - libc `sinf` / `__ocml_<fn>f` / hardware `fsqrt` are correctly-rounded
+    today regardless, and the test is not comparing against the naive path. The point is to catch the precise path
+    regressing: e.g. the CUDA `use_fast = fast_math && !stmt->precise` dispatch at `codegen_cuda.cpp` flipping to
+    unconditional `__nv_fast_<fn>f`, or `disable_fast_math()` being dropped so an LLVM upgrade starts substituting
+    `sqrt` with `rsqrt+refine` under `afn`. In every such regression the precise path is the one that fails here.
 
-    `sqrt` is included because LLVM FMF's `afn` can substitute `rsqrt+refine` which is ~2-3 ULP -
-    the precise tag must defeat that substitution. Parametrized per op so each failure reports the
-    specific function that regressed instead of a batched max-ULP over all four.
-
-    On SPIR-V backends (vulkan/metal) the `sin` / `cos` cases are skipped: the SPIR-V spec scopes
-    `NoContraction` to arithmetic instructions, so the decoration is ignored on the `OpExtInst
-    GLSL.std.450 Sin/Cos` calls, and GLSL.std.450 Sin/Cos are spec-required only to 2^-11 absolute
-    error (thousands of ULPs for inputs where the reference has magnitude < 1). No amount of tagging
-    can force a correctly-rounded sin/cos through the driver on SPIR-V. See
-    `docs/source/user_guide/precise.md` (Backend coverage). `log` and `sqrt` remain in-scope on every
-    backend because their spec precision fits within the 2 ULP bound here.
+    `sqrt` is included because LLVM FMF's `afn` can substitute `rsqrt+refine` which is ~2-3 ULP - the precise tag
+    must defeat that substitution. Parametrized per op so each failure reports the specific function that regressed
+    instead of a batched max-ULP over all four.
     """
-    if op_name in ("sin", "cos") and qd.lang.impl.current_cfg().arch in (qd.vulkan, qd.metal):
-        pytest.skip(f"SPIR-V does not provide a correctly-rounded `{op_name}`; tag is a no-op on OpExtInst")
-
     qd_op = getattr(qd, op_name)
     np_op = getattr(np, op_name)
 
