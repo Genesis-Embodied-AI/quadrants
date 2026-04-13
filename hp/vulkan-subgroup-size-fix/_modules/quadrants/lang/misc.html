@@ -1150,6 +1150,13 @@
                 <span class="p">)</span>
         <span class="k">elif</span> <span class="n">arch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">cpu</span><span class="p">,</span> <span class="n">x64</span><span class="p">,</span> <span class="n">arm64</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;subgroup_size is not supported on CPU backends&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">vulkan</span><span class="p">:</span>
+            <span class="n">min_sg</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_min_subgroup_size</span><span class="p">()</span>
+            <span class="n">max_sg</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_max_subgroup_size</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">subgroup_size</span> <span class="o">&lt;</span> <span class="n">min_sg</span> <span class="ow">or</span> <span class="n">subgroup_size</span> <span class="o">&gt;</span> <span class="n">max_sg</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;subgroup_size=</span><span class="si">{</span><span class="n">subgroup_size</span><span class="si">}</span><span class="s2"> is not valid for Vulkan. &quot;</span> <span class="sa">f</span><span class="s2">&quot;Device supports [</span><span class="si">{</span><span class="n">min_sg</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">max_sg</span><span class="si">}</span><span class="s2">]&quot;</span>
+                <span class="p">)</span>
         <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">subgroup_size</span><span class="p">(</span><span class="n">subgroup_size</span><span class="p">)</span></div>
 
 
