@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.simt._tile16 import _TILE, _make_tile16x16
@@ -296,3 +297,145 @@ def test_tile16_make_caching():
     assert a is not c
     d = _make_tile16x16(qd.f64)
     assert c is d
+
+
+def _make_spd(np_dtype=np.float32, seed: int = 42):
+    """Return a well-conditioned 16x16 symmetric positive-definite matrix."""
+    rng = np.random.RandomState(seed)
+    B = rng.randn(_TILE, _TILE).astype(np.float64)
+    return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_ger_sub(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    vec_a = qd.ndarray(qd_dtype, (_TILE,))
+    vec_b = qd.ndarray(qd_dtype, (_TILE,))
+    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        mat_arr: qd.types.NDArray[qd_dtype, 2],
+        a_arr: qd.types.NDArray[qd_dtype, 1],
+        b_arr: qd.types.NDArray[qd_dtype, 1],
+        out_arr: qd.types.NDArray[qd_dtype, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(mat_arr, 0, _TILE, 0, _TILE)
+            tid = qd.simt.subgroup.invocation_id()
+            a_val = a_arr[tid]
+            b_val = b_arr[tid]
+            t._ger_sub(a_val, b_val)
+            t._store(out_arr, 0, _TILE, 0, _TILE)
+
+    M = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np_dtype) + 1.0
+    b = np.arange(_TILE, dtype=np_dtype) + 2.0
+    mat.from_numpy(M)
+    vec_a.from_numpy(a)
+    vec_b.from_numpy(b)
+    k1(mat, vec_a, vec_b, out)
+
+    expected = M - np.outer(a, b)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
+
+
+@pytest.mark.parametrize("dst_delta", [0, 3, 16])
+@pytest.mark.parametrize("src_offset", [0, 5, 32])
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_cholesky(qd_dtype, src_offset, dst_delta):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    GRID = 64
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (GRID, GRID))
+    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+
+    dst_offset = src_offset + dst_delta
+    src_row_end = src_offset + _TILE
+    dst_row_end = dst_offset + _TILE
+
+    @qd.kernel
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t._load(src_arr, src_offset, src_row_end, src_offset, src_row_end)
+            if qd.static(qd_dtype == qd.f64):
+                t.cholesky_(qd.f64(1e-12))
+            else:
+                t.cholesky_(qd.f32(1e-6))
+            t._store(dst_arr, dst_offset, dst_row_end, dst_offset, dst_row_end)
+
+    A = _make_spd(np_dtype)
+    src_np = np.zeros((GRID, GRID), dtype=np_dtype)
+    src_np[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE] = A
+    src.from_numpy(src_np)
+    dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
+    k1(src, dst)
+
+    result = dst.to_numpy()
+    L_gpu = np.tril(result[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE])
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(L_gpu, L_ref, atol=atol)
+    untouched = np.full((GRID, GRID), -1.0, dtype=np_dtype)
+    untouched[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE] = result[
+        dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE
+    ]
+    np.testing.assert_allclose(result, untouched)
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_tile16_trsm(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    a_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    b_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(
+        a_in: qd.types.NDArray[qd_dtype, 2],
+        b_in: qd.types.NDArray[qd_dtype, 2],
+        out: qd.types.NDArray[qd_dtype, 2],
+    ):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            L = Tile()
+            L._load(a_in, 0, _TILE, 0, _TILE)
+            B = Tile()
+            B._load(b_in, 0, _TILE, 0, _TILE)
+            L.solve_triangular_(B)
+            B._store(out, 0, _TILE, 0, _TILE)
+
+    A = _make_spd(np_dtype)
+    L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
+    B = np.random.RandomState(123).randn(_TILE, _TILE).astype(np_dtype)
+
+    a_arr.from_numpy(L_ref)
+    b_arr.from_numpy(B)
+    k1(a_arr, b_arr, dst)
+
+    X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
+        np_dtype
+    )
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-4
+    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_solve_triangular_upper_raises():
+    Tile = _make_tile16x16(qd.f32)
+    with pytest.raises(TypeError, match="only lower=True"):
+        Tile().solve_triangular_(Tile(), lower=False)

@@ -73,38 +73,9 @@ def _make_tile16x16_class(dtype):
                 arr_col_end = arr.shape[1]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start < col_end:
-                    self.r0 = arr[row, col_start]
-                if col_start + 1 < col_end:
-                    self.r1 = arr[row, col_start + 1]
-                if col_start + 2 < col_end:
-                    self.r2 = arr[row, col_start + 2]
-                if col_start + 3 < col_end:
-                    self.r3 = arr[row, col_start + 3]
-                if col_start + 4 < col_end:
-                    self.r4 = arr[row, col_start + 4]
-                if col_start + 5 < col_end:
-                    self.r5 = arr[row, col_start + 5]
-                if col_start + 6 < col_end:
-                    self.r6 = arr[row, col_start + 6]
-                if col_start + 7 < col_end:
-                    self.r7 = arr[row, col_start + 7]
-                if col_start + 8 < col_end:
-                    self.r8 = arr[row, col_start + 8]
-                if col_start + 9 < col_end:
-                    self.r9 = arr[row, col_start + 9]
-                if col_start + 10 < col_end:
-                    self.r10 = arr[row, col_start + 10]
-                if col_start + 11 < col_end:
-                    self.r11 = arr[row, col_start + 11]
-                if col_start + 12 < col_end:
-                    self.r12 = arr[row, col_start + 12]
-                if col_start + 13 < col_end:
-                    self.r13 = arr[row, col_start + 13]
-                if col_start + 14 < col_end:
-                    self.r14 = arr[row, col_start + 14]
-                if col_start + 15 < col_end:
-                    self.r15 = arr[row, col_start + 15]
+                for j in range(_TILE):
+                    if col_start + j < col_end:
+                        self._set_col(j, arr[row, col_start + j])
 
         @qd.func
         def _load3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
@@ -121,38 +92,9 @@ def _make_tile16x16_class(dtype):
                 arr_col_end = arr.shape[2]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start < col_end:
-                    self.r0 = arr[batch, row, col_start]
-                if col_start + 1 < col_end:
-                    self.r1 = arr[batch, row, col_start + 1]
-                if col_start + 2 < col_end:
-                    self.r2 = arr[batch, row, col_start + 2]
-                if col_start + 3 < col_end:
-                    self.r3 = arr[batch, row, col_start + 3]
-                if col_start + 4 < col_end:
-                    self.r4 = arr[batch, row, col_start + 4]
-                if col_start + 5 < col_end:
-                    self.r5 = arr[batch, row, col_start + 5]
-                if col_start + 6 < col_end:
-                    self.r6 = arr[batch, row, col_start + 6]
-                if col_start + 7 < col_end:
-                    self.r7 = arr[batch, row, col_start + 7]
-                if col_start + 8 < col_end:
-                    self.r8 = arr[batch, row, col_start + 8]
-                if col_start + 9 < col_end:
-                    self.r9 = arr[batch, row, col_start + 9]
-                if col_start + 10 < col_end:
-                    self.r10 = arr[batch, row, col_start + 10]
-                if col_start + 11 < col_end:
-                    self.r11 = arr[batch, row, col_start + 11]
-                if col_start + 12 < col_end:
-                    self.r12 = arr[batch, row, col_start + 12]
-                if col_start + 13 < col_end:
-                    self.r13 = arr[batch, row, col_start + 13]
-                if col_start + 14 < col_end:
-                    self.r14 = arr[batch, row, col_start + 14]
-                if col_start + 15 < col_end:
-                    self.r15 = arr[batch, row, col_start + 15]
+                for j in range(_TILE):
+                    if col_start + j < col_end:
+                        self._set_col(j, arr[batch, row, col_start + j])
 
         @qd.func
         def _store(self, arr: qd.template(), row_start, row_end, col_start, col_end):
@@ -169,38 +111,9 @@ def _make_tile16x16_class(dtype):
                 arr_col_end = arr.shape[1]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start < col_end:
-                    arr[row, col_start] = self.r0
-                if col_start + 1 < col_end:
-                    arr[row, col_start + 1] = self.r1
-                if col_start + 2 < col_end:
-                    arr[row, col_start + 2] = self.r2
-                if col_start + 3 < col_end:
-                    arr[row, col_start + 3] = self.r3
-                if col_start + 4 < col_end:
-                    arr[row, col_start + 4] = self.r4
-                if col_start + 5 < col_end:
-                    arr[row, col_start + 5] = self.r5
-                if col_start + 6 < col_end:
-                    arr[row, col_start + 6] = self.r6
-                if col_start + 7 < col_end:
-                    arr[row, col_start + 7] = self.r7
-                if col_start + 8 < col_end:
-                    arr[row, col_start + 8] = self.r8
-                if col_start + 9 < col_end:
-                    arr[row, col_start + 9] = self.r9
-                if col_start + 10 < col_end:
-                    arr[row, col_start + 10] = self.r10
-                if col_start + 11 < col_end:
-                    arr[row, col_start + 11] = self.r11
-                if col_start + 12 < col_end:
-                    arr[row, col_start + 12] = self.r12
-                if col_start + 13 < col_end:
-                    arr[row, col_start + 13] = self.r13
-                if col_start + 14 < col_end:
-                    arr[row, col_start + 14] = self.r14
-                if col_start + 15 < col_end:
-                    arr[row, col_start + 15] = self.r15
+                for j in range(_TILE):
+                    if col_start + j < col_end:
+                        arr[row, col_start + j] = self._get_col(j)
 
         @qd.func
         def _store3d(self, arr: qd.template(), batch, row_start, row_end, col_start, col_end):
@@ -217,38 +130,9 @@ def _make_tile16x16_class(dtype):
                 arr_col_end = arr.shape[2]
                 if arr_col_end < col_end:
                     col_end = arr_col_end
-                if col_start < col_end:
-                    arr[batch, row, col_start] = self.r0
-                if col_start + 1 < col_end:
-                    arr[batch, row, col_start + 1] = self.r1
-                if col_start + 2 < col_end:
-                    arr[batch, row, col_start + 2] = self.r2
-                if col_start + 3 < col_end:
-                    arr[batch, row, col_start + 3] = self.r3
-                if col_start + 4 < col_end:
-                    arr[batch, row, col_start + 4] = self.r4
-                if col_start + 5 < col_end:
-                    arr[batch, row, col_start + 5] = self.r5
-                if col_start + 6 < col_end:
-                    arr[batch, row, col_start + 6] = self.r6
-                if col_start + 7 < col_end:
-                    arr[batch, row, col_start + 7] = self.r7
-                if col_start + 8 < col_end:
-                    arr[batch, row, col_start + 8] = self.r8
-                if col_start + 9 < col_end:
-                    arr[batch, row, col_start + 9] = self.r9
-                if col_start + 10 < col_end:
-                    arr[batch, row, col_start + 10] = self.r10
-                if col_start + 11 < col_end:
-                    arr[batch, row, col_start + 11] = self.r11
-                if col_start + 12 < col_end:
-                    arr[batch, row, col_start + 12] = self.r12
-                if col_start + 13 < col_end:
-                    arr[batch, row, col_start + 13] = self.r13
-                if col_start + 14 < col_end:
-                    arr[batch, row, col_start + 14] = self.r14
-                if col_start + 15 < col_end:
-                    arr[batch, row, col_start + 15] = self.r15
+                for j in range(_TILE):
+                    if col_start + j < col_end:
+                        arr[batch, row, col_start + j] = self._get_col(j)
 
         @qd.func
         def _eye_(self):
@@ -257,54 +141,152 @@ def _make_tile16x16_class(dtype):
             Each thread sets its diagonal element to 1.0 and all others to 0.0.
             """
             tid = qd.simt.subgroup.invocation_id()
-            self.r0 = 0.0
-            self.r1 = 0.0
-            self.r2 = 0.0
-            self.r3 = 0.0
-            self.r4 = 0.0
-            self.r5 = 0.0
-            self.r6 = 0.0
-            self.r7 = 0.0
-            self.r8 = 0.0
-            self.r9 = 0.0
-            self.r10 = 0.0
-            self.r11 = 0.0
-            self.r12 = 0.0
-            self.r13 = 0.0
-            self.r14 = 0.0
-            self.r15 = 0.0
-            if tid == 0:
-                self.r0 = 1.0
-            if tid == 1:
-                self.r1 = 1.0
-            if tid == 2:
-                self.r2 = 1.0
-            if tid == 3:
-                self.r3 = 1.0
-            if tid == 4:
-                self.r4 = 1.0
-            if tid == 5:
-                self.r5 = 1.0
-            if tid == 6:
-                self.r6 = 1.0
-            if tid == 7:
-                self.r7 = 1.0
-            if tid == 8:
-                self.r8 = 1.0
-            if tid == 9:
-                self.r9 = 1.0
-            if tid == 10:
-                self.r10 = 1.0
-            if tid == 11:
-                self.r11 = 1.0
-            if tid == 12:
-                self.r12 = 1.0
-            if tid == 13:
-                self.r13 = 1.0
-            if tid == 14:
-                self.r14 = 1.0
-            if tid == 15:
-                self.r15 = 1.0
+            for j in range(_TILE):
+                self._set_col(j, 0.0)
+            for j in range(_TILE):
+                if tid == j:
+                    self._set_col(j, 1.0)
+
+        @qd.func
+        def _get_col(self, k):
+            """Return the value of register (column) k."""
+            val = qd.cast(0.0, dtype)
+            if k == 0:
+                val = self.r0
+            if k == 1:
+                val = self.r1
+            if k == 2:
+                val = self.r2
+            if k == 3:
+                val = self.r3
+            if k == 4:
+                val = self.r4
+            if k == 5:
+                val = self.r5
+            if k == 6:
+                val = self.r6
+            if k == 7:
+                val = self.r7
+            if k == 8:
+                val = self.r8
+            if k == 9:
+                val = self.r9
+            if k == 10:
+                val = self.r10
+            if k == 11:
+                val = self.r11
+            if k == 12:
+                val = self.r12
+            if k == 13:
+                val = self.r13
+            if k == 14:
+                val = self.r14
+            if k == 15:
+                val = self.r15
+            return val
+
+        @qd.func
+        def _set_col(self, k, val):
+            """Set register (column) k to val."""
+            if k == 0:
+                self.r0 = val
+            if k == 1:
+                self.r1 = val
+            if k == 2:
+                self.r2 = val
+            if k == 3:
+                self.r3 = val
+            if k == 4:
+                self.r4 = val
+            if k == 5:
+                self.r5 = val
+            if k == 6:
+                self.r6 = val
+            if k == 7:
+                self.r7 = val
+            if k == 8:
+                self.r8 = val
+            if k == 9:
+                self.r9 = val
+            if k == 10:
+                self.r10 = val
+            if k == 11:
+                self.r11 = val
+            if k == 12:
+                self.r12 = val
+            if k == 13:
+                self.r13 = val
+            if k == 14:
+                self.r14 = val
+            if k == 15:
+                self.r15 = val
+
+        @qd.func
+        def _ger_sub(self, a, b):
+            """General rank-1 subtract in-place: self -= a @ b^T."""
+            for j in range(_TILE):
+                bc = qd.simt.subgroup.shuffle(b, qd.u32(j))
+                self._set_col(j, self._get_col(j) - a * bc)
+
+        @qd.func
+        def cholesky_(self, eps):
+            """In-place 16x16 Cholesky factorization via subgroup shuffles.
+
+            On return, the lower triangle holds L such that A = L @ L^T.
+            Diagonal clamped to sqrt(max(value, eps)) for numerical stability.
+            """
+            tid = qd.i32(qd.simt.subgroup.invocation_id())
+            for k in range(_TILE):
+                diag_val = qd.cast(0.0, dtype)
+                if tid == k:
+                    s = qd.cast(0.0, dtype)
+                    for j in range(_TILE):
+                        if k > j:
+                            c = self._get_col(j)
+                            s += c * c
+                    diag_val = qd.sqrt(qd.max(self._get_col(k) - s, eps))
+                    self._set_col(k, diag_val)
+
+                diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
+
+                dot = qd.cast(0.0, dtype)
+                for j in range(_TILE):
+                    if k > j:
+                        my_col = self._get_col(j)
+                        Lkj = qd.simt.subgroup.shuffle(my_col, qd.u32(k))
+                        dot += Lkj * my_col  # type: ignore[reportOperatorIssue]
+
+                if tid > k:  # type: ignore[reportOperatorIssue]
+                    new_val = (self._get_col(k) - dot) / diag_k  # type: ignore[reportOperatorIssue]
+                    self._set_col(k, new_val)
+
+        @qd.func
+        def _trsm(self, L):
+            """In-place triangular solve: solve self @ L^T = B (original self).
+
+            L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).
+            On return, self holds the solution X.
+            """
+            for c in range(_TILE):
+                dot = qd.cast(0.0, dtype)
+                for j in range(_TILE):
+                    if c > j:
+                        Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
+                        dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
+
+                diag_c = qd.simt.subgroup.shuffle(L._get_col(c), qd.u32(c))
+                new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
+                self._set_col(c, new_val)
+
+        def solve_triangular_(self, B, lower=True):
+            """Triangular solve: X @ self^T = B, storing result X in B in-place.
+
+            self must be lower-triangular (e.g. from cholesky_()).
+            Only lower=True is supported.
+            """
+            if not lower:
+                raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
+            B._trsm(self)
 
     # StructType.__call__ already defaults missing args to 0, so Tile()
     # produces a zero-initialized tile without needing default values in the
