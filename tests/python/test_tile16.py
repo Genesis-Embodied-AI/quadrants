@@ -907,3 +907,80 @@ def test_tile16_load_without_slice_rebinds():
     src.from_numpy(data)
     with pytest.raises(Exception):
         k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_augassign_add_outer_raises():
+    """t += qd.outer(a, b) must raise TypeError (only -= is supported)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[0:_TILE, 0:_TILE]
+            tid = qd.f32(qd.simt.subgroup.invocation_id())
+            t += qd.outer(tid, tid)
+
+    with pytest.raises(TypeError, match="unsupported augmented assignment op"):
+        k1(src)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_augassign_non_outer_raises():
+    """t -= <scalar> must raise TypeError (only outer products allowed)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            t[:] = s[0:_TILE, 0:_TILE]
+            t -= qd.f32(1.0)
+
+    with pytest.raises(TypeError, match="unsupported augmented assignment"):
+        k1(src)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_vec_slice_missing_stop_raises():
+    """arr[0:, col] must be rejected (vec slice missing stop)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, 2))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            v = s[0:, 0]
+            t -= qd.outer(v, v)
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
+        k1(src, dst)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_vec_slice_missing_start_raises():
+    """arr[:16, col] must be rejected (vec slice missing start)."""
+    Tile = _make_tile16x16(qd.f32)
+    src = qd.ndarray(qd.f32, (_TILE, 2))
+    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+
+    @qd.kernel
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+        qd.loop_config(block_dim=_TILE)
+        for _ in range(_TILE):
+            t = Tile()
+            v = s[:_TILE, 0]
+            t -= qd.outer(v, v)
+            d[0:_TILE, 0:_TILE] = t
+
+    with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
+        k1(src, dst)
