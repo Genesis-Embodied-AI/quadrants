@@ -105,7 +105,7 @@ Factorizes the tile in-place: replaces the lower triangle with `L` such that `L 
 L.solve_triangular_(B)
 ```
 
-Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular tile (e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
+Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
 
 ## Kernel structure
 
