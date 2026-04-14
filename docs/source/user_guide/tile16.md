@@ -4,15 +4,14 @@
 
 This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
-Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required.
+Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
 
 ## Quick start
 
 ```python
 import quadrants as qd
-from quadrants.lang.simt._tile16 import _make_tile16x16
 
-Tile = _make_tile16x16(qd.f32)
+Tile = qd.simt.Tile16x16
 N = Tile.SIZE  # 16
 
 @qd.func
@@ -26,13 +25,16 @@ def my_blocked_op(A, row0, col0, eps):
 ## Creating a tile
 
 ```python
-Tile = _make_tile16x16(qd.f32)   # or qd.f64
+Tile = qd.simt.Tile16x16
 
-t = Tile.zeros()       # all zeros
-t = Tile.eye()         # 16x16 identity
+t = Tile.zeros()                 # uses the runtime's default_fp (typically qd.f32)
+t = Tile.zeros(dtype=qd.f32)    # explicit f32
+t = Tile.zeros(dtype=qd.f64)    # explicit f64
+t = Tile.eye()                   # 16x16 identity (default dtype)
+t = Tile.eye(dtype=qd.f64)      # 16x16 identity in f64
 ```
 
-`_make_tile16x16` returns a `qd.dataclass` type whose 16 fields (`r0`–`r15`) are the scalar registers for one row. The result is cached per dtype.
+When `dtype` is omitted, it defaults to the runtime's `default_fp`. The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row. Tile types are cached per dtype internally.
 
 ## Loading and storing
 
@@ -114,6 +116,7 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-trian
 Set `block_dim=Tile.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
 
 ```python
+Tile = qd.simt.Tile16x16
 N = Tile.SIZE
 
 @qd.kernel
@@ -132,10 +135,11 @@ Tile operations communicate between threads using `qd.simt.subgroup.shuffle`. Th
 
 ## f64 support
 
-Pass `qd.f64` to the factory for double precision:
+Pass `dtype=qd.f64` for double precision:
 
 ```python
-Tile64 = _make_tile16x16(qd.f64)
+Tile = qd.simt.Tile16x16
+t = Tile.zeros(dtype=qd.f64)
 ```
 
 Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in tests.
@@ -144,8 +148,8 @@ Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in 
 
 | Operation | Description |
 |-----------|-------------|
-| `Tile.zeros()` | Create a zero-initialized tile |
-| `Tile.eye()` | Create an identity tile |
+| `Tile.zeros(dtype=...)` | Create a zero-initialized tile (dtype defaults to `default_fp`) |
+| `Tile.eye(dtype=...)` | Create an identity tile (dtype defaults to `default_fp`) |
 | `Tile.SIZE` | Tile dimension constant (16) |
 | `t[:] = arr[r0:r1, c0:c1]` | Load from 2D array |
 | `t[:] = arr[i, r0:r1, c0:c1]` | Load from 3D array |
