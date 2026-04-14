@@ -100,8 +100,10 @@ def precise(obj):
 
     Every binary and unary FP op inside ``obj`` is evaluated in source
     order with no reassociation, no FMA contraction, no approximate
-    transcendental substitution, and no algebraic simplification,
-    regardless of the module-level :attr:`fast_math` setting. This is
+    transcendental substitution, and no non-IEEE-exact algebraic
+    simplification, regardless of the module-level :attr:`fast_math`
+    setting. Folds that are IEEE-exact for every input (e.g.
+    ``a - 0 -> a``, ``a > a -> false``) are still applied. This is
     equivalent to MSL's / HLSL's ``precise`` keyword and lets you keep
     ``fast_math=True`` globally while protecting compensated-arithmetic
     blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
