@@ -422,8 +422,10 @@
 
 <span class="sd">    Every binary and unary FP op inside ``obj`` is evaluated in source</span>
 <span class="sd">    order with no reassociation, no FMA contraction, no approximate</span>
-<span class="sd">    transcendental substitution, and no algebraic simplification,</span>
-<span class="sd">    regardless of the module-level :attr:`fast_math` setting. This is</span>
+<span class="sd">    transcendental substitution, and no non-IEEE-exact algebraic</span>
+<span class="sd">    simplification, regardless of the module-level :attr:`fast_math`</span>
+<span class="sd">    setting. Folds that are IEEE-exact for every input (e.g.</span>
+<span class="sd">    ``a - 0 -&gt; a``, ``a &gt; a -&gt; false``) are still applied. This is</span>
 <span class="sd">    equivalent to MSL&#39;s / HLSL&#39;s ``precise`` keyword and lets you keep</span>
 <span class="sd">    ``fast_math=True`` globally while protecting compensated-arithmetic</span>
 <span class="sd">    blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded</span>

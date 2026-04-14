@@ -498,8 +498,10 @@ Must be called in Quadrants scope.</p>
 <dd><p>Mark a floating-point expression as IEEE-strict.</p>
 <p>Every binary and unary FP op inside <code class="docutils literal notranslate"><span class="pre">obj</span></code> is evaluated in source
 order with no reassociation, no FMA contraction, no approximate
-transcendental substitution, and no algebraic simplification,
-regardless of the module-level <code class="xref py py-attr docutils literal notranslate"><span class="pre">fast_math</span></code> setting. This is
+transcendental substitution, and no non-IEEE-exact algebraic
+simplification, regardless of the module-level <code class="xref py py-attr docutils literal notranslate"><span class="pre">fast_math</span></code>
+setting. Folds that are IEEE-exact for every input (e.g.
+<code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">-</span> <span class="pre">0</span> <span class="pre">-&gt;</span> <span class="pre">a</span></code>, <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&gt;</span> <span class="pre">a</span> <span class="pre">-&gt;</span> <span class="pre">false</span></code>) are still applied. This is
 equivalent to MSL’s / HLSL’s <code class="docutils literal notranslate"><span class="pre">precise</span></code> keyword and lets you keep
 <code class="docutils literal notranslate"><span class="pre">fast_math=True</span></code> globally while protecting compensated-arithmetic
 blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
