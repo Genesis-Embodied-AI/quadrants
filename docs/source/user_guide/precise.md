@@ -76,7 +76,9 @@ def k(...):
 | Setting | Non-precise op | `qd.precise` op |
 |---|---|---|
 | `fast_math=True` | reassoc / contract / simplify | IEEE-strict |
-| `fast_math=False` | IEEE-strict | IEEE-strict (redundant but harmless) |
+| `fast_math=False` | mostly IEEE-strict (*) | IEEE-strict |
+
+(*) Under `fast_math=False` most rewrites are already globally disabled, but the `a + 0 -> a` fold for FP adds is gated on `qd.precise` only (not on `fast_math`), so `(-0.0) + 0.0` still folds to `-0.0` without the tag. `qd.precise` is therefore not fully redundant under `fast_math=False` for code that depends on signed-zero semantics.
 
 The recommended workflow is to leave `fast_math=True` globally for throughput and reach for `qd.precise` only in the handful of spots that need IEEE behavior.
 
