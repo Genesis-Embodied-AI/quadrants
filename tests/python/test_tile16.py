@@ -463,61 +463,70 @@ def test_tile16_solve_triangular_upper_raises():
 # =============================================================================
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_load_store_roundtrip():
-    Tile = _make_tile16x16(qd.f32)
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+def test_tile16_slice_load_store_roundtrip(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
             t[:] = src_arr[0:_TILE, 0:_TILE]
             dst_arr[0:_TILE, 0:_TILE] = t
 
-    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 1.0
     src.from_numpy(data)
     k1(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_partial_cols():
-    Tile = _make_tile16x16(qd.f32)
+def test_tile16_slice_partial_cols(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
     NCOLS = 7
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
+    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd.f32, 2], dst_arr: qd.types.NDArray[qd.f32, 2]):
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
             t[:] = src_arr[0:_TILE, 0:NCOLS]
             dst_arr[0:_TILE, 0:NCOLS] = t
 
-    data = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE) + 1.0
+    data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 1.0
     src.from_numpy(data)
-    dst.from_numpy(np.full((_TILE, _TILE), -1.0, dtype=np.float32))
+    dst.from_numpy(np.full((_TILE, _TILE), -1.0, dtype=np_dtype))
     k1(src, dst)
 
     result = dst.to_numpy()
-    expected = np.full((_TILE, _TILE), -1.0, dtype=np.float32)
+    expected = np.full((_TILE, _TILE), -1.0, dtype=np_dtype)
     expected[:, :NCOLS] = data[:, :NCOLS]
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_3d_batch():
-    Tile = _make_tile16x16(qd.f32)
+def test_tile16_slice_3d_batch(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
     NBATCH = 3
-    src = qd.ndarray(qd.f32, (NBATCH, _TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (NBATCH, _TILE, _TILE))
+    src = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
+    dst = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd.f32, 3], dst_arr: qd.types.NDArray[qd.f32, 3]):
+    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             for b in range(NBATCH):
@@ -525,26 +534,29 @@ def test_tile16_slice_3d_batch():
                 t[:] = src_arr[b, 0:_TILE, 0:_TILE]
                 dst_arr[b, 0:_TILE, 0:_TILE] = t
 
-    data = np.arange(NBATCH * _TILE * _TILE, dtype=np.float32).reshape(NBATCH, _TILE, _TILE) + 1.0
+    data = np.arange(NBATCH * _TILE * _TILE, dtype=np_dtype).reshape(NBATCH, _TILE, _TILE) + 1.0
     src.from_numpy(data)
     k1(src, dst)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_ger_sub_via_outer():
-    Tile = _make_tile16x16(qd.f32)
-    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
-    vec_a = qd.ndarray(qd.f32, (_TILE,))
-    vec_b = qd.ndarray(qd.f32, (_TILE,))
-    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+def test_tile16_slice_ger_sub_via_outer(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    vec_a = qd.ndarray(qd_dtype, (_TILE,))
+    vec_b = qd.ndarray(qd_dtype, (_TILE,))
+    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd.f32, 2],
-        a_arr: qd.types.NDArray[qd.f32, 1],
-        b_arr: qd.types.NDArray[qd.f32, 1],
-        out_arr: qd.types.NDArray[qd.f32, 2],
+        mat_arr: qd.types.NDArray[qd_dtype, 2],
+        a_arr: qd.types.NDArray[qd_dtype, 1],
+        b_arr: qd.types.NDArray[qd_dtype, 1],
+        out_arr: qd.types.NDArray[qd_dtype, 2],
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -556,30 +568,34 @@ def test_tile16_slice_ger_sub_via_outer():
             t -= qd.outer(a_val, b_val)
             out_arr[0:_TILE, 0:_TILE] = t
 
-    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
-    a = np.arange(_TILE, dtype=np.float32) + 1.0
-    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    M = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np_dtype) + 1.0
+    b = np.arange(_TILE, dtype=np_dtype) + 2.0
     mat.from_numpy(M)
     vec_a.from_numpy(a)
     vec_b.from_numpy(b)
     k1(mat, vec_a, vec_b, out)
 
     expected = M - np.outer(a, b)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_vec_proxy_ger_sub_2d():
-    Tile = _make_tile16x16(qd.f32)
-    mat = qd.ndarray(qd.f32, (_TILE, _TILE))
-    vecs = qd.ndarray(qd.f32, (_TILE, 2))
-    out = qd.ndarray(qd.f32, (_TILE, _TILE))
+def test_tile16_vec_proxy_ger_sub_2d(qd_dtype):
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    Tile = _make_tile16x16(qd_dtype)
+    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    vecs = qd.ndarray(qd_dtype, (_TILE, 2))
+    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd.f32, 2],
-        vecs_arr: qd.types.NDArray[qd.f32, 2],
-        out_arr: qd.types.NDArray[qd.f32, 2],
+        mat_arr: qd.types.NDArray[qd_dtype, 2],
+        vecs_arr: qd.types.NDArray[qd_dtype, 2],
+        out_arr: qd.types.NDArray[qd_dtype, 2],
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -588,15 +604,16 @@ def test_tile16_vec_proxy_ger_sub_2d():
             t -= qd.outer(vecs_arr[0:_TILE, 0], vecs_arr[0:_TILE, 1])
             out_arr[0:_TILE, 0:_TILE] = t
 
-    M = np.arange(_TILE * _TILE, dtype=np.float32).reshape(_TILE, _TILE)
-    a = np.arange(_TILE, dtype=np.float32) + 1.0
-    b = np.arange(_TILE, dtype=np.float32) + 2.0
+    M = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE)
+    a = np.arange(_TILE, dtype=np_dtype) + 1.0
+    b = np.arange(_TILE, dtype=np_dtype) + 2.0
     mat.from_numpy(M)
     vecs.from_numpy(np.column_stack([a, b]))
     k1(mat, vecs, out)
 
     expected = M - np.outer(a, b)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
 @test_utils.test(arch=qd.gpu)
