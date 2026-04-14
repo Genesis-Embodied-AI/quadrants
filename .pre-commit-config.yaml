@@ -35,5 +35,5 @@ repos:
     rev: v3.3.4
     hooks:
       - id: pylint
-        args: ['-rn', '-sn']
+        args: ['-rn', '-sn', '--max-line-length=120']
         files: ^python/quadrants/
