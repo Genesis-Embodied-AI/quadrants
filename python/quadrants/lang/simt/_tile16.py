@@ -81,8 +81,10 @@ class _DeferredProxyMixin:
 class _TileSliceProxy(_DeferredProxyMixin):
     """Deferred 2D/3D array slice for tile load/store.
 
-    Created by subscripting a Field or ndarray with 2D slices, e.g. ``arr[k0:k0+16, k0:k0+16]``.
-    Not a quadrants expression — only valid as the RHS of a tile assignment (load) or as the LHS target (store).
+    Created by subscripting a Field or ndarray with 2D slices,
+    e.g. ``arr[row_start:row_stop, col_start:col_stop]``.
+    Not a quadrants expression -- only valid as the RHS of a tile
+    assignment (load) or as the LHS target (store).
     """
 
     _qd_is_deferred = True
@@ -109,7 +111,7 @@ class _TileSliceProxy(_DeferredProxyMixin):
 class _VecSliceProxy(_DeferredProxyMixin):
     """Deferred column-vector load from a 2D/3D array.
 
-    Created by ``arr[r0:r_end, col]`` or ``arr[batch, r0:r_end, col]``.
+    Created by ``arr[row_start:row_stop, col]`` or ``arr[batch_idx, row_start:row_stop, col]``.
     Each subgroup thread loads one element; out-of-range threads get 0.
     Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
     """
