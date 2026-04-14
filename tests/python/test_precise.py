@@ -373,13 +373,14 @@ def test_qd_precise_clones_shared_subexpression():
 # (Interaction with fast_math) for the backend-specific nuance.
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], default_fp=qd.f32, fast_math=False)
 def test_qd_precise_idempotent_when_fast_math_off():
-    """With `fast_math=False`, every reassociation / algebraic rewrite that `qd.precise` gates is
-    already skipped at the module level, so wrapping in `qd.precise(...)` must be a bit-exact
-    no-op for any computation whose non-precise output relies on that gating.
+    """With `fast_math=False`, the reassociation / contraction / approximation rewrites that `qd.precise` gates are
+    already globally disabled, so for computations that only depend on those gates, wrapping in `qd.precise(...)` must
+    be a bit-exact no-op. Note: `qd.precise` also gates the `a + 0 -> a` fold for FP adds (signed-zero semantics),
+    which fires regardless of `fast_math`; this test's Dekker 2Sum workload does not exercise that pattern, so the
+    idempotency claim holds here but is not universal.
 
-    The canonical observable is Dekker / Kahan 2Sum: under `fast_math=False`, the compensation
-    term `(a - aa) + (b - bb)` is IEEE-preserved without the wrap, and the wrap must not change
-    the result.
+    The canonical observable is Dekker / Kahan 2Sum: under `fast_math=False`, the compensation term
+    `(a - aa) + (b - bb)` is IEEE-preserved without the wrap, and the wrap must not change the result.
     """
 
     @qd.func

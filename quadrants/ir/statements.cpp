@@ -26,9 +26,7 @@ bool UnaryOpStmt::same_operation(UnaryOpStmt *o) const {
   if (op_type != o->op_type) {
     return false;
   }
-  // Two unary ops that differ only in their `precise` flag are NOT the same operation: CSE or similar passes relying on
-  // `same_operation` alone must not merge a precise op with a non-precise one, or the `qd.precise(...)` tag is silently
-  // dropped on the merged representative.
+  // Two unary ops that differ only in their `precise` flag are not the same operation.
   if (precise != o->precise) {
     return false;
   }
