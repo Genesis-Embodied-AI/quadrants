@@ -514,8 +514,6 @@ def _make_tile16x16_class(dtype):
     return result
 
 
-Tile16x16 = _make_tile16x16(qd.f32)  # kept for backward compat; prefer qd.simt.Tile16x16
-
 
 class _Tile16x16Proxy:
     """Proxy for dtype-at-point-of-use tile creation.
