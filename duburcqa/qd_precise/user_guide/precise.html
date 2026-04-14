@@ -453,12 +453,13 @@
 <td><p>IEEE-strict</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fast_math=False</span></code></p></td>
+<td><p>mostly IEEE-strict (*)</p></td>
 <td><p>IEEE-strict</p></td>
-<td><p>IEEE-strict (redundant but harmless)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<p>(*) Under <code class="docutils literal notranslate"><span class="pre">fast_math=False</span></code> most rewrites are already globally disabled, but the <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">0</span> <span class="pre">-&gt;</span> <span class="pre">a</span></code> fold for FP adds is gated on <code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> only (not on <code class="docutils literal notranslate"><span class="pre">fast_math</span></code>), so <code class="docutils literal notranslate"><span class="pre">(-0.0)</span> <span class="pre">+</span> <span class="pre">0.0</span></code> still folds to <code class="docutils literal notranslate"><span class="pre">-0.0</span></code> without the tag. <code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> is therefore not fully redundant under <code class="docutils literal notranslate"><span class="pre">fast_math=False</span></code> for code that depends on signed-zero semantics.</p>
 <p>The recommended workflow is to leave <code class="docutils literal notranslate"><span class="pre">fast_math=True</span></code> globally for throughput and reach for <code class="docutils literal notranslate"><span class="pre">qd.precise</span></code> only in the handful of spots that need IEEE behavior.</p>
 </section>
 <section id="backend-coverage">
