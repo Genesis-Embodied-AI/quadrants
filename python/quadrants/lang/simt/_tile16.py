@@ -415,6 +415,7 @@ def _make_tile16x16_class(dtype):
 
         @qd.func
         def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
+            """Load one scalar per thread from a 2D array column, clamped to array bounds."""
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
@@ -426,6 +427,7 @@ def _make_tile16x16_class(dtype):
 
         @qd.func
         def _resolve_vec3d(self, arr: qd.template(), batch, row_start, row_stop, col):
+            """Load one scalar per thread from a 3D array column, clamped to array bounds."""
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
