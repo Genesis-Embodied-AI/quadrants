@@ -39,7 +39,7 @@ Bitwise operations (`bit_and`, `bit_or`, `bit_xor`, `bit_shl`, `bit_sar`) are in
 The walker descends through `BinaryOp`, `UnaryOp`, and `TernaryOp` (e.g. `qd.select`) nodes, so wrapping a composite expression protects the inner ops too:
 
 ```python
-# All three FP ops below are tagged: the outer sqrt, the inner add, and the inner mul.
+# All four FP ops below are tagged: the outer sqrt, the inner add, and the two inner muls.
 r = qd.precise(qd.sqrt(a * a + b * b))
 
 # Ternary is traversed through; the two branches and the condition's inner ops are tagged.
