@@ -223,11 +223,11 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
         # pylint: disable-next=import-outside-toplevel
-        from quadrants.lang.simt.tile_slicing import _SENTINEL, try_tile_ref
+        from quadrants.lang.simt.tile_slicing import try_tile_ref
 
-        result = try_tile_ref(value, _indices)
-        if result is not _SENTINEL:
-            return result
+        matched, proxy = try_tile_ref(value, _indices)
+        if matched:
+            return proxy
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)
@@ -254,11 +254,11 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
     if has_slice:
         if isinstance(value, (Field, AnyArray, SharedArray)):
             # pylint: disable-next=import-outside-toplevel
-            from quadrants.lang.simt.tile_slicing import _SENTINEL, try_tile_slice
+            from quadrants.lang.simt.tile_slicing import try_tile_slice
 
-            result = try_tile_slice(value, indices)
-            if result is not _SENTINEL:
-                return result
+            matched, proxy = try_tile_slice(value, indices)
+            if matched:
+                return proxy
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
