@@ -163,4 +163,4 @@ Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in 
 
 ## Example: blocked Cholesky
 
-See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, with benchmarks against NumPy.
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
