@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Benchmark 64x64 blocked Cholesky factorization using Tile16x16.
+"""Benchmark 92x92 blocked Cholesky factorization using Tile16x16.
 
 Three kernels compared:
 
-1. Baseline: scalar Cholesky-Crout, 64 threads, shared memory, 64 sequential
-   syncs. Thread 0 computes each diagonal, remaining threads parallelize
-   off-diagonal updates.
+1. Baseline: scalar Cholesky-Crout, 64 threads, shared memory, 2*N+1 sequential syncs. Thread 0 computes each
+   diagonal, remaining threads parallelize off-diagonal updates.
 
-2. Blocked: 4x4 grid of 16x16 tiles, 16 threads, shared memory, scalar Crout
-   for diagonal blocks. Same blocking structure as Tile16x16 but all data lives
-   in shared memory with block.sync() between every step.
+2. Blocked: 6x6 grid of 16x16 tiles, 16 threads, shared memory, scalar Crout for diagonal blocks. Same blocking
+   structure as Tile16x16 but all data lives in shared memory with block.sync() between every step.
 
-3. Tile16x16: same blocked structure but fully register-resident via Tile16x16.
-   No shared memory, zero syncs. Prior tiles read from global memory (L2).
+3. Tile16x16: same blocked structure but fully register-resident via Tile16x16. No shared memory, zero syncs.
+   Prior tiles read from global memory (L2).
 
 Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
 
@@ -209,10 +207,9 @@ def cholesky_tile16():
             L_kk = qd.simt.Tile16x16.eye(dtype=qd.f32)
             L_kk[:] = A_field[env, k0:k1, k0:k1]
 
-            # Subtract rank-1 contributions from prior column-blocks.
-            # Each vector load reads from global memory, but only data this
-            # subgroup itself wrote in an earlier iteration (same thread reads
-            # its own prior store), so no cross-thread sync is needed.
+            # Subtract rank-1 contributions from prior column-blocks. Each vector load reads from global memory,
+            # but only data this subgroup itself wrote in an earlier iteration (same thread reads its own prior
+            # store), so no cross-thread sync is needed.
             for jb in range(kb):
                 j0 = jb * TILE
                 for t in range(TILE):
@@ -284,7 +281,7 @@ def verify(name, L_field, A_np):
 
 
 def main():
-    print(f"Blocked Cholesky {N}x{N} benchmark (dex_hand dimensions)")
+    print(f"Blocked Cholesky {N}x{N} benchmark")
     print(f"  {N_ENVS} environments, {WARMUP} warmup, {ITERS} measured iterations")
     print()
 
