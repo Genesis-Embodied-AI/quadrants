@@ -95,7 +95,7 @@ class JITSessionAMDGPU : public JITSession {
       : JITSession(tlctx, config), data_layout(data_layout) {
     random_num_ = get_random_num();
     char *env_dir = std::getenv("QD_TMP_DIR");
-    tmp_dir_ = "/tmp/quadrants_hsaco/";
+    tmp_dir_ = "/tmp/quadrants_hsaco_" + std::to_string(getuid()) + "/";
     if (env_dir) {
       tmp_dir_ = env_dir;
       if (tmp_dir_[tmp_dir_.size() - 1] != '/') {
