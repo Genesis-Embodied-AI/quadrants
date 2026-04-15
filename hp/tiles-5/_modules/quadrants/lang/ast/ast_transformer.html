@@ -358,6 +358,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.snode</span><span class="w"> </span><span class="kn">import</span> <span class="n">append</span><span class="p">,</span> <span class="n">deactivate</span><span class="p">,</span> <span class="n">length</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.struct</span><span class="w"> </span><span class="kn">import</span> <span class="n">Struct</span><span class="p">,</span> <span class="n">StructType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">is_from_quadrants_module</span> <span class="k">as</span> <span class="n">_is_from_quadrants_module</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">is_quadrants_internal_file</span> <span class="k">as</span> <span class="n">_is_quadrants_internal_file</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">primitive_types</span>
@@ -1101,7 +1104,7 @@
                         <span class="n">violation</span> <span class="o">=</span> <span class="kc">False</span>
                     <span class="k">if</span> <span class="n">violation</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">in</span> <span class="p">[</span><span class="n">qd_math</span><span class="p">,</span> <span class="n">math</span><span class="p">,</span> <span class="n">np</span><span class="p">]:</span>
                         <span class="n">violation</span> <span class="o">=</span> <span class="kc">False</span>
-                    <span class="k">if</span> <span class="n">violation</span> <span class="ow">and</span> <span class="n">_is_quadrants_internal_file</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">file</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">violation</span> <span class="ow">and</span> <span class="n">_is_from_quadrants_module</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
                         <span class="n">violation</span> <span class="o">=</span> <span class="kc">False</span>
                     <span class="k">if</span> <span class="n">violation</span><span class="p">:</span>
                         <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;[PURE.VIOLATION] WARNING: Accessing global var </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="si">}</span><span class="s2"> from outside function scope within pure kernel </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure_reason</span><span class="si">}</span><span class="s2">&quot;</span>
