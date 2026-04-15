@@ -41,6 +41,9 @@ from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
 from quadrants.lang.util import (
+    is_from_quadrants_module as _is_from_quadrants_module,
+)
+from quadrants.lang.util import (
     is_quadrants_internal_file as _is_quadrants_internal_file,
 )
 from quadrants.types import primitive_types
@@ -678,7 +681,7 @@ class ASTTransformer(Builder):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
                         violation = False
-                    if violation and _is_quadrants_internal_file(ctx.file):
+                    if violation and _is_from_quadrants_module(node.value.ptr):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"

@@ -366,4 +366,14 @@ def is_quadrants_internal_file(filepath: str) -> bool:
     return os.path.realpath(filepath).startswith(_quadrants_package_dir() + os.sep)
 
 
+def is_from_quadrants_module(obj: object) -> bool:
+    """Return True if obj belongs to the quadrants package (module, class, or instance)."""
+    import types  # pylint: disable=C0415
+
+    if isinstance(obj, types.ModuleType):
+        return getattr(obj, "__name__", "").startswith("quadrants")
+    mod = getattr(obj, "__module__", None) or getattr(type(obj), "__module__", None)
+    return mod is not None and mod.startswith("quadrants")
+
+
 __all__ = []
