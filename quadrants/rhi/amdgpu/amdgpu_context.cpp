@@ -77,6 +77,25 @@ AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_cont
   std::free(hip_device_prop);
 
   QD_TRACE("Emitting AMDGPU code for {}", mcpu_);
+
+  // Probe async memory-pool support (hipMallocAsync / hipFreeAsync) so the LLVM executor can skip the fixed-size
+  // device_memory_GB preallocation, the same way the CUDA backend does via cuMemAllocAsync. This feature requires
+  // ROCm >= 5.2; earlier runtimes are not supported by quadrants. Use the non-throwing .call() variant so a future
+  // hipDeviceAttribute_t reshuffle degrades to "no pool" rather than aborting init.
+  int device_supports_mem_pool = 0;
+  uint32 attr_err = driver_.device_get_attribute.call(
+      &device_supports_mem_pool, HIP_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, 0 /*device ordinal*/);
+
+  if (attr_err == HIP_SUCCESS && device_supports_mem_pool) {
+    supports_mem_pool_ = true;
+    void *default_mem_pool = nullptr;
+    driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
+    // Match CUDAContext: keep up to 128 MiB cached in the pool between alloc cycles. Larger workloads are served by the
+    // pool growing on demand.
+    constexpr uint64 kMemPoolReleaseThreshold = 128ull * 1024 * 1024;
+    driver_.mem_pool_set_attribute(default_mem_pool, HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+                                   (void *)&kMemPoolReleaseThreshold);
+  }
 }
 
 std::size_t AMDGPUContext::get_total_memory() {

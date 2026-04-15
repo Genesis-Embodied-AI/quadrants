@@ -27,9 +27,13 @@ PER_AMDGPU_FUNCTION(memcpy_async, hipMemcpyAsync, void *, void *, std::size_t, u
 PER_AMDGPU_FUNCTION(memcpy_host_to_device_async, hipMemcpyHtoDAsync, void *, void *, std::size_t, void *);
 PER_AMDGPU_FUNCTION(memcpy_device_to_host_async, hipMemcpyDtoHAsync, void *, void *, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc, hipMalloc, void **, std::size_t);
+PER_AMDGPU_FUNCTION(malloc_async_impl, hipMallocAsync, void **, std::size_t, void *);
 PER_AMDGPU_FUNCTION(malloc_managed, hipMallocManaged, void **, std::size_t, uint32);
 PER_AMDGPU_FUNCTION(memset, hipMemset, void *, uint8, std::size_t);
 PER_AMDGPU_FUNCTION(mem_free, hipFree, void *);
+PER_AMDGPU_FUNCTION(mem_free_async_impl, hipFreeAsync, void *, void *);
+PER_AMDGPU_FUNCTION(device_get_default_mem_pool, hipDeviceGetDefaultMemPool, void **, int);
+PER_AMDGPU_FUNCTION(mem_pool_set_attribute, hipMemPoolSetAttribute, void *, uint32, void *);
 PER_AMDGPU_FUNCTION(mem_get_info, hipMemGetInfo, std::size_t *, std::size_t *);
 PER_AMDGPU_FUNCTION(mem_get_attribute, hipPointerGetAttribute, void *, uint32, void *);
 PER_AMDGPU_FUNCTION(mem_get_attributes, hipPointerGetAttributes, void *, void *);

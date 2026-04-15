@@ -19,6 +19,20 @@ def test_memory_allocate():
         x[i] = i
 
 
+@pytest.mark.run_in_serial
+@test_utils.test()
+def test_ndarray_exceeds_default_device_memory_gb():
+    # Allocate an ndarray larger than the default device_memory_GB (1 GiB) to exercise that on-demand growth works
+    # without user-side pool tuning. On AMDGPU this path goes through hipMallocAsync since ROCm 5.2+; CUDA uses
+    # cuMemAllocAsync; CPU/Vulkan/Metal are unaffected by device_memory_GB. The check is that the allocation and its
+    # zero-fill both succeed.
+    n = (1 << 30) // 4 + 1
+    arr = qd.ndarray(qd.i32, shape=(n,))
+    assert arr[0] == 0
+    assert arr[n // 2] == 0
+    assert arr[n - 1] == 0
+
+
 @test_utils.test(arch=get_host_arch_list())
 def test_oop_memory_leak():
     @qd.data_oriented

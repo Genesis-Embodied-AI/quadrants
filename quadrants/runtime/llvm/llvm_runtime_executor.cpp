@@ -64,6 +64,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config, KernelProfilerBa
       config.arch = host_arch();
     } else {
       // AMDGPU runtime created successfully
+      use_device_memory_pool_ = AMDGPUContext::get_instance().supports_mem_pool();
     }
 #else
     QD_WARN("Quadrants is not compiled with AMDGPU.");
