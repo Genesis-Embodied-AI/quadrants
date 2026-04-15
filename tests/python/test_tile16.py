@@ -59,7 +59,7 @@ def test_tile16_eye(qd_dtype, inplace):
             if qd.static(inplace):
                 t = Tile()
                 t._load(src_arr, 0, _TILE, 0, _TILE)
-                t._eye_()
+                t.eye_()
                 t._store(dst_arr, 0, _TILE, 0, _TILE)
             else:
                 t = Tile.eye()

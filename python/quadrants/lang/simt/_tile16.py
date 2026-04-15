@@ -154,7 +154,7 @@ _tile16_cache = {}
 def _make_tile16x16(dtype=None):
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
-    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and _load/_store/_eye_ methods.
+    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and _load/_store/eye_ methods.
     """
     if dtype is None:
         dtype = qd.f32
@@ -264,7 +264,7 @@ def _make_tile16x16_class(dtype):
                         arr[batch, row, col_start + j] = self._get_col(j)
 
         @qd.func
-        def _eye_(self):
+        def eye_(self):
             """Set this tile to the 16x16 identity matrix.  Each thread sets its diagonal element to 1.0 and all
             others to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
@@ -472,7 +472,7 @@ def _make_tile16x16_class(dtype):
     @qd.func
     def _eye():
         t = result()
-        t._eye_()  # type: ignore[reportAttributeAccessIssue]
+        t.eye_()  # type: ignore[reportAttributeAccessIssue]
         return t
 
     result.eye = _eye  # type: ignore[reportAttributeAccessIssue]
