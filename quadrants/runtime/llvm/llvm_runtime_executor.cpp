@@ -357,7 +357,10 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(const LlvmOfflineCache:
     }
   }
 
-  if (config_.arch == Arch::cuda && use_device_memory_pool() && !all_dense) {
+  if ((config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) && use_device_memory_pool() && !all_dense) {
+    // Sparse SNode trees allocate runtime state via runtime_memory_allocate_aligned during snode_initialize.
+    // When the device memory pool is active, the eager preallocate_runtime_memory() in materialize_runtime is
+    // skipped, so the bump allocator is only wired up lazily here when a sparse tree actually needs it.
     preallocate_runtime_memory();
   }
 
