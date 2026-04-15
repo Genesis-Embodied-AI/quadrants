@@ -76,18 +76,31 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
       ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
+      auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
       if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
+        // External array. Note: assuming both data & grad are on the same device.
         if (on_amdgpu_device(data_ptr)) {
           device_ptrs[data_ptr_idx] = data_ptr;
+          device_ptrs[grad_ptr_idx] = grad_ptr;
         } else {
           DeviceAllocation devalloc = executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
           device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
           AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          if (grad_ptr != nullptr) {
+            DeviceAllocation grad_devalloc =
+                executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
+            device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(grad_devalloc);
+            transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
+
+            AMDGPUDriver::get_instance().memcpy_host_to_device((void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
+          } else {
+            device_ptrs[grad_ptr_idx] = nullptr;
+          }
         }
-        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
@@ -97,7 +110,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
         // Unwrapped raw ptr on device
         device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
 
-        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)ctx.array_ptrs[grad_ptr_idx]);
+        if (grad_ptr != nullptr) {
+          ptr = static_cast<DeviceAllocation *>(grad_ptr);
+          device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(*ptr);
+        } else {
+          device_ptrs[grad_ptr_idx] = nullptr;
+        }
+
+        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }

@@ -4,7 +4,7 @@ import quadrants as qd
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
 
 torch = pytest.importorskip("torch")
 
@@ -213,8 +213,12 @@ def test_tensor_shape():
     with qd.ad.Tape(loss=loss):
         test(a, loss)
 
-    for i in range(N):
-        assert a.grad[i] == 1.0
+    # AMDGPU fp32 adjoint sums lose bit-exactness (CUDA happens to hit exactly 1.0).
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        assert torch.allclose(a.grad, torch.ones_like(a.grad))
+    else:
+        for i in range(N):
+            assert a.grad[i] == 1.0
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
