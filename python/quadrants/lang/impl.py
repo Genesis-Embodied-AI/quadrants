@@ -49,6 +49,7 @@ from quadrants.lang.mesh import (
     element_type_name,
 )
 from quadrants.lang.simt.block import SharedArray
+from quadrants.lang.simt.tile_slicing import try_tile_ref, try_tile_slice
 from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
@@ -118,6 +119,8 @@ def expr_init(rhs):
     if isinstance(rhs, MeshRelationAccessProxy):
         return rhs
     if hasattr(rhs, "_data_oriented"):
+        return rhs
+    if hasattr(rhs, "_qd_is_deferred"):
         return rhs
     return Expr(
         compiling_callable.ast_builder().expr_var(
@@ -220,6 +223,9 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             raise Exception(
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
+        matched, proxy = try_tile_ref(value, _indices)
+        if matched:
+            return proxy
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)
@@ -244,6 +250,10 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
+        if isinstance(value, (Field, AnyArray, SharedArray)):
+            matched, proxy = try_tile_slice(value, indices)
+            if matched:
+                return proxy
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
