@@ -4,8 +4,8 @@ Standard Python coverage tools only measure host-side code. Quadrants kernel cov
 lines actually execute *inside* compiled kernels on the device (CPU or GPU), including which branches of `if`/`else`
 blocks are taken at runtime.
 
-The coverage data is written in the standard `coverage.py` format, so it works with `coverage report`, `diff-cover`,
-and IDE coverage viewers out of the box.
+The coverage data is written in the standard `coverage.py` format, so it works with `coverage report`, `pytest-cov`,
+`diff-cover`, and IDE coverage viewers out of the box.
 
 ## Prerequisites
 
