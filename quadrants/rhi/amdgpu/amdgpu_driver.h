@@ -129,5 +129,14 @@ class AMDGPUDriver : protected AMDGPUDriverBase {
   // bool rocm_version_valid_{false};
 };
 
+// Byte-granular device memset for AMDGPU. Mirrors the CUDA backend, which
+// routes 4-byte-aligned allocations through cuMemsetD32_v2 (see
+// quadrants/rhi/cuda/cuda_driver_functions.inc.h: `memsetd32`); keeping the
+// two backends aligned avoids backend-specific zero-init behavior downstream.
+// It also sidesteps a ROCm issue where byte-granular hipMemset returns
+// hipErrorInvalidValue past a 1 GiB size on at least RDNA3 + ROCm 7 (see
+// Genesis-Embodied-AI/Genesis#2434), which hipMemsetD32 does not exhibit.
+void amdgpu_memset(void *ptr, uint8 value, std::size_t size);
+
 }  // namespace lang
 }  // namespace quadrants

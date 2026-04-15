@@ -38,7 +38,7 @@ RhiResult AmdgpuDevice::allocate_memory(const AllocParams &params, DeviceAllocat
     return RhiResult::out_of_memory;
   }
 
-  AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
+  amdgpu_memset((void *)info.ptr, 0, info.size);
 
   *out_devalloc = DeviceAllocation{};
   out_devalloc->alloc_id = allocations_.size();
@@ -58,7 +58,7 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
         DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).allocate_with_cache(this, params);
     QD_ASSERT(info.ptr != nullptr);
 
-    AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
+    amdgpu_memset((void *)info.ptr, 0, info.size);
   }
   info.is_imported = false;
   info.use_cached = true;

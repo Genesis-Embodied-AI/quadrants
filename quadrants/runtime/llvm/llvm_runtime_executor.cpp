@@ -372,7 +372,7 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(const LlvmOfflineCache:
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    AMDGPUDriver::get_instance().memset(root_buffer, 0, rounded_size);
+    amdgpu_memset(root_buffer, 0, rounded_size);
 #else
     QD_NOT_IMPLEMENTED;
 #endif
@@ -443,7 +443,7 @@ void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc, std::size_
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    AMDGPUDriver::get_instance().memset((void *)ptr, data, size);
+    amdgpu_memset((void *)ptr, data, size);
 #else
     QD_NOT_IMPLEMENTED;
 #endif

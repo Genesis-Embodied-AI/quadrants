@@ -75,5 +75,24 @@ AMDGPUDriver &AMDGPUDriver::get_instance() {
   return get_instance_without_context();
 }
 
+void amdgpu_memset(void *ptr, uint8 value, std::size_t size) {
+  // Prefer the 32-bit-pattern path (hipMemsetD32) for the aligned bulk, which
+  // matches how the CUDA backend issues zero-init (cuMemsetD32_v2); the ROCm
+  // byte-fill path (hipMemset) returns hipErrorInvalidValue for sizes above
+  // 1 GiB on RDNA3 + ROCm 7, while the 32-bit-pattern path is unaffected.
+  auto &driver = AMDGPUDriver::get_instance();
+  auto *bytes = static_cast<uint8 *>(ptr);
+  std::size_t aligned_bytes = size & ~std::size_t{3};
+  if (aligned_bytes > 0) {
+    uint32 pattern = static_cast<uint32>(value) * 0x01010101u;
+    driver.memsetd32(bytes, pattern, aligned_bytes / 4);
+  }
+  // Residual 0-3 trailing bytes fall back to byte hipMemset, which is always
+  // well below the size at which the ROCm issue manifests.
+  if (aligned_bytes < size) {
+    driver.memset(bytes + aligned_bytes, value, size - aligned_bytes);
+  }
+}
+
 }  // namespace lang
 }  // namespace quadrants
