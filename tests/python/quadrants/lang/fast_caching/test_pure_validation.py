@@ -251,3 +251,34 @@ def test_pure_validation_actual_violation_warning():
 
     with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
         assert k2() == 23
+
+
+@test_utils.test()
+def test_pure_validation_quadrants_module_attribute_allowed():
+    """Accessing an int constant from the quadrants package should not trigger a purity violation."""
+
+    @qd.kernel(pure=True)
+    def k1() -> qd.i32:
+        return qd.simt.Tile16x16.SIZE
+
+    assert k1() == 16
+
+
+@test_utils.test()
+def test_pure_validation_non_quadrants_attribute_warns():
+    """Accessing an int attribute on a non-quadrants object should still warn/error."""
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch
+    qd.init(arch=arch, offline_cache=False)
+
+    class Config:
+        SIZE = 32
+
+    cfg = Config()
+
+    @qd.kernel(pure=True)
+    def k1() -> qd.i32:
+        return cfg.SIZE
+
+    with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
+        assert k1() == 32
