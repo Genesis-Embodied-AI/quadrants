@@ -420,24 +420,35 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
 
       patch_intrinsic("cuda_match_any_sync_i32", Intrinsic::nvvm_match_any_sync_i32);
 
-      // LLVM 10.0.0 seems to have a bug on this intrinsic function
-      /*
-      nvvm_match_all_sync_i32
-      Args:
-          1. u32 mask
-          2. i32 value
-          3. i32 *pred
-      */
-      /*
-      patch_intrinsic("cuda_match_all_sync_i32p",
-                      Intrinsic::nvvm_math_all_sync_i32);
-      */
+      // The three intrinsics below replace the stubs in runtime.cpp that
+      // previously contained PTX inline asm with AArch64-specific register
+      // constraints. See the comment in runtime.cpp for the full story.
+      // The LLVM 10 bugs that originally prevented using these intrinsics
+      // (commented out before this change) are long fixed in LLVM 22.
+      patch_intrinsic("cuda_active_mask", Intrinsic::nvvm_activemask);
 
-      // LLVM 10.0.0 seems to have a bug on this intrinsic function
-      /*
-      patch_intrinsic("cuda_match_any_sync_i64",
-                      Intrinsic::nvvm_match_any_sync_i64);
-                      */
+      // nvvm_match_all_sync_i32p returns {i32, i1}; extract only the i32.
+      // (The predicate is discarded — same as the old inline asm did.)
+      {
+        auto func = module->getFunction("cuda_match_all_sync_i32");
+        if (func) {
+          func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          std::vector<llvm::Value *> args;
+          for (auto &arg : func->args())
+            args.push_back(&arg);
+          auto result = builder.CreateIntrinsic(Intrinsic::nvvm_match_all_sync_i32p, {}, args);
+          builder.CreateRet(builder.CreateExtractValue(result, {0}));
+          QuadrantsLLVMContext::mark_inline(func);
+        }
+      }
+
+      // cuda_match_any_sync_i64 is not registered in internal_ops.inc.h (no
+      // kernel IR emits calls to it), but it IS called from C++ runtime code
+      // in node_pointer.h::is_representative() on compute capability >= 70.
+      patch_intrinsic("cuda_match_any_sync_i64", Intrinsic::nvvm_match_any_sync_i64);
 
       patch_intrinsic("ctlz_i32", Intrinsic::ctlz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
       patch_intrinsic("cttz_i32", Intrinsic::cttz, true, {llvm::Type::getInt32Ty(*ctx)}, {get_constant(false)});
