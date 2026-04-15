@@ -65,7 +65,7 @@ For padding partial tiles in blocked algorithms:
 
 ```python
 t = Tile.eye()    # create a new identity tile
-t.eye_()          # or reset an existing tile to identity in-place
+t.eye_()         # or reset an existing tile to identity in-place
 ```
 
 Each thread sets its diagonal element to 1.0 and all others to 0.0.
