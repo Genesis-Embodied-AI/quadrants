@@ -65,7 +65,7 @@ For padding partial tiles in blocked algorithms:
 
 ```python
 t = Tile.eye()    # create a new identity tile
-t._eye_()         # or reset an existing tile to identity in-place
+t.eye_()          # or reset an existing tile to identity in-place
 ```
 
 Each thread sets its diagonal element to 1.0 and all others to 0.0.
@@ -151,7 +151,7 @@ Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in 
 | `t[:] = arr[i, r0:r1, c0:c1]` | Load from 3D array |
 | `arr[r0:r1, c0:c1] = t` | Store to 2D array |
 | `arr[i, r0:r1, c0:c1] = t` | Store to 3D array |
-| `t._eye_()` | Set to identity matrix (in-place) |
+| `t.eye_()` | Set to identity matrix (in-place) |
 | `t -= qd.outer(v, v)` | Symmetric rank-1 subtract |
 | `t -= qd.outer(a, b)` | General rank-1 subtract |
 | `t.cholesky_(eps)` | In-place Cholesky factorization |

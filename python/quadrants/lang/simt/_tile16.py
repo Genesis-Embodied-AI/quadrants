@@ -27,7 +27,7 @@ if _TYPE_CHECKING:
         def zeros(cls) -> _Tile16x16Proto: ...  # noqa: E704
         @classmethod
         def eye(cls) -> _Tile16x16Proto: ...  # noqa: E704
-        def _eye_(self) -> None: ...  # noqa: E704
+        def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: _Tile16x16Proto, lower: bool = True) -> None: ...  # noqa: E704
         def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
@@ -299,7 +299,7 @@ def _make_tile16x16_class(dtype):
                         arr[batch, row, col_start + j] = self._get_col(j)
 
         @qd.func
-        def _eye_(self):
+        def eye_(self):
             """Set this tile to the 16x16 identity matrix.  Each thread sets its diagonal element to 1.0 and all
             others to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
@@ -507,7 +507,7 @@ def _make_tile16x16_class(dtype):
     @qd.func
     def _eye():
         t = result()
-        t._eye_()  # type: ignore[reportAttributeAccessIssue]
+        t.eye_()  # type: ignore[reportAttributeAccessIssue]
         return t
 
     result.eye = _eye  # type: ignore[reportAttributeAccessIssue]

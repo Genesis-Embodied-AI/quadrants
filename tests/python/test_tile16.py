@@ -96,7 +96,7 @@ def test_tile16_eye_inplace(tensor_type, qd_dtype):
         for _ in range(_TILE):
             t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:_TILE, 0:_TILE]
-            t._eye_()
+            t.eye_()
             dst_arr[0:_TILE, 0:_TILE] = t
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 100.0
