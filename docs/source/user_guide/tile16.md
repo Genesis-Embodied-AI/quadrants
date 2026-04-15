@@ -11,17 +11,14 @@ Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and
 ```python
 import quadrants as qd
 
-N = qd.simt.Tile16x16.SIZE  # 16
-
 @qd.func
 def my_blocked_op(A, row0, col0, eps):
+    N = qd.simt.Tile16x16.SIZE
     t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
     t[:] = A[row0:row0+N, col0:col0+N]
     t.cholesky_(eps)
     A[row0:row0+N, col0:col0+N] = t
 ```
-
-`qd.simt.Tile16x16` is a proxy handle. The actual tile creation (`zeros()`, `eye()`) must happen inside a kernel or `@qd.func`.
 
 ## Creating a tile
 
@@ -117,10 +114,9 @@ Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-trian
 Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
 
 ```python
-N = qd.simt.Tile16x16.SIZE
-
 @qd.kernel
 def my_kernel(A: qd.types.NDArray[qd.f32, 3]):
+    N = qd.simt.Tile16x16.SIZE
     qd.loop_config(block_dim=N)
     for i in range(A.shape[0]):
         t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
