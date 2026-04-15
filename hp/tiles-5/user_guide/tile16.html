@@ -379,17 +379,15 @@
 <h1>Tile16x16: register-resident 16x16 tiles<a class="headerlink" href="#tile16x16-register-resident-16x16-tiles" title="Link to this heading">#</a></h1>
 <p><code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses subgroup shuffles — no shared memory needed.</p>
 <p>This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.</p>
-<p>Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p>
+<p>Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.shuffle</span></code>, which is cross-platform — no vendor-specific libraries required.</p>
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
-<span class="n">Tile</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span>
-<span class="n">N</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">SIZE</span>  <span class="c1"># 16</span>
-
 <span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_blocked_op</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">row0</span><span class="p">,</span> <span class="n">col0</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
     <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="n">N</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="n">N</span><span class="p">]</span>
     <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="n">eps</span><span class="p">)</span>
     <span class="n">A</span><span class="p">[</span><span class="n">row0</span><span class="p">:</span><span class="n">row0</span><span class="o">+</span><span class="n">N</span><span class="p">,</span> <span class="n">col0</span><span class="p">:</span><span class="n">col0</span><span class="o">+</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
@@ -398,16 +396,15 @@
 </section>
 <section id="creating-a-tile">
 <h2>Creating a tile<a class="headerlink" href="#creating-a-tile" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">Tile</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span>
-
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>                 <span class="c1"># uses the runtime&#39;s default_fp (typically qd.f32)</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>    <span class="c1"># explicit f32</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>    <span class="c1"># explicit f64</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>                   <span class="c1"># 16x16 identity (default dtype)</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>      <span class="c1"># 16x16 identity in f64</span>
+<p>Tiles are created inside kernels or <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> functions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># inside a kernel or @qd.func:</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>    <span class="c1"># all zeros, f32</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>    <span class="c1"># all zeros, f64</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>      <span class="c1"># 16x16 identity, f32</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>      <span class="c1"># 16x16 identity, f64</span>
 </pre></div>
 </div>
-<p>When <code class="docutils literal notranslate"><span class="pre">dtype</span></code> is omitted, it defaults to the runtime’s <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>. The underlying tile dataclass has 16 fields (<code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code>) — the scalar registers for one row. Tile types are cached per dtype internally.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">dtype</span></code> argument is required. The underlying tile dataclass has 16 fields (<code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code>) — the scalar registers for one row.</p>
 </section>
 <section id="loading-and-storing">
 <h2>Loading and storing<a class="headerlink" href="#loading-and-storing" title="Link to this heading">#</a></h2>
@@ -426,8 +423,8 @@
 <h3>Slice value rules<a class="headerlink" href="#slice-value-rules" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p><strong>Both start and stop indices are required.</strong> <code class="docutils literal notranslate"><span class="pre">arr[:N,</span> <span class="pre">:N]</span></code> and <code class="docutils literal notranslate"><span class="pre">arr[0:,</span> <span class="pre">0:]</span></code> are not allowed; write <code class="docutils literal notranslate"><span class="pre">arr[0:N,</span> <span class="pre">0:N]</span></code>.</p></li>
-<li><p><strong>Row range</strong> <code class="docutils literal notranslate"><span class="pre">[row0,</span> <span class="pre">row1)</span></code>: thread <code class="docutils literal notranslate"><span class="pre">tid</span></code> accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>. Threads where <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span> <span class="pre">&gt;=</span> <span class="pre">row1</span></code> are skipped. Additionally, rows beyond the array’s shape are skipped. Typically <code class="docutils literal notranslate"><span class="pre">row1</span> <span class="pre">=</span> <span class="pre">row0</span> <span class="pre">+</span> <span class="pre">Tile.SIZE</span></code>, but smaller ranges work for partial tiles.</p></li>
-<li><p><strong>Column range</strong> <code class="docutils literal notranslate"><span class="pre">[col0,</span> <span class="pre">col1)</span></code>: each active thread loads/stores columns <code class="docutils literal notranslate"><span class="pre">col0</span></code> through <code class="docutils literal notranslate"><span class="pre">min(col1,</span> <span class="pre">arr.shape[-1])</span> <span class="pre">-</span> <span class="pre">1</span></code>. Tile columns beyond this range are left as zero (load) or skipped (store). At most <code class="docutils literal notranslate"><span class="pre">Tile.SIZE</span></code> columns are accessed (tile registers <code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code> map to <code class="docutils literal notranslate"><span class="pre">col0</span></code>, <code class="docutils literal notranslate"><span class="pre">col0+1</span></code>, …, <code class="docutils literal notranslate"><span class="pre">col0+15</span></code>).</p></li>
+<li><p><strong>Row range</strong> <code class="docutils literal notranslate"><span class="pre">[row0,</span> <span class="pre">row1)</span></code>: thread <code class="docutils literal notranslate"><span class="pre">tid</span></code> accesses row <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span></code>. Threads where <code class="docutils literal notranslate"><span class="pre">row0</span> <span class="pre">+</span> <span class="pre">tid</span> <span class="pre">&gt;=</span> <span class="pre">row1</span></code> are skipped. Additionally, rows beyond the array’s shape are skipped. Typically <code class="docutils literal notranslate"><span class="pre">row1</span> <span class="pre">=</span> <span class="pre">row0</span> <span class="pre">+</span> <span class="pre">qd.simt.Tile16x16.SIZE</span></code>, but smaller ranges work for partial tiles.</p></li>
+<li><p><strong>Column range</strong> <code class="docutils literal notranslate"><span class="pre">[col0,</span> <span class="pre">col1)</span></code>: each active thread loads/stores columns <code class="docutils literal notranslate"><span class="pre">col0</span></code> through <code class="docutils literal notranslate"><span class="pre">min(col1,</span> <span class="pre">arr.shape[-1])</span> <span class="pre">-</span> <span class="pre">1</span></code>. Tile columns beyond this range are left as zero (load) or skipped (store). At most <code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.SIZE</span></code> columns are accessed (tile registers <code class="docutils literal notranslate"><span class="pre">r0</span></code>–<code class="docutils literal notranslate"><span class="pre">r15</span></code> map to <code class="docutils literal notranslate"><span class="pre">col0</span></code>, <code class="docutils literal notranslate"><span class="pre">col0+1</span></code>, …, <code class="docutils literal notranslate"><span class="pre">col0+15</span></code>).</p></li>
 <li><p><strong>Batch index</strong> (3D only): a scalar integer indexing the leading dimension.</p></li>
 </ul>
 </section>
@@ -439,8 +436,8 @@
 <section id="identity-initialization">
 <h2>Identity initialization<a class="headerlink" href="#identity-initialization" title="Link to this heading">#</a></h2>
 <p>For padding partial tiles in blocked algorithms:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">eye</span><span class="p">()</span>    <span class="c1"># create a new identity tile</span>
-<span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>         <span class="c1"># or reset an existing tile to identity in-place</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>    <span class="c1"># create a new identity tile</span>
+<span class="n">t</span><span class="o">.</span><span class="n">eye_</span><span class="p">()</span>                                     <span class="c1"># or reset an existing tile to identity in-place</span>
 </pre></div>
 </div>
 <p>Each thread sets its diagonal element to 1.0 and all others to 0.0.</p>
@@ -481,15 +478,13 @@
 <h2>Kernel structure<a class="headerlink" href="#kernel-structure" title="Link to this heading">#</a></h2>
 <section id="block-size">
 <h3>Block size<a class="headerlink" href="#block-size" title="Link to this heading">#</a></h3>
-<p>Set <code class="docutils literal notranslate"><span class="pre">block_dim=Tile.SIZE</span></code> so that each thread block contains exactly 16 threads — one per tile row:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">Tile</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span>
-<span class="n">N</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">SIZE</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<p>Set <code class="docutils literal notranslate"><span class="pre">block_dim=qd.simt.Tile16x16.SIZE</span></code> so that each thread block contains exactly 16 threads — one per tile row:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">3</span><span class="p">]):</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span>
     <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">()</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
         <span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
         <span class="n">t</span><span class="o">.</span><span class="n">cholesky_</span><span class="p">(</span><span class="mf">1e-6</span><span class="p">)</span>
         <span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>
@@ -504,11 +499,9 @@
 <section id="f64-support">
 <h2>f64 support<a class="headerlink" href="#f64-support" title="Link to this heading">#</a></h2>
 <p>Pass <code class="docutils literal notranslate"><span class="pre">dtype=qd.f64</span></code> for double precision:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">Tile</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">Tile</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Not all GPU backends support f64. Use <code class="docutils literal notranslate"><span class="pre">test_utils.skip_if_f64_unsupported()</span></code> in tests.</p>
 </section>
 <section id="method-reference">
 <h2>Method reference<a class="headerlink" href="#method-reference" title="Link to this heading">#</a></h2>
@@ -519,13 +512,13 @@
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Tile.zeros(dtype=...)</span></code></p></td>
-<td><p>Create a zero-initialized tile (dtype defaults to <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.zeros(dtype=...)</span></code></p></td>
+<td><p>Create a zero-initialized tile</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Tile.eye(dtype=...)</span></code></p></td>
-<td><p>Create an identity tile (dtype defaults to <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.eye(dtype=...)</span></code></p></td>
+<td><p>Create an identity tile</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Tile.SIZE</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.SIZE</span></code></p></td>
 <td><p>Tile dimension constant (16)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t[:]</span> <span class="pre">=</span> <span class="pre">arr[r0:r1,</span> <span class="pre">c0:c1]</span></code></p></td>
@@ -561,7 +554,35 @@
 </section>
 <section id="example-blocked-cholesky">
 <h2>Example: blocked Cholesky<a class="headerlink" href="#example-blocked-cholesky" title="Link to this heading">#</a></h2>
-<p>See <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using Tile16x16, with benchmarks against NumPy.</p>
+<p>See <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).</p>
+<p>Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Kernel</p></th>
+<th class="head text-right"><p>Threads</p></th>
+<th class="head text-right"><p>Time (us)</p></th>
+<th class="head text-right"><p>vs baseline</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>baseline (scalar Crout, shared mem)</p></td>
+<td class="text-right"><p>64</p></td>
+<td class="text-right"><p>2766</p></td>
+<td class="text-right"><p>1.00x</p></td>
+</tr>
+<tr class="row-odd"><td><p>blocked (scalar Crout, shared mem)</p></td>
+<td class="text-right"><p>16</p></td>
+<td class="text-right"><p>2556</p></td>
+<td class="text-right"><p>1.08x</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>tile16 (Tile16x16, no shared memory)</strong></p></td>
+<td class="text-right"><p>16</p></td>
+<td class="text-right"><p>533</p></td>
+<td class="text-right"><p><strong>5.19x</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
 </section>
 </section>
 
