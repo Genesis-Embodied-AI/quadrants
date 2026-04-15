@@ -137,8 +137,6 @@ Pass `dtype=qd.f64` for double precision:
 t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
 ```
 
-Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in tests.
-
 ## Method reference
 
 | Operation | Description |
