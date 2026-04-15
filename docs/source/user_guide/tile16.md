@@ -160,3 +160,7 @@ Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in 
 | `t -= qd.outer(a, b)` | General rank-1 subtract |
 | `t.cholesky_(eps)` | In-place Cholesky factorization |
 | `L.solve_triangular_(B)` | Triangular solve (in-place on B) |
+
+## Example: blocked Cholesky
+
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, with benchmarks against NumPy.
