@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/spirv_codegen.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <variant>
 #include <filesystem>
@@ -2208,10 +2209,18 @@ const spirv::Label TaskCodegen::return_label() const {
   return continue_label_stack_.front();
 }
 
+// Per-thread flag set when SPIRV-Tools reports an ID-space overflow during optimization. The optimizer does not always
+// propagate this as `Pass::Status::Failure`, so we capture it here and treat it as a hard failure that requires falling
+// back to the un-optimized SPIR-V.
+static thread_local bool spirv_opt_id_overflow_seen = false;
+
 static void spriv_message_consumer(spv_message_level_t level,
                                    const char *source,
                                    const spv_position_t &position,
                                    const char *message) {
+  if (message != nullptr && std::string_view(message).find("ID overflow") != std::string_view::npos) {
+    spirv_opt_id_overflow_seen = true;
+  }
   // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
   if (level <= SPV_MSG_FATAL) {
     QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
@@ -2333,11 +2342,12 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     bool success = true;
     {
+      spirv_opt_id_overflow_seen = false;
       bool result = false;
       QD_WARN_IF(
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(), &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
-      if (result) {
+      if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
     }
@@ -2368,7 +2378,9 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     }
 
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
-    generated_spirv.push_back(std::move(optimized_spv));
+    // If SPIR-V optimization failed (e.g. because a SPIRV-Tools pass overflowed the 4M ID space), `optimized_spv` may
+    // reference id 0 and is unsafe to ship to the GPU backend. Fall back to the un-optimized kernel from TaskCodegen.
+    generated_spirv.push_back(success ? std::move(optimized_spv) : std::move(task_res.spirv_code));
   }
   kernel_attribs.ctx_attribs = std::move(ctx_attribs_);
   kernel_attribs.name = params_.ti_kernel_name;
