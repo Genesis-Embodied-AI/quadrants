@@ -2235,6 +2235,9 @@ static void spriv_message_consumer(spv_message_level_t level,
     return;
   if (source == nullptr)
     source = "";
+  // The raised max_id_bound and intermediate DCE passes are the primary defense. This substring match is fragile
+  // (tied to SPIRV-Tools message text) but harmless if it stops matching -- Run() failure is also checked
+  // independently.
   if (std::string_view(message).find("ID overflow") != std::string_view::npos) {
     spirv_opt_id_overflow_seen = true;
   }
@@ -2249,9 +2252,7 @@ static void spriv_message_consumer(spv_message_level_t level,
   }
   spirv_msg_last = message;
   // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
-  if (level <= SPV_MSG_FATAL) {
-    QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
-  } else if (level <= SPV_MSG_ERROR) {
+  if (level <= SPV_MSG_ERROR) {
     // Log at WARN, not ERROR: QD_ERROR throws, which would propagate through SPIRV-Tools (not
     // exception-safe) and bypass spirv_msg_flush_dedup(). The hard error is raised by QD_ERROR_IF
     // after Run() returns.
@@ -2432,11 +2433,11 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       fout.close();
     }
 
-    kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     QD_ERROR_IF(!success,
                 "SPIR-V optimization failed for '{}' (possible ID-space overflow). "
                 "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
                 tp.ti_kernel_name);
+    kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     generated_spirv.push_back(std::move(optimized_spv));
   }
   kernel_attribs.ctx_attribs = std::move(ctx_attribs_);
