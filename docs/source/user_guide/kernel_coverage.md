@@ -17,7 +17,24 @@ pip install coverage
 
 ## Enabling kernel coverage
 
-Set the `QD_KERNEL_COVERAGE` environment variable before running your program:
+### Automatic with pytest-cov
+
+If you use `pytest-cov`, kernel coverage is enabled automatically — no configuration needed. Quadrants ships a pytest
+plugin that detects `--cov` and sets `QD_KERNEL_COVERAGE=1` for you. Just run:
+
+```bash
+pytest --cov=my_package --cov-branch tests/
+```
+
+To disable kernel coverage while still collecting Python coverage, opt out explicitly:
+
+```bash
+QD_KERNEL_COVERAGE=0 pytest --cov=my_package --cov-branch tests/
+```
+
+### Manual with any script
+
+For scripts outside pytest, set the `QD_KERNEL_COVERAGE` environment variable:
 
 ```bash
 QD_KERNEL_COVERAGE=1 python my_simulation.py
@@ -47,14 +64,12 @@ coverage html
 
 ### With pytest-cov
 
-If you run your tests with `pytest-cov`, kernel coverage data is automatically merged with Python coverage. Enable
-both at once:
+When using `pytest-cov`, kernel coverage is enabled automatically (see above). The kernel coverage data is merged with
+Python coverage after the run:
 
 ```bash
-QD_KERNEL_COVERAGE=1 pytest --cov=my_package --cov-branch tests/
+coverage combine _qd_kcov.* .coverage
 ```
-
-After the run, `coverage combine _qd_kcov.* .coverage` merges the kernel and Python data into a single report.
 
 ## Example
 

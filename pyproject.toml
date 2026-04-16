@@ -99,6 +99,9 @@ test = [
     "pyright",
 ]
 
+[project.entry-points.pytest11]
+quadrants = "quadrants.pytest_plugin"
+
 [project.urls]
 Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 
