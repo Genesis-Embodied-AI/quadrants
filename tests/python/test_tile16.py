@@ -1,3 +1,7 @@
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 import scipy.linalg
@@ -1768,3 +1772,12 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
 
     np.testing.assert_allclose(result32, np.eye(_TILE, dtype=np.float32))
     assert result32.dtype == np.float32
+
+
+@test_utils.test(arch=qd.gpu)
+def test_tile16_cholesky_blocked_demo():
+    """Smoke-test that misc/demos/cholesky_blocked.py runs to completion."""
+    demo = Path(__file__).resolve().parents[2] / "misc" / "demos" / "cholesky_blocked.py"
+    result = subprocess.run([sys.executable, str(demo)], capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        pytest.fail(f"cholesky_blocked.py exited with code {result.returncode}\nstderr:\n{result.stderr}")
