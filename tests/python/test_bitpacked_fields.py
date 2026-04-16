@@ -150,8 +150,6 @@ def test_bitpacked_fields():
 
 @test_utils.test(require=[qd.extension.quant_basic, qd.extension.sparse], debug=True)
 def test_bitpacked_fields_struct_for():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: bitpacked fields with struct-for produce wrong result on AMDGPU. This should be fixed.")
     block_size = 16
     N = 64
     cell = qd.root.pointer(qd.i, N // block_size)

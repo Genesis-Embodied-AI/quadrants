@@ -1,5 +1,3 @@
-import pytest
-
 import quadrants as qd
 
 from tests import test_utils
@@ -60,6 +58,4 @@ def _test_dynamic_attributes(dt):
 
 @test_utils.test(require=qd.extension.sparse, exclude=[qd.metal], default_fp=qd.f32, debug=True)
 def test_dynamic_attributes_f32():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: dynamic SNode attribute access hangs on AMDGPU (TIMEOUT). This should be fixed.")
     _test_dynamic_attributes(qd.f32)

@@ -1,5 +1,3 @@
-import pytest
-
 import quadrants as qd
 from quadrants.lang.misc import loop_unique
 
@@ -8,8 +6,6 @@ from tests import test_utils
 
 @test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_simple_1d():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: loop-unique optimization causes hipErrorIllegalAddress on AMDGPU. This should be fixed.")
     x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
@@ -35,8 +31,6 @@ def test_loop_unique_simple_1d():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_binary_op_1d():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: loop-unique optimization causes hipErrorIllegalAddress on AMDGPU. This should be fixed.")
     x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
@@ -62,8 +56,6 @@ def test_loop_unique_binary_op_1d():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_nested_1d():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: loop-unique optimization causes hipErrorIllegalAddress on AMDGPU. This should be fixed.")
     x, y = qd.field(qd.i32), qd.field(qd.i32)
 
     N = 16
@@ -90,8 +82,6 @@ def test_loop_unique_nested_1d():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_loop_unique_2d():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: loop-unique optimization causes hipErrorIllegalAddress on AMDGPU. This should be fixed.")
     x, y, z = qd.field(qd.i32), qd.field(qd.i32), qd.field(qd.i32)
 
     N = 8
