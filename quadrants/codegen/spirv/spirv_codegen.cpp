@@ -2210,8 +2210,8 @@ const spirv::Label TaskCodegen::return_label() const {
 }
 
 // Per-thread flag set when SPIRV-Tools reports an ID-space overflow during optimization. The optimizer does not always
-// propagate this as `Pass::Status::Failure`, so we capture it here and treat it as a hard failure that requires falling
-// back to the un-optimized SPIR-V.
+// propagate this as `Pass::Status::Failure`, so we capture it here and abort the kernel compilation with a hard error
+// (see QD_ERROR_IF in KernelCodegen::run).
 static thread_local bool spirv_opt_id_overflow_seen = false;
 
 // Deduplication state for the SPIRV-Tools message consumer. Exposed so that KernelCodegen::run()
@@ -2250,6 +2250,8 @@ static void spriv_message_consumer(spv_message_level_t level,
   spirv_msg_last = message;
   // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
   if (level <= SPV_MSG_FATAL) {
+    QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
+  } else if (level <= SPV_MSG_ERROR) {
     QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
     QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
@@ -2325,7 +2327,8 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   // The SPIRV-Tools default ID bound (0x3FFFFF = 4194303) is too low for large autodiff kernels
   // where SSA construction (LocalMultiStoreElim / SSARewrite) creates millions of phi nodes.
   // Raise the optimizer-internal limit; CompactIdsPass at the end of the pipeline renumbers the
-  // output back into the spec-compliant range (SPIR-V 2.3 caps the bound at 4194303).
+  // output back to a dense range (the SPIR-V spec allows IDs up to 2^32-1; 4194303 is only the
+  // SPIRV-Tools default, not a spec limit).
   spirv_opt_options_.set_max_id_bound(0x3FFFFFF);
 
   spirv_tools_ = std::make_unique<spvtools::SpirvTools>(target_env);
@@ -2393,6 +2396,9 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(), &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
       spirv_msg_flush_dedup();
+      if (spirv_opt_id_overflow_seen && !result) {
+        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.ti_kernel_name);
+      }
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
@@ -2414,7 +2420,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       std::vector<uint32_t> &spirv = success ? optimized_spv : task_res.spirv_code;
 
       std::string spirv_asm;
-      spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
+      spirv_tools_->Disassemble(spirv, &spirv_asm);
       auto kernel_name = tp.ti_kernel_name;
       QD_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
 
