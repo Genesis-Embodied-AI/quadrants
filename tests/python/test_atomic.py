@@ -228,7 +228,7 @@ def test_local_atomic_with_if():
 @test_utils.test()
 def test_atomic_sub_with_type_promotion():
     if qd.lang.impl.current_cfg().arch in (qd.metal, qd.vulkan):
-        pytest.xfail("SPIR-V codegen bug with atomic sub type promotion")
+        pytest.xfail("BUG: SPIR-V codegen does not support unsigned integer negation (OpSNegate).")
 
     # Test Case 1
     @qd.kernel

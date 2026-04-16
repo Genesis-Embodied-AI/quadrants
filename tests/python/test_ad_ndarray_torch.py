@@ -114,7 +114,7 @@ def test_ad_select():
 @test_utils.test(arch=archs_support_ndarray_ad)
 def test_ad_mixed_with_torch():
     if qd.lang.impl.current_cfg().arch == qd.metal:
-        pytest.xfail("ndarray autodiff is broken on metal")
+        pytest.xfail("BUG: ndarray autodiff broken on metal -- gradients stay zero.")
 
     @test_utils.torch_op(output_shapes=[(1,)], output_dtype=torch.float)
     @qd.kernel

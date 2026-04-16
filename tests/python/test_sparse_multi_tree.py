@@ -8,7 +8,7 @@ from tests import test_utils
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_pointer():
     if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: multiple sparse tree operations hang on AMDGPU (TIMEOUT). This should be fixed.")
+        pytest.xfail("BUG: multiple sparse tree operations hang on AMDGPU (TIMEOUT).")
     e = qd.Vector.field(2, dtype=int, shape=16)
 
     e[0] = qd.Vector([0, 0])

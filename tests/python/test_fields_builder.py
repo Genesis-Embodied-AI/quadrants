@@ -87,7 +87,7 @@ def test_fields_builder_dense():
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_fields_builder_pointer():
     if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: pointer SNode produces wrong result on AMDGPU. This should be fixed.")
+        pytest.xfail("BUG: pointer SNode produces wrong result on AMDGPU.")
     shape = 5
     fb1 = qd.FieldsBuilder()
     x = qd.field(qd.f32)
