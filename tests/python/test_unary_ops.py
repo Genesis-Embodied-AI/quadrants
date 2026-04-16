@@ -120,7 +120,7 @@ def test_popcnt():
     assert test_u32(10000) == 5
     assert test_u64(100) == 3
     assert test_u64(1000) == 6
-    assert test_i64(10000) == 5
+    assert test_u64(10000) == 5
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
