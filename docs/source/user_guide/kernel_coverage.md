@@ -98,7 +98,7 @@ The forward pass is covered. The backward pass is not, because instrumenting it 
 computation. This is normally fine — the backward pass is auto-generated and replays the same control flow, so
 forward coverage is sufficient.
 
-One edge case: a kernel that is *only* ever called inside a `qd.ad.Tape` with `validation=True` will not be covered.
+One edge case: kernel calls inside a `qd.ad.Tape` with `validation=True` will not be covered.
 
 ## Offline cache interaction
 
