@@ -284,17 +284,19 @@ def test(arch=None, exclude=None, require=None, **options):
     return decorator
 
 
-def torch_op(*, output_shapes=[(1,)]):
+def torch_op(*, output_shapes=[(1,)], output_dtype=None):
     def inner(f):
         from quadrants.lang.util import has_pytorch
 
         if has_pytorch():
             import torch
 
+        out_dtype = torch.double if output_dtype is None else output_dtype
+
         class CustomQuadrantsOp(torch.autograd.Function):
             @staticmethod
             def forward(ctx, *inputs):
-                outputs = tuple([torch.zeros(shape, dtype=torch.double, requires_grad=True) for shape in output_shapes])
+                outputs = tuple([torch.zeros(shape, dtype=out_dtype, requires_grad=True) for shape in output_shapes])
                 f(*inputs, *outputs)
                 ctx.save_for_backward(*inputs, *outputs)
                 return outputs

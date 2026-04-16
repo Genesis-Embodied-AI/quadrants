@@ -3,7 +3,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
     e = qd.Vector.field(2, dtype=int, shape=16)
 

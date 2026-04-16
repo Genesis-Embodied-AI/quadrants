@@ -38,8 +38,9 @@ def test_classfunc():
             assert arr.val[i, j] == i * j * 2
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_class_real_func():
+
     @qd.data_oriented
     class Array2D:
         def __init__(self, n, m):
