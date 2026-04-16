@@ -2268,7 +2268,14 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   spirv_opt_ = std::make_unique<spvtools::Optimizer>(target_env);
   spirv_opt_->SetMessageConsumer(spriv_message_consumer);
   if (params.enable_spv_opt) {
-    // From: SPIRV-Tools/source/opt/optimizer.cpp
+    // From: SPIRV-Tools/source/opt/optimizer.cpp (RegisterPerformancePasses).
+    // Intermediate AggressiveDCE passes are critical: without them, dead instructions accumulate
+    // between expensive transformations and a single pass can exhaust the 4M SPIR-V ID space on
+    // large autodiff kernels.
+    // From: SPIRV-Tools/source/opt/optimizer.cpp (RegisterPerformancePasses).
+    // Intermediate AggressiveDCE passes are critical: without them, dead instructions accumulate
+    // between expensive transformations and a single pass (e.g. LocalMultiStoreElim doing SSA
+    // construction) can exhaust the SPIR-V ID space on large autodiff kernels.
     spirv_opt_->RegisterPass(spvtools::CreateWrapOpKillPass())
         .RegisterPass(spvtools::CreateDeadBranchElimPass())
         .RegisterPass(spvtools::CreateMergeReturnPass())
@@ -2278,23 +2285,37 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
         .RegisterPass(spvtools::CreatePrivateToLocalPass())
         .RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass())
         .RegisterPass(spvtools::CreateLocalSingleStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateScalarReplacementPass())
         .RegisterPass(spvtools::CreateLocalAccessChainConvertPass())
+        .RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass())
+        .RegisterPass(spvtools::CreateLocalSingleStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateLocalMultiStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateCCPPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateLoopUnrollPass(true))
+        .RegisterPass(spvtools::CreateDeadBranchElimPass())
         .RegisterPass(spvtools::CreateRedundancyEliminationPass())
         .RegisterPass(spvtools::CreateCombineAccessChainsPass())
         .RegisterPass(spvtools::CreateSimplificationPass())
         .RegisterPass(spvtools::CreateSSARewritePass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateVectorDCEPass())
         .RegisterPass(spvtools::CreateDeadInsertElimPass())
         .RegisterPass(spvtools::CreateIfConversionPass())
         .RegisterPass(spvtools::CreateCopyPropagateArraysPass())
         .RegisterPass(spvtools::CreateReduceLoadSizePass())
-        .RegisterPass(spvtools::CreateBlockMergePass());
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
+        .RegisterPass(spvtools::CreateBlockMergePass())
+        .RegisterPass(spvtools::CreateCompactIdsPass());
   }
   spirv_opt_options_.set_run_validator(false);
+  // The SPIRV-Tools default ID bound (0x3FFFFF ~= 4M) is too low for large autodiff kernels
+  // where SSA construction (LocalMultiStoreElim / SSARewrite) creates millions of phi nodes.
+  // Raise the limit to 64M; the SPIR-V spec itself imposes no upper bound on the ID space.
+  spirv_opt_options_.set_max_id_bound(0x3FFFFFF);
 
   spirv_tools_ = std::make_unique<spvtools::SpirvTools>(target_env);
 }
@@ -2353,14 +2374,8 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     std::vector<uint32_t> optimized_spv(task_res.spirv_code);
 
-    // The SPIR-V spec caps the ID bound at 4 194 303 (0x3FFFFF). Some SPIRV-Tools passes can inflate the ID count
-    // by 50x+ within a single invocation, and when TakeNextId() returns 0 the optimizer segfaults. Skip optimization
-    // for modules whose id_bound is already high enough to risk overflow; the un-optimized SPIR-V is always valid.
-    static constexpr uint32_t kSpvOptIdBoundThreshold = 65536;
-    const uint32_t id_bound = task_res.spirv_code.size() >= 4 ? task_res.spirv_code[3] : 0;
-
     bool success = true;
-    if (id_bound < kSpvOptIdBoundThreshold) {
+    {
       spirv_opt_id_overflow_seen = false;
       bool result = false;
       QD_WARN_IF(
@@ -2369,10 +2384,6 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
-    } else {
-      QD_WARN("Skipping SPIR-V optimization for '{}': id_bound {} exceeds threshold {} (risk of ID-space overflow)",
-              tp.ti_kernel_name, id_bound, kSpvOptIdBoundThreshold);
-      success = false;
     }
 
     QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}", task_res.spirv_code.size(), optimized_spv.size());
