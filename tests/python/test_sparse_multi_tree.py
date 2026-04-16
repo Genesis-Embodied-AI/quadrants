@@ -1,14 +1,10 @@
-import pytest
-
 import quadrants as qd
 
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test(require=qd.extension.sparse)
 def test_pointer():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: multiple sparse tree operations hang on AMDGPU (TIMEOUT).")
     e = qd.Vector.field(2, dtype=int, shape=16)
 
     e[0] = qd.Vector([0, 0])

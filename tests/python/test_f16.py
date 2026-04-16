@@ -166,6 +166,9 @@ def test_unary_op():
 @pytest.mark.sm70
 @test_utils.test()
 def test_extra_unary_promote():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: AMDGPU runtime does not provide OCML symbol __ocml_fasb_f16 (f16 fabs).")
+
     dtype = qd.f16
     x = qd.field(dtype, shape=())
     y = qd.field(dtype, shape=())

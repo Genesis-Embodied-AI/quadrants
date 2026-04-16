@@ -84,10 +84,8 @@ def test_fields_builder_dense():
         assert x[i] == i * 3
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test(require=qd.extension.sparse)
 def test_fields_builder_pointer():
-    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: FieldsBuilder pointer SNode struct-for returns wrong values on AMDGPU.")
     shape = 5
     fb1 = qd.FieldsBuilder()
     x = qd.field(qd.f32)

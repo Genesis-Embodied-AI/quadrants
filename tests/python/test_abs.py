@@ -76,7 +76,7 @@ def test_abs_fwd():
 @test_utils.test(require=qd.extension.data64)
 def test_abs_i64():
     if qd.lang.impl.current_cfg().arch == qd.amdgpu:
-        pytest.xfail("BUG: abs(i64) intrinsic not mapped to AMDGPU ISA.")
+        pytest.xfail("BUG: abs(i64) not implemented in AMDGPU codegen.")
 
     @qd.kernel
     def foo(x: qd.i64) -> qd.i64:
