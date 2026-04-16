@@ -133,11 +133,11 @@ of your kernel source lines is accurate and complete.
 If you have a kernel that is *only* ever called inside a `qd.ad.Tape` with `validation=True` and never called
 outside one, it will be compiled exclusively in validation mode and will not receive coverage probes.
 
-## Limitations
+## Offline cache interaction
 
-- **Offline cache interaction.** Coverage probes change the compiled kernel, so the offline cache will see them as
-  new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled
-  will be slower if you normally rely on cached kernels.
+Coverage probes change the compiled kernel, so the offline cache will see them as new kernels and recompile. This is
+expected and does not affect correctness, but the first run with coverage enabled will be slower if you normally rely
+on cached kernels.
 
 ## Under the hood
 
