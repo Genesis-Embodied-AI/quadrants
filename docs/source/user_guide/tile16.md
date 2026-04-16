@@ -36,7 +36,7 @@ The `dtype` argument is optional — if omitted it defaults to the runtime's `de
 
 ## Loading and storing
 
-Load/store transfers data between a tile and device memory arrays using slice syntax. Both `qd.ndarray` and `qd.field` are supported (use `qd.Template` as the annotation for field arguments). Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
+Load/store transfers data between a tile and device memory arrays using slice syntax. Both `qd.ndarray` and `qd.field` are supported. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
 ### Slice syntax
 
