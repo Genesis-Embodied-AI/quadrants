@@ -76,7 +76,7 @@ coverage combine _qd_kcov.* .coverage
 - **Zero overhead when disabled.** The coverage module is never imported unless `QD_KERNEL_COVERAGE=1` is set. There
   is no cost in normal operation.
 - **Branch coverage.** Probes inside `if`/`else` bodies only fire when that branch is taken, giving true runtime
-  branch coverage — not just line coverage.
+  branch coverage — not just kernel-level coverage, or static conditional coverage.
 - **Works with pytest-xdist.** Each worker writes to a separate file; combine them afterward.
 - **Survives `qd.init()` resets.** Coverage data is accumulated across multiple `qd.init()` calls within the same
   process.
