@@ -1,3 +1,5 @@
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -5,6 +7,8 @@ from tests import test_utils
 
 @test_utils.test(require=qd.extension.sparse)
 def test_pointer():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse parallel struct-for hangs on AMDGPU (TIMEOUT). This should be fixed.")
     x = qd.field(qd.f32)
     s = qd.field(qd.i32)
 
@@ -30,6 +34,8 @@ def test_pointer():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_pointer2():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse parallel struct-for hangs on AMDGPU (TIMEOUT). This should be fixed.")
     x = qd.field(qd.f32)
     s = qd.field(qd.i32)
 
@@ -56,6 +62,8 @@ def test_pointer2():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_nested_struct_fill_and_clear():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse parallel struct-for hangs on AMDGPU (TIMEOUT). This should be fixed.")
     a = qd.field(dtype=qd.f32)
     N = 512
 

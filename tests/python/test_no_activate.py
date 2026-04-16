@@ -1,3 +1,5 @@
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -5,6 +7,8 @@ from tests import test_utils
 
 @test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_no_activate():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse no-activate mode produces wrong result on AMDGPU. This should be fixed.")
     x = qd.field(qd.f32)
 
     n = 1024

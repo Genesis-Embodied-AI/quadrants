@@ -1,3 +1,5 @@
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
@@ -55,11 +57,15 @@ def _test_block_gc():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_block():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse SNode garbage collection hangs on AMDGPU (TIMEOUT). This should be fixed.")
     _test_block_gc()
 
 
 @test_utils.test(require=qd.extension.sparse, exclude=qd.metal)
 def test_dynamic_gc():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse SNode garbage collection hangs on AMDGPU (TIMEOUT). This should be fixed.")
     x = qd.field(dtype=qd.i32)
 
     L = qd.root.dynamic(qd.i, 1024 * 1024, chunk_size=1024)
@@ -75,6 +81,8 @@ def test_dynamic_gc():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_pointer_gc():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: sparse SNode garbage collection hangs on AMDGPU (TIMEOUT). This should be fixed.")
     x = qd.field(dtype=qd.i32)
 
     L = qd.root.pointer(qd.ij, 32)

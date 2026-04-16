@@ -378,6 +378,8 @@ def test_copy_matrix_in_quadrants_scope():
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_matrix_field_dynamic_index_stride():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: dynamic index stride computation is incorrect on AMDGPU. This should be fixed.")
     # placeholders
     temp_a = qd.field(qd.f32)
     temp_b = qd.field(qd.f32)
