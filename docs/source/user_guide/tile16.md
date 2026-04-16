@@ -4,7 +4,7 @@
 
 This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
-Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required.
+Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
 
 ## Quick start
 
@@ -32,11 +32,11 @@ t = qd.simt.Tile16x16.eye(dtype=qd.f32)      # 16x16 identity, f32
 t = qd.simt.Tile16x16.eye(dtype=qd.f64)      # 16x16 identity, f64
 ```
 
-The `dtype` argument is required. The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
+The `dtype` argument is optional — if omitted it defaults to the runtime's `default_fp` (usually `qd.f32`). The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
 
 ## Loading and storing
 
-Load/store transfers data between a tile and device memory arrays using slice syntax. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
+Load/store transfers data between a tile and device memory arrays using slice syntax. Both `qd.ndarray` and `qd.field` are supported. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
 ### Slice syntax
 
@@ -106,6 +106,36 @@ L.solve_triangular_(B)
 ```
 
 Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
+
+### Combined Cholesky + triangular solve
+
+A common pattern is to factorize a tile and immediately solve against it:
+
+```python
+L = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+L[:] = A[0:N, 0:N]
+L.cholesky_(eps)
+B = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+B[:] = rhs[0:N, 0:N]
+L.solve_triangular_(B)
+rhs[0:N, 0:N] = B
+```
+
+## SharedArray support
+
+Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
+
+```python
+sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
+t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t[:] = src[0:N, 0:N]
+sh[0:N, 0:N] = t          # store tile to shared memory
+qd.simt.block.sync()
+t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t2[:] = sh[0:N, 0:N]      # load tile from shared memory
+```
+
+Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (`v = sh[K0:K1, col]`) also work with SharedArray.
 
 ## Kernel structure
 

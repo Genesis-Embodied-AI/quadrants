@@ -255,13 +255,13 @@ def test_pure_validation_actual_violation_warning():
 
 @test_utils.test()
 def test_pure_validation_quadrants_module_attribute_allowed():
-    """Accessing an int constant from the quadrants package should not trigger a purity violation."""
+    """Accessing a float constant from the quadrants package should not trigger a purity violation."""
 
-    @qd.kernel(pure=True)
-    def k1() -> qd.i32:
-        return qd.simt.Tile16x16.SIZE
+    @qd.kernel(fastcache=True)
+    def k1() -> qd.f32:
+        return qd.math.pi
 
-    assert k1() == 16
+    assert int(k1() * 100) == 314
 
 
 @test_utils.test()
@@ -276,7 +276,7 @@ def test_pure_validation_non_quadrants_attribute_warns():
 
     cfg = Config()
 
-    @qd.kernel(pure=True)
+    @qd.kernel(fastcache=True)
     def k1() -> qd.i32:
         return cfg.SIZE
 

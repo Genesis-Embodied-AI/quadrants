@@ -517,9 +517,8 @@ def _make_tile16x16_class(dtype):
 class _Tile16x16Proxy:
     """Proxy for dtype-at-point-of-use tile creation.
 
-    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel.
-    The dtype is resolved at kernel compilation time, defaulting to the
-    compile config's ``default_fp`` if omitted.
+    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel. The dtype is resolved at kernel compilation
+    time, defaulting to the compile config's ``default_fp`` if omitted.
     """
 
     SIZE = _TILE
@@ -538,6 +537,8 @@ class _Tile16x16Proxy:
             )
         if dtype is None:
             dtype = impl.get_runtime().default_fp
+        if dtype in _tile16_cache:
+            return _tile16_cache[dtype]
         return _make_tile16x16(dtype)
 
     def zeros(self, *, dtype=None):
