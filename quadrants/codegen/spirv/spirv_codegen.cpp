@@ -2236,8 +2236,9 @@ static void spriv_message_consumer(spv_message_level_t level,
   if (source == nullptr)
     source = "";
   // The raised max_id_bound and intermediate DCE passes are the primary defense. This substring match is fragile
-  // (tied to SPIRV-Tools message text) but harmless if it stops matching -- Run() failure is also checked
-  // independently.
+  // (tied to SPIRV-Tools message text). If it stops matching and Run() still returns success with corrupt output
+  // (id-0 references), the corrupted SPIR-V will reach the GPU driver. The Run()-failure path is checked
+  // independently, but does NOT cover the Run()-succeeds-but-output-is-corrupt case.
   if (std::string_view(message).find("ID overflow") != std::string_view::npos) {
     spirv_opt_id_overflow_seen = true;
   }
@@ -2400,7 +2401,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(), &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
       spirv_msg_flush_dedup();
-      if (spirv_opt_id_overflow_seen && !result) {
+      if (spirv_opt_id_overflow_seen) {
         QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.ti_kernel_name);
       }
       if (result || spirv_opt_id_overflow_seen) {
@@ -2433,10 +2434,14 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       fout.close();
     }
 
-    QD_ERROR_IF(!success,
-                "SPIR-V optimization failed for '{}' (possible ID-space overflow). "
-                "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
-                tp.ti_kernel_name);
+    if (spirv_opt_id_overflow_seen) {
+      QD_ERROR_IF(!success,
+                  "SPIR-V optimization failed for '{}' due to ID-space overflow. "
+                  "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
+                  tp.ti_kernel_name);
+    } else {
+      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.ti_kernel_name);
+    }
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     generated_spirv.push_back(std::move(optimized_spv));
   }
