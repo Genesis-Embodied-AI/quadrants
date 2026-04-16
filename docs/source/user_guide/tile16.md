@@ -107,6 +107,22 @@ L.solve_triangular_(B)
 
 Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
 
+## SharedArray support
+
+Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
+
+```python
+sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
+t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t[:] = src[0:N, 0:N]
+sh[0:N, 0:N] = t          # store tile to shared memory
+qd.simt.block.sync()
+t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t2[:] = sh[0:N, 0:N]      # load tile from shared memory
+```
+
+Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (`v = sh[K0:K1, col]`) also work with SharedArray.
+
 ## Kernel structure
 
 ### Block size
