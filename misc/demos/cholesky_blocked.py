@@ -37,7 +37,7 @@ N_ENVS = 4096
 WARMUP = 50
 ITERS = 200
 
-qd.init(arch=qd.cuda)
+qd.init(arch=qd.gpu)
 
 A_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
 L_baseline_field = qd.field(dtype=qd.f32, shape=(N_ENVS, N, N))
