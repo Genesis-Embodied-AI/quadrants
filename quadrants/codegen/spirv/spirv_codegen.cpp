@@ -2353,8 +2353,14 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     std::vector<uint32_t> optimized_spv(task_res.spirv_code);
 
+    // The SPIR-V spec caps the ID bound at 4 194 303 (0x3FFFFF). Some SPIRV-Tools passes can inflate the ID count
+    // by 50x+ within a single invocation, and when TakeNextId() returns 0 the optimizer segfaults. Skip optimization
+    // for modules whose id_bound is already high enough to risk overflow; the un-optimized SPIR-V is always valid.
+    static constexpr uint32_t kSpvOptIdBoundThreshold = 65536;
+    const uint32_t id_bound = task_res.spirv_code.size() >= 4 ? task_res.spirv_code[3] : 0;
+
     bool success = true;
-    {
+    if (id_bound < kSpvOptIdBoundThreshold) {
       spirv_opt_id_overflow_seen = false;
       bool result = false;
       QD_WARN_IF(
@@ -2363,6 +2369,10 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
+    } else {
+      QD_WARN("Skipping SPIR-V optimization for '{}': id_bound {} exceeds threshold {} (risk of ID-space overflow)",
+              tp.ti_kernel_name, id_bound, kSpvOptIdBoundThreshold);
+      success = false;
     }
 
     QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}", task_res.spirv_code.size(), optimized_spv.size());
