@@ -274,7 +274,7 @@ def test_torch_zero():
 
 
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test()
 def test_torch_view():
     @qd.kernel
     def copy(x: qd.types.ndarray(), y: qd.types.ndarray()):

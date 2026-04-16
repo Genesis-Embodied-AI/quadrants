@@ -28,6 +28,8 @@ def filter_lines(target: str, match: str) -> str:
     return "\n".join(lines)
 
 
+# TODO: AMDGPU excluded because HIP printf output format differs from CUDA (padding, float repr),
+# causing capfd string assertions to fail. All print tests in this file are affected.
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_docs_scalar_self_documenting_exp(capfd):
     a = qd.field(qd.f32, 4)
@@ -70,7 +72,7 @@ def test_print_docs_matrix_self_documenting_exp(capfd):
 # Just making sure it does not crash
 # Metal doesn't support print() or 64-bit data
 @pytest.mark.parametrize("dt", qd.types.primitive_types.all_types)
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_print(dt):
     @qd.kernel
     def func():
@@ -650,7 +652,7 @@ def test_print_seq(capfd):
     assert "inside kernel\noutside kernel" in out
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], print_ir=True, debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], print_ir=True, debug=True)
 def test_fp16_print_ir():
     half2 = qd.types.vector(n=2, dtype=qd.f16)
 
