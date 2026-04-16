@@ -71,29 +71,6 @@ Python coverage after the run:
 coverage combine _qd_kcov.* .coverage
 ```
 
-## Example
-
-```python
-import quadrants as qd
-
-qd.init(arch=qd.gpu)
-
-result = qd.field(dtype=qd.i32, shape=(1,))
-
-@qd.kernel
-def my_kernel():
-    x = 10
-    if x > 5:
-        result[0] = 1    # this line will show as covered
-    else:
-        result[0] = 2    # this line will show as NOT covered
-
-my_kernel()
-```
-
-Running with `QD_KERNEL_COVERAGE=1` and then inspecting the report will show that only the `if` branch was executed,
-and the `else` branch was missed.
-
 ## Key properties
 
 - **Zero overhead when disabled.** The coverage module is never imported unless `QD_KERNEL_COVERAGE=1` is set. There
