@@ -92,6 +92,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       emit(expr->cast_type);
     }
     emit(expr->operand);
+    emit(expr->precise);
   }
 
   void visit(BinaryOpExpression *expr) override {
@@ -99,6 +100,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(expr->type);
     emit(expr->lhs);
     emit(expr->rhs);
+    emit(expr->precise);
   }
 
   void visit(TernaryOpExpression *expr) override {

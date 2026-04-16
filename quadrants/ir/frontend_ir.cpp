@@ -261,6 +261,9 @@ void UnaryOpExpression::flatten(FlattenContext *ctx) {
   if (is_cast()) {
     unary->cast_type = cast_type;
   }
+  if (precise) {
+    unary->codegen_hints |= (uint32_t)CodegenHint::kDisableFastMath;
+  }
   stmt = unary.get();
   stmt->ret_type = ret_type;
   ctx->push_back(std::move(unary));
@@ -429,7 +432,11 @@ void BinaryOpExpression::flatten(FlattenContext *ctx) {
     return;
   }
   auto rhs_stmt = flatten_rvalue(rhs, ctx);
-  ctx->push_back(std::make_unique<BinaryOpStmt>(type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info));
+  auto bin_stmt = std::make_unique<BinaryOpStmt>(type, lhs_stmt, rhs_stmt, /*is_bit_vectorized=*/false, dbg_info);
+  if (precise) {
+    bin_stmt->codegen_hints |= (uint32_t)CodegenHint::kDisableFastMath;
+  }
+  ctx->push_back(std::move(bin_stmt));
   stmt = ctx->back_stmt();
   stmt->ret_type = ret_type;
 }

@@ -1,4 +1,5 @@
 #include "quadrants/codegen/spirv/spirv_codegen.h"
+#include "quadrants/codegen/precise_codegen_hooks.h"
 
 #include <string>
 #include <vector>
@@ -81,6 +82,7 @@ TaskCodegen::TaskCodegen(const Params &params)
   // stale reads when a buffer is written and re-read within the same loop.
   // Marking buffer accesses as Volatile prevents this optimization.
   use_volatile_buffer_access_ = (arch_ == Arch::metal);
+  install_precise_hooks_spirv(*this);
 }
 
 void TaskCodegen::fill_snode_to_root() {
@@ -146,7 +148,11 @@ void TaskCodegen::visit(OffloadedStmt *) {
 void TaskCodegen::visit(Block *stmt) {
   for (auto &s : stmt->statements) {
     if (offload_loop_motion_.find(s.get()) == offload_loop_motion_.end()) {
+      for (auto &h : pre_stmt_hooks_)
+        h(*this, s.get());
       s->accept(this);
+      for (auto &h : post_stmt_hooks_)
+        h(*this, s.get());
     }
   }
 }

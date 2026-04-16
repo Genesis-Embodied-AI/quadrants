@@ -15,6 +15,7 @@
 
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
+#include "quadrants/ir/precise.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/program/ndarray.h"
@@ -628,6 +629,7 @@ void export_lang(py::module &m) {
 
   m.def("value_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(cast));
   m.def("bits_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(bit_cast));
+  m.def("precise", static_cast<Expr (*)(const Expr &)>(precise));
 
   m.def("expr_atomic_add",
         [&](const Expr &a, const Expr &b) { return Expr::make<AtomicOpExpression>(AtomicOpType::add, a, b); });

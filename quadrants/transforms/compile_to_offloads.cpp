@@ -9,6 +9,7 @@
 #include "quadrants/program/kernel.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
+#include "quadrants/transforms/precise_fence.h"
 #include <fstream>
 
 namespace quadrants::lang {
@@ -90,6 +91,8 @@ void compile_to_offloads(IRNode *ir,
     irpass::scalarize(ir, false /*half2_optimization_enabled*/);
     irpass::die(ir);
   }
+
+  irpass::fence_precise_ops(ir);
 
   dump_ir("before_simplify_I");
   irpass::full_simplify(
@@ -296,6 +299,8 @@ void offload_to_executable(IRNode *ir,
     }
   }
 
+  irpass::unfence_precise_ops(ir);
+
   // Final field registration correctness & type checking
   irpass::type_check(ir, config);
   irpass::analysis::verify(ir);
@@ -360,6 +365,8 @@ void compile_function(IRNode *ir,
   }
 
   if (target_stage >= Function::IRStage::OptimizedIR && current_stage < Function::IRStage::OptimizedIR) {
+    irpass::fence_precise_ops(ir);
+
     irpass::lower_access(ir, config, {{}, true});
     print("Access lowered");
     irpass::analysis::verify(ir);
@@ -388,6 +395,9 @@ void compile_function(IRNode *ir,
 
     irpass::full_simplify(ir, config, {true, autodiff_mode != AutodiffMode::kNone, func->get_name(), verbose, "final"});
     print("Simplified");
+
+    irpass::unfence_precise_ops(ir);
+
     irpass::analysis::verify(ir);
     func->set_ir_stage(Function::IRStage::OptimizedIR);
   }

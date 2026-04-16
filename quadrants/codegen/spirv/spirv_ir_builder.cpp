@@ -672,28 +672,32 @@ Value IRBuilder::popcnt(Value x) {
   return make_value(spv::OpBitCount, x.stype, x);
 }
 
-#define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)   \
-  Value IRBuilder::_OpName(Value a, Value b) {         \
-    QD_ASSERT(a.stype.id == b.stype.id);               \
-    if (is_integral(a.stype.dt)) {                     \
-      return make_value(spv::OpI##_Op, a.stype, a, b); \
-    } else {                                           \
-      QD_ASSERT(is_real(a.stype.dt));                  \
-      return make_value(spv::OpF##_Op, a.stype, a, b); \
-    }                                                  \
+#define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)                       \
+  Value IRBuilder::_OpName(Value a, Value b) {                             \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
+    if (is_integral(a.stype.dt)) {                                         \
+      return make_value(spv::OpI##_Op, a.stype, a, b);                     \
+    }                                                                      \
+    QD_ASSERT(is_real(a.stype.dt));                                        \
+    Value v = make_value(spv::OpF##_Op, a.stype, a, b);                    \
+    if (emit_no_contraction_)                                              \
+      decorate(spv::OpDecorate, v, spv::DecorationNoContraction);          \
+    return v;                                                              \
   }
 
-#define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)         \
-  Value IRBuilder::_OpName(Value a, Value b) {              \
-    QD_ASSERT(a.stype.id == b.stype.id);                    \
-    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) { \
-      return make_value(spv::OpS##_Op, a.stype, a, b);      \
-    } else if (is_integral(a.stype.dt)) {                   \
-      return make_value(spv::OpU##_Op, a.stype, a, b);      \
-    } else {                                                \
-      QD_ASSERT(is_real(a.stype.dt));                       \
-      return make_value(spv::OpF##_Op, a.stype, a, b);      \
-    }                                                       \
+#define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)                        \
+  Value IRBuilder::_OpName(Value a, Value b) {                             \
+    QD_ASSERT(a.stype.id == b.stype.id);                                   \
+    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {                \
+      return make_value(spv::OpS##_Op, a.stype, a, b);                     \
+    } else if (is_integral(a.stype.dt)) {                                  \
+      return make_value(spv::OpU##_Op, a.stype, a, b);                     \
+    }                                                                      \
+    QD_ASSERT(is_real(a.stype.dt));                                        \
+    Value v = make_value(spv::OpF##_Op, a.stype, a, b);                    \
+    if (emit_no_contraction_)                                              \
+      decorate(spv::OpDecorate, v, spv::DecorationNoContraction);          \
+    return v;                                                              \
   }
 
 DEFINE_BUILDER_BINARY_USIGN_OP(add, Add);
@@ -708,10 +712,12 @@ Value IRBuilder::mod(Value a, Value b) {
     return sub(a, mul(b, div(a, b)));
   } else if (is_integral(a.stype.dt)) {
     return make_value(spv::OpUMod, a.stype, a, b);
-  } else {
-    QD_ASSERT(is_real(a.stype.dt));
-    return make_value(spv::OpFRem, a.stype, a, b);
   }
+  QD_ASSERT(is_real(a.stype.dt));
+  Value v = make_value(spv::OpFRem, a.stype, a, b);
+  if (emit_no_contraction_)
+    decorate(spv::OpDecorate, v, spv::DecorationNoContraction);
+  return v;
 }
 
 #define DEFINE_BUILDER_CMP_OP(_OpName, _Op)                                \

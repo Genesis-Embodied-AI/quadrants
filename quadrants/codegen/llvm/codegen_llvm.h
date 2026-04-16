@@ -1,6 +1,7 @@
 // The LLVM backend for CPUs/NVPTX/AMDGPU
 #pragma once
 
+#include <functional>
 #include <set>
 #include <unordered_map>
 
@@ -30,6 +31,12 @@ class FunctionCreationGuard {
 
 class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
  public:
+  // Generic per-stmt hooks fired around each stmt's accept() in visit(Block*).
+  // Features register callbacks without the codegen knowing what they do.
+  using CodegenStmtHook = std::function<void(TaskCodeGenLLVM &, Stmt *)>;
+  void add_pre_stmt_hook(CodegenStmtHook hook) { pre_stmt_hooks_.push_back(std::move(hook)); }
+  void add_post_stmt_hook(CodegenStmtHook hook) { post_stmt_hooks_.push_back(std::move(hook)); }
+
   const CompileConfig &compile_config;
   const Kernel *kernel;
   IRNode *ir;
@@ -385,6 +392,9 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   ~TaskCodeGenLLVM() override = default;
 
  private:
+  std::vector<CodegenStmtHook> pre_stmt_hooks_;
+  std::vector<CodegenStmtHook> post_stmt_hooks_;
+
   void set_struct_to_buffer(llvm::Value *buffer,
                             llvm::Type *buffer_type,
                             const std::vector<Stmt *> &elements,

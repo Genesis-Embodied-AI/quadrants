@@ -405,6 +405,11 @@ class IRBuilder {
   Value get_subgroup_invocation_id();
   Value get_subgroup_size();
 
+  // When true, FP arithmetic results are decorated with NoContraction.
+  // Set/cleared by codegen hooks around precise-tagged stmts.
+  void set_emit_no_contraction(bool v) { emit_no_contraction_ = v; }
+  bool emit_no_contraction() const { return emit_no_contraction_; }
+
   // Expressions
   Value add(Value a, Value b);
   Value sub(Value a, Value b);
@@ -614,6 +619,8 @@ class IRBuilder {
   std::vector<uint32_t> func_header_;
   // Main Function segment
   std::vector<uint32_t> function_;
+
+  bool emit_no_contraction_{false};
 };
 }  // namespace spirv
 }  // namespace quadrants::lang

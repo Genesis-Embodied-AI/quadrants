@@ -125,6 +125,8 @@ Expr bit_cast(const Expr &input) {
   return quadrants::lang::bit_cast(input, get_data_type<T>());
 }
 
+Expr precise(const Expr &input);
+
 // like Expr::Expr, but allows to explicitly specify the type
 template <typename T>
 Expr value(const T &val) {

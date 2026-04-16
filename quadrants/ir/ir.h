@@ -383,6 +383,13 @@ class StmtFieldManager {
   mark_fields_registered(); \
   io(field_manager)
 
+// Generic per-stmt hints consumed by codegen. Features set bits; codegen hooks read them.
+// This field lives on the Stmt base class so cloning inherits it automatically.
+enum class CodegenHint : uint32_t {
+  kNone = 0,
+  kDisableFastMath = 1 << 0,
+};
+
 class Stmt : public IRNode {
  protected:
   std::vector<Stmt **> operands;
@@ -398,6 +405,7 @@ class Stmt : public IRNode {
   bool fields_registered;
   DataType ret_type;
   DebugInfo dbg_info;
+  uint32_t codegen_hints{0};
 
   Stmt();
   Stmt(const Stmt &stmt);

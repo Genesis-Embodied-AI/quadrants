@@ -9,6 +9,8 @@
 
 #include "quadrants/util/lang_util.h"
 
+#include <functional>
+
 #include "quadrants/codegen/spirv/snode_struct_compiler.h"
 #include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/codegen/spirv/spirv_ir_builder.h"
@@ -27,6 +29,12 @@ using BufferInfoHasher = TaskAttributes::BufferInfoHasher;
 
 class TaskCodegen : public IRVisitor {
  public:
+  using CodegenStmtHook = std::function<void(TaskCodegen &, Stmt *)>;
+  void add_pre_stmt_hook(CodegenStmtHook hook) { pre_stmt_hooks_.push_back(std::move(hook)); }
+  void add_post_stmt_hook(CodegenStmtHook hook) { post_stmt_hooks_.push_back(std::move(hook)); }
+
+  spirv::IRBuilder &spirv_builder() { return *ir_; }
+
   struct Params {
     OffloadedStmt *task_ir;
     Arch arch;
@@ -179,6 +187,8 @@ class TaskCodegen : public IRVisitor {
   // `sharr[0]` (MatrixPtrStmt) is added here during visit(MatrixPtrStmt).
   std::unordered_set<const Stmt *> uint_backed_shared_float_ptr_stmts_;
   std::unordered_map<std::vector<int>, Value, hashing::Hasher<std::vector<int>>> argid_to_tex_value_;
+  std::vector<CodegenStmtHook> pre_stmt_hooks_;
+  std::vector<CodegenStmtHook> post_stmt_hooks_;
 
   struct PhysicalPtrComponents {
     spirv::Value base_ptr;

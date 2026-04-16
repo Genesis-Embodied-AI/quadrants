@@ -95,6 +95,38 @@ def cast(obj, dtype):
     return expr.Expr(_qd_core.value_cast(expr.Expr(obj).ptr, dtype))
 
 
+def precise(obj):
+    """Mark a floating-point expression as IEEE-strict.
+
+    Every binary and unary FP op inside ``obj`` is evaluated in source
+    order with no reassociation, no FMA contraction, no approximate
+    transcendental substitution, and no algebraic simplification,
+    regardless of the module-level :attr:`fast_math` setting. This is
+    equivalent to MSL's / HLSL's ``precise`` keyword and lets you keep
+    ``fast_math=True`` globally while protecting compensated-arithmetic
+    blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
+    away.
+
+    Args:
+        obj: A scalar Quadrants expression (typically a chain of FP ops).
+
+    Returns:
+        The same expression, with every reachable binary and unary FP op
+        tagged as ``precise``. Constants and non-FP ops are unaffected.
+
+    Example::
+
+        >>> @qd.func
+        >>> def fast_two_sum(a, b):
+        >>>     s = qd.precise(a + b)
+        >>>     e = qd.precise(b - (s - a))
+        >>>     return s, e
+    """
+    if is_quadrants_class(obj):
+        raise ValueError("Cannot apply precise on Quadrants classes")
+    return expr.Expr(_qd_core.precise(expr.Expr(obj).ptr))
+
+
 def bit_cast(obj, dtype):
     """Copy and cast a scalar to a specified data type with its underlying
     bits preserved. Must be called in quadrants scope.
@@ -1535,4 +1567,5 @@ __all__ = [
     "select",
     "abs",
     "pow",
+    "precise",
 ]

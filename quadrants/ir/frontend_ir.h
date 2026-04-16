@@ -372,6 +372,7 @@ class UnaryOpExpression : public Expression {
   UnaryOpType type;
   Expr operand;
   DataType cast_type;
+  bool precise{false};
 
   UnaryOpExpression(UnaryOpType type, const Expr &operand, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), type(type), operand(operand) {
@@ -395,6 +396,7 @@ class BinaryOpExpression : public Expression {
  public:
   BinaryOpType type;
   Expr lhs, rhs;
+  bool precise{false};
 
   BinaryOpExpression(const BinaryOpType &type, const Expr &lhs, const Expr &rhs) : type(type), lhs(lhs), rhs(rhs) {
   }

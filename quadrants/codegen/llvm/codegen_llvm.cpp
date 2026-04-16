@@ -1,4 +1,5 @@
 #include "quadrants/codegen/llvm/codegen_llvm.h"
+#include "quadrants/codegen/precise_codegen_hooks.h"
 
 #include <algorithm>
 
@@ -111,7 +112,11 @@ CodeGenStmtGuard make_while_after_loop_guard(TaskCodeGenLLVM *cg) {
 // TaskCodeGenLLVM
 void TaskCodeGenLLVM::visit(Block *stmt_list) {
   for (auto &stmt : stmt_list->statements) {
+    for (auto &h : pre_stmt_hooks_)
+      h(*this, stmt.get());
     stmt->accept(this);
+    for (auto &h : post_stmt_hooks_)
+      h(*this, stmt.get());
     if (returned) {
       break;
     }
@@ -2263,6 +2268,7 @@ void TaskCodeGenLLVM::initialize_context() {
     fast_flags.setApproxFunc();
     builder->setFastMathFlags(fast_flags);
   }
+  install_precise_hooks_llvm(*this);
 }
 
 llvm::Value *TaskCodeGenLLVM::get_arg(int i) {
