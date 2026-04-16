@@ -2233,6 +2233,8 @@ static void spriv_message_consumer(spv_message_level_t level,
                                    const char *message) {
   if (message == nullptr)
     return;
+  if (source == nullptr)
+    source = "";
   if (std::string_view(message).find("ID overflow") != std::string_view::npos) {
     spirv_opt_id_overflow_seen = true;
   }
@@ -2320,9 +2322,10 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
         .RegisterPass(spvtools::CreateCompactIdsPass());
   }
   spirv_opt_options_.set_run_validator(false);
-  // The SPIRV-Tools default ID bound (0x3FFFFF ~= 4M) is too low for large autodiff kernels
+  // The SPIRV-Tools default ID bound (0x3FFFFF = 4194303) is too low for large autodiff kernels
   // where SSA construction (LocalMultiStoreElim / SSARewrite) creates millions of phi nodes.
-  // Raise the limit to 64M; the SPIR-V spec itself imposes no upper bound on the ID space.
+  // Raise the optimizer-internal limit; CompactIdsPass at the end of the pipeline renumbers the
+  // output back into the spec-compliant range (SPIR-V 2.3 caps the bound at 4194303).
   spirv_opt_options_.set_max_id_bound(0x3FFFFFF);
 
   spirv_tools_ = std::make_unique<spvtools::SpirvTools>(target_env);
@@ -2397,7 +2400,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}", task_res.spirv_code.size(), optimized_spv.size());
 
-    if (dump_ir) {
+    if (dump_ir && success) {
       std::string spirv_asm;
       spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
       std::filesystem::path filename = ir_dump_dir / (spirv_dump_basename + "_after_opt.spirv");
