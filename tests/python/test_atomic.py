@@ -48,7 +48,7 @@ def test_atomic_add_global_f32():
     run_atomic_add_global_case(qd.f32, 4.2, valproc=lambda x: test_utils.approx(x, rel=1e-5))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_atomic_min_max_uint():
     x = qd.field(qd.u64, shape=100)
 
@@ -225,8 +225,11 @@ def test_local_atomic_with_if():
     assert ret[None] == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_atomic_sub_with_type_promotion():
+    if qd.lang.impl.current_cfg().arch in (qd.metal, qd.vulkan):
+        pytest.xfail("SPIR-V codegen bug with atomic sub type promotion")
+
     # Test Case 1
     @qd.kernel
     def test_u16_sub_u8() -> qd.uint16:

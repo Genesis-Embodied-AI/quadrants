@@ -74,7 +74,7 @@ def test_logic_not_invalid():
         test(1.0)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_frexp():
     @qd.kernel
     def get_frac(x: qd.f32) -> qd.f32:
@@ -91,7 +91,7 @@ def test_frexp():
     assert get_exp(1.4) == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_popcnt():
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
@@ -123,7 +123,7 @@ def test_popcnt():
     assert test_i64(10000) == 5
 
 
-@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_clz():
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
@@ -140,7 +140,7 @@ def test_clz():
 
 
 @test_utils.test(arch=[qd.metal])
-def test_popcnt():
+def test_popcnt_metal():
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.popcnt(x)

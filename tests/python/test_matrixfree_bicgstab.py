@@ -11,7 +11,7 @@ vk_on_mac = (qd.vulkan, "Darwin")
 
 
 @pytest.mark.parametrize("qd_dtype", [qd.f32, qd.f64])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac])
 def test_matrixfree_bicgstab(qd_dtype):
     GRID = 32
     Ax = qd.field(dtype=qd_dtype, shape=(GRID, GRID))

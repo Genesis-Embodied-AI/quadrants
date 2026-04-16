@@ -28,7 +28,7 @@ def filter_lines(target: str, match: str) -> str:
     return "\n".join(lines)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_docs_scalar_self_documenting_exp(capfd):
     a = qd.field(qd.f32, 4)
 
@@ -48,7 +48,7 @@ def test_print_docs_scalar_self_documenting_exp(capfd):
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_docs_matrix_self_documenting_exp(capfd):
     @qd.kernel
     def func():
@@ -70,7 +70,7 @@ def test_print_docs_matrix_self_documenting_exp(capfd):
 # Just making sure it does not crash
 # Metal doesn't support print() or 64-bit data
 @pytest.mark.parametrize("dt", qd.types.primitive_types.all_types)
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_print(dt):
     @qd.kernel
     def func():
@@ -84,7 +84,7 @@ def test_print(dt):
 
 # TODO: As described by @k-ye above, what we want to ensure
 #       is that, the content shows on console is *correct*.
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_multi_print():
     @qd.kernel
     def func(x: qd.i32, y: qd.f32):
@@ -94,7 +94,7 @@ def test_multi_print():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_string():
     @qd.kernel
     def func(x: qd.i32, y: qd.f32):
@@ -106,7 +106,7 @@ def test_print_string():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_matrix():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -122,7 +122,7 @@ def test_print_matrix():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_matrix_string_format():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -138,7 +138,7 @@ def test_print_matrix_string_format():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_matrix_string_format_with_spec(capfd):
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -163,7 +163,7 @@ TEST_PRINT: hello [[0000000000, 0000000000, 0000000000], [0000000000, 0000000000
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_matrix_string_format_with_spec_mismatch():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -192,7 +192,7 @@ def test_print_matrix_string_format_with_spec_mismatch():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_matrix_fstring():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -208,7 +208,7 @@ def test_print_matrix_fstring():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_matrix_fstring_with_spec(capfd):
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -233,7 +233,7 @@ TEST_PRINT: hello [[00, 00, 00], [00, 00, 00]] world!"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_matrix_fstring_with_spec_mismatch():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -262,7 +262,7 @@ def test_print_matrix_fstring_with_spec_mismatch():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_docs_scalar(capfd):
     a = qd.field(qd.f32, 4)
 
@@ -307,7 +307,7 @@ TEST_PRINT: a[3] = 0.000, a[2] = 0.00, a[1] = 0.0, a[0] = 1"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_docs_matrix(capfd):
     a = qd.field(qd.f32, 4)
 
@@ -347,7 +347,7 @@ TEST_PRINT: m = [[20.0, 300.0, 4000.0], [50000.0, 600000.0, 7000000.0]]"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_sep_end():
     @qd.kernel
     def func():
@@ -367,7 +367,7 @@ def test_print_sep_end():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_multiple_threads():
     x = qd.field(dtype=qd.f32, shape=(128,))
 
@@ -383,7 +383,7 @@ def test_print_multiple_threads():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_list():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=(2, 3))
     y = qd.Vector.field(3, dtype=qd.f32, shape=())
@@ -404,7 +404,7 @@ def test_print_list():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_python_scope_print_field():
     x = qd.Matrix.field(2, 3, dtype=qd.f32, shape=())
     y = qd.Vector.field(3, dtype=qd.f32, shape=3)
@@ -415,7 +415,7 @@ def test_python_scope_print_field():
     print(z)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_string_format():
     @qd.kernel
     def func(k: qd.f32):
@@ -431,7 +431,7 @@ def test_print_string_format():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_string_format_with_spec(capfd):
     @qd.kernel
     def func(k: qd.f32):
@@ -455,7 +455,7 @@ TEST_PRINT: 2.33e+02 123 456.7000"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_string_format_with_spec_mismatch():
     @qd.func
     def foo1(x):
@@ -482,7 +482,7 @@ def test_print_string_format_with_spec_mismatch():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_string_format_with_positional_arg(capfd):
     @qd.kernel
     def func(k: qd.f32):
@@ -500,7 +500,7 @@ TEST_PRINT: 1 3 2 233.300003 3 233.300003 3 233.300003"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_string_format_with_positional_arg_with_spec(capfd):
     @qd.kernel
     def func(k: qd.f32):
@@ -518,7 +518,7 @@ TEST_PRINT: 1.0 3.00 2.000 2.3330e+02 3.00000 233.30000 3.00000 233.3"""
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_string_format_with_positional_arg_mismatch():
     @qd.kernel
     def func(k: qd.f32):
@@ -559,7 +559,7 @@ def test_print_string_format_with_positional_arg_mismatch():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_fstring():
     @qd.func
     def foo1(x):
@@ -573,7 +573,7 @@ def test_print_fstring():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_fstring_with_spec(capfd):
     @qd.func
     def foo1(x):
@@ -591,7 +591,7 @@ def test_print_fstring_with_spec(capfd):
     assert out == expected_out and err == ""
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_fstring_with_spec_mismatch():
     @qd.func
     def foo1(x):
@@ -618,7 +618,7 @@ def test_print_fstring_with_spec_mismatch():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_u64():
     @qd.kernel
     def func(i: qd.u64):
@@ -628,7 +628,7 @@ def test_print_u64():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac], debug=True)
 def test_print_i64():
     @qd.kernel
     def func(i: qd.i64):
@@ -638,7 +638,7 @@ def test_print_i64():
     qd.sync()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan], exclude=[vk_on_mac, cuda_on_windows], debug=True)
 def test_print_seq(capfd):
     @qd.kernel
     def foo():
@@ -650,7 +650,7 @@ def test_print_seq(capfd):
     assert "inside kernel\noutside kernel" in out
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], print_ir=True, debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], print_ir=True, debug=True)
 def test_fp16_print_ir():
     half2 = qd.types.vector(n=2, dtype=qd.f16)
 

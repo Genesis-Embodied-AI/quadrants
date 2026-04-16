@@ -5,7 +5,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_function_without_return():
     x = qd.field(qd.i32, shape=())
 
@@ -23,7 +23,7 @@ def test_function_without_return():
     assert x[None] == 42
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_function_with_return():
     x = qd.field(qd.i32, shape=())
 
@@ -43,7 +43,7 @@ def test_function_with_return():
     assert x[None] == 42
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_call_expressions():
     x = qd.field(qd.i32, shape=())
 
@@ -64,7 +64,7 @@ def test_call_expressions():
     assert x[None] == 26
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_default_templates():
     @qd.func
     def func1(x: qd.template()):
@@ -131,7 +131,7 @@ def test_default_templates():
     run_func()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_experimental_templates():
     x = qd.field(qd.i32, shape=())
     y = qd.field(qd.i32, shape=())
@@ -179,7 +179,7 @@ def test_experimental_templates():
     verify()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_missing_arg_annotation():
     with pytest.raises(qd.QuadrantsSyntaxError, match="must be type annotated"):
 
@@ -188,7 +188,7 @@ def test_missing_arg_annotation():
             return a + b
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_missing_return_annotation():
     with pytest.raises(qd.QuadrantsCompilationError, match="return value must be annotated"):
 
@@ -203,8 +203,9 @@ def test_missing_return_annotation():
         run()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_different_argument_type():
+
     @qd.real_func
     def add(a: qd.f32, b: qd.f32) -> qd.f32:
         return a + b
@@ -217,7 +218,7 @@ def test_different_argument_type():
 
 
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=8192)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], cuda_stack_limit=8192)
 def test_recursion():
     @qd.real_func
     def sum(f: qd.template(), l: qd.i32, r: qd.i32) -> qd.i32:
@@ -238,7 +239,7 @@ def test_recursion():
 
 
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[qd.cpu, qd.cuda], cuda_stack_limit=32768)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], cuda_stack_limit=32768)
 def test_deep_recursion():
     @qd.real_func
     def sum_func(n: qd.i32) -> qd.i32:
@@ -253,7 +254,7 @@ def test_deep_recursion():
     assert sum(100) == 5050
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_multiple_return():
     x = qd.field(qd.i32, shape=())
 
@@ -277,8 +278,9 @@ def test_multiple_return():
     assert x[None] == 26
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_return_in_for():
+
     @qd.real_func
     def foo() -> qd.i32:
         for i in range(10):
@@ -291,8 +293,9 @@ def test_return_in_for():
     assert bar() == 42
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_return_in_while():
+
     @qd.real_func
     def foo() -> qd.i32:
         i = 1
@@ -306,8 +309,9 @@ def test_return_in_while():
     assert bar() == 42
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_return_in_if_in_for():
+
     @qd.real_func
     def foo(a: qd.i32) -> qd.i32:
         s = 0
@@ -325,7 +329,7 @@ def test_return_in_if_in_for():
     assert bar(200) == 99 * 50
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_ref():
     @qd.real_func
     def foo(a: qd.ref(qd.f32)):
@@ -340,7 +344,7 @@ def test_ref():
     bar()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_ref_atomic():
     # FIXME: failed test on Pascal (and potentially older) architecture.
     # Please remove this guardiance when you fix this issue
@@ -363,7 +367,7 @@ def test_ref_atomic():
     bar()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True, print_full_traceback=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True, print_full_traceback=False)
 def test_func_ndarray_arg():
     vec3 = qd.types.vector(3, qd.f32)
 
@@ -447,8 +451,9 @@ def test_func_struct_arg():
     k()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_matrix_arg():
+
     @qd.real_func
     def mat_arg(a: qd.math.mat2, b: qd.math.vec2) -> float:
         return a[0, 0] + a[0, 1] + a[1, 0] + a[1, 1] + b[0] + b[1]
@@ -465,8 +470,9 @@ def test_real_func_matrix_arg():
     assert foo() == pytest.approx(21)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_matrix_return():
+
     @qd.real_func
     def mat_ret() -> qd.math.mat2:
         return qd.math.mat2(1, 2, 3, 4)
@@ -478,7 +484,7 @@ def test_real_func_matrix_return():
     assert (foo() == qd.math.mat2(1, 2, 3, 4)).all()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.data64)
 def test_real_func_struct_ret():
     s = qd.types.struct(a=qd.i16, b=qd.f64)
 
@@ -494,7 +500,7 @@ def test_real_func_struct_ret():
     assert foo() == pytest.approx(123 * 1.2345e300)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_struct_ret_with_matrix():
     s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
     s1 = qd.types.struct(a=qd.f32, b=s0)
@@ -511,8 +517,9 @@ def test_real_func_struct_ret_with_matrix():
     assert foo() == pytest.approx(105.2)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_break_in_real_func():
+
     @qd.real_func
     def bar() -> int:
         a = 0
@@ -529,8 +536,9 @@ def test_break_in_real_func():
     assert foo() == 5
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_continue_in_real_func():
+
     @qd.real_func
     def bar() -> int:
         a = 0
