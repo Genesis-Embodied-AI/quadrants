@@ -2221,14 +2221,27 @@ static void spriv_message_consumer(spv_message_level_t level,
   if (message != nullptr && std::string_view(message).find("ID overflow") != std::string_view::npos) {
     spirv_opt_id_overflow_seen = true;
   }
-  // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
+  // Some SPIRV-Tools passes (e.g. when the ID space overflows) emit the same message thousands of times in a row.
+  // Deduplicate consecutive identical messages so the log stays readable.
+  thread_local std::string last_message;
+  thread_local uint32_t suppressed_count = 0;
+  std::string_view current(message != nullptr ? message : "");
+  if (current == last_message) {
+    ++suppressed_count;
+    return;
+  }
+  if (suppressed_count > 0) {
+    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", suppressed_count);
+    suppressed_count = 0;
+  }
+  last_message = current;
   if (level <= SPV_MSG_FATAL) {
     QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
     QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_INFO) {
     QD_INFO("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
-  } else if (level <= SPV_MSG_INFO) {
+  } else if (level <= SPV_MSG_DEBUG) {
     QD_TRACE("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   }
 }
