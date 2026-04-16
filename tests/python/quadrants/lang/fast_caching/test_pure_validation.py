@@ -257,7 +257,7 @@ def test_pure_validation_actual_violation_warning():
 def test_pure_validation_quadrants_module_attribute_allowed():
     """Accessing a float constant from the quadrants package should not trigger a purity violation."""
 
-    @qd.kernel(pure=True)
+    @qd.kernel(fastcache=True)
     def k1() -> qd.f32:
         return qd.math.pi
 
@@ -276,7 +276,7 @@ def test_pure_validation_non_quadrants_attribute_warns():
 
     cfg = Config()
 
-    @qd.kernel(pure=True)
+    @qd.kernel(fastcache=True)
     def k1() -> qd.i32:
         return cfg.SIZE
 
