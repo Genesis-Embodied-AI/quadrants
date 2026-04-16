@@ -2214,27 +2214,39 @@ const spirv::Label TaskCodegen::return_label() const {
 // back to the un-optimized SPIR-V.
 static thread_local bool spirv_opt_id_overflow_seen = false;
 
+// Deduplication state for the SPIRV-Tools message consumer. Exposed so that KernelCodegen::run()
+// can flush and reset after each optimizer invocation.
+static thread_local std::string spirv_msg_last;
+static thread_local uint32_t spirv_msg_suppressed = 0;
+
+static void spirv_msg_flush_dedup() {
+  if (spirv_msg_suppressed > 0) {
+    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", spirv_msg_suppressed);
+  }
+  spirv_msg_last.clear();
+  spirv_msg_suppressed = 0;
+}
+
 static void spriv_message_consumer(spv_message_level_t level,
                                    const char *source,
                                    const spv_position_t &position,
                                    const char *message) {
-  if (message != nullptr && std::string_view(message).find("ID overflow") != std::string_view::npos) {
+  if (message == nullptr)
+    return;
+  if (std::string_view(message).find("ID overflow") != std::string_view::npos) {
     spirv_opt_id_overflow_seen = true;
   }
-  // Some SPIRV-Tools passes (e.g. when the ID space overflows) emit the same message thousands of times in a row.
   // Deduplicate consecutive identical messages so the log stays readable.
-  thread_local std::string last_message;
-  thread_local uint32_t suppressed_count = 0;
-  std::string_view current(message != nullptr ? message : "");
-  if (current == last_message) {
-    ++suppressed_count;
+  if (message == spirv_msg_last) {
+    ++spirv_msg_suppressed;
     return;
   }
-  if (suppressed_count > 0) {
-    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", suppressed_count);
-    suppressed_count = 0;
+  if (spirv_msg_suppressed > 0) {
+    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", spirv_msg_suppressed);
+    spirv_msg_suppressed = 0;
   }
-  last_message = current;
+  spirv_msg_last = message;
+  // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
   if (level <= SPV_MSG_FATAL) {
     QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
@@ -2268,14 +2280,10 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   spirv_opt_ = std::make_unique<spvtools::Optimizer>(target_env);
   spirv_opt_->SetMessageConsumer(spriv_message_consumer);
   if (params.enable_spv_opt) {
-    // From: SPIRV-Tools/source/opt/optimizer.cpp (RegisterPerformancePasses).
-    // Intermediate AggressiveDCE passes are critical: without them, dead instructions accumulate
-    // between expensive transformations and a single pass can exhaust the 4M SPIR-V ID space on
-    // large autodiff kernels.
-    // From: SPIRV-Tools/source/opt/optimizer.cpp (RegisterPerformancePasses).
-    // Intermediate AggressiveDCE passes are critical: without them, dead instructions accumulate
-    // between expensive transformations and a single pass (e.g. LocalMultiStoreElim doing SSA
-    // construction) can exhaust the SPIR-V ID space on large autodiff kernels.
+    // From: SPIRV-Tools/source/opt/optimizer.cpp
+    // Intermediate AggressiveDCE passes (matching upstream RegisterPerformancePasses) are critical:
+    // without them, dead instructions accumulate between expensive transformations and a single pass
+    // (e.g. LocalMultiStoreElim doing SSA construction) can exhaust the SPIR-V ID space.
     spirv_opt_->RegisterPass(spvtools::CreateWrapOpKillPass())
         .RegisterPass(spvtools::CreateDeadBranchElimPass())
         .RegisterPass(spvtools::CreateMergeReturnPass())
@@ -2381,6 +2389,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       QD_WARN_IF(
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(), &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
+      spirv_msg_flush_dedup();
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
