@@ -1731,6 +1731,12 @@ def test_proxy_size_constant():
     assert qd.simt.Tile16x16.SIZE == 16
 
 
+@test_utils.test(arch=qd.gpu)
+def test_simt_invalid_attr_raises():
+    with pytest.raises(AttributeError):
+        _ = qd.simt.NoSuchThing
+
+
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test(arch=qd.gpu)
 def test_proxy_default_dtype(tensor_type):
@@ -1749,6 +1755,26 @@ def test_proxy_default_dtype(tensor_type):
 
     k1(dst)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np.float32))
+
+
+@pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_proxy_eye_explicit_dtype(qd_dtype):
+    """eye(dtype=...) via the proxy must produce an identity tile."""
+    test_utils.skip_if_f64_unsupported(qd_dtype)
+    np_dtype = _NP_DTYPES[qd_dtype]
+    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+
+    @qd.kernel(fastcache=True)
+    def k1(d: qd.types.NDArray[qd_dtype, 2]):
+        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
+        tile_size = qd.simt.Tile16x16.SIZE
+        for _ in range(tile_size):
+            t = qd.simt.Tile16x16.eye(dtype=qd_dtype)
+            d[0:tile_size, 0:tile_size] = t
+
+    k1(dst)
+    np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
