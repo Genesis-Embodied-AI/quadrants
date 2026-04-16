@@ -2252,7 +2252,10 @@ static void spriv_message_consumer(spv_message_level_t level,
   if (level <= SPV_MSG_FATAL) {
     QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_ERROR) {
-    QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
+    // Log at WARN, not ERROR: QD_ERROR throws, which would propagate through SPIRV-Tools (not
+    // exception-safe) and bypass spirv_msg_flush_dedup(). The hard error is raised by QD_ERROR_IF
+    // after Run() returns.
+    QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
     QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_INFO) {
