@@ -76,6 +76,9 @@ def test_logic_not_invalid():
 
 @test_utils.test(arch=[qd.cuda, qd.amdgpu, qd.vulkan, qd.metal])
 def test_frexp():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: frexp multi-return intrinsic not mapped to AMDGPU ISA.")
+
     @qd.kernel
     def get_frac(x: qd.f32) -> qd.f32:
         a, b = qd.frexp(x)
@@ -93,6 +96,9 @@ def test_frexp():
 
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_popcnt():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: popcnt intrinsic not mapped to AMDGPU ISA.")
+
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.popcnt(x)
@@ -125,6 +131,9 @@ def test_popcnt():
 
 @test_utils.test(arch=[qd.cpu, qd.metal, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_clz():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: clz (count leading zeros) intrinsic not mapped to AMDGPU ISA.")
+
     @qd.kernel
     def test_i32(x: qd.int32) -> qd.int32:
         return qd.math.clz(x)
