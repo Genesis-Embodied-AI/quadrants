@@ -40,6 +40,9 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import (
+    is_quadrants_internal_file as _is_quadrants_internal_file,
+)
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
@@ -85,11 +88,12 @@ class ASTTransformer(Builder):
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
             if isinstance(node.ptr, (float, int, Field)):
-                message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                if node.id.upper() == node.id:
-                    warnings.warn(message)
-                else:
-                    raise exception.QuadrantsCompilationError(message)
+                if not _is_quadrants_internal_file(ctx.file):
+                    message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
+                    if node.id.upper() == node.id:
+                        warnings.warn(message)
+                    else:
+                        raise exception.QuadrantsCompilationError(message)
         if isinstance(node.ptr, Generator):
             raise ValueError("Cannot store generators in variables, inside kernels or functions")
         return node.ptr
@@ -673,7 +677,8 @@ class ASTTransformer(Builder):
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
                     if violation and node.value.ptr in [qd_math, math, np]:
-                        # ignore this built-in module
+                        violation = False
+                    if violation and _is_quadrants_internal_file(ctx.file):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"

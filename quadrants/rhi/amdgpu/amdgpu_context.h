@@ -23,6 +23,7 @@ class AMDGPUContext {
   KernelProfilerBase *profiler_{nullptr};
   AMDGPUDriver &driver_;
   bool debug_{false};
+  bool supports_mem_pool_{false};
   std::vector<void *> kernel_arg_pointer_;
 
  public:
@@ -81,6 +82,10 @@ class AMDGPUContext {
 
   int get_compute_capability() const {
     return compute_capability_;
+  }
+
+  bool supports_mem_pool() const {
+    return supports_mem_pool_;
   }
 
   ~AMDGPUContext();

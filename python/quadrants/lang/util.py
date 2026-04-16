@@ -353,4 +353,17 @@ def is_qd_template(annotation: Any) -> bool:
     return annotation is Template or type(annotation) is Template
 
 
+@functools.lru_cache(maxsize=1)
+def _quadrants_package_dir() -> str:
+    """Return the absolute path to the installed quadrants package directory."""
+    import quadrants as _qd_pkg  # pylint: disable=C0415
+
+    return os.path.realpath(os.path.dirname(_qd_pkg.__file__))
+
+
+def is_quadrants_internal_file(filepath: str) -> bool:
+    """Return True if filepath is inside the quadrants package (suppresses purity violations)."""
+    return os.path.realpath(filepath).startswith(_quadrants_package_dir() + os.sep)
+
+
 __all__ = []

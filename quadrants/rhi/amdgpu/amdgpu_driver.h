@@ -14,6 +14,12 @@ constexpr uint32 HIP_MEM_ATTACH_GLOBAL = 0x1;
 constexpr uint32 HIP_MEM_ADVISE_SET_PREFERRED_LOCATION = 3;
 constexpr uint32 HIP_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 26;
 constexpr uint32 HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 63;
+// hipDeviceAttributeMemoryPoolsSupported from the hipDeviceAttribute_t enum in
+// ROCm/clr hipamd/include/hip/hip_runtime_api.h.
+constexpr uint32 HIP_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED = 88;
+// hipMemPoolAttrReleaseThreshold from the hipMemPoolAttr enum in
+// ROCm/clr hipamd/include/hip/hip_runtime_api.h.
+constexpr uint32 HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD = 4;
 // sizeof(hipDeviceProperties_t) in ROCm 6.
 // ROCm 5.7.1 is 792 and ROCm 6 is 1472, so to make both work we use whichever
 // is larger.
@@ -120,6 +126,11 @@ class AMDGPUDriver : protected AMDGPUDriverBase {
   static AMDGPUDriver &get_instance();
 
   static AMDGPUDriver &get_instance_without_context();
+
+  // Thin wrappers that transparently fall back to the synchronous hipMalloc / hipFree when the device does not
+  // advertise memory-pool support. Mirrors CUDADriver::{malloc_async, mem_free_async}.
+  void malloc_async(void **dev_ptr, size_t size, void *stream);
+  void mem_free_async(void *dev_ptr, void *stream);
 
  private:
   AMDGPUDriver();
