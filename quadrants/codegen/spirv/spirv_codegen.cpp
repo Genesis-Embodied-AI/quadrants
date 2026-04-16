@@ -2424,9 +2424,11 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     }
 
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
-    // If SPIR-V optimization failed (e.g. because a SPIRV-Tools pass overflowed the 4M ID space), `optimized_spv` may
-    // reference id 0 and is unsafe to ship to the GPU backend. Fall back to the un-optimized kernel from TaskCodegen.
-    generated_spirv.push_back(success ? std::move(optimized_spv) : std::move(task_res.spirv_code));
+    QD_ERROR_IF(!success,
+                "SPIR-V optimization failed for '{}' (possible ID-space overflow). "
+                "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
+                tp.ti_kernel_name);
+    generated_spirv.push_back(std::move(optimized_spv));
   }
   kernel_attribs.ctx_attribs = std::move(ctx_attribs_);
   kernel_attribs.name = params_.ti_kernel_name;
