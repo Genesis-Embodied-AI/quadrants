@@ -1774,7 +1774,7 @@ def test_proxy_default_dtype_survives_reinit(tensor_type):
     assert result32.dtype == np.float32
 
 
-@test_utils.test(arch=qd.gpu)
+@test_utils.test(arch=[qd.cuda])
 def test_tile16_cholesky_blocked_demo():
     """Smoke-test that misc/demos/cholesky_blocked.py runs to completion."""
     demo = Path(__file__).resolve().parents[2] / "misc" / "demos" / "cholesky_blocked.py"
