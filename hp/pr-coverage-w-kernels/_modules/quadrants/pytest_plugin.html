@@ -328,7 +328,11 @@
 <a class="viewcode-back" href="../../autoapi/quadrants/pytest_plugin/index.html#quadrants.pytest_plugin.pytest_configure">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">pytest_configure</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">pluginmanager</span><span class="o">.</span><span class="n">hasplugin</span><span class="p">(</span><span class="s2">&quot;_cov&quot;</span><span class="p">):</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span></div>
+        <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span>
+        <span class="c1"># Kernel coverage always writes arc-format data; ensure pytest-cov matches to avoid</span>
+        <span class="c1"># &quot;Can not mix line and arc data&quot; errors during coverage combine.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cov_branch&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="n">config</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">cov_branch</span> <span class="o">=</span> <span class="kc">True</span></div>
 
 </pre></div>
 
