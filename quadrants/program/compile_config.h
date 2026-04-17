@@ -102,6 +102,8 @@ struct CompileConfig {
 
   size_t cuda_stack_limit{0};
 
+  bool amdgpu_auto_waves_per_eu{true};
+
   CompileConfig();
 
   void fit();

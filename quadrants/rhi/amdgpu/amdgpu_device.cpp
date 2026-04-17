@@ -56,19 +56,26 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(
     const LlvmRuntimeAllocParams &params) {
   AllocInfo info;
   info.size = quadrants::iroundup(params.size, quadrants_page_size);
-  if (params.host_read || params.host_write) {
+  if (info.size == 0) {
+    info.ptr = nullptr;
+  } else if (params.use_memory_pool) {
+    AMDGPUDriver::get_instance().malloc_async((void **)&info.ptr, info.size,
+                                              nullptr);
+  } else if (params.host_read || params.host_write) {
     QD_NOT_IMPLEMENTED
   } else {
     info.ptr = DeviceMemoryPool::get_instance(Arch::amdgpu,
                                               false /*merge_upon_release*/)
                    .allocate_with_cache(this, params);
-    QD_ASSERT(info.ptr != nullptr);
-
-    AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
   }
+
+  if (info.ptr)
+    AMDGPUDriver::get_instance().memset((void *)info.ptr, 0, info.size);
+
   info.is_imported = false;
   info.use_cached = true;
   info.use_preallocated = true;
+  info.use_memory_pool = params.use_memory_pool;
 
   DeviceAllocation alloc;
   alloc.alloc_id = allocations_.size();
@@ -98,11 +105,17 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
 
   validate_device_alloc(handle);
   AllocInfo &info = allocations_[handle.alloc_id];
+
+  if (info.size == 0) {
+    return;
+  }
   if (info.ptr == nullptr) {
     QD_ERROR("the DeviceAllocation is already deallocated");
   }
   QD_ASSERT(!info.is_imported);
-  if (info.use_cached) {
+  if (info.use_memory_pool) {
+    AMDGPUDriver::get_instance().mem_free_async(info.ptr, nullptr);
+  } else if (info.use_cached) {
     DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {

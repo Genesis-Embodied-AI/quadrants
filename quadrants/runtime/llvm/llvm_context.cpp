@@ -918,8 +918,13 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func,
 }
 
 void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(
-    llvm::Function *func) {
+    llvm::Function *func, int block_dim) {
   func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+  if (block_dim > 0) {
+    std::string size_str = std::to_string(block_dim) + "," +
+                           std::to_string(block_dim);
+    func->addFnAttr("amdgpu-flat-work-group-size", size_str);
+  }
 }
 
 void QuadrantsLLVMContext::eliminate_unused_functions(

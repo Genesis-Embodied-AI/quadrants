@@ -13,6 +13,7 @@ constexpr uint32 HIP_STREAM_NON_BLOCKING = 0x1;
 constexpr uint32 HIP_MEM_ATTACH_GLOBAL = 0x1;
 constexpr uint32 HIP_MEM_ADVISE_SET_PREFERRED_LOCATION = 3;
 constexpr uint32 HIP_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 26;
+constexpr uint32 HIP_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR = 39;
 constexpr uint32 HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 63;
 // sizeof(hipDeviceProperties_t) in ROCm 6.
 // ROCm 5.7.1 is 792 and ROCm 6 is 1472, so to make both work we use whichever
@@ -35,6 +36,7 @@ constexpr uint32 HIP_JIT_MAX_REGISTERS = 0;
 constexpr uint32 HIP_POINTER_ATTRIBUTE_MEMORY_TYPE = 2;
 constexpr uint32 HIP_SUCCESS = 0;
 constexpr uint32 HIP_MEMORYTYPE_DEVICE = 1;
+constexpr uint32 HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD = 4;
 
 std::string get_amdgpu_error_message(uint32 err);
 
@@ -68,6 +70,10 @@ class AMDGPUFunction {
   std::string get_error_message(uint32 err) {
     return get_amdgpu_error_message(err) +
            fmt::format(" while calling {} ({})", name_, symbol_name_);
+  }
+
+  bool is_available() const {
+    return function_ != nullptr;
   }
 
   uint32 call_with_warning(Args... args) {
@@ -116,6 +122,10 @@ class AMDGPUDriver : protected AMDGPUDriverBase {
   void (*driver_get_version)(int *);
 
   void (*runtime_get_version)(int *);
+
+  void malloc_async(void **ptr, size_t size, void *stream);
+
+  void mem_free_async(void *ptr, void *stream);
 
   bool detected();
 

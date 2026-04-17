@@ -84,6 +84,21 @@ AMDGPUContext::AMDGPUContext()
   mcpu_ = mcpu_.substr(0, mcpu_.find(":"));
   std::free(hip_device_prop);
 
+  if (driver_.device_get_default_mem_pool.is_available()) {
+    void *default_mem_pool = nullptr;
+    uint32 err = driver_.device_get_default_mem_pool.call_with_warning(
+        &default_mem_pool, 0);
+    if (err == HIP_SUCCESS && default_mem_pool != nullptr) {
+      supports_mem_pool_ = true;
+      constexpr uint64 kMemPoolReleaseThreshold = 1048576 * 128;
+      driver_.mem_pool_set_attribute(default_mem_pool,
+                                     HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+                                     (void *)&kMemPoolReleaseThreshold);
+      QD_TRACE("HIP memory pool enabled (release threshold: {} bytes)",
+               kMemPoolReleaseThreshold);
+    }
+  }
+
   QD_TRACE("Emitting AMDGPU code for {}", mcpu_);
 }
 
@@ -175,7 +190,8 @@ void AMDGPUContext::launch(void *func,
     bool valid =
         offline_cache::try_demangle_name(task_name, primal_task_name, key);
     profiler_amdgpu->trace(task_handle, valid ? primal_task_name : task_name,
-                           func, grid_dim, block_dim, 0);
+                           func, grid_dim, block_dim,
+                           dynamic_shared_mem_bytes);
   }
 
   auto context_guard = AMDGPUContext::get_instance().get_guard();

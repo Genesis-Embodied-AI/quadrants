@@ -17,6 +17,7 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/codegen/codegen_utils.h"
+#include "quadrants/inc/constants.h"
 
 namespace quadrants {
 namespace lang {
@@ -26,6 +27,8 @@ using namespace llvm;
 class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
  public:
   using IRVisitor::visit;
+  size_t dynamic_shared_array_bytes{0};
+
   TaskCodeGenAMDGPU(int id,
                     const CompileConfig &config,
                     QuadrantsLLVMContext &tlctx,
@@ -46,6 +49,37 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 
   void visit(PrintStmt *stmt) override {
     // We'll just ignore it
+  }
+
+  // Dynamic shared memory promotion
+  void visit(AllocaStmt *stmt) override {
+    auto tensor_type = stmt->ret_type.ptr_removed()->cast<TensorType>();
+    if (tensor_type && stmt->is_shared) {
+      size_t shared_array_bytes =
+          tensor_type->get_num_elements() *
+          data_type_size(tensor_type->get_element_type());
+      if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
+        if (dynamic_shared_array_bytes > 0) {
+          QD_ERROR(
+              "Only one single large shared array instance is allowed in "
+              "current version.")
+        }
+        tensor_type->set_shape(std::vector<int>({0}));
+        dynamic_shared_array_bytes += shared_array_bytes;
+      }
+
+      auto type = tlctx->get_data_type(tensor_type);
+      auto base = new llvm::GlobalVariable(
+          *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
+          fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
+          nullptr, llvm::GlobalVariable::NotThreadLocal,
+          3 /*addrspace=LDS*/);
+      base->setAlignment(llvm::MaybeAlign(8));
+      auto ptr_type = llvm::PointerType::get(type, 0);
+      llvm_val[stmt] = builder->CreatePointerCast(base, ptr_type);
+    } else {
+      TaskCodeGenLLVM::visit(stmt);
+    }
   }
 
   void emit_extra_unary(UnaryOpStmt *stmt) override {
@@ -79,7 +113,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else {
         QD_NOT_IMPLEMENTED
       }
-    }  // TODO simplify the impl of sgn
+    }
+    // Branchless sgn using select (no alloca/scratch)
     else if (op == UnaryOpType::sgn) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         auto ashr = builder->CreateAShr(input, 31);
@@ -87,117 +122,33 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto lshr = builder->CreateLShr(sub, 31);
         llvm_val[stmt] = builder->CreateOr(ashr, lshr);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        auto func = builder->GetInsertBlock()->getParent();
-        auto bb_oeq_then = BasicBlock::Create(*llvm_context, "oeq_then", func);
-        auto bb_oeq_else = BasicBlock::Create(*llvm_context, "oeq_else");
-        auto bb_merge = BasicBlock::Create(*llvm_context, "merge");
-        auto bb_olt_then = BasicBlock::Create(*llvm_context, "olt_then", func);
-        auto bb_olt_else = BasicBlock::Create(*llvm_context, "olt_else");
-
-        auto alloc = builder->CreateAlloca(
-            llvm::Type::getFloatTy(*llvm_context), (unsigned)5);
-        auto newty = llvm::PointerType::get(
-            llvm::Type::getFloatTy(*llvm_context), (unsigned)0);
-        auto cast = builder->CreateAddrSpaceCast(alloc, newty);
-        auto fcmp_oeq = builder->CreateFCmpOEQ(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
-        builder->CreateCondBr(fcmp_oeq, bb_oeq_then, bb_oeq_else);
-        builder->SetInsertPoint(bb_oeq_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_oeq_then = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_oeq_else);
-        builder->SetInsertPoint(bb_oeq_else);
-        auto fcmp_olt = builder->CreateFCmpOLT(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
-        builder->CreateCondBr(fcmp_olt, bb_olt_then, bb_olt_else);
-        bb_oeq_else = builder->GetInsertBlock();
-
-        builder->SetInsertPoint(bb_olt_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), -1),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_olt_then = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_olt_else);
-        builder->SetInsertPoint(bb_olt_else);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 1),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_olt_else = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_merge);
-        builder->SetInsertPoint(bb_merge);
-        llvm_val[stmt] =
-            builder->CreateLoad(llvm::Type::getFloatTy(*llvm_context), cast);
+        auto *float_ty = llvm::Type::getFloatTy(*llvm_context);
+        auto *zero = llvm::ConstantFP::get(float_ty, 0.0);
+        auto *neg_one = llvm::ConstantFP::get(float_ty, -1.0);
+        auto *pos_one = llvm::ConstantFP::get(float_ty, 1.0);
+        auto *is_neg = builder->CreateFCmpOLT(input, zero);
+        auto *is_zero = builder->CreateFCmpOEQ(input, zero);
+        auto *neg_or_pos = builder->CreateSelect(is_neg, neg_one, pos_one);
+        llvm_val[stmt] = builder->CreateSelect(is_zero, zero, neg_or_pos);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
-        auto func = builder->GetInsertBlock()->getParent();
-        auto bb_oeq_then = BasicBlock::Create(*llvm_context, "oeq_then", func);
-        auto bb_oeq_else = BasicBlock::Create(*llvm_context, "oeq_else");
-        auto bb_merge = BasicBlock::Create(*llvm_context, "merge");
-        auto bb_olt_then = BasicBlock::Create(*llvm_context, "olt_then", func);
-        auto bb_olt_else = BasicBlock::Create(*llvm_context, "olt_else");
-
-        auto alloc = builder->CreateAlloca(
-            llvm::Type::getDoubleTy(*llvm_context), (unsigned)5);
-        auto newty = llvm::PointerType::get(
-            llvm::Type::getDoubleTy(*llvm_context), (unsigned)0);
-        auto cast = builder->CreateAddrSpaceCast(alloc, newty);
-        auto fcmp_oeq = builder->CreateFCmpOEQ(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
-        builder->CreateCondBr(fcmp_oeq, bb_oeq_then, bb_oeq_else);
-        builder->SetInsertPoint(bb_oeq_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_oeq_then = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_oeq_else);
-        builder->SetInsertPoint(bb_oeq_else);
-        auto fcmp_olt = builder->CreateFCmpOLT(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
-        builder->CreateCondBr(fcmp_olt, bb_olt_then, bb_olt_else);
-        bb_oeq_else = builder->GetInsertBlock();
-
-        builder->SetInsertPoint(bb_olt_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), -1),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_olt_then = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_olt_else);
-        builder->SetInsertPoint(bb_olt_else);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 1),
-            cast);
-        builder->CreateBr(bb_merge);
-        bb_olt_else = builder->GetInsertBlock();
-
-        func->insert(func->end(), bb_merge);
-        builder->SetInsertPoint(bb_merge);
-        llvm_val[stmt] =
-            builder->CreateLoad(llvm::Type::getDoubleTy(*llvm_context), cast);
+        auto *double_ty = llvm::Type::getDoubleTy(*llvm_context);
+        auto *zero = llvm::ConstantFP::get(double_ty, 0.0);
+        auto *neg_one = llvm::ConstantFP::get(double_ty, -1.0);
+        auto *pos_one = llvm::ConstantFP::get(double_ty, 1.0);
+        auto *is_neg = builder->CreateFCmpOLT(input, zero);
+        auto *is_zero = builder->CreateFCmpOEQ(input, zero);
+        auto *neg_or_pos = builder->CreateSelect(is_neg, neg_one, pos_one);
+        llvm_val[stmt] = builder->CreateSelect(is_zero, zero, neg_or_pos);
       }
     }
     UNARY_STD(cos)
-    UNARY_STD(acos)
     UNARY_STD(sin)
+    UNARY_STD(log)
+    UNARY_STD(acos)
     UNARY_STD(asin)
     UNARY_STD(tan)
     UNARY_STD(tanh)
     UNARY_STD(exp)
-    UNARY_STD(log)
     UNARY_STD(sqrt)
     else {
       QD_P(unary_op_type_name(op));
@@ -267,7 +218,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 
     auto [begin, end] = get_range_for_bounds(stmt);
     call("gpu_parallel_range_for",
-         {get_arg(0), begin, end, tls_prologue, body, epilogue,
+         {get_context(), begin, end, tls_prologue, body, epilogue,
           tlctx->get_constant(stmt->tls_size)});
   }
 
@@ -307,42 +258,147 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   bool kernel_argument_by_val() const override {
-    // on AMDGPU, pass the argument by value is not allowed
     return false;
+  }
+
+  bool kernel_argument_struct_in_kernarg() const override {
+    return true;
+  }
+
+  // SNode root pointers are hipMalloc'd global memory. Cast result
+  // to addrspace(1) so GEP chains produce global_load after inlining.
+  void visit(GetRootStmt *stmt) override {
+    TaskCodeGenLLVM::visit(stmt);
+    auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+    llvm_val[stmt] = builder->CreateAddrSpaceCast(llvm_val[stmt], ptr_as1);
+  }
+
+  void visit(SNodeLookupStmt *stmt) override {
+    // Cast addrspace(1) input to addrspace(0) for base visitor's
+    // runtime function calls, then cast result back to addrspace(1).
+    auto *input = llvm_val[stmt->input_snode];
+    if (input && input->getType()->isPointerTy() &&
+        input->getType()->getPointerAddressSpace() == 1) {
+      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
+      llvm_val[stmt->input_snode] =
+          builder->CreateAddrSpaceCast(input, ptr_as0);
+    }
+    TaskCodeGenLLVM::visit(stmt);
+    llvm_val[stmt->input_snode] = input;
+    if (llvm_val[stmt] && llvm_val[stmt]->getType()->isPointerTy() &&
+        llvm_val[stmt]->getType()->getPointerAddressSpace() == 0) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(llvm_val[stmt], ptr_as1);
+    }
+  }
+
+  void visit(GetChStmt *stmt) override {
+    if (stmt->input_snode->type == SNodeType::quant_array ||
+        stmt->ret_type->as<PointerType>()->is_bit_pointer()) {
+      TaskCodeGenLLVM::visit(stmt);
+      return;
+    }
+    auto *input = llvm_val[stmt->input_ptr];
+    if (input && input->getType()->isPointerTy() &&
+        input->getType()->getPointerAddressSpace() == 1) {
+      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
+      llvm_val[stmt->input_ptr] =
+          builder->CreateAddrSpaceCast(input, ptr_as0);
+    }
+    TaskCodeGenLLVM::visit(stmt);
+    llvm_val[stmt->input_ptr] = input;
+    if (llvm_val[stmt] && llvm_val[stmt]->getType()->isPointerTy() &&
+        llvm_val[stmt]->getType()->getPointerAddressSpace() == 0) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(llvm_val[stmt], ptr_as1);
+    }
+  }
+
+  llvm::Value *get_runtime() override {
+    auto *runtime_context_ty = get_runtime_type("RuntimeContext");
+    auto *runtime_ptr_addr = builder->CreateStructGEP(
+        runtime_context_ty, TaskCodeGenLLVM::get_context(), 1);
+    auto *runtime_ty =
+        llvm::PointerType::get(get_runtime_type("LLVMRuntime"), 0);
+    auto *runtime_ptr = builder->CreateLoad(runtime_ty, runtime_ptr_addr);
+    auto *invariant_load_metadata =
+        llvm::MDNode::get(builder->getContext(), {});
+    runtime_ptr->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                             invariant_load_metadata);
+    return runtime_ptr;
+  }
+
+  // Read-only cache loads via invariant.load metadata
+  llvm::Value *create_intrinsic_load(llvm::Value *ptr,
+                                     llvm::Type *ty) override {
+    auto *ptr_ty_addrspace_1 = llvm::PointerType::get(ty, 1);
+    auto *cast_ptr = builder->CreateAddrSpaceCast(ptr, ptr_ty_addrspace_1);
+    auto *load = builder->CreateLoad(ty, cast_ptr);
+    auto *invariant_load_metadata =
+        llvm::MDNode::get(builder->getContext(), {});
+    load->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                      invariant_load_metadata);
+    return load;
   }
 
   void visit(GlobalLoadStmt *stmt) override {
     auto ptr = llvm_val[stmt->src];
     auto ptr_type = stmt->src->ret_type->as<PointerType>();
     if (ptr_type->is_bit_pointer()) {
-      auto val_type = ptr_type->get_pointee_type();
-      auto get_ch = stmt->src->as<GetChStmt>();
-      auto physical_type =
-          tlctx->get_data_type(get_ch->input_snode->physical_type);
-      auto [byte_ptr, bit_offset] = load_bit_ptr(ptr);
-      auto physical_value = builder->CreateLoad(physical_type, byte_ptr);
-      if (auto qit = val_type->cast<QuantIntType>()) {
-        llvm_val[stmt] = extract_quant_int(physical_value, bit_offset, qit);
-      } else if (auto qfxt = val_type->cast<QuantFixedType>()) {
-        qit = qfxt->get_digits_type()->as<QuantIntType>();
-        auto digits = extract_quant_int(physical_value, bit_offset, qit);
-        llvm_val[stmt] = reconstruct_quant_fixed(digits, qfxt);
+      if (auto get_ch = stmt->src->cast<GetChStmt>()) {
+        bool should_cache_as_read_only =
+            current_offload->mem_access_opt.has_flag(
+                get_ch->output_snode, SNodeAccessFlag::read_only);
+        create_global_load(stmt, should_cache_as_read_only);
       } else {
-        QD_ASSERT(val_type->is<QuantFloatType>());
-        QD_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
-        llvm_val[stmt] = extract_quant_float(
-            physical_value, get_ch->input_snode->dt->as<BitStructType>(),
-            get_ch->output_snode->id_in_bit_struct);
+        create_global_load(stmt, false);
       }
     } else {
-      // Byte pointer case.
-      llvm_val[stmt] =
-          builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // SNode data lives in hipMalloc'd global memory. Cast pointer to
+      // addrspace(1) so LLVM emits global_load instead of flat_load,
+      // avoiding the FLAT unit's runtime address-space resolution.
+      auto *load_ty = tlctx->get_data_type(stmt->ret_type);
+      bool read_only = false;
+      if (auto get_ch = stmt->src->cast<GetChStmt>()) {
+        read_only = current_offload->mem_access_opt.has_flag(
+            get_ch->output_snode, SNodeAccessFlag::read_only);
+      }
+      auto *ptr_as1 = llvm::PointerType::get(load_ty, 1);
+      auto *cast_ptr = builder->CreateAddrSpaceCast(ptr, ptr_as1);
+      auto *load = builder->CreateLoad(load_ty, cast_ptr);
+      if (read_only) {
+        auto *md = llvm::MDNode::get(builder->getContext(), {});
+        load->setMetadata(llvm::LLVMContext::MD_invariant_load, md);
+      }
+      llvm_val[stmt] = load;
     }
   }
 
+  void visit(GlobalStoreStmt *stmt) override {
+    QD_ASSERT(llvm_val[stmt->val]);
+    QD_ASSERT(llvm_val[stmt->dest]);
+    auto ptr_type = stmt->dest->ret_type->as<PointerType>();
+    if (ptr_type->is_bit_pointer()) {
+      TaskCodeGenLLVM::visit(stmt);
+    } else {
+      // Cast to addrspace(1) for global_store instead of flat_store.
+      auto *val_ty = llvm_val[stmt->val]->getType();
+      auto *ptr_as1 = llvm::PointerType::get(val_ty, 1);
+      auto *cast_ptr =
+          builder->CreateAddrSpaceCast(llvm_val[stmt->dest], ptr_as1);
+      builder->CreateStore(llvm_val[stmt->val], cast_ptr);
+    }
+  }
+
+  // BLS / shared memory buffer allocation
   void create_bls_buffer(OffloadedStmt *stmt) {
-    QD_NOT_IMPLEMENTED
+    auto type = llvm::ArrayType::get(
+        llvm::Type::getInt8Ty(*llvm_context), stmt->bls_size);
+    bls_buffer = new llvm::GlobalVariable(
+        *module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr,
+        "bls_buffer", nullptr, llvm::GlobalVariable::NotThreadLocal,
+        3 /*addrspace=LDS*/);
+    bls_buffer->setAlignment(llvm::MaybeAlign(8));
   }
 
   void visit(OffloadedStmt *stmt) override {
@@ -384,22 +440,26 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         }
       }
       if (stmt->task_type == Type::listgen) {
-        // Note: 32 is a temporary number
-        // TODO: find a func to obtain this attr
-        int query_max_block_per_sm = 32;
-        // AMDGPUDriver::get_instance().device_get_attribute(
-        //     &query_max_block_per_sm,
-        //     HIP_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
         int num_SMs;
         AMDGPUDriver::get_instance().device_get_attribute(
             &num_SMs, HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
+        int max_threads_per_sm = 0;
+        AMDGPUDriver::get_instance().device_get_attribute(
+            &max_threads_per_sm,
+            HIP_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, 0);
+        int query_max_block_per_sm =
+            (max_threads_per_sm > 0 && stmt->block_dim > 0)
+                ? (max_threads_per_sm / stmt->block_dim)
+                : 32;
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
+      current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
+      dynamic_shared_array_bytes = 0;
     }
     current_offload = nullptr;
 #else

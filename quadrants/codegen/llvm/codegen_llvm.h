@@ -22,6 +22,7 @@ class FunctionCreationGuard {
   llvm::Function *body;
   llvm::BasicBlock *old_entry, *allocas, *entry, *old_final, *final;
   llvm::IRBuilder<>::InsertPoint ip;
+  llvm::Value *old_context_val_alloca{nullptr};
 
   FunctionCreationGuard(TaskCodeGenLLVM *mb,
                         std::vector<llvm::Type *> arguments,
@@ -97,6 +98,8 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_tls_base_ptr();
 
+  llvm::Value *context_val_alloca_{nullptr};
+
   llvm::Type *get_tls_buffer_type();
 
   std::vector<llvm::Type *> get_xlogue_argument_types();
@@ -111,7 +114,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_root(int snode_tree_id);
 
-  llvm::Value *get_runtime();
+  virtual llvm::Value *get_runtime();
 
   void emit_struct_meta_base(const std::string &name,
                              llvm::Value *node_meta,
@@ -328,6 +331,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   virtual bool kernel_argument_by_val() const {
     return false;  // on CPU devices just pass in a pointer
+  }
+
+  // On AMDGPU, byval attribute is disallowed by the calling convention
+  // verifier. Instead, pass the struct type directly in kernarg and store
+  // to an alloca at function entry to obtain a pointer.
+  virtual bool kernel_argument_struct_in_kernarg() const {
+    return false;
   }
 
   std::string init_offloaded_task_function(OffloadedStmt *stmt,

@@ -68,6 +68,8 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
       config.arch = host_arch();
     } else {
       // AMDGPU runtime created successfully
+      use_device_memory_pool_ =
+          AMDGPUContext::get_instance().supports_mem_pool();
     }
 #else
     QD_WARN("Quadrants is not compiled with AMDGPU.");
@@ -146,7 +148,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
       config.max_block_dim = query_max_block_dim;
     }
     if (config.saturating_grid_dim == 0) {
-      config.saturating_grid_dim = num_workgroups * query_max_block_per_cu * 2;
+      config.saturating_grid_dim = num_workgroups * query_max_block_per_cu;
     }
     if (config.kernel_profiler) {
       AMDGPUContext::get_instance().set_profiler(profiler);

@@ -23,6 +23,7 @@ class AMDGPUContext {
   KernelProfilerBase *profiler_{nullptr};
   AMDGPUDriver &driver_;
   bool debug_{false};
+  bool supports_mem_pool_{false};
   std::vector<void *> kernel_arg_pointer_;
 
  public:
@@ -36,13 +37,21 @@ class AMDGPUContext {
     return dev_count_ != 0;
   }
 
+  bool supports_mem_pool() const {
+    return supports_mem_pool_;
+  }
+
   void push_back_kernel_arg_pointer(void *ptr) {
     kernel_arg_pointer_.push_back(ptr);
   }
 
   void free_kernel_arg_pointer() {
     for (auto &i : kernel_arg_pointer_) {
-      AMDGPUDriver::get_instance().mem_free(i);
+      if (supports_mem_pool_) {
+        AMDGPUDriver::get_instance().mem_free_async(i, nullptr);
+      } else {
+        AMDGPUDriver::get_instance().mem_free(i);
+      }
     }
     kernel_arg_pointer_.erase(kernel_arg_pointer_.begin(),
                               kernel_arg_pointer_.end());

@@ -2,11 +2,13 @@
 #include <utility>
 #include <mutex>
 #include <random>
+#include <unordered_map>
 #include <unistd.h>
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/MD5.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/DataLayout.h"
@@ -23,6 +25,7 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
 
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
@@ -137,10 +140,22 @@ class JITSessionAMDGPU : public JITSession {
     return tmp_dir_;
   }
 
+  std::string compute_module_cache_key(llvm::Module *module) {
+    std::string bitcode;
+    llvm::raw_string_ostream sos(bitcode);
+    llvm::WriteBitcodeToFile(*module, sos);
+    llvm::MD5 hasher;
+    hasher.update(bitcode);
+    llvm::MD5::MD5Result result;
+    hasher.final(result);
+    return result.digest().str().str();
+  }
+
  private:
   std::string compile_module_to_hsaco(std::unique_ptr<llvm::Module> &module);
   uint64_t random_num_;
   std::string tmp_dir_;
+  std::unordered_map<std::string, std::string> hsaco_cache_;
 };
 
 #endif

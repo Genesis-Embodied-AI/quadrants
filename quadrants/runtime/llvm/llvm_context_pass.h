@@ -113,6 +113,71 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
   }
 };
 
+// After O3, remaining addrspace(0) loads/stores are either runtime
+// metadata accesses (global memory) or alloca-derived accesses that
+// InferAddressSpaces couldn't resolve. This pass converts the former
+// to addrspace(1) by using stripPointerCasts() to trace pointer
+// origins: if the origin is an alloca or addrspacecast-from-5
+// (scratch), the load/store is left as flat.
+struct AMDGPUFlatToGlobalLoadStorePass : public FunctionPass {
+  static inline char ID{0};
+  AMDGPUFlatToGlobalLoadStorePass() : FunctionPass(ID) {}
+
+  static bool originatesFromScratch(llvm::Value *ptr) {
+    auto *origin = ptr->stripPointerCasts();
+    if (llvm::isa<llvm::AllocaInst>(origin))
+      return true;
+    if (auto *ASC = llvm::dyn_cast<llvm::AddrSpaceCastInst>(origin))
+      if (ASC->getSrcAddressSpace() == 5)
+        return true;
+    if (auto *PHI = llvm::dyn_cast<llvm::PHINode>(origin)) {
+      for (unsigned i = 0; i < PHI->getNumIncomingValues(); ++i)
+        if (originatesFromScratch(PHI->getIncomingValue(i)))
+          return true;
+    }
+    if (auto *Sel = llvm::dyn_cast<llvm::SelectInst>(origin)) {
+      if (originatesFromScratch(Sel->getTrueValue()) ||
+          originatesFromScratch(Sel->getFalseValue()))
+        return true;
+    }
+    return false;
+  }
+
+  bool runOnFunction(llvm::Function &F) override {
+    bool modified = false;
+    auto *ptr_global_ty = llvm::PointerType::get(F.getContext(), 1);
+    for (auto &BB : F) {
+      std::vector<llvm::Instruction *> to_convert;
+      for (auto &I : BB) {
+        if (auto *LI = llvm::dyn_cast<llvm::LoadInst>(&I)) {
+          if (LI->getPointerAddressSpace() == 0 &&
+              !originatesFromScratch(LI->getPointerOperand()))
+            to_convert.push_back(LI);
+        } else if (auto *SI = llvm::dyn_cast<llvm::StoreInst>(&I)) {
+          if (SI->getPointerAddressSpace() == 0 &&
+              !originatesFromScratch(SI->getPointerOperand()))
+            to_convert.push_back(SI);
+        }
+      }
+      for (auto *I : to_convert) {
+        llvm::IRBuilder<> B(I);
+        if (auto *LI = llvm::dyn_cast<llvm::LoadInst>(I)) {
+          auto *cast = B.CreateAddrSpaceCast(LI->getPointerOperand(),
+                                             ptr_global_ty);
+          LI->setOperand(LI->getPointerOperandIndex(), cast);
+          modified = true;
+        } else if (auto *SI = llvm::dyn_cast<llvm::StoreInst>(I)) {
+          auto *cast = B.CreateAddrSpaceCast(SI->getPointerOperand(),
+                                             ptr_global_ty);
+          SI->setOperand(SI->getPointerOperandIndex(), cast);
+          modified = true;
+        }
+      }
+    }
+    return modified;
+  }
+};
+
 struct AMDGPUAddStructForFuncPass : public ModulePass {
   static inline char ID{0};
   std::string func_name_;

@@ -19,7 +19,7 @@ bool is_extension_supported(Arch arch, Extension ext) {
        {Extension::sparse, Extension::quant, Extension::quant_basic,
         Extension::data64, Extension::adstack, Extension::bls,
         Extension::assertion, Extension::mesh}},
-      {Arch::amdgpu, {Extension::assertion}},
+      {Arch::amdgpu, {Extension::assertion, Extension::bls}},
       {Arch::metal, {}},
       {Arch::vulkan, {}},
   };

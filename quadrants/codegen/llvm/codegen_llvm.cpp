@@ -38,6 +38,8 @@ FunctionCreationGuard::FunctionCreationGuard(
                                 llvm::Function::InternalLinkage, func_name,
                                 mb->module.get());
   old_func = mb->func;
+  old_context_val_alloca = mb->context_val_alloca_;
+  mb->context_val_alloca_ = nullptr;
   // emit into loop body function
   mb->func = body;
 
@@ -74,6 +76,7 @@ FunctionCreationGuard::~FunctionCreationGuard() {
   mb->entry_block = old_entry;
   mb->final_block = old_final;
   mb->func = old_func;
+  mb->context_val_alloca_ = old_context_val_alloca;
   mb->builder->restoreIP(ip);
 
   QD_ASSERT(!llvm::verifyFunction(*body, &llvm::errs()));
@@ -2015,9 +2018,15 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt,
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
+  llvm::Type *context_param_type;
+  if (kernel_argument_struct_in_kernarg()) {
+    context_param_type = context_ty;
+  } else {
+    context_param_type = llvm::PointerType::get(context_ty, 0);
+  }
   task_function_type =
       llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context),
-                              {llvm::PointerType::get(context_ty, 0)}, false);
+                              {context_param_type}, false);
 
   auto task_kernel_name = fmt::format(
       "{}_{}_{}{}", kernel_name, task_codegen_id, stmt->task_name(), suffix);
@@ -2041,6 +2050,13 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt,
   // The real function body
   func_body_bb = llvm::BasicBlock::Create(*llvm_context, "body", func);
   builder->SetInsertPoint(func_body_bb);
+
+  if (kernel_argument_struct_in_kernarg()) {
+    context_val_alloca_ = create_entry_block_alloca(context_ty);
+    builder->CreateStore(kernel_args[0], context_val_alloca_);
+  } else {
+    context_val_alloca_ = nullptr;
+  }
   return task_kernel_name;
 }
 
@@ -2627,6 +2643,8 @@ llvm::Value *TaskCodeGenLLVM::get_arg(int i) {
 }
 
 llvm::Value *TaskCodeGenLLVM::get_context() {
+  if (context_val_alloca_)
+    return context_val_alloca_;
   return get_arg(0);
 }
 
@@ -2732,7 +2750,7 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
     for (const auto &task : offloaded_tasks) {
       llvm::Function *func = module->getFunction(task.name);
       QD_ASSERT(func);
-      tlctx->mark_function_as_amdgpu_kernel(func);
+      tlctx->mark_function_as_amdgpu_kernel(func, task.block_dim);
     }
 #if defined(QD_WITH_AMDGPU)
     llvm::legacy::FunctionPassManager fpm(module.get());

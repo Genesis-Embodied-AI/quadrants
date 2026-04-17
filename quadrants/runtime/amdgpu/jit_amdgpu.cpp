@@ -1,9 +1,14 @@
 #include "quadrants/runtime/amdgpu/jit_amdgpu.h"
 #include "quadrants/runtime/llvm/llvm_context.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/rhi/amdgpu/amdgpu_types.h"
 
 #include "llvm/IR/Module.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Scalar/LoopStrengthReduce.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
+#include "llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h"
+#include "llvm/Transforms/Utils.h"
 
 #include <fstream>
 #include <cstdlib>
@@ -13,6 +18,18 @@ namespace lang {
 #if defined(QD_WITH_AMDGPU)
 JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M,
                                          int max_reg) {
+  // HSACo caching
+  auto cache_key = compute_module_cache_key(M.get());
+  auto cache_it = hsaco_cache_.find(cache_key);
+  if (cache_it != hsaco_cache_.end()) {
+    QD_TRACE("HSACo cache hit for key {}", cache_key.substr(0, 16));
+    void *amdgpu_module;
+    AMDGPUDriver::get_instance().module_load_data(&amdgpu_module,
+                                                  cache_it->second.c_str());
+    modules.push_back(std::make_unique<JITModuleAMDGPU>(amdgpu_module));
+    return modules.back().get();
+  }
+
   auto hsaco = compile_module_to_hsaco(M);
   QD_TRACE("hsaco size: {:.2f}KB", hsaco.size() / 1024.0);
 
@@ -21,6 +38,9 @@ JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M,
   AMDGPUDriver::get_instance().module_load_data(&amdgpu_module, hsaco.c_str());
   QD_TRACE("AMDGPU load data from module time : {}ms",
            (Time::get_time() - t) * 1000);
+
+  hsaco_cache_[cache_key] = hsaco;
+
   modules.push_back(std::make_unique<JITModuleAMDGPU>(amdgpu_module));
   return modules.back().get();
 }
@@ -35,6 +55,45 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   for (auto func = llvm_module->begin(); func != llvm_module->end(); ++func)
     function_pass_manager_addrcast.run(*func);
   function_pass_manager_addrcast.doFinalization();
+
+  for (auto &F : *llvm_module) {
+    // Match CUDA parity: jit_cuda.cpp:332-335 unconditionally applies
+    // unsafe-fp-math to ALL functions via hardcoded kFTZDenorms=1.
+    // Enables FMA contraction, reciprocal for division, and operation
+    // reordering. Applied to all functions (not just kernels) because
+    // internal body functions contain the actual FP compute.
+    F.addFnAttr("unsafe-fp-math", "true");
+    F.addFnAttr("no-signed-zeros-fp-math", "true");
+
+    if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
+      const std::string kernel_name = F.getName().str();
+      const bool is_lightweight_cg_subkernel =
+          kernel_name.find("_kernel_cg_only_save_prev_grad") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_forces") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_qfrc") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_constraint_cost") !=
+              std::string::npos ||
+          kernel_name.find("_kernel_update_search_direction") !=
+              std::string::npos;
+
+      if (!is_lightweight_cg_subkernel) {
+        F.addFnAttr("amdgpu-waves-per-eu", "1,2");
+      }
+      F.addFnAttr("uniform-work-group-size", "true");
+      F.addFnAttr("amdgpu-ieee", "false");
+      F.addFnAttr("amdgpu-dx10-clamp", "false");
+    }
+  }
+
+  auto *daz_type = llvm::Type::getInt8Ty(llvm_module->getContext());
+  auto *daz_init = llvm::ConstantInt::get(daz_type, 1);
+  auto *daz_var = new llvm::GlobalVariable(
+      *llvm_module, daz_type, true, llvm::GlobalValue::LinkOnceODRLinkage,
+      daz_init, "__oclc_daz_opt");
+  daz_var->setVisibility(llvm::GlobalValue::HiddenVisibility);
 
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);
@@ -54,15 +113,17 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
 
   llvm::TargetOptions options;
   options.MCOptions.AsmVerbose = false;
+  // FMA contraction always enabled to match CUDA's unconditional
+  // unsafe-fp-math=true (function attribute overrides TargetOptions,
+  // but setting Fast here ensures consistent behavior across all
+  // AMDGPU backend passes that check TargetOptions directly).
+  options.AllowFPOpFusion = FPOpFusion::Fast;
   if (this->config_.fast_math) {
-    options.AllowFPOpFusion = FPOpFusion::Fast;
-    // UnsafeFPMath was removed in LLVM 22; set the individual flags it implied
     options.NoInfsFPMath = 1;
     options.NoNaNsFPMath = 1;
     options.NoSignedZerosFPMath = 1;
     options.NoTrappingFPMath = 1;
   } else {
-    options.AllowFPOpFusion = FPOpFusion::Strict;
     options.NoInfsFPMath = 0;
     options.NoNaNsFPMath = 0;
     options.NoSignedZerosFPMath = 0;
@@ -155,6 +216,16 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
 
   // Run the new optimization pipeline
   mpm.run(*llvm_module, mam);
+
+  // Additional LLVM optimization passes
+  llvm::legacy::FunctionPassManager extra_fpm(llvm_module.get());
+  extra_fpm.add(llvm::createLoopStrengthReducePass());
+  extra_fpm.add(llvm::createSeparateConstOffsetFromGEPPass(false));
+  extra_fpm.add(llvm::createEarlyCSEPass(true));
+  extra_fpm.doInitialization();
+  for (auto func = llvm_module->begin(); func != llvm_module->end(); ++func)
+    extra_fpm.run(*func);
+  extra_fpm.doFinalization();
 
   // Keep legacy PassManager for backend code generation
   module_pass_manager.add(llvm::createTargetTransformInfoWrapperPass(

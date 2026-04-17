@@ -201,6 +201,8 @@ void export_lang(py::module &m) {
       .def_readwrite("default_gpu_block_dim",
                      &CompileConfig::default_gpu_block_dim)
       .def_readwrite("gpu_max_reg", &CompileConfig::gpu_max_reg)
+      .def_readwrite("amdgpu_auto_waves_per_eu",
+                     &CompileConfig::amdgpu_auto_waves_per_eu)
       .def_readwrite("saturating_grid_dim", &CompileConfig::saturating_grid_dim)
       .def_readwrite("max_block_dim", &CompileConfig::max_block_dim)
       .def_readwrite("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads)
