@@ -15,8 +15,11 @@ from weakref import ReferenceType
 from quadrants import _logging
 
 _GRAPH_ENABLED = os.environ.get("QD_GRAPH", "1") == "1"
+
+
 def _kernel_coverage_enabled() -> bool:
     return os.environ.get("QD_KERNEL_COVERAGE") == "1"
+
 
 from quadrants._lib.core.quadrants_python import (
     Arch,

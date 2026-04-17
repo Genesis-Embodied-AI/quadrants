@@ -19,8 +19,10 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
+
 def _kernel_coverage_enabled() -> bool:
     return os.environ.get("QD_KERNEL_COVERAGE") == "1"
+
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
