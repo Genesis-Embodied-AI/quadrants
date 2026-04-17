@@ -33,7 +33,6 @@ def _ann(tensor_type, dtype, ndim):
 def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
     dst.from_numpy(np.ones((_TILE, _TILE), dtype=np_dtype))
 
@@ -45,10 +44,10 @@ def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             if qd.static(use_zeros_alias):
-                t = Tile.zeros()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
             else:
-                t = Tile()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
     k1(dst, use_zeros_alias)
@@ -62,7 +61,6 @@ def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
 def test_tile16_eye(tensor_type, qd_dtype, inplace):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (_TILE, _TILE))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
 
@@ -74,12 +72,12 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             if qd.static(inplace):
-                t = Tile()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t._load(src_arr, 0, tile_size, 0, tile_size)
                 t.eye_()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
             else:
-                t = Tile.eye()
+                t = qd.simt.Tile16x16.eye(dtype=qd_dtype)
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 100.0
@@ -108,7 +106,6 @@ def test_tile16_load_store(tensor_type, qd_dtype, src_row, src_col, row_offset, 
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (GRID, GRID))
     dst = tensor_type(qd_dtype, (GRID, GRID))
 
@@ -137,7 +134,7 @@ def test_tile16_load_store(tensor_type, qd_dtype, src_row, src_col, row_offset, 
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(src_arr, src_row, src_row_end, src_col, src_col_end)
             t._store(dst_arr, dst_row, dst_row_end, dst_col, dst_col_end)
 
@@ -163,7 +160,6 @@ def test_tile16_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NROWS = 10
-    Tile = _make_tile16x16(qd_dtype)
     src_rows = NROWS if clamp_side == "load" else _TILE
     dst_rows = _TILE if clamp_side == "load" else NROWS
     src = tensor_type(qd_dtype, (src_rows, _TILE))
@@ -176,7 +172,7 @@ def test_tile16_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(src_arr, 0, tile_size, 0, tile_size)
             t._store(dst_arr, 0, tile_size, 0, tile_size)
 
@@ -200,7 +196,6 @@ def test_tile16_3d_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NROWS = 10
-    Tile = _make_tile16x16(qd_dtype)
     src_rows = NROWS if clamp_side == "load" else _TILE
     dst_rows = _TILE if clamp_side == "load" else NROWS
     src = tensor_type(qd_dtype, (1, src_rows, _TILE))
@@ -213,7 +208,7 @@ def test_tile16_3d_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load3d(src_arr, 0, 0, tile_size, 0, tile_size)
             t._store3d(dst_arr, 0, 0, tile_size, 0, tile_size)
 
@@ -247,7 +242,6 @@ def test_tile16_load3d_store3d(tensor_type, qd_dtype, batch, src_row, src_col, n
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
     NBATCH = 6
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (NBATCH, GRID, GRID))
     dst = tensor_type(qd_dtype, (NBATCH, GRID, GRID))
 
@@ -269,7 +263,7 @@ def test_tile16_load3d_store3d(tensor_type, qd_dtype, batch, src_row, src_col, n
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load3d(src_arr, batch, src_row, row_end, src_col, col_end)
             t._store3d(dst_arr, batch, src_row, row_end, src_col, col_end)
 
@@ -298,7 +292,6 @@ def test_tile16_load_clamp_to_array_cols(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (_TILE, NCOLS))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
 
@@ -309,7 +302,7 @@ def test_tile16_load_clamp_to_array_cols(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(src_arr, 0, tile_size, 0, tile_size)
             t._store(dst_arr, 0, tile_size, 0, tile_size)
 
@@ -329,7 +322,6 @@ def test_tile16_store_partial_cols_untouched(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (_TILE, _TILE))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
 
@@ -340,7 +332,7 @@ def test_tile16_store_partial_cols_untouched(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(src_arr, 0, tile_size, 0, tile_size)
             t._store(dst_arr, 0, tile_size, 0, NCOLS)
 
@@ -377,7 +369,6 @@ def _make_spd(np_dtype=np.float32, seed: int = 42):
 def test_tile16_ger_sub(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     mat = tensor_type(qd_dtype, (_TILE, _TILE))
     vec_a = tensor_type(qd_dtype, (_TILE,))
     vec_b = tensor_type(qd_dtype, (_TILE,))
@@ -396,7 +387,7 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(mat_arr, 0, tile_size, 0, tile_size)
             tid = qd.simt.subgroup.invocation_id()
             a_val = a_arr[tid]
@@ -425,7 +416,6 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 64
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (GRID, GRID))
     dst = tensor_type(qd_dtype, (GRID, GRID))
 
@@ -448,7 +438,7 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t._load(src_arr, src_offset, src_row_end, src_offset, src_row_end)
             if qd.static(qd_dtype == qd.f64):
                 t.cholesky_(qd.f64(1e-12))
@@ -481,7 +471,6 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
 def test_tile16_trsm(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     a_arr = tensor_type(qd_dtype, (_TILE, _TILE))
     b_arr = tensor_type(qd_dtype, (_TILE, _TILE))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
@@ -497,9 +486,9 @@ def test_tile16_trsm(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            L = Tile()
+            L = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             L._load(a_in, 0, tile_size, 0, tile_size)
-            B = Tile()
+            B = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             B._load(b_in, 0, tile_size, 0, tile_size)
             L.solve_triangular_(B)
             B._store(out, 0, tile_size, 0, tile_size)
@@ -537,7 +526,6 @@ def test_tile16_solve_triangular_upper_raises():
 def test_tile16_slice_load_store_roundtrip(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     src = tensor_type(qd_dtype, (_TILE, _TILE))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
 
@@ -548,7 +536,7 @@ def test_tile16_slice_load_store_roundtrip(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:tile_size, 0:tile_size]
             dst_arr[0:tile_size, 0:tile_size] = t
 
@@ -564,7 +552,6 @@ def test_tile16_slice_load_store_roundtrip(tensor_type, qd_dtype):
 def test_tile16_slice_partial_cols(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     NCOLS = 7
     src = tensor_type(qd_dtype, (_TILE, _TILE))
     dst = tensor_type(qd_dtype, (_TILE, _TILE))
@@ -576,7 +563,7 @@ def test_tile16_slice_partial_cols(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:tile_size, 0:NCOLS]
             dst_arr[0:tile_size, 0:NCOLS] = t
 
@@ -597,7 +584,6 @@ def test_tile16_slice_partial_cols(tensor_type, qd_dtype):
 def test_tile16_slice_3d_batch(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     NBATCH = 3
     src = tensor_type(qd_dtype, (NBATCH, _TILE, _TILE))
     dst = tensor_type(qd_dtype, (NBATCH, _TILE, _TILE))
@@ -610,7 +596,7 @@ def test_tile16_slice_3d_batch(tensor_type, qd_dtype):
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             for b in range(NBATCH):
-                t = Tile()
+                t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
                 t[:] = src_arr[b, 0:tile_size, 0:tile_size]
                 dst_arr[b, 0:tile_size, 0:tile_size] = t
 
@@ -626,7 +612,6 @@ def test_tile16_slice_3d_batch(tensor_type, qd_dtype):
 def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     mat = tensor_type(qd_dtype, (_TILE, _TILE))
     vec_a = tensor_type(qd_dtype, (_TILE,))
     vec_b = tensor_type(qd_dtype, (_TILE,))
@@ -645,7 +630,7 @@ def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             a_val = a_arr[tid]
@@ -672,7 +657,6 @@ def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
 def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
-    Tile = _make_tile16x16(qd_dtype)
     mat = tensor_type(qd_dtype, (_TILE, _TILE))
     vecs = tensor_type(qd_dtype, (_TILE, 2))
     out = tensor_type(qd_dtype, (_TILE, _TILE))
@@ -688,7 +672,7 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd_dtype)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
             t -= qd.outer(vecs_arr[0:tile_size, 0], vecs_arr[0:tile_size, 1])
             out_arr[0:tile_size, 0:tile_size] = t
@@ -708,7 +692,6 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
 @test_utils.test(arch=qd.gpu)
 def test_tile16_outer_symmetric_same_variable():
     """t -= qd.outer(v, v) with the same variable for both args."""
-    Tile = _make_tile16x16(qd.f32)
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     vecs = qd.ndarray(qd.f32, (_TILE, 1))
     out = qd.ndarray(qd.f32, (_TILE, _TILE))
@@ -722,7 +705,7 @@ def test_tile16_outer_symmetric_same_variable():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
             v = vecs_arr[0:tile_size, 0]
             t -= qd.outer(v, v)
@@ -741,7 +724,6 @@ def test_tile16_outer_symmetric_same_variable():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_proxy_ger_sub_3d():
     """Column vector load from a 3D array: v = arr[batch, r0:r1, col]."""
-    Tile = _make_tile16x16(qd.f32)
     NBATCH = 2
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     vecs = qd.ndarray(qd.f32, (NBATCH, _TILE, 2))
@@ -756,7 +738,7 @@ def test_tile16_vec_proxy_ger_sub_3d():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
             a = vecs_arr[1, 0:tile_size, 0]
             b = vecs_arr[1, 0:tile_size, 1]
@@ -828,16 +810,15 @@ def test_tile_slice_proxy_misuse_errors():
 )
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_slice_errors(bad_slice, match):
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             if qd.static(bad_slice == "neg_row"):
                 t[:] = s[-1:tile_size, 0:tile_size]
             elif qd.static(bad_slice == "neg_col"):
@@ -849,7 +830,7 @@ def test_tile16_load_slice_errors(bad_slice, match):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst)
+        k1(src, dst, bad_slice)
 
 
 @pytest.mark.parametrize(
@@ -863,16 +844,15 @@ def test_tile16_load_slice_errors(bad_slice, match):
 )
 @test_utils.test(arch=qd.gpu)
 def test_tile16_store_slice_errors(bad_slice, match):
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:tile_size, 0:tile_size]
             if qd.static(bad_slice == "neg_row"):
                 d[-1:tile_size, 0:tile_size] = t
@@ -884,13 +864,12 @@ def test_tile16_store_slice_errors(bad_slice, match):
                 d[0:, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst)
+        k1(src, dst, bad_slice)
 
 
 @test_utils.test(arch=qd.gpu)
 def test_tile16_slice_wrong_index_order_raises():
     """arr[r:r2, col, batch] must be rejected (batch must come first)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (3, _TILE, 2))
 
     @qd.kernel(fastcache=True)
@@ -898,7 +877,7 @@ def test_tile16_slice_wrong_index_order_raises():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             v = s[0:tile_size, 0, 1]
             t -= qd.outer(v, v)
 
@@ -909,7 +888,6 @@ def test_tile16_slice_wrong_index_order_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_slice_extra_indices_raises():
     """arr[a, b, r:r2, c:c2] must be rejected (too many non-slice indices)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -918,7 +896,7 @@ def test_tile16_slice_extra_indices_raises():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0, 0, 0:tile_size, 0:tile_size]
             d[0:tile_size, 0:tile_size] = t
 
@@ -929,7 +907,6 @@ def test_tile16_slice_extra_indices_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_outer_product_intermediate_variable():
     """qd.outer(a, b) assigned to a variable before -= must work."""
-    Tile = _make_tile16x16(qd.f32)
     mat = qd.ndarray(qd.f32, (_TILE, _TILE))
     out = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -941,7 +918,7 @@ def test_tile16_outer_product_intermediate_variable():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             a_val = qd.f32(tid + 1)
@@ -963,7 +940,6 @@ def test_tile16_outer_product_intermediate_variable():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_without_slice_rebinds():
     """Omitting [:] on the LHS rebinds the variable to a proxy, not a tile."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
@@ -972,7 +948,7 @@ def test_tile16_load_without_slice_rebinds():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t = s[0:tile_size, 0:tile_size]
             d[0:tile_size, 0:tile_size] = t
 
@@ -985,7 +961,6 @@ def test_tile16_load_without_slice_rebinds():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_augassign_add_outer_raises():
     """t += qd.outer(a, b) must raise TypeError (only -= is supported)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
@@ -993,7 +968,7 @@ def test_tile16_augassign_add_outer_raises():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:tile_size, 0:tile_size]
             tid = qd.f32(qd.simt.subgroup.invocation_id())
             t += qd.outer(tid, tid)
@@ -1005,7 +980,6 @@ def test_tile16_augassign_add_outer_raises():
 @test_utils.test(arch=qd.gpu)
 def test_tile16_augassign_non_outer_raises():
     """t -= <scalar> must raise TypeError (only outer products allowed)."""
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
@@ -1013,7 +987,7 @@ def test_tile16_augassign_non_outer_raises():
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:tile_size, 0:tile_size]
             t -= qd.f32(1.0)
 
@@ -1024,16 +998,15 @@ def test_tile16_augassign_non_outer_raises():
 @pytest.mark.parametrize("bad_slice", ["no_stop", "no_start"])
 @test_utils.test(arch=qd.gpu)
 def test_tile16_vec_slice_errors(bad_slice):
-    Tile = _make_tile16x16(qd.f32)
     src = qd.ndarray(qd.f32, (_TILE, 2))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
-            t = Tile()
+            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             if qd.static(bad_slice == "no_stop"):
                 v = s[0:, 0]
             elif qd.static(bad_slice == "no_start"):
@@ -1042,7 +1015,7 @@ def test_tile16_vec_slice_errors(bad_slice):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst)
+        k1(src, dst, bad_slice)
 
 
 # =============================================================================
