@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
-_KERNEL_COVERAGE = os.environ.get("QD_KERNEL_COVERAGE") == "1"
+def _kernel_coverage_enabled() -> bool:
+    return os.environ.get("QD_KERNEL_COVERAGE") == "1"
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
@@ -246,7 +247,7 @@ class FuncBase:
         autodiff_mode = current_kernel.autodiff_mode
 
         _kcov = None
-        if _KERNEL_COVERAGE and autodiff_mode == _qd_core.AutodiffMode.NONE:
+        if _kernel_coverage_enabled() and autodiff_mode == _qd_core.AutodiffMode.NONE:
             from . import (  # pylint: disable=import-outside-toplevel
                 _kernel_coverage as _kcov,
             )
