@@ -149,8 +149,10 @@ def flush() -> None:
     """
     _harvest_field()
 
-    if not _accumulated_lines:
-        return
+    with _lock:
+        if not _accumulated_lines:
+            return
+        snapshot = {f: set(lines) for f, lines in _accumulated_lines.items()}
 
     base_dir = _coverage_dir or os.getcwd()
     kernel_path = os.path.join(base_dir, f"_qd_kcov.{os.getpid()}")
@@ -159,7 +161,7 @@ def flush() -> None:
     cov = CoverageData(basename=kernel_path)
     if use_arcs:
         arcs_by_file: dict[str, list[tuple[int, int]]] = {}
-        for filepath, lines in _accumulated_lines.items():
+        for filepath, lines in snapshot.items():
             # Emit only entry/exit arcs per line — we know which lines ran but not the actual transitions
             # between them, so we avoid fabricating inter-line arcs that would misrepresent branch coverage.
             arcs = []
@@ -169,7 +171,7 @@ def flush() -> None:
             arcs_by_file[filepath] = arcs
         cov.add_arcs(arcs_by_file)
     else:
-        cov.add_lines({f: sorted(lines) for f, lines in _accumulated_lines.items()})
+        cov.add_lines({f: sorted(lines) for f, lines in snapshot.items()})
     cov.write()
 
 
