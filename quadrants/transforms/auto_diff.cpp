@@ -42,8 +42,8 @@ class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
   inline static const std::set<UnaryOpType> unary_collections{
-      UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos, UnaryOpType::tan, UnaryOpType::tanh,
-      UnaryOpType::asin, UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt};
+      UnaryOpType::abs,  UnaryOpType::sin, UnaryOpType::cos, UnaryOpType::tan,  UnaryOpType::tanh, UnaryOpType::asin,
+      UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt, UnaryOpType::rsqrt};
   inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
                                                                 BinaryOpType::atan2, BinaryOpType::pow};
 };

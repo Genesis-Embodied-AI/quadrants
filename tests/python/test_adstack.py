@@ -19,6 +19,7 @@ from tests import test_utils
         (qd.sqrt, "sqrt"),
         (qd.tanh, "tanh"),
         (qd.exp, "exp"),
+        (qd.rsqrt, "rsqrt"),
     ],
 )
 @test_utils.test(require=qd.extension.adstack, ad_stack_experimental_enabled=True)
