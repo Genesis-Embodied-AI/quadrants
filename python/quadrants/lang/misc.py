@@ -491,13 +491,14 @@ def init(
     else:
         _install_python_backend_dtype_call()
 
+    # Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)
+    os.chdir(current_dir)
+
     if os.environ.get("QD_KERNEL_COVERAGE") == "1":
         from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
         _kernel_coverage.ensure_field_allocated()
 
-    # Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)
-    os.chdir(current_dir)
     return None
 
 
