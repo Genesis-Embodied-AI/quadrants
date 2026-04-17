@@ -13,8 +13,8 @@ on:
         type: string
   workflow_dispatch:
 concurrency:
-  group: gh-pages-deploy-${{ github.event.inputs.head_ref || github.head_ref }}
-  cancel-in-progress: true
+  group: gh-pages-deploy
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
