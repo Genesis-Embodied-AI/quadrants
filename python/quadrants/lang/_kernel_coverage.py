@@ -97,9 +97,10 @@ def ensure_field_allocated() -> None:
 
 
 def get_field() -> "ScalarField | None":
-    if _cov_field_prog is not impl.get_runtime()._prog:
-        return None
-    return _cov_field
+    with _lock:
+        if _cov_field_prog is not impl.get_runtime()._prog:
+            return None
+        return _cov_field
 
 
 def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Module:
