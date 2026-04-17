@@ -47,7 +47,7 @@ def combine_coverage():
     kcov_files = glob.glob(str(REPO_ROOT / "_qd_kcov.*"))
     combine_args = [".coverage.pytest"] + [os.path.basename(f) for f in kcov_files]
     result = _run(f"coverage combine {' '.join(combine_args)}")
-    if result.returncode != 0 and not kcov_files:
+    if result.returncode != 0 and kcov_files:
         _run("coverage combine .coverage.pytest")
 
 
