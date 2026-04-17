@@ -10,15 +10,15 @@ Three styles are supported:
 - **Forward mode** - few inputs, many outputs. One forward pass yields every output derivative along a chosen input direction. See [Forward-mode AD via `qd.ad.FwdMode`](#forward-mode-ad-via-qdadfwdmode).
 - **Custom gradients** - override the auto-generated gradient with a user-supplied one, typically to inject a closed-form analytic derivative or to checkpoint for memory. See [Overriding the compiler-generated gradient](#overriding-the-compiler-generated-gradient).
 
-Dynamic loops, runtime validation, and the backend support matrix are covered further down for when the default path is not enough.
+[Dynamic loops](#autodiff-with-dynamic-loops) and the [validation checker](#global-data-access-rules-and-the-validation-checker) are covered further down for when the default path is not enough.
 
 ## Reverse-mode autodiff
 
-Reverse-mode AD computes the gradient of a scalar output with respect to every input in a single backward sweep. It walks the forward kernel's operations in reverse order and applies the chain rule to accumulate contributions into adjoint (`.grad`) fields alongside the primal fields.
+**Problem.** You have one scalar output (typically a loss) and many inputs, and you want `d(loss) / d(input_i)` for every `i` in a single pass. This is the shape of every gradient-based training loop: PyTorch's `.backward()` runs reverse-mode autodiff, as do most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this is the section.
 
-This is the engine under every gradient-based training loop: Torch's `.backward()` runs reverse-mode autodiff, as do most differentiable-simulation frameworks. If you want to put a learned parameter inside a Quadrants kernel and have an optimizer tune it, this section is how you do it.
+**How Quadrants does it.** The compiler walks the forward kernel's operations in reverse order and applies the chain rule, accumulating contributions into adjoint (`.grad`) fields allocated next to each primal. Everything runs on the same backend as the forward kernel: no Python-side tape, no per-op dispatch, no external AD framework. The emitted backward kernel does roughly 1.5-3x the work of the forward one.
 
-The workflow is:
+**Workflow.**
 
 1. Allocate an adjoint (`.grad`) buffer next to every primal field whose gradient you need.
 2. Run the forward kernel.
@@ -164,7 +164,11 @@ with qd.ad.Tape(loss=total):
 
 ### Global data access rules and the validation checker
 
-**The rule**: within a single kernel launch, a field or ndarray entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry. Kernel scalar arguments are not subject to this rule: they are function parameters, not globals, and the reverse pass does not need to re-read their original value.
+**Problem.** Reverse-mode AD reads the same globals the forward pass touched to compute gradients. If the forward pass reads a global and then overwrites it in the same launch, the reverse pass sees the post-write value and silently computes the wrong gradient - no error, no warning, just incorrect numbers.
+
+**How Quadrants does it.** The compiler imposes a per-launch constraint: within a single kernel launch, a field or ndarray entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry. Kernel scalar arguments are not subject to this rule: they are function parameters, not globals, and the reverse pass does not need to re-read their original value.
+
+**Workflow.** Keep reads and writes to the same global entry in separate kernel launches; when developing, opt into the runtime checker described below to catch accidental violations.
 
 Here is a kernel that violates the rule:
 
@@ -200,7 +204,11 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 ## Autodiff with dynamic loops
 
-Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) must remember the forward outputs for every iteration. To do this, enable the autodiff stack (adstack): `qd.init(..., ad_stack_experimental_enabled=True)`. It is an opt-in compiler pipeline that allocates a per-variable stack alongside each loop-carried primal - the forward pass pushes an entry each iteration, and the reverse pass pops them back off to recover the correct primal for every chain-rule step. It is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it.
+**Problem.** Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) needs to recover the primal value at each iteration when walking the loop backwards. Without that, the chain-rule steps read a stale value and the gradients come out silently wrong. Static-unrolled (`qd.static(range(...))`) loops are not affected because every iteration becomes its own inlined block at compile time.
+
+**How Quadrants does it.** An opt-in compiler pipeline called the *autodiff stack* (*adstack*) allocates a per-variable stack alongside each loop-carried primal. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. It is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with the adstack when it is not strictly needed is safe; running without it when it is needed silently yields zero gradients.
+
+**Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`. The flag is compile-time, so it must be set before the offending kernel compiles.
 
 ### Examples of dynamic loops that need it
 
@@ -209,9 +217,7 @@ Reverse-mode AD through a dynamic loop (one whose trip count is not known at com
 - Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose derivative depends on the primal value at that iteration.
 - An `if` whose condition depends on a variable that mutates across iterations.
 
-`qd.static(range(...))` loops are unrolled at compile time and never need the adstack. If in doubt, enable it: running with the adstack when it is not strictly needed is safe, while running without it when it is needed silently yields zero gradients.
-
-The `ad_stack_experimental_enabled` flag is compile-time, so it must be set at `qd.init` time, before the offending kernel compiles.
+`qd.static(range(...))` loops are unrolled at compile time and never need the adstack.
 
 ### Adstack overflow
 
@@ -229,8 +235,8 @@ The adstack pipeline is behind `ad_stack_experimental_enabled=True`. Enable it w
 
 ## Known limitations
 
-- Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel sets a flag during execution and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch.
+- Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel writes to a host-polled SSBO flag during execution, and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) reads the flag and raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch.
 - On SPIR-V backends (Metal, Vulkan) the adstack is allocated as per-thread on-chip memory, which the driver's shader compiler caps at a few kilobytes. Kernels whose combined adstack demand exceeds that cap fail to compile and Quadrants raises a Python `RuntimeError` at kernel-launch time. LLVM backends (CPU, CUDA, AMDGPU) allocate on the heap and do not hit this limit. Lifting the SPIR-V limit by moving the adstack off on-chip memory is tracked for future work.
-- The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies can push compile times from seconds into minutes and, on SPIR-V backends, into the territory where the driver's shader compiler gives up. Expect compile regressions when migrating existing reverse-mode AD workloads; budget accordingly.
+- The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes, and on SPIR-V backends sometimes into the territory where the driver's shader compiler gives up. Expect the regression when migrating existing reverse-mode AD workloads; budget accordingly.
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
 - Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Closing this gap is future work.
