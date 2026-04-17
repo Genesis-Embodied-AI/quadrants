@@ -293,7 +293,6 @@ def test_tile16_size_constant():
     assert Tile.SIZE == 16
 
 
-
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
