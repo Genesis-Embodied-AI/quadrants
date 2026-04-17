@@ -44,6 +44,20 @@ jobs:
           cd docs
           make html
       - name: Deploy docs
+        id: deploy_1
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/build/html
+          destination_dir: ${{ github.event.inputs.head_ref || github.head_ref }}
+          keep_files: true
+          publish_branch: gh-pages
+      - name: Wait before retry
+        if: steps.deploy_1.outcome == 'failure'
+        run: sleep 30
+      - name: Deploy docs (retry)
+        if: steps.deploy_1.outcome == 'failure'
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
