@@ -123,6 +123,7 @@ jobs:
           name: coverage-cuda
           path: coverage-cuda
       - name: Generate coverage report
+        continue-on-error: true
         run: |
           COV_XMLS="coverage-cpu/coverage.xml"
           if [ -f coverage-cuda/coverage.xml ]; then
@@ -134,6 +135,7 @@ jobs:
             --coverage-xml $COV_XMLS \
             --format markdown > coverage-comment.md
       - name: Post coverage comment
+        if: always() && hashFiles('coverage-comment.md') != ''
         run: gh pr comment ${{ github.event.pull_request.number }} --body-file coverage-comment.md
         env:
           GH_TOKEN: ${{ github.token }}
