@@ -31,8 +31,7 @@ void CUCG::solve(Program *prog, const Ndarray &x, const Ndarray &b) {
   CUDADriver::get_instance().malloc((void **)&d_p, sizeof(float) * m);
 
   // r = b
-  CUDADriver::get_instance().memcpy_device_to_device((void *)d_r, (void *)db,
-                                                     sizeof(float) * m);
+  CUDADriver::get_instance().memcpy_device_to_device((void *)d_r, (void *)db, sizeof(float) * m);
 
   // Ax = A @ x
   A.spmv(dX, size_t(d_Ax));
@@ -56,8 +55,7 @@ void CUCG::solve(Program *prog, const Ndarray &x, const Ndarray &b) {
       CUBLASDriver::get_instance().cubSaxpy(handle_, m, &alpha, d_r, 1, d_p, 1);
     } else {
       // p = r
-      CUDADriver::get_instance().memcpy_device_to_device(
-          (void *)d_p, (void *)d_r, sizeof(float) * m);
+      CUDADriver::get_instance().memcpy_device_to_device((void *)d_p, (void *)d_r, sizeof(float) * m);
     }
 
     // Ap = A @ p
@@ -66,8 +64,7 @@ void CUCG::solve(Program *prog, const Ndarray &x, const Ndarray &b) {
     CUBLASDriver::get_instance().cubSdot(handle_, m, d_p, 1, d_Ax, 1, &dot);
     float a = r1 / dot;
     // x = x + a * p
-    CUBLASDriver::get_instance().cubSaxpy(handle_, m, &a, d_p, 1, (float *)dX,
-                                          1);
+    CUBLASDriver::get_instance().cubSaxpy(handle_, m, &a, d_p, 1, (float *)dX, 1);
     // r = r - a * Ap
     float na = -a;
     CUBLASDriver::get_instance().cubSaxpy(handle_, m, &na, d_Ax, 1, d_r, 1);
@@ -85,10 +82,7 @@ void CUCG::solve(Program *prog, const Ndarray &x, const Ndarray &b) {
 #endif
 }
 
-std::unique_ptr<CUCG> make_cucg_solver(SparseMatrix &A,
-                                       int max_iters,
-                                       float tol,
-                                       bool verbose) {
+std::unique_ptr<CUCG> make_cucg_solver(SparseMatrix &A, int max_iters, float tol, bool verbose) {
   return std::make_unique<CUCG>(A, max_iters, tol, verbose);
 }
 }  // namespace quadrants::lang

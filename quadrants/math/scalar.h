@@ -159,8 +159,7 @@ QD_FORCE_INLINE bool abnormal(T m) noexcept {
 }
 
 inline int64 get_largest_pot(int64 a) noexcept {
-  QD_ASSERT_INFO(a > 0,
-                 "a should be positive, instead of " + std::to_string(a));
+  QD_ASSERT_INFO(a > 0, "a should be positive, instead of " + std::to_string(a));
 
   /* This code was copied from https://stackoverflow.com/a/20207950 and edited
   It uses loop unrolling, which all (modern) compilers will do. */

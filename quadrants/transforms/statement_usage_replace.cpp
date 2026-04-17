@@ -14,8 +14,7 @@ class StatementUsageReplace : public IRVisitor {
  public:
   Stmt *old_stmt, *new_stmt;
 
-  StatementUsageReplace(Stmt *old_stmt, Stmt *new_stmt)
-      : old_stmt(old_stmt), new_stmt(new_stmt) {
+  StatementUsageReplace(Stmt *old_stmt, Stmt *new_stmt) : old_stmt(old_stmt), new_stmt(new_stmt) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }

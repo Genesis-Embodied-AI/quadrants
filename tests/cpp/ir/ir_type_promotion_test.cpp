@@ -31,12 +31,10 @@ TEST(IRPromotionTest, TensorType) {
 
   auto *lhs_element = builder.get_int32(1);
   auto *lhs_mat = builder.create_matrix_init({lhs_element});
-  lhs_mat->ret_type =
-      TypeFactory::create_tensor_type({1, 1}, PrimitiveType::i32);
+  lhs_mat->ret_type = TypeFactory::create_tensor_type({1, 1}, PrimitiveType::i32);
   auto *rhs_element = builder.get_float32(1);
   auto *rhs_mat = builder.create_matrix_init({rhs_element});
-  rhs_mat->ret_type =
-      TypeFactory::create_tensor_type({1, 1}, PrimitiveType::f32);
+  rhs_mat->ret_type = TypeFactory::create_tensor_type({1, 1}, PrimitiveType::f32);
   builder.create_add(lhs_mat, rhs_mat);
   auto ir = builder.extract_ir();
   auto config = CompileConfig();
@@ -49,10 +47,8 @@ TEST(IRPromotionTest, TensorType) {
   auto ret_type = stmt->ret_type;
 
   EXPECT_TRUE(rhs_type->is<TensorType>() &&
-              rhs_type->cast<TensorType>()->get_element_type()->is_primitive(
-                  PrimitiveTypeID::f32));
+              rhs_type->cast<TensorType>()->get_element_type()->is_primitive(PrimitiveTypeID::f32));
   EXPECT_TRUE(ret_type->is<TensorType>() &&
-              ret_type->cast<TensorType>()->get_element_type()->is_primitive(
-                  PrimitiveTypeID::f32));
+              ret_type->cast<TensorType>()->get_element_type()->is_primitive(PrimitiveTypeID::f32));
 }
 }  // namespace quadrants::lang

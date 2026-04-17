@@ -3,9 +3,15 @@
 function(COMPILE_LLVM_RUNTIME rtm_arch)
     message(STATUS "Compiling LLVM byte code file for arch ${rtm_arch}")
     # Keep this for now, as .bc need to be generated.
+    # -mno-outline-atomics: runtime.cpp is compiled to bitcode (.bc) that is later JIT-compiled by the ORC JIT linker
+    # at runtime. On AArch64, clang's default -moutline-atomics emits calls to helpers like __aarch64_ldadd4_acq_rel
+    # (normally provided by libgcc/compiler-rt), but the ORC JIT environment has no access to those libraries and fails
+    # with "Symbols not found". This flag forces clang to emit inline LL/SC atomic sequences directly in the bitcode
+    # instead. It is a no-op on x86 and irrelevant for CUDA/GPU paths. The alternative (registering those symbols with
+    # the JIT linker) would be far more complex and fragile.
     add_custom_target(
         "generate_llvm_runtime_${rtm_arch}"
-        COMMAND ${CLANG_EXECUTABLE} ${CLANG_OSX_FLAGS} -c runtime.cpp -o "runtime_${rtm_arch}.bc" -fno-exceptions -emit-llvm -std=c++17 -D "ARCH_${rtm_arch}" -I ${PROJECT_SOURCE_DIR};
+        COMMAND ${CLANG_EXECUTABLE} ${CLANG_OSX_FLAGS} -c runtime.cpp -o "runtime_${rtm_arch}.bc" -fno-exceptions -emit-llvm -std=c++17 -mno-outline-atomics -D "ARCH_${rtm_arch}" -I ${PROJECT_SOURCE_DIR};
         # TODO, it's better to avoid polluting the source dir, keep in build
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )

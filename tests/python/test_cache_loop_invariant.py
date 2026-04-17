@@ -5,7 +5,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu])
+@test_utils.test(require=qd.extension.assertion)
 def test_local_matrix_non_constant_index_real_matrix():
     N = 1
     x = qd.Vector.field(3, float, shape=1)

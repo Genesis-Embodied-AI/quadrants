@@ -32,10 +32,7 @@ void memcpy_cpu_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
   vk_dev->unmap(dst);
 }
 
-void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
-                                      DevicePtr staging,
-                                      DevicePtr src,
-                                      uint64_t size) {
+void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst, DevicePtr staging, DevicePtr src, uint64_t size) {
   VulkanDevice *vk_dev = dynamic_cast<VulkanDevice *>(dst.device);
   CpuDevice *cpu_dev = dynamic_cast<CpuDevice *>(src.device);
 
@@ -61,10 +58,7 @@ void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
 void memcpy_cpu_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
   QD_NOT_IMPLEMENTED;
 }
-void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst,
-                                      DevicePtr stagin,
-                                      DevicePtr src,
-                                      uint64_t size) {
+void memcpy_cpu_to_vulkan_via_staging(DevicePtr dst, DevicePtr stagin, DevicePtr src, uint64_t size) {
   QD_NOT_IMPLEMENTED;
 }
 #endif  // QD_WITH_VULKAN

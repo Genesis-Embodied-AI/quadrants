@@ -46,8 +46,7 @@ bool is_same_type(llvm::Type *a, llvm::Type *b) {
       return false;
     }
     for (int j = 0; j < req_func->getNumParams(); j++) {
-      if (!is_same_type(req_func->getParamType(j),
-                        prov_func->getParamType(j))) {
+      if (!is_same_type(req_func->getParamType(j), prov_func->getParamType(j))) {
         return false;
       }
     }
@@ -110,8 +109,7 @@ void check_func_call_signature(llvm::FunctionType *func_type,
   if (func_type->isFunctionVarArg()) {
     QD_ASSERT(num_params <= arglist.size());
   } else {
-    QD_ERROR_IF(num_params != arglist.size(),
-                "Function \"{}\" requires {} arguments but {} provided",
+    QD_ERROR_IF(num_params != arglist.size(), "Function \"{}\" requires {} arguments but {} provided",
                 std::string(func_name), num_params, arglist.size());
   }
 
@@ -135,13 +133,10 @@ void check_func_call_signature(llvm::FunctionType *func_type,
       QD_INFO("    Type : {}", type_name(func_type));
       if (&required->getContext() != &provided->getContext()) {
         QD_INFO("  parameter {} types are from different contexts", i);
-        QD_INFO("    required from context {}",
-                (void *)&required->getContext());
-        QD_INFO("    provided from context {}",
-                (void *)&provided->getContext());
+        QD_INFO("    required from context {}", (void *)&required->getContext());
+        QD_INFO("    provided from context {}", (void *)&provided->getContext());
       }
-      QD_ERROR("  parameter {} mismatch: required={}, provided={}", i,
-               type_name(required), type_name(provided));
+      QD_ERROR("  parameter {} mismatch: required={}, provided={}", i, type_name(required), type_name(provided));
     }
   }
 }

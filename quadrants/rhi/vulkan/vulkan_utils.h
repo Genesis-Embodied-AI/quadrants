@@ -46,24 +46,19 @@ class WindowsSecurityAttributes {
 };
 
 inline WindowsSecurityAttributes::WindowsSecurityAttributes() {
-  security_descriptor = (PSECURITY_DESCRIPTOR)calloc(
-      1, SECURITY_DESCRIPTOR_MIN_LENGTH + 2 * sizeof(void **));
+  security_descriptor = (PSECURITY_DESCRIPTOR)calloc(1, SECURITY_DESCRIPTOR_MIN_LENGTH + 2 * sizeof(void **));
 
-  PSID *sid =
-      (PSID *)((PBYTE)security_descriptor + SECURITY_DESCRIPTOR_MIN_LENGTH);
+  PSID *sid = (PSID *)((PBYTE)security_descriptor + SECURITY_DESCRIPTOR_MIN_LENGTH);
   PACL *acl = (PACL *)((PBYTE)sid + sizeof(PSID *));
 
-  InitializeSecurityDescriptor(security_descriptor,
-                               SECURITY_DESCRIPTOR_REVISION);
+  InitializeSecurityDescriptor(security_descriptor, SECURITY_DESCRIPTOR_REVISION);
 
   SID_IDENTIFIER_AUTHORITY sid_identifier_auth = SECURITY_WORLD_SID_AUTHORITY;
-  AllocateAndInitializeSid(&sid_identifier_auth, 1, SECURITY_WORLD_RID, 0, 0, 0,
-                           0, 0, 0, 0, sid);
+  AllocateAndInitializeSid(&sid_identifier_auth, 1, SECURITY_WORLD_RID, 0, 0, 0, 0, 0, 0, 0, sid);
 
   EXPLICIT_ACCESS explicit_access;
   ZeroMemory(&explicit_access, sizeof(EXPLICIT_ACCESS));
-  explicit_access.grfAccessPermissions =
-      STANDARD_RIGHTS_ALL | SPECIFIC_RIGHTS_ALL;
+  explicit_access.grfAccessPermissions = STANDARD_RIGHTS_ALL | SPECIFIC_RIGHTS_ALL;
   explicit_access.grfAccessMode = SET_ACCESS;
   explicit_access.grfInheritance = INHERIT_ONLY;
   explicit_access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
@@ -84,8 +79,7 @@ inline SECURITY_ATTRIBUTES *WindowsSecurityAttributes::operator&() {
 }
 
 inline WindowsSecurityAttributes::~WindowsSecurityAttributes() {
-  PSID *sid =
-      (PSID *)((PBYTE)security_descriptor + SECURITY_DESCRIPTOR_MIN_LENGTH);
+  PSID *sid = (PSID *)((PBYTE)security_descriptor + SECURITY_DESCRIPTOR_MIN_LENGTH);
   PACL *acl = (PACL *)((PBYTE)sid + sizeof(PSID *));
 
   if (*sid) {

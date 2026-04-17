@@ -49,8 +49,7 @@ class MakeBlockLocalTest : public ::testing::Test {
 
     struct_for_snode_ = &(pointer_snode_->dynamic({Axis{2}}, /*n=*/1024,
                                                   /*chunk_size=*/128));
-    struct_for_place_snode_ =
-        &(struct_for_snode_->insert_children(SNodeType::place));
+    struct_for_place_snode_ = &(struct_for_snode_->insert_children(SNodeType::place));
     struct_for_place_snode_->dt = PrimitiveType::i32;
 
     FakeStructCompiler sc;
@@ -59,13 +58,11 @@ class MakeBlockLocalTest : public ::testing::Test {
     for_stmt_ = std::make_unique<OffloadedStmt>(
         /*task_type=*/OffloadedTaskType::struct_for,
         /*arch=*/Arch::x64, nullptr);
-    for_stmt_->mem_access_opt.add_flag(bls_place_snode_,
-                                       SNodeAccessFlag::block_local);
+    for_stmt_->mem_access_opt.add_flag(bls_place_snode_, SNodeAccessFlag::block_local);
     for_stmt_->snode = struct_for_place_snode_;
     for_stmt_->block_dim = 64;
 
-    builder_.set_insertion_point(
-        {/*block=*/for_stmt_->body.get(), /*position=*/0});
+    builder_.set_insertion_point({/*block=*/for_stmt_->body.get(), /*position=*/0});
   }
 
   int get_block_corner(int loop_index) const {
@@ -119,12 +116,9 @@ TEST_F(MakeBlockLocalTest, Basic) {
   glb_ptr = builder_.create_global_ptr(bls_place_snode_,
                                        /*indices=*/{idx0, idx1});
   builder_.create_global_load(glb_ptr);
-  irpass::make_block_local(for_stmt_.get(), CompileConfig{},
-                           MakeBlockLocalPass::Args{});
+  irpass::make_block_local(for_stmt_.get(), CompileConfig{}, MakeBlockLocalPass::Args{});
 
-  auto loop_shape_at = [p = struct_for_place_snode_](int axis) {
-    return p->shape_along_axis(axis);
-  };
+  auto loop_shape_at = [p = struct_for_place_snode_](int axis) { return p->shape_along_axis(axis); };
   // Runs over all the indices covered by |struct_for_place_snode_|. Checks if
   // the generated BLS offset is correct for the given global loop indices.
   for (int idx0 = 0; idx0 < loop_shape_at(0); ++idx0) {
@@ -134,14 +128,12 @@ TEST_F(MakeBlockLocalTest, Basic) {
           get_block_corner(idx0),
           get_block_corner(idx1),
       };
-      int expected_bls_offset_in_bytes =
-          (get_block_size(0) * (loop_indices_vals[0] - block_corner_vals[0]) -
-           /*bls_bounds[0].lower=*/kNeg1);
+      int expected_bls_offset_in_bytes = (get_block_size(0) * (loop_indices_vals[0] - block_corner_vals[0]) -
+                                          /*bls_bounds[0].lower=*/kNeg1);
       expected_bls_offset_in_bytes *=
           /*bls_stride[0]=*/(get_block_size(/*axis=*/1) - kNeg3);
-      expected_bls_offset_in_bytes +=
-          (get_block_size(1) * (loop_indices_vals[1] - block_corner_vals[1]) -
-           /*bls_bounds[1].lower=*/kNeg3);
+      expected_bls_offset_in_bytes += (get_block_size(1) * (loop_indices_vals[1] - block_corner_vals[1]) -
+                                       /*bls_bounds[1].lower=*/kNeg3);
       expected_bls_offset_in_bytes *= sizeof(float);
 
       ArithmeticInterpretor::CodeRegion code_region;
@@ -168,12 +160,10 @@ TEST_F(MakeBlockLocalTest, Basic) {
           const auto *stmt = stmts[i].get();
           if (stmt->is<LoopIndexStmt>()) {
             const auto *li = stmt->as<LoopIndexStmt>();
-            init_ctx.insert(stmt, TypedConstant(PrimitiveType::i32,
-                                                loop_indices_vals[li->index]));
+            init_ctx.insert(stmt, TypedConstant(PrimitiveType::i32, loop_indices_vals[li->index]));
           } else if (stmt->is<BlockCornerIndexStmt>()) {
             const auto *bc = stmt->as<BlockCornerIndexStmt>();
-            init_ctx.insert(stmt, TypedConstant(PrimitiveType::i32,
-                                                block_corner_vals[bc->index]));
+            init_ctx.insert(stmt, TypedConstant(PrimitiveType::i32, block_corner_vals[bc->index]));
           } else if (stmt->is<BlockLocalPtrStmt>()) {
             code_region.end = stmts[i].get();
             break;
@@ -184,8 +174,7 @@ TEST_F(MakeBlockLocalTest, Basic) {
       ArithmeticInterpretor ai;
       auto bls_offset_opt = ai.evaluate(code_region, init_ctx);
       ASSERT_TRUE(bls_offset_opt.has_value());
-      EXPECT_EQ(bls_offset_opt.value().val_int32(),
-                expected_bls_offset_in_bytes);
+      EXPECT_EQ(bls_offset_opt.value().val_int32(), expected_bls_offset_in_bytes);
     }
   }
 }

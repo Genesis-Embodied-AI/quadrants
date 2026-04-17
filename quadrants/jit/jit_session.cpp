@@ -9,25 +9,21 @@ namespace quadrants::lang {
 class ProgramImpl;
 
 #ifdef QD_WITH_LLVM
-std::unique_ptr<JITSession> create_llvm_jit_session_cpu(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch);
+std::unique_ptr<JITSession> create_llvm_jit_session_cpu(QuadrantsLLVMContext *tlctx,
+                                                        const CompileConfig &config,
+                                                        Arch arch);
 
-std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch,
-    ProgramImpl *program_impl);
+std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,
+                                                         const CompileConfig &config,
+                                                         Arch arch,
+                                                         ProgramImpl *program_impl);
 
-std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch);
+std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(QuadrantsLLVMContext *tlctx,
+                                                           const CompileConfig &config,
+                                                           Arch arch);
 #endif
 
-JITSession::JITSession(QuadrantsLLVMContext *tlctx, const CompileConfig &config)
-    : tlctx_(tlctx), config_(config) {
+JITSession::JITSession(QuadrantsLLVMContext *tlctx, const CompileConfig &config) : tlctx_(tlctx), config_(config) {
 }
 
 std::unique_ptr<JITSession> JITSession::create(QuadrantsLLVMContext *tlctx,

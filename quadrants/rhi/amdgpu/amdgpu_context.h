@@ -23,6 +23,7 @@ class AMDGPUContext {
   KernelProfilerBase *profiler_{nullptr};
   AMDGPUDriver &driver_;
   bool debug_{false};
+  bool supports_mem_pool_{false};
   std::vector<void *> kernel_arg_pointer_;
 
  public:
@@ -44,13 +45,10 @@ class AMDGPUContext {
     for (auto &i : kernel_arg_pointer_) {
       AMDGPUDriver::get_instance().mem_free(i);
     }
-    kernel_arg_pointer_.erase(kernel_arg_pointer_.begin(),
-                              kernel_arg_pointer_.end());
+    kernel_arg_pointer_.erase(kernel_arg_pointer_.begin(), kernel_arg_pointer_.end());
   }
 
-  void pack_args(std::vector<void *> arg_pointers,
-                 std::vector<int> arg_sizes,
-                 char *arg_packed);
+  void pack_args(std::vector<void *> arg_pointers, std::vector<int> arg_sizes, char *arg_packed);
 
   int get_args_byte(std::vector<int> arg_sizes);
 
@@ -86,6 +84,10 @@ class AMDGPUContext {
     return compute_capability_;
   }
 
+  bool supports_mem_pool() const {
+    return supports_mem_pool_;
+  }
+
   ~AMDGPUContext();
 
   class ContextGuard {
@@ -94,8 +96,7 @@ class AMDGPUContext {
     void *new_ctx_;
 
    public:
-    explicit ContextGuard(AMDGPUContext *new_ctx)
-        : old_ctx_(nullptr), new_ctx_(new_ctx) {
+    explicit ContextGuard(AMDGPUContext *new_ctx) : old_ctx_(nullptr), new_ctx_(new_ctx) {
       AMDGPUDriver::get_instance().context_get_current(&old_ctx_);
       if (old_ctx_ != new_ctx)
         new_ctx->make_current();

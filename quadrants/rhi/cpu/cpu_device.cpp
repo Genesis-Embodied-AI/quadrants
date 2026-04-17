@@ -16,8 +16,7 @@ CpuDevice::AllocInfo CpuDevice::get_alloc_info(const DeviceAllocation handle) {
 CpuDevice::CpuDevice() {
 }
 
-RhiResult CpuDevice::allocate_memory(const AllocParams &params,
-                                     DeviceAllocation *out_devalloc) {
+RhiResult CpuDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
   info.size = params.size;
   info.use_cached = false;
@@ -25,8 +24,7 @@ RhiResult CpuDevice::allocate_memory(const AllocParams &params,
   if (info.size == 0) {
     info.ptr = nullptr;
   } else {
-    info.ptr = HostMemoryPool::get_instance().allocate(
-        params.size, HostMemoryPool::page_size, true /*exclusive*/);
+    info.ptr = HostMemoryPool::get_instance().allocate(params.size, HostMemoryPool::page_size, true /*exclusive*/);
 
     if (info.ptr == nullptr) {
       return RhiResult::out_of_memory;
@@ -41,20 +39,16 @@ RhiResult CpuDevice::allocate_memory(const AllocParams &params,
   return RhiResult::success;
 }
 
-DeviceAllocation CpuDevice::allocate_memory_runtime(
-    const LlvmRuntimeAllocParams &params) {
+DeviceAllocation CpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocParams &params) {
   DeviceAllocation alloc;
   RhiResult res = allocate_memory(params, &alloc);
-  RHI_ASSERT(res == RhiResult::success &&
-             "Failed to allocate memory for runtime");
+  RHI_ASSERT(res == RhiResult::success && "Failed to allocate memory for runtime");
   return alloc;
 }
 
-uint64_t *CpuDevice::allocate_llvm_runtime_memory_jit(
-    const LlvmRuntimeAllocParams &params) {
-  params.runtime_jit->call<void *, std::size_t, std::size_t>(
-      "runtime_memory_allocate_aligned", params.runtime, params.size,
-      quadrants_page_size, params.result_buffer);
+uint64_t *CpuDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
+  params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
+                                                             params.size, quadrants_page_size, params.result_buffer);
   return reinterpret_cast<uint64_t *>(params.result_buffer[0]);
 }
 
@@ -73,10 +67,7 @@ void CpuDevice::dealloc_memory(DeviceAllocation handle) {
   }
 }
 
-RhiResult CpuDevice::upload_data(DevicePtr *device_ptr,
-                                 const void **data,
-                                 size_t *size,
-                                 int num_alloc) noexcept {
+RhiResult CpuDevice::upload_data(DevicePtr *device_ptr, const void **data, size_t *size, int num_alloc) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -93,12 +84,11 @@ RhiResult CpuDevice::upload_data(DevicePtr *device_ptr,
   return RhiResult::success;
 }
 
-RhiResult CpuDevice::readback_data(
-    DevicePtr *device_ptr,
-    void **data,
-    size_t *size,
-    int num_alloc,
-    const std::vector<StreamSemaphore> &wait_sema) noexcept {
+RhiResult CpuDevice::readback_data(DevicePtr *device_ptr,
+                                   void **data,
+                                   size_t *size,
+                                   int num_alloc,
+                                   const std::vector<StreamSemaphore> &wait_sema) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -115,9 +105,7 @@ RhiResult CpuDevice::readback_data(
   return RhiResult::success;
 }
 
-RhiResult CpuDevice::map_range(DevicePtr ptr,
-                               uint64_t size,
-                               void **mapped_ptr) {
+RhiResult CpuDevice::map_range(DevicePtr ptr, uint64_t size, void **mapped_ptr) {
   AllocInfo &info = allocations_[ptr.alloc_id];
   if (info.ptr == nullptr) {
     return RhiResult::error;
@@ -140,10 +128,8 @@ void CpuDevice::unmap(DeviceAllocation alloc) {
 }
 
 void CpuDevice::memcpy_internal(DevicePtr dst, DevicePtr src, uint64_t size) {
-  void *dst_ptr =
-      static_cast<char *>(allocations_[dst.alloc_id].ptr) + dst.offset;
-  void *src_ptr =
-      static_cast<char *>(allocations_[src.alloc_id].ptr) + src.offset;
+  void *dst_ptr = static_cast<char *>(allocations_[dst.alloc_id].ptr) + dst.offset;
+  void *src_ptr = static_cast<char *>(allocations_[src.alloc_id].ptr) + src.offset;
   std::memcpy(dst_ptr, src_ptr, size);
 }
 

@@ -22,9 +22,7 @@ class LowererImpl : public ScalarPointerLowerer {
   std::vector<LinearizeStmt *> linears;
 
  protected:
-  Stmt *handle_snode_at_level(int level,
-                              LinearizeStmt *linearized,
-                              Stmt *last) override {
+  Stmt *handle_snode_at_level(int level, LinearizeStmt *linearized, Stmt *last) override {
     linears.push_back(linearized);
     return last;
   }
@@ -58,9 +56,7 @@ TEST_F(ScalarPointerLowererTest, Basic) {
     for (int j = 0; j < kDenseSize; ++j) {
       const int loop_index = (i * kDenseSize) + j;
       VecStatement lowered;
-      LowererImpl lowerer{leaf_snode_,
-                          std::vector<Stmt *>{builder.get_int32(loop_index)},
-                          SNodeOpType::undefined,
+      LowererImpl lowerer{leaf_snode_, std::vector<Stmt *>{builder.get_int32(loop_index)}, SNodeOpType::undefined,
                           /*is_bit_vectorized=*/false, &lowered};
       lowerer.run();
       // There are three linearized stmts:
@@ -124,10 +120,8 @@ TEST(ScalarPointerLowerer, EliminateModDiv) {
                         &lowered};
   lowerer_2.run();
   for (int i = 0; i < lowered.size(); i++) {
-    ASSERT_FALSE(
-        lowered[i]->is<BinaryOpStmt>() &&
-        (lowered[i]->as<BinaryOpStmt>()->op_type == BinaryOpType::mod ||
-         lowered[i]->as<BinaryOpStmt>()->op_type == BinaryOpType::div));
+    ASSERT_FALSE(lowered[i]->is<BinaryOpStmt>() && (lowered[i]->as<BinaryOpStmt>()->op_type == BinaryOpType::mod ||
+                                                    lowered[i]->as<BinaryOpStmt>()->op_type == BinaryOpType::div));
   }
 }
 }  // namespace

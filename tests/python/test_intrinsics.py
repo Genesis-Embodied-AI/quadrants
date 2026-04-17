@@ -49,20 +49,43 @@ def test_clock_monotonic():
 
 @test_utils.test(arch=qd.cuda)
 def test_clock_accuracy():
+    """Verify that clock_counter() measures elapsed cycles proportional to work done.
+
+    Launches 32 threads as a single warp, each doing a different number of LCG iterations
+    (thread i does (i+1)*50000). Asserts strict monotonicity across threads and that
+    a[i]/a[0] ≈ (i+1), confirming clock_counter() tracks real computational work.
+    """
     a = qd.field(dtype=qd.i64, shape=32)
+    state = qd.field(dtype=qd.i32, shape=32)
 
     @qd.kernel
-    def foo():
-        qd.loop_config(block_dim=1)
+    def measure_sequence_timings():
+        # 32 threads = one CUDA warp, so all threads share the same SM clock for comparable timing
         for i in range(32):
-            start = qd.clock_counter()
-            x = qd.random() * 0.5 + 0.5
-            for j in range((i + 1) * 2000):
-                x = qd.sin(x * 1.0001 + j * 1e-6) + 1.2345
-            if x < 10.0:
-                a[i] = qd.clock_counter() - start
+            # Read from a field so the compiler can't constant-fold the deterministic LCG sequence
+            x = state[i]
+            start = qd.i64(0)
+            for j in range((i + 1) * 50000):
+                # LCG: constant cost per iteration (pure integer arithmetic) and uniform output
+                # over [0, 2^31), making `x > 10` true >99.999% of the time but not provably
+                # always true, so the compiler can't optimize away the conditional store.
+                x = (1664527 * x + 1013904223) % 2147483647
+                # Start timing after 10 warmup iterations so all operations (LCG, store, clock
+                # counter) are warmed up before we begin measuring.
+                if j == 10:
+                    start = qd.clock_counter()
+                # x > 10 is almost always true for LCG; this data-dependent condition prevents the
+                # compiler from dead-code-eliminating the clock read and field write.
+                # Writing the end time inside the loop (not after it) is essential: in a warp, all
+                # threads execute in lockstep, so a post-loop clock read would fire at the warp's
+                # reconvergence point and give all threads the same value. By writing each
+                # iteration, a[i] captures the clock at thread i's last iteration.
+                if x > 10:
+                    a[i] = qd.clock_counter() - start
+            # Write x back to prevent dead-code elimination of the entire LCG loop
+            state[i] = x
 
-    foo()
+    measure_sequence_timings()
 
     for i in range(1, 31):
         assert a[i - 1] < a[i] < a[i + 1]

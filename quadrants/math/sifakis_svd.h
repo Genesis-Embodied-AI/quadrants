@@ -42,11 +42,9 @@ QD_FORCE_INLINE float rsqrt(const float f) {
   return 1.0f / std::sqrt(f);
 }
 
-constexpr float Four_Gamma_Squared = 5.82842712474619f;  // sqrt(8.) + 3.;
-constexpr float Sine_Pi_Over_Eight =
-    0.3826834323650897f;  // .5 * sqrt(2. - sqrt(2.));
-constexpr float Cosine_Pi_Over_Eight =
-    0.9238795325112867f;  //.5 * sqrt(2. + sqrt(2.));
+constexpr float Four_Gamma_Squared = 5.82842712474619f;      // sqrt(8.) + 3.;
+constexpr float Sine_Pi_Over_Eight = 0.3826834323650897f;    // .5 * sqrt(2. - sqrt(2.));
+constexpr float Cosine_Pi_Over_Eight = 0.9238795325112867f;  //.5 * sqrt(2. + sqrt(2.));
 
 template <int sweeps = 4>
 QD_FORCE_INLINE void svd(const float a11,
