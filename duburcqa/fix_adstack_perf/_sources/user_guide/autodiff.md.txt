@@ -258,31 +258,13 @@ compute.grad()
 
 Without `ad_stack_experimental_enabled=True`, `x.grad[0]` comes out as zero. The flag is compile-time, so it must be set at `qd.init` time, before the offending kernel compiles.
 
-### `default_ad_stack_size` and overflow behavior
+### Adstack overflow
 
-Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to `compile_config.default_ad_stack_size`, which defaults to `32`.
+Each adstack has a fixed capacity baked into the compiled kernel. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default.
 
-**Why the default is small.** Every live adstack is allocated up front as per-thread private memory, at kernel entry, regardless of whether any push ever runs. Total private memory per thread is:
+Every live adstack is allocated up front as per-thread private memory at kernel entry, regardless of whether any push runs. On SPIR-V backends (Metal, Vulkan) the per-thread private memory footprint is capped by the driver's shader compiler, so the fallback default stays small. If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` at the next synchronize() pointing at the issue; if the default is already too large for the target shader compiler, pipeline creation itself fails with a similar exception at kernel-launch time.
 
-```
-2 * sizeof(element) * default_ad_stack_size * number_of_live_adstacks
-```
-
-Apple's Metal shader compiler (and, less aggressively, Vulkan drivers) imposes a hard cap on per-thread private memory. Kernels with many loop-carried variables hit that cap quickly: at `default_ad_stack_size=64` or above, a moderately complex reverse-mode kernel can push the shader compiler past its limit and fail pipeline creation with `XPC_ERROR_CONNECTION_INTERRUPTED`. Raising this knob is therefore a direct-multiplier cost, not a lazy allocation.
-
-Raise the value only as far as your workload requires and the target platform will tolerate. Keep it small on Metal / Vulkan; feel free to raise it on LLVM backends where the limit is much higher:
-
-```python
-qd.init(
-    arch=qd.gpu,
-    ad_stack_experimental_enabled=True,
-    default_ad_stack_size=256,  # safe on LLVM backends; usually too much for Metal
-)
-```
-
-On LLVM backends, if the forward pass pushes more elements than the stack can hold, the kernel aborts with a diagnostic pointing at this knob; silently wrapping would corrupt the adjoint tape. On SPIR-V the overflow iteration is silently dropped (see "Known limitations"), so the recommended workflow is: run on an LLVM backend first to catch overflow aborts and size the value accordingly, then ship to SPIR-V with the same value (or a smaller one, if the shader compiler rejects it).
-
-A future "adaptive sizing" pass would mitigate this by proving tighter per-loop bounds at compile time, shrinking the static allocation and letting more kernels compile at smaller sizes. Tracked as a follow-up.
+Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is tracked as follow-up.
 
 ## Backend support
 
@@ -292,8 +274,8 @@ The adstack pipeline is still behind `ad_stack_experimental_enabled=True`. Enabl
 
 ## Known limitations
 
-- Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel sets a flag during execution and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) raises. This follows the same pattern as CUDA async errors - the raise is deferred so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch. Either way, raise `default_ad_stack_size` at `qd.init` time if your kernel can exceed the current capacity.
-- On SPIR-V backends (Metal, Vulkan), raising `default_ad_stack_size` too high can make the driver's shader compiler reject the pipeline because the per-thread Function-scope footprint exceeds what it accepts. When it does, Quadrants raises a Python `RuntimeError` at kernel-launch time pointing at `default_ad_stack_size`; lower the value and retry. LLVM backends (CPU, CUDA, AMDGPU) allocate the adstack on the heap and do not hit this limit. The default (`32`) is deliberately small; raise it only if your workload needs deeper stacks. Moving SPIR-V adstacks off Function-scope onto a heap-backed buffer to lift this ceiling is left for future work.
+- Adstack overflow is reported as a Python-level exception on every backend, but asynchronously: the offending kernel sets a flag during execution and the next `qd.sync()` (explicit, or implicit via a host read like `to_numpy()` / `to_torch()`) raises. This follows the same pattern as CUDA async errors so every launch does not pay a per-launch sync. If you want the exception to land exactly at the offending kernel rather than at the next sync, call `qd.sync()` right after the kernel, or enable `qd.init(debug=True)` on LLVM backends to poll after every launch.
+- On SPIR-V backends (Metal, Vulkan), a large adstack can make the driver's shader compiler reject the pipeline because the per-thread Function-scope footprint exceeds what it accepts. When it does, Quadrants raises a Python `RuntimeError` at kernel-launch time. LLVM backends (CPU, CUDA, AMDGPU) allocate the adstack on the heap and do not hit this limit. Moving SPIR-V adstacks off Function-scope onto a heap-backed buffer to lift this ceiling is left for future work.
 - The adstack pipeline trades compile-time complexity for generality. Real-world kernels (many loop-carried variables, nested dynamic loops, large inner-loop bodies) can push compile times from seconds into minutes and, on some backends, into the territory where the driver's shader compiler gives up entirely. The implementation does not currently try to share stacks across independent variables or coalesce pushes, so the generated kernel's IR grows roughly linearly with the number of live adstack slots. Expect compile regressions when migrating existing reverse-mode AD workloads to the adstack pipeline; budget accordingly.
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
 - Runtime speed of the generated backward kernel is not yet a focus. The current codegen is "correct first": adjoint accumulation goes through ordinary atomics and ordinary loads / stores, with no backend-specific tuning (no tiling across the reverse pass, no fusion of adjoint accumulations, no specialized scheduling for the push/pop pattern). Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V. Improving this is future work. The adstack pipeline is opt-in (`ad_stack_experimental_enabled=True`) while this is being addressed.
