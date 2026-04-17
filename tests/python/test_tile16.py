@@ -15,20 +15,32 @@ from tests import test_utils
 
 _QD_DTYPES = [qd.f32, qd.f64]
 _NP_DTYPES = {qd.f32: np.float32, qd.f64: np.float64}
+_ATOLS = {qd.f32: 1e-5, qd.f64: 1e-10}
+_EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
 
 
+def _ann(tensor_type, dtype, ndim):
+    """Return the right kernel annotation for the given tensor_type."""
+    if tensor_type == qd.ndarray:
+        return qd.types.NDArray[dtype, ndim]
+    return qd.Template
+
+
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("use_zeros_alias", [False, True])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_zeros(qd_dtype, use_zeros_alias):
+def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
     dst.from_numpy(np.ones((_TILE, _TILE), dtype=np_dtype))
 
+    Ann = _ann(tensor_type, qd_dtype, 2)
+
     @qd.kernel
-    def k1(dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             if qd.static(use_zeros_alias):
@@ -42,18 +54,21 @@ def test_tile16_zeros(qd_dtype, use_zeros_alias):
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("inplace", [False, True])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_eye(qd_dtype, inplace):
+def test_tile16_eye(tensor_type, qd_dtype, inplace):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             if qd.static(inplace):
@@ -71,6 +86,7 @@ def test_tile16_eye(qd_dtype, inplace):
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize(
     "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
@@ -86,13 +102,13 @@ def test_tile16_eye(qd_dtype, inplace):
 )
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
+def test_tile16_load_store(tensor_type, qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (GRID, GRID))
-    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+    src = tensor_type(qd_dtype, (GRID, GRID))
+    dst = tensor_type(qd_dtype, (GRID, GRID))
 
     src_col_end = src_col + ncols
     src_row_end = src_row + nrows
@@ -101,8 +117,10 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
     dst_col_end = dst_col + ncols
     dst_row_end = dst_row + nrows
 
+    Ann = _ann(tensor_type, qd_dtype, 2)
+
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -122,10 +140,11 @@ def test_tile16_load_store(qd_dtype, src_row, src_col, row_offset, col_offset, n
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("clamp_side", ["load", "store"])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_clamp_to_array_rows(qd_dtype, clamp_side):
+def test_tile16_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
     """Row clamping: load from short src (extra tile rows zero) or store to short dst (no OOB)."""
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -133,11 +152,13 @@ def test_tile16_clamp_to_array_rows(qd_dtype, clamp_side):
     Tile = _make_tile16x16(qd_dtype)
     src_rows = NROWS if clamp_side == "load" else _TILE
     dst_rows = _TILE if clamp_side == "load" else NROWS
-    src = qd.ndarray(qd_dtype, (src_rows, _TILE))
-    dst = qd.ndarray(qd_dtype, (dst_rows, _TILE))
+    src = tensor_type(qd_dtype, (src_rows, _TILE))
+    dst = tensor_type(qd_dtype, (dst_rows, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -155,10 +176,11 @@ def test_tile16_clamp_to_array_rows(qd_dtype, clamp_side):
         np.testing.assert_allclose(result, data[:NROWS, :])
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("clamp_side", ["load", "store"])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_3d_clamp_to_array_rows(qd_dtype, clamp_side):
+def test_tile16_3d_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
     """3D row clamping: load from short src (extra tile rows zero) or store to short dst (no OOB)."""
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
@@ -166,11 +188,13 @@ def test_tile16_3d_clamp_to_array_rows(qd_dtype, clamp_side):
     Tile = _make_tile16x16(qd_dtype)
     src_rows = NROWS if clamp_side == "load" else _TILE
     dst_rows = _TILE if clamp_side == "load" else NROWS
-    src = qd.ndarray(qd_dtype, (1, src_rows, _TILE))
-    dst = qd.ndarray(qd_dtype, (1, dst_rows, _TILE))
+    src = tensor_type(qd_dtype, (1, src_rows, _TILE))
+    dst = tensor_type(qd_dtype, (1, dst_rows, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 3)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -188,6 +212,7 @@ def test_tile16_3d_clamp_to_array_rows(qd_dtype, clamp_side):
         np.testing.assert_allclose(result[0], data[0, :NROWS, :])
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize(
     "batch, src_row, src_col, ncols, nrows",
     [
@@ -201,20 +226,22 @@ def test_tile16_3d_clamp_to_array_rows(qd_dtype, clamp_side):
 )
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_load3d_store3d(qd_dtype, batch, src_row, src_col, ncols, nrows):
+def test_tile16_load3d_store3d(tensor_type, qd_dtype, batch, src_row, src_col, ncols, nrows):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 92
     NBATCH = 6
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
-    dst = qd.ndarray(qd_dtype, (NBATCH, GRID, GRID))
+    src = tensor_type(qd_dtype, (NBATCH, GRID, GRID))
+    dst = tensor_type(qd_dtype, (NBATCH, GRID, GRID))
 
     col_end = src_col + ncols
     row_end = src_row + nrows
 
+    Ann = _ann(tensor_type, qd_dtype, 3)
+
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -255,19 +282,22 @@ def test_tile16_size_constant_in_kernel():
     assert out.to_numpy()[0] == 16
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_load_clamp_to_array_cols(qd_dtype):
+def test_tile16_load_clamp_to_array_cols(tensor_type, qd_dtype):
     """Load from an array narrower than 16 columns. Columns beyond arr width should be zero."""
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (_TILE, NCOLS))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_TILE, NCOLS))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -282,19 +312,22 @@ def test_tile16_load_clamp_to_array_cols(qd_dtype):
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_store_partial_cols_untouched(qd_dtype):
+def test_tile16_store_partial_cols_untouched(tensor_type, qd_dtype):
     """Load full 16 columns, store only NCOLS. Remaining dst columns must be untouched."""
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     NCOLS = 10
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -328,23 +361,27 @@ def _make_spd(np_dtype=np.float32, seed: int = 42):
     return (B @ B.T + _TILE * np.eye(_TILE)).astype(np_dtype)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_ger_sub(qd_dtype):
+def test_tile16_ger_sub(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    vec_a = qd.ndarray(qd_dtype, (_TILE,))
-    vec_b = qd.ndarray(qd_dtype, (_TILE,))
-    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    mat = tensor_type(qd_dtype, (_TILE, _TILE))
+    vec_a = tensor_type(qd_dtype, (_TILE,))
+    vec_b = tensor_type(qd_dtype, (_TILE,))
+    out = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann2 = _ann(tensor_type, qd_dtype, 2)
+    Ann1 = _ann(tensor_type, qd_dtype, 1)
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd_dtype, 2],
-        a_arr: qd.types.NDArray[qd_dtype, 1],
-        b_arr: qd.types.NDArray[qd_dtype, 1],
-        out_arr: qd.types.NDArray[qd_dtype, 2],
+        mat_arr: Ann2,
+        a_arr: Ann1,
+        b_arr: Ann1,
+        out_arr: Ann2,
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -369,24 +406,27 @@ def test_tile16_ger_sub(qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("dst_delta", [0, 3, 16])
 @pytest.mark.parametrize("src_offset", [0, 5, 32])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_cholesky(qd_dtype, src_offset, dst_delta):
+def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     GRID = 64
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (GRID, GRID))
-    dst = qd.ndarray(qd_dtype, (GRID, GRID))
+    src = tensor_type(qd_dtype, (GRID, GRID))
+    dst = tensor_type(qd_dtype, (GRID, GRID))
 
     dst_offset = src_offset + dst_delta
     src_row_end = src_offset + _TILE
     dst_row_end = dst_offset + _TILE
 
+    Ann = _ann(tensor_type, qd_dtype, 2)
+
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -416,21 +456,24 @@ def test_tile16_cholesky(qd_dtype, src_offset, dst_delta):
     np.testing.assert_allclose(result, untouched)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_trsm(qd_dtype):
+def test_tile16_trsm(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    a_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    b_arr = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    a_arr = tensor_type(qd_dtype, (_TILE, _TILE))
+    b_arr = tensor_type(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def k1(
-        a_in: qd.types.NDArray[qd_dtype, 2],
-        b_in: qd.types.NDArray[qd_dtype, 2],
-        out: qd.types.NDArray[qd_dtype, 2],
+        a_in: Ann,
+        b_in: Ann,
+        out: Ann,
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -468,17 +511,20 @@ def test_tile16_solve_triangular_upper_raises():
 # =============================================================================
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_load_store_roundtrip(qd_dtype):
+def test_tile16_slice_load_store_roundtrip(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -491,18 +537,21 @@ def test_tile16_slice_load_store_roundtrip(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_partial_cols(qd_dtype):
+def test_tile16_slice_partial_cols(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
     NCOLS = 7
-    src = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    src = tensor_type(qd_dtype, (_TILE, _TILE))
+    dst = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             t = Tile()
@@ -520,18 +569,21 @@ def test_tile16_slice_partial_cols(qd_dtype):
     np.testing.assert_allclose(result, expected)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_3d_batch(qd_dtype):
+def test_tile16_slice_3d_batch(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
     NBATCH = 3
-    src = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
-    dst = qd.ndarray(qd_dtype, (NBATCH, _TILE, _TILE))
+    src = tensor_type(qd_dtype, (NBATCH, _TILE, _TILE))
+    dst = tensor_type(qd_dtype, (NBATCH, _TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 3)
 
     @qd.kernel
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 3], dst_arr: qd.types.NDArray[qd_dtype, 3]):
+    def k1(src_arr: Ann, dst_arr: Ann):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
             for b in range(NBATCH):
@@ -545,23 +597,27 @@ def test_tile16_slice_3d_batch(qd_dtype):
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_slice_ger_sub_via_outer(qd_dtype):
+def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    vec_a = qd.ndarray(qd_dtype, (_TILE,))
-    vec_b = qd.ndarray(qd_dtype, (_TILE,))
-    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    mat = tensor_type(qd_dtype, (_TILE, _TILE))
+    vec_a = tensor_type(qd_dtype, (_TILE,))
+    vec_b = tensor_type(qd_dtype, (_TILE,))
+    out = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann2 = _ann(tensor_type, qd_dtype, 2)
+    Ann1 = _ann(tensor_type, qd_dtype, 1)
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd_dtype, 2],
-        a_arr: qd.types.NDArray[qd_dtype, 1],
-        b_arr: qd.types.NDArray[qd_dtype, 1],
-        out_arr: qd.types.NDArray[qd_dtype, 2],
+        mat_arr: Ann2,
+        a_arr: Ann1,
+        b_arr: Ann1,
+        out_arr: Ann2,
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
@@ -586,21 +642,24 @@ def test_tile16_slice_ger_sub_via_outer(qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_vec_proxy_ger_sub_2d(qd_dtype):
+def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    vecs = qd.ndarray(qd_dtype, (_TILE, 2))
-    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    mat = tensor_type(qd_dtype, (_TILE, _TILE))
+    vecs = tensor_type(qd_dtype, (_TILE, 2))
+    out = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel
     def k1(
-        mat_arr: qd.types.NDArray[qd_dtype, 2],
-        vecs_arr: qd.types.NDArray[qd_dtype, 2],
-        out_arr: qd.types.NDArray[qd_dtype, 2],
+        mat_arr: Ann,
+        vecs_arr: Ann,
+        out_arr: Ann,
     ):
         qd.loop_config(block_dim=_TILE)
         for _ in range(_TILE):
