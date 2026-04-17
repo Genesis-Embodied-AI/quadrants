@@ -402,8 +402,7 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
     k1(mat, vec_a, vec_b, out)
 
     expected = M - np.outer(a, b)
-    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=_ATOLS[qd_dtype])
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
@@ -447,7 +446,7 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
     result = dst.to_numpy()
     L_gpu = np.tril(result[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE])
     L_ref = scipy.linalg.cholesky(A.astype(np.float64), lower=True).astype(np_dtype)
-    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    atol = _ATOLS[qd_dtype]
     np.testing.assert_allclose(L_gpu, L_ref, atol=atol)
     untouched = np.full((GRID, GRID), -1.0, dtype=np_dtype)
     untouched[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE] = result[
@@ -495,8 +494,8 @@ def test_tile16_trsm(tensor_type, qd_dtype):
     X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
         np_dtype
     )
-    atol = 1e-10 if qd_dtype == qd.f64 else 1e-4
-    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
+    trsm_atol = {qd.f32: 1e-4, qd.f64: 1e-10}
+    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=trsm_atol[qd_dtype])
 
 
 @test_utils.test(arch=qd.gpu)
@@ -638,7 +637,7 @@ def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
     k1(mat, vec_a, vec_b, out)
 
     expected = M - np.outer(a, b)
-    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    atol = _ATOLS[qd_dtype]
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
@@ -676,7 +675,7 @@ def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
     k1(mat, vecs, out)
 
     expected = M - np.outer(a, b)
-    atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
+    atol = _ATOLS[qd_dtype]
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
@@ -709,7 +708,7 @@ def test_tile16_outer_symmetric_same_variable():
     k1(mat, vecs, out)
 
     expected = M - np.outer(a, a)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=_ATOLS[qd.f32])
 
 
 @test_utils.test(arch=qd.gpu)
@@ -747,7 +746,7 @@ def test_tile16_vec_proxy_ger_sub_3d():
     k1(mat, vecs, out)
 
     expected = M - np.outer(a, b)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=_ATOLS[qd.f32])
 
 
 # =============================================================================
@@ -947,7 +946,7 @@ def test_tile16_outer_product_intermediate_variable():
     k1(mat, out)
 
     expected = M - np.outer(a, b)
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=_ATOLS[qd.f32])
 
 
 @test_utils.test(arch=qd.gpu)
