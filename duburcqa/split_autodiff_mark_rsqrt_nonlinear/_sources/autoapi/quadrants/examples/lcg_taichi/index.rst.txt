@@ -1,0 +1,22 @@
+quadrants.examples.lcg_taichi
+=============================
+
+.. py:module:: quadrants.examples.lcg_taichi
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.examples.lcg_taichi.lcg_ti
+   quadrants.examples.lcg_taichi.main
+
+
+Module Contents
+---------------
+
+.. py:function:: lcg_ti(B: int, lcg_its: int, a: quadrants.types.NDArray[quadrants.i32, 1]) -> None
+
+.. py:function:: main() -> None
+
