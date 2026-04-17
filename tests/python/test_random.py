@@ -104,7 +104,7 @@ def test_random_seed_per_launch():
     assert count <= n * 0.15
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.metal])
+@test_utils.test()
 def test_random_seed_per_program():
     import numpy as np
 
@@ -126,7 +126,7 @@ def test_random_seed_per_program():
     assert not np.allclose(result[0], result[1])
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.data64)
 def test_random_f64():
     """
     Tests the granularity of float64 random numbers.

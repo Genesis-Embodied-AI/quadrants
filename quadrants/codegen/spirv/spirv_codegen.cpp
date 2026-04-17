@@ -1,6 +1,7 @@
 #include "quadrants/codegen/spirv/spirv_codegen.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <variant>
 #include <filesystem>
@@ -2208,18 +2209,60 @@ const spirv::Label TaskCodegen::return_label() const {
   return continue_label_stack_.front();
 }
 
+// Per-thread flag set when SPIRV-Tools reports an ID-space overflow during optimization. The optimizer does not always
+// propagate this as `Pass::Status::Failure`, so we capture it here and abort the kernel compilation with a hard error
+// (see QD_ERROR_IF in KernelCodegen::run).
+static thread_local bool spirv_opt_id_overflow_seen = false;
+
+// Deduplication state for the SPIRV-Tools message consumer. Exposed so that KernelCodegen::run()
+// can flush and reset after each optimizer invocation.
+static thread_local std::string spirv_msg_last;
+static thread_local uint32_t spirv_msg_suppressed = 0;
+
+static void spirv_msg_flush_dedup() {
+  if (spirv_msg_suppressed > 0) {
+    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", spirv_msg_suppressed);
+  }
+  spirv_msg_last.clear();
+  spirv_msg_suppressed = 0;
+}
+
 static void spriv_message_consumer(spv_message_level_t level,
                                    const char *source,
                                    const spv_position_t &position,
                                    const char *message) {
+  if (message == nullptr)
+    return;
+  if (source == nullptr)
+    source = "";
+  // The raised max_id_bound and intermediate DCE passes are the primary defense. This substring match is fragile
+  // (tied to SPIRV-Tools message text). If it stops matching and Run() still returns success with corrupt output
+  // (id-0 references), the corrupted SPIR-V will reach the GPU driver. The Run()-failure path is checked
+  // independently, but does NOT cover the Run()-succeeds-but-output-is-corrupt case.
+  if (std::string_view(message).find("ID overflow") != std::string_view::npos) {
+    spirv_opt_id_overflow_seen = true;
+  }
+  // Deduplicate consecutive identical messages so the log stays readable.
+  if (message == spirv_msg_last) {
+    ++spirv_msg_suppressed;
+    return;
+  }
+  if (spirv_msg_suppressed > 0) {
+    QD_WARN("(previous SPIRV-Tools message repeated {} more times)", spirv_msg_suppressed);
+    spirv_msg_suppressed = 0;
+  }
+  spirv_msg_last = message;
   // TODO: Maybe we can add a macro, e.g. QD_LOG_AT_LEVEL(lv, ...)
-  if (level <= SPV_MSG_FATAL) {
-    QD_ERROR("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
+  if (level <= SPV_MSG_ERROR) {
+    // Log at WARN, not ERROR: QD_ERROR throws, which would propagate through SPIRV-Tools (not
+    // exception-safe) and bypass spirv_msg_flush_dedup(). The hard error is raised by QD_ERROR_IF
+    // after Run() returns.
+    QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_WARNING) {
     QD_WARN("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   } else if (level <= SPV_MSG_INFO) {
     QD_INFO("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
-  } else if (level <= SPV_MSG_INFO) {
+  } else if (level <= SPV_MSG_DEBUG) {
     QD_TRACE("{}\n[{}:{}:{}] {}", source, position.index, position.line, position.column, message);
   }
 }
@@ -2247,6 +2290,9 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
   spirv_opt_->SetMessageConsumer(spriv_message_consumer);
   if (params.enable_spv_opt) {
     // From: SPIRV-Tools/source/opt/optimizer.cpp
+    // Intermediate AggressiveDCE passes (matching upstream RegisterPerformancePasses) are critical:
+    // without them, dead instructions accumulate between expensive transformations and a single pass
+    // (e.g. LocalMultiStoreElim doing SSA construction) can exhaust the SPIR-V ID space.
     spirv_opt_->RegisterPass(spvtools::CreateWrapOpKillPass())
         .RegisterPass(spvtools::CreateDeadBranchElimPass())
         .RegisterPass(spvtools::CreateMergeReturnPass())
@@ -2256,23 +2302,39 @@ KernelCodegen::KernelCodegen(const Params &params) : params_(params), ctx_attrib
         .RegisterPass(spvtools::CreatePrivateToLocalPass())
         .RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass())
         .RegisterPass(spvtools::CreateLocalSingleStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateScalarReplacementPass())
         .RegisterPass(spvtools::CreateLocalAccessChainConvertPass())
+        .RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass())
+        .RegisterPass(spvtools::CreateLocalSingleStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateLocalMultiStoreElimPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateCCPPass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateLoopUnrollPass(true))
+        .RegisterPass(spvtools::CreateDeadBranchElimPass())
         .RegisterPass(spvtools::CreateRedundancyEliminationPass())
         .RegisterPass(spvtools::CreateCombineAccessChainsPass())
         .RegisterPass(spvtools::CreateSimplificationPass())
         .RegisterPass(spvtools::CreateSSARewritePass())
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
         .RegisterPass(spvtools::CreateVectorDCEPass())
         .RegisterPass(spvtools::CreateDeadInsertElimPass())
         .RegisterPass(spvtools::CreateIfConversionPass())
         .RegisterPass(spvtools::CreateCopyPropagateArraysPass())
         .RegisterPass(spvtools::CreateReduceLoadSizePass())
-        .RegisterPass(spvtools::CreateBlockMergePass());
+        .RegisterPass(spvtools::CreateAggressiveDCEPass())
+        .RegisterPass(spvtools::CreateBlockMergePass())
+        .RegisterPass(spvtools::CreateCompactIdsPass());
   }
   spirv_opt_options_.set_run_validator(false);
+  // The SPIRV-Tools default ID bound (0x3FFFFF = 4194303) is too low for large autodiff kernels
+  // where SSA construction (LocalMultiStoreElim / SSARewrite) creates millions of phi nodes.
+  // Raise the optimizer-internal limit; CompactIdsPass at the end of the pipeline renumbers the
+  // output back to a dense range (the SPIR-V spec allows IDs up to 2^32-1; 4194303 is only the
+  // SPIRV-Tools default, not a spec limit).
+  spirv_opt_options_.set_max_id_bound(0x3FFFFFF);
 
   spirv_tools_ = std::make_unique<spvtools::SpirvTools>(target_env);
 }
@@ -2333,18 +2395,23 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     bool success = true;
     {
+      spirv_opt_id_overflow_seen = false;
       bool result = false;
       QD_WARN_IF(
           (result = !spirv_opt_->Run(optimized_spv.data(), optimized_spv.size(), &optimized_spv, spirv_opt_options_)),
           "SPIRV optimization failed");
-      if (result) {
+      spirv_msg_flush_dedup();
+      if (spirv_opt_id_overflow_seen) {
+        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.ti_kernel_name);
+      }
+      if (result || spirv_opt_id_overflow_seen) {
         success = false;
       }
     }
 
     QD_TRACE("SPIRV-Tools-opt: binary size, before={}, after={}", task_res.spirv_code.size(), optimized_spv.size());
 
-    if (dump_ir) {
+    if (dump_ir && success) {
       std::string spirv_asm;
       spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
       std::filesystem::path filename = ir_dump_dir / (spirv_dump_basename + "_after_opt.spirv");
@@ -2358,7 +2425,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       std::vector<uint32_t> &spirv = success ? optimized_spv : task_res.spirv_code;
 
       std::string spirv_asm;
-      spirv_tools_->Disassemble(optimized_spv, &spirv_asm);
+      spirv_tools_->Disassemble(spirv, &spirv_asm);
       auto kernel_name = tp.ti_kernel_name;
       QD_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
 
@@ -2367,6 +2434,14 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       fout.close();
     }
 
+    if (spirv_opt_id_overflow_seen) {
+      QD_ERROR_IF(!success,
+                  "SPIR-V optimization failed for '{}' due to ID-space overflow. "
+                  "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
+                  tp.ti_kernel_name);
+    } else {
+      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.ti_kernel_name);
+    }
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     generated_spirv.push_back(std::move(optimized_spv));
   }

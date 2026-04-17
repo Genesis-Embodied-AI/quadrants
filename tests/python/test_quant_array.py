@@ -94,7 +94,7 @@ def test_2D_quant_array():
     verify_val()
 
 
-@test_utils.test(require=qd.extension.quant, debug=True)
+@test_utils.test(require=[qd.extension.quant, qd.extension.sparse], debug=True)
 def test_quant_array_struct_for():
     block_size = 16
     N = 64

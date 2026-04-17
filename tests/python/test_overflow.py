@@ -14,7 +14,7 @@ if os.name == "nt":
     )
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_no_debug(capfd):
     capfd.readouterr()
 
@@ -47,6 +47,9 @@ add_table = [
 ]
 
 
+# TODO: AMDGPU excluded from all debug=True overflow tests because HIP does not
+# flush kernel printf to stdout, so capfd captures empty output and positive
+# string assertions fail.
 @pytest.mark.parametrize("ty,num", add_table)
 @test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan], debug=True)
 def test_add_overflow(capfd, ty, num):

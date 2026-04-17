@@ -59,7 +59,7 @@ def test_logical_vec_i32():
 
 
 # FIXME: bool vectors not supported on spir-v
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_logical_vec_bool():
     vec4d = qd.types.vector(4, qd.u1)
 

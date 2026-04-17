@@ -7,7 +7,7 @@ from quadrants.lang.exception import QuadrantsRuntimeError
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test()
 def test_fields_with_shape():
     shape = 5
     x = qd.field(qd.f32, shape=shape)
@@ -40,7 +40,7 @@ def test_fields_with_shape():
         assert x[i] == i
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test()
 def test_fields_builder_dense():
     shape = 5
     fb1 = qd.FieldsBuilder()
@@ -84,7 +84,7 @@ def test_fields_builder_dense():
         assert x[i] == i * 3
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(require=qd.extension.sparse)
 def test_fields_builder_pointer():
     shape = 5
     fb1 = qd.FieldsBuilder()
@@ -144,7 +144,7 @@ def test_fields_builder_pointer():
 # See https://docs.taichi-lang.org/docs/type#primitive-types for more details.
 @pytest.mark.parametrize("test_1d_size", [1, 10, 100])
 @pytest.mark.parametrize("field_type", [qd.f32, qd.i32])
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan, qd.metal])
+@test_utils.test()
 def test_fields_builder_destroy(test_1d_size, field_type):
     def test_for_single_destroy_multi_fields():
         fb = qd.FieldsBuilder()
@@ -182,8 +182,11 @@ def test_fields_builder_destroy(test_1d_size, field_type):
             c.destroy()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.vulkan])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.vulkan])
 def test_field_initialize_zero():
+    # Metal is intentionally excluded: `program.cpp:destroy_snode_tree` asserts
+    # `arch_uses_llvm(arch) || arch == vulkan`, so `c.destroy()` below would fail
+    # on metal by design (not a bug).
     fb0 = qd.FieldsBuilder()
     a = qd.field(qd.i32)
     fb0.dense(qd.i, 1).place(a)

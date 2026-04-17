@@ -4,14 +4,14 @@ import quadrants as qd
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
 torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.needs_torch
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_simple_demo():
     @test_utils.torch_op(output_shapes=[(1,)])
     @qd.kernel
@@ -27,7 +27,7 @@ def test_simple_demo():
     torch.autograd.gradcheck(test, input)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.data64)
 def test_ad_reduce():
     @test_utils.torch_op(output_shapes=[(1,)])
     @qd.kernel
@@ -80,7 +80,7 @@ def test_ad_reduce():
         lambda y: y**0.4,
     ],
 )
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.data64)
 def test_poly(tifunc):
     s = (4,)
 
@@ -95,7 +95,7 @@ def test_poly(tifunc):
     torch.autograd.gradcheck(test, input)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.data64)
 def test_ad_select():
     s = (4,)
 
@@ -113,7 +113,10 @@ def test_ad_select():
 
 @test_utils.test(arch=archs_support_ndarray_ad)
 def test_ad_mixed_with_torch():
-    @test_utils.torch_op(output_shapes=[(1,)])
+    if qd.lang.impl.current_cfg().arch == qd.metal:
+        pytest.xfail("BUG: ndarray autodiff broken on metal -- gradients stay zero.")
+
+    @test_utils.torch_op(output_shapes=[(1,)], output_dtype=torch.float)
     @qd.kernel
     def compute_sum(a: qd.types.ndarray(), p: qd.types.ndarray()):
         for i in a:
