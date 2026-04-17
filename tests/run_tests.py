@@ -37,7 +37,7 @@ def _test_python(args, default_dir="python"):
         pytest_args += ["--reruns", args.rerun]
     try:
         if args.coverage:
-            os.environ["QD_KERNEL_COVERAGE"] = "1"
+            os.environ.setdefault("QD_KERNEL_COVERAGE", "1")
             import quadrants as _qd
 
             _cov_src = os.path.dirname(_qd.__file__)
