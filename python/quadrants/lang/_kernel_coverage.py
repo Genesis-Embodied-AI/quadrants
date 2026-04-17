@@ -46,20 +46,22 @@ def _harvest_field() -> None:
     Must be called while the runtime is still alive (before clear()).
     """
     global _cov_field, _cov_field_prog
-    if _cov_field is None or not _probe_map:
-        return
-    try:
-        arr = _cov_field.to_numpy()
-    except Exception:
-        logging.warning("Failed to read coverage field, coverage data for this session will be lost", exc_info=True)
+    with _lock:
+        if _cov_field is None or not _probe_map:
+            return
+        field_ref = _cov_field
+        probe_snapshot = dict(_probe_map)
         _cov_field = None
         _cov_field_prog = None
+    try:
+        arr = field_ref.to_numpy()
+    except Exception:
+        logging.warning("Failed to read coverage field, coverage data for this session will be lost", exc_info=True)
         return
-    for probe_id, (filepath, lineno) in _probe_map.items():
-        if probe_id < len(arr) and arr[probe_id] != 0:
-            _accumulated_lines.setdefault(filepath, set()).add(lineno)
-    _cov_field = None
-    _cov_field_prog = None
+    with _lock:
+        for probe_id, (filepath, lineno) in probe_snapshot.items():
+            if probe_id < len(arr) and arr[probe_id] != 0:
+                _accumulated_lines.setdefault(filepath, set()).add(lineno)
 
 
 def _install_reset_hook() -> None:
