@@ -3,7 +3,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_packed_size():
     x = qd.field(qd.i32)
     qd.root.dense(qd.l, 3).dense(qd.ijk, 129).place(x)

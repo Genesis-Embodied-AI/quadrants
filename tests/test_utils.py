@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 from quadrants._lib import core as _qd_core
-from quadrants.lang import cpu, cuda, gpu, metal, vulkan
+from quadrants.lang import amdgpu, cpu, cuda, gpu, metal, vulkan
 from quadrants.lang.misc import is_arch_supported
 
 
@@ -139,7 +139,7 @@ def expected_archs():
     """
 
     def get_archs():
-        archs = set([cpu, cuda, metal, vulkan])
+        archs = set([cpu, cuda, amdgpu, metal, vulkan])
         # TODO: now expected_archs is not called per test so we cannot test it
         archs = set(filter(is_arch_supported, archs))
         return archs
@@ -284,17 +284,19 @@ def test(arch=None, exclude=None, require=None, **options):
     return decorator
 
 
-def torch_op(*, output_shapes=[(1,)]):
+def torch_op(*, output_shapes=[(1,)], output_dtype=None):
     def inner(f):
         from quadrants.lang.util import has_pytorch
 
         if has_pytorch():
             import torch
 
+        out_dtype = torch.double if output_dtype is None else output_dtype
+
         class CustomQuadrantsOp(torch.autograd.Function):
             @staticmethod
             def forward(ctx, *inputs):
-                outputs = tuple([torch.zeros(shape, dtype=torch.double, requires_grad=True) for shape in output_shapes])
+                outputs = tuple([torch.zeros(shape, dtype=out_dtype, requires_grad=True) for shape in output_shapes])
                 f(*inputs, *outputs)
                 ctx.save_for_backward(*inputs, *outputs)
                 return outputs

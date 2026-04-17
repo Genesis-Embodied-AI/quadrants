@@ -32,6 +32,14 @@ interop
 ```
 
 ```{toctree}
+:caption: SIMT primitives
+:maxdepth: 1
+:titlesonly:
+
+tile16
+```
+
+```{toctree}
 :caption: Performance
 :maxdepth: 1
 :titlesonly:
