@@ -52,7 +52,7 @@ def test_clock_accuracy():
     """Verify that clock_counter() measures elapsed cycles proportional to work done.
 
     Launches 32 threads as a single warp, each doing a different number of LCG iterations
-    (thread i does (i+1)*50000). Asserts strict monotonicity across threads and that
+    (thread i does (i+1)*200000). Asserts strict monotonicity across threads and that
     a[i]/a[0] ≈ (i+1), confirming clock_counter() tracks real computational work.
     """
     a = qd.field(dtype=qd.i64, shape=32)
@@ -65,7 +65,7 @@ def test_clock_accuracy():
             # Read from a field so the compiler can't constant-fold the deterministic LCG sequence
             x = state[i]
             start = qd.i64(0)
-            for j in range((i + 1) * 50000):
+            for j in range((i + 1) * 200000):
                 # LCG: constant cost per iteration (pure integer arithmetic) and uniform output
                 # over [0, 2^31), making `x > 10` true >99.999% of the time but not provably
                 # always true, so the compiler can't optimize away the conditional store.
