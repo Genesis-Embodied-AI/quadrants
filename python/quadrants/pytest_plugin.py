@@ -10,3 +10,7 @@ import os
 def pytest_configure(config):
     if config.pluginmanager.hasplugin("_cov"):
         os.environ.setdefault("QD_KERNEL_COVERAGE", "1")
+        # Kernel coverage always writes arc-format data; ensure pytest-cov matches to avoid
+        # "Can not mix line and arc data" errors during coverage combine.
+        if not config.option.__dict__.get("cov_branch", False):
+            config.option.cov_branch = True
