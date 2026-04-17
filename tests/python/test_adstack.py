@@ -12,6 +12,7 @@ from tests import test_utils
         (qd.abs, "abs"),
         (qd.sin, "sin"),
         (qd.cos, "cos"),
+        (qd.tan, "tan"),
         (qd.asin, "asin"),
         (qd.acos, "acos"),
         (qd.log, "log"),

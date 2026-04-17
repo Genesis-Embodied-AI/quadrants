@@ -41,9 +41,9 @@ class IndependentBlockMetaData {
 class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
-  inline static const std::set<UnaryOpType> unary_collections{UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos,
-                                                              UnaryOpType::tanh, UnaryOpType::asin, UnaryOpType::acos,
-                                                              UnaryOpType::exp,  UnaryOpType::log,  UnaryOpType::sqrt};
+  inline static const std::set<UnaryOpType> unary_collections{
+      UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos, UnaryOpType::tan, UnaryOpType::tanh,
+      UnaryOpType::asin, UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt};
   inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
                                                                 BinaryOpType::atan2, BinaryOpType::pow};
 };
@@ -975,6 +975,10 @@ class ADTransform : public IRVisitor {
     return insert<UnaryOpStmt>(UnaryOpType::log, load(op1));
   }
 
+  Stmt *tan(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::tan, load(op1));
+  }
+
   Stmt *pow(Stmt *op1, Stmt *op2) {
     return insert<BinaryOpStmt>(BinaryOpType::pow, load(op1), load(op2));
   }
@@ -1246,11 +1250,11 @@ class MakeAdjoint : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::cos) {
       accumulate(stmt->operand, negate(mul(adjoint(stmt), sin(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
-      // The derivative of `tan` is `1 / cos^2`, which has many singular points
-      // causing NaNs. Though the NaNs are expected, it is error prone and hard
-      // to debug. Therefore we currently don't support computing derivative for
-      // `tan`.
-      QD_NOT_IMPLEMENTED;
+      // d/dx tan(x) = 1 + tan(x)^2. Recompute tan(operand) rather than reusing the forward value: the primal is
+      // per-iteration inside dynamic loops but BackupSSA only spills forward values to a single plain alloca, so
+      // reading the forward tan would use the last-iteration value in the reversed loop. The operand, in contrast,
+      // rides the adstack through its LocalLoad, so a fresh tan on it is per-iteration correct.
+      accumulate(stmt->operand, mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(stmt))));
     } else if (stmt->op_type == UnaryOpType::asin) {
@@ -1841,11 +1845,8 @@ class MakeDual : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::cos) {
       accumulate(stmt, negate(mul(sin(stmt->operand), dual(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
-      // The derivative of `tan` is `1 / cos^2`, which has many singular points
-      // causing NaNs. Though the NaNs are expected, it is error prone and hard
-      // to debug. Therefore we currently don't support computing derivative for
-      // `tan`.
-      QD_NOT_IMPLEMENTED;
+      // d/dx tan(x) = 1 + tan(x)^2. See the matching reverse-mode case for rationale.
+      accumulate(stmt, mul(add(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt, mul(sub(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::asin) {
