@@ -1114,7 +1114,7 @@ def test_tile16_syr_sub(tensor_type, qd_dtype):
     mat.from_numpy(R)
     vec.from_numpy(v)
     k1(mat, vec, out)
-    np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=_ATOLS[qd.f32])
+    np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=_ATOLS[qd_dtype])
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
