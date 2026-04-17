@@ -118,7 +118,7 @@ Rules:
 - `loss` is a scalar field or a list of scalar fields; the result lands in `loss.dual`. Duals are cleared on entry and kernel autodiff modes are restored on exit.
 - Forward mode uses `AutodiffMode.FORWARD` and the `MakeDual` transform; the adstack pipeline does not apply.
 
-To build a full Jacobian, call `FwdMode` once per basis vector (one-hot seed) and stack the resulting `loss.dual` columns.
+The *Jacobian* is the matrix of partial derivatives of every output with respect to every input: entry `(i, j)` is `d(output_i) / d(input_j)`. Forward mode computes one *column* per pass (pick one input direction, get every output's derivative along it); reverse mode computes one *row* per pass (pick one output, get every input's derivative). That is why forward mode wins when inputs << outputs and reverse mode wins when outputs << inputs (the typical ML loss case: a single scalar loss over millions of parameters). To build the full Jacobian in forward mode, call `FwdMode` once per basis vector (one-hot seed) and stack the resulting `loss.dual` columns.
 
 ### Overriding the compiler-generated gradient
 
@@ -264,7 +264,7 @@ Each adstack has a fixed capacity baked into the compiled kernel. When the compi
 
 Every live adstack is allocated up front as per-thread private memory at kernel entry, regardless of whether any push runs. On SPIR-V backends (Metal, Vulkan) the per-thread private memory footprint is capped by the driver's shader compiler, so the fallback default stays small. If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` at the next synchronize() pointing at the issue; if the default is already too large for the target shader compiler, pipeline creation itself fails with a similar exception at kernel-launch time.
 
-Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is tracked as follow-up.
+Pass `ad_stack_size=N` to `qd.init()` to override the fallback. Heap-backed SPIR-V adstack, which would lift the per-thread ceiling, is left for future work.
 
 ## Backend support
 
