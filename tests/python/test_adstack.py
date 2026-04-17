@@ -17,6 +17,8 @@ from tests import test_utils
         (qd.acos, "acos"),
         (qd.log, "log"),
         (qd.sqrt, "sqrt"),
+        (qd.tanh, "tanh"),
+        (qd.exp, "exp"),
     ],
 )
 @test_utils.test(require=qd.extension.adstack, ad_stack_experimental_enabled=True)

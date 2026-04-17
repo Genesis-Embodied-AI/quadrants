@@ -979,6 +979,14 @@ class ADTransform : public IRVisitor {
     return insert<UnaryOpStmt>(UnaryOpType::tan, load(op1));
   }
 
+  Stmt *tanh(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::tanh, load(op1));
+  }
+
+  Stmt *exp(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::exp, load(op1));
+  }
+
   Stmt *pow(Stmt *op1, Stmt *op2) {
     return insert<BinaryOpStmt>(BinaryOpType::pow, load(op1), load(op2));
   }
@@ -1256,7 +1264,11 @@ class MakeAdjoint : public ADTransform {
       // rides the adstack through its LocalLoad, so a fresh tan on it is per-iteration correct.
       accumulate(stmt->operand, mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::tanh) {
-      accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(stmt))));
+      // Recompute tanh(operand) in the reverse pass instead of reusing the forward stmt value. In dynamic loops
+      // BackupSSA spills the forward stmt to a single plain alloca overwritten each iteration, so the reversed
+      // loop would read the last-iteration tanh for every backward step. The operand rides the adstack through
+      // LocalLoad, so a fresh tanh on it is per-iteration correct.
+      accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(tanh(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::asin) {
       accumulate(stmt->operand, mul(adjoint(stmt), div(constant(1, stmt->ret_type),
                                                        sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
@@ -1265,7 +1277,9 @@ class MakeAdjoint : public ADTransform {
                  mul(adjoint(stmt), negate(div(constant(1, stmt->ret_type),
                                                sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
     } else if (stmt->op_type == UnaryOpType::exp) {
-      accumulate(stmt->operand, mul(adjoint(stmt), stmt));
+      // See the tanh case above: recompute exp on the adstack-backed operand so the reversed loop sees the
+      // per-iteration value rather than the last-forward value spilled by BackupSSA.
+      accumulate(stmt->operand, mul(adjoint(stmt), exp(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::log) {
       accumulate(stmt->operand, div(adjoint(stmt), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
