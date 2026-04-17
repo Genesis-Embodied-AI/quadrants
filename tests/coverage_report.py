@@ -450,8 +450,8 @@ def main():
         print("No coverage.xml found. Run tests first or specify --coverage-xml.", file=sys.stderr)
         sys.exit(1)
 
-    generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
-    return 0
+    total_pct = generate_report(args.compare_branch, xml_paths, args.output_format, output_path=args.output)
+    return 0 if total_pct >= 80 else 1
 
 
 if __name__ == "__main__":
