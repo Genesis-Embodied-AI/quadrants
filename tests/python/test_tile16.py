@@ -40,7 +40,7 @@ def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(dst_arr: Ann):
+    def k1(dst_arr: Ann, use_zeros_alias: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
@@ -51,7 +51,7 @@ def test_tile16_zeros(tensor_type, qd_dtype, use_zeros_alias):
                 t = Tile()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
-    k1(dst)
+    k1(dst, use_zeros_alias)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((_TILE, _TILE), dtype=np_dtype))
 
 
@@ -69,7 +69,7 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
+    def k1(src_arr: Ann, dst_arr: Ann, inplace: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
@@ -84,10 +84,11 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
 
     data = np.arange(_TILE * _TILE, dtype=np_dtype).reshape(_TILE, _TILE) + 100.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, inplace)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(_TILE, dtype=np_dtype))
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize(
     "src_row, src_col, row_offset, col_offset, ncols, nrows",
     [
@@ -101,7 +102,6 @@ def test_tile16_eye(tensor_type, qd_dtype, inplace):
         (60, 60, 0, 0, 16, 16),
     ],
 )
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load_store(tensor_type, qd_dtype, src_row, src_col, row_offset, col_offset, ncols, nrows):
@@ -228,6 +228,7 @@ def test_tile16_3d_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
         np.testing.assert_allclose(result[0], data[0, :NROWS, :])
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize(
     "batch, src_row, src_col, ncols, nrows",
     [
@@ -239,7 +240,6 @@ def test_tile16_3d_clamp_to_array_rows(tensor_type, qd_dtype, clamp_side):
         (0, 16, 16, 12, 8),
     ],
 )
-@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_tile16_load3d_store3d(tensor_type, qd_dtype, batch, src_row, src_col, ncols, nrows):
@@ -287,8 +287,7 @@ def test_tile16_load3d_store3d(tensor_type, qd_dtype, batch, src_row, src_col, n
 
 
 def test_tile16_size_constant():
-    Tile = _make_tile16x16(qd.f32)
-    assert Tile.SIZE == 16
+    assert qd.simt.Tile16x16.SIZE == 16
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
@@ -414,8 +413,7 @@ def test_tile16_ger_sub(tensor_type, qd_dtype):
     k1(mat, vec_a, vec_b, out)
 
     expected = M - np.outer(a, b)
-    atol = _ATOLS[qd_dtype]
-    np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
+    np.testing.assert_allclose(out.to_numpy(), expected, atol=_ATOLS[qd_dtype])
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
@@ -445,6 +443,7 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
         src_row_end: qd.i32,
         dst_offset: qd.i32,
         dst_row_end: qd.i32,
+        qd_dtype: qd.Template,
     ):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
@@ -462,7 +461,7 @@ def test_tile16_cholesky(tensor_type, qd_dtype, src_offset, dst_delta):
     src_np[src_offset : src_offset + _TILE, src_offset : src_offset + _TILE] = A
     src.from_numpy(src_np)
     dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
-    k1(src, dst, src_offset, src_row_end, dst_offset, dst_row_end)
+    k1(src, dst, src_offset, src_row_end, dst_offset, dst_row_end, qd_dtype)
 
     result = dst.to_numpy()
     L_gpu = np.tril(result[dst_offset : dst_offset + _TILE, dst_offset : dst_offset + _TILE])
@@ -516,8 +515,8 @@ def test_tile16_trsm(tensor_type, qd_dtype):
     X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
         np_dtype
     )
-    atol = {qd.f32: 1e-4, qd.f64: 1e-10}[qd_dtype]
-    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=atol)
+    trsm_atol = {qd.f32: 1e-4, qd.f64: 1e-10}
+    np.testing.assert_allclose(dst.to_numpy(), X_ref, atol=trsm_atol[qd_dtype])
 
 
 @test_utils.test(arch=qd.gpu)
@@ -528,7 +527,7 @@ def test_tile16_solve_triangular_upper_raises():
 
 
 # =============================================================================
-# Slice-syntax tests (PR 3: arr[r0:r1, c0:c1])
+# Slice-syntax tests (arr[r0:r1, c0:c1])
 # =============================================================================
 
 
@@ -667,21 +666,24 @@ def test_tile16_slice_ger_sub_via_outer(tensor_type, qd_dtype):
     np.testing.assert_allclose(out.to_numpy(), expected, atol=atol)
 
 
+@pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @pytest.mark.parametrize("qd_dtype", _QD_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_vec_proxy_ger_sub_2d(qd_dtype):
+def test_tile16_vec_proxy_ger_sub_2d(tensor_type, qd_dtype):
     test_utils.skip_if_f64_unsupported(qd_dtype)
     np_dtype = _NP_DTYPES[qd_dtype]
     Tile = _make_tile16x16(qd_dtype)
-    mat = qd.ndarray(qd_dtype, (_TILE, _TILE))
-    vecs = qd.ndarray(qd_dtype, (_TILE, 2))
-    out = qd.ndarray(qd_dtype, (_TILE, _TILE))
+    mat = tensor_type(qd_dtype, (_TILE, _TILE))
+    vecs = tensor_type(qd_dtype, (_TILE, 2))
+    out = tensor_type(qd_dtype, (_TILE, _TILE))
+
+    Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
     def k1(
-        mat_arr: qd.types.NDArray[qd_dtype, 2],
-        vecs_arr: qd.types.NDArray[qd_dtype, 2],
-        out_arr: qd.types.NDArray[qd_dtype, 2],
+        mat_arr: Ann,
+        vecs_arr: Ann,
+        out_arr: Ann,
     ):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
@@ -1044,7 +1046,7 @@ def test_tile16_vec_slice_errors(bad_slice):
 
 
 # =============================================================================
-# PR 4: public-API tests (qd.simt.Tile16x16 proxy, tensor_type, SharedArray)
+# Public-API tests (qd.simt.Tile16x16 proxy, tensor_type, SharedArray)
 # =============================================================================
 
 _M = 40
