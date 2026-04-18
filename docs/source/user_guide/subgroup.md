@@ -129,4 +129,3 @@ Extend the pattern (offsets 16, 8, 4, 2, 1, ...) to reduce a full subgroup; only
 
 - [tile16](tile16.md) — `Tile16x16` builds on `subgroup.shuffle` to implement register-resident 16x16 matrix tiles.
 - `subgroup.invocation_id()` — returns this lane's subgroup-local index.
-- `subgroup.size()` — returns the active subgroup size.
