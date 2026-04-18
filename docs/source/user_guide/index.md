@@ -36,6 +36,7 @@ interop
 :maxdepth: 1
 :titlesonly:
 
+shuffle
 tile16
 ```
 
