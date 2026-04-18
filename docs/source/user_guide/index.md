@@ -36,7 +36,7 @@ interop
 :maxdepth: 1
 :titlesonly:
 
-shuffle
+subgroup
 tile16
 ```
 
