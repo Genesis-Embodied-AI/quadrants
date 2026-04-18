@@ -1,6 +1,10 @@
 # type: ignore
+# pyright: reportInvalidTypeForm=false
 
 from quadrants.lang import impl
+from quadrants.lang.kernel_impl import func
+from quadrants.types.annotations import template
+from quadrants.types.primitive_types import u32
 
 
 def barrier():
@@ -47,42 +51,37 @@ def invocation_id():
     return impl.call_internal("subgroupInvocationId", with_runtime_context=False)
 
 
-def reduce_add(value, log2_size):
+@func
+def reduce_add(value, log2_size: template()):
     """Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
     The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
     Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
     (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
 
-    ``log2_size`` is a Python ``int`` resolved at trace time; the body unrolls into ``log2_size``
-    shuffle+add operations directly in the calling kernel's IR.
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+    shuffle+add operations in the calling kernel's IR.
     """
-    # local import: subgroup.py is imported during quadrants package init, so `qd.u32` is not yet
-    # bound at module load time
-    import quadrants as qd
-
-    for i in range(log2_size):
-        offset = 1 << (log2_size - 1 - i)
-        value = value + shuffle_down(value, qd.cast(offset, qd.u32))
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << (log2_size - 1 - i))
+        value = value + shuffle_down(value, u32(offset))
     return value
 
 
-def reduce_all_add(value, log2_size):
+@func
+def reduce_all_add(value, log2_size: template()):
     """Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
 
     The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
     does not exceed the active subgroup size on the target.
 
-    ``log2_size`` is a Python ``int`` resolved at trace time; the body unrolls into ``log2_size``
-    shuffle+add operations directly in the calling kernel's IR.
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+    shuffle+add operations in the calling kernel's IR.
     """
-    # local import: subgroup.py is imported during quadrants package init
-    import quadrants as qd
-
     lane = invocation_id()
-    for i in range(log2_size):
-        mask = 1 << i
-        value = value + shuffle(value, qd.cast(lane ^ mask, qd.u32))
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        value = value + shuffle(value, u32(lane ^ mask))
     return value
 
 
