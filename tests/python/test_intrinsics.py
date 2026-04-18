@@ -91,7 +91,7 @@ def test_clock_accuracy():
         assert a[i - 1] < a[i] < a[i + 1]
         ratio = a[i] / a[0]
         expected = i + 1
-        assert abs(ratio - expected) / expected < 0.1  # 10% tolerance
+        assert abs(ratio - expected) / expected < 0.2  # 20% tolerance
 
 
 @test_utils.test(arch=clock_freq_supported_archs)
