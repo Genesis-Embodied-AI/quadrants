@@ -32,7 +32,8 @@ PER_INTERNAL_OP(subgroupShuffleDown)
 PER_INTERNAL_OP(subgroupShuffleUp)
 PER_INTERNAL_OP(subgroupSize)
 PER_INTERNAL_OP(subgroupInvocationId)
-PER_INTERNAL_OP(subgroupAdd)
+// subgroupAdd removed: use portable Python `subgroup.reduce_add(value, log2_size)` which is
+// implemented on top of `subgroupShuffleDown` and works on all backends.
 PER_INTERNAL_OP(subgroupMul)
 PER_INTERNAL_OP(subgroupMin)
 PER_INTERNAL_OP(subgroupMax)

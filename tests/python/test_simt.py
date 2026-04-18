@@ -539,14 +539,11 @@ def _test_subgroup_reduce(op, group_op, np_op, size, initial_value, dtype):
 # i.e. any device other than a subgroup size of 1 should have one non active group
 
 
-@test_utils.test(arch=qd.vulkan, exclude=[(qd.vulkan, "Darwin")])
-def test_subgroup_reduction_add_i32():
-    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.i32)
-
-
-@test_utils.test(arch=qd.vulkan)
-def test_subgroup_reduction_add_f32():
-    _test_subgroup_reduce(qd.atomic_add, subgroup.reduce_add, np.sum, 2677, 0, qd.f32)
+# Note: the old `subgroup.reduce_add(value)` no-arg API used the SPIR-V-only
+# `OpGroupNonUniformFAdd` op and ran over the natural subgroup width.  It has been replaced by the
+# portable `subgroup.reduce_add(value, log2_size)` (lane-0 result) and `subgroup.reduce_all_add(...)`
+# (all-lanes result), both of which expand to a shuffle tree and work on all backends.  See the
+# `test_subgroup_reduce_add_*` and `test_subgroup_reduce_all_add_*` tests below.
 
 
 # @test_utils.test(arch=qd.vulkan)
@@ -733,6 +730,63 @@ def test_subgroup_shuffle_down_reduction(dtype):
     # Lane 0 should have sum of lanes 0-3 (within the min subgroup of 4)
     expected = sum(src[i] for i in range(4))
     assert abs(dst[0] - expected) < 1e-5
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_add(dtype, log2_size):
+    """Portable shuffle_down tree reduction: lane 0 of each 2**log2_size group has the sum."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_add(src[i], log2_size)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    expected = sum(src[i] for i in range(group_size))
+    if dtype == qd.i32:
+        assert dst[0] == expected
+    else:
+        assert abs(dst[0] - expected) < 1e-4 * abs(expected)
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@pytest.mark.parametrize("log2_size", [1, 2, 3, 4, 5])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_reduce_all_add(dtype, log2_size):
+    """Portable butterfly XOR reduction: every lane in each 2**log2_size group has the sum."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.reduce_all_add(src[i], log2_size)
+
+    _init_field(src, N, dtype)
+    foo()
+
+    group_size = 1 << log2_size
+    expected = sum(src[i] for i in range(group_size))
+    for i in range(group_size):
+        if dtype == qd.i32:
+            assert dst[i] == expected, f"lane {i}: got {dst[i]}, expected {expected}"
+        else:
+            assert abs(dst[i] - expected) < 1e-4 * abs(expected), (
+                f"lane {i}: got {dst[i]}, expected {expected}"
+            )
 
 
 @test_utils.test(arch=qd.gpu)

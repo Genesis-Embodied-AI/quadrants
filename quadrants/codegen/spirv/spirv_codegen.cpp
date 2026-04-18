@@ -1179,7 +1179,10 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
   }
 
-  const std::unordered_set<std::string> reduction_ops{"subgroupAdd", "subgroupMul", "subgroupMin", "subgroupMax",
+  // Note: subgroupAdd is intentionally not in this set. The portable `subgroup.reduce_add(value,
+  // log2_size)` Python helper expands to a `subgroupShuffleDown` tree at trace time and works on
+  // all backends, so the SPIR-V-only `OpGroupNonUniformFAdd`/`IAdd` lowering has been removed.
+  const std::unordered_set<std::string> reduction_ops{"subgroupMul", "subgroupMin", "subgroupMax",
                                                       "subgroupAnd", "subgroupOr",  "subgroupXor"};
 
   const std::unordered_set<std::string> inclusive_scan_ops{
