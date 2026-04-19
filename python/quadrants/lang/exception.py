@@ -1,5 +1,7 @@
 # type: ignore
 
+import inspect
+
 from quadrants._lib import core
 
 
@@ -59,8 +61,6 @@ class QuadrantsRuntimeTypeError(QuadrantsRuntimeError, TypeError):
 
 def get_func_signature(func):
     """Call inspect.signature with eval_str=True, converting annotation errors to QuadrantsSyntaxError."""
-    import inspect
-
     try:
         return inspect.signature(func, eval_str=True)
     except (NameError, AttributeError) as e:
