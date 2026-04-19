@@ -50,6 +50,7 @@ Functions
    quadrants.lang.misc.cache_read_only
    quadrants.lang.misc.assume_in_range
    quadrants.lang.misc.loop_config
+   quadrants.lang.misc.graph_do_while
    quadrants.lang.misc.global_thread_idx
    quadrants.lang.misc.mesh_patch_idx
    quadrants.lang.misc.is_extension_enabled
@@ -212,7 +213,7 @@ Module Contents
                       ``kwargs``, which allows for fine grained control of Quadrants compiler
                       behavior. Below we list some of the most frequently used ones. For a
                       complete list, please check out
-                      https://github.com/taichi-dev/quadrants/blob/master/quadrants/program/compile_config.h.
+                      https://github.com/Genesis-Embodied-AI/quadrants/blob/master/quadrants/program/compile_config.h.
 
                       * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
                       * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
@@ -244,7 +245,7 @@ Module Contents
    and to enable the mesh BLS optimization,
    only available for backends supporting `qd.extension.mesh` and to use with mesh-for loop.
 
-   Related to https://github.com/taichi-dev/quadrants/issues/3608
+   Related to https://github.com/taichi-dev/taichi/issues/3608
 
    :param \*args: A list of mesh attributes or fields accessed as attributes.
    :type \*args: List[Attribute]
@@ -297,7 +298,7 @@ Module Contents
        10
 
 
-.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, block_dim_adaptive=True, bit_vectorize=False)
+.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, block_dim_adaptive=True, bit_vectorize=False, name=None)
 
    Sets directives for the next loop
 
@@ -311,6 +312,8 @@ Module Contents
    :type block_dim_adaptive: bool
    :param bit_vectorize: Whether to enable bit vectorization of struct fors on quant_arrays.
    :type bit_vectorize: bool
+   :param name: Optional name for this loop, used in GPU kernel names for profiling and debugging.
+   :type name: str
 
    Examples::
 
@@ -350,6 +353,23 @@ Module Contents
                y[i, j] = x[i, j]
 
 
+.. py:function:: graph_do_while(condition) -> bool
+
+   Marks a while loop as a CUDA graph do-while conditional node.
+
+   Used as ``while qd.graph_do_while(flag):`` inside a
+   ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
+   ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
+
+   On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
+   conditional while node. On older CUDA GPUs and non-CUDA backends
+   it falls back to a host-side do-while loop.
+
+   This function should not be called directly at runtime; it is
+   recognised and transformed during AST compilation.
+   Requires ``@qd.kernel(graph=True)``.
+
+
 .. py:function:: global_thread_idx()
 
    Returns the global thread id of this running thread,
@@ -374,7 +394,7 @@ Module Contents
    Returns the internal mesh patch id of this running thread,
    only available for backends supporting `qd.extension.mesh` and to use within mesh-for loop.
 
-   Related to https://github.com/taichi-dev/quadrants/issues/3608
+   Related to https://github.com/taichi-dev/taichi/issues/3608
 
 
 .. py:function:: is_extension_enabled(ext: quadrants._lib.core.quadrants_python.Extension) -> bool
