@@ -1,11 +1,8 @@
 // Source for the graph_do_while condition kernel.
 //
-// This file is the source of truth for the PTX string kConditionKernelPTX
-// in gpu_graph_manager.cpp. After editing, regenerate the PTX and paste
-// the entire output into the R"PTX(...)PTX" literal:
+// After editing, regenerate the pre-built fatbin:
 //
-//   nvcc -ptx -arch=sm_90 -rdc=true graph_do_while_cond.cu \
-//        && cat graph_do_while_cond.ptx
+//   python scripts/build_condition_kernel_fatbin.py
 
 #include <cstdint>
 #include <cuda_runtime.h>
@@ -24,9 +21,7 @@
 //   handle:    conditional node handle (passed to cudaGraphSetConditional)
 //   flag_slot: device pointer to a void* slot holding the address of the
 //              user's qd.i32 counter ndarray
-extern "C" __global__ void _qd_graph_do_while_cond(
-    cudaGraphConditionalHandle handle,
-    int32_t **flag_slot) {
+extern "C" __global__ void _qd_graph_do_while_cond(cudaGraphConditionalHandle handle, int32_t **flag_slot) {
   int32_t *flag = *flag_slot;
   cudaGraphSetConditional(handle, *flag != 0 ? 1u : 0u);
 }

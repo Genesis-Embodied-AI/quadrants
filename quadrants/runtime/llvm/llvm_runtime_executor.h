@@ -36,24 +36,18 @@ class CpuDevice;
 
 class LlvmRuntimeExecutor {
  public:
-  LlvmRuntimeExecutor(CompileConfig &config,
-                      KernelProfilerBase *profiler,
-                      quadrants::lang::ProgramImpl *program_impl);
+  LlvmRuntimeExecutor(CompileConfig &config, KernelProfilerBase *profiler, quadrants::lang::ProgramImpl *program_impl);
   virtual ~LlvmRuntimeExecutor();
   /**
    * Initializes the runtime system for LLVM based backends.
    */
-  void materialize_runtime(KernelProfilerBase *profiler,
-                           uint64 **result_buffer_ptr);
+  void materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr);
 
   // SNodeTree Allocation
-  void initialize_llvm_runtime_snodes(
-      const LlvmOfflineCache::FieldCacheData &field_cache_data,
-      uint64 *result_buffer);
+  void initialize_llvm_runtime_snodes(const LlvmOfflineCache::FieldCacheData &field_cache_data, uint64 *result_buffer);
 
   // Ndarray and ArgPack Allocation
-  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size,
-                                             uint64 *result_buffer);
+  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer);
 
   void deallocate_memory_on_device(DeviceAllocation handle);
 
@@ -89,8 +83,7 @@ class LlvmRuntimeExecutor {
   /* ----------------------- */
   template <typename T>
   T fetch_result(int i, uint64 *result_buffer) {
-    return quadrants_union_cast_with_different_sizes<T>(
-        fetch_result_uint64(i, result_buffer));
+    return quadrants_union_cast_with_different_sizes<T>(fetch_result_uint64(i, result_buffer));
   }
 
   template <typename T>
@@ -100,33 +93,25 @@ class LlvmRuntimeExecutor {
 
   DevicePtr get_snode_tree_device_ptr(int tree_id);
 
-  void fill_ndarray(const DeviceAllocation &alloc,
-                    std::size_t size,
-                    uint32_t data);
+  void fill_ndarray(const DeviceAllocation &alloc, std::size_t size, uint32_t data);
 
-  void *preallocate_memory(std::size_t prealloc_size,
-                           DeviceAllocationUnique &devalloc);
+  void *preallocate_memory(std::size_t prealloc_size, DeviceAllocationUnique &devalloc);
   void preallocate_runtime_memory();
 
   /* ------------------------- */
   /* ---- Runtime Helpers ---- */
   /* ------------------------- */
   void print_list_manager_info(void *list_manager, uint64 *result_buffer);
-  void print_memory_profiler_info(
-      std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
-      uint64 *result_buffer);
+  void print_memory_profiler_info(std::vector<std::unique_ptr<SNodeTree>> &snode_trees_, uint64 *result_buffer);
 
   template <typename T, typename... Args>
-  T runtime_query(const std::string &key,
-                  uint64 *result_buffer,
-                  Args &&...args) {
+  T runtime_query(const std::string &key, uint64 *result_buffer, Args &&...args) {
     QD_ASSERT(arch_uses_llvm(config_.arch));
 
     auto runtime = get_runtime_jit_module();
-    runtime->call<void *>("runtime_" + key, llvm_runtime_,
-                          std::forward<Args>(args)...);
-    return quadrants_union_cast_with_different_sizes<T>(fetch_result_uint64(
-        quadrants_result_buffer_runtime_query_id, result_buffer));
+    runtime->call<void *>("runtime_" + key, llvm_runtime_, std::forward<Args>(args)...);
+    return quadrants_union_cast_with_different_sizes<T>(
+        fetch_result_uint64(quadrants_result_buffer_runtime_query_id, result_buffer));
   }
 
   /* -------------------------- */
@@ -136,8 +121,7 @@ class LlvmRuntimeExecutor {
 
   uint64 fetch_result_uint64(int i, uint64 *result_buffer);
   void destroy_snode_tree(SNodeTree *snode_tree);
-  std::size_t get_snode_num_dynamically_allocated(SNode *snode,
-                                                  uint64 *result_buffer);
+  std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer);
 
   void init_runtime_jit_module(std::unique_ptr<llvm::Module> module);
 
@@ -156,8 +140,7 @@ class LlvmRuntimeExecutor {
   std::unordered_map<int, DeviceAllocation> snode_tree_allocs_;
   DeviceAllocationUnique preallocated_runtime_objects_allocs_ = nullptr;
   DeviceAllocationUnique preallocated_runtime_memory_allocs_ = nullptr;
-  std::unordered_map<DeviceAllocationId, DeviceAllocation>
-      allocated_runtime_memory_allocs_;
+  std::unordered_map<DeviceAllocationId, DeviceAllocation> allocated_runtime_memory_allocs_;
 
   // good buddy
   friend LlvmProgramImpl;

@@ -7,12 +7,12 @@ from quadrants.lang import impl
 from tests import test_utils
 
 
-def _gpu_graph_cache_size():
-    return impl.get_runtime().prog.get_gpu_graph_cache_size()
+def _graph_cache_size():
+    return impl.get_runtime().prog.get_graph_cache_size()
 
 
-def _gpu_graph_used():
-    return impl.get_runtime().prog.get_gpu_graph_cache_used_on_last_call()
+def _graph_used():
+    return impl.get_runtime().prog.get_graph_cache_used_on_last_call()
 
 
 def _on_cuda():
@@ -23,20 +23,20 @@ def _num_offloaded_tasks():
     return impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
 
 
-def _gpu_graph_num_nodes():
-    return impl.get_runtime().prog.get_gpu_graph_num_nodes_on_last_call()
+def _graph_num_nodes():
+    return impl.get_runtime().prog.get_graph_num_nodes_on_last_call()
 
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_two_loops(tensor_type):
+def test_graph_two_loops(tensor_type):
     """A kernel with two top-level for loops should be fused into a CUDA graph."""
     platform_supports_graph = _on_cuda()
     n = 1024
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
@@ -46,19 +46,19 @@ def test_gpu_graph_two_loops(tensor_type):
     x = tensor_type(qd.f32, (n,))
     y = tensor_type(qd.f32, (n,))
 
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     two_loops(x, y)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 2
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
     two_loops(x, y)
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_used() == platform_supports_graph
     two_loops(x, y)
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()
@@ -68,14 +68,14 @@ def test_gpu_graph_two_loops(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_three_loops(tensor_type):
+def test_graph_three_loops(tensor_type):
     """A kernel with three top-level for loops."""
     platform_supports_graph = _on_cuda()
     n = 512
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def three_loops(a: Annotation, b: Annotation, c: Annotation):
         for i in range(a.shape[0]):
             a[i] = a[i] + 1.0
@@ -88,14 +88,14 @@ def test_gpu_graph_three_loops(tensor_type):
     b = tensor_type(qd.f32, (n,))
     c = tensor_type(qd.f32, (n,))
 
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     three_loops(a, b, c)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 3
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
 
     a_np = a.to_numpy()
     b_np = b.to_numpy()
@@ -105,8 +105,8 @@ def test_gpu_graph_three_loops(tensor_type):
     assert np.allclose(c_np, 11.0)
 
     three_loops(a, b, c)
-    assert _gpu_graph_used() == platform_supports_graph
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
     a_np = a.to_numpy()
     b_np = b.to_numpy()
@@ -118,7 +118,7 @@ def test_gpu_graph_three_loops(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_multi_func(tensor_type):
+def test_graph_multi_func(tensor_type):
     """A kernel calling three funcs with 2, 4, and 3 top-level for loops."""
     platform_supports_graph = _on_cuda()
     n = 256
@@ -152,7 +152,7 @@ def test_gpu_graph_multi_func(tensor_type):
         for i in range(z.shape[0]):
             z[i] = z[i] + 9.0
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def multi_func(a: Annotation, b: Annotation, c: Annotation, d: Annotation, e: Annotation, f: Annotation):
         func_a(a, b)
         func_b(a, b, c, d)
@@ -165,14 +165,14 @@ def test_gpu_graph_multi_func(tensor_type):
     e = tensor_type(qd.f32, (n,))
     f = tensor_type(qd.f32, (n,))
 
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     multi_func(a, b, c, d, e, f)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 9
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
 
     # func_a: a += 1, b += 2
     # func_b: a += 3, b += 4, c += 5, d += 6
@@ -185,8 +185,8 @@ def test_gpu_graph_multi_func(tensor_type):
     assert np.allclose(f.to_numpy(), 9.0)
 
     multi_func(a, b, c, d, e, f)
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_used() == platform_supports_graph
 
     assert np.allclose(a.to_numpy(), 8.0)
     assert np.allclose(b.to_numpy(), 12.0)
@@ -198,8 +198,8 @@ def test_gpu_graph_multi_func(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_no_gpu_graph_annotation(tensor_type):
-    """A kernel WITHOUT gpu_graph=True should never use the graph path."""
+def test_no_graph_annotation(tensor_type):
+    """A kernel WITHOUT graph=True should never use the graph path."""
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
@@ -216,11 +216,11 @@ def test_no_gpu_graph_annotation(tensor_type):
 
     two_loops(x, y)
     assert _num_offloaded_tasks() >= 2
-    assert _gpu_graph_num_nodes() == 0
-    assert not _gpu_graph_used()
+    assert _graph_num_nodes() == 0
+    assert not _graph_used()
     two_loops(x, y)
-    assert not _gpu_graph_used()
-    assert _gpu_graph_cache_size() == 0
+    assert not _graph_used()
+    assert _graph_cache_size() == 0
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()
@@ -230,14 +230,14 @@ def test_no_gpu_graph_annotation(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_changed_args(tensor_type):
+def test_graph_changed_args(tensor_type):
     """Graph should produce correct results when called with different tensors."""
     platform_supports_graph = _on_cuda()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
@@ -246,16 +246,16 @@ def test_gpu_graph_changed_args(tensor_type):
 
     x1 = tensor_type(qd.f32, (n,))
     y1 = tensor_type(qd.f32, (n,))
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     two_loops(x1, y1)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 2
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
     two_loops(x1, y1)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_used() == platform_supports_graph
 
     x1_np = x1.to_numpy()
     y1_np = y1.to_numpy()
@@ -267,13 +267,13 @@ def test_gpu_graph_changed_args(tensor_type):
     x2.from_numpy(np.full(n, 10.0, dtype=np.float32))
     y2.from_numpy(np.full(n, 20.0, dtype=np.float32))
     two_loops(x2, y2)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_used() == platform_supports_graph
     # Fields are template args, so different field objects produce a second
     # compiled kernel and a second graph cache entry.
     if tensor_type == qd.field:
-        assert _gpu_graph_cache_size() == (2 if platform_supports_graph else 0)
+        assert _graph_cache_size() == (2 if platform_supports_graph else 0)
     else:
-        assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
+        assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
@@ -288,7 +288,7 @@ def test_gpu_graph_changed_args(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_different_sizes(tensor_type):
+def test_graph_different_sizes(tensor_type):
     """Graph must produce correct results when called with different-sized arrays.
 
     Catches stale grid dims: if the graph cached from the small call is
@@ -301,7 +301,7 @@ def test_gpu_graph_different_sizes(tensor_type):
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def add_one(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
@@ -310,25 +310,25 @@ def test_gpu_graph_different_sizes(tensor_type):
 
     x1 = tensor_type(qd.f32, (256,))
     y1 = tensor_type(qd.f32, (256,))
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     add_one(x1, y1)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 2
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
 
     x2 = tensor_type(qd.f32, (1024,))
     y2 = tensor_type(qd.f32, (1024,))
     add_one(x2, y2)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_used() == platform_supports_graph
     # Ndarrays reuse the same compiled kernel; fields produce a second
     # template specialization with its own graph cache entry.
     if tensor_type == qd.field:
-        assert _gpu_graph_cache_size() == (2 if platform_supports_graph else 0)
+        assert _graph_cache_size() == (2 if platform_supports_graph else 0)
     else:
-        assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
+        assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x2_np = x2.to_numpy()
     y2_np = y2.to_numpy()
@@ -338,13 +338,13 @@ def test_gpu_graph_different_sizes(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_after_reset(tensor_type):
-    """gpu_graph=True kernel must work correctly after qd.reset()."""
+def test_graph_after_reset(tensor_type):
+    """graph=True kernel must work correctly after qd.reset()."""
     platform_supports_graph = _on_cuda()
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def add_one(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
@@ -358,11 +358,11 @@ def test_gpu_graph_after_reset(tensor_type):
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 2
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
     add_one(x, y)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_used() == platform_supports_graph
 
     assert np.allclose(x.to_numpy(), 2.0)
     assert np.allclose(y.to_numpy(), 4.0)
@@ -373,10 +373,10 @@ def test_gpu_graph_after_reset(tensor_type):
 
     x2 = tensor_type(qd.f32, (n,))
     y2 = tensor_type(qd.f32, (n,))
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     add_one(x2, y2)
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
 
     assert np.allclose(x2.to_numpy(), 1.0)
     assert np.allclose(y2.to_numpy(), 2.0)
@@ -384,14 +384,14 @@ def test_gpu_graph_after_reset(tensor_type):
 
 @pytest.mark.parametrize("tensor_type", [qd.ndarray, qd.field])
 @test_utils.test()
-def test_gpu_graph_annotation_cross_platform(tensor_type):
-    """gpu_graph=True should be a harmless no-op on non-CUDA backends."""
+def test_graph_annotation_cross_platform(tensor_type):
+    """graph=True should be a harmless no-op on non-CUDA backends."""
     platform_supports_graph = _on_cuda()
     n = 256
 
     Annotation = qd.types.NDArray[qd.f32, 1] if tensor_type == qd.ndarray else qd.Template
 
-    @qd.kernel(gpu_graph=True)
+    @qd.kernel(graph=True)
     def two_loops(x: Annotation, y: Annotation):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
@@ -401,17 +401,17 @@ def test_gpu_graph_annotation_cross_platform(tensor_type):
     x = tensor_type(qd.f32, (n,))
     y = tensor_type(qd.f32, (n,))
 
-    assert _gpu_graph_cache_size() == 0
+    assert _graph_cache_size() == 0
     two_loops(x, y)
     num_tasks = _num_offloaded_tasks()
     assert num_tasks >= 2
     expected_nodes = num_tasks if platform_supports_graph else 0
-    assert _gpu_graph_num_nodes() == expected_nodes
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
-    assert _gpu_graph_used() == platform_supports_graph
+    assert _graph_num_nodes() == expected_nodes
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
     two_loops(x, y)
-    assert _gpu_graph_used() == platform_supports_graph
-    assert _gpu_graph_cache_size() == (1 if platform_supports_graph else 0)
+    assert _graph_used() == platform_supports_graph
+    assert _graph_cache_size() == (1 if platform_supports_graph else 0)
 
     x_np = x.to_numpy()
     y_np = y.to_numpy()

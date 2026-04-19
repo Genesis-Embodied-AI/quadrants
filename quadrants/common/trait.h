@@ -12,10 +12,9 @@ struct always_false : std::false_type {};
 template <typename T>
 inline constexpr bool always_false_v = always_false<T>::value;
 
-#define ENUM_FLAG_OPERATOR(T, X)                                   \
-  inline T operator X(T lhs, T rhs) {                              \
-    return (T)(static_cast<std::underlying_type_t<T>>(lhs)         \
-                   X static_cast<std::underlying_type_t<T>>(rhs)); \
+#define ENUM_FLAG_OPERATOR(T, X)                                                                           \
+  inline T operator X(T lhs, T rhs) {                                                                      \
+    return (T)(static_cast<std::underlying_type_t<T>>(lhs) X static_cast<std::underlying_type_t<T>>(rhs)); \
   }
 #define ENUM_FLAGS(T)                                       \
   enum class T;                                             \

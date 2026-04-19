@@ -27,14 +27,11 @@ class ExtractLocalPointers : public BasicStmtVisitor {
   ImmediateIRModifier immediate_modifier_;
   DelayedIRModifier delayed_modifier_;
 
-  std::unordered_map<std::pair<Stmt *, int>,
-                     Stmt *,
-                     hashing::Hasher<std::pair<Stmt *, int>>>
-      first_matrix_ptr_;  // mapping an (AllocaStmt, integer) pair to the
-                          // first MatrixPtrStmt representing it
-  std::unordered_map<int, Stmt *>
-      first_const_;  // mapping an integer to the first ConstStmt representing
-                     // it
+  std::unordered_map<std::pair<Stmt *, int>, Stmt *, hashing::Hasher<std::pair<Stmt *, int>>>
+      first_matrix_ptr_;                         // mapping an (AllocaStmt, integer) pair to the
+                                                 // first MatrixPtrStmt representing it
+  std::unordered_map<int, Stmt *> first_const_;  // mapping an integer to the first ConstStmt representing
+                                                 // it
   Block *top_level_;
 
   explicit ExtractLocalPointers(IRNode *root);

@@ -23,34 +23,26 @@ KernelCodeGen::KernelCodeGen(const CompileConfig &compile_config,
                              const Kernel *kernel,
                              IRNode *ir,
                              QuadrantsLLVMContext &tlctx)
-    : prog(kernel->program),
-      kernel(kernel),
-      ir(ir),
-      compile_config_(compile_config),
-      tlctx_(tlctx) {
+    : prog(kernel->program), kernel(kernel), ir(ir), compile_config_(compile_config), tlctx_(tlctx) {
 }
 
-std::unique_ptr<KernelCodeGen> KernelCodeGen::create(
-    const CompileConfig &compile_config,
-    const Kernel *kernel,
-    IRNode *ir,
-    QuadrantsLLVMContext &tlctx) {
+std::unique_ptr<KernelCodeGen> KernelCodeGen::create(const CompileConfig &compile_config,
+                                                     const Kernel *kernel,
+                                                     IRNode *ir,
+                                                     QuadrantsLLVMContext &tlctx) {
 #ifdef QD_WITH_LLVM
   const auto arch = compile_config.arch;
   if (arch_is_cpu(arch)) {
-    return std::make_unique<KernelCodeGenCPU>(compile_config, kernel, ir,
-                                              tlctx);
+    return std::make_unique<KernelCodeGenCPU>(compile_config, kernel, ir, tlctx);
   } else if (arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
-    return std::make_unique<KernelCodeGenCUDA>(compile_config, kernel, ir,
-                                               tlctx);
+    return std::make_unique<KernelCodeGenCUDA>(compile_config, kernel, ir, tlctx);
 #else
     QD_NOT_IMPLEMENTED
 #endif
   } else if (arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    return std::make_unique<KernelCodeGenAMDGPU>(compile_config, kernel, ir,
-                                                 tlctx);
+    return std::make_unique<KernelCodeGenAMDGPU>(compile_config, kernel, ir, tlctx);
 #else
     QD_NOT_IMPLEMENTED
 #endif

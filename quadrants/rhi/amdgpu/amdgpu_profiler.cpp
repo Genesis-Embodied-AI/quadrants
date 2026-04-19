@@ -10,8 +10,7 @@ std::string KernelProfilerAMDGPU::get_device_name() {
   return AMDGPUContext::get_instance().get_device_name();
 }
 
-bool KernelProfilerAMDGPU::reinit_with_metrics(
-    const std::vector<std::string> metrics) {
+bool KernelProfilerAMDGPU::reinit_with_metrics(const std::vector<std::string> metrics) {
   QD_NOT_IMPLEMENTED
 }
 
@@ -23,8 +22,7 @@ bool KernelProfilerAMDGPU::set_profiler_toolkit(std::string toolkit_name) {
   return false;
 }
 
-KernelProfilerBase::TaskHandle KernelProfilerAMDGPU::start_with_handle(
-    const std::string &kernel_name) {
+KernelProfilerBase::TaskHandle KernelProfilerAMDGPU::start_with_handle(const std::string &kernel_name) {
   QD_NOT_IMPLEMENTED;
 }
 
@@ -40,12 +38,10 @@ void KernelProfilerAMDGPU::trace(KernelProfilerBase::TaskHandle &task_handle,
   task_handle = event_toolkit_->start_with_handle(kernel_name);
   KernelProfileTracedRecord record;
 
+  AMDGPUDriver::get_instance().kernel_get_attribute(&register_per_thread,
+                                                    HIPfunction_attribute::HIP_FUNC_ATTRIBUTE_NUM_REGS, kernel);
   AMDGPUDriver::get_instance().kernel_get_attribute(
-      &register_per_thread, HIPfunction_attribute::HIP_FUNC_ATTRIBUTE_NUM_REGS,
-      kernel);
-  AMDGPUDriver::get_instance().kernel_get_attribute(
-      &static_shared_mem_per_block,
-      HIPfunction_attribute::HIP_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, kernel);
+      &static_shared_mem_per_block, HIPfunction_attribute::HIP_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, kernel);
   // kernel_get_occupancy doesn't work well
   // AMDGPUDriver::get_instance().kernel_get_occupancy(
   //     &max_active_blocks_per_multiprocessor, kernel, block_size,
@@ -68,11 +64,9 @@ void KernelProfilerAMDGPU::stop(KernelProfilerBase::TaskHandle handle) {
 
   // get elapsed time and destroy events
   auto record = event_toolkit_->get_current_event_record();
-  AMDGPUDriver::get_instance().event_elapsed_time(
-      &record->kernel_elapsed_time_in_ms, record->start_event, handle);
-  AMDGPUDriver::get_instance().event_elapsed_time(
-      &record->time_since_base, event_toolkit_->get_base_event(),
-      record->start_event);
+  AMDGPUDriver::get_instance().event_elapsed_time(&record->kernel_elapsed_time_in_ms, record->start_event, handle);
+  AMDGPUDriver::get_instance().event_elapsed_time(&record->time_since_base, event_toolkit_->get_base_event(),
+                                                  record->start_event);
 
   AMDGPUDriver::get_instance().event_destroy(record->start_event);
   AMDGPUDriver::get_instance().event_destroy(record->stop_event);
@@ -80,11 +74,8 @@ void KernelProfilerAMDGPU::stop(KernelProfilerBase::TaskHandle handle) {
 
 bool KernelProfilerAMDGPU::statistics_on_traced_records() {
   for (auto &record : traced_records_) {
-    auto it =
-        std::find_if(statistical_results_.begin(), statistical_results_.end(),
-                     [&](KernelProfileStatisticalResult &result) {
-                       return result.name == record.name;
-                     });
+    auto it = std::find_if(statistical_results_.begin(), statistical_results_.end(),
+                           [&](KernelProfileStatisticalResult &result) { return result.name == record.name; });
     if (it == statistical_results_.end()) {
       statistical_results_.emplace_back(record.name);
       it = std::prev(statistical_results_.end());
@@ -121,11 +112,9 @@ std::string KernelProfilerAMDGPU::get_device_name() {
   QD_NOT_IMPLEMENTED
 }
 
-bool KernelProfilerAMDGPU::reinit_with_metrics(
-    const std::vector<std::string> metrics){QD_NOT_IMPLEMENTED}
+bool KernelProfilerAMDGPU::reinit_with_metrics(const std::vector<std::string> metrics){QD_NOT_IMPLEMENTED}
 
-KernelProfilerBase::TaskHandle
-    KernelProfilerAMDGPU::start_with_handle(const std::string &kernel_name) {
+KernelProfilerBase::TaskHandle KernelProfilerAMDGPU::start_with_handle(const std::string &kernel_name) {
   QD_NOT_IMPLEMENTED;
 }
 
@@ -159,15 +148,12 @@ void KernelProfilerAMDGPU::clear(){QD_NOT_IMPLEMENTED}
 
 #if defined(QD_WITH_AMDGPU)
 
-KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(
-    const std::string &kernel_name) {
+KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(const std::string &kernel_name) {
   EventRecord record;
   record.name = kernel_name;
 
-  AMDGPUDriver::get_instance().event_create(&(record.start_event),
-                                            HIP_EVENT_DEFAULT);
-  AMDGPUDriver::get_instance().event_create(&(record.stop_event),
-                                            HIP_EVENT_DEFAULT);
+  AMDGPUDriver::get_instance().event_create(&(record.start_event), HIP_EVENT_DEFAULT);
+  AMDGPUDriver::get_instance().event_create(&(record.stop_event), HIP_EVENT_DEFAULT);
   AMDGPUDriver::get_instance().event_record((record.start_event), 0);
   event_records_.push_back(record);
 
@@ -192,40 +178,32 @@ KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(
   return record.stop_event;
 }
 
-void EventToolkitAMDGPU::update_record(
-    uint32_t records_size_after_sync,
-    std::vector<KernelProfileTracedRecord> &traced_records) {
+void EventToolkitAMDGPU::update_record(uint32_t records_size_after_sync,
+                                       std::vector<KernelProfileTracedRecord> &traced_records) {
   uint32_t events_num = event_records_.size();
   uint32_t records_num = traced_records.size();
-  QD_ERROR_IF(
-      records_size_after_sync + events_num != records_num,
-      "KernelProfilerAMDGPU::EventToolkitAMDGPU: event_records_.size({}) != "
-      "traced_records_.size({})",
-      records_size_after_sync + events_num, records_num);
+  QD_ERROR_IF(records_size_after_sync + events_num != records_num,
+              "KernelProfilerAMDGPU::EventToolkitAMDGPU: event_records_.size({}) != "
+              "traced_records_.size({})",
+              records_size_after_sync + events_num, records_num);
 
   uint32_t idx = 0;
   for (auto &record : event_records_) {
     // copy to traced_records_ then clear event_records_
-    traced_records[records_size_after_sync + idx].kernel_elapsed_time_in_ms =
-        record.kernel_elapsed_time_in_ms;
-    traced_records[records_size_after_sync + idx].time_since_base =
-        record.time_since_base;
+    traced_records[records_size_after_sync + idx].kernel_elapsed_time_in_ms = record.kernel_elapsed_time_in_ms;
+    traced_records[records_size_after_sync + idx].time_since_base = record.time_since_base;
     idx++;
   }
 }
 
-void EventToolkitAMDGPU::update_timeline(
-    std::vector<KernelProfileTracedRecord> &traced_records) {
+void EventToolkitAMDGPU::update_timeline(std::vector<KernelProfileTracedRecord> &traced_records) {
   if (Timelines::get_instance().get_enabled()) {
     auto &timeline = Timeline::get_this_thread_instance();
     for (auto &record : traced_records) {
-      timeline.insert_event({record.name, /*param_name=begin*/ true,
-                             base_time_ + record.time_since_base * 1e-3,
-                             "amdgpu"});
+      timeline.insert_event(
+          {record.name, /*param_name=begin*/ true, base_time_ + record.time_since_base * 1e-3, "amdgpu"});
       timeline.insert_event({record.name, /*param_name=begin*/ false,
-                             base_time_ + (record.time_since_base +
-                                           record.kernel_elapsed_time_in_ms) *
-                                              1e-3,
+                             base_time_ + (record.time_since_base + record.kernel_elapsed_time_in_ms) * 1e-3,
                              "amdgpu"});
     }
   }
@@ -233,17 +211,14 @@ void EventToolkitAMDGPU::update_timeline(
 
 #else
 
-KernelProfilerBase::TaskHandle
-    EventToolkitAMDGPU::start_with_handle(const std::string &kernel_name) {
+KernelProfilerBase::TaskHandle EventToolkitAMDGPU::start_with_handle(const std::string &kernel_name) {
   QD_NOT_IMPLEMENTED;
 }
-void EventToolkitAMDGPU::update_record(
-    uint32_t records_size_after_sync,
-    std::vector<KernelProfileTracedRecord> &traced_records) {
+void EventToolkitAMDGPU::update_record(uint32_t records_size_after_sync,
+                                       std::vector<KernelProfileTracedRecord> &traced_records) {
   QD_NOT_IMPLEMENTED;
 }
-void EventToolkitAMDGPU::update_timeline(
-    std::vector<KernelProfileTracedRecord> &traced_records) {
+void EventToolkitAMDGPU::update_timeline(std::vector<KernelProfileTracedRecord> &traced_records) {
   QD_NOT_IMPLEMENTED;
 }
 

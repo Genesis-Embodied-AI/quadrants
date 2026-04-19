@@ -62,8 +62,7 @@ class LLVMModuleBuilder {
   QuadrantsLLVMContext *tlctx{nullptr};
   llvm::LLVMContext *llvm_context{nullptr};
 
-  LLVMModuleBuilder(std::unique_ptr<llvm::Module> &&module,
-                    QuadrantsLLVMContext *tlctx)
+  LLVMModuleBuilder(std::unique_ptr<llvm::Module> &&module, QuadrantsLLVMContext *tlctx)
       : module(std::move(module)), tlctx(tlctx) {
     QD_ASSERT(this->module != nullptr);
     QD_ASSERT(&this->module->getContext() == tlctx->get_this_thread_context());
@@ -96,10 +95,7 @@ class LLVMModuleBuilder {
       QD_ERROR("LLVMRuntime function {} not found.", name);
     }
     f = llvm::cast<llvm::Function>(
-        module
-            ->getOrInsertFunction(name, f->getFunctionType(),
-                                  f->getAttributes())
-            .getCallee());
+        module->getOrInsertFunction(name, f->getFunctionType(), f->getAttributes()).getCallee());
     return f;
   }
 
@@ -111,15 +107,11 @@ class LLVMModuleBuilder {
     return builder->CreateCall(func_ty, func, std::move(args));
   }
 
-  llvm::Value *call(llvm::Value *func,
-                    llvm::FunctionType *func_ty,
-                    std::vector<llvm::Value *> args) {
+  llvm::Value *call(llvm::Value *func, llvm::FunctionType *func_ty, std::vector<llvm::Value *> args) {
     return call(builder.get(), func, func_ty, std::move(args));
   }
 
-  llvm::Value *call(llvm::IRBuilder<> *builder,
-                    llvm::Function *func,
-                    std::vector<llvm::Value *> args) {
+  llvm::Value *call(llvm::IRBuilder<> *builder, llvm::Function *func, std::vector<llvm::Value *> args) {
     return call(builder, func, func->getFunctionType(), std::move(args));
   }
 
@@ -127,22 +119,17 @@ class LLVMModuleBuilder {
     return call(builder.get(), func, std::move(args));
   }
 
-  llvm::Value *call(llvm::IRBuilder<> *builder,
-                    const std::string &func_name,
-                    std::vector<llvm::Value *> args) {
+  llvm::Value *call(llvm::IRBuilder<> *builder, const std::string &func_name, std::vector<llvm::Value *> args) {
     auto func = get_runtime_function(func_name);
     return call(builder, func, std::move(args));
   }
 
-  llvm::Value *call(const std::string &func_name,
-                    std::vector<llvm::Value *> args) {
+  llvm::Value *call(const std::string &func_name, std::vector<llvm::Value *> args) {
     return call(builder.get(), func_name, std::move(args));
   }
 
   template <typename... Args>
-  llvm::Value *call(llvm::IRBuilder<> *builder,
-                    llvm::Function *func,
-                    Args *...args) {
+  llvm::Value *call(llvm::IRBuilder<> *builder, llvm::Function *func, Args *...args) {
     return call(builder, func, {args...});
   }
 
@@ -152,9 +139,7 @@ class LLVMModuleBuilder {
   }
 
   template <typename... Args>
-  llvm::Value *call(llvm::IRBuilder<> *builder,
-                    const std::string &func_name,
-                    Args *...args) {
+  llvm::Value *call(llvm::IRBuilder<> *builder, const std::string &func_name, Args *...args) {
     return call(builder, func_name, {args...});
   }
 
@@ -209,8 +194,7 @@ class RuntimeObject {
   llvm::Value *call(const std::string &func_name, Args &&...args) {
     auto func = get_func(func_name);
     auto arglist = std::vector<llvm::Value *>({ptr, args...});
-    check_func_call_signature(func->getFunctionType(), func->getName(), arglist,
-                              builder);
+    check_func_call_signature(func->getFunctionType(), func->getName(), arglist, builder);
     return builder->CreateCall(func, std::move(arglist));
   }
 

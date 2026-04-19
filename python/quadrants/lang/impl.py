@@ -49,6 +49,7 @@ from quadrants.lang.mesh import (
     element_type_name,
 )
 from quadrants.lang.simt.block import SharedArray
+from quadrants.lang.simt.tile_slicing import try_tile_ref, try_tile_slice
 from quadrants.lang.snode import SNode
 from quadrants.lang.struct import Struct, StructField, _IntermediateStruct
 from quadrants.lang.util import (
@@ -118,6 +119,8 @@ def expr_init(rhs):
     if isinstance(rhs, MeshRelationAccessProxy):
         return rhs
     if hasattr(rhs, "_data_oriented"):
+        return rhs
+    if hasattr(rhs, "_qd_is_deferred"):
         return rhs
     return Expr(
         compiling_callable.ast_builder().expr_var(
@@ -220,6 +223,9 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             raise Exception(
                 "Cannot subscript NdarrayType. Did you access a global py dataclass inadvertently?", value, type(value)
             )
+        matched, proxy = try_tile_ref(value, _indices)
+        if matched:
+            return proxy
         if len(_indices) == 1:
             _indices = _indices[0]
         return value.__getitem__(_indices)
@@ -244,6 +250,10 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
 
     indices_expr_group = None
     if has_slice:
+        if isinstance(value, (Field, AnyArray, SharedArray)):
+            matched, proxy = try_tile_slice(value, indices)
+            if matched:
+                return proxy
         if not (isinstance(value, Expr) and value.is_tensor()):
             raise QuadrantsSyntaxError(f"The type {type(value)} do not support index of slice type")
     else:
@@ -1282,6 +1292,37 @@ def call_internal(name, *args, with_runtime_context=True):
 
 def get_cuda_compute_capability():
     return _qd_core.query_int64("cuda_compute_capability")
+
+
+def get_max_shared_memory_bytes(*, is_lowerbound_ok):
+    """Return the maximum shared memory per block in bytes.
+
+    Args:
+        is_lowerbound_ok: If True, return a conservative lower bound based on
+            hardware specifications. If False, raise RuntimeError for backends
+            where the exact value cannot be queried.
+    """
+    arch = current_cfg().arch
+    if arch == _qd_core.cuda:
+        return _qd_core.query_int64("cuda_max_shared_memory_bytes")
+    if is_lowerbound_ok:
+        if arch == _qd_core.host_arch():  # CPU backend matching host's hardware
+            # CPU backend does not support shared memory.
+            return 0
+        if arch == _qd_core.metal:
+            # All Apple Silicon GPUs have 32KB threadgroup memory.
+            # https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+            return 32 * 1024
+        if arch == _qd_core.amdgpu:
+            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2
+            # (Nov 2020).
+            # https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html
+            return 64 * 1024
+        if arch == _qd_core.vulkan:
+            # Vulkan Roadmap 2026 requires maxComputeSharedMemorySize >= 32768.
+            # https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-required
+            return 32 * 1024
+    raise RuntimeError(f"get_max_shared_memory_bytes not implemented for arch {arch.name}")
 
 
 @quadrants_scope

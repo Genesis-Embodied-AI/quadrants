@@ -59,7 +59,7 @@ def test_get_external_tensor_shape_access_torch(size):
 @pytest.mark.needs_torch
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
 @pytest.mark.parametrize("size", [[1, 2, 3, 4]])
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_get_external_tensor_shape_access_ndarray(size):
     @qd.kernel
     def func(x: qd.types.ndarray(), index: qd.template()) -> qd.i32:

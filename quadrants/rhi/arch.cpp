@@ -29,8 +29,7 @@ Arch arch_from_name(const std::string &arch_name) {
 
   else {
     std::array<char, 256> buf;
-    RHI_DEBUG_SNPRINTF(buf.data(), buf.size(), "Unknown architecture name: %s",
-                       arch_name.c_str());
+    RHI_DEBUG_SNPRINTF(buf.data(), buf.size(), "Unknown architecture name: %s", arch_name.c_str());
     RHI_LOG_ERROR(buf.data());
     RHI_NOT_IMPLEMENTED
   }
@@ -40,8 +39,7 @@ Arch arch_from_name(const std::string &arch_name) {
 
 // Assuming a processor is either a CPU or a GPU. DSP/TPUs not considered.
 bool arch_is_cpu(Arch arch) {
-  if (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::js ||
-      arch == Arch::python) {
+  if (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::js || arch == Arch::python) {
     return true;
   } else {
     return false;
@@ -61,8 +59,7 @@ bool arch_is_metal(Arch arch) {
 }
 
 bool arch_uses_llvm(Arch arch) {
-  return (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::cuda ||
-          arch == Arch::amdgpu);
+  return (arch == Arch::x64 || arch == Arch::arm64 || arch == Arch::cuda || arch == Arch::amdgpu);
 }
 
 bool arch_is_gpu(Arch arch) {

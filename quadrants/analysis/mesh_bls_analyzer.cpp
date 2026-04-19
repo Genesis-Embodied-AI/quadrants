@@ -9,10 +9,7 @@ MeshBLSAnalyzer::MeshBLSAnalyzer(OffloadedStmt *for_stmt,
                                  MeshBLSCaches *caches,
                                  bool auto_mesh_local,
                                  const CompileConfig &config)
-    : for_stmt_(for_stmt),
-      caches_(caches),
-      auto_mesh_local_(auto_mesh_local),
-      config_(config) {
+    : for_stmt_(for_stmt), caches_(caches), auto_mesh_local_(auto_mesh_local), config_(config) {
   QD_AUTO_PROF;
   allow_undefined_visitor = true;
   invoke_default_visitor = false;
@@ -25,8 +22,7 @@ void MeshBLSAnalyzer::record_access(Stmt *stmt, AccessFlag flag) {
   if (!stmt->is<GlobalPtrStmt>())
     return;  // local alloca
   auto ptr = stmt->as<GlobalPtrStmt>();
-  if (ptr->indices.size() != std::size_t(1) ||
-      !ptr->indices[0]->is<MeshIndexConversionStmt>())
+  if (ptr->indices.size() != std::size_t(1) || !ptr->indices[0]->is<MeshIndexConversionStmt>())
     return;
   auto conv = ptr->indices[0]->as<MeshIndexConversionStmt>();
   auto element_type = conv->idx_type;
@@ -37,18 +33,15 @@ void MeshBLSAnalyzer::record_access(Stmt *stmt, AccessFlag flag) {
   auto snode = ptr->snode;
   if (!caches_->has(snode)) {
     if (auto_mesh_local_ &&
-        (flag == AccessFlag::accumulate ||
-         (flag == AccessFlag::read && config_.arch == Arch::cuda)) &&
-        (!idx->is<LoopIndexStmt>() ||
-         !idx->as<LoopIndexStmt>()->is_mesh_index())) {
+        (flag == AccessFlag::accumulate || (flag == AccessFlag::read && config_.arch == Arch::cuda)) &&
+        (!idx->is<LoopIndexStmt>() || !idx->as<LoopIndexStmt>()->is_mesh_index())) {
       caches_->insert(snode);
     } else {
       return;
     }
   }
   if (idx->is<MeshRelationAccessStmt>()) {
-    if (!caches_->access(snode, element_type, conv_type, flag,
-                         idx->as<MeshRelationAccessStmt>()->neighbor_idx)) {
+    if (!caches_->access(snode, element_type, conv_type, flag, idx->as<MeshRelationAccessStmt>()->neighbor_idx)) {
       analysis_ok_ = false;
       return;
     }
@@ -88,16 +81,14 @@ bool MeshBLSAnalyzer::run() {
 namespace irpass {
 namespace analysis {
 
-std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(
-    OffloadedStmt *offload,
-    bool auto_mesh_local,
-    const CompileConfig &config) {
+std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(OffloadedStmt *offload,
+                                                               bool auto_mesh_local,
+                                                               const CompileConfig &config) {
   QD_AUTO_PROF
   QD_ASSERT(offload->task_type == OffloadedTaskType::mesh_for);
   std::unique_ptr<MeshBLSCaches> caches;
   caches = std::make_unique<MeshBLSCaches>();
-  for (auto snode : offload->mem_access_opt.get_snodes_with_flag(
-           SNodeAccessFlag::mesh_local)) {
+  for (auto snode : offload->mem_access_opt.get_snodes_with_flag(SNodeAccessFlag::mesh_local)) {
     caches->insert(snode);
   }
 

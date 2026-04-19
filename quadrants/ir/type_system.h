@@ -123,10 +123,7 @@ class TyVarMismatch : public TypeSystemError {
   const DataType original_, conflicting_;
 
  public:
-  explicit TyVarMismatch(int solved_position,
-                         int current_position,
-                         DataType original,
-                         DataType conflicting)
+  explicit TyVarMismatch(int solved_position, int current_position, DataType original, DataType conflicting)
       : solved_position_(solved_position),
         current_position_(current_position),
         original_(original),
@@ -141,8 +138,7 @@ class TypeMismatch : public TypeSystemError {
   const DataType param_, arg_;
 
  public:
-  explicit TypeMismatch(int pos, DataType param, DataType arg)
-      : position_(pos), param_(param), arg_(arg) {
+  explicit TypeMismatch(int pos, DataType param, DataType arg) : position_(pos), param_(param), arg_(arg) {
   }
   std::string to_string() const override;
 };
@@ -174,8 +170,7 @@ class DynamicTrait : public Trait {
   const std::function<bool(DataType dt)> impl_;
 
  public:
-  explicit DynamicTrait(const std::string &name,
-                        const std::function<bool(DataType dt)> &impl)
+  explicit DynamicTrait(const std::string &name, const std::function<bool(DataType dt)> &impl)
       : name_(name), impl_(impl) {
   }
   bool validate(DataType dt) const override;
@@ -188,8 +183,7 @@ class Constraint {
  public:
   const std::shared_ptr<TyVar> tyvar;
   Trait *const trait;
-  explicit Constraint(std::shared_ptr<TyVar> tyvar, Trait *trait)
-      : tyvar(tyvar), trait(trait) {
+  explicit Constraint(std::shared_ptr<TyVar> tyvar, Trait *trait) : tyvar(tyvar), trait(trait) {
   }
 };
 
@@ -232,9 +226,7 @@ class Signature {
   explicit Signature(const std::vector<Constraint> &constraints,
                      const std::vector<TypeExpr> &parameters,
                      TypeExpr ret_type)
-      : constraints_(constraints),
-        parameters_(parameters),
-        ret_type_(ret_type) {
+      : constraints_(constraints), parameters_(parameters), ret_type_(ret_type) {
   }
   explicit Signature(const std::vector<TypeExpr> &parameters, TypeExpr ret_type)
       : parameters_(parameters), ret_type_(ret_type) {
@@ -272,15 +264,12 @@ class Operation {
   const std::string name;
   const Signature sig;
 
-  explicit Operation(const std::string &name, const Signature &sig)
-      : name(name), sig(sig) {
+  explicit Operation(const std::string &name, const Signature &sig) : name(name), sig(sig) {
   }
   virtual ~Operation() = default;
 
   DataType type_check(const std::vector<DataType> &arg_types) const;
-  virtual Stmt *flatten(Expression::FlattenContext *ctx,
-                        const std::vector<Expr> &args,
-                        DataType ret_type) const = 0;
+  virtual Stmt *flatten(Expression::FlattenContext *ctx, const std::vector<Expr> &args, DataType ret_type) const = 0;
 };
 
 // Internal operation IDs.

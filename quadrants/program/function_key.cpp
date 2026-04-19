@@ -2,9 +2,7 @@
 
 namespace quadrants::lang {
 
-FunctionKey::FunctionKey(const std::string &func_name,
-                         int func_id,
-                         int instance_id)
+FunctionKey::FunctionKey(const std::string &func_name, int func_id, int instance_id)
     : func_name(func_name), func_id(func_id), instance_id(instance_id) {
 }
 
@@ -13,8 +11,7 @@ bool FunctionKey::operator==(const FunctionKey &other_key) const {
 }
 
 std::string FunctionKey::get_full_name() const {
-  return func_name + "_" + std::to_string(func_id) + "_" +
-         std::to_string(instance_id);
+  return func_name + "_" + std::to_string(func_id) + "_" + std::to_string(instance_id);
 }
 
 }  // namespace quadrants::lang

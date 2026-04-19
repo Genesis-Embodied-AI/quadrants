@@ -40,13 +40,12 @@
     return opname(lhs, rhs);                                               \
   }
 
-#define DEFINE_EXPRESSION_FUNC_TERNARY(opname)                               \
-  Expr expr_##opname(const Expr &cond, const Expr &lhs, const Expr &rhs) {   \
-    return Expr::make<TernaryOpExpression>(TernaryOpType::opname, cond, lhs, \
-                                           rhs);                             \
-  }                                                                          \
-  Expr opname(const Expr &cond, const Expr &lhs, const Expr &rhs) {          \
-    return expr_##opname(cond, lhs, rhs);                                    \
+#define DEFINE_EXPRESSION_FUNC_TERNARY(opname)                                     \
+  Expr expr_##opname(const Expr &cond, const Expr &lhs, const Expr &rhs) {         \
+    return Expr::make<TernaryOpExpression>(TernaryOpType::opname, cond, lhs, rhs); \
+  }                                                                                \
+  Expr opname(const Expr &cond, const Expr &lhs, const Expr &rhs) {                \
+    return expr_##opname(cond, lhs, rhs);                                          \
   }
 
 #else

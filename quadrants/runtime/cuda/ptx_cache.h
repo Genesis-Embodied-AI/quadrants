@@ -56,24 +56,18 @@ class PtxCache final {
     std::string offline_cache_path;
   };
 
-  explicit PtxCache(const Config init_params,
-                    const CompileConfig &compile_config,
-                    int compute_capability);
+  explicit PtxCache(const Config init_params, const CompileConfig &compile_config, int compute_capability);
 
   void dump();
-  void clean_offline_cache(offline_cache::CleanCachePolicy policy,
-                           int max_bytes,
-                           double cleaning_factor) const;
+  void clean_offline_cache(offline_cache::CleanCachePolicy policy, int max_bytes, double cleaning_factor) const;
   void store_ptx(const std::string &cache_key, const std::string &ptx);
   std::optional<std::string> load_ptx(const std::string &cache_key);
-  std::string make_cache_key(const std::string &llvm_ir,
-                             bool use_fast_math) const;
+  std::string make_cache_key(const std::string &llvm_ir, bool use_fast_math) const;
 
  private:
   std::string make_filename(const std::string &kernel_key) const;
   static CacheMode get_cache_mode(const CompileConfig &compile_config);
-  std::optional<std::string> try_load_cached(const std::string &cache_key,
-                                             CacheMode cache_mode);
+  std::optional<std::string> try_load_cached(const std::string &cache_key, CacheMode cache_mode);
   std::optional<std::string> load_data_from_disk(const std::string &cache_key);
 
   const Config config_;

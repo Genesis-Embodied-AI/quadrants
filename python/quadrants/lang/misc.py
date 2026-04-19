@@ -643,6 +643,7 @@ def loop_config(
     parallelize=None,
     block_dim_adaptive=True,
     bit_vectorize=False,
+    name=None,
 ):
     """Sets directives for the next loop
 
@@ -652,6 +653,7 @@ def loop_config(
         parallelize (int): The number of threads to use on CPU
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
+        name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
 
     Examples::
 
@@ -707,12 +709,15 @@ def loop_config(
     if bit_vectorize:
         _bit_vectorize()
 
+    if name is not None:
+        get_runtime().compiling_callable.ast_builder().set_loop_name(name)
+
 
 def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
     Used as ``while qd.graph_do_while(flag):`` inside a
-    ``@qd.kernel(gpu_graph=True)`` kernel. The loop body repeats while
+    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
@@ -721,7 +726,7 @@ def graph_do_while(condition) -> bool:
 
     This function should not be called directly at runtime; it is
     recognised and transformed during AST compilation.
-    Requires ``@qd.kernel(gpu_graph=True)``.
+    Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
 

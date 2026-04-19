@@ -21,9 +21,7 @@ class EliminateImmutableLocalVars : public BasicStmtVisitor {
   DelayedIRModifier delayed_modifier_;
 
  public:
-  explicit EliminateImmutableLocalVars(
-      const std::unordered_set<Stmt *> &immutable_local_vars,
-      IRNode *node)
+  explicit EliminateImmutableLocalVars(const std::unordered_set<Stmt *> &immutable_local_vars, IRNode *node)
       : immutable_local_vars_(immutable_local_vars), immediate_modifier_(node) {
   }
 
@@ -35,24 +33,21 @@ class EliminateImmutableLocalVars : public BasicStmtVisitor {
 
   void visit(LocalLoadStmt *stmt) override {
     if (immutable_local_vars_.find(stmt->src) != immutable_local_vars_.end()) {
-      immediate_modifier_.replace_usages_with(
-          stmt, immutable_local_var_to_value_[stmt->src]);
+      immediate_modifier_.replace_usages_with(stmt, immutable_local_var_to_value_[stmt->src]);
       delayed_modifier_.erase(stmt);
     }
   }
 
   void visit(LocalStoreStmt *stmt) override {
     if (immutable_local_vars_.find(stmt->dest) != immutable_local_vars_.end()) {
-      QD_ASSERT(immutable_local_var_to_value_.find(stmt->dest) ==
-                immutable_local_var_to_value_.end());
+      QD_ASSERT(immutable_local_var_to_value_.find(stmt->dest) == immutable_local_var_to_value_.end());
       immutable_local_var_to_value_[stmt->dest] = stmt->val;
       delayed_modifier_.erase(stmt);
     }
   }
 
   static void run(IRNode *node) {
-    EliminateImmutableLocalVars pass(
-        irpass::analysis::gather_immutable_local_vars(node), node);
+    EliminateImmutableLocalVars pass(irpass::analysis::gather_immutable_local_vars(node), node);
     node->accept(&pass);
     pass.delayed_modifier_.modify_ir();
   }

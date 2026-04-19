@@ -35,10 +35,7 @@ using host_printf_type = void (*)(const char *, ...);
 extern "C" void get_func_type_host_printf(const char *, ...) {
 }
 
-using host_vsnprintf_type = int (*)(char *,
-                                    std::size_t,
-                                    const char *,
-                                    std::va_list);
+using host_vsnprintf_type = int (*)(char *, std::size_t, const char *, std::va_list);
 using host_allocator_type = void *(*)(void *, std::size_t, std::size_t);
 using RangeForTaskFunc = void(RuntimeContext *, const char *tls, int i);
 using MeshForTaskFunc = void(RuntimeContext *, const char *tls, uint32_t i);
@@ -54,68 +51,6 @@ __asm__(".symver powf,powf@GLIBC_2.2.5");
 __asm__(".symver expf,expf@GLIBC_2.2.5");
 #endif
 
-#if (defined(__linux___) && defined(__aarch64__) && defined(__clang__))
-// JIT session error: Symbols not found: [ __aarch64_ldadd4_acq_rel, ... ]
-// This is an issue with newer clang versions (>13) on aarch64, where
-// atomics are outlined by default. The JIT environment does not
-// automatically link libatomic/libgcc.
-//
-// We provide the implementations here using inline assembly. The
-// implementations use a load-exclusive/store-exclusive loop to be compatible
-// with all ARMv8-A processors, including those that do not support the LSE
-// (Large System Extensions) instructions.
-__asm__(
-    // Atomic swap for 4 bytes (32-bit integer)
-    // Arguments: x0 = pointer, w1 = new value
-    // Returns: original value in w0
-    ".globl __aarch64_swp4_acq_rel\n"
-    "__aarch64_swp4_acq_rel:\n"
-    "1:\n"
-    "  ldaxr w2, [x0]\n"      // Load-acquire exclusive
-    "  stlxr w3, w1, [x0]\n"  // Store-release exclusive
-    "  cbnz w3, 1b\n"         // Retry if store failed
-    "  mov w0, w2\n"          // Return original value
-    "  ret\n"
-
-    // Atomic swap for 8 bytes (64-bit integer)
-    // Arguments: x0 = pointer, x1 = new value
-    // Returns: original value in x0
-    ".globl __aarch64_swp8_acq_rel\n"
-    "__aarch64_swp8_acq_rel:\n"
-    "1:\n"
-    "  ldaxr x2, [x0]\n"
-    "  stlxr w3, x1, [x0]\n"
-    "  cbnz w3, 1b\n"
-    "  mov x0, x2\n"
-    "  ret\n"
-
-    // Atomic load-add for 4 bytes (32-bit integer)
-    // Arguments: x0 = pointer, w1 = value to add
-    // Returns: original value in w0
-    ".globl __aarch64_ldadd4_acq_rel\n"
-    "__aarch64_ldadd4_acq_rel:\n"
-    "1:\n"
-    "  ldaxr w2, [x0]\n"
-    "  add w3, w2, w1\n"
-    "  stlxr w4, w3, [x0]\n"
-    "  cbnz w4, 1b\n"
-    "  mov w0, w2\n"
-    "  ret\n"
-
-    // Atomic load-add for 8 bytes (64-bit integer)
-    // Arguments: x0 = pointer, x1 = value to add
-    // Returns: original value in x0
-    ".globl __aarch64_ldadd8_acq_rel\n"
-    "__aarch64_ldadd8_acq_rel:\n"
-    "1:\n"
-    "  ldaxr x2, [x0]\n"
-    "  add x3, x2, x1\n"
-    "  stlxr w4, x3, [x0]\n"
-    "  cbnz w4, 1b\n"
-    "  mov x0, x2\n"
-    "  ret\n");
-#endif
-
 // For accessing struct fields
 #define STRUCT_FIELD(S, F)                              \
   extern "C" decltype(S::F) S##_get_##F(S *s) {         \
@@ -128,14 +63,12 @@ __asm__(
     s->F = f;                                           \
   }
 
-#define STRUCT_FIELD_ARRAY(S, F)                                             \
-  extern "C" std::remove_all_extents_t<decltype(S::F)> S##_get_##F(S *s,     \
-                                                                   int i) {  \
-    return s->F[i];                                                          \
-  }                                                                          \
-  extern "C" void S##_set_##F(S *s, int i,                                   \
-                              std::remove_all_extents_t<decltype(S::F)> f) { \
-    s->F[i] = f;                                                             \
+#define STRUCT_FIELD_ARRAY(S, F)                                                          \
+  extern "C" std::remove_all_extents_t<decltype(S::F)> S##_get_##F(S *s, int i) {         \
+    return s->F[i];                                                                       \
+  }                                                                                       \
+  extern "C" void S##_set_##F(S *s, int i, std::remove_all_extents_t<decltype(S::F)> f) { \
+    s->F[i] = f;                                                                          \
   };
 
 // For fetching struct fields from device to host
@@ -181,11 +114,7 @@ using RuntimeContextArgType = long long;
 #if ARCH_cuda || ARCH_amdgpu
 extern "C" {
 
-void __assertfail(const char *message,
-                  const char *file,
-                  i32 line,
-                  const char *function,
-                  std::size_t charSize);
+void __assertfail(const char *message, const char *file, i32 line, const char *function, std::size_t charSize);
 };
 #endif
 
@@ -387,9 +316,7 @@ struct StructMeta {
 
   i32 (*get_num_elements)(Ptr, Ptr);
 
-  void (*refine_coordinates)(PhysicalCoordinates *inp_coord,
-                             PhysicalCoordinates *refined_coord,
-                             int index);
+  void (*refine_coordinates)(PhysicalCoordinates *inp_coord, PhysicalCoordinates *refined_coord, int index);
 
   RuntimeContext *context;
 };
@@ -444,8 +371,7 @@ template <typename T>
 T debug_mul(RuntimeContext *ctx, T a, T b, const char *tb) {
   T c;
   if (__builtin_mul_overflow(a, b, &c)) {
-    quadrants_printf(ctx->runtime, "Multiplication overflow detected in %s\n",
-                     tb);
+    quadrants_printf(ctx->runtime, "Multiplication overflow detected in %s\n", tb);
   }
   return c;
 }
@@ -504,14 +430,9 @@ struct ListManager {
   i32 num_elements;
   LLVMRuntime *runtime;
 
-  ListManager(LLVMRuntime *runtime,
-              std::size_t element_size,
-              std::size_t num_elements_per_chunk)
-      : element_size(element_size),
-        max_num_elements_per_chunk(num_elements_per_chunk),
-        runtime(runtime) {
-    quadrants_assert_runtime(runtime,
-                             is_power_of_two(max_num_elements_per_chunk),
+  ListManager(LLVMRuntime *runtime, std::size_t element_size, std::size_t num_elements_per_chunk)
+      : element_size(element_size), max_num_elements_per_chunk(num_elements_per_chunk), runtime(runtime) {
+    quadrants_assert_runtime(runtime, is_power_of_two(max_num_elements_per_chunk),
                              "max_num_elements_per_chunk must be POT.");
     lock = 0;
     num_elements = 0;
@@ -553,8 +474,7 @@ struct ListManager {
   }
 
   Ptr get_element_ptr(i32 i) {
-    return chunks[i >> log2chunk_num_elements] +
-           element_size * (i & ((1 << log2chunk_num_elements) - 1));
+    return chunks[i >> log2chunk_num_elements] + element_size * (i & ((1 << log2chunk_num_elements) - 1));
   }
 
   template <typename T>
@@ -576,8 +496,7 @@ struct ListManager {
     for (int i = 0; i < max_num_chunks; i++) {
       quadrants_assert_runtime(runtime, chunks[i] != nullptr, "ptr not found.");
       if (chunks[i] <= ptr && ptr < chunks[i] + chunk_size) {
-        return (i << log2chunk_num_elements) +
-               i32((ptr - chunks[i]) / element_size);
+        return (i << log2chunk_num_elements) + i32((ptr - chunks[i]) / element_size);
       }
     }
     return -1;
@@ -649,9 +568,7 @@ struct LLVMRuntime {
                        bool request = false);
 
   // Allocate from preallocated memory (CUDA, AMDGPU)
-  Ptr allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk,
-                                    std::size_t size,
-                                    std::size_t alignment);
+  Ptr allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk, std::size_t size, std::size_t alignment);
   Ptr profiler;
   void (*profiler_start)(Ptr, Ptr);
   void (*profiler_stop)(Ptr);
@@ -671,14 +588,12 @@ struct LLVMRuntime {
   template <typename T>
   void set_result(std::size_t i, T t) {
     static_assert(sizeof(T) <= sizeof(uint64));
-    ((u64 *)result_buffer)[i] =
-        quadrants_union_cast_with_different_sizes<uint64>(t);
+    ((u64 *)result_buffer)[i] = quadrants_union_cast_with_different_sizes<uint64>(t);
   }
 
   template <typename T, typename... Args>
   T *create(Args &&...args) {
-    auto ptr = (T *)allocate_aligned(runtime_memory_chunk, sizeof(T), 4096,
-                                     true /*request*/);
+    auto ptr = (T *)allocate_aligned(runtime_memory_chunk, sizeof(T), 4096, true /*request*/);
     new (ptr) T(std::forward<Args>(args)...);
     return ptr;
   }
@@ -712,27 +627,21 @@ struct NodeManager {
 
   using list_data_type = i32;
 
-  NodeManager(LLVMRuntime *runtime,
-              i32 element_size,
-              i32 chunk_num_elements = -1)
+  NodeManager(LLVMRuntime *runtime, i32 element_size, i32 chunk_num_elements = -1)
       : runtime(runtime), element_size(element_size) {
     // 128K elements per chunk, by default
     if (chunk_num_elements == -1) {
       chunk_num_elements = 128 * 1024;
     }
     // Maximum chunk size = 128 MB
-    while (chunk_num_elements > 1 &&
-           (uint64)chunk_num_elements * element_size > 128UL * 1024 * 1024) {
+    while (chunk_num_elements > 1 && (uint64)chunk_num_elements * element_size > 128UL * 1024 * 1024) {
       chunk_num_elements /= 2;
     }
     this->chunk_num_elements = chunk_num_elements;
     free_list_used = 0;
-    free_list = runtime->create<ListManager>(runtime, sizeof(list_data_type),
-                                             chunk_num_elements);
-    recycled_list = runtime->create<ListManager>(
-        runtime, sizeof(list_data_type), chunk_num_elements);
-    data_list =
-        runtime->create<ListManager>(runtime, element_size, chunk_num_elements);
+    free_list = runtime->create<ListManager>(runtime, sizeof(list_data_type), chunk_num_elements);
+    recycled_list = runtime->create<ListManager>(runtime, sizeof(list_data_type), chunk_num_elements);
+    data_list = runtime->create<ListManager>(runtime, element_size, chunk_num_elements);
   }
 
   Ptr allocate() {
@@ -760,8 +669,7 @@ struct NodeManager {
   void gc_serial() {
     // compact free list
     for (int i = free_list_used; i < free_list->size(); i++) {
-      free_list->get<list_data_type>(i - free_list_used) =
-          free_list->get<list_data_type>(i);
+      free_list->get<list_data_type>(i - free_list_used) = free_list->get<list_data_type>(i);
     }
     const i32 num_unused = max_i32(free_list->size() - free_list_used, 0);
     free_list_used = 0;
@@ -802,20 +710,15 @@ void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
 }
 
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
-  runtime->set_result(quadrants_result_buffer_error_id,
-                      runtime->error_message_template[i]);
+  runtime->set_result(quadrants_result_buffer_error_id, runtime->error_message_template[i]);
 }
 
-void runtime_retrieve_error_message_argument(LLVMRuntime *runtime,
-                                             int argument_id) {
-  runtime->set_result(quadrants_result_buffer_error_id,
-                      runtime->error_message_arguments[argument_id]);
+void runtime_retrieve_error_message_argument(LLVMRuntime *runtime, int argument_id) {
+  runtime->set_result(quadrants_result_buffer_error_id, runtime->error_message_arguments[argument_id]);
 }
 
-void runtime_ListManager_get_num_active_chunks(LLVMRuntime *runtime,
-                                               ListManager *list_manager) {
-  runtime->set_result(quadrants_result_buffer_runtime_query_id,
-                      list_manager->get_num_active_chunks());
+void runtime_ListManager_get_num_active_chunks(LLVMRuntime *runtime, ListManager *list_manager) {
+  runtime->set_result(quadrants_result_buffer_runtime_query_id, list_manager->get_num_active_chunks());
 }
 
 RUNTIME_STRUCT_FIELD_ARRAY(LLVMRuntime, node_allocators);
@@ -835,11 +738,7 @@ void quadrants_assert(RuntimeContext *context, u1 test, const char *msg) {
   quadrants_assert_runtime(context->runtime, test, msg);
 }
 
-void quadrants_assert_format(LLVMRuntime *runtime,
-                             u1 test,
-                             const char *format,
-                             int num_arguments,
-                             uint64 *arguments) {
+void quadrants_assert_format(LLVMRuntime *runtime, u1 test, const char *format, int num_arguments, uint64 *arguments) {
 #ifdef ARCH_amdgpu
   // TODO: find out why error with mark_force_no_inline
   //  llvm::SDValue llvm::SelectionDAG::getNode(unsigned int, const llvm::SDLoc
@@ -856,11 +755,9 @@ void quadrants_assert_format(LLVMRuntime *runtime,
       if (!runtime->error_code) {
         runtime->error_code = 1;  // Assertion failure
 
-        memset(runtime->error_message_template, 0,
-               quadrants_error_message_max_length);
+        memset(runtime->error_message_template, 0, quadrants_error_message_max_length);
         memcpy(runtime->error_message_template, format,
-               std::min(quadrants_strlen(format),
-                        quadrants_error_message_max_length - 1));
+               std::min(quadrants_strlen(format), quadrants_error_message_max_length - 1));
         for (int i = 0; i < num_arguments; i++) {
           runtime->error_message_arguments[i] = arguments[i];
         }
@@ -907,18 +804,16 @@ Ptr LLVMRuntime::allocate_aligned(PreallocatedMemoryChunk &memory_chunk,
 }
 
 // [ONLY ON DEVICE] CUDA/AMDGPU backend
-Ptr LLVMRuntime::allocate_from_reserved_memory(
-    PreallocatedMemoryChunk &memory_chunk,
-    std::size_t size,
-    std::size_t alignment) {
+Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk,
+                                               std::size_t size,
+                                               std::size_t alignment) {
   Ptr ret = nullptr;
   bool success = false;
   locked_task(&allocator_lock, [&] {
     std::size_t preallocated_head = (std::size_t)memory_chunk.preallocated_head;
     std::size_t preallocated_tail = (std::size_t)memory_chunk.preallocated_tail;
 
-    auto alignment_bytes =
-        alignment - 1 - (preallocated_head + alignment - 1) % alignment;
+    auto alignment_bytes = alignment - 1 - (preallocated_head + alignment - 1) % alignment;
     size += alignment_bytes;
     if (preallocated_head + size <= preallocated_tail) {
       ret = (Ptr)(preallocated_head + alignment_bytes);
@@ -948,31 +843,23 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
-void runtime_memory_allocate_aligned(LLVMRuntime *runtime,
-                                     std::size_t size,
-                                     std::size_t alignment,
-                                     uint64 *result) {
+void runtime_memory_allocate_aligned(LLVMRuntime *runtime, std::size_t size, std::size_t alignment, uint64 *result) {
   *result = quadrants_union_cast_with_different_sizes<uint64>(
-      runtime->allocate_aligned(runtime->runtime_memory_chunk, size,
-                                alignment));
+      runtime->allocate_aligned(runtime->runtime_memory_chunk, size, alignment));
 }
 
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
-void runtime_get_memory_requirements(Ptr result_buffer,
-                                     i32 num_rand_states,
-                                     i32 use_preallocated_buffer) {
+void runtime_get_memory_requirements(Ptr result_buffer, i32 num_rand_states, i32 use_preallocated_buffer) {
   i64 size = 0;
 
   if (use_preallocated_buffer) {
     size += quadrants::iroundup(i64(sizeof(LLVMRuntime)), quadrants_page_size);
   }
 
-  size += quadrants::iroundup(i64(quadrants_global_tmp_buffer_size),
-                              quadrants_page_size);
-  size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states,
-                              quadrants_page_size);
+  size += quadrants::iroundup(i64(quadrants_global_tmp_buffer_size), quadrants_page_size);
+  size += quadrants::iroundup(i64(sizeof(RandState)) * num_rand_states, quadrants_page_size);
 
   reinterpret_cast<i64 *>(result_buffer)[0] = size;
 }
@@ -980,16 +867,14 @@ void runtime_get_memory_requirements(Ptr result_buffer,
 // External API
 // [ON HOST] CPU backend
 // [ON DEVICE] CUDA/AMDGPU backend
-void runtime_initialize(
-    Ptr result_buffer,
-    Ptr memory_pool,
-    std::size_t
-        preallocated_size,  // Non-zero means use the preallocated buffer
-    Ptr preallocated_buffer,
-    i32 num_rand_states,
-    void *_host_allocator,
-    void *_host_printf,
-    void *_host_vsnprintf) {
+void runtime_initialize(Ptr result_buffer,
+                        Ptr memory_pool,
+                        std::size_t preallocated_size,  // Non-zero means use the preallocated buffer
+                        Ptr preallocated_buffer,
+                        i32 num_rand_states,
+                        void *_host_allocator,
+                        void *_host_printf,
+                        void *_host_vsnprintf) {
   // bootstrap
   auto host_allocator = (host_allocator_type)_host_allocator;
   auto host_printf = (host_printf_type)_host_printf;
@@ -998,11 +883,9 @@ void runtime_initialize(
   Ptr preallocated_tail = preallocated_buffer + preallocated_size;
   if (preallocated_size) {
     runtime = (LLVMRuntime *)preallocated_buffer;
-    preallocated_buffer +=
-        quadrants::iroundup(sizeof(LLVMRuntime), quadrants_page_size);
+    preallocated_buffer += quadrants::iroundup(sizeof(LLVMRuntime), quadrants_page_size);
   } else {
-    runtime =
-        (LLVMRuntime *)host_allocator(memory_pool, sizeof(LLVMRuntime), 128);
+    runtime = (LLVMRuntime *)host_allocator(memory_pool, sizeof(LLVMRuntime), 128);
   }
 
   PreallocatedMemoryChunk runtime_objects_chunk;
@@ -1021,35 +904,28 @@ void runtime_initialize(
 
   runtime->total_requested_memory = 0;
 
-  runtime->temporaries = (Ptr)runtime->allocate_aligned(
-      runtime->runtime_objects_chunk, quadrants_global_tmp_buffer_size,
-      quadrants_page_size);
+  runtime->temporaries = (Ptr)runtime->allocate_aligned(runtime->runtime_objects_chunk,
+                                                        quadrants_global_tmp_buffer_size, quadrants_page_size);
 
   runtime->num_rand_states = num_rand_states;
   runtime->rand_states = (RandState *)runtime->allocate_aligned(
-      runtime->runtime_objects_chunk,
-      sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
+      runtime->runtime_objects_chunk, sizeof(RandState) * runtime->num_rand_states, quadrants_page_size);
 }
 
-void runtime_initialize_memory(LLVMRuntime *runtime,
-                               std::size_t preallocated_size,
-                               Ptr preallocated_buffer) {
+void runtime_initialize_memory(LLVMRuntime *runtime, std::size_t preallocated_size, Ptr preallocated_buffer) {
   if (preallocated_size) {
     runtime->runtime_memory_chunk.preallocated_size = preallocated_size;
     runtime->runtime_memory_chunk.preallocated_head = preallocated_buffer;
-    runtime->runtime_memory_chunk.preallocated_tail =
-        preallocated_buffer + preallocated_size;
+    runtime->runtime_memory_chunk.preallocated_tail = preallocated_buffer + preallocated_size;
   }
 }
 
-void runtime_initialize_rand_states_cuda(LLVMRuntime *runtime,
-                                         int starting_rand_state) {
+void runtime_initialize_rand_states_cuda(LLVMRuntime *runtime, int starting_rand_state) {
   int i = block_dim() * block_idx() + thread_idx();
   initialize_rand_state(&runtime->rand_states[i], starting_rand_state + i);
 }
 
-void runtime_initialize_rand_states_serial(LLVMRuntime *runtime,
-                                           int starting_rand_state) {
+void runtime_initialize_rand_states_serial(LLVMRuntime *runtime, int starting_rand_state) {
   for (int i = 0; i < runtime->num_rand_states; i++) {
     initialize_rand_state(&runtime->rand_states[i], starting_rand_state + i);
   }
@@ -1074,8 +950,7 @@ void runtime_initialize_snodes(LLVMRuntime *runtime,
   }
   for (int i = root_id; i < root_id + num_snodes; i++) {
     // TODO: some SNodes do not actually need an element list.
-    runtime->element_lists[i] =
-        runtime->create<ListManager>(runtime, sizeof(Element), 1024 * 64);
+    runtime->element_lists[i] = runtime->create<ListManager>(runtime, sizeof(Element), 1024 * 64);
   }
   Element elem;
   elem.loop_bounds[0] = 0;
@@ -1088,27 +963,20 @@ void runtime_initialize_snodes(LLVMRuntime *runtime,
   runtime->element_lists[root_id]->append(&elem);
 }
 
-void LLVMRuntime_initialize_thread_pool(LLVMRuntime *runtime,
-                                        void *thread_pool,
-                                        void *parallel_for) {
+void LLVMRuntime_initialize_thread_pool(LLVMRuntime *runtime, void *thread_pool, void *parallel_for) {
   runtime->thread_pool = (Ptr)thread_pool;
   runtime->parallel_for = (parallel_for_type)parallel_for;
 }
 
-void runtime_NodeAllocator_initialize(LLVMRuntime *runtime,
-                                      int snode_id,
-                                      std::size_t node_size) {
-  runtime->node_allocators[snode_id] =
-      runtime->create<NodeManager>(runtime, node_size, 1024 * 16);
+void runtime_NodeAllocator_initialize(LLVMRuntime *runtime, int snode_id, std::size_t node_size) {
+  runtime->node_allocators[snode_id] = runtime->create<NodeManager>(runtime, node_size, 1024 * 16);
 }
 
-void runtime_allocate_ambient(LLVMRuntime *runtime,
-                              int snode_id,
-                              std::size_t size) {
+void runtime_allocate_ambient(LLVMRuntime *runtime, int snode_id, std::size_t size) {
   // Do not use NodeManager for the ambient node since it will never be garbage
   // collected.
-  runtime->ambient_elements[snode_id] = runtime->allocate_aligned(
-      runtime->runtime_memory_chunk, size, 128, true /*request*/);
+  runtime->ambient_elements[snode_id] =
+      runtime->allocate_aligned(runtime->runtime_memory_chunk, size, 128, true /*request*/);
 }
 
 void mutex_lock_i32(Ptr mutex) {
@@ -1172,6 +1040,97 @@ f32 cuda_shfl_sync_f32(u32 mask, f32 val, i32 delta, int width) {
   return 0;
 }
 
+// Stubs patched to AMDGPU intrinsics at module load (see llvm_context.cpp).
+// The bodies are replaced by patch_intrinsic; __builtin_trap guards against
+// accidentally calling an unpatched stub.
+
+i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
+  __builtin_trap();
+  return 0;
+}
+
+i32 amdgpu_mbcnt_lo(i32 mask, i32 base) {
+  __builtin_trap();
+  return 0;
+}
+
+i32 amdgpu_mbcnt_hi(i32 mask, i32 base) {
+  __builtin_trap();
+  return 0;
+}
+
+i32 amdgpu_lane_id() {
+  return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
+}
+
+i32 amdgpu_shuffle_i32(i32 index, i32 value) {
+  return amdgpu_ds_bpermute(index * 4, value);
+}
+
+f32 amdgpu_shuffle_f32(i32 index, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_shuffle_i32(index, u.i);
+  return u.f;
+}
+
+i64 amdgpu_shuffle_i64(i32 index, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_shuffle_i32(index, lo);
+  hi = amdgpu_shuffle_i32(index, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 amdgpu_shuffle_f64(i32 index, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = amdgpu_shuffle_i64(index, u.i);
+  return u.d;
+}
+
+i32 cuda_lane_id() {
+  return thread_idx() & 31;
+}
+
+i32 cuda_shuffle_i32(i32 index, i32 value) {
+  return cuda_shfl_sync_i32(0xFFFFFFFF, value, index, 31);
+}
+
+f32 cuda_shuffle_f32(i32 index, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = cuda_shuffle_i32(index, u.i);
+  return u.f;
+}
+
+i64 cuda_shuffle_i64(i32 index, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = cuda_shuffle_i32(index, lo);
+  hi = cuda_shuffle_i32(index, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 cuda_shuffle_f64(i32 index, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = cuda_shuffle_i64(index, u.i);
+  return u.d;
+}
+
 bool cuda_all_sync(u32 mask, bool bit) {
   return false;
 }
@@ -1212,63 +1171,30 @@ uint32 cuda_match_any_sync_i32(u32 mask, i32 value) {
   return 0;
 }
 
+// The three functions below used to contain PTX inline asm with arch-specific
+// register constraints (#if __aarch64__ "=w" / #elif __x86_64__ "=r").
+// On AArch64, clang validated the constraints against the host target and
+// embedded them in the bitcode. When that bitcode was later linked into an
+// NVPTX module, the LLVM NVPTX backend rejected the AArch64 'w' constraint
+// ("couldn't allocate output register for constraint 'w'"), crashing kernel
+// compilation for any large CUDA kernel that pulled in these symbols.
+//
+// The fix: keep the bodies as trivial stubs here (the host compiler never
+// actually executes them) and let patch_intrinsic() in llvm_context.cpp
+// replace them with the corresponding LLVM NVPTX intrinsics at module-init
+// time, which is target-correct and architecture-independent.
+
 u32 cuda_match_all_sync_i32(u32 mask, i32 value) {
-#if ARCH_cuda
-  u32 ret;
-#if defined(__aarch64__) || defined(__arm64__)
-  asm volatile("match.all.sync.b32  %0, %1, %2;"
-               : "=w"(ret)
-               : "w"(value), "w"(mask));
-#elif defined(__x86_64__)
-  asm volatile("match.all.sync.b32  %0, %1, %2;"
-               : "=r"(ret)
-               : "r"(value), "r"(mask));
-#else
-#error "Unsupported architecture: this code requires ARM64 or x86_64"
-#endif
-  return ret;
-#else
   return 0;
-#endif
 }
 
 uint32 cuda_match_any_sync_i64(u32 mask, i64 value) {
-#if ARCH_cuda
-  u32 ret;
-#if defined(__aarch64__) || defined(__arm64__)
-  asm volatile("match.any.sync.b64  %0, %1, %2;"
-               : "=w"(ret)
-               : "r"(value), "w"(mask));
-#elif defined(__x86_64__)
-  asm volatile("match.any.sync.b64  %0, %1, %2;"
-               : "=r"(ret)
-               : "l"(value), "r"(mask));
-#else
-#error "Unsupported architecture: this code requires ARM64 or x86_64"
-#endif
-  return ret;
-#else
   return 0;
-#endif
 }
 
-#if ARCH_cuda
-uint32 cuda_active_mask() {
-  unsigned int mask;
-#if defined(__aarch64__) || defined(__arm64__)
-  asm volatile("activemask.b32 %0;" : "=w"(mask));
-#elif defined(__x86_64__)
-  asm volatile("activemask.b32 %0;" : "=r"(mask));
-#else
-#error "Unsupported architecture: this code requires ARM64 or x86_64"
-#endif
-  return mask;
-}
-#else
 uint32 cuda_active_mask() {
   return 0;
 }
-#endif
 
 void block_barrier() {
 }
@@ -1326,24 +1252,23 @@ i32 op_xor_i32(i32 a, i32 b) {
   return a ^ b;
 }
 
-#define DEFINE_REDUCTION(op, dtype)                                    \
-  dtype warp_reduce_##op##_##dtype(uint32_t mask, dtype val) {         \
-    for (int offset = 16; offset > 0; offset /= 2)                     \
-      val = op_##op##_##dtype(                                         \
-          val, cuda_shfl_down_sync_##dtype(mask, val, offset, 31));    \
-    return val;                                                        \
-  }                                                                    \
-  dtype reduce_##op##_##dtype(dtype *result, dtype val) {              \
-    uint32_t mask = cuda_active_mask();                                \
-    if (mask != 0xFFFFFFFF) {                                          \
-      atomic_##op##_##dtype(result, val);                              \
-    } else {                                                           \
-      dtype warp_result = warp_reduce_##op##_##dtype(0xFFFFFFFF, val); \
-      if ((thread_idx() & (warp_size() - 1)) == 0) {                   \
-        atomic_##op##_##dtype(result, warp_result);                    \
-      }                                                                \
-    }                                                                  \
-    return val;                                                        \
+#define DEFINE_REDUCTION(op, dtype)                                                     \
+  dtype warp_reduce_##op##_##dtype(uint32_t mask, dtype val) {                          \
+    for (int offset = 16; offset > 0; offset /= 2)                                      \
+      val = op_##op##_##dtype(val, cuda_shfl_down_sync_##dtype(mask, val, offset, 31)); \
+    return val;                                                                         \
+  }                                                                                     \
+  dtype reduce_##op##_##dtype(dtype *result, dtype val) {                               \
+    uint32_t mask = cuda_active_mask();                                                 \
+    if (mask != 0xFFFFFFFF) {                                                           \
+      atomic_##op##_##dtype(result, val);                                               \
+    } else {                                                                            \
+      dtype warp_result = warp_reduce_##op##_##dtype(0xFFFFFFFF, val);                  \
+      if ((thread_idx() & (warp_size() - 1)) == 0) {                                    \
+        atomic_##op##_##dtype(result, warp_result);                                     \
+      }                                                                                 \
+    }                                                                                   \
+    return val;                                                                         \
   }
 
 DEFINE_REDUCTION(add, i32);
@@ -1373,9 +1298,7 @@ void clear_list(LLVMRuntime *runtime, StructMeta *parent, StructMeta *child) {
 
 // For the root node there is only one container,
 // therefore we use a special kernel for more parallelism.
-void element_listgen_root(LLVMRuntime *runtime,
-                          StructMeta *parent,
-                          StructMeta *child) {
+void element_listgen_root(LLVMRuntime *runtime, StructMeta *parent, StructMeta *child) {
   // If there's just one element in the parent list, we need to use the blocks
   // (instead of threads) to split the parent container
   auto parent_list = runtime->element_lists[parent->snode_id];
@@ -1406,8 +1329,7 @@ void element_listgen_root(LLVMRuntime *runtime,
   auto ch_element = parent_lookup_element((Ptr)parent, element.element, 0);
   ch_element = child_from_parent_element((Ptr)ch_element);
   auto ch_num_elements = child_get_num_elements((Ptr)child, ch_element);
-  auto ch_element_size =
-      std::min(ch_num_elements, quadrants_listgen_max_element_size);
+  auto ch_element_size = std::min(ch_num_elements, quadrants_listgen_max_element_size);
 
   // Here is a grid-stride loop.
   for (int c = c_start; c * ch_element_size < ch_num_elements; c += c_step) {
@@ -1422,9 +1344,7 @@ void element_listgen_root(LLVMRuntime *runtime,
   }
 }
 
-void element_listgen_nonroot(LLVMRuntime *runtime,
-                             StructMeta *parent,
-                             StructMeta *child) {
+void element_listgen_nonroot(LLVMRuntime *runtime, StructMeta *parent, StructMeta *child) {
   auto parent_list = runtime->element_lists[parent->snode_id];
   int num_parent_elements = parent_list->size();
   auto child_list = runtime->element_lists[child->snode_id];
@@ -1455,19 +1375,15 @@ void element_listgen_nonroot(LLVMRuntime *runtime,
       PhysicalCoordinates refined_coord;
       parent_refine_coordinates(&element.pcoord, &refined_coord, j);
       if (parent_is_active((Ptr)parent, element.element, j)) {
-        auto ch_element =
-            parent_lookup_element((Ptr)parent, element.element, j);
+        auto ch_element = parent_lookup_element((Ptr)parent, element.element, j);
         ch_element = child_from_parent_element((Ptr)ch_element);
         auto ch_num_elements = child_get_num_elements((Ptr)child, ch_element);
-        auto ch_element_size =
-            std::min(ch_num_elements, quadrants_listgen_max_element_size);
-        for (int ch_lower = 0; ch_lower < ch_num_elements;
-             ch_lower += ch_element_size) {
+        auto ch_element_size = std::min(ch_num_elements, quadrants_listgen_max_element_size);
+        for (int ch_lower = 0; ch_lower < ch_num_elements; ch_lower += ch_element_size) {
           Element elem;
           elem.element = ch_element;
           elem.loop_bounds[0] = ch_lower;
-          elem.loop_bounds[1] =
-              std::min(ch_lower + ch_element_size, ch_num_elements);
+          elem.loop_bounds[1] = std::min(ch_lower + ch_element_size, ch_num_elements);
           elem.pcoord = refined_coord;
           child_list->append(&elem);
         }
@@ -1511,8 +1427,7 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
   if (lower < upper) {
-    (*ctx->task)(&this_thread_context, tls_buffer,
-                 &ctx->list->get<Element>(element_id), lower, upper);
+    (*ctx->task)(&this_thread_context, tls_buffer, &ctx->list->get<Element>(element_id), lower, upper);
   }
 }
 
@@ -1555,8 +1470,8 @@ void parallel_struct_for(RuntimeContext *context,
   ctx.element_split = element_split;
   ctx.tls_buffer_size = tls_buffer_size;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool, list_tail * element_split,
-                        num_threads, &ctx, cpu_struct_for_block_helper);
+  runtime->parallel_for(runtime->thread_pool, list_tail * element_split, num_threads, &ctx,
+                        cpu_struct_for_block_helper);
 #endif
 }
 
@@ -1577,9 +1492,7 @@ struct range_task_helper_context {
   int step;
 };
 
-void cpu_parallel_range_for_task(void *range_context,
-                                 int thread_id,
-                                 int task_id) {
+void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id) {
   auto ctx = *(range_task_helper_context *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
@@ -1633,9 +1546,8 @@ void cpu_parallel_range_for(RuntimeContext *context,
   }
   ctx.block_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool,
-                        (end - begin + block_dim - 1) / block_dim, num_threads,
-                        &ctx, cpu_parallel_range_for_task);
+  runtime->parallel_for(runtime->thread_pool, (end - begin + block_dim - 1) / block_dim, num_threads, &ctx,
+                        cpu_parallel_range_for_task);
 }
 
 void gpu_parallel_range_for(RuntimeContext *context,
@@ -1677,9 +1589,7 @@ struct mesh_task_helper_context {
   int block_size;
 };
 
-void cpu_parallel_mesh_for_task(void *range_context,
-                                int thread_id,
-                                int task_id) {
+void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id) {
   auto ctx = *(mesh_task_helper_context *)range_context;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wvla-cxx-extension"
@@ -1725,9 +1635,8 @@ void cpu_parallel_mesh_for(RuntimeContext *context,
   }
   ctx.block_size = block_dim;
   auto runtime = context->runtime;
-  runtime->parallel_for(runtime->thread_pool,
-                        (num_patches + block_dim - 1) / block_dim, num_threads,
-                        &ctx, cpu_parallel_mesh_for_task);
+  runtime->parallel_for(runtime->thread_pool, (num_patches + block_dim - 1) / block_dim, num_threads, &ctx,
+                        cpu_parallel_mesh_for_task);
 }
 
 void gpu_parallel_mesh_for(RuntimeContext *context,
@@ -1771,16 +1680,14 @@ i32 linear_thread_idx(RuntimeContext *context) {
 #include "node_bitmasked.h"
 
 void ListManager::touch_chunk(int chunk_id) {
-  quadrants_assert_runtime(runtime, chunk_id < max_num_chunks,
-                           "List manager out of chunks.");
+  quadrants_assert_runtime(runtime, chunk_id < max_num_chunks, "List manager out of chunks.");
   if (!chunks[chunk_id]) {
     locked_task(&lock, [&] {
       // may have been allocated during lock contention
       if (!chunks[chunk_id]) {
         grid_memfence();
-        auto chunk_ptr = runtime->allocate_aligned(
-            runtime->runtime_memory_chunk,
-            max_num_elements_per_chunk * element_size, 4096, true /*request*/);
+        auto chunk_ptr = runtime->allocate_aligned(runtime->runtime_memory_chunk,
+                                                   max_num_elements_per_chunk * element_size, 4096, true /*request*/);
         atomic_exchange_u64((u64 *)&chunks[chunk_id], (u64)chunk_ptr);
       }
     });
@@ -1820,8 +1727,7 @@ void gc_parallel_impl_0(RuntimeContext *context, NodeManager *allocator) {
     // Move only non-overlapping parts
     auto items_to_copy = free_list_used;
     while (i < items_to_copy) {
-      free_list->get<T>(i) =
-          free_list->get<T>(free_list_size - items_to_copy + i);
+      free_list->get<T>(i) = free_list->get<T>(free_list_size - items_to_copy + i);
       i += grid_dim() * block_dim();
     }
   }
@@ -1835,8 +1741,7 @@ void gc_parallel_0(RuntimeContext *context, int snode_id) {
 void gc_parallel_impl_1(NodeManager *allocator) {
   auto free_list = allocator->free_list;
 
-  const i32 num_unused =
-      max_i32(free_list->size() - allocator->free_list_used, 0);
+  const i32 num_unused = max_i32(free_list->size() - allocator->free_list_used, 0);
   free_list->resize(num_unused);
 
   allocator->free_list_used = 0;
@@ -1897,8 +1802,7 @@ void gc_parallel_2(RuntimeContext *context, int snode_id) {
 extern "C" {
 
 u32 rand_u32(RuntimeContext *context) {
-  auto state = &((LLVMRuntime *)context->runtime)
-                    ->rand_states[linear_thread_idx(context)];
+  auto state = &((LLVMRuntime *)context->runtime)->rand_states[linear_thread_idx(context)];
 
   auto &x = state->x;
   auto &y = state->y;
@@ -1966,9 +1870,7 @@ struct printf_helper {
 };
 
 template <typename... Args>
-void quadrants_printf(LLVMRuntime *runtime,
-                      const char *format,
-                      Args &&...args) {
+void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) {
 #if ARCH_cuda
   printf_helper helper;
   helper.push_back(std::forward<Args>(args)...);
@@ -2017,50 +1919,44 @@ void stack_push(Ptr stack, size_t max_num_elements, std::size_t element_size) {
 // When N equals bits equals 32, 32 times of left shifting will be carried on
 // which is an undefined behavior.
 // see #2096 for more details
-#define DEFINE_SET_PARTIAL_BITS(N)                                            \
-  void set_mask_b##N(u##N *ptr, u64 mask, u##N value) {                       \
-    u##N mask_N = (u##N)mask;                                                 \
-    *ptr = (*ptr & (~mask_N)) | (value & mask);                               \
-  }                                                                           \
-                                                                              \
-  void atomic_set_mask_b##N(u##N *ptr, u64 mask, u##N value) {                \
-    u##N mask_N = (u##N)mask;                                                 \
-    u##N new_value = 0;                                                       \
-    u##N old_value = *ptr;                                                    \
-    do {                                                                      \
-      old_value = *ptr;                                                       \
-      new_value = (old_value & (~mask_N)) | (value & mask);                   \
-    } while (                                                                 \
-        !__atomic_compare_exchange(ptr, &old_value, &new_value, true,         \
-                                   std::memory_order::memory_order_seq_cst,   \
-                                   std::memory_order::memory_order_seq_cst)); \
-  }                                                                           \
-                                                                              \
-  void set_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits, u##N value) {   \
-    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);            \
-    set_mask_b##N(ptr, mask, value << offset);                                \
-  }                                                                           \
-                                                                              \
-  void atomic_set_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits,          \
-                                    u##N value) {                             \
-    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);            \
-    atomic_set_mask_b##N(ptr, mask, value << offset);                         \
-  }                                                                           \
-                                                                              \
-  u##N atomic_add_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits,          \
-                                    u##N value) {                             \
-    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);            \
-    u##N new_value = 0;                                                       \
-    u##N old_value = *ptr;                                                    \
-    do {                                                                      \
-      old_value = *ptr;                                                       \
-      new_value = old_value + (value << offset);                              \
-      new_value = (old_value & (~mask)) | (new_value & mask);                 \
-    } while (                                                                 \
-        !__atomic_compare_exchange(ptr, &old_value, &new_value, true,         \
-                                   std::memory_order::memory_order_seq_cst,   \
-                                   std::memory_order::memory_order_seq_cst)); \
-    return old_value;                                                         \
+#define DEFINE_SET_PARTIAL_BITS(N)                                                                                  \
+  void set_mask_b##N(u##N *ptr, u64 mask, u##N value) {                                                             \
+    u##N mask_N = (u##N)mask;                                                                                       \
+    *ptr = (*ptr & (~mask_N)) | (value & mask);                                                                     \
+  }                                                                                                                 \
+                                                                                                                    \
+  void atomic_set_mask_b##N(u##N *ptr, u64 mask, u##N value) {                                                      \
+    u##N mask_N = (u##N)mask;                                                                                       \
+    u##N new_value = 0;                                                                                             \
+    u##N old_value = *ptr;                                                                                          \
+    do {                                                                                                            \
+      old_value = *ptr;                                                                                             \
+      new_value = (old_value & (~mask_N)) | (value & mask);                                                         \
+    } while (!__atomic_compare_exchange(ptr, &old_value, &new_value, true, std::memory_order::memory_order_seq_cst, \
+                                        std::memory_order::memory_order_seq_cst));                                  \
+  }                                                                                                                 \
+                                                                                                                    \
+  void set_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits, u##N value) {                                         \
+    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);                                                  \
+    set_mask_b##N(ptr, mask, value << offset);                                                                      \
+  }                                                                                                                 \
+                                                                                                                    \
+  void atomic_set_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits, u##N value) {                                  \
+    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);                                                  \
+    atomic_set_mask_b##N(ptr, mask, value << offset);                                                               \
+  }                                                                                                                 \
+                                                                                                                    \
+  u##N atomic_add_partial_bits_b##N(u##N *ptr, u32 offset, u32 bits, u##N value) {                                  \
+    u##N mask = ((~(u##N)0) << (N - bits)) >> (N - offset - bits);                                                  \
+    u##N new_value = 0;                                                                                             \
+    u##N old_value = *ptr;                                                                                          \
+    do {                                                                                                            \
+      old_value = *ptr;                                                                                             \
+      new_value = old_value + (value << offset);                                                                    \
+      new_value = (old_value & (~mask)) | (new_value & mask);                                                       \
+    } while (!__atomic_compare_exchange(ptr, &old_value, &new_value, true, std::memory_order::memory_order_seq_cst, \
+                                        std::memory_order::memory_order_seq_cst));                                  \
+    return old_value;                                                                                               \
   }
 
 DEFINE_SET_PARTIAL_BITS(8);
@@ -2077,16 +1973,14 @@ f32 rounding_prepare_f32(f32 f) {
   */
 
   // Branch-free implementation: copy the sign bit of "f" to "0.5"
-  i32 delta_bits = (quadrants_union_cast<i32>(f) & 0x80000000) |
-                   quadrants_union_cast<i32>(0.5f);
+  i32 delta_bits = (quadrants_union_cast<i32>(f) & 0x80000000) | quadrants_union_cast<i32>(0.5f);
   f32 delta = quadrants_union_cast<f32>(delta_bits);
   return f + delta;
 }
 
 f64 rounding_prepare_f64(f64 f) {
   // Same as above
-  i64 delta_bits = (quadrants_union_cast<i64>(f) & 0x8000000000000000LL) |
-                   quadrants_union_cast<i64>(0.5);
+  i64 delta_bits = (quadrants_union_cast<i64>(f) & 0x8000000000000000LL) | quadrants_union_cast<i64>(0.5);
   f64 delta = quadrants_union_cast<f64>(delta_bits);
   return f + delta;
 }

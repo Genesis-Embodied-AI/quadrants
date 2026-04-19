@@ -56,8 +56,7 @@ class KernelCompilationManagerTest_DumpNewKernel_Test;
 class KernelCompilationManagerTest_CacheExistingKernelThrowsException_Test;
 class KernelCompilationManagerTest_DumpMemCacheOnlyKernel_Test;
 class KernelCompilationManagerTest_DumpMultipleKernels_Test;
-class
-    KernelCompilationManagerTest_CacheDuplicateKernelFromDiskThrowsException_Test;
+class KernelCompilationManagerTest_CacheDuplicateKernelFromDiskThrowsException_Test;
 }  // namespace tests
 
 class KernelCompilationManager final {
@@ -85,9 +84,7 @@ class KernelCompilationManager final {
   void dump();
 
   // Run offline cache cleaning
-  void clean_offline_cache(offline_cache::CleanCachePolicy policy,
-                           int max_bytes,
-                           double cleaning_factor) const;
+  void clean_offline_cache(offline_cache::CleanCachePolicy policy, int max_bytes, double cleaning_factor) const;
 
   const CompiledKernelData *load_fast_cache(const std::string &checksum,
                                             const std::string &kernel_name,
@@ -99,48 +96,39 @@ class KernelCompilationManager final {
   // naming structure for gtest friend test cases is:
   // [class name]_[test name]_Test
   friend class tests::KernelCompilationManagerTest_DumpNewKernel_Test;
-  friend class tests::
-      KernelCompilationManagerTest_CacheExistingKernelThrowsException_Test;
+  friend class tests::KernelCompilationManagerTest_CacheExistingKernelThrowsException_Test;
   friend class tests::KernelCompilationManagerTest_DumpMemCacheOnlyKernel_Test;
   friend class tests::KernelCompilationManagerTest_DumpMultipleKernels_Test;
-  friend class tests::
-      KernelCompilationManagerTest_CacheDuplicateKernelFromDiskThrowsException_Test;
+  friend class tests::KernelCompilationManagerTest_CacheDuplicateKernelFromDiskThrowsException_Test;
 
   std::string make_filename(const std::string &kernel_key) const;
 
-  std::unique_ptr<CompiledKernelData> compile_kernel(
-      const CompileConfig &compile_config,
-      const DeviceCapabilityConfig &caps,
-      const Kernel &kernel_def) const;
+  std::unique_ptr<CompiledKernelData> compile_kernel(const CompileConfig &compile_config,
+                                                     const DeviceCapabilityConfig &caps,
+                                                     const Kernel &kernel_def) const;
 
   std::string make_kernel_key(const CompileConfig &compile_config,
                               const DeviceCapabilityConfig &caps,
                               const Kernel &kernel_def) const;
 
-  const CompiledKernelData *try_load_cached_kernel(
-      const std::string &kernel_name,
-      const std::string &kernel_key,
-      Arch arch,
-      CacheData::CacheMode cache_mode);
+  const CompiledKernelData *try_load_cached_kernel(const std::string &kernel_name,
+                                                   const std::string &kernel_key,
+                                                   Arch arch,
+                                                   CacheData::CacheMode cache_mode);
 
-  const CompiledKernelData &compile_and_cache_kernel(
-      const std::string &kernel_key,
-      const CompileConfig &compile_config,
-      const DeviceCapabilityConfig &caps,
-      const Kernel &kernel_def);
+  const CompiledKernelData &compile_and_cache_kernel(const std::string &kernel_key,
+                                                     const CompileConfig &compile_config,
+                                                     const DeviceCapabilityConfig &caps,
+                                                     const Kernel &kernel_def);
 
-  CompiledKernelData &cache_kernel(
-      const std::string &kernel_key,
-      const CompileConfig &compile_config,
-      std::unique_ptr<CompiledKernelData> compiled_kernel_data,
-      const Kernel &kernel_def);
+  CompiledKernelData &cache_kernel(const std::string &kernel_key,
+                                   const CompileConfig &compile_config,
+                                   std::unique_ptr<CompiledKernelData> compiled_kernel_data,
+                                   const Kernel &kernel_def);
 
-  std::unique_ptr<CompiledKernelData> load_ckd(const std::string &kernel_key,
-                                               Arch arch);
+  std::unique_ptr<CompiledKernelData> load_ckd(const std::string &kernel_key, Arch arch);
 
-  static CacheData::CacheMode get_cache_mode(
-      const CompileConfig &compile_config,
-      bool kernel_ir_is_ast);
+  static CacheData::CacheMode get_cache_mode(const CompileConfig &compile_config, bool kernel_ir_is_ast);
 
   Config config_;
   CachingKernels caching_kernels_;
