@@ -14,8 +14,7 @@ constexpr int m = 256;
 constexpr int n = m * m * m;
 constexpr int block_size = 4;
 
-using grid_type = float[m / block_size][m / block_size][m / block_size][4]
-                       [block_size][block_size][block_size];
+using grid_type = float[m / block_size][m / block_size][m / block_size][4][block_size][block_size][block_size];
 
 __global__ void fill(grid_type *grid_) {
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;

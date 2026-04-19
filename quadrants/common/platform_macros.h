@@ -39,7 +39,6 @@ static_assert(false, "32-bit Windows systems are not supported")
 #define QD_PLATFORM_OSX
 #endif
 
-#if (defined(QD_PLATFORM_LINUX) || defined(QD_PLATFORM_OSX) || \
-     defined(__unix__))
+#if (defined(QD_PLATFORM_LINUX) || defined(QD_PLATFORM_OSX) || defined(__unix__))
 #define QD_PLATFORM_UNIX
 #endif

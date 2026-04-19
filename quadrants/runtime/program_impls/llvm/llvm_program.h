@@ -49,19 +49,15 @@ class LlvmProgramImpl : public ProgramImpl {
   // initialize_llvm_runtime_snodes It's a 2-in-1 interface
   void materialize_snode_tree(SNodeTree *tree, uint64 *result_buffer) override;
 
-  void cache_field(int snode_tree_id,
-                   int root_id,
-                   const StructCompiler &struct_compiler);
+  void cache_field(int snode_tree_id, int root_id, const StructCompiler &struct_compiler);
 
   LlvmOfflineCache::FieldCacheData get_cached_field(int snode_tree_id) const {
-    QD_ASSERT(cache_data_->fields.find(snode_tree_id) !=
-              cache_data_->fields.end());
+    QD_ASSERT(cache_data_->fields.find(snode_tree_id) != cache_data_->fields.end());
     return cache_data_->fields.at(snode_tree_id);
   }
 
  private:
-  std::unique_ptr<StructCompiler> compile_snode_tree_types_impl(
-      SNodeTree *tree);
+  std::unique_ptr<StructCompiler> compile_snode_tree_types_impl(SNodeTree *tree);
 
   /* -------------------------------- */
   /* ---- JIT-Runtime Interfaces ---- */
@@ -86,8 +82,7 @@ class LlvmProgramImpl : public ProgramImpl {
   /**
    * Initializes the runtime system for LLVM based backends.
    */
-  void materialize_runtime(KernelProfilerBase *profiler,
-                           uint64 **result_buffer_ptr) override {
+  void materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr) override {
     runtime_exec_->materialize_runtime(profiler, result_buffer_ptr);
   }
 
@@ -112,14 +107,11 @@ class LlvmProgramImpl : public ProgramImpl {
     return runtime_exec_->get_device_alloc_info_ptr(alloc);
   }
 
-  void fill_ndarray(const DeviceAllocation &alloc,
-                    std::size_t size,
-                    uint32_t data) override {
+  void fill_ndarray(const DeviceAllocation &alloc, std::size_t size, uint32_t data) override {
     return runtime_exec_->fill_ndarray(alloc, size, data);
   }
 
-  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size,
-                                             uint64 *result_buffer) override {
+  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) override {
     return runtime_exec_->allocate_memory_on_device(alloc_size, result_buffer);
   }
 
@@ -130,11 +122,8 @@ class LlvmProgramImpl : public ProgramImpl {
   /**
    * Initializes the SNodes for LLVM based backends.
    */
-  void initialize_llvm_runtime_snodes(
-      const LlvmOfflineCache::FieldCacheData &field_cache_data,
-      uint64 *result_buffer) {
-    runtime_exec_->initialize_llvm_runtime_snodes(field_cache_data,
-                                                  result_buffer);
+  void initialize_llvm_runtime_snodes(const LlvmOfflineCache::FieldCacheData &field_cache_data, uint64 *result_buffer) {
+    runtime_exec_->initialize_llvm_runtime_snodes(field_cache_data, result_buffer);
   }
 
   uint64 fetch_result_uint64(int i, uint64 *result_buffer) override {
@@ -142,20 +131,16 @@ class LlvmProgramImpl : public ProgramImpl {
   }
 
   template <typename T, typename... Args>
-  T runtime_query(const std::string &key,
-                  uint64 *result_buffer,
-                  Args &&...args) {
-    return runtime_exec_->runtime_query<T>(key, result_buffer,
-                                           std::forward<Args>(args)...);
+  T runtime_query(const std::string &key, uint64 *result_buffer, Args &&...args) {
+    return runtime_exec_->runtime_query<T>(key, result_buffer, std::forward<Args>(args)...);
   }
 
   void print_list_manager_info(void *list_manager, uint64 *result_buffer) {
     runtime_exec_->print_list_manager_info(list_manager, result_buffer);
   }
 
-  void print_memory_profiler_info(
-      std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
-      uint64 *result_buffer) override {
+  void print_memory_profiler_info(std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
+                                  uint64 *result_buffer) override {
     runtime_exec_->print_memory_profiler_info(snode_trees_, result_buffer);
   }
 
@@ -171,11 +156,8 @@ class LlvmProgramImpl : public ProgramImpl {
     return runtime_exec_->get_llvm_runtime();
   }
 
-  std::size_t get_snode_num_dynamically_allocated(
-      SNode *snode,
-      uint64 *result_buffer) override {
-    return runtime_exec_->get_snode_num_dynamically_allocated(snode,
-                                                              result_buffer);
+  std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) override {
+    return runtime_exec_->get_snode_num_dynamically_allocated(snode, result_buffer);
   }
 
   void check_runtime_error(uint64 *result_buffer) override {
@@ -215,9 +197,8 @@ class LlvmProgramImpl : public ProgramImpl {
     return get_llvm_context()->get_data_layout_string();
   };
 
-  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(
-      const StructType *old_ty,
-      const std::string &layout) override {
+  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(const StructType *old_ty,
+                                                                         const std::string &layout) override {
     return get_llvm_context()->get_struct_type_with_data_layout(old_ty, layout);
   }
 

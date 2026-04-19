@@ -10,8 +10,7 @@ class CompileQuadrantsFunctions : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  CompileQuadrantsFunctions(const CompileConfig &compile_config,
-                            Function::IRStage target_stage)
+  CompileQuadrantsFunctions(const CompileConfig &compile_config, Function::IRStage target_stage)
       : compile_config_(compile_config), target_stage_(target_stage) {
   }
 
@@ -21,15 +20,12 @@ class CompileQuadrantsFunctions : public BasicStmtVisitor {
     if (ir_type < target_stage_) {
       irpass::compile_function(func->ir.get(), compile_config_, func,
                                /*autodiff_mode=*/AutodiffMode::kNone,
-                               /*verbose=*/compile_config_.print_ir,
-                               target_stage_);
+                               /*verbose=*/compile_config_.print_ir, target_stage_);
       func->ir->accept(this);
     }
   }
 
-  static void run(IRNode *ir,
-                  const CompileConfig &compile_config,
-                  Function::IRStage target_stage) {
+  static void run(IRNode *ir, const CompileConfig &compile_config, Function::IRStage target_stage) {
     CompileQuadrantsFunctions ctf{compile_config, target_stage};
     ir->accept(&ctf);
   }
@@ -41,9 +37,7 @@ class CompileQuadrantsFunctions : public BasicStmtVisitor {
 
 namespace irpass {
 
-void compile_quadrants_functions(IRNode *ir,
-                                 const CompileConfig &compile_config,
-                                 Function::IRStage target_stage) {
+void compile_quadrants_functions(IRNode *ir, const CompileConfig &compile_config, Function::IRStage target_stage) {
   QD_AUTO_PROF;
   CompileQuadrantsFunctions::run(ir, compile_config, target_stage);
 }

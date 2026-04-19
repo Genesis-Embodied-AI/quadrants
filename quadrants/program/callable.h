@@ -15,25 +15,17 @@ class QD_DLL_EXPORT CallableBase {
  public:
   struct Parameter {
     std::string name;
-    bool is_array{
-        false};  // This is true for both ndarray and external array args.
+    bool is_array{false};      // This is true for both ndarray and external array args.
     std::size_t total_dim{0};  // total dim of array
     BufferFormat format{BufferFormat::unknown};
     bool needs_grad{false};  // TODO: reorder for better alignment
     std::vector<int> element_shape{};
     ParameterType ptype{ParameterType::kUnknown};
-    QD_IO_DEF(is_array,
-              total_dim,
-              format,
-              dt_,
-              needs_grad,
-              element_shape,
-              ptype);
+    QD_IO_DEF(is_array, total_dim, format, dt_, needs_grad, element_shape, ptype);
 
     bool operator==(const Parameter &o) const {
-      return is_array == o.is_array && total_dim == o.total_dim &&
-             format == o.format && dt_ == o.dt_ && needs_grad == o.needs_grad &&
-             element_shape == o.element_shape && ptype == o.ptype;
+      return is_array == o.is_array && total_dim == o.total_dim && format == o.format && dt_ == o.dt_ &&
+             needs_grad == o.needs_grad && element_shape == o.element_shape && ptype == o.ptype;
     }
 
     /* [arguments with TensorType]
@@ -63,9 +55,7 @@ class QD_DLL_EXPORT CallableBase {
       //       other words, `get_type_for_kernel_args` which we currently do in
       //       Python should be delayed until finalize_params.
       if (dt->is<PrimitiveType>() && element_shape.size() > 0) {
-        this->dt_ =
-            quadrants::lang::TypeFactory::get_instance().create_tensor_type(
-                element_shape, dt);
+        this->dt_ = quadrants::lang::TypeFactory::get_instance().create_tensor_type(element_shape, dt);
       } else {
         this->dt_ = dt;
       }
@@ -131,8 +121,7 @@ class QD_DLL_EXPORT Callable : public CallableBase {
   Callable();
   virtual ~Callable();
 
-  std::vector<int> insert_scalar_param(const DataType &dt,
-                                       const std::string &name = "");
+  std::vector<int> insert_scalar_param(const DataType &dt, const std::string &name = "");
   std::vector<int> insert_arr_param(const DataType &dt,
                                     int total_dim,
                                     std::vector<int> element_shape,
@@ -141,8 +130,7 @@ class QD_DLL_EXPORT Callable : public CallableBase {
                                         int ndim,
                                         const std::string &name = "",
                                         bool needs_grad = false);
-  std::vector<int> insert_pointer_param(const DataType &dt,
-                                        const std::string &name = "");
+  std::vector<int> insert_pointer_param(const DataType &dt, const std::string &name = "");
 
   int insert_ret(const DataType &dt);
 

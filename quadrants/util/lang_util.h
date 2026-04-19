@@ -18,16 +18,13 @@ real get_cpu_frequency();
 
 extern real default_measurement_time;
 
-real measure_cpe(std::function<void()> target,
-                 int64 elements_per_call,
-                 real time_second = default_measurement_time);
+real measure_cpe(std::function<void()> target, int64 elements_per_call, real time_second = default_measurement_time);
 
 class LaunchContextBuilder;
 
 using FunctionType = std::function<void(LaunchContextBuilder &)>;
 
-inline std::string make_list(const std::vector<std::string> &data,
-                             std::string bracket = "") {
+inline std::string make_list(const std::vector<std::string> &data, std::string bracket = "") {
   std::string ret = bracket;
   for (int i = 0; i < (int)data.size(); i++) {
     ret += data[i];
@@ -83,7 +80,6 @@ FP function_pointer_helper(T (*)(Args...)) {
 }
 
 template <typename T>
-using function_pointer_type =
-    decltype(function_pointer_helper(std::declval<T>()));
+using function_pointer_type = decltype(function_pointer_helper(std::declval<T>()));
 
 }  // namespace quadrants

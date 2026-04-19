@@ -60,12 +60,10 @@ bool VulkanLoader::check_vulkan_device() {
       const auto &physical_device = devices[i];
 
       uint32_t queue_family_count = 0;
-      vkGetPhysicalDeviceQueueFamilyProperties(physical_device,
-                                               &queue_family_count, nullptr);
+      vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
       if (queue_family_count > 0) {
         std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(
-            physical_device, &queue_family_count, queue_families.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families.data());
 
         for (auto &queue : queue_families) {
           if (queue.queueFlags & VK_QUEUE_COMPUTE_BIT) {
@@ -78,6 +76,7 @@ bool VulkanLoader::check_vulkan_device() {
 
   if (instance) {
     vkDestroyInstance(instance, kNoVkAllocCallbacks);
+    vulkan_instance_ = VK_NULL_HANDLE;
   }
 
   return found_device_with_compute;
@@ -95,11 +94,9 @@ bool VulkanLoader::init(PFN_vkGetInstanceProcAddr get_proc_addr) {
       return;
     }
 #if defined(__APPLE__)
-    vulkan_rt_ = std::make_unique<DynamicLoader>(runtime_lib_dir() +
-                                                 "/libMoltenVK.dylib");
+    vulkan_rt_ = std::make_unique<DynamicLoader>(runtime_lib_dir() + "/libMoltenVK.dylib");
     PFN_vkGetInstanceProcAddr get_proc_addr =
-        (PFN_vkGetInstanceProcAddr)vulkan_rt_->load_function(
-            "vkGetInstanceProcAddr");
+        (PFN_vkGetInstanceProcAddr)vulkan_rt_->load_function("vkGetInstanceProcAddr");
 
     volkInitializeCustom(get_proc_addr);
     initialized_ = true;
@@ -126,12 +123,10 @@ void VulkanLoader::load_device(VkDevice device) {
 }
 
 PFN_vkVoidFunction VulkanLoader::load_function(const char *name) {
-  auto result =
-      vkGetInstanceProcAddr(VulkanLoader::instance().vulkan_instance_, name);
+  auto result = vkGetInstanceProcAddr(VulkanLoader::instance().vulkan_instance_, name);
   if (result == nullptr) {
     char msg_buf[256];
-    snprintf(msg_buf, sizeof(msg_buf), "Failed to load vulkan function %s",
-             name);
+    snprintf(msg_buf, sizeof(msg_buf), "Failed to load vulkan function %s", name);
     RHI_LOG_ERROR(msg_buf);
   }
   return result;

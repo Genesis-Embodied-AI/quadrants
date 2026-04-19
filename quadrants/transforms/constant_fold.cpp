@@ -20,8 +20,7 @@ T sar(T value, unsigned int amount) {
 
 template <typename T>
 T shr(T value, unsigned int shift) {
-  return static_cast<T>(
-      static_cast<typename std::make_unsigned<T>::type>(value) >> shift);
+  return static_cast<T>(static_cast<typename std::make_unsigned<T>::type>(value) >> shift);
 }
 }  // namespace
 
@@ -33,13 +32,10 @@ class ConstantFold : public BasicStmtVisitor {
   static bool is_good_type(DataType dt) {
     // ConstStmt of `bad` types like `i8` is not supported by LLVM.
     // Discussion:
-    // https://github.com/taichi-dev/quadrants/pull/839#issuecomment-625902727
-    if (dt->is_primitive(PrimitiveTypeID::i32) ||
-        dt->is_primitive(PrimitiveTypeID::i64) ||
-        dt->is_primitive(PrimitiveTypeID::u1) ||
-        dt->is_primitive(PrimitiveTypeID::u32) ||
-        dt->is_primitive(PrimitiveTypeID::u64) ||
-        dt->is_primitive(PrimitiveTypeID::f32) ||
+    // https://github.com/taichi-dev/taichi/pull/839#issuecomment-625902727
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64) ||
+        dt->is_primitive(PrimitiveTypeID::u1) || dt->is_primitive(PrimitiveTypeID::u32) ||
+        dt->is_primitive(PrimitiveTypeID::u64) || dt->is_primitive(PrimitiveTypeID::f32) ||
         dt->is_primitive(PrimitiveTypeID::f64))
       return true;
     else
@@ -67,27 +63,18 @@ class ConstantFold : public BasicStmtVisitor {
     std::optional<TypedConstant> res = std::nullopt;
     switch (stmt->op_type) {
 #define COMMA ,
-#define HANDLE_REAL_AND_INTEGRAL_BINARY(OP_TYPE, PREFIX, OP_CPP)              \
-  case BinaryOpType::OP_TYPE: {                                               \
-    if (dt->is_primitive(PrimitiveTypeID::f32) ||                             \
-        dt->is_primitive(PrimitiveTypeID::f64)) {                             \
-      res = TypedConstant(dst_type,                                           \
-                          PREFIX(lhs->val.val_cast_to_float64()               \
-                                     OP_CPP rhs->val.val_cast_to_float64())); \
-    } else if (dt->is_primitive(PrimitiveTypeID::i32) ||                      \
-               dt->is_primitive(PrimitiveTypeID::i64)) {                      \
-      res = TypedConstant(                                                    \
-          dst_type, PREFIX(lhs->val.val_int() OP_CPP rhs->val.val_int()));    \
-    } else if (dt->is_primitive(PrimitiveTypeID::u32) ||                      \
-               dt->is_primitive(PrimitiveTypeID::u64)) {                      \
-      res = TypedConstant(                                                    \
-          dst_type, PREFIX(lhs->val.val_uint() OP_CPP rhs->val.val_uint()));  \
-    } else if (dt->is_primitive(PrimitiveTypeID::u1)) {                       \
-      res = TypedConstant(dst_type,                                           \
-                          PREFIX(int32(lhs->val.val_uint1())                  \
-                                     OP_CPP int32(rhs->val.val_uint1())));    \
-    }                                                                         \
-    break;                                                                    \
+#define HANDLE_REAL_AND_INTEGRAL_BINARY(OP_TYPE, PREFIX, OP_CPP)                                                   \
+  case BinaryOpType::OP_TYPE: {                                                                                    \
+    if (dt->is_primitive(PrimitiveTypeID::f32) || dt->is_primitive(PrimitiveTypeID::f64)) {                        \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_cast_to_float64() OP_CPP rhs->val.val_cast_to_float64())); \
+    } else if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64)) {                 \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_int() OP_CPP rhs->val.val_int()));                         \
+    } else if (dt->is_primitive(PrimitiveTypeID::u32) || dt->is_primitive(PrimitiveTypeID::u64)) {                 \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_uint() OP_CPP rhs->val.val_uint()));                       \
+    } else if (dt->is_primitive(PrimitiveTypeID::u1)) {                                                            \
+      res = TypedConstant(dst_type, PREFIX(int32(lhs->val.val_uint1()) OP_CPP int32(rhs->val.val_uint1())));       \
+    }                                                                                                              \
+    break;                                                                                                         \
   }
 
       HANDLE_REAL_AND_INTEGRAL_BINARY(mul, , *)
@@ -108,20 +95,16 @@ class ConstantFold : public BasicStmtVisitor {
       HANDLE_REAL_AND_INTEGRAL_BINARY(pow, std::pow, COMMA)
 #undef HANDLE_REAL_AND_INTEGRAL_BINARY
 
-#define HANDLE_INTEGRAL_BINARY(OP_TYPE, PREFIX, OP_CPP)                        \
-  case BinaryOpType::OP_TYPE: {                                                \
-    if (dt->is_primitive(PrimitiveTypeID::i32)) {                              \
-      res = TypedConstant(                                                     \
-          dst_type, PREFIX(lhs->val.val_int32() OP_CPP rhs->val.val_int32())); \
-    } else if (dt->is_primitive(PrimitiveTypeID::i64)) {                       \
-      res = TypedConstant(                                                     \
-          dst_type, PREFIX(lhs->val.val_int() OP_CPP rhs->val.val_int()));     \
-    } else if (dt->is_primitive(PrimitiveTypeID::u32) ||                       \
-               dt->is_primitive(PrimitiveTypeID::u64)) {                       \
-      res = TypedConstant(                                                     \
-          dst_type, PREFIX(lhs->val.val_uint() OP_CPP rhs->val.val_uint()));   \
-    }                                                                          \
-    break;                                                                     \
+#define HANDLE_INTEGRAL_BINARY(OP_TYPE, PREFIX, OP_CPP)                                            \
+  case BinaryOpType::OP_TYPE: {                                                                    \
+    if (dt->is_primitive(PrimitiveTypeID::i32)) {                                                  \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_int32() OP_CPP rhs->val.val_int32()));     \
+    } else if (dt->is_primitive(PrimitiveTypeID::i64)) {                                           \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_int() OP_CPP rhs->val.val_int()));         \
+    } else if (dt->is_primitive(PrimitiveTypeID::u32) || dt->is_primitive(PrimitiveTypeID::u64)) { \
+      res = TypedConstant(dst_type, PREFIX(lhs->val.val_uint() OP_CPP rhs->val.val_uint()));       \
+    }                                                                                              \
+    break;                                                                                         \
   }
 
       HANDLE_INTEGRAL_BINARY(mod, , %)
@@ -135,8 +118,7 @@ class ConstantFold : public BasicStmtVisitor {
 #undef COMMA
 
       case BinaryOpType::truediv:
-        QD_ERROR("{} should have been lowered.",
-                 binary_op_type_name(stmt->op_type));
+        QD_ERROR("{} should have been lowered.", binary_op_type_name(stmt->op_type));
         break;
 
       default:
@@ -151,8 +133,8 @@ class ConstantFold : public BasicStmtVisitor {
     auto rhs = stmt->rhs;
 
     if (lhs->is<ConstStmt>() && rhs->is<ConstStmt>()) {
-      auto typed_constant = get_scalar_value_to_replace(
-          stmt, lhs->as<ConstStmt>(), rhs->as<ConstStmt>(), stmt->ret_type);
+      auto typed_constant =
+          get_scalar_value_to_replace(stmt, lhs->as<ConstStmt>(), rhs->as<ConstStmt>(), stmt->ret_type);
       if (!typed_constant)
         return;
 
@@ -163,15 +145,13 @@ class ConstantFold : public BasicStmtVisitor {
 
       std::vector<TypedConstant> typed_constants;
       for (int i = 0; i < num_values; i++) {
-        auto scalar_lhs =
-            lhs->as<MatrixInitStmt>()->values[i]->cast<ConstStmt>();
-        auto scalar_rhs =
-            rhs->as<MatrixInitStmt>()->values[i]->cast<ConstStmt>();
+        auto scalar_lhs = lhs->as<MatrixInitStmt>()->values[i]->cast<ConstStmt>();
+        auto scalar_rhs = rhs->as<MatrixInitStmt>()->values[i]->cast<ConstStmt>();
         if (!scalar_lhs || !scalar_rhs)
           return;
 
-        auto typed_constant = get_scalar_value_to_replace(
-            stmt, scalar_lhs, scalar_rhs, stmt->ret_type.get_element_type());
+        auto typed_constant =
+            get_scalar_value_to_replace(stmt, scalar_lhs, scalar_rhs, stmt->ret_type.get_element_type());
         if (!typed_constant)
           return;
 
@@ -182,9 +162,7 @@ class ConstantFold : public BasicStmtVisitor {
     }
   }
 
-  std::optional<TypedConstant> get_scalar_value_to_replace(UnaryOpStmt *stmt,
-                                                           ConstStmt *operand,
-                                                           DataType dst_type) {
+  std::optional<TypedConstant> get_scalar_value_to_replace(UnaryOpStmt *stmt, ConstStmt *operand, DataType dst_type) {
     if (stmt->is_cast() && stmt->op_type == UnaryOpType::cast_bits) {
       TypedConstant new_constant(dst_type);
       new_constant.value_bits = operand->val.value_bits;
@@ -196,19 +174,16 @@ class ConstantFold : public BasicStmtVisitor {
 
     std::optional<TypedConstant> res = std::nullopt;
     switch (stmt->op_type) {
-#define HANDLE_REAL_AND_INTEGRAL_UNARY(OP_TYPE, OP_CPP)                \
-  case UnaryOpType::OP_TYPE: {                                         \
-    if (dt->is_primitive(PrimitiveTypeID::f32) ||                      \
-        dt->is_primitive(PrimitiveTypeID::f64)) {                      \
-      res = TypedConstant(dst_type, OP_CPP(operand->val.val_float())); \
-    } else if (dt->is_primitive(PrimitiveTypeID::i32) ||               \
-               dt->is_primitive(PrimitiveTypeID::i64)) {               \
-      res = TypedConstant(dst_type, OP_CPP(operand->val.val_int()));   \
-    } else if (dt->is_primitive(PrimitiveTypeID::u32) ||               \
-               dt->is_primitive(PrimitiveTypeID::u64)) {               \
-      res = TypedConstant(dst_type, OP_CPP(operand->val.val_uint()));  \
-    }                                                                  \
-    break;                                                             \
+#define HANDLE_REAL_AND_INTEGRAL_UNARY(OP_TYPE, OP_CPP)                                            \
+  case UnaryOpType::OP_TYPE: {                                                                     \
+    if (dt->is_primitive(PrimitiveTypeID::f32) || dt->is_primitive(PrimitiveTypeID::f64)) {        \
+      res = TypedConstant(dst_type, OP_CPP(operand->val.val_float()));                             \
+    } else if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64)) { \
+      res = TypedConstant(dst_type, OP_CPP(operand->val.val_int()));                               \
+    } else if (dt->is_primitive(PrimitiveTypeID::u32) || dt->is_primitive(PrimitiveTypeID::u64)) { \
+      res = TypedConstant(dst_type, OP_CPP(operand->val.val_uint()));                              \
+    }                                                                                              \
+    break;                                                                                         \
   }
 
       HANDLE_REAL_AND_INTEGRAL_UNARY(neg, -)
@@ -228,18 +203,16 @@ class ConstantFold : public BasicStmtVisitor {
       HANDLE_REAL_AND_INTEGRAL_UNARY(rsqrt, 1.0 / std::sqrt)
 #undef HANDLE_REAL_AND_INTEGRAL_UNARY
 
-#define HANDLE_INTEGRAL_UNARY(OP_TYPE, OP_CPP)                        \
-  case UnaryOpType::OP_TYPE: {                                        \
-    if (dt->is_primitive(PrimitiveTypeID::i32) ||                     \
-        dt->is_primitive(PrimitiveTypeID::i64)) {                     \
-      res = TypedConstant(dst_type, OP_CPP(operand->val.val_int()));  \
-    } else if (dt->is_primitive(PrimitiveTypeID::u32) ||              \
-               dt->is_primitive(PrimitiveTypeID::u64)) {              \
-      res = TypedConstant(dst_type, OP_CPP(operand->val.val_uint())); \
-    } else if (dt->is_primitive(PrimitiveTypeID::u1)) {               \
-      res = TypedConstant(dst_type, !operand->val.val_uint1());       \
-    }                                                                 \
-    break;                                                            \
+#define HANDLE_INTEGRAL_UNARY(OP_TYPE, OP_CPP)                                                     \
+  case UnaryOpType::OP_TYPE: {                                                                     \
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64)) {        \
+      res = TypedConstant(dst_type, OP_CPP(operand->val.val_int()));                               \
+    } else if (dt->is_primitive(PrimitiveTypeID::u32) || dt->is_primitive(PrimitiveTypeID::u64)) { \
+      res = TypedConstant(dst_type, OP_CPP(operand->val.val_uint()));                              \
+    } else if (dt->is_primitive(PrimitiveTypeID::u1)) {                                            \
+      res = TypedConstant(dst_type, !operand->val.val_uint1());                                    \
+    }                                                                                              \
+    break;                                                                                         \
   }
 
       HANDLE_INTEGRAL_UNARY(bit_not, ~)
@@ -247,14 +220,11 @@ class ConstantFold : public BasicStmtVisitor {
 #undef HANDLE_INTEGRAL_UNARY
 
       case UnaryOpType::cast_value: {
-        if (dt->is_primitive(PrimitiveTypeID::f32) ||
-            dt->is_primitive(PrimitiveTypeID::f64)) {
+        if (dt->is_primitive(PrimitiveTypeID::f32) || dt->is_primitive(PrimitiveTypeID::f64)) {
           res = TypedConstant(dst_type, operand->val.val_float());
-        } else if (dt->is_primitive(PrimitiveTypeID::i32) ||
-                   dt->is_primitive(PrimitiveTypeID::i64)) {
+        } else if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64)) {
           res = TypedConstant(dst_type, operand->val.val_int());
-        } else if (dt->is_primitive(PrimitiveTypeID::u32) ||
-                   dt->is_primitive(PrimitiveTypeID::u64)) {
+        } else if (dt->is_primitive(PrimitiveTypeID::u32) || dt->is_primitive(PrimitiveTypeID::u64)) {
           res = TypedConstant(dst_type, operand->val.val_uint());
         } else if (dt->is_primitive(PrimitiveTypeID::u1)) {
           res = TypedConstant(dst_type, operand->val.val_uint1());
@@ -275,8 +245,7 @@ class ConstantFold : public BasicStmtVisitor {
     }
 
     if (auto operand = stmt->operand->cast<ConstStmt>()) {
-      auto typed_constant =
-          get_scalar_value_to_replace(stmt, operand, stmt->ret_type);
+      auto typed_constant = get_scalar_value_to_replace(stmt, operand, stmt->ret_type);
       if (!typed_constant)
         return;
 
@@ -289,8 +258,8 @@ class ConstantFold : public BasicStmtVisitor {
         if (!const_scalar_operand)
           return;
 
-        auto typed_constant = get_scalar_value_to_replace(
-            stmt, const_scalar_operand, stmt->ret_type.get_element_type());
+        auto typed_constant =
+            get_scalar_value_to_replace(stmt, const_scalar_operand, stmt->ret_type.get_element_type());
         if (!typed_constant)
           return;
 
@@ -325,8 +294,7 @@ class ConstantFold : public BasicStmtVisitor {
     modifier.erase(stmt);
   }
 
-  void insert_and_erase(Stmt *stmt,
-                        const std::vector<TypedConstant> &new_constants) {
+  void insert_and_erase(Stmt *stmt, const std::vector<TypedConstant> &new_constants) {
     std::vector<Stmt *> values;
     for (auto &new_constant : new_constants) {
       auto const_stmt = Stmt::make<ConstStmt>(new_constant);

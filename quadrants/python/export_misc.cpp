@@ -46,8 +46,7 @@ void print_all_units() {
   int all_units = 0;
   for (auto &interface_name : names) {
     auto impls = interfaces[interface_name]->get_implementation_names();
-    std::cout << " * " << interface_name << " [" << int(impls.size()) << "]"
-              << std::endl;
+    std::cout << " * " << interface_name << " [" << int(impls.size()) << "]" << std::endl;
     all_units += int(impls.size());
     std::sort(impls.begin(), impls.end());
     for (auto &impl : impls) {
@@ -70,19 +69,14 @@ void export_misc(py::module &m) {
 
   py::class_<Task, std::shared_ptr<Task>>(m, "Task")
       .def("initialize", &Task::initialize)
-      .def("run",
-           static_cast<std::string (Task::*)(const std::vector<std::string> &)>(
-               &Task::run));
+      .def("run", static_cast<std::string (Task::*)(const std::vector<std::string> &)>(&Task::run));
 
   py::class_<Benchmark, std::shared_ptr<Benchmark>>(m, "Benchmark")
       .def("run", &Benchmark::run)
       .def("test", &Benchmark::test)
       .def("initialize", &Benchmark::initialize);
 
-#define QD_EXPORT_LOGGING(X)                  \
-  m.def(#X, [](const std::string &msg) {      \
-    quadrants::Logger::get_instance().X(msg); \
-  });
+#define QD_EXPORT_LOGGING(X) m.def(#X, [](const std::string &msg) { quadrants::Logger::get_instance().X(msg); });
 
   m.def("flush_log", []() { quadrants::Logger::get_instance().flush(); });
 
@@ -95,16 +89,10 @@ void export_misc(py::module &m) {
 
   m.def("print_all_units", print_all_units);
   m.def("set_core_state_python_imported", CoreState::set_python_imported);
-  m.def("set_logging_level", [](const std::string &level) {
-    Logger::get_instance().set_level(level);
-  });
-  m.def("logging_effective", [](const std::string &level) {
-    return Logger::get_instance().is_level_effective(level);
-  });
-  m.def("set_logging_level_default",
-        []() { Logger::get_instance().set_level_default(); });
-  m.def("set_core_trigger_gdb_when_crash",
-        CoreState::set_trigger_gdb_when_crash);
+  m.def("set_logging_level", [](const std::string &level) { Logger::get_instance().set_level(level); });
+  m.def("logging_effective", [](const std::string &level) { return Logger::get_instance().is_level_effective(level); });
+  m.def("set_logging_level_default", []() { Logger::get_instance().set_level_default(); });
+  m.def("set_core_trigger_gdb_when_crash", CoreState::set_trigger_gdb_when_crash);
   m.def("test_raise_error", test_raise_error);
   m.def("get_default_float_size", []() { return sizeof(real); });
   m.def("trigger_sig_fpe", []() {
@@ -112,10 +100,8 @@ void export_misc(py::module &m) {
     a -= 2;
     return 1 / a;
   });
-  m.def("print_profile_info",
-        [&]() { Profiling::get_instance().print_profile_info(); });
-  m.def("clear_profile_info",
-        [&]() { Profiling::get_instance().clear_profile_info(); });
+  m.def("print_profile_info", [&]() { Profiling::get_instance().print_profile_info(); });
+  m.def("clear_profile_info", [&]() { Profiling::get_instance().clear_profile_info(); });
   m.def("start_memory_monitoring", start_memory_monitoring);
   m.def("get_repo_dir", get_repo_dir);
   m.def("get_python_package_dir", get_python_package_dir);
@@ -139,8 +125,7 @@ void export_misc(py::module &m) {
 #endif
 #ifdef QD_WITH_VULKAN
   m.def("with_vulkan", quadrants::lang::vulkan::is_vulkan_api_available);
-  m.def("set_vulkan_visible_device",
-        quadrants::lang::vulkan::set_vulkan_visible_device);
+  m.def("set_vulkan_visible_device", quadrants::lang::vulkan::set_vulkan_visible_device);
 #else
   m.def("with_vulkan", []() { return false; });
 #endif

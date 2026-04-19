@@ -23,14 +23,14 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  std::string loop_name{""};
 };
 
-#define QD_DEFINE_CLONE_FOR_FRONTEND_IR                \
-  std::unique_ptr<Stmt> clone() const override {       \
-    std::unique_ptr<Stmt> new_stmt{                    \
-        new std::decay<decltype(*this)>::type{*this}}; \
-    new_stmt->ret_type = ret_type;                     \
-    return new_stmt;                                   \
+#define QD_DEFINE_CLONE_FOR_FRONTEND_IR                                           \
+  std::unique_ptr<Stmt> clone() const override {                                  \
+    std::unique_ptr<Stmt> new_stmt{new std::decay<decltype(*this)>::type{*this}}; \
+    new_stmt->ret_type = ret_type;                                                \
+    return new_stmt;                                                              \
   }
 
 // Frontend Statements
@@ -78,9 +78,7 @@ class FrontendAllocaStmt : public Stmt {
  public:
   Identifier ident;
 
-  FrontendAllocaStmt(const Identifier &lhs,
-                     DataType type,
-                     const DebugInfo &dbg_info = DebugInfo())
+  FrontendAllocaStmt(const Identifier &lhs, DataType type, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), ident(lhs), is_shared(false) {
     ret_type = type;
   }
@@ -91,8 +89,7 @@ class FrontendAllocaStmt : public Stmt {
                      bool is_shared = false,
                      const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), ident(lhs), is_shared(is_shared) {
-    ret_type = TypeFactory::get_instance().get_pointer_type(
-        DataType(TypeFactory::create_tensor_type(shape, element)));
+    ret_type = TypeFactory::get_instance().get_pointer_type(DataType(TypeFactory::create_tensor_type(shape, element)));
   }
 
   bool is_shared;
@@ -108,12 +105,11 @@ class FrontendSNodeOpStmt : public Stmt {
   ExprGroup indices;
   Expr val;
 
-  FrontendSNodeOpStmt(
-      SNodeOpType op_type,
-      SNode *snode,
-      const ExprGroup &indices,
-      const Expr &val = Expr(std::shared_ptr<Expression>(nullptr)),
-      const DebugInfo &dbg_info = DebugInfo());
+  FrontendSNodeOpStmt(SNodeOpType op_type,
+                      SNode *snode,
+                      const ExprGroup &indices,
+                      const Expr &val = Expr(std::shared_ptr<Expression>(nullptr)),
+                      const DebugInfo &dbg_info = DebugInfo());
 
   QD_DEFINE_ACCEPT
   QD_DEFINE_CLONE_FOR_FRONTEND_IR
@@ -125,9 +121,7 @@ class FrontendAssertStmt : public Stmt {
   Expr cond;
   std::vector<Expr> args;
 
-  FrontendAssertStmt(const Expr &cond,
-                     const std::string &text,
-                     const DebugInfo &dbg_info = DebugInfo())
+  FrontendAssertStmt(const Expr &cond, const std::string &text, const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), text(text), cond(cond) {
   }
 
@@ -149,9 +143,7 @@ class FrontendAssignStmt : public Stmt {
  public:
   Expr lhs, rhs;
 
-  FrontendAssignStmt(const Expr &lhs,
-                     const Expr &rhs,
-                     const DebugInfo &dbg_info = DebugInfo());
+  FrontendAssignStmt(const Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info = DebugInfo());
 
   QD_DEFINE_ACCEPT
   QD_DEFINE_CLONE_FOR_FRONTEND_IR
@@ -162,8 +154,7 @@ class FrontendIfStmt : public Stmt {
   Expr condition;
   std::unique_ptr<Block> true_statements, false_statements;
 
-  explicit FrontendIfStmt(const Expr &condition, const DebugInfo &dbg_info)
-      : Stmt(dbg_info), condition(condition) {
+  explicit FrontendIfStmt(const Expr &condition, const DebugInfo &dbg_info) : Stmt(dbg_info), condition(condition) {
   }
 
   bool is_container_statement() const override {
@@ -207,6 +198,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
                   SNode *snode,
@@ -272,8 +264,7 @@ class FrontendFuncDefStmt : public Stmt {
 
 class FrontendBreakStmt : public Stmt {
  public:
-  explicit FrontendBreakStmt(const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info) {
+  explicit FrontendBreakStmt(const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info) {
   }
 
   bool is_container_statement() const override {
@@ -286,8 +277,7 @@ class FrontendBreakStmt : public Stmt {
 
 class FrontendContinueStmt : public Stmt {
  public:
-  explicit FrontendContinueStmt(const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info) {
+  explicit FrontendContinueStmt(const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info) {
   }
 
   bool is_container_statement() const override {
@@ -303,8 +293,7 @@ class FrontendWhileStmt : public Stmt {
   Expr cond;
   std::unique_ptr<Block> body;
 
-  explicit FrontendWhileStmt(const Expr &cond, const DebugInfo &dbg_info)
-      : Stmt(dbg_info), cond(cond) {
+  explicit FrontendWhileStmt(const Expr &cond, const DebugInfo &dbg_info) : Stmt(dbg_info), cond(cond) {
   }
 
   bool is_container_statement() const override {
@@ -321,8 +310,7 @@ class FrontendReturnStmt : public Stmt {
  public:
   ExprGroup values;
 
-  explicit FrontendReturnStmt(const ExprGroup &group,
-                              const DebugInfo &dbg_info = DebugInfo());
+  explicit FrontendReturnStmt(const ExprGroup &group, const DebugInfo &dbg_info = DebugInfo());
 
   bool is_container_statement() const override {
     return false;
@@ -351,11 +339,7 @@ class ArgLoadExpression : public Expression {
                     bool is_ptr = false,
                     bool create_load = true,
                     const DebugInfo &dbg_info = DebugInfo())
-      : Expression(dbg_info),
-        arg_id(arg_id),
-        dt(dt),
-        is_ptr(is_ptr),
-        create_load(create_load) {
+      : Expression(dbg_info), arg_id(arg_id), dt(dt), is_ptr(is_ptr), create_load(create_load) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -373,8 +357,7 @@ class RandExpression : public Expression {
  public:
   DataType dt;
 
-  explicit RandExpression(DataType dt, const DebugInfo &dbg_info = DebugInfo())
-      : Expression(dbg_info), dt(dt) {
+  explicit RandExpression(DataType dt, const DebugInfo &dbg_info = DebugInfo()) : Expression(dbg_info), dt(dt) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -390,21 +373,13 @@ class UnaryOpExpression : public Expression {
   Expr operand;
   DataType cast_type;
 
-  UnaryOpExpression(UnaryOpType type,
-                    const Expr &operand,
-                    const DebugInfo &dbg_info = DebugInfo())
+  UnaryOpExpression(UnaryOpType type, const Expr &operand, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), type(type), operand(operand) {
     cast_type = PrimitiveType::unknown;
   }
 
-  UnaryOpExpression(UnaryOpType type,
-                    const Expr &operand,
-                    DataType cast_type,
-                    const DebugInfo &dbg_info = DebugInfo())
-      : Expression(dbg_info),
-        type(type),
-        operand(operand),
-        cast_type(cast_type) {
+  UnaryOpExpression(UnaryOpType type, const Expr &operand, DataType cast_type, const DebugInfo &dbg_info = DebugInfo())
+      : Expression(dbg_info), type(type), operand(operand), cast_type(cast_type) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -421,8 +396,7 @@ class BinaryOpExpression : public Expression {
   BinaryOpType type;
   Expr lhs, rhs;
 
-  BinaryOpExpression(const BinaryOpType &type, const Expr &lhs, const Expr &rhs)
-      : type(type), lhs(lhs), rhs(rhs) {
+  BinaryOpExpression(const BinaryOpType &type, const Expr &lhs, const Expr &rhs) : type(type), lhs(lhs), rhs(rhs) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -437,11 +411,7 @@ class TernaryOpExpression : public Expression {
   TernaryOpType type;
   Expr op1, op2, op3;
 
-  TernaryOpExpression(TernaryOpType type,
-                      const Expr &op1,
-                      const Expr &op2,
-                      const Expr &op3)
-      : type(type) {
+  TernaryOpExpression(TernaryOpType type, const Expr &op1, const Expr &op2, const Expr &op3) : type(type) {
     this->op1.set(op1);
     this->op2.set(op2);
     this->op3.set(op3);
@@ -459,8 +429,7 @@ class InternalFuncCallExpression : public Expression {
   Operation *op;
   std::vector<Expr> args;
 
-  InternalFuncCallExpression(Operation *op, const std::vector<Expr> &args_)
-      : op(op), args(args_) {
+  InternalFuncCallExpression(Operation *op, const std::vector<Expr> &args_) : op(op), args(args_) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -503,8 +472,7 @@ class ExternalTensorExpression : public Expression {
   }
 
   void type_check(const CompileConfig *config) override {
-    ret_type = TypeFactory::get_instance().get_ndarray_struct_type(dt, ndim,
-                                                                   needs_grad);
+    ret_type = TypeFactory::get_instance().get_ndarray_struct_type(dt, ndim, needs_grad);
     ret_type.set_is_pointer(true);
     config_ = config;
   }
@@ -512,11 +480,7 @@ class ExternalTensorExpression : public Expression {
  private:
   const CompileConfig *config_ = nullptr;
 
-  void init(const DataType &dt,
-            int ndim,
-            const std::vector<int> &arg_id,
-            bool needs_grad,
-            BoundaryMode boundary) {
+  void init(const DataType &dt, int ndim, const std::vector<int> &arg_id, bool needs_grad, BoundaryMode boundary) {
     this->dt = dt;
     this->ndim = ndim;
     this->arg_id = arg_id;
@@ -559,20 +523,16 @@ class MatrixFieldExpression : public Expression {
   bool dynamic_indexable{false};
   int dynamic_index_stride{0};
 
-  MatrixFieldExpression(const std::vector<Expr> &fields,
-                        const std::vector<int> &element_shape)
+  MatrixFieldExpression(const std::vector<Expr> &fields, const std::vector<int> &element_shape)
       : fields(fields), element_shape(element_shape) {
     for (auto &field : fields) {
       QD_ASSERT(field.is<FieldExpression>());
     }
     QD_ASSERT(!fields.empty());
-    auto compute_type =
-        fields[0].cast<FieldExpression>()->dt->get_compute_type();
+    auto compute_type = fields[0].cast<FieldExpression>()->dt->get_compute_type();
     for (auto &field : fields) {
-      if (field.cast<FieldExpression>()->dt->get_compute_type() !=
-          compute_type) {
-        throw QuadrantsRuntimeError(
-            "Member fields of a matrix field must have the same compute type");
+      if (field.cast<FieldExpression>()->dt->get_compute_type() != compute_type) {
+        throw QuadrantsRuntimeError("Member fields of a matrix field must have the same compute type");
       }
     }
   }
@@ -618,9 +578,7 @@ class IndexExpression : public Expression {
   std::vector<ExprGroup> indices_group;
   std::vector<int> ret_shape;
 
-  IndexExpression(const Expr &var,
-                  const ExprGroup &indices,
-                  const DebugInfo &dbg_info = DebugInfo());
+  IndexExpression(const Expr &var, const ExprGroup &indices, const DebugInfo &dbg_info = DebugInfo());
 
   IndexExpression(const Expr &var,
                   const std::vector<ExprGroup> &indices_group,
@@ -674,9 +632,7 @@ class LoopUniqueExpression : public Expression {
   Expr input;
   std::vector<SNode *> covers;
 
-  LoopUniqueExpression(const Expr &input,
-                       const std::vector<SNode *> &covers,
-                       const DebugInfo &dbg_info = DebugInfo())
+  LoopUniqueExpression(const Expr &input, const std::vector<SNode *> &covers, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), input(input), covers(covers) {
   }
 
@@ -716,8 +672,7 @@ class AtomicOpExpression : public Expression {
   AtomicOpType op_type;
   Expr dest, val;
 
-  AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &val)
-      : op_type(op_type), dest(dest), val(val) {
+  AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &val) : op_type(op_type), dest(dest), val(val) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -734,14 +689,9 @@ class SNodeOpExpression : public Expression {
   ExprGroup indices;
   std::vector<Expr> values;  // Only for op_type==append
 
-  SNodeOpExpression(SNode *snode,
-                    SNodeOpType op_type,
-                    const ExprGroup &indices);
+  SNodeOpExpression(SNode *snode, SNodeOpType op_type, const ExprGroup &indices);
 
-  SNodeOpExpression(SNode *snode,
-                    SNodeOpType op_type,
-                    const ExprGroup &indices,
-                    const std::vector<Expr> &values);
+  SNodeOpExpression(SNode *snode, SNodeOpType op_type, const ExprGroup &indices, const std::vector<Expr> &values);
 
   void type_check(const CompileConfig *config) override;
 
@@ -775,10 +725,7 @@ class ExternalTensorShapeAlongAxisExpression : public Expression {
   Expr ptr;
   int axis;
 
-  ExternalTensorShapeAlongAxisExpression(
-      const Expr &ptr,
-      int axis,
-      const DebugInfo &dbg_info = DebugInfo())
+  ExternalTensorShapeAlongAxisExpression(const Expr &ptr, int axis, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), ptr(ptr), axis(axis) {
   }
 
@@ -794,10 +741,7 @@ class ExternalTensorBasePtrExpression : public Expression {
   Expr ptr;
   bool is_grad;
 
-  explicit ExternalTensorBasePtrExpression(
-      const Expr &ptr,
-      bool is_grad,
-      const DebugInfo &dbg_info = DebugInfo())
+  explicit ExternalTensorBasePtrExpression(const Expr &ptr, bool is_grad, const DebugInfo &dbg_info = DebugInfo())
       : ptr(ptr), is_grad(is_grad) {
   }
 
@@ -814,11 +758,10 @@ class FrontendFuncCallStmt : public Stmt {
   Function *func;
   ExprGroup args;
 
-  explicit FrontendFuncCallStmt(
-      Function *func,
-      const ExprGroup &args,
-      const std::optional<Identifier> &id = std::nullopt,
-      const DebugInfo &dbg_info = DebugInfo())
+  explicit FrontendFuncCallStmt(Function *func,
+                                const ExprGroup &args,
+                                const std::optional<Identifier> &id = std::nullopt,
+                                const DebugInfo &dbg_info = DebugInfo())
       : Stmt(dbg_info), ident(id), func(func), args(args) {
     QD_ASSERT(id.has_value() == !func->rets.empty());
   }
@@ -838,9 +781,7 @@ class GetElementExpression : public Expression {
 
   void type_check(const CompileConfig *config) override;
 
-  GetElementExpression(const Expr &src,
-                       std::vector<int> index,
-                       const DebugInfo &dbg_info = DebugInfo())
+  GetElementExpression(const Expr &src, std::vector<int> index, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), src(src), index(index) {
   }
 
@@ -853,8 +794,7 @@ class GetElementExpression : public Expression {
 
 class MeshPatchIndexExpression : public Expression {
  public:
-  explicit MeshPatchIndexExpression(const DebugInfo &dbg_info = DebugInfo())
-      : Expression(dbg_info) {
+  explicit MeshPatchIndexExpression(const DebugInfo &dbg_info = DebugInfo()) : Expression(dbg_info) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -885,11 +825,7 @@ class MeshRelationAccessExpression : public Expression {
                                mesh::MeshElementType to_type,
                                const Expr neighbor_idx,
                                const DebugInfo &dbg_info = DebugInfo())
-      : Expression(dbg_info),
-        mesh(mesh),
-        mesh_idx(mesh_idx),
-        to_type(to_type),
-        neighbor_idx(neighbor_idx) {
+      : Expression(dbg_info), mesh(mesh), mesh_idx(mesh_idx), to_type(to_type), neighbor_idx(neighbor_idx) {
   }
 
   void flatten(FlattenContext *ctx) override;
@@ -922,8 +858,7 @@ class ReferenceExpression : public Expression {
   Expr var;
   void type_check(const CompileConfig *config) override;
 
-  explicit ReferenceExpression(const Expr &expr,
-                               const DebugInfo &dbg_info = DebugInfo())
+  explicit ReferenceExpression(const Expr &expr, const DebugInfo &dbg_info = DebugInfo())
       : Expression(dbg_info), var(expr) {
   }
 
@@ -952,6 +887,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.loop_name.clear();
     }
   };
 
@@ -963,8 +899,7 @@ class ASTBuilder {
   int id_counter_{0};
 
  public:
-  ASTBuilder(Block *initial, Arch arch, bool is_kernel)
-      : is_kernel_(is_kernel), arch_(arch) {
+  ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
     stack_.push_back(initial);
     loop_state_stack_.push_back(None);
   }
@@ -974,13 +909,9 @@ class ASTBuilder {
   Block *current_block();
   Stmt *get_last_stmt();
   void stop_gradient(SNode *);
-  void insert_assignment(Expr &lhs,
-                         const Expr &rhs,
-                         const DebugInfo &dbg_info = DebugInfo());
+  void insert_assignment(Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info = DebugInfo());
   Expr make_var(const Expr &x, const DebugInfo &dbg_info = DebugInfo());
-  void insert_for(const Expr &s,
-                  const Expr &e,
-                  const std::function<void(Expr)> &func);
+  void insert_for(const Expr &s, const Expr &e, const std::function<void(Expr)> &func);
 
   Expr make_id_expr(const std::string &name);
   Expr make_matrix_expr(const std::vector<int> &shape,
@@ -989,15 +920,13 @@ class ASTBuilder {
                         const DebugInfo &dbg_info = DebugInfo());
   Expr insert_thread_idx_expr();
   Expr insert_patch_idx_expr(const DebugInfo &dbg_info = DebugInfo());
-  void create_kernel_exprgroup_return(const ExprGroup &group,
-                                      const DebugInfo &dbg_info = DebugInfo());
+  void create_kernel_exprgroup_return(const ExprGroup &group, const DebugInfo &dbg_info = DebugInfo());
   void create_print(std::vector<std::variant<Expr, std::string>> contents,
                     std::vector<std::optional<std::string>> formats,
                     const DebugInfo &dbg_info = DebugInfo());
   void begin_func(const std::string &funcid);
   void end_func(const std::string &funcid);
-  void begin_frontend_if(const Expr &cond,
-                         const DebugInfo &dbg_info = DebugInfo());
+  void begin_frontend_if(const Expr &cond, const DebugInfo &dbg_info = DebugInfo());
   void begin_frontend_if_true();
   void begin_frontend_if_false();
   void insert_external_func_call(std::size_t func_addr,
@@ -1011,9 +940,7 @@ class ASTBuilder {
   Expr expr_alloca_shared_array(const std::vector<int> &shape,
                                 const DataType &element_type,
                                 const DebugInfo &dbg_info = DebugInfo());
-  Expr expr_subscript(const Expr &expr,
-                      const ExprGroup &indices,
-                      const DebugInfo &dbg_info = DebugInfo());
+  Expr expr_subscript(const Expr &expr, const ExprGroup &indices, const DebugInfo &dbg_info = DebugInfo());
 
   Expr mesh_index_conversion(mesh::MeshPtr mesh_ptr,
                              mesh::MeshElementType idx_type,
@@ -1021,43 +948,29 @@ class ASTBuilder {
                              mesh::ConvType &conv_type,
                              const DebugInfo &dbg_info = DebugInfo());
 
-  void expr_assign(const Expr &lhs,
-                   const Expr &rhs,
-                   const DebugInfo &dbg_info = DebugInfo());
-  std::optional<Expr> insert_func_call(Function *func,
-                                       const ExprGroup &args,
-                                       const DebugInfo &dbg_info = DebugInfo());
+  void expr_assign(const Expr &lhs, const Expr &rhs, const DebugInfo &dbg_info = DebugInfo());
+  std::optional<Expr> insert_func_call(Function *func, const ExprGroup &args, const DebugInfo &dbg_info = DebugInfo());
   void create_assert_stmt(const Expr &cond,
                           const std::string &msg,
                           const std::vector<Expr> &args,
                           const DebugInfo &dbg_info = DebugInfo());
-  void begin_frontend_range_for(const Expr &i,
-                                const Expr &s,
-                                const Expr &e,
-                                const DebugInfo &dbg_info = DebugInfo());
-  void begin_frontend_struct_for_on_snode(
-      const ExprGroup &loop_vars,
-      SNode *snode,
-      const DebugInfo &dbg_info = DebugInfo());
-  void begin_frontend_struct_for_on_external_tensor(
-      const ExprGroup &loop_vars,
-      const Expr &external_tensor,
-      const DebugInfo &dbg_info = DebugInfo());
+  void begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info = DebugInfo());
+  void begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
+                                          SNode *snode,
+                                          const DebugInfo &dbg_info = DebugInfo());
+  void begin_frontend_struct_for_on_external_tensor(const ExprGroup &loop_vars,
+                                                    const Expr &external_tensor,
+                                                    const DebugInfo &dbg_info = DebugInfo());
   void begin_frontend_mesh_for(const Expr &i,
                                const mesh::MeshPtr &mesh_ptr,
                                const mesh::MeshElementType &element_type,
                                const DebugInfo &dbg_info = DebugInfo());
-  void begin_frontend_while(const Expr &cond,
-                            const DebugInfo &dbg_info = DebugInfo());
+  void begin_frontend_while(const Expr &cond, const DebugInfo &dbg_info = DebugInfo());
   void insert_break_stmt(const DebugInfo &dbg_info = DebugInfo());
   void insert_continue_stmt(const DebugInfo &dbg_info = DebugInfo());
   void insert_expr_stmt(const Expr &val);
-  void insert_snode_activate(SNode *snode,
-                             const ExprGroup &expr_group,
-                             const DebugInfo &dbg_info = DebugInfo());
-  void insert_snode_deactivate(SNode *snode,
-                               const ExprGroup &expr_group,
-                               const DebugInfo &dbg_info = DebugInfo());
+  void insert_snode_activate(SNode *snode, const ExprGroup &expr_group, const DebugInfo &dbg_info = DebugInfo());
+  void insert_snode_deactivate(SNode *snode, const ExprGroup &expr_group, const DebugInfo &dbg_info = DebugInfo());
   /*
    * This function allocates the space for a new item (a struct or a scalar)
    * in the Dynamic SNode, and assigns values to the elements inside it.
@@ -1066,9 +979,7 @@ class ASTBuilder {
    * the number of elements in the struct. When appending a scalar,
    * the size of vals must be one.
    */
-  Expr snode_append(SNode *snode,
-                    const ExprGroup &indices,
-                    const std::vector<Expr> &vals);
+  Expr snode_append(SNode *snode, const ExprGroup &indices, const std::vector<Expr> &vals);
   Expr snode_is_active(SNode *snode, const ExprGroup &indices);
   Expr snode_length(SNode *snode, const ExprGroup &indices);
   Expr snode_get_addr(SNode *snode, const ExprGroup &indices);
@@ -1099,6 +1010,10 @@ class ASTBuilder {
     for_loop_dec_.config.block_dim = v;
   }
 
+  void set_loop_name(const std::string &loop_name) {
+    for_loop_dec_.config.loop_name = loop_name;
+  }
+
   void insert_snode_access_flag(SNodeAccessFlag v, const Expr &field) {
     for_loop_dec_.config.mem_access_opt.add_flag(field.snode(), v);
   }
@@ -1120,8 +1035,7 @@ class FrontendContext {
  public:
   explicit FrontendContext(Arch arch, bool is_kernel) {
     root_node_ = std::make_unique<Block>();
-    current_builder_ =
-        std::make_unique<ASTBuilder>(root_node_.get(), arch, is_kernel);
+    current_builder_ = std::make_unique<ASTBuilder>(root_node_.get(), arch, is_kernel);
   }
 
   ASTBuilder &builder() {

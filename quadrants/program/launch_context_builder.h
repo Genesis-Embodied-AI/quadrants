@@ -18,8 +18,7 @@ inline bool operator==(ArgArrayPtrKey lhs, ArgArrayPtrKey rhs) noexcept {
 
 struct ArgArrayPtrKeyHasher {
   size_t operator()(ArgArrayPtrKey k) const noexcept {
-    return (static_cast<size_t>(static_cast<uint32_t>(k.arg_id)) << 32) |
-           static_cast<uint32_t>(k.ptr_type);
+    return (static_cast<size_t>(static_cast<uint32_t>(k.arg_id)) << 32) | static_cast<uint32_t>(k.ptr_type);
   }
 };
 
@@ -51,20 +50,17 @@ class LaunchContextBuilder {
   // In this context, 'args_id' is a vector gathering the position of each
   // of these scalar arguments in the corresponding kernel. As a result, the
   // length 'args_id' and 'vec' must be equal.
-  void set_args_float(const std::vector<int> &args_id,
-                      const std::vector<float64> &vec);
+  void set_args_float(const std::vector<int> &args_id, const std::vector<float64> &vec);
 
   // Created signed and unsigned version for argument range check of pybind
   void set_arg_int(int arg_id, int64 d);
   // Bulk processing of multiple scalar int arguments at the same time.
   // See 'set_arg_float' documentation for details.
-  void set_args_int(const std::vector<int> &args_id,
-                    const std::vector<int64> &vec);
+  void set_args_int(const std::vector<int> &args_id, const std::vector<int64> &vec);
   // Bulk processing of multiple scalar uint arguments at the same time.
   // See 'set_arg_float' documentation for details.
   void set_arg_uint(int arg_id, uint64 d);
-  void set_args_uint(const std::vector<int> &args_id,
-                     const std::vector<uint64> &vec);
+  void set_args_uint(const std::vector<int> &args_id, const std::vector<uint64> &vec);
 
   void set_array_runtime_size(int arg_id, uint64 size);
 
@@ -112,11 +108,8 @@ class LaunchContextBuilder {
   // Bulk processing of multiple individual Taichi NDarray arguments (without
   // any associated gradient) at the same time.
   // See 'set_arg_float' for details.
-  void set_args_ndarray(const std::vector<int> &args_id,
-                        const std::vector<Ndarray *> &arrs);
-  void set_arg_ndarray_with_grad(int arg_id,
-                                 const Ndarray &arr,
-                                 const Ndarray &arr_grad);
+  void set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs);
+  void set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad);
   // Bulk processing of multiple individual Taichi NDarray arguments (along
   // with associated gradient) at the same time.
   // See 'set_arg_float' for details.
@@ -150,7 +143,7 @@ class LaunchContextBuilder {
   size_t arg_buffer_size{0};
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
-  bool use_cuda_graph{false};
+  bool use_graph{false};
   int graph_do_while_arg_id{-1};
   void *graph_do_while_flag_dev_ptr{nullptr};
 

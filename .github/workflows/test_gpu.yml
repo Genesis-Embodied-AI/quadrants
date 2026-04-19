@@ -119,7 +119,9 @@ jobs:
           python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
-          pip install torch
+          # pin to torch 12.8 for now, until we update the driver on the
+          # github runner gpu nodes
+          pip install torch --index-url https://download.pytorch.org/whl/cu128
           python tests/run_tests.py -r 1 -v --arch cuda -m needs_torch
   test_linux_vulkan:
     name: Test Linux Vulkan

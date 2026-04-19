@@ -26,8 +26,7 @@ class Axis {
   }
   explicit Axis(int value) : value(value) {
     QD_ERROR_UNLESS(0 <= value && value < quadrants_max_num_indices,
-                    "Too many dimensions. The maximum dimensionality is {}",
-                    quadrants_max_num_indices);
+                    "Too many dimensions. The maximum dimensionality is {}", quadrants_max_num_indices);
   }
 };
 
@@ -108,13 +107,12 @@ class SNode {
   // Quant
   PrimitiveType *physical_type{nullptr};  // for bit_struct and quant_array only
   int id_in_bit_struct{-1};               // for children of bit_struct only
-  bool is_bit_level{false};  // true if inside bit_struct or quant_array
+  bool is_bit_level{false};               // true if inside bit_struct or quant_array
 
   // Whether the path from root to |this| contains only `dense` SNodes.
   bool is_path_all_dense{true};
 
-  explicit SNode(SNodeFieldMap *snode_to_fields = nullptr,
-                 SNodeRwAccessorsBank *snode_rw_accessors_bank = nullptr);
+  explicit SNode(SNodeFieldMap *snode_to_fields = nullptr, SNodeRwAccessorsBank *snode_rw_accessors_bank = nullptr);
 
   SNode(int depth,
         SNodeType t,
@@ -141,22 +139,15 @@ class SNode {
                      const DebugInfo &dbg_info = DebugInfo());
 
   // SNodes maintains how flattened index bits are taken from indices
-  SNode &dense(const std::vector<Axis> &axes,
-               const std::vector<int> &sizes,
-               const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &dense(const std::vector<Axis> &axes, const std::vector<int> &sizes, const DebugInfo &dbg_info = DebugInfo()) {
     return create_node(axes, sizes, SNodeType::dense, dbg_info);
   }
 
-  SNode &dense(const std::vector<Axis> &axes,
-               int sizes,
-               const DebugInfo &dbg_info = DebugInfo()) {
-    return create_node(axes, std::vector<int>{sizes}, SNodeType::dense,
-                       dbg_info);
+  SNode &dense(const std::vector<Axis> &axes, int sizes, const DebugInfo &dbg_info = DebugInfo()) {
+    return create_node(axes, std::vector<int>{sizes}, SNodeType::dense, dbg_info);
   }
 
-  SNode &dense(const Axis &axis,
-               int size,
-               const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &dense(const Axis &axis, int size, const DebugInfo &dbg_info = DebugInfo()) {
     return SNode::dense(std::vector<Axis>{axis}, size, dbg_info);
   }
 
@@ -166,16 +157,11 @@ class SNode {
     return create_node(axes, sizes, SNodeType::pointer, dbg_info);
   }
 
-  SNode &pointer(const std::vector<Axis> &axes,
-                 int sizes,
-                 const DebugInfo &dbg_info = DebugInfo()) {
-    return create_node(axes, std::vector<int>{sizes}, SNodeType::pointer,
-                       dbg_info);
+  SNode &pointer(const std::vector<Axis> &axes, int sizes, const DebugInfo &dbg_info = DebugInfo()) {
+    return create_node(axes, std::vector<int>{sizes}, SNodeType::pointer, dbg_info);
   }
 
-  SNode &pointer(const Axis &axis,
-                 int size,
-                 const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &pointer(const Axis &axis, int size, const DebugInfo &dbg_info = DebugInfo()) {
     return SNode::pointer(std::vector<Axis>{axis}, size, dbg_info);
   }
 
@@ -185,35 +171,23 @@ class SNode {
     return create_node(axes, sizes, SNodeType::bitmasked, dbg_info);
   }
 
-  SNode &bitmasked(const std::vector<Axis> &axes,
-                   int sizes,
-                   const DebugInfo &dbg_info = DebugInfo()) {
-    return create_node(axes, std::vector<int>{sizes}, SNodeType::bitmasked,
-                       dbg_info);
+  SNode &bitmasked(const std::vector<Axis> &axes, int sizes, const DebugInfo &dbg_info = DebugInfo()) {
+    return create_node(axes, std::vector<int>{sizes}, SNodeType::bitmasked, dbg_info);
   }
 
-  SNode &bitmasked(const Axis &axis,
-                   int size,
-                   const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &bitmasked(const Axis &axis, int size, const DebugInfo &dbg_info = DebugInfo()) {
     return SNode::bitmasked(std::vector<Axis>{axis}, size, dbg_info);
   }
 
-  SNode &hash(const std::vector<Axis> &axes,
-              const std::vector<int> &sizes,
-              const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &hash(const std::vector<Axis> &axes, const std::vector<int> &sizes, const DebugInfo &dbg_info = DebugInfo()) {
     return create_node(axes, sizes, SNodeType::hash, dbg_info);
   }
 
-  SNode &hash(const std::vector<Axis> &axes,
-              int sizes,
-              const DebugInfo &dbg_info = DebugInfo()) {
-    return create_node(axes, std::vector<int>{sizes}, SNodeType::hash,
-                       dbg_info);
+  SNode &hash(const std::vector<Axis> &axes, int sizes, const DebugInfo &dbg_info = DebugInfo()) {
+    return create_node(axes, std::vector<int>{sizes}, SNodeType::hash, dbg_info);
   }
 
-  SNode &hash(const Axis &axis,
-              int size,
-              const DebugInfo &dbg_info = DebugInfo()) {
+  SNode &hash(const Axis &axis, int size, const DebugInfo &dbg_info = DebugInfo()) {
     return hash(std::vector<Axis>{axis}, size, dbg_info);
   }
 
@@ -221,8 +195,7 @@ class SNode {
     return snode_type_name(type);
   }
 
-  SNode &bit_struct(BitStructType *bit_struct_type,
-                    const DebugInfo &dbg_info = DebugInfo());
+  SNode &bit_struct(BitStructType *bit_struct_type, const DebugInfo &dbg_info = DebugInfo());
 
   SNode &quant_array(const std::vector<Axis> &axes,
                      const std::vector<int> &sizes,
@@ -233,10 +206,7 @@ class SNode {
 
   void set_index_offsets(std::vector<int> index_offsets);
 
-  SNode &dynamic(const Axis &expr,
-                 int n,
-                 int chunk_size,
-                 const DebugInfo &dbg_info = DebugInfo());
+  SNode &dynamic(const Axis &expr, int n, int chunk_size, const DebugInfo &dbg_info = DebugInfo());
 
   SNode &morton(bool val = true) {
     _morton = val;
@@ -257,8 +227,7 @@ class SNode {
   }
 
   bool has_allocator() const {
-    return type == SNodeType::pointer || type == SNodeType::hash ||
-           type == SNodeType::root;
+    return type == SNodeType::pointer || type == SNodeType::hash || type == SNodeType::root;
   }
 
   bool need_activation() const;
@@ -352,8 +321,7 @@ class SNode {
  private:
   int snode_tree_id_{0};
   SNodeFieldMap *snode_to_fields_{nullptr};
-  SNodeRwAccessorsBank *snode_rw_accessors_bank_{
-      nullptr};  // owned by the "Program" class
+  SNodeRwAccessorsBank *snode_rw_accessors_bank_{nullptr};  // owned by the "Program" class
 };
 
 }  // namespace quadrants::lang

@@ -32,11 +32,19 @@ interop
 ```
 
 ```{toctree}
+:caption: SIMT primitives
+:maxdepth: 1
+:titlesonly:
+
+tile16
+```
+
+```{toctree}
 :caption: Performance
 :maxdepth: 1
 :titlesonly:
 
-cuda_graph
+graph
 perf_dispatch
 ```
 
@@ -50,4 +58,12 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
 ```

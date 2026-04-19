@@ -27,8 +27,7 @@ class ExpressionPrinter : public ExpressionVisitor {
 
 class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
  public:
-  explicit ExpressionHumanFriendlyPrinter(std::ostream *os = nullptr)
-      : ExpressionPrinter(os) {
+  explicit ExpressionHumanFriendlyPrinter(std::ostream *os = nullptr) : ExpressionPrinter(os) {
   }
 
   void visit(ExprGroup &expr_group) override {
@@ -36,8 +35,8 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
   }
 
   void visit(ArgLoadExpression *expr) override {
-    emit(fmt::format("arg{}[{}] (dt={})", expr->create_load ? "load" : "addr",
-                     fmt::join(expr->arg_id, ", "), data_type_name(expr->dt)));
+    emit(fmt::format("arg{}[{}] (dt={})", expr->create_load ? "load" : "addr", fmt::join(expr->arg_id, ", "),
+                     data_type_name(expr->dt)));
   }
 
   void visit(RandExpression *expr) override {
@@ -82,15 +81,13 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
   }
 
   void visit(ExternalTensorExpression *expr) override {
-    emit(fmt::format("{}d_ext_arr (dt={}, grad={})", expr->ndim,
-                     expr->dt->to_string(), expr->needs_grad));
+    emit(fmt::format("{}d_ext_arr (dt={}, grad={})", expr->ndim, expr->dt->to_string(), expr->needs_grad));
   }
 
   void visit(FieldExpression *expr) override {
     emit("#", expr->ident.name());
     if (expr->snode) {
-      emit(
-          fmt::format(" (snode={})", expr->snode->get_node_type_name_hinted()));
+      emit(fmt::format(" (snode={})", expr->snode->get_node_type_name_hinted()));
     } else {
       emit(fmt::format(" (dt={})", expr->dt->to_string()));
     }
@@ -161,9 +158,8 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
 
   void visit(AtomicOpExpression *expr) override {
     const auto op_type = (std::size_t)expr->op_type;
-    constexpr const char *names_table[] = {
-        "atomic_add",     "atomic_sub",    "atomic_min",     "atomic_max",
-        "atomic_bit_and", "atomic_bit_or", "atomic_bit_xor", "atomic_mul"};
+    constexpr const char *names_table[] = {"atomic_add",     "atomic_sub",    "atomic_min",     "atomic_max",
+                                           "atomic_bit_and", "atomic_bit_or", "atomic_bit_xor", "atomic_mul"};
     if (op_type > std::size(names_table)) {
       // min/max not supported in the LLVM backend yet.
       QD_NOT_IMPLEMENTED;
@@ -222,8 +218,8 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
   }
 
   void visit(MeshIndexConversionExpression *expr) override {
-    emit("mesh_index_conversion(", mesh::conv_type_name(expr->conv_type), ", ",
-         mesh::element_type_name(expr->idx_type), ", ");
+    emit("mesh_index_conversion(", mesh::conv_type_name(expr->conv_type), ", ", mesh::element_type_name(expr->idx_type),
+         ", ");
     expr->idx->accept(this);
     emit(")");
   }
@@ -274,8 +270,7 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
 
   template <typename D>
   void emit_element(D &&e) {
-    using T =
-        typename std::remove_cv<typename std::remove_reference<D>::type>::type;
+    using T = typename std::remove_cv<typename std::remove_reference<D>::type>::type;
     if constexpr (std::is_same_v<T, Expr>) {
       e->accept(this);
     } else if constexpr (std::is_same_v<T, SNode *>) {

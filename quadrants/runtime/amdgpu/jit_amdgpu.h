@@ -55,9 +55,7 @@ class JITModuleAMDGPU : public JITModule {
     AMDGPUContext::get_instance().make_current();
     void *func = nullptr;
     auto t = Time::get_time();
-    auto err =
-        AMDGPUDriver::get_instance().module_get_function.call_with_warning(
-            &func, module_, name.c_str());
+    auto err = AMDGPUDriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
     if (err) {
       QD_ERROR("Cannot look up function {}", name);
     }
@@ -80,8 +78,7 @@ class JITModuleAMDGPU : public JITModule {
               const std::vector<void *> &arg_pointers,
               const std::vector<int> &arg_sizes) override {
     auto func = lookup_function(name);
-    AMDGPUContext::get_instance().launch(func, name, arg_pointers, arg_sizes,
-                                         grid_dim, block_dim,
+    AMDGPUContext::get_instance().launch(func, name, arg_pointers, arg_sizes, grid_dim, block_dim,
                                          dynamic_shared_mem_bytes);
   }
 
@@ -94,16 +91,15 @@ class JITSessionAMDGPU : public JITSession {
  public:
   llvm::DataLayout data_layout;
 
-  JITSessionAMDGPU(QuadrantsLLVMContext *tlctx,
-                   const CompileConfig &config,
-                   llvm::DataLayout data_layout)
+  JITSessionAMDGPU(QuadrantsLLVMContext *tlctx, const CompileConfig &config, llvm::DataLayout data_layout)
       : JITSession(tlctx, config), data_layout(data_layout) {
     random_num_ = get_random_num();
     char *env_dir = std::getenv("QD_TMP_DIR");
-    tmp_dir_ = "/tmp/quadrants_hsaco/";
-    if (env_dir) {
+    tmp_dir_ = "/tmp/quadrants_hsaco_" + std::to_string(getuid()) + "/";
+    // Treat an empty QD_TMP_DIR the same as unset, so the per-user default below is used.
+    if (env_dir && env_dir[0] != '\0') {
       tmp_dir_ = env_dir;
-      if (tmp_dir_[tmp_dir_.size() - 1] != '/') {
+      if (tmp_dir_.back() != '/') {
         tmp_dir_ += '/';
       }
     }
@@ -122,8 +118,7 @@ class JITSessionAMDGPU : public JITSession {
     if (!src_file.is_open()) {
       QD_ERROR(fmt::format("Open {} Error", filename));
     }
-    return std::string(std::istreambuf_iterator<char>(src_file),
-                       (std::istreambuf_iterator<char>()));
+    return std::string(std::istreambuf_iterator<char>(src_file), (std::istreambuf_iterator<char>()));
   }
 
   uint64 get_random_num() {
@@ -145,10 +140,9 @@ class JITSessionAMDGPU : public JITSession {
 
 #endif
 
-std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch);
+std::unique_ptr<JITSession> create_llvm_jit_session_amdgpu(QuadrantsLLVMContext *tlctx,
+                                                           const CompileConfig &config,
+                                                           Arch arch);
 
 }  // namespace lang
 }  // namespace quadrants
