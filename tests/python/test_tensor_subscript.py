@@ -25,7 +25,6 @@ from quadrants.lang.misc import get_host_arch_list
 
 from tests import test_utils
 
-
 # ---------------------------------------------------------------------------
 # Read / write — both layouts, both backends.
 # ---------------------------------------------------------------------------

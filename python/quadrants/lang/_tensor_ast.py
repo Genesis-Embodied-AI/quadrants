@@ -39,6 +39,7 @@ import inspect
 from typing import Any
 
 from quadrants.lang import _tensor
+from quadrants.lang._dataclass_util import create_flat_name
 
 
 def _is_tensor_param_annotation(annotation: Any) -> bool:
@@ -59,9 +60,7 @@ def _tensor_param_names(fn) -> list[str]:
     ]
 
 
-def extract_tensor_params_from_kernel_args(
-    fn, py_args: tuple[Any, ...]
-) -> dict[str, tuple[int, ...]]:
+def extract_tensor_params_from_kernel_args(fn, py_args: tuple[Any, ...]) -> dict[str, tuple[int, ...]]:
     """Return ``{param_name: layout_tuple}`` for every kernel parameter typed
     as a tensor backend variant.
 
@@ -96,8 +95,6 @@ def extract_tensor_params_from_expanded_args(
     layout slot's runtime value is the actual layout tuple. We match these
     by name in ``arg_metas_expanded`` to locate the layout position.
     """
-    from quadrants.lang._dataclass_util import create_flat_name
-
     by_name = {meta.name: i for i, meta in enumerate(arg_metas_expanded)}
     layouts: dict[str, tuple[int, ...]] = {}
     for name in _tensor_param_names(fn):
@@ -220,9 +217,7 @@ def _make_keepalive_layout_stmt(name: str, lineno: int, col_offset: int) -> ast.
     return stmt
 
 
-def unpack_ast_tensor_subscripts(
-    tree: ast.Module, tensor_layouts: dict[str, tuple[int, ...]]
-) -> ast.Module:
+def unpack_ast_tensor_subscripts(tree: ast.Module, tensor_layouts: dict[str, tuple[int, ...]]) -> ast.Module:
     """Apply :class:`_TensorSubscriptTransformer` to the tree, in place.
 
     Returns the (possibly mutated) tree with line numbers fixed up. If
@@ -242,8 +237,7 @@ def unpack_ast_tensor_subscripts(
         func_def = new_tree.body[0]
         first_stmt = func_def.body[0] if func_def.body else func_def
         keepalives = [
-            _make_keepalive_layout_stmt(name, first_stmt.lineno, first_stmt.col_offset)
-            for name in tensor_layouts
+            _make_keepalive_layout_stmt(name, first_stmt.lineno, first_stmt.col_offset) for name in tensor_layouts
         ]
         func_def.body = keepalives + func_def.body
 
