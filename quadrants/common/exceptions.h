@@ -127,16 +127,14 @@ struct ErrorEmitter {
   ErrorEmitter(ErrorEmitter &&) = delete;
 
   // Emit an error on stmt with error message
-  template <typename E,
-            typename = std::enable_if_t<
-                std::is_base_of_v<QuadrantsExceptionImpl, std::decay_t<E>>>,
-            // The expected type for T is `Stmt`, `Expression`, or `DebugInfo`.
-            // These types have a member function named get_tb() that returns
-            // trace back information as a `std::string`.
-            typename T,
-            typename = std::enable_if_t<std::is_same_v<
-                std::decay_t<decltype(std::declval<T>()->get_tb())>,
-                std::string>>>
+  template <
+      typename E,
+      typename = std::enable_if_t<std::is_base_of_v<QuadrantsExceptionImpl, std::decay_t<E>>>,
+      // The expected type for T is `Stmt`, `Expression`, or `DebugInfo`.
+      // These types have a member function named get_tb() that returns
+      // trace back information as a `std::string`.
+      typename T,
+      typename = std::enable_if_t<std::is_same_v<std::decay_t<decltype(std::declval<T>()->get_tb())>, std::string>>>
   ErrorEmitter(E &&error, T p_dbg_info, std::string &&error_msg) {
     if constexpr ((std::is_same_v<std::decay_t<T>, DebugInfo *> ||
                    std::is_same_v<std::decay_t<T>, const DebugInfo *>) &&

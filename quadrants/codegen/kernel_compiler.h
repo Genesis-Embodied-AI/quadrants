@@ -14,8 +14,7 @@ class KernelCompiler {
   using CKDPtr = std::unique_ptr<CompiledKernelData>;
 
   // AST -> CHI IR
-  virtual IRNodePtr compile(const CompileConfig &compile_config,
-                            const Kernel &kernel_def) const = 0;
+  virtual IRNodePtr compile(const CompileConfig &compile_config, const Kernel &kernel_def) const = 0;
 
   // CHI IR -> CompiledKernelData
   virtual CKDPtr compile(const CompileConfig &compile_config,

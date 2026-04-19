@@ -921,8 +921,9 @@ def test_dictcomp_fail():
         foo(5, 3)
 
 
+@pytest.mark.needs_torch
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_ndarray():
     n = 4
     m = 7

@@ -63,10 +63,7 @@ uint64 MemoryMonitor::get_usage() const {
 
 void MemoryMonitor::append_sample() {
   auto t = std::chrono::system_clock::now();
-  log_ << fmt::format(
-      "{:.5f} {}\n",
-      (t.time_since_epoch() / std::chrono::nanoseconds(1)) / 1e9_f64,
-      get_usage());
+  log_ << fmt::format("{:.5f} {}\n", (t.time_since_epoch() / std::chrono::nanoseconds(1)) / 1e9_f64, get_usage());
   log_.flush();
 }
 

@@ -411,7 +411,7 @@ def test_dataclass():
 
 @test_utils.test(arch=get_host_arch_list())
 def test_name_collision():
-    # https://github.com/taichi-dev/quadrants/issues/6652
+    # https://github.com/taichi-dev/taichi/issues/6652
     @qd.dataclass
     class Foo:
         zoo: qd.f32
@@ -428,7 +428,7 @@ def test_name_collision():
 
 @test_utils.test(debug=True)
 def test_dataclass_as_member():
-    # https://github.com/taichi-dev/quadrants/issues/6884
+    # https://github.com/taichi-dev/taichi/issues/6884
     @qd.dataclass
     class A:
         i: int

@@ -94,8 +94,7 @@ bool StmtFieldSNode::equal(const StmtField *other_generic) const {
 }
 
 bool StmtFieldMemoryAccessOptions::equal(const StmtField *other_generic) const {
-  if (auto other =
-          dynamic_cast<const StmtFieldMemoryAccessOptions *>(other_generic)) {
+  if (auto other = dynamic_cast<const StmtFieldMemoryAccessOptions *>(other_generic)) {
     return opt_.get_all() == other->opt_.get_all();
   } else {
     // Different types
@@ -209,16 +208,14 @@ std::string Stmt::get_last_tb() const {
   const auto *callable = get_callable();
   const auto callable_name = callable ? callable->get_name() : "";
 
-  std::string prefix =
-      !callable_name.empty() ? "While compiling `" + callable_name + "`, " : "";
+  std::string prefix = !callable_name.empty() ? "While compiling `" + callable_name + "`, " : "";
 
   const auto &tb = dbg_info.tb;
   if (tb.empty()) {
     // If has no tb, try to find tb from the immediate previous statement
     if (parent) {
-      auto it_this = std::find_if(
-          parent->statements.rbegin(), parent->statements.rend(),
-          [this](const pStmt &stmt) { return stmt.get() == this; });
+      auto it_this = std::find_if(parent->statements.rbegin(), parent->statements.rend(),
+                                  [this](const pStmt &stmt) { return stmt.get() == this; });
 
       while (it_this != parent->statements.rend()) {
         const auto &stmt = *it_this;
@@ -231,8 +228,7 @@ std::string Stmt::get_last_tb() const {
 
     const auto stmt_type_name = typeid(*this).name();
 
-    return fmt::format("{}Statement {} (type={});\n", prefix, name(),
-                       cpp_demangle(stmt_type_name));
+    return fmt::format("{}Statement {} (type={});\n", prefix, name(), cpp_demangle(stmt_type_name));
   }
 
   return prefix + tb;
@@ -287,8 +283,7 @@ void Block::erase(Stmt *stmt) {
   erase_range(iter, std::next(iter));
 }
 
-void Block::erase_range(stmt_vector::iterator begin,
-                        stmt_vector::iterator end) {
+void Block::erase_range(stmt_vector::iterator begin, stmt_vector::iterator end) {
   for (auto iter = begin; iter != end; iter++) {
     (*iter)->erased = true;
     trash_bin.push_back(std::move(*iter));
@@ -330,8 +325,7 @@ Stmt *Block::insert(std::unique_ptr<Stmt> &&stmt, int location) {
   return insert_at(std::move(stmt), locate(location));
 }
 
-Stmt *Block::insert_at(std::unique_ptr<Stmt> &&stmt,
-                       stmt_vector::iterator location) {
+Stmt *Block::insert_at(std::unique_ptr<Stmt> &&stmt, stmt_vector::iterator location) {
   auto stmt_ptr = stmt.get();
   stmt->parent = this;
   statements.insert(location, std::move(stmt));
@@ -350,22 +344,17 @@ Stmt *Block::insert_at(VecStatement &&stmt, stmt_vector::iterator location) {
   for (auto &s : stmt.stmts) {
     s->parent = this;
   }
-  statements.insert(location, std::make_move_iterator(stmt.stmts.begin()),
-                    std::make_move_iterator(stmt.stmts.end()));
+  statements.insert(location, std::make_move_iterator(stmt.stmts.begin()), std::make_move_iterator(stmt.stmts.end()));
   return stmt_ptr;
 }
 
-void Block::replace_statements_in_range(int start,
-                                        int end,
-                                        VecStatement &&stmts) {
+void Block::replace_statements_in_range(int start, int end, VecStatement &&stmts) {
   QD_ASSERT(start <= end);
   erase_range(locate(start), locate(end));
   insert(std::move(stmts), start);
 }
 
-void Block::replace_with(Stmt *old_statement,
-                         std::unique_ptr<Stmt> &&new_statement,
-                         bool replace_usages) {
+void Block::replace_with(Stmt *old_statement, std::unique_ptr<Stmt> &&new_statement, bool replace_usages) {
   VecStatement vec;
   vec.push_back(std::move(new_statement));
   replace_with(old_statement, std::move(vec), replace_usages);
@@ -399,9 +388,7 @@ void Block::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
   insert_at(std::move(new_statements), std::next(find(old_statement)));
 }
 
-void Block::replace_with(Stmt *old_statement,
-                         VecStatement &&new_statements,
-                         bool replace_usages) {
+void Block::replace_with(Stmt *old_statement, VecStatement &&new_statements, bool replace_usages) {
   auto iter = find(old_statement);
   QD_ASSERT(iter != statements.end());
   if (replace_usages && !new_statements.stmts.empty())
@@ -469,8 +456,7 @@ stmt_vector::iterator Block::locate(int location) {
 }
 
 stmt_vector::iterator Block::find(Stmt *stmt) {
-  return std::find_if(statements.begin(), statements.end(),
-                      [stmt](const pStmt &x) { return x.get() == stmt; });
+  return std::find_if(statements.begin(), statements.end(), [stmt](const pStmt &x) { return x.get() == stmt; });
 }
 
 std::unique_ptr<Block> Block::clone() const {
@@ -497,33 +483,24 @@ void DelayedIRModifier::erase(Stmt *stmt) {
   to_erase_.push_back(stmt);
 }
 
-void DelayedIRModifier::insert_before(Stmt *old_statement,
-                                      std::unique_ptr<Stmt> new_statements) {
-  to_insert_before_.emplace_back(old_statement,
-                                 VecStatement(std::move(new_statements)));
+void DelayedIRModifier::insert_before(Stmt *old_statement, std::unique_ptr<Stmt> new_statements) {
+  to_insert_before_.emplace_back(old_statement, VecStatement(std::move(new_statements)));
 }
 
-void DelayedIRModifier::insert_before(Stmt *old_statement,
-                                      VecStatement &&new_statements) {
+void DelayedIRModifier::insert_before(Stmt *old_statement, VecStatement &&new_statements) {
   to_insert_before_.emplace_back(old_statement, std::move(new_statements));
 }
 
-void DelayedIRModifier::insert_after(Stmt *old_statement,
-                                     std::unique_ptr<Stmt> new_statements) {
-  to_insert_after_.emplace_back(old_statement,
-                                VecStatement(std::move(new_statements)));
+void DelayedIRModifier::insert_after(Stmt *old_statement, std::unique_ptr<Stmt> new_statements) {
+  to_insert_after_.emplace_back(old_statement, VecStatement(std::move(new_statements)));
 }
 
-void DelayedIRModifier::insert_after(Stmt *old_statement,
-                                     VecStatement &&new_statements) {
+void DelayedIRModifier::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
   to_insert_after_.emplace_back(old_statement, std::move(new_statements));
 }
 
-void DelayedIRModifier::replace_with(Stmt *stmt,
-                                     VecStatement &&new_statements,
-                                     bool replace_usages) {
-  to_replace_with_.emplace_back(stmt, std::move(new_statements),
-                                replace_usages);
+void DelayedIRModifier::replace_with(Stmt *stmt, VecStatement &&new_statements, bool replace_usages) {
+  to_replace_with_.emplace_back(stmt, std::move(new_statements), replace_usages);
 }
 
 void DelayedIRModifier::extract_to_block_front(Stmt *stmt, Block *blk) {
@@ -537,8 +514,7 @@ void DelayedIRModifier::type_check(IRNode *node, CompileConfig cfg) {
 bool DelayedIRModifier::modify_ir() {
   bool force_modified = modified_;
   modified_ = false;
-  if (to_insert_before_.empty() && to_insert_after_.empty() &&
-      to_erase_.empty() && to_replace_with_.empty() &&
+  if (to_insert_before_.empty() && to_insert_after_.empty() && to_erase_.empty() && to_replace_with_.empty() &&
       to_extract_to_block_front_.empty() && to_type_check_.empty())
     return force_modified;
   for (auto &i : to_insert_before_) {

@@ -30,39 +30,33 @@ class Task : public Unit {
 QD_INTERFACE(Task)
 
 template <typename T>
-inline std::enable_if_t<
-    std::is_same<std::result_of_t<T(const std::vector<std::string> &)>,
-                 void>::value ||
-        std::is_same<std::result_of_t<T(const std::vector<std::string> &)>,
-                     const char *>::value,
-    std::string>
+inline std::enable_if_t<std::is_same<std::result_of_t<T(const std::vector<std::string> &)>, void>::value ||
+                            std::is_same<std::result_of_t<T(const std::vector<std::string> &)>, const char *>::value,
+                        std::string>
 task_invoke(const T &func, const std::vector<std::string> &params) {
   func(params);
   return "";
 }
 
 template <typename T>
-inline std::enable_if_t<
-    std::is_same<std::result_of_t<T(const std::vector<std::string> &)>,
-                 std::string>::value,
-    std::string>
+inline std::enable_if_t<std::is_same<std::result_of_t<T(const std::vector<std::string> &)>, std::string>::value,
+                        std::string>
 task_invoke(const T &func, const std::vector<std::string> &params) {
   return func(params);
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_same<std::result_of_t<T()>, void>::value,
-                        std::string>
-task_invoke(const T &func, const std::vector<std::string> &params) {
+inline std::enable_if_t<std::is_same<std::result_of_t<T()>, void>::value, std::string> task_invoke(
+    const T &func,
+    const std::vector<std::string> &params) {
   func();
   return "";
 }
 
 template <typename T>
-inline std::enable_if_t<
-    std::is_same<std::result_of_t<T()>, std::string>::value ||
-        std::is_same<std::result_of_t<T()>, const char *>::value,
-    std::string>
+inline std::enable_if_t<std::is_same<std::result_of_t<T()>, std::string>::value ||
+                            std::is_same<std::result_of_t<T()>, const char *>::value,
+                        std::string>
 task_invoke(const T &func, const std::vector<std::string> &params) {
   return func();
 }

@@ -43,6 +43,7 @@ def test_ternary_op():
         select()
 
 
+@pytest.mark.needs_torch
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
 @test_utils.test(arch=[qd.cpu], print_full_traceback=False)
 def test_subscript():

@@ -20,8 +20,7 @@ class IRVerifier : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  explicit IRVerifier(IRNode *root)
-      : current_block_(nullptr), current_container_stmt_(nullptr) {
+  explicit IRVerifier(IRNode *root) : current_block_(nullptr), current_container_stmt_(nullptr) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
     if (!root->is<Block>())
@@ -32,8 +31,7 @@ class IRVerifier : public BasicStmtVisitor {
   }
 
   void basic_verify(Stmt *stmt) {
-    QD_ASSERT_INFO(stmt->parent == current_block_,
-                   "stmt({})->parent({}) != current_block({})", stmt->id,
+    QD_ASSERT_INFO(stmt->parent == current_block_, "stmt({})->parent({}) != current_block({})", stmt->id,
                    fmt::ptr(stmt->parent), fmt::ptr(current_block_));
     for (auto &op : stmt->get_operands()) {
       if (op == nullptr)
@@ -45,16 +43,16 @@ class IRVerifier : public BasicStmtVisitor {
           break;
         }
       }
-      QD_ASSERT_INFO(
-          found,
-          "IR broken: stmt {} {} cannot have operand {} {}."
-          " If you are using autodiff, please check out"
-          " https://docs.taichi-lang.org/docs/"
-          "differences_between_quadrants_and_python_programs"
-          " If it doesn't help, please open an issue at"
-          " https://github.com/taichi-dev/quadrants to help us improve."
-          " Thanks in advance!",
-          stmt->type(), stmt->id, op->type(), op->id);
+      QD_ASSERT_INFO(found,
+                     "IR broken: stmt {} {} cannot have operand {} {}."
+                     " If you are using autodiff, please check out"
+                     " https://genesis-embodied-ai.github.io/quadrants/"
+                     "user_guide/unsupported_python.html"
+                     " If it doesn't help, please open an issue at"
+                     " https://github.com/Genesis-Embodied-AI/quadrants/issues"
+                     " to help us improve."
+                     " Thanks in advance!",
+                     stmt->type(), stmt->id, op->type(), op->id);
     }
     visible_stmts_.back().insert(stmt);
   }
@@ -68,11 +66,10 @@ class IRVerifier : public BasicStmtVisitor {
   }
 
   void visit(Block *block) override {
-    QD_ASSERT_INFO(
-        block->parent_stmt() == current_container_stmt_,
-        "block({})->parent({}) != current_container_stmt({})", fmt::ptr(block),
-        block->parent_stmt() ? block->parent_stmt()->name() : "nullptr",
-        current_container_stmt_ ? current_container_stmt_->name() : "nullptr");
+    QD_ASSERT_INFO(block->parent_stmt() == current_container_stmt_,
+                   "block({})->parent({}) != current_container_stmt({})", fmt::ptr(block),
+                   block->parent_stmt() ? block->parent_stmt()->name() : "nullptr",
+                   current_container_stmt_ ? current_container_stmt_->name() : "nullptr");
     auto backup_block = current_block_;
     current_block_ = block;
     auto backup_container_stmt = current_container_stmt_;
@@ -93,27 +90,23 @@ class IRVerifier : public BasicStmtVisitor {
   void visit(OffloadedStmt *stmt) override {
     basic_verify(stmt);
     if (stmt->has_body() && !stmt->body) {
-      QD_ERROR("offloaded {} ({})->body is nullptr",
-               offloaded_task_type_name(stmt->task_type), stmt->name());
+      QD_ERROR("offloaded {} ({})->body is nullptr", offloaded_task_type_name(stmt->task_type), stmt->name());
     } else if (!stmt->has_body() && stmt->body) {
-      QD_ERROR("offloaded {} ({})->body is {} (should be nullptr)",
-               offloaded_task_type_name(stmt->task_type), stmt->name(),
-               fmt::ptr(stmt->body));
+      QD_ERROR("offloaded {} ({})->body is {} (should be nullptr)", offloaded_task_type_name(stmt->task_type),
+               stmt->name(), fmt::ptr(stmt->body));
     }
     stmt->all_blocks_accept(this);
   }
 
   void visit(LocalLoadStmt *stmt) override {
     basic_verify(stmt);
-    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
-              stmt->src->is<MatrixOfMatrixPtrStmt>());
+    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() || stmt->src->is<MatrixOfMatrixPtrStmt>());
   }
 
   void visit(LocalStoreStmt *stmt) override {
     basic_verify(stmt);
     QD_ASSERT(stmt->dest->is<AllocaStmt>() ||
-              (stmt->dest->is<MatrixPtrStmt>() &&
-               stmt->dest->cast<MatrixPtrStmt>()->offset_used_as_index()) ||
+              (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->cast<MatrixPtrStmt>()->offset_used_as_index()) ||
               (stmt->dest->is<MatrixOfMatrixPtrStmt>()));
   }
 
@@ -121,16 +114,11 @@ class IRVerifier : public BasicStmtVisitor {
     basic_verify(stmt);
     QD_ASSERT(stmt->loop);
     if (stmt->loop->is<OffloadedStmt>()) {
-      QD_ASSERT(stmt->loop->as<OffloadedStmt>()->task_type ==
-                    OffloadedStmt::TaskType::struct_for ||
-                stmt->loop->as<OffloadedStmt>()->task_type ==
-                    OffloadedStmt::TaskType::mesh_for ||
-                stmt->loop->as<OffloadedStmt>()->task_type ==
-                    OffloadedStmt::TaskType::range_for);
+      QD_ASSERT(stmt->loop->as<OffloadedStmt>()->task_type == OffloadedStmt::TaskType::struct_for ||
+                stmt->loop->as<OffloadedStmt>()->task_type == OffloadedStmt::TaskType::mesh_for ||
+                stmt->loop->as<OffloadedStmt>()->task_type == OffloadedStmt::TaskType::range_for);
     } else {
-      QD_ASSERT(stmt->loop->is<StructForStmt>() ||
-                stmt->loop->is<MeshForStmt>() ||
-                stmt->loop->is<RangeForStmt>());
+      QD_ASSERT(stmt->loop->is<StructForStmt>() || stmt->loop->is<MeshForStmt>() || stmt->loop->is<RangeForStmt>());
     }
   }
 

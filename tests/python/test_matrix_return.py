@@ -16,7 +16,7 @@ def test_vector_return():
     _test_vector_return()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_vector_return_real_matrix():
     _test_vector_return()
 
@@ -29,12 +29,12 @@ def _test_matrix_return():
     assert (func() == qd.Matrix([[1, 2, 3], [4, 5, 6]])).all()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.metal])
+@test_utils.test()
 def test_matrix_return():
     _test_matrix_return()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_matrix_return_real_matrix():
     _test_matrix_return()
 
@@ -67,6 +67,6 @@ def test_matrix_return_limit():
     _test_matrix_return_limit()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_matrix_return_limit_real_matrix():
     _test_matrix_return_limit()

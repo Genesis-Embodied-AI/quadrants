@@ -17,9 +17,7 @@ class SNodeTreeBufferManager {
  public:
   explicit SNodeTreeBufferManager(LlvmRuntimeExecutor *runtime_exec);
 
-  Ptr allocate(std::size_t size,
-               const int snode_tree_id,
-               uint64 *result_buffer);
+  Ptr allocate(std::size_t size, const int snode_tree_id, uint64 *result_buffer);
 
   void destroy(SNodeTree *snode_tree);
 

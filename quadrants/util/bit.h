@@ -53,8 +53,7 @@ struct Bits {
 
   template <int start, int bits = 1>
   QD_FORCE_INLINE void set(T val) {
-    data =
-        (data & ~mask<start, bits>()) | ((val << start) & mask<start, bits>());
+    data = (data & ~mask<start, bits>()) | ((val << start) & mask<start, bits>());
   }
 
   QD_FORCE_INLINE T operator()(T) const {
@@ -136,8 +135,7 @@ constexpr QD_FORCE_INLINE copy_refcv_t<T, G> &&reinterpret_bits(T &&t) {
 };
 
 QD_FORCE_INLINE constexpr float64 compress(float32 h, float32 l) {
-  uint64 data =
-      ((uint64)reinterpret_bits<uint32>(h) << 32) + reinterpret_bits<uint32>(l);
+  uint64 data = ((uint64)reinterpret_bits<uint32>(h) << 32) + reinterpret_bits<uint32>(l);
   return reinterpret_bits<float64>(data);
 }
 

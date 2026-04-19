@@ -20,18 +20,15 @@ template <typename T>
 std::shared_ptr<T> create_instance(const std::string &alias);
 
 template <typename T>
-std::shared_ptr<T> create_instance(const std::string &alias,
-                                   const Config &config);
+std::shared_ptr<T> create_instance(const std::string &alias, const Config &config);
 
 template <typename T>
 std::unique_ptr<T> create_instance_unique(const std::string &alias);
 
 template <typename T>
-std::unique_ptr<T> create_instance_unique(const std::string &alias,
-                                          const Config &config);
+std::unique_ptr<T> create_instance_unique(const std::string &alias, const Config &config);
 template <typename T>
-std::unique_ptr<T> create_instance_unique_ctor(const std::string &alias,
-                                               const Config &config);
+std::unique_ptr<T> create_instance_unique_ctor(const std::string &alias, const Config &config);
 
 template <typename T>
 T *create_instance_raw(const std::string &alias);
@@ -43,9 +40,7 @@ template <typename T>
 T *create_instance_placement(const std::string &alias, void *place);
 
 template <typename T>
-T *create_instance_placement(const std::string &alias,
-                             void *place,
-                             const Config &config);
+T *create_instance_placement(const std::string &alias, void *place, const Config &config);
 
 template <typename T>
 std::vector<std::string> get_implementation_names();
@@ -96,13 +91,11 @@ class InterfaceHolder {
   std::map<std::string, RegistrationMethod> methods;
   std::map<std::string, ImplementationHolderBase *> interfaces;
 
-  void register_registration_method(const std::string &name,
-                                    const RegistrationMethod &method) {
+  void register_registration_method(const std::string &name, const RegistrationMethod &method) {
     methods[name] = method;
   }
 
-  void register_interface(const std::string &name,
-                          ImplementationHolderBase *interface_) {
+  void register_interface(const std::string &name, ImplementationHolderBase *interface_) {
     interfaces[name] = interface_;
   }
 
@@ -112,217 +105,178 @@ class InterfaceHolder {
   }
 };
 
-#define QD_INTERFACE(T)                                                       \
-  extern void *get_implementation_holder_instance_##T();                      \
-  class QD_IMPLEMENTATION_HOLDER_NAME(T) final                                \
-      : public ImplementationHolderBase {                                     \
-   public:                                                                    \
-    explicit QD_IMPLEMENTATION_HOLDER_NAME(T)(const std::string &name) {      \
-      this->name = name;                                                      \
-    }                                                                         \
-    using FactoryMethod = std::function<std::shared_ptr<T>()>;                \
-    using FactoryUniqueMethod = std::function<std::unique_ptr<T>()>;          \
-    using FactoryUniqueCtorMethod =                                           \
-        std::function<std::unique_ptr<T>(const Dict &config)>;                \
-    using FactoryRawMethod = std::function<T *()>;                            \
-    using FactoryPlacementMethod = std::function<T *(void *)>;                \
-    std::map<std::string, FactoryMethod> implementation_factories;            \
-    std::map<std::string, FactoryUniqueMethod>                                \
-        implementation_unique_factories;                                      \
-    std::map<std::string, FactoryUniqueCtorMethod>                            \
-        implementation_unique_ctor_factories;                                 \
-    std::map<std::string, FactoryRawMethod> implementation_raw_factories;     \
-    std::map<std::string, FactoryPlacementMethod>                             \
-        implementation_placement_factories;                                   \
-    std::vector<std::string> get_implementation_names() const override {      \
-      std::vector<std::string> names;                                         \
-      for (auto &kv : implementation_factories) {                             \
-        names.push_back(kv.first);                                            \
-      }                                                                       \
-      return names;                                                           \
-    }                                                                         \
-    template <typename G>                                                     \
-    void insert(const std::string &alias) {                                   \
-      implementation_factories.insert(                                        \
-          std::make_pair(alias, [&]() { return std::make_shared<G>(); }));    \
-      implementation_unique_factories.insert(                                 \
-          std::make_pair(alias, [&]() { return std::make_unique<G>(); }));    \
-      implementation_raw_factories.insert(                                    \
-          std::make_pair(alias, [&]() { return new G(); }));                  \
-      implementation_placement_factories.insert(std::make_pair(               \
-          alias, [&](void *place) { return new (place) G(); }));              \
-    }                                                                         \
-    template <typename G>                                                     \
-    void insert_new(const std::string &alias) {                               \
-      /*with ctor*/                                                           \
-      implementation_factories.insert(                                        \
-          std::make_pair(alias, [&]() { return std::make_shared<G>(); }));    \
-      implementation_unique_factories.insert(                                 \
-          std::make_pair(alias, [&]() { return std::make_unique<G>(); }));    \
-      implementation_unique_ctor_factories.insert(std::make_pair(             \
-          alias,                                                              \
-          [&](const Dict &config) { return std::make_unique<G>(config); }));  \
-      implementation_raw_factories.insert(                                    \
-          std::make_pair(alias, [&]() { return new G(); }));                  \
-      implementation_placement_factories.insert(std::make_pair(               \
-          alias, [&](void *place) { return new (place) G(); }));              \
-    }                                                                         \
-    void insert(const std::string &alias, const FactoryMethod &f) {           \
-      implementation_factories.insert(std::make_pair(alias, f));              \
-    }                                                                         \
-    bool has(const std::string &alias) const override {                       \
-      return implementation_factories.find(alias) !=                          \
-             implementation_factories.end();                                  \
-    }                                                                         \
-    void remove(const std::string &alias) override {                          \
-      QD_ASSERT_INFO(has(alias),                                              \
-                     std::string("Implementation ") + alias + " not found!"); \
-      implementation_factories.erase(alias);                                  \
-    }                                                                         \
-    void update(const std::string &alias, const FactoryMethod &f) {           \
-      if (has(alias)) {                                                       \
-        remove(alias);                                                        \
-      }                                                                       \
-      insert(alias, f);                                                       \
-    }                                                                         \
-    template <typename G>                                                     \
-    void update(const std::string &alias) {                                   \
-      if (has(alias)) {                                                       \
-        remove(alias);                                                        \
-      }                                                                       \
-      insert<G>(alias);                                                       \
-    }                                                                         \
-    std::shared_ptr<T> create(const std::string &alias) {                     \
-      auto factory = implementation_factories.find(alias);                    \
-      QD_ASSERT_INFO(                                                         \
-          factory != implementation_factories.end(),                          \
-          "Implementation [" + name + "::" + alias + "] not found!");         \
-      return (factory->second)();                                             \
-    }                                                                         \
-    std::unique_ptr<T> create_unique(const std::string &alias) {              \
-      auto factory = implementation_unique_factories.find(alias);             \
-      QD_ASSERT_INFO(                                                         \
-          factory != implementation_unique_factories.end(),                   \
-          "Implementation [" + name + "::" + alias + "] not found!");         \
-      return (factory->second)();                                             \
-    }                                                                         \
-    std::unique_ptr<T> create_unique_ctor(const std::string &alias,           \
-                                          const Dict &config) {               \
-      auto factory = implementation_unique_ctor_factories.find(alias);        \
-      QD_ASSERT_INFO(                                                         \
-          factory != implementation_unique_ctor_factories.end(),              \
-          "Implementation [" + name + "::" + alias + "] not found!");         \
-      return (factory->second)(config);                                       \
-    }                                                                         \
-    T *create_raw(const std::string &alias) {                                 \
-      auto factory = implementation_raw_factories.find(alias);                \
-      QD_ASSERT_INFO(                                                         \
-          factory != implementation_raw_factories.end(),                      \
-          "Implementation [" + name + "::" + alias + "] not found!");         \
-      return (factory->second)();                                             \
-    }                                                                         \
-    T *create_placement(const std::string &alias, void *place) {              \
-      auto factory = implementation_placement_factories.find(alias);          \
-      QD_ASSERT_INFO(                                                         \
-          factory != implementation_placement_factories.end(),                \
-          "Implementation [" + name + "::" + alias + "] not found!");         \
-      return (factory->second)(place);                                        \
-    }                                                                         \
-    static QD_IMPLEMENTATION_HOLDER_NAME(T) * get_instance() {                \
-      return static_cast<QD_IMPLEMENTATION_HOLDER_NAME(T) *>(                 \
-          get_implementation_holder_instance_##T());                          \
-    }                                                                         \
-  };                                                                          \
+#define QD_INTERFACE(T)                                                                                               \
+  extern void *get_implementation_holder_instance_##T();                                                              \
+  class QD_IMPLEMENTATION_HOLDER_NAME(T) final : public ImplementationHolderBase {                                    \
+   public:                                                                                                            \
+    explicit QD_IMPLEMENTATION_HOLDER_NAME(T)(const std::string &name) {                                              \
+      this->name = name;                                                                                              \
+    }                                                                                                                 \
+    using FactoryMethod = std::function<std::shared_ptr<T>()>;                                                        \
+    using FactoryUniqueMethod = std::function<std::unique_ptr<T>()>;                                                  \
+    using FactoryUniqueCtorMethod = std::function<std::unique_ptr<T>(const Dict &config)>;                            \
+    using FactoryRawMethod = std::function<T *()>;                                                                    \
+    using FactoryPlacementMethod = std::function<T *(void *)>;                                                        \
+    std::map<std::string, FactoryMethod> implementation_factories;                                                    \
+    std::map<std::string, FactoryUniqueMethod> implementation_unique_factories;                                       \
+    std::map<std::string, FactoryUniqueCtorMethod> implementation_unique_ctor_factories;                              \
+    std::map<std::string, FactoryRawMethod> implementation_raw_factories;                                             \
+    std::map<std::string, FactoryPlacementMethod> implementation_placement_factories;                                 \
+    std::vector<std::string> get_implementation_names() const override {                                              \
+      std::vector<std::string> names;                                                                                 \
+      for (auto &kv : implementation_factories) {                                                                     \
+        names.push_back(kv.first);                                                                                    \
+      }                                                                                                               \
+      return names;                                                                                                   \
+    }                                                                                                                 \
+    template <typename G>                                                                                             \
+    void insert(const std::string &alias) {                                                                           \
+      implementation_factories.insert(std::make_pair(alias, [&]() { return std::make_shared<G>(); }));                \
+      implementation_unique_factories.insert(std::make_pair(alias, [&]() { return std::make_unique<G>(); }));         \
+      implementation_raw_factories.insert(std::make_pair(alias, [&]() { return new G(); }));                          \
+      implementation_placement_factories.insert(std::make_pair(alias, [&](void *place) { return new (place) G(); })); \
+    }                                                                                                                 \
+    template <typename G>                                                                                             \
+    void insert_new(const std::string &alias) {                                                                       \
+      /*with ctor*/                                                                                                   \
+      implementation_factories.insert(std::make_pair(alias, [&]() { return std::make_shared<G>(); }));                \
+      implementation_unique_factories.insert(std::make_pair(alias, [&]() { return std::make_unique<G>(); }));         \
+      implementation_unique_ctor_factories.insert(                                                                    \
+          std::make_pair(alias, [&](const Dict &config) { return std::make_unique<G>(config); }));                    \
+      implementation_raw_factories.insert(std::make_pair(alias, [&]() { return new G(); }));                          \
+      implementation_placement_factories.insert(std::make_pair(alias, [&](void *place) { return new (place) G(); })); \
+    }                                                                                                                 \
+    void insert(const std::string &alias, const FactoryMethod &f) {                                                   \
+      implementation_factories.insert(std::make_pair(alias, f));                                                      \
+    }                                                                                                                 \
+    bool has(const std::string &alias) const override {                                                               \
+      return implementation_factories.find(alias) != implementation_factories.end();                                  \
+    }                                                                                                                 \
+    void remove(const std::string &alias) override {                                                                  \
+      QD_ASSERT_INFO(has(alias), std::string("Implementation ") + alias + " not found!");                             \
+      implementation_factories.erase(alias);                                                                          \
+    }                                                                                                                 \
+    void update(const std::string &alias, const FactoryMethod &f) {                                                   \
+      if (has(alias)) {                                                                                               \
+        remove(alias);                                                                                                \
+      }                                                                                                               \
+      insert(alias, f);                                                                                               \
+    }                                                                                                                 \
+    template <typename G>                                                                                             \
+    void update(const std::string &alias) {                                                                           \
+      if (has(alias)) {                                                                                               \
+        remove(alias);                                                                                                \
+      }                                                                                                               \
+      insert<G>(alias);                                                                                               \
+    }                                                                                                                 \
+    std::shared_ptr<T> create(const std::string &alias) {                                                             \
+      auto factory = implementation_factories.find(alias);                                                            \
+      QD_ASSERT_INFO(factory != implementation_factories.end(),                                                       \
+                     "Implementation [" + name + "::" + alias + "] not found!");                                      \
+      return (factory->second)();                                                                                     \
+    }                                                                                                                 \
+    std::unique_ptr<T> create_unique(const std::string &alias) {                                                      \
+      auto factory = implementation_unique_factories.find(alias);                                                     \
+      QD_ASSERT_INFO(factory != implementation_unique_factories.end(),                                                \
+                     "Implementation [" + name + "::" + alias + "] not found!");                                      \
+      return (factory->second)();                                                                                     \
+    }                                                                                                                 \
+    std::unique_ptr<T> create_unique_ctor(const std::string &alias, const Dict &config) {                             \
+      auto factory = implementation_unique_ctor_factories.find(alias);                                                \
+      QD_ASSERT_INFO(factory != implementation_unique_ctor_factories.end(),                                           \
+                     "Implementation [" + name + "::" + alias + "] not found!");                                      \
+      return (factory->second)(config);                                                                               \
+    }                                                                                                                 \
+    T *create_raw(const std::string &alias) {                                                                         \
+      auto factory = implementation_raw_factories.find(alias);                                                        \
+      QD_ASSERT_INFO(factory != implementation_raw_factories.end(),                                                   \
+                     "Implementation [" + name + "::" + alias + "] not found!");                                      \
+      return (factory->second)();                                                                                     \
+    }                                                                                                                 \
+    T *create_placement(const std::string &alias, void *place) {                                                      \
+      auto factory = implementation_placement_factories.find(alias);                                                  \
+      QD_ASSERT_INFO(factory != implementation_placement_factories.end(),                                             \
+                     "Implementation [" + name + "::" + alias + "] not found!");                                      \
+      return (factory->second)(place);                                                                                \
+    }                                                                                                                 \
+    static QD_IMPLEMENTATION_HOLDER_NAME(T) * get_instance() {                                                        \
+      return static_cast<QD_IMPLEMENTATION_HOLDER_NAME(T) *>(get_implementation_holder_instance_##T());               \
+    }                                                                                                                 \
+  };                                                                                                                  \
   extern QD_IMPLEMENTATION_HOLDER_NAME(T) * QD_IMPLEMENTATION_HOLDER_PTR(T);
 
-#define QD_INTERFACE_DEF(class_name, base_alias)                               \
-  template <>                                                                  \
-  std::shared_ptr<class_name> create_instance(const std::string &alias) {      \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create(  \
-        alias);                                                                \
-  }                                                                            \
-  template <>                                                                  \
-  std::shared_ptr<class_name> create_instance(const std::string &alias,        \
-                                              const Config &config) {          \
-    auto instance = create_instance<class_name>(alias);                        \
-    instance->initialize(config);                                              \
-    return instance;                                                           \
-  }                                                                            \
-  template <>                                                                  \
-  std::unique_ptr<class_name> create_instance_unique(                          \
-      const std::string &alias) {                                              \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
-        ->create_unique(alias);                                                \
-  }                                                                            \
-  template <>                                                                  \
-  std::unique_ptr<class_name> create_instance_unique(const std::string &alias, \
-                                                     const Config &config) {   \
-    auto instance = create_instance_unique<class_name>(alias);                 \
-    instance->initialize(config);                                              \
-    return instance;                                                           \
-  }                                                                            \
-  template <>                                                                  \
-  std::unique_ptr<class_name> create_instance_unique_ctor(                     \
-      const std::string &alias, const Dict &config) {                          \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
-        ->create_unique_ctor(alias, config);                                   \
-  }                                                                            \
-  template <>                                                                  \
-  class_name *create_instance_raw(const std::string &alias) {                  \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
-        ->create_raw(alias);                                                   \
-  }                                                                            \
-  template <>                                                                  \
-  class_name *create_instance_placement(const std::string &alias,              \
-                                        void *place) {                         \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
-        ->create_placement(alias, place);                                      \
-  }                                                                            \
-  template <>                                                                  \
-  class_name *create_instance_placement(const std::string &alias, void *place, \
-                                        const Config &config) {                \
-    auto instance = create_instance_placement<class_name>(alias, place);       \
-    instance->initialize(config);                                              \
-    return instance;                                                           \
-  }                                                                            \
-  template <>                                                                  \
-  class_name *create_instance_raw(const std::string &alias,                    \
-                                  const Config &config) {                      \
-    auto instance = create_instance_raw<class_name>(alias);                    \
-    instance->initialize(config);                                              \
-    return instance;                                                           \
-  }                                                                            \
-  template <>                                                                  \
-  std::vector<std::string> get_implementation_names<class_name>() {            \
-    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()           \
-        ->get_implementation_names();                                          \
-  }                                                                            \
-  QD_IMPLEMENTATION_HOLDER_NAME(class_name) *                                  \
-      QD_IMPLEMENTATION_HOLDER_PTR(class_name) = nullptr;                      \
-  void *get_implementation_holder_instance_##class_name() {                    \
-    if (!QD_IMPLEMENTATION_HOLDER_PTR(class_name)) {                           \
-      QD_IMPLEMENTATION_HOLDER_PTR(class_name) =                               \
-          new QD_IMPLEMENTATION_HOLDER_NAME(class_name)(base_alias);           \
-    }                                                                          \
-    return QD_IMPLEMENTATION_HOLDER_PTR(class_name);                           \
+#define QD_INTERFACE_DEF(class_name, base_alias)                                                            \
+  template <>                                                                                               \
+  std::shared_ptr<class_name> create_instance(const std::string &alias) {                                   \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create(alias);                        \
+  }                                                                                                         \
+  template <>                                                                                               \
+  std::shared_ptr<class_name> create_instance(const std::string &alias, const Config &config) {             \
+    auto instance = create_instance<class_name>(alias);                                                     \
+    instance->initialize(config);                                                                           \
+    return instance;                                                                                        \
+  }                                                                                                         \
+  template <>                                                                                               \
+  std::unique_ptr<class_name> create_instance_unique(const std::string &alias) {                            \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create_unique(alias);                 \
+  }                                                                                                         \
+  template <>                                                                                               \
+  std::unique_ptr<class_name> create_instance_unique(const std::string &alias, const Config &config) {      \
+    auto instance = create_instance_unique<class_name>(alias);                                              \
+    instance->initialize(config);                                                                           \
+    return instance;                                                                                        \
+  }                                                                                                         \
+  template <>                                                                                               \
+  std::unique_ptr<class_name> create_instance_unique_ctor(const std::string &alias, const Dict &config) {   \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create_unique_ctor(alias, config);    \
+  }                                                                                                         \
+  template <>                                                                                               \
+  class_name *create_instance_raw(const std::string &alias) {                                               \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create_raw(alias);                    \
+  }                                                                                                         \
+  template <>                                                                                               \
+  class_name *create_instance_placement(const std::string &alias, void *place) {                            \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->create_placement(alias, place);       \
+  }                                                                                                         \
+  template <>                                                                                               \
+  class_name *create_instance_placement(const std::string &alias, void *place, const Config &config) {      \
+    auto instance = create_instance_placement<class_name>(alias, place);                                    \
+    instance->initialize(config);                                                                           \
+    return instance;                                                                                        \
+  }                                                                                                         \
+  template <>                                                                                               \
+  class_name *create_instance_raw(const std::string &alias, const Config &config) {                         \
+    auto instance = create_instance_raw<class_name>(alias);                                                 \
+    instance->initialize(config);                                                                           \
+    return instance;                                                                                        \
+  }                                                                                                         \
+  template <>                                                                                               \
+  std::vector<std::string> get_implementation_names<class_name>() {                                         \
+    return QD_IMPLEMENTATION_HOLDER_NAME(class_name)::get_instance()->get_implementation_names();           \
+  }                                                                                                         \
+  QD_IMPLEMENTATION_HOLDER_NAME(class_name) * QD_IMPLEMENTATION_HOLDER_PTR(class_name) = nullptr;           \
+  void *get_implementation_holder_instance_##class_name() {                                                 \
+    if (!QD_IMPLEMENTATION_HOLDER_PTR(class_name)) {                                                        \
+      QD_IMPLEMENTATION_HOLDER_PTR(class_name) = new QD_IMPLEMENTATION_HOLDER_NAME(class_name)(base_alias); \
+    }                                                                                                       \
+    return QD_IMPLEMENTATION_HOLDER_PTR(class_name);                                                        \
   }
 
-#define QD_IMPLEMENTATION(base_class_name, class_name, alias)        \
-  class ImplementationInjector_##base_class_name##class_name {       \
-   public:                                                           \
-    ImplementationInjector_##base_class_name##class_name() {         \
-      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
-          ->insert<class_name>(alias);                               \
-    }                                                                \
+#define QD_IMPLEMENTATION(base_class_name, class_name, alias)                                    \
+  class ImplementationInjector_##base_class_name##class_name {                                   \
+   public:                                                                                       \
+    ImplementationInjector_##base_class_name##class_name() {                                     \
+      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance()->insert<class_name>(alias); \
+    }                                                                                            \
   } ImplementationInjector_##base_class_name##class_name##instance;
 
-#define QD_IMPLEMENTATION_NEW(base_class_name, class_name)           \
-  class ImplementationInjector_##base_class_name##class_name {       \
-   public:                                                           \
-    ImplementationInjector_##base_class_name##class_name() {         \
-      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance() \
-          ->insert_new<class_name>(class_name::get_name_static());   \
-    }                                                                \
+#define QD_IMPLEMENTATION_NEW(base_class_name, class_name)                                    \
+  class ImplementationInjector_##base_class_name##class_name {                                \
+   public:                                                                                    \
+    ImplementationInjector_##base_class_name##class_name() {                                  \
+      QD_IMPLEMENTATION_HOLDER_NAME(base_class_name)::get_instance()->insert_new<class_name>( \
+          class_name::get_name_static());                                                     \
+    }                                                                                         \
   } ImplementationInjector_##base_class_name##class_name##instance;
 
 #define QD_NAME(alias)                            \

@@ -212,7 +212,7 @@ def test_struct_ret_with_matrix():
 
 
 @pytest.mark.skipif(sys.version_info < (3, 9), reason="requires python3.9 or higher")
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_tuple_ret_39():
     s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 
@@ -232,7 +232,7 @@ def test_real_func_tuple_ret_39():
     assert ret_b.b == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_tuple_ret_typing_tuple():
     s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 
@@ -252,7 +252,7 @@ def test_real_func_tuple_ret_typing_tuple():
     assert ret_b.b == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], debug=True)
 def test_real_func_tuple_ret():
     s0 = qd.types.struct(a=qd.math.vec3, b=qd.i16)
 

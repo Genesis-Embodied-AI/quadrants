@@ -34,15 +34,11 @@ class CG {
   }
 
   void solve() {
-    Eigen::ConjugateGradient<Eigen::SparseMatrix<DT>,
-                             Eigen::Lower | Eigen::Upper>
-        cg;
+    Eigen::ConjugateGradient<Eigen::SparseMatrix<DT>, Eigen::Lower | Eigen::Upper> cg;
     cg.setMaxIterations(max_iters_);
     cg.setTolerance(tol_);
-    EigenSparseMatrix<Eigen::SparseMatrix<DT>> &A =
-        static_cast<EigenSparseMatrix<Eigen::SparseMatrix<DT>> &>(A_);
-    Eigen::SparseMatrix<DT> *A_eigen =
-        (Eigen::SparseMatrix<DT> *)A.get_matrix();
+    EigenSparseMatrix<Eigen::SparseMatrix<DT>> &A = static_cast<EigenSparseMatrix<Eigen::SparseMatrix<DT>> &>(A_);
+    Eigen::SparseMatrix<DT> *A_eigen = (Eigen::SparseMatrix<DT> *)A.get_matrix();
     cg.compute(*A_eigen);
     x_ = cg.solve(b_);
     if (verbose_) {
@@ -71,10 +67,7 @@ class CG {
 };
 
 template <typename EigenT, typename DT>
-std::unique_ptr<CG<EigenT, DT>> make_cg_solver(SparseMatrix &A,
-                                               int max_iters,
-                                               float tol,
-                                               bool verbose) {
+std::unique_ptr<CG<EigenT, DT>> make_cg_solver(SparseMatrix &A, int max_iters, float tol, bool verbose) {
   return std::make_unique<CG<EigenT, DT>>(A, max_iters, tol, verbose);
 }
 
@@ -97,8 +90,5 @@ class CUCG {
   bool is_success_{false};
 };
 
-std::unique_ptr<CUCG> make_cucg_solver(SparseMatrix &A,
-                                       int max_iters,
-                                       float tol,
-                                       bool verbose);
+std::unique_ptr<CUCG> make_cucg_solver(SparseMatrix &A, int max_iters, float tol, bool verbose);
 }  // namespace quadrants::lang

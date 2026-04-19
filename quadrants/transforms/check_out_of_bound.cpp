@@ -17,8 +17,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
   DelayedIRModifier modifier;
   std::string kernel_name;
 
-  explicit CheckOutOfBound(const std::string &kernel_name)
-      : kernel_name(kernel_name) {
+  explicit CheckOutOfBound(const std::string &kernel_name) : kernel_name(kernel_name) {
   }
 
   bool is_done(Stmt *stmt) {
@@ -46,10 +45,8 @@ class CheckOutOfBound : public BasicStmtVisitor {
     auto new_stmts = VecStatement();
     auto zero = new_stmts.push_back<ConstStmt>(TypedConstant(0));
     Stmt *result = new_stmts.push_back<ConstStmt>(TypedConstant(true));
-    std::string msg = fmt::format(
-        "[kernel={}] Out of bound access to ndarray at arg {} with indices [",
-        kernel_name,
-        fmt::join(stmt->base_ptr->as<ArgLoadStmt>()->arg_id, ", "));
+    std::string msg = fmt::format("[kernel={}] Out of bound access to ndarray at arg {} with indices [", kernel_name,
+                                  fmt::join(stmt->base_ptr->as<ArgLoadStmt>()->arg_id, ", "));
     std::vector<Stmt *> args;
     int flattened_element = 1;
     for (int i = 0; i < stmt->element_shape.size(); i++) {
@@ -57,8 +54,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
     }
     for (int i = 0; i < stmt->indices.size(); i++) {
       auto lower_bound = zero;
-      auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::cmp_ge, stmt->indices[i], lower_bound);
+      auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_ge, stmt->indices[i], lower_bound);
       Stmt *upper_bound{nullptr};
 
       auto ndim = stmt->ndim;
@@ -70,16 +66,12 @@ class CheckOutOfBound : public BasicStmtVisitor {
             /*arg_id=*/stmt->base_ptr->as<ArgLoadStmt>()->arg_id);
       } else {
         // Check for Element Shape
-        upper_bound =
-            new_stmts.push_back<ConstStmt>(TypedConstant(flattened_element));
+        upper_bound = new_stmts.push_back<ConstStmt>(TypedConstant(flattened_element));
       }
 
-      auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::cmp_lt, stmt->indices[i], upper_bound);
-      auto check_i = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
-      result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result,
-                                                 check_i);
+      auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_lt, stmt->indices[i], upper_bound);
+      auto check_i = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
+      result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result, check_i);
 
       auto input_index = stmt->indices[i];
       args.emplace_back(input_index);
@@ -107,8 +99,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
     Stmt *result = new_stmts.push_back<ConstStmt>(TypedConstant(true));
 
     std::string msg =
-        fmt::format("(kernel={}) Accessing field ({}) of size (", kernel_name,
-                    snode->get_node_type_name_hinted());
+        fmt::format("(kernel={}) Accessing field ({}) of size (", kernel_name, snode->get_node_type_name_hinted());
     std::string offset_msg = "offset (";
     std::vector<Stmt *> args;
     for (int i = 0; i < stmt->indices.size(); i++) {
@@ -118,18 +109,13 @@ class CheckOutOfBound : public BasicStmtVisitor {
       // already converted to [0, +inf) range.
 
       auto lower_bound = zero;
-      auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::cmp_ge, stmt->indices[i], lower_bound);
+      auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_ge, stmt->indices[i], lower_bound);
       int size_i = snode->shape_along_axis(i);
       int upper_bound_i = size_i;
-      auto upper_bound =
-          new_stmts.push_back<ConstStmt>(TypedConstant(upper_bound_i));
-      auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::cmp_lt, stmt->indices[i], upper_bound);
-      auto check_i = new_stmts.push_back<BinaryOpStmt>(
-          BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
-      result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result,
-                                                 check_i);
+      auto upper_bound = new_stmts.push_back<ConstStmt>(TypedConstant(upper_bound_i));
+      auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_lt, stmt->indices[i], upper_bound);
+      auto check_i = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
+      result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result, check_i);
       if (i > 0) {
         msg += ", ";
         offset_msg += ", ";
@@ -140,8 +126,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
       auto input_index = stmt->indices[i];
       if (offset_i != 0) {
         auto offset = new_stmts.push_back<ConstStmt>(TypedConstant(offset_i));
-        input_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::add,
-                                                        input_index, offset);
+        input_index = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::add, input_index, offset);
       }
       args.emplace_back(input_index);
     }
@@ -180,19 +165,13 @@ class CheckOutOfBound : public BasicStmtVisitor {
     Stmt *result = new_stmts.push_back<ConstStmt>(TypedConstant(true));
 
     auto lower_bound = zero;
-    auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(
-        BinaryOpType::cmp_ge, index, lower_bound);
-    auto upper_bound =
-        new_stmts.push_back<ConstStmt>(TypedConstant(max_valid_index));
-    auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(
-        BinaryOpType::cmp_le, index, upper_bound);
-    auto check_i = new_stmts.push_back<BinaryOpStmt>(
-        BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
-    result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result,
-                                               check_i);
+    auto check_lower_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_ge, index, lower_bound);
+    auto upper_bound = new_stmts.push_back<ConstStmt>(TypedConstant(max_valid_index));
+    auto check_upper_bound = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::cmp_le, index, upper_bound);
+    auto check_i = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, check_lower_bound, check_upper_bound);
+    result = new_stmts.push_back<BinaryOpStmt>(BinaryOpType::bit_and, result, check_i);
 
-    std::string msg =
-        fmt::format("(kernel={}) Out of bound access to a [", kernel_name);
+    std::string msg = fmt::format("(kernel={}) Out of bound access to a [", kernel_name);
     for (int i = 0; i < matrix_shape.size(); i++) {
       if (i > 0)
         msg += ", ";
@@ -212,16 +191,13 @@ class CheckOutOfBound : public BasicStmtVisitor {
       return;
     }
     if (stmt->op_type == BinaryOpType::pow) {
-      if (is_integral(stmt->rhs->ret_type) &&
-          is_integral(stmt->lhs->ret_type)) {
+      if (is_integral(stmt->rhs->ret_type) && is_integral(stmt->lhs->ret_type)) {
         auto compare_rhs = Stmt::make<ConstStmt>(TypedConstant(0));
-        auto compare = std::make_unique<BinaryOpStmt>(
-            BinaryOpType::cmp_ge, stmt->rhs, compare_rhs.get());
+        auto compare = std::make_unique<BinaryOpStmt>(BinaryOpType::cmp_ge, stmt->rhs, compare_rhs.get());
         compare->ret_type = PrimitiveType::i32;
         std::string msg = "Negative exponent in pow(int, int) is not allowed.";
         msg += "\n" + stmt->get_tb();
-        auto assert_stmt = std::make_unique<AssertStmt>(compare.get(), msg,
-                                                        std::vector<Stmt *>());
+        auto assert_stmt = std::make_unique<AssertStmt>(compare.get(), msg, std::vector<Stmt *>());
         assert_stmt->accept(this);
         modifier.insert_before(stmt, std::move(compare_rhs));
         modifier.insert_before(stmt, std::move(compare));
@@ -231,9 +207,7 @@ class CheckOutOfBound : public BasicStmtVisitor {
     }
   }
 
-  static bool run(IRNode *node,
-                  const CompileConfig &config,
-                  const std::string &kernel_name) {
+  static bool run(IRNode *node, const CompileConfig &config, const std::string &kernel_name) {
     CheckOutOfBound checker(kernel_name);
     bool modified = false;
     while (true) {
@@ -254,9 +228,7 @@ const PassID CheckOutOfBoundPass::id = "CheckOutOfBoundPass";
 
 namespace irpass {
 
-bool check_out_of_bound(IRNode *root,
-                        const CompileConfig &config,
-                        const CheckOutOfBoundPass::Args &args) {
+bool check_out_of_bound(IRNode *root, const CompileConfig &config, const CheckOutOfBoundPass::Args &args) {
   QD_AUTO_PROF;
   return CheckOutOfBound::run(root, config, args.kernel_name);
 }

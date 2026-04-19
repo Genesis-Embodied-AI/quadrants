@@ -163,8 +163,7 @@ Bitset::reference &Bitset::reference::operator=(bool x) {
   return *this;
 }
 
-Bitset::reference &Bitset::reference::operator=(
-    const Bitset::reference &other) {
+Bitset::reference &Bitset::reference::operator=(const Bitset::reference &other) {
   *this = bool(other);
   return *this;
 }
@@ -236,8 +235,7 @@ QD_TEST("bit") {
   dec.d = 0xef;
   CHECK(v == 0xefcd1234);
 
-  CHECK(reinterpret_bits<float32>(reinterpret_bits<uint32>(1.32_f32)) ==
-        1.32_f32);
+  CHECK(reinterpret_bits<float32>(reinterpret_bits<uint32>(1.32_f32)) == 1.32_f32);
 
   // float64 t = 123.456789;
   // auto e = extract(t);

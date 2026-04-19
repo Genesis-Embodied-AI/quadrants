@@ -1,20 +1,47 @@
 #include "quadrants/runtime/cuda/kernel_launcher.h"
+#include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
+
+#include <vector>
 
 namespace quadrants::lang {
 namespace cuda {
 
-bool KernelLauncher::on_cuda_device(void *ptr) {
-  unsigned int attr_val = 0;
-  uint32_t ret_code = CUDADriver::get_instance().mem_get_attribute.call(
-      &attr_val, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, (void *)ptr);
-
-  return ret_code == CUDA_SUCCESS && attr_val == CU_MEMORYTYPE_DEVICE;
+void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                                            JITModule *cuda_module,
+                                            const std::vector<OffloadedTask> &offloaded_tasks) {
+  for (const auto &task : offloaded_tasks) {
+    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
+    cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                        {});
+  }
 }
 
-void KernelLauncher::launch_llvm_kernel(Handle handle,
-                                        LaunchContextBuilder &ctx) {
+void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
+                                                          JITModule *cuda_module,
+                                                          const std::vector<OffloadedTask> &offloaded_tasks) {
+  int32_t counter_val;
+  do {
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
+    counter_val = 0;
+    auto *stream = CUDAContext::get_instance().get_stream();
+    CUDADriver::get_instance().stream_synchronize(stream);
+    CUDADriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
+  } while (counter_val != 0);
+}
+
+void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
+
+  if (ctx.use_graph) {
+    auto &lctx = contexts_[handle.get_launch_id()];
+    if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,
+                                  get_runtime_executor())) {
+      return;
+    }
+  }
+  graph_manager_.mark_not_used();
+
   auto launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *cuda_module = launcher_ctx.jit_module;
@@ -32,9 +59,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   // for data_ptr and TypeFactory::GRAD_PTR_POS_IN_NDARRAY for grad_ptr. Value
   // is [host_ptr, temporary_device_alloc]. Invariant: temp_devallocs.size() !=
   // 0 <==> transfer happened.
-  std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>,
-                     ArgArrayPtrKeyHasher>
-      transfers;
+  std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>, ArgArrayPtrKeyHasher> transfers;
 
   // |device_ptrs| stores pointers on device for all arrays args, including
   // external arrays and ndarrays, no matter whether the data is originally on
@@ -44,9 +69,8 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
   char *device_result_buffer{nullptr};
-  CUDADriver::get_instance().malloc_async(
-      (void **)&device_result_buffer,
-      std::max(ctx.result_buffer_size, sizeof(uint64)), nullptr);
+  CUDADriver::get_instance().malloc_async((void **)&device_result_buffer,
+                                          std::max(ctx.result_buffer_size, sizeof(uint64)), nullptr);
   ctx.get_context().runtime = executor->get_llvm_runtime();
 
   for (int i = 0; i < (int)parameters.size(); i++) {
@@ -67,8 +91,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       auto data_ptr = ctx.array_ptrs[data_ptr_idx];
       auto grad_ptr = ctx.array_ptrs[grad_ptr_idx];
 
-      if (ctx.device_allocation_type[arg_id] ==
-          LaunchContextBuilder::DevAllocType::kNone) {
+      if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
         // External array
         // Note: assuming both data & grad are on the same device
         if (on_cuda_device(data_ptr)) {
@@ -76,31 +99,27 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
           device_ptrs[data_ptr_idx] = data_ptr;
           device_ptrs[grad_ptr_idx] = grad_ptr;
         } else {
-          DeviceAllocation devalloc = executor->allocate_memory_on_device(
-              arr_sz, (uint64 *)device_result_buffer);
-          device_ptrs[data_ptr_idx] =
-              executor->get_device_alloc_info_ptr(devalloc);
+          DeviceAllocation devalloc = executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
+          device_ptrs[data_ptr_idx] = executor->get_device_alloc_info_ptr(devalloc);
           transfers[data_ptr_idx] = {data_ptr, devalloc};
 
-          CUDADriver::get_instance().memcpy_host_to_device(
-              (void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
+          CUDADriver::get_instance().memcpy_host_to_device((void *)device_ptrs[data_ptr_idx], data_ptr, arr_sz);
           if (grad_ptr != nullptr) {
             DeviceAllocation grad_devalloc =
-                executor->allocate_memory_on_device(
-                    arr_sz, (uint64 *)device_result_buffer);
-            device_ptrs[grad_ptr_idx] =
-                executor->get_device_alloc_info_ptr(grad_devalloc);
+                executor->allocate_memory_on_device(arr_sz, (uint64 *)device_result_buffer);
+            device_ptrs[grad_ptr_idx] = executor->get_device_alloc_info_ptr(grad_devalloc);
             transfers[grad_ptr_idx] = {grad_ptr, grad_devalloc};
 
-            CUDADriver::get_instance().memcpy_host_to_device(
-                (void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
+            CUDADriver::get_instance().memcpy_host_to_device((void *)device_ptrs[grad_ptr_idx], grad_ptr, arr_sz);
           } else {
             device_ptrs[grad_ptr_idx] = nullptr;
           }
         }
 
-        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
-                             (uint64)device_ptrs[grad_ptr_idx]);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       } else if (arr_sz > 0) {
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -114,8 +133,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
           device_ptrs[grad_ptr_idx] = nullptr;
         }
 
-        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx],
-                             (uint64)device_ptrs[grad_ptr_idx]);
+        ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
+        if (arg_id == ctx.graph_do_while_arg_id) {
+          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
       }
     }
   }
@@ -128,28 +149,24 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   }
   char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().malloc_async((void **)&device_arg_buffer,
-                                            ctx.arg_buffer_size, nullptr);
-    CUDADriver::get_instance().memcpy_host_to_device_async(
-        device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size,
-        nullptr);
+    CUDADriver::get_instance().malloc_async((void **)&device_arg_buffer, ctx.arg_buffer_size, nullptr);
+    CUDADriver::get_instance().memcpy_host_to_device_async(device_arg_buffer, ctx.get_context().arg_buffer,
+                                                           ctx.arg_buffer_size, nullptr);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
-  for (auto task : offloaded_tasks) {
-    QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim,
-             task.block_dim);
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim,
-                        task.dynamic_shared_array_bytes, {&ctx.get_context()},
-                        {});
+  if (ctx.graph_do_while_arg_id >= 0) {
+    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
+    launch_offloaded_tasks_with_do_while(ctx, cuda_module, offloaded_tasks);
+  } else {
+    launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks);
   }
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
   }
   if (ctx.result_buffer_size > 0) {
-    CUDADriver::get_instance().memcpy_device_to_host_async(
-        host_result_buffer, device_result_buffer, ctx.result_buffer_size,
-        nullptr);
+    CUDADriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
+                                                           ctx.result_buffer_size, nullptr);
   }
   CUDADriver::get_instance().mem_free_async(device_result_buffer, nullptr);
   // copy data back to host
@@ -157,16 +174,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     CUDADriver::get_instance().stream_synchronize(nullptr);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
-      CUDADriver::get_instance().memcpy_device_to_host(
-          itr->second.first, (void *)device_ptrs[idx],
-          ctx.array_runtime_sizes[idx.arg_id]);
+      CUDADriver::get_instance().memcpy_device_to_host(itr->second.first, (void *)device_ptrs[idx],
+                                                       ctx.array_runtime_sizes[idx.arg_id]);
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
 }
 
-KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
-    const LLVM::CompiledKernelData &compiled) {
+KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {
   QD_ASSERT(compiled.arch() == Arch::cuda);
 
   if (!compiled.get_handle()) {

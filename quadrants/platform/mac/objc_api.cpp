@@ -8,10 +8,8 @@ namespace mac {
 nsobj_unique_ptr<QD_NSString> wrap_string_as_ns_string(const std::string &str) {
   constexpr int kNSUTF8StringEncoding = 4;
   id ns_string = clscall("NSString", "alloc");
-  auto *ptr = cast_call<QD_NSString *>(
-      ns_string,
-      "initWithBytesNoCopy:length:encoding:freeWhenDone:", str.data(),
-      str.size(), kNSUTF8StringEncoding, false);
+  auto *ptr = cast_call<QD_NSString *>(ns_string, "initWithBytesNoCopy:length:encoding:freeWhenDone:", str.data(),
+                                       str.size(), kNSUTF8StringEncoding, false);
   return wrap_as_nsobj_unique_ptr(ptr);
 }
 
@@ -24,8 +22,7 @@ int ns_array_count(QD_NSArray *na) {
 }
 
 QD_NSAutoreleasePool *create_autorelease_pool() {
-  return cast_call<QD_NSAutoreleasePool *>(
-      clscall("NSAutoreleasePool", "alloc"), "init");
+  return cast_call<QD_NSAutoreleasePool *>(clscall("NSAutoreleasePool", "alloc"), "init");
 }
 
 void drain_autorelease_pool(QD_NSAutoreleasePool *pool) {
