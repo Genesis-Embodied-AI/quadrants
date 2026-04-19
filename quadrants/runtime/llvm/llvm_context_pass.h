@@ -32,8 +32,7 @@ struct AddStructForFuncPass : public ModulePass {
     auto struct_for_func = M.getFunction("parallel_struct_for");
     auto &llvm_context = M.getContext();
     auto value_map = llvm::ValueToValueMapTy();
-    auto patched_struct_for_func =
-        llvm::CloneFunction(struct_for_func, value_map);
+    auto patched_struct_for_func = llvm::CloneFunction(struct_for_func, value_map);
     patched_struct_for_func->setName(func_name_);
 
     int num_found_alloca = 0;
@@ -50,8 +49,7 @@ struct AddStructForFuncPass : public ModulePass {
           continue;
         auto alloca_type = now_alloca->getAllocatedType();
         // Allocated type should be array [1 x i8]
-        if (alloca_type->isArrayTy() &&
-            alloca_type->getArrayNumElements() == 1 &&
+        if (alloca_type->isArrayTy() && alloca_type->getArrayNumElements() == 1 &&
             alloca_type->getArrayElementType() == char_type) {
           alloca = now_alloca;
           num_found_alloca++;
@@ -82,15 +80,13 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
   AMDGPUConvertAllocaInstAddressSpacePass() : FunctionPass(ID) {
   }
   bool runOnFunction(llvm::Function &f) override {
-    f.addFnAttr("target-cpu",
-                "gfx" + AMDGPUContext::get_instance().get_mcpu().substr(3, 4));
+    f.addFnAttr("target-cpu", "gfx" + AMDGPUContext::get_instance().get_mcpu().substr(3, 4));
     f.addFnAttr("target-features", "");
     for (auto &bb : f) {
       std::vector<AllocaInst *> alloca_inst_vec;
       for (Instruction &inst : bb) {
         AllocaInst *now_alloca = dyn_cast<AllocaInst>(&inst);
-        if (!now_alloca ||
-            now_alloca->getType()->getAddressSpace() != (unsigned)0) {
+        if (!now_alloca || now_alloca->getType()->getAddressSpace() != (unsigned)0) {
           continue;
         }
         alloca_inst_vec.push_back(now_alloca);
@@ -102,7 +98,7 @@ struct AMDGPUConvertAllocaInstAddressSpacePass : public FunctionPass {
         // more details, please ref
         // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
         auto *new_alloca = builder.CreateAlloca(alloca_type, (unsigned)5);
-        auto new_type = llvm::PointerType::get(alloca_type, (unsigned)0);
+        auto *new_type = llvm::PointerType::get(f.getContext(), (unsigned)0);
         new_alloca->setAlignment(Align(allocainst->getAlign().value()));
         auto *addrspacecast = builder.CreateAddrSpaceCast(new_alloca, new_type);
         allocainst->replaceAllUsesWith(addrspacecast);
@@ -117,8 +113,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
   static inline char ID{0};
   std::string func_name_;
   int tls_size_;
-  AMDGPUAddStructForFuncPass(std::string func_name, int tls_size)
-      : ModulePass(ID) {
+  AMDGPUAddStructForFuncPass(std::string func_name, int tls_size) : ModulePass(ID) {
     func_name_ = func_name;
     tls_size_ = tls_size;
   }
@@ -126,8 +121,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
     auto struct_for_func = M.getFunction("parallel_struct_for");
     auto &llvm_context = M.getContext();
     auto value_map = llvm::ValueToValueMapTy();
-    auto patched_struct_for_func =
-        llvm::CloneFunction(struct_for_func, value_map);
+    auto patched_struct_for_func = llvm::CloneFunction(struct_for_func, value_map);
     patched_struct_for_func->setName(func_name_);
 
     int num_found_alloca = 0;
@@ -144,8 +138,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
           continue;
         auto alloca_type = now_alloca->getAllocatedType();
         // Allocated type should be array [1 x i8]
-        if (alloca_type->isArrayTy() &&
-            alloca_type->getArrayNumElements() == 1 &&
+        if (alloca_type->isArrayTy() && alloca_type->getArrayNumElements() == 1 &&
             alloca_type->getArrayElementType() == char_type) {
           alloca = now_alloca;
           num_found_alloca++;
@@ -164,7 +157,7 @@ struct AMDGPUAddStructForFuncPass : public ModulePass {
     // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
     auto *new_alloca = builder.CreateAlloca(new_type, (unsigned)5);
     new_alloca->setAlignment(Align(8));
-    auto new_ty = llvm::PointerType::get(new_type, unsigned(0));
+    auto *new_ty = llvm::PointerType::get(M.getContext(), unsigned(0));
     auto *new_cast = builder.CreateAddrSpaceCast(new_alloca, new_ty);
     new_alloca->setAlignment(Align(8));
     QD_ASSERT(alloca->hasOneUse());
@@ -195,8 +188,7 @@ struct AMDGPUConvertFunctionBodyAllocsAddressSpacePass : public FunctionPass {
       std::vector<AllocaInst *> alloca_inst_vec;
       for (Instruction &inst : bb) {
         AllocaInst *now_alloca = dyn_cast<AllocaInst>(&inst);
-        if (!now_alloca ||
-            now_alloca->getType()->getAddressSpace() != (unsigned)0) {
+        if (!now_alloca || now_alloca->getType()->getAddressSpace() != (unsigned)0) {
           continue;
         }
         alloca_inst_vec.push_back(now_alloca);
@@ -205,7 +197,7 @@ struct AMDGPUConvertFunctionBodyAllocsAddressSpacePass : public FunctionPass {
         auto alloca_type = allocainst->getAllocatedType();
         llvm::IRBuilder<> builder(allocainst);
         auto *new_alloca = builder.CreateAlloca(alloca_type, (unsigned)5);
-        auto new_type = llvm::PointerType::get(alloca_type, (unsigned)0);
+        auto *new_type = llvm::PointerType::get(f.getContext(), (unsigned)0);
         new_alloca->setAlignment(Align(allocainst->getAlign().value()));
         auto *addrspacecast = builder.CreateAddrSpaceCast(new_alloca, new_type);
         allocainst->replaceAllUsesWith(addrspacecast);
@@ -256,15 +248,11 @@ struct AMDGPUConvertFuncParamAddressSpacePass : public ModulePass {
           new_func_params.push_back(arg.getType());
         }
       }
-      auto new_func_type = llvm::FunctionType::get(func_type->getReturnType(),
-                                                   new_func_params, false);
-      auto new_func = llvm::Function::Create(new_func_type, f->getLinkage(),
-                                             f->getAddressSpace());
+      auto new_func_type = llvm::FunctionType::get(func_type->getReturnType(), new_func_params, false);
+      auto new_func = llvm::Function::Create(new_func_type, f->getLinkage(), f->getAddressSpace());
       new_func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
       new_func->addFnAttr("amdgpu-flat-work-group-size", "1, 1024");
-      new_func->addFnAttr(
-          "target-cpu",
-          "gfx" + AMDGPUContext::get_instance().get_mcpu().substr(3, 4));
+      new_func->addFnAttr("target-cpu", "gfx" + AMDGPUContext::get_instance().get_mcpu().substr(3, 4));
       new_func->setComdat(f->getComdat());
       f->getParent()->getFunctionList().insert(f->getIterator(), new_func);
       new_func->takeName(f);
@@ -280,15 +268,13 @@ struct AMDGPUConvertFuncParamAddressSpacePass : public ModulePass {
         new_func->insert(new_func->end(), bb);
       }
 
-      for (llvm::Function::arg_iterator I = f->arg_begin(), E = f->arg_end(),
-                                        I2 = new_func->arg_begin();
-           I != E; ++I, ++I2) {
+      for (llvm::Function::arg_iterator I = f->arg_begin(), E = f->arg_end(), I2 = new_func->arg_begin(); I != E;
+           ++I, ++I2) {
         if (I->getType()->getTypeID() == llvm::Type::PointerTyID) {
           // Find the first basic block and insert instruction using IRBuilder
           llvm::BasicBlock *front_bb = &new_func->front();
           llvm::IRBuilder<> builder(front_bb, front_bb->getFirstInsertionPt());
-          llvm::Value *addrspacecast =
-              builder.CreateAddrSpaceCast(&*I2, I->getType(), "addrspacecast");
+          llvm::Value *addrspacecast = builder.CreateAddrSpaceCast(&*I2, I->getType(), "addrspacecast");
           I->replaceAllUsesWith(addrspacecast);
           I2->takeName(&*I);
         } else {

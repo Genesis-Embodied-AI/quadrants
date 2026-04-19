@@ -14,16 +14,14 @@ TEST(TensorType, eliminateImmutableLocalVars) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto &type_factory = TypeFactory::get_instance();
 
   /*
     Declare tensor types
   */
-  Type *tensor2x2 = type_factory.get_tensor_type(
-      {2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
+  Type *tensor2x2 = type_factory.get_tensor_type({2, 2}, type_factory.get_primitive_type(PrimitiveTypeID::i32));
 
   /* Define initial IR
 
@@ -39,8 +37,7 @@ TEST(TensorType, eliminateImmutableLocalVars) {
   alloca_stmt->ret_type = tensor2x2;
 
   auto const_1_stmt = block->push_back<ConstStmt>(TypedConstant(1));
-  std::vector<Stmt *> matrix_vals = {const_1_stmt, const_1_stmt, const_1_stmt,
-                                     const_1_stmt};
+  std::vector<Stmt *> matrix_vals = {const_1_stmt, const_1_stmt, const_1_stmt, const_1_stmt};
   auto matrix_init_stmt = block->push_back<MatrixInitStmt>(matrix_vals);
   matrix_init_stmt->ret_type = tensor2x2;
 
@@ -52,8 +49,7 @@ TEST(TensorType, eliminateImmutableLocalVars) {
   auto load_stmt1 = block->push_back<LocalLoadStmt>(alloca_stmt);
   load_stmt1->ret_type = tensor2x2;
 
-  auto bin_stmt =
-      block->push_back<BinaryOpStmt>(BinaryOpType::add, load_stmt0, load_stmt1);
+  auto bin_stmt = block->push_back<BinaryOpStmt>(BinaryOpType::add, load_stmt0, load_stmt1);
   bin_stmt->ret_type = tensor2x2;
 
   irpass::eliminate_immutable_local_vars(block.get());

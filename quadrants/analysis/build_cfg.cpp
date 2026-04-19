@@ -10,8 +10,7 @@ struct CFGFuncKey {
   bool in_parallel_for{false};
 
   bool operator==(const CFGFuncKey &other_key) const {
-    return func_key == other_key.func_key &&
-           in_parallel_for == other_key.in_parallel_for;
+    return func_key == other_key.func_key && in_parallel_for == other_key.in_parallel_for;
   }
 };
 
@@ -20,10 +19,8 @@ struct CFGFuncKey {
 namespace std {
 template <>
 struct hash<quadrants::lang::CFGFuncKey> {
-  std::size_t operator()(
-      const quadrants::lang::CFGFuncKey &key) const noexcept {
-    return std::hash<quadrants::lang::FunctionKey>()(key.func_key) ^
-           ((std::size_t)key.in_parallel_for << 32);
+  std::size_t operator()(const quadrants::lang::CFGFuncKey &key) const noexcept {
+    return std::hash<quadrants::lang::FunctionKey>()(key.func_key) ^ ((std::size_t)key.in_parallel_for << 32);
   }
 };
 }  // namespace std
@@ -91,10 +88,9 @@ class CFGBuilder : public IRVisitor {
    * @return The node which is just created.
    */
   CFGNode *new_node(int next_begin_location) {
-    auto node = graph_->push_back(
-        current_block_, begin_location_, /*end_location=*/current_stmt_id_,
-        /*is_parallel_executed=*/in_parallel_for_,
-        /*prev_node_in_same_block=*/last_node_in_current_block_);
+    auto node = graph_->push_back(current_block_, begin_location_, /*end_location=*/current_stmt_id_,
+                                  /*is_parallel_executed=*/in_parallel_for_,
+                                  /*prev_node_in_same_block=*/last_node_in_current_block_);
     for (auto &prev_node : prev_nodes_) {
       // Now that the "(next node)" is created, we should insert edges
       // "node... -> (next node)" here.
@@ -430,8 +426,7 @@ class CFGBuilder : public IRVisitor {
     if (!builder.graph_->nodes[builder.graph_->final_node]->empty()) {
       // Make the final node empty (by adding an empty final node).
       builder.graph_->push_back();
-      CFGNode::add_edge(builder.graph_->nodes[builder.graph_->final_node].get(),
-                        builder.graph_->back());
+      CFGNode::add_edge(builder.graph_->nodes[builder.graph_->final_node].get(), builder.graph_->back());
       builder.graph_->final_node = (int)builder.graph_->size() - 1;
     }
     return std::move(builder.graph_);

@@ -37,16 +37,13 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
       all_elements.insert(_type);
     }
     for (auto _type : all_elements) {
-      QD_ERROR_IF(mesh_for->mesh->num_elements.find(_type) ==
-                      mesh_for->mesh->num_elements.end(),
-                  "Cannot load mesh element {}'s metadata",
-                  mesh::element_type_name(_type));
+      QD_ERROR_IF(mesh_for->mesh->num_elements.find(_type) == mesh_for->mesh->num_elements.end(),
+                  "Cannot load mesh element {}'s metadata", mesh::element_type_name(_type));
     }
 
     std::set<mesh::MeshRelationType> all_relations;
     for (auto _type : mesh_for->major_to_types) {
-      all_relations.insert(
-          mesh::relation_by_orders(int(mesh_for->major_from_type), int(_type)));
+      all_relations.insert(mesh::relation_by_orders(int(mesh_for->major_from_type), int(_type)));
     }
     for (auto _type : mesh_for->minor_relation_types) {
       all_relations.insert(_type);
@@ -56,20 +53,17 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
     std::string full_name;
     std::string short_name;
     for (auto _type : all_relations) {
-      if (mesh_for->mesh->relations.find(_type) ==
-          mesh_for->mesh->relations.end()) {
+      if (mesh_for->mesh->relations.find(_type) == mesh_for->mesh->relations.end()) {
         if (missing) {
           full_name += ", ";
           short_name += ", ";
         }
         full_name += mesh::relation_type_name(_type);
         short_name += '\'';
-        short_name += char(mesh::element_type_name(mesh::MeshElementType(
-                               mesh::from_end_element_order(_type)))[0] +
-                           'A' - 'a');
-        short_name += char(mesh::element_type_name(mesh::MeshElementType(
-                               mesh::to_end_element_order(_type)))[0] +
-                           'A' - 'a');
+        short_name +=
+            char(mesh::element_type_name(mesh::MeshElementType(mesh::from_end_element_order(_type)))[0] + 'A' - 'a');
+        short_name +=
+            char(mesh::element_type_name(mesh::MeshElementType(mesh::to_end_element_order(_type)))[0] + 'A' - 'a');
         short_name += '\'';
         missing = true;
       }
@@ -87,21 +81,17 @@ class GatherMeshforRelationTypes : public BasicStmtVisitor {
   }
 
   void visit(MeshRelationAccessStmt *stmt) override {
-    if (auto from_stmt =
-            stmt->mesh_idx->cast<LoopIndexStmt>()) {  // major relation
+    if (auto from_stmt = stmt->mesh_idx->cast<LoopIndexStmt>()) {  // major relation
       QD_ASSERT(from_stmt->mesh_index_type() == mesh_for->major_from_type);
       mesh_for->major_to_types.insert(stmt->to_type);
-    } else if (auto from_stmt =
-                   stmt->mesh_idx
-                       ->cast<MeshRelationAccessStmt>()) {  // minor relation
+    } else if (auto from_stmt = stmt->mesh_idx->cast<MeshRelationAccessStmt>()) {  // minor relation
       QD_ASSERT(!from_stmt->is_size());
       auto from_order = mesh::element_order(from_stmt->to_type);
       auto to_order = mesh::element_order(stmt->to_type);
       QD_ASSERT_INFO(from_order > to_order,
                      "Cannot access an indeterminate relation (E.g, Vert-Vert) "
                      "in a nested neighbor access");
-      mesh_for->minor_relation_types.insert(
-          mesh::relation_by_orders(from_order, to_order));
+      mesh_for->minor_relation_types.insert(mesh::relation_by_orders(from_order, to_order));
     } else {
       QD_NOT_IMPLEMENTED;
     }

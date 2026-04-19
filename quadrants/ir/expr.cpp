@@ -58,8 +58,7 @@ Expr &Expr::operator=(const Expr &o) {
 }
 
 SNode *Expr::snode() const {
-  QD_ASSERT_INFO(is<FieldExpression>(),
-                 "Cannot get snode of non-field expressions.");
+  QD_ASSERT_INFO(is<FieldExpression>(), "Cannot get snode of non-field expressions.");
   return cast<FieldExpression>()->snode;
 }
 
@@ -107,29 +106,21 @@ Expr expr_rand(DataType dt) {
   return Expr::make<RandExpression>(dt);
 }
 
-Expr assume_range(const Expr &expr,
-                  const Expr &base,
-                  int low,
-                  int high,
-                  const DebugInfo &dbg_info) {
+Expr assume_range(const Expr &expr, const Expr &base, int low, int high, const DebugInfo &dbg_info) {
   return Expr::make<RangeAssumptionExpression>(expr, base, low, high, dbg_info);
 }
 
-Expr loop_unique(const Expr &input,
-                 const std::vector<SNode *> &covers,
-                 const DebugInfo &dbg_info) {
+Expr loop_unique(const Expr &input, const std::vector<SNode *> &covers, const DebugInfo &dbg_info) {
   return Expr::make<LoopUniqueExpression>(input, covers, dbg_info);
 }
 
 Expr expr_field(Expr id_expr, DataType dt) {
   QD_ASSERT(id_expr.is<IdExpression>());
-  auto ret = Expr(
-      std::make_shared<FieldExpression>(dt, id_expr.cast<IdExpression>()->id));
+  auto ret = Expr(std::make_shared<FieldExpression>(dt, id_expr.cast<IdExpression>()->id));
   return ret;
 }
 
-Expr expr_matrix_field(const std::vector<Expr> &fields,
-                       const std::vector<int> &element_shape) {
+Expr expr_matrix_field(const std::vector<Expr> &fields, const std::vector<int> &element_shape) {
   return Expr::make<MatrixFieldExpression>(fields, element_shape);
 }
 

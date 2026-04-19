@@ -63,8 +63,7 @@ class ProfilerRecords {
   bool enabled;
 
   explicit ProfilerRecords(const std::string &name) {
-    root = std::make_unique<ProfilerRecordNode>(
-        fmt::format("[Profiler {}]", name), nullptr);
+    root = std::make_unique<ProfilerRecordNode>(fmt::format("[Profiler {}]", name), nullptr);
     current_node = root.get();
     current_depth = 0;  // depth(root) = 0
     enabled = true;
@@ -175,12 +174,10 @@ void ProfilerRecords::print(ProfilerRecordNode *node, int depth) {
     for (auto &ch : node->childs) {
       make_indent(1);
       auto child_time = ch->total_time;
-      auto bulk_statistics =
-          fmt::format("{} {}", get_readable_time(child_time), ch->name);
+      auto bulk_statistics = fmt::format("{} {}", get_readable_time(child_time), ch->name);
       fmt::print(fg(level_color), "{:40}", bulk_statistics);
       fmt::print(fg(fmt::color::cyan), " [{} x {}]\n", ch->num_samples,
-                 get_readable_time_with_scale(
-                     ch->get_averaged(), get_time_scale(ch->get_averaged())));
+                 get_readable_time_with_scale(ch->get_averaged(), get_time_scale(ch->get_averaged())));
       print(ch.get(), depth + 1);
     }
   } else {
@@ -189,25 +186,21 @@ void ProfilerRecords::print(ProfilerRecordNode *node, int depth) {
     for (auto &ch : node->childs) {
       make_indent(1);
       auto child_time = ch->total_time;
-      std::string bulk_statistics = fmt::format(
-          "{} {:5.2f}%  {}", get_readable_time_with_scale(child_time, scale),
-          child_time * 100.0 / total_time, ch->name);
+      std::string bulk_statistics = fmt::format("{} {:5.2f}%  {}", get_readable_time_with_scale(child_time, scale),
+                                                child_time * 100.0 / total_time, ch->name);
       fmt::print(fg(level_color), "{:40}", bulk_statistics);
       fmt::print(fg(fmt::color::cyan), " [{} x {}]\n", ch->num_samples,
-                 get_readable_time_with_scale(
-                     ch->get_averaged(), get_time_scale(ch->get_averaged())));
+                 get_readable_time_with_scale(ch->get_averaged(), get_time_scale(ch->get_averaged())));
       if (ch->account_tpe) {
         make_indent(1);
-        fmt::print("                     [TPE] {}\n",
-                   get_readable_time(ch->total_time));
+        fmt::print("                     [TPE] {}\n", get_readable_time(ch->total_time));
       }
       print(ch.get(), depth + 1);
       unaccounted -= child_time;
     }
     if (!node->childs.empty() && (unaccounted > total_time * 0.005)) {
       make_indent(1);
-      fmt::print(fg(level_color), "{} {:5.2f}%  {}\n",
-                 get_readable_time_with_scale(unaccounted, scale),
+      fmt::print(fg(level_color), "{} {:5.2f}%  {}\n", get_readable_time_with_scale(unaccounted, scale),
                  unaccounted * 100.0 / total_time, "[unaccounted]");
     }
   }
@@ -225,8 +218,7 @@ void ScopedProfiler::stop() {
   QD_ASSERT_INFO(!stopped_, "Profiler already stopped.");
   float64 elapsed = Time::get_time() - start_time_;
   if ((int64)elements_ != -1) {
-    ProfilerRecords::get_this_thread_instance().insert_sample(elapsed,
-                                                              elements_);
+    ProfilerRecords::get_this_thread_instance().insert_sample(elapsed, elements_);
   } else {
     ProfilerRecords::get_this_thread_instance().insert_sample(elapsed);
   }

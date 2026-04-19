@@ -3,7 +3,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(require=qd.extension.quant, debug=True, cfg_optimization=False)
+@test_utils.test(require=[qd.extension.quant, qd.extension.sparse], debug=True, cfg_optimization=False)
 def test_vectorized_struct_for():
     qu1 = qd.types.quant.int(1, False)
 
@@ -46,7 +46,7 @@ def test_vectorized_struct_for():
     verify()
 
 
-@test_utils.test(require=qd.extension.quant, debug=True)
+@test_utils.test(require=[qd.extension.quant, qd.extension.sparse], debug=True)
 def test_offset_load():
     qu1 = qd.types.quant.int(1, False)
 

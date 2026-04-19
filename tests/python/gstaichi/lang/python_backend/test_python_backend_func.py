@@ -1,4 +1,8 @@
+import pytest
+
 import quadrants as qd
+
+pytestmark = pytest.mark.needs_torch
 
 
 def test_python_backend_func() -> None:

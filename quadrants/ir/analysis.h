@@ -27,12 +27,10 @@ class DiffRange {
     QD_ASSERT(related == false);
   }
 
-  DiffRange(bool related, int coeff, int low)
-      : DiffRange(related, coeff, low, low + 1) {
+  DiffRange(bool related, int coeff, int low) : DiffRange(related, coeff, low, low + 1) {
   }
 
-  DiffRange(bool related, int coeff, int low, int high)
-      : related_(related), coeff(coeff), low(low), high(high) {
+  DiffRange(bool related, int coeff, int low, int high) : related_(related), coeff(coeff), low(low), high(high) {
     if (!related) {
       this->low = this->high = 0;
     }
@@ -96,31 +94,24 @@ bool definitely_same_address(Stmt *var1, Stmt *var2);
 
 std::unordered_set<Stmt *> detect_fors_with_break(IRNode *root);
 std::unordered_set<Stmt *> detect_loops_with_continue(IRNode *root);
-std::unordered_map<Stmt *, std::vector<std::pair<Stmt *, int>>>
-gather_statement_usages(IRNode *root);
+std::unordered_map<Stmt *, std::vector<std::pair<Stmt *, int>>> gather_statement_usages(IRNode *root);
 std::unordered_set<Stmt *> gather_immutable_local_vars(IRNode *root);
 std::unordered_set<SNode *> gather_deactivations(IRNode *root);
-std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>>
-gather_snode_read_writes(IRNode *root);
-std::vector<Stmt *> gather_statements(IRNode *root,
-                                      const std::function<bool(Stmt *)> &test);
+std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>> gather_snode_read_writes(IRNode *root);
+std::vector<Stmt *> gather_statements(IRNode *root, const std::function<bool(Stmt *)> &test);
 void gather_uniquely_accessed_bit_structs(IRNode *root, AnalysisManager *amgr);
 std::tuple<std::unordered_map<const SNode *, GlobalPtrStmt *>,
-           std::unordered_map<std::vector<int>,
-                              ExternalPtrStmt *,
-                              hashing::Hasher<std::vector<int>>>,
+           std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>>,
            std::unordered_set<MatrixPtrStmt *>>
 gather_uniquely_accessed_pointers(IRNode *root);
 std::unordered_set<Stmt *> gather_dynamically_indexed_pointers(IRNode *root);
 
-std::unique_ptr<std::unordered_set<AtomicOpStmt *>> gather_used_atomics(
-    IRNode *root);
+std::unique_ptr<std::unordered_set<AtomicOpStmt *>> gather_used_atomics(IRNode *root);
 stmt_refs get_load_pointers(Stmt *load_stmt, bool get_aliased = false);
 stmt_refs include_aliased_stmts(stmt_refs dest);
 
 Stmt *get_store_data(Stmt *store_stmt) noexcept;
-stmt_refs get_store_destination(Stmt *store_stmt,
-                                bool get_aliased = false) noexcept;
+stmt_refs get_store_destination(Stmt *store_stmt, bool get_aliased = false) noexcept;
 bool has_store_or_atomic(IRNode *root, const std::vector<Stmt *> &vars);
 std::pair<bool, Stmt *> last_store_or_atomic(IRNode *root, Stmt *var);
 
@@ -155,10 +146,9 @@ bool maybe_same_address(Stmt *var1, Stmt *var2);
  *   Otherwise, this function also recursively check the operands until
  *   ids in the id_map are reached.
  */
-bool same_statements(
-    IRNode *root1,
-    IRNode *root2,
-    const std::optional<std::unordered_map<int, int>> &id_map = std::nullopt);
+bool same_statements(IRNode *root1,
+                     IRNode *root2,
+                     const std::optional<std::unordered_map<int, int>> &id_map = std::nullopt);
 
 /**
  * Test if stmt1 and stmt2 definitely have the same value.
@@ -167,10 +157,7 @@ bool same_statements(
  * @param id_map
  *   Same as in same_statements(root1, root2, id_map).
  */
-bool same_value(
-    Stmt *stmt1,
-    Stmt *stmt2,
-    const std::optional<std::unordered_map<int, int>> &id_map = std::nullopt);
+bool same_value(Stmt *stmt1, Stmt *stmt2, const std::optional<std::unordered_map<int, int>> &id_map = std::nullopt);
 
 DiffRange value_diff_loop_index(Stmt *stmt, Stmt *loop, int index_id);
 
@@ -203,9 +190,7 @@ struct DiffPtrResult {
  */
 DiffPtrResult value_diff_ptr_index(Stmt *val1, Stmt *val2);
 
-std::unordered_set<Stmt *> constexpr_prop(
-    Block *block,
-    std::function<bool(Stmt *)> is_const_seed);
+std::unordered_set<Stmt *> constexpr_prop(Block *block, std::function<bool(Stmt *)> is_const_seed);
 
 void verify(IRNode *root);
 
@@ -214,10 +199,9 @@ void gather_meshfor_relation_types(IRNode *node);
 std::pair</* owned= */ std::unordered_set<mesh::MeshElementType>,
           /* total= */ std::unordered_set<mesh::MeshElementType>>
 gather_mesh_thread_local(OffloadedStmt *offload, const CompileConfig &config);
-std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(
-    OffloadedStmt *offload,
-    bool auto_mesh_local,
-    const CompileConfig &config);
+std::unique_ptr<MeshBLSCaches> initialize_mesh_local_attribute(OffloadedStmt *offload,
+                                                               bool auto_mesh_local,
+                                                               const CompileConfig &config);
 void gather_func_store_dests(IRNode *ir);
 }  // namespace analysis
 }  // namespace irpass

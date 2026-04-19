@@ -38,16 +38,14 @@ class HostDeviceContextBlitter {
         device_(device) {
   }
 
-  void host_to_device(
-      const std::unordered_map<int, DeviceAllocation> &ext_arrays,
-      const std::unordered_map<int, size_t> &ext_arr_size) {
+  void host_to_device(const std::unordered_map<int, DeviceAllocation> &ext_arrays,
+                      const std::unordered_map<int, size_t> &ext_arr_size) {
     if (!ctx_attribs_->has_args()) {
       return;
     }
 
     void *device_base{nullptr};
-    QD_ASSERT(device_->map(*device_args_buffer_, &device_base) ==
-              RhiResult::success);
+    QD_ASSERT(device_->map(*device_args_buffer_, &device_base) == RhiResult::success);
 
     for (int i = 0; i < ctx_attribs_->args().size(); ++i) {
       const auto &arg_kv = ctx_attribs_->args()[i];
@@ -56,24 +54,18 @@ class HostDeviceContextBlitter {
       if (arg.is_array) {
         QD_ASSERT(indices.size() == 1);
         int arg_id = indices[0];
-        if (host_ctx_.device_allocation_type[arg_id] ==
-                LaunchContextBuilder::DevAllocType::kNone &&
+        if (host_ctx_.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone &&
             ext_arr_size.at(arg_id)) {
           // Only need to blit ext arrs (host array)
-          auto access_it = std::find_if(ctx_attribs_->arr_access.begin(),
-                                        ctx_attribs_->arr_access.end(),
-                                        [indices](const auto &pair) -> bool {
-                                          return pair.first == indices;
-                                        });
+          auto access_it = std::find_if(ctx_attribs_->arr_access.begin(), ctx_attribs_->arr_access.end(),
+                                        [indices](const auto &pair) -> bool { return pair.first == indices; });
           QD_ASSERT(access_it != ctx_attribs_->arr_access.end());
           uint32_t access = uint32_t(access_it->second);
           if (access & uint32_t(irpass::ExternalPtrAccess::READ)) {
             DeviceAllocation buffer = ext_arrays.at(arg_id);
             void *device_arr_ptr{nullptr};
-            QD_ASSERT(device_->map(buffer, &device_arr_ptr) ==
-                      RhiResult::success);
-            ArgArrayPtrKey data_ptr_idx{arg_id,
-                                        TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+            QD_ASSERT(device_->map(buffer, &device_arr_ptr) == RhiResult::success);
+            ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
             const void *host_ptr = host_ctx_.array_ptrs[data_ptr_idx];
             std::memcpy(device_arr_ptr, host_ptr, ext_arr_size.at(arg_id));
             device_->unmap(buffer);
@@ -81,32 +73,24 @@ class HostDeviceContextBlitter {
         }
         // Substitute in the device address.
 
-        if ((host_ctx_.device_allocation_type[arg_id] ==
-                 LaunchContextBuilder::DevAllocType::kNone ||
-             host_ctx_.device_allocation_type[arg_id] ==
-                 LaunchContextBuilder::DevAllocType::kNdarray) &&
-            device_->get_caps().get(
-                DeviceCapability::spirv_has_physical_storage_buffer)) {
-          ArgArrayPtrKey grad_ptr_idx{arg_id,
-                                      TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
-          uint64_t addr =
-              device_->get_memory_physical_pointer(ext_arrays.at(arg_id));
-          host_ctx_.set_ndarray_ptrs(
-              arg_id, addr, (uint64)host_ctx_.array_ptrs[grad_ptr_idx]);
+        if ((host_ctx_.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone ||
+             host_ctx_.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNdarray) &&
+            device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+          ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+          uint64_t addr = device_->get_memory_physical_pointer(ext_arrays.at(arg_id));
+          host_ctx_.set_ndarray_ptrs(arg_id, addr, (uint64)host_ctx_.array_ptrs[grad_ptr_idx]);
         }
       }
     }
 
-    std::memcpy(device_base, host_ctx_.get_context().arg_buffer,
-                ctx_attribs_->args_bytes());
+    std::memcpy(device_base, host_ctx_.get_context().arg_buffer, ctx_attribs_->args_bytes());
 
     device_->unmap(*device_args_buffer_);
   }
 
-  bool device_to_host(
-      CommandList *cmdlist,
-      const std::unordered_map<int, DeviceAllocation> &ext_arrays,
-      const std::unordered_map<int, size_t> &ext_arr_size) {
+  bool device_to_host(CommandList *cmdlist,
+                      const std::unordered_map<int, DeviceAllocation> &ext_arrays,
+                      const std::unordered_map<int, size_t> &ext_arr_size) {
     if (ctx_attribs_->empty()) {
       return false;
     }
@@ -123,21 +107,16 @@ class HostDeviceContextBlitter {
       if (arg.is_array) {
         QD_ASSERT(indices.size() == 1);
         int arg_id = indices[0];
-        if (host_ctx_.device_allocation_type[arg_id] ==
-                LaunchContextBuilder::DevAllocType::kNone &&
+        if (host_ctx_.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone &&
             ext_arr_size.at(arg_id)) {
-          auto access_it = std::find_if(ctx_attribs_->arr_access.begin(),
-                                        ctx_attribs_->arr_access.end(),
-                                        [indices](const auto &pair) -> bool {
-                                          return pair.first == indices;
-                                        });
+          auto access_it = std::find_if(ctx_attribs_->arr_access.begin(), ctx_attribs_->arr_access.end(),
+                                        [indices](const auto &pair) -> bool { return pair.first == indices; });
           QD_ASSERT(access_it != ctx_attribs_->arr_access.end());
           uint32_t access = uint32_t(access_it->second);
           if (access & uint32_t(irpass::ExternalPtrAccess::WRITE)) {
             // Only need to blit ext arrs (host array)
             readback_dev_ptrs.push_back(ext_arrays.at(arg_id).get_ptr(0));
-            readback_host_ptrs.push_back(host_ctx_.array_ptrs[{
-                arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
+            readback_host_ptrs.push_back(host_ctx_.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
             // TODO: readback grad_ptrs as well once ndarray ad is supported
             readback_sizes.push_back(ext_arr_size.at(arg_id));
             require_sync = true;
@@ -148,16 +127,13 @@ class HostDeviceContextBlitter {
 
     if (require_sync) {
       if (readback_sizes.size()) {
-        StreamSemaphore command_complete_sema =
-            device_->get_compute_stream()->submit(cmdlist);
+        StreamSemaphore command_complete_sema = device_->get_compute_stream()->submit(cmdlist);
 
         device_->wait_idle();
 
         // In this case `readback_data` syncs
-        QD_ASSERT(device_->readback_data(
-                      readback_dev_ptrs.data(), readback_host_ptrs.data(),
-                      readback_sizes.data(), int(readback_sizes.size()),
-                      {command_complete_sema}) == RhiResult::success);
+        QD_ASSERT(device_->readback_data(readback_dev_ptrs.data(), readback_host_ptrs.data(), readback_sizes.data(),
+                                         int(readback_sizes.size()), {command_complete_sema}) == RhiResult::success);
       } else {
         device_->get_compute_stream()->submit_synced(cmdlist);
       }
@@ -170,8 +146,7 @@ class HostDeviceContextBlitter {
     }
 
     void *device_base{nullptr};
-    QD_ASSERT(device_->map(*device_ret_buffer_, &device_base) ==
-              RhiResult::success);
+    QD_ASSERT(device_->map(*device_ret_buffer_, &device_base) == RhiResult::success);
 
     void *ctx_result_buffer = host_ctx_.get_context().result_buffer;
     std::memcpy(ctx_result_buffer, device_base, ctx_attribs_->rets_bytes());
@@ -181,17 +156,16 @@ class HostDeviceContextBlitter {
     return true;
   }
 
-  static std::unique_ptr<HostDeviceContextBlitter> maybe_make(
-      const KernelContextAttributes *ctx_attribs,
-      LaunchContextBuilder &host_ctx,
-      Device *device,
-      DeviceAllocation *device_args_buffer,
-      DeviceAllocation *device_ret_buffer) {
+  static std::unique_ptr<HostDeviceContextBlitter> maybe_make(const KernelContextAttributes *ctx_attribs,
+                                                              LaunchContextBuilder &host_ctx,
+                                                              Device *device,
+                                                              DeviceAllocation *device_args_buffer,
+                                                              DeviceAllocation *device_ret_buffer) {
     if (ctx_attribs->empty()) {
       return nullptr;
     }
-    return std::make_unique<HostDeviceContextBlitter>(
-        ctx_attribs, host_ctx, device, device_args_buffer, device_ret_buffer);
+    return std::make_unique<HostDeviceContextBlitter>(ctx_attribs, host_ctx, device, device_args_buffer,
+                                                      device_ret_buffer);
   }
 
  private:
@@ -211,8 +185,7 @@ constexpr size_t kListGenBufferSize = 32 << 20;
 // Unified Device API pipelines.
 
 CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
-    : ti_kernel_attribs_(*ti_params.ti_kernel_attribs),
-      device_(ti_params.device) {
+    : ti_kernel_attribs_(*ti_params.ti_kernel_attribs), device_(ti_params.device) {
   input_buffers_[BufferType::GlobalTmps] = ti_params.global_tmps_buffer;
   input_buffers_[BufferType::ListGen] = ti_params.listgen_buffer;
 
@@ -235,17 +208,15 @@ CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
   QD_ASSERT(task_attribs.size() == spirv_bins.size());
 
   for (int i = 0; i < task_attribs.size(); ++i) {
-    PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary,
-                                   (void *)spirv_bins[i].data(),
+    PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv_bins[i].data(),
                                    spirv_bins[i].size() * sizeof(uint32_t)};
-    auto [vp, res] = ti_params.device->create_pipeline_unique(
-        source_desc, task_attribs[i].name, ti_params.backend_cache);
+    auto [vp, res] =
+        ti_params.device->create_pipeline_unique(source_desc, task_attribs[i].name, ti_params.backend_cache);
     pipelines_.push_back(std::move(vp));
   }
 }
 
-const QuadrantsKernelAttributes &CompiledQuadrantsKernel::ti_kernel_attribs()
-    const {
+const QuadrantsKernelAttributes &CompiledQuadrantsKernel::ti_kernel_attribs() const {
   return ti_kernel_attribs_;
 }
 
@@ -265,8 +236,7 @@ Pipeline *CompiledQuadrantsKernel::get_pipeline(int i) {
   return pipelines_[i].get();
 }
 
-GfxRuntime::GfxRuntime(const Params &params)
-    : device_(params.device), profiler_(params.profiler) {
+GfxRuntime::GfxRuntime(const Params &params) : device_(params.device), profiler_(params.profiler) {
   current_cmdlist_pending_since_ = high_res_clock::now();
   init_nonroot_buffers();
 
@@ -277,13 +247,11 @@ GfxRuntime::GfxRuntime(const Params &params)
   if (std::filesystem::exists(cache_path)) {
     QD_TRACE("Loading pipeline cache from {}", cache_path.generic_string());
     std::ifstream cache_file(cache_path, std::ios::binary);
-    cache_data.assign(std::istreambuf_iterator<char>(cache_file),
-                      std::istreambuf_iterator<char>());
+    cache_data.assign(std::istreambuf_iterator<char>(cache_file), std::istreambuf_iterator<char>());
   } else {
     QD_TRACE("Pipeline cache not found at {}", cache_path.generic_string());
   }
-  auto [cache, res] = device_->create_pipeline_cache_unique(cache_data.size(),
-                                                            cache_data.data());
+  auto [cache, res] = device_->create_pipeline_cache_unique(cache_data.size(), cache_data.data());
   if (res == RhiResult::success) {
     backend_cache_ = std::move(cache);
   }
@@ -297,8 +265,7 @@ GfxRuntime::~GfxRuntime() {
     uint8_t *cache_data = (uint8_t *)backend_cache_->data();
     size_t cache_size = backend_cache_->size();
     if (cache_data) {
-      std::filesystem::path cache_path =
-          std::filesystem::path(get_repo_dir()) / "rhi_cache.bin";
+      std::filesystem::path cache_path = std::filesystem::path(get_repo_dir()) / "rhi_cache.bin";
       std::ofstream cache_file(cache_path, std::ios::binary | std::ios::trunc);
       std::ostreambuf_iterator<char> output_iterator(cache_file);
       std::copy(cache_data, cache_data + cache_size, output_iterator);
@@ -314,8 +281,7 @@ GfxRuntime::~GfxRuntime() {
   listgen_buffer_.reset();
 }
 
-GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(
-    GfxRuntime::RegisterParams reg_params) {
+GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::RegisterParams reg_params) {
   CompiledQuadrantsKernel::Params params;
   params.ti_kernel_attribs = &(reg_params.kernel_attribs);
   params.num_snode_trees = reg_params.num_snode_trees;
@@ -341,8 +307,7 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(
   return res;
 }
 
-void GfxRuntime::launch_kernel(KernelHandle handle,
-                               LaunchContextBuilder &host_ctx) {
+void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
   auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
@@ -355,39 +320,34 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
           "Quadrants "
           "kernel. Profiling aborted.");
       profiler_ = nullptr;
-    } else if (device_->profiler_get_sampler_count() + task_count >
-               apple_max_query_pool_count) {
+    } else if (device_->profiler_get_sampler_count() + task_count > apple_max_query_pool_count) {
       flush();
       device_->profiler_sync();
     }
   }
 #endif
 
-  std::unique_ptr<DeviceAllocationGuard> args_buffer{nullptr},
-      ret_buffer{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> args_buffer{nullptr}, ret_buffer{nullptr};
 
   if (ti_kernel->get_args_buffer_size()) {
-    auto [buf, res] = device_->allocate_memory_unique(
-        {ti_kernel->get_args_buffer_size(),
-         /*host_write=*/true, /*host_read=*/false,
-         /*export_sharing=*/false, AllocUsage::Uniform});
+    auto [buf, res] = device_->allocate_memory_unique({ti_kernel->get_args_buffer_size(),
+                                                       /*host_write=*/true, /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Uniform});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate args buffer");
     args_buffer = std::move(buf);
   }
 
   if (ti_kernel->get_ret_buffer_size()) {
-    auto [buf, res] = device_->allocate_memory_unique(
-        {ti_kernel->get_ret_buffer_size(),
-         /*host_write=*/false, /*host_read=*/true,
-         /*export_sharing=*/false, AllocUsage::Storage});
+    auto [buf, res] = device_->allocate_memory_unique({ti_kernel->get_ret_buffer_size(),
+                                                       /*host_write=*/false, /*host_read=*/true,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ret buffer");
     ret_buffer = std::move(buf);
   }
 
   // Create context blitter
-  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(
-      &ti_kernel->ti_kernel_attribs().ctx_attribs, host_ctx, device_,
-      args_buffer.get(), ret_buffer.get());
+  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(&ti_kernel->ti_kernel_attribs().ctx_attribs, host_ctx,
+                                                          device_, args_buffer.get(), ret_buffer.get());
 
   // `any_arrays` contain both external arrays and NDArrays
   std::unordered_map<int, DeviceAllocation> any_arrays;
@@ -398,8 +358,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
 
   // Prepare context buffers & arrays
   if (ctx_blitter) {
-    QD_ASSERT(ti_kernel->get_args_buffer_size() ||
-              ti_kernel->get_ret_buffer_size());
+    QD_ASSERT(ti_kernel->get_args_buffer_size() || ti_kernel->get_ret_buffer_size());
 
     const auto &args = ti_kernel->ti_kernel_attribs().ctx_attribs.args();
     for (auto &kv : args) {
@@ -408,18 +367,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
       if (arg.is_array) {
         QD_ASSERT(indices.size() == 1);
         int arg_id = indices[0];
-        if (host_ctx.device_allocation_type[arg_id] !=
-            LaunchContextBuilder::DevAllocType::kNone) {
+        if (host_ctx.device_allocation_type[arg_id] != LaunchContextBuilder::DevAllocType::kNone) {
           DeviceAllocation devalloc = kDeviceNullAllocation;
           // NDArray
-          const ArgArrayPtrKey key{arg_id,
-                                   TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+          const ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
           if (host_ctx.array_ptrs.count(key)) {
             devalloc = *(DeviceAllocation *)(host_ctx.array_ptrs[key]);
           }
 
-          if (host_ctx.device_allocation_type[arg_id] ==
-              LaunchContextBuilder::DevAllocType::kNdarray) {
+          if (host_ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNdarray) {
             any_arrays[arg_id] = devalloc;
             ndarrays_in_use_.insert(devalloc.alloc_id);
           } else {
@@ -427,22 +383,17 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
           }
         } else {
           ext_array_size[arg_id] = host_ctx.array_runtime_sizes[arg_id];
-          auto arr_access =
-              ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access;
+          auto arr_access = ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access;
           auto access_it = std::find_if(arr_access.begin(), arr_access.end(),
-                                        [indices](const auto &pair) -> bool {
-                                          return pair.first == indices;
-                                        });
+                                        [indices](const auto &pair) -> bool { return pair.first == indices; });
           QD_ASSERT(access_it != arr_access.end());
           uint32_t access = uint32_t(access_it->second);
           // Alloc ext arr
           size_t alloc_size = std::max(size_t(32), ext_array_size.at(arg_id));
           bool host_write = access & uint32_t(irpass::ExternalPtrAccess::READ);
           auto [allocated, res] = device_->allocate_memory_unique(
-              {alloc_size, host_write, false, /*export_sharing=*/false,
-               AllocUsage::Storage});
-          QD_ASSERT_INFO(res == RhiResult::success,
-                         "Failed to allocate ext arr buffer");
+              {alloc_size, host_write, false, /*export_sharing=*/false, AllocUsage::Storage});
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ext arr buffer");
           any_arrays[arg_id] = *allocated.get();
           ctx_buffers_.push_back(std::move(allocated));
         }
@@ -460,26 +411,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
-    const int group_x = (attribs.advisory_total_num_threads +
-                         attribs.advisory_num_threads_per_group - 1) /
+    const int group_x = (attribs.advisory_total_num_threads + attribs.advisory_num_threads_per_group - 1) /
                         attribs.advisory_num_threads_per_group;
-    std::unique_ptr<ShaderResourceSet> bindings =
-        device_->create_resource_set_unique();
+    std::unique_ptr<ShaderResourceSet> bindings = device_->create_resource_set_unique();
     for (auto &bind : attribs.buffer_binds) {
       // We might have to bind a invalid buffer (this is fine as long as
       // shader don't do anything with it)
       if (bind.buffer.type == BufferType::ExtArr) {
         bindings->rw_buffer(bind.binding, any_arrays.at(bind.buffer.root_id));
       } else if (bind.buffer.type == BufferType::Args) {
-        bindings->buffer(bind.binding,
-                         args_buffer ? *args_buffer : kDeviceNullAllocation);
+        bindings->buffer(bind.binding, args_buffer ? *args_buffer : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::Rets) {
-        bindings->rw_buffer(bind.binding,
-                            ret_buffer ? *ret_buffer : kDeviceNullAllocation);
+        bindings->rw_buffer(bind.binding, ret_buffer ? *ret_buffer : kDeviceNullAllocation);
       } else {
         DeviceAllocation *alloc = ti_kernel->get_buffer_bind(bind.buffer);
-        bindings->rw_buffer(bind.binding,
-                            alloc ? *alloc : kDeviceNullAllocation);
+        bindings->rw_buffer(bind.binding, alloc ? *alloc : kDeviceNullAllocation);
       }
     }
 
@@ -487,23 +433,18 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
       for (auto &bind : attribs.buffer_binds) {
         if (bind.buffer.type == BufferType::ListGen) {
           // FIXME: properlly support multiple list
-          current_cmdlist_->buffer_fill(
-              ti_kernel->get_buffer_bind(bind.buffer)->get_ptr(0),
-              kBufferSizeEntireSize,
-              /*data=*/0);
-          current_cmdlist_->buffer_barrier(
-              *ti_kernel->get_buffer_bind(bind.buffer));
+          current_cmdlist_->buffer_fill(ti_kernel->get_buffer_bind(bind.buffer)->get_ptr(0), kBufferSizeEntireSize,
+                                        /*data=*/0);
+          current_cmdlist_->buffer_barrier(*ti_kernel->get_buffer_bind(bind.buffer));
         }
       }
     }
 
     current_cmdlist_->bind_pipeline(vp);
     RhiResult status = current_cmdlist_->bind_shader_resources(bindings.get());
-    QD_ERROR_IF(status != RhiResult::success,
-                "Resource binding error : RhiResult({})", status);
+    QD_ERROR_IF(status != RhiResult::success, "Resource binding error : RhiResult({})", status);
 
-    if (device_->get_caps().get(
-            DeviceCapability::spirv_has_physical_storage_buffer)) {
+    if (device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
       for (const auto &[arg_id, alloc] : any_arrays) {
         current_cmdlist_->track_physical_buffer(alloc);
       }
@@ -519,8 +460,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
       current_cmdlist_->end_profiler_scope();
     }
 
-    QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})",
-                status);
+    QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})", status);
     current_cmdlist_->memory_barrier();
   }
 
@@ -534,8 +474,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle,
 
   // If we need to host sync, sync and remove in-flight references
   if (ctx_blitter) {
-    if (ctx_blitter->device_to_host(current_cmdlist_.get(), any_arrays,
-                                    ext_array_size)) {
+    if (ctx_blitter->device_to_host(current_cmdlist_.get(), any_arrays, ext_array_size)) {
       current_cmdlist_ = nullptr;
       ctx_buffers_.clear();
     }
@@ -574,8 +513,7 @@ StreamSemaphore GfxRuntime::flush() {
     current_cmdlist_ = nullptr;
     ctx_buffers_.clear();
   } else {
-    auto [cmdlist, res] =
-        device_->get_compute_stream()->new_command_list_unique();
+    auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);
     cmdlist->memory_barrier();
     sema = device_->get_compute_stream()->submit(cmdlist.get());
@@ -591,8 +529,7 @@ void GfxRuntime::ensure_current_cmdlist() {
   // Create new command list if current one is nullptr
   if (!current_cmdlist_) {
     current_cmdlist_pending_since_ = high_res_clock::now();
-    auto [cmdlist, res] =
-        device_->get_compute_stream()->new_command_list_unique();
+    auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);
     current_cmdlist_ = std::move(cmdlist);
   }
@@ -605,8 +542,7 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
   if (current_cmdlist_) {
     constexpr uint64_t max_pending_time = 2000;  // 2000us = 2ms
     auto duration = high_res_clock::now() - current_cmdlist_pending_since_;
-    if (std::chrono::duration_cast<std::chrono::microseconds>(duration)
-            .count() > max_pending_time) {
+    if (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() > max_pending_time) {
       flush();
     }
   }
@@ -614,27 +550,24 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
 
 void GfxRuntime::init_nonroot_buffers() {
   {
-    auto [buf, res] = device_->allocate_memory_unique(
-        {kGtmpBufferSize,
-         /*host_write=*/false, /*host_read=*/false,
-         /*export_sharing=*/false, AllocUsage::Storage});
+    auto [buf, res] = device_->allocate_memory_unique({kGtmpBufferSize,
+                                                       /*host_write=*/false, /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "gtmp allocation failed");
     global_tmps_buffer_ = std::move(buf);
   }
 
   {
-    auto [buf, res] = device_->allocate_memory_unique(
-        {kListGenBufferSize,
-         /*host_write=*/false, /*host_read=*/false,
-         /*export_sharing=*/false, AllocUsage::Storage});
+    auto [buf, res] = device_->allocate_memory_unique({kListGenBufferSize,
+                                                       /*host_write=*/false, /*host_read=*/false,
+                                                       /*export_sharing=*/false, AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "listgen allocation failed");
     listgen_buffer_ = std::move(buf);
   }
 
   // Need to zero fill the buffers, otherwise there could be NaN.
   Stream *stream = device_->get_compute_stream();
-  auto [cmdlist, res] =
-      device_->get_compute_stream()->new_command_list_unique();
+  auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
   QD_ASSERT(res == RhiResult::success);
 
   cmdlist->buffer_fill(global_tmps_buffer_->get_ptr(0), kBufferSizeEntireSize,
@@ -648,15 +581,12 @@ void GfxRuntime::add_root_buffer(size_t root_buffer_size) {
   if (root_buffer_size == 0) {
     root_buffer_size = 4;  // there might be empty roots
   }
-  auto [new_buffer, res_buffer] = device_->allocate_memory_unique(
-      {root_buffer_size,
-       /*host_write=*/false, /*host_read=*/false,
-       /*export_sharing=*/false, AllocUsage::Storage});
-  QD_ASSERT_INFO(res_buffer == RhiResult::success,
-                 "Failed to allocate root buffer");
+  auto [new_buffer, res_buffer] = device_->allocate_memory_unique({root_buffer_size,
+                                                                   /*host_write=*/false, /*host_read=*/false,
+                                                                   /*export_sharing=*/false, AllocUsage::Storage});
+  QD_ASSERT_INFO(res_buffer == RhiResult::success, "Failed to allocate root buffer");
   Stream *stream = device_->get_compute_stream();
-  auto [cmdlist, res_cmdlist] =
-      device_->get_compute_stream()->new_command_list_unique();
+  auto [cmdlist, res_cmdlist] = device_->get_compute_stream()->new_command_list_unique();
   QD_ASSERT(res_cmdlist == RhiResult::success);
   cmdlist->buffer_fill(new_buffer->get_ptr(0), kBufferSizeEntireSize,
                        /*data=*/0);
@@ -681,12 +611,10 @@ size_t GfxRuntime::get_root_buffer_size(int id) const {
   return it->second;
 }
 
-void GfxRuntime::enqueue_compute_op_lambda(
-    std::function<void(Device *device, CommandList *cmdlist)> op,
-    const std::vector<ComputeOpImageRef> &image_refs) {
+void GfxRuntime::enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                           const std::vector<ComputeOpImageRef> &image_refs) {
   for (const auto &ref : image_refs) {
-    QD_ASSERT(last_image_layouts_.find(ref.image.alloc_id) !=
-              last_image_layouts_.end());
+    QD_ASSERT(last_image_layouts_.find(ref.image.alloc_id) != last_image_layouts_.end());
   }
 
   ensure_current_cmdlist();
@@ -697,15 +625,13 @@ void GfxRuntime::enqueue_compute_op_lambda(
   }
 }
 
-GfxRuntime::RegisterParams run_codegen(
-    Kernel *kernel,
-    Arch arch,
-    const DeviceCapabilityConfig &caps,
-    const std::vector<CompiledSNodeStructs> &compiled_structs,
-    const CompileConfig &compile_config) {
+GfxRuntime::RegisterParams run_codegen(Kernel *kernel,
+                                       Arch arch,
+                                       const DeviceCapabilityConfig &caps,
+                                       const std::vector<CompiledSNodeStructs> &compiled_structs,
+                                       const CompileConfig &compile_config) {
   const auto id = Program::get_kernel_id();
-  const auto quadrants_kernel_name(
-      fmt::format("{}_k{:04d}_vk", kernel->name, id));
+  const auto quadrants_kernel_name(fmt::format("{}_k{:04d}_vk", kernel->name, id));
   QD_TRACE("VK codegen for Quadrants kernel={}", quadrants_kernel_name);
   spirv::KernelCodegen::Params params;
   params.ti_kernel_name = quadrants_kernel_name;
@@ -723,16 +649,13 @@ GfxRuntime::RegisterParams run_codegen(
   return res;
 }
 
-std::pair<const lang::StructType *, size_t>
-GfxRuntime::get_struct_type_with_data_layout(const lang::StructType *old_ty,
-                                             const std::string &layout) {
-  auto [new_ty, size, align] =
-      get_struct_type_with_data_layout_impl(old_ty, layout);
+std::pair<const lang::StructType *, size_t> GfxRuntime::get_struct_type_with_data_layout(const lang::StructType *old_ty,
+                                                                                         const std::string &layout) {
+  auto [new_ty, size, align] = get_struct_type_with_data_layout_impl(old_ty, layout);
   return {new_ty, size};
 }
 
-std::tuple<const lang::StructType *, size_t, size_t>
-GfxRuntime::get_struct_type_with_data_layout_impl(
+std::tuple<const lang::StructType *, size_t, size_t> GfxRuntime::get_struct_type_with_data_layout_impl(
     const lang::StructType *old_ty,
     const std::string &layout) {
   QD_TRACE("get_struct_type_with_data_layout: {}", layout);
@@ -747,8 +670,7 @@ GfxRuntime::get_struct_type_with_data_layout_impl(
     size_t member_align;
     size_t member_size;
     if (auto struct_type = member.type->cast<lang::StructType>()) {
-      auto [new_ty, size, member_align_] =
-          get_struct_type_with_data_layout_impl(struct_type, layout);
+      auto [new_ty, size, member_align_] = get_struct_type_with_data_layout_impl(struct_type, layout);
       members[i].type = new_ty;
       member_align = member_align_;
       member_size = size;
@@ -791,10 +713,7 @@ GfxRuntime::get_struct_type_with_data_layout_impl(
     bytes = align_up(bytes, 4 * sizeof(float));
   }
   QD_TRACE("  total_bytes={}", bytes);
-  return {TypeFactory::get_instance()
-              .get_struct_type(members, layout)
-              ->as<lang::StructType>(),
-          bytes, align};
+  return {TypeFactory::get_instance().get_struct_type(members, layout)->as<lang::StructType>(), bytes, align};
 }
 
 }  // namespace gfx

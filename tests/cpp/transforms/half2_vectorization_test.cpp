@@ -14,21 +14,17 @@ TEST(Half2Vectorization, Ndarray) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
-  auto half2_type =
-      TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
+  auto half2_type = TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
 
-  auto argload_stmt = block->push_back<ArgLoadStmt>(
-      std::vector<int>{0} /*arg_id*/, PrimitiveType::f16, /*is_ptr*/ true,
-      /*create_load*/ false);
+  auto argload_stmt = block->push_back<ArgLoadStmt>(std::vector<int>{0} /*arg_id*/, PrimitiveType::f16, /*is_ptr*/ true,
+                                                    /*create_load*/ false);
   argload_stmt->ret_type = half2_type;
   auto const_0_stmt = block->push_back<ConstStmt>(TypedConstant(0));
 
   std::vector<Stmt *> external_ptr_indices0 = {const_0_stmt};
-  auto external_ptr_stmt_0 =
-      block->push_back<ExternalPtrStmt>(argload_stmt, external_ptr_indices0);
+  auto external_ptr_stmt_0 = block->push_back<ExternalPtrStmt>(argload_stmt, external_ptr_indices0);
   external_ptr_stmt_0->ret_type = half2_type;
   external_ptr_stmt_0->ret_type.set_is_pointer(true);
 
@@ -39,8 +35,7 @@ TEST(Half2Vectorization, Ndarray) {
   auto matrix_stmt = block->push_back<MatrixInitStmt>(values);
   matrix_stmt->ret_type = half2_type;
 
-  auto atomic_stmt = block->push_back<AtomicOpStmt>(
-      AtomicOpType::add, external_ptr_stmt_0, matrix_stmt);
+  auto atomic_stmt = block->push_back<AtomicOpStmt>(AtomicOpType::add, external_ptr_stmt_0, matrix_stmt);
   atomic_stmt->ret_type = half2_type;
 
   /*
@@ -84,10 +79,8 @@ TEST(Half2Vectorization, GlobalTemporary) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
-  auto half2_type =
-      TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto half2_type = TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
 
   auto val_0_stmt = block->push_back<ConstStmt>(TypedConstant(10));
   auto val_1_stmt = block->push_back<ConstStmt>(TypedConstant(20));
@@ -96,11 +89,9 @@ TEST(Half2Vectorization, GlobalTemporary) {
   auto matrix_stmt = block->push_back<MatrixInitStmt>(values);
   matrix_stmt->ret_type = half2_type;
 
-  auto global_temp_stmt_0 =
-      block->push_back<GlobalTemporaryStmt>(0, half2_type);
+  auto global_temp_stmt_0 = block->push_back<GlobalTemporaryStmt>(0, half2_type);
 
-  block->push_back<AtomicOpStmt>(AtomicOpType::add, global_temp_stmt_0,
-                                 matrix_stmt);
+  block->push_back<AtomicOpStmt>(AtomicOpType::add, global_temp_stmt_0, matrix_stmt);
 
   irpass::type_check(block.get(), CompileConfig());
 
@@ -142,23 +133,19 @@ TEST(Half2Vectorization, Field) {
   auto block = std::make_unique<Block>();
 
   auto func = []() {};
-  auto kernel =
-      std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
+  auto kernel = std::make_unique<Kernel>(*test_prog.prog(), func, "fake_kernel");
 
   auto get_root = block->push_back<GetRootStmt>();
-  auto linearized_empty = block->push_back<LinearizeStmt>(std::vector<Stmt *>(),
-                                                          std::vector<int>());
+  auto linearized_empty = block->push_back<LinearizeStmt>(std::vector<Stmt *>(), std::vector<int>());
   SNode root(0, SNodeType::root);
   root.insert_children(SNodeType::place);
   root.insert_children(SNodeType::place);
 
-  auto lookup = block->push_back<SNodeLookupStmt>(&root, get_root,
-                                                  linearized_empty, false);
+  auto lookup = block->push_back<SNodeLookupStmt>(&root, get_root, linearized_empty, false);
 
   auto get_ch_stmt_0 = block->push_back<GetChStmt>(lookup, 0);
 
-  auto half2_type =
-      TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
+  auto half2_type = TypeFactory::get_instance().create_tensor_type({2}, PrimitiveType::f16);
   get_ch_stmt_0->ret_type = half2_type;
   get_ch_stmt_0->ret_type.set_is_pointer(true);
   get_ch_stmt_0->as<GetChStmt>()->overrided_dtype = true;

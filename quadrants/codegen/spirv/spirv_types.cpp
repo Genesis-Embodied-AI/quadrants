@@ -15,8 +15,7 @@ size_t StructType::memory_size(tinyir::LayoutContext &ctx) const {
   int n = 0;
   for (const Type *elem : elements_) {
     QD_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
-    const MemRefElementTypeInterface *mem_ref_type =
-        elem->cast<tinyir::MemRefElementTypeInterface>();
+    const MemRefElementTypeInterface *mem_ref_type = elem->cast<tinyir::MemRefElementTypeInterface>();
     size_t elem_size = mem_ref_type->memory_size(ctx);
     size_t elem_align = mem_ref_type->memory_alignment_size(ctx);
     // First align the head ptr, then add the size
@@ -45,9 +44,7 @@ size_t StructType::memory_alignment_size(tinyir::LayoutContext &ctx) const {
   size_t max_align = 0;
   for (const Type *elem : elements_) {
     QD_ASSERT(elem->is<tinyir::MemRefElementTypeInterface>());
-    max_align = std::max(
-        max_align,
-        elem->cast<MemRefElementTypeInterface>()->memory_alignment_size(ctx));
+    max_align = std::max(max_align, elem->cast<MemRefElementTypeInterface>()->memory_alignment_size(ctx));
   }
 
   if (ctx.is<STD140LayoutContext>()) {
@@ -76,24 +73,18 @@ size_t SmallVectorType::memory_size(tinyir::LayoutContext &ctx) const {
     return s;
   }
 
-  size_t size =
-      element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_size(
-          ctx) *
-      num_elements_;
+  size_t size = element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_size(ctx) * num_elements_;
 
   ctx.register_size(this, size);
   return size;
 }
 
-size_t SmallVectorType::memory_alignment_size(
-    tinyir::LayoutContext &ctx) const {
+size_t SmallVectorType::memory_alignment_size(tinyir::LayoutContext &ctx) const {
   if (size_t s = ctx.query_alignment(this)) {
     return s;
   }
 
-  size_t align =
-      element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_size(
-          ctx);
+  size_t align = element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_size(ctx);
 
   if (ctx.is<STD430LayoutContext>() || ctx.is<STD140LayoutContext>()) {
     // For STD140 / STD430, small vectors are Power-of-Two aligned
@@ -115,8 +106,7 @@ size_t ArrayType::memory_size(tinyir::LayoutContext &ctx) const {
     return s;
   }
 
-  size_t elem_align = element_type_->cast<tinyir::MemRefElementTypeInterface>()
-                          ->memory_alignment_size(ctx);
+  size_t elem_align = element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_alignment_size(ctx);
 
   if (ctx.is<STD140LayoutContext>()) {
     // For STD140, arrays element stride equals the base alignment of the array
@@ -134,8 +124,7 @@ size_t ArrayType::memory_alignment_size(tinyir::LayoutContext &ctx) const {
     return s;
   }
 
-  size_t elem_align = element_type_->cast<tinyir::MemRefElementTypeInterface>()
-                          ->memory_alignment_size(ctx);
+  size_t elem_align = element_type_->cast<tinyir::MemRefElementTypeInterface>()->memory_alignment_size(ctx);
 
   if (ctx.is<STD140LayoutContext>()) {
     // With STD140 layout, array alignment is rounded up to `sizeof(vec4)`
@@ -164,8 +153,7 @@ bool bitcast_possible(tinyir::Type *a, tinyir::Type *b, bool _inverted) {
   return false;
 }
 
-const tinyir::Type *translate_ti_primitive(tinyir::Block &ir_module,
-                                           const DataType t) {
+const tinyir::Type *translate_ti_primitive(tinyir::Block &ir_module, const DataType t) {
   if (t->is<PrimitiveType>()) {
     if (t == PrimitiveType::i8) {
       return ir_module.emplace_back<IntType>(/*num_bits=*/8,
@@ -249,8 +237,7 @@ class TypePrinter : public TypeVisitor {
 
  public:
   void visit_int_type(const IntType *type) override {
-    result_ += fmt::format("T{} = {}int{}_t\n", get_id(type),
-                           type->is_signed() ? "" : "u", type->num_bits());
+    result_ += fmt::format("T{} = {}int{}_t\n", get_id(type), type->is_signed() ? "" : "u", type->num_bits());
   }
 
   void visit_float_type(const FloatType *type) override {
@@ -258,8 +245,7 @@ class TypePrinter : public TypeVisitor {
   }
 
   void visit_physical_pointer_type(const PhysicalPointerType *type) override {
-    result_ += fmt::format("T{} = T{} *\n", get_id(type),
-                           get_id(type->get_pointed_type()));
+    result_ += fmt::format("T{} = T{} *\n", get_id(type), get_id(type->get_pointed_type()));
   }
 
   void visit_struct_type(const StructType *type) override {
@@ -271,14 +257,12 @@ class TypePrinter : public TypeVisitor {
   }
 
   void visit_small_vector_type(const SmallVectorType *type) override {
-    result_ += fmt::format("T{} = small_vector<T{}, {}>\n", get_id(type),
-                           get_id(type->element_type()),
+    result_ += fmt::format("T{} = small_vector<T{}, {}>\n", get_id(type), get_id(type->element_type()),
                            type->get_constant_shape()[0]);
   }
 
   void visit_array_type(const ArrayType *type) override {
-    result_ += fmt::format("T{} = array<T{}, {}>\n", get_id(type),
-                           get_id(type->element_type()),
+    result_ += fmt::format("T{} = array<T{}, {}>\n", get_id(type), get_id(type->element_type()),
                            type->get_constant_shape()[0]);
   }
 
@@ -298,8 +282,7 @@ class TypeReducer : public TypeVisitor {
   std::unique_ptr<tinyir::Block> copy{nullptr};
   std::unordered_map<const tinyir::Type *, const tinyir::Type *> &oldptr2newptr;
 
-  explicit TypeReducer(
-      std::unordered_map<const tinyir::Type *, const tinyir::Type *> &old2new)
+  explicit TypeReducer(std::unordered_map<const tinyir::Type *, const tinyir::Type *> &old2new)
       : oldptr2newptr(old2new) {
     copy = std::make_unique<tinyir::Block>();
     old2new.clear();
@@ -354,8 +337,7 @@ class TypeReducer : public TypeVisitor {
     if (!check_type(type)) {
       const tinyir::Type *element = check_type(type->element_type());
       QD_ASSERT(element);
-      oldptr2newptr[type] = copy->emplace_back<SmallVectorType>(
-          element, type->get_constant_shape()[0]);
+      oldptr2newptr[type] = copy->emplace_back<SmallVectorType>(element, type->get_constant_shape()[0]);
     }
   }
 
@@ -363,8 +345,7 @@ class TypeReducer : public TypeVisitor {
     if (!check_type(type)) {
       const tinyir::Type *element = check_type(type->element_type());
       QD_ASSERT(element);
-      oldptr2newptr[type] =
-          copy->emplace_back<ArrayType>(element, type->get_constant_shape()[0]);
+      oldptr2newptr[type] = copy->emplace_back<ArrayType>(element, type->get_constant_shape()[0]);
     }
   }
 };
@@ -385,8 +366,7 @@ class Translate2Spirv : public TypeVisitor {
  public:
   std::unordered_map<const tinyir::Node *, uint32_t> ir_node_2_spv_value;
 
-  Translate2Spirv(IRBuilder *spir_builder,
-                  tinyir::LayoutContext &layout_context)
+  Translate2Spirv(IRBuilder *spir_builder, tinyir::LayoutContext &layout_context)
       : spir_builder_(spir_builder), layout_context_(layout_context) {
   }
 
@@ -432,9 +412,8 @@ class Translate2Spirv : public TypeVisitor {
 
   void visit_physical_pointer_type(const PhysicalPointerType *type) override {
     SType vt = spir_builder_->get_null_type();
-    spir_builder_->declare_global(
-        spv::OpTypePointer, vt, spv::StorageClassPhysicalStorageBuffer,
-        ir_node_2_spv_value[type->get_pointed_type()]);
+    spir_builder_->declare_global(spv::OpTypePointer, vt, spv::StorageClassPhysicalStorageBuffer,
+                                  ir_node_2_spv_value[type->get_pointed_type()]);
     ir_node_2_spv_value[type] = vt.id;
   }
 
@@ -447,16 +426,14 @@ class Translate2Spirv : public TypeVisitor {
     spir_builder_->declare_global(spv::OpTypeStruct, vt, element_ids);
     ir_node_2_spv_value[type] = vt.id;
     for (int i = 0; i < type->get_num_elements(); i++) {
-      spir_builder_->decorate(spv::OpMemberDecorate, vt, i,
-                              spv::DecorationOffset,
+      spir_builder_->decorate(spv::OpMemberDecorate, vt, i, spv::DecorationOffset,
                               type->nth_element_offset(i, layout_context_));
     }
   }
 
   void visit_small_vector_type(const SmallVectorType *type) override {
     SType vt = spir_builder_->get_null_type();
-    spir_builder_->declare_global(spv::OpTypeVector, vt,
-                                  ir_node_2_spv_value[type->element_type()],
+    spir_builder_->declare_global(spv::OpTypeVector, vt, ir_node_2_spv_value[type->element_type()],
                                   type->get_constant_shape()[0]);
     ir_node_2_spv_value[type] = vt.id;
   }
@@ -465,25 +442,21 @@ class Translate2Spirv : public TypeVisitor {
     SType vt = spir_builder_->get_null_type();
     spir_builder_->declare_global(
         spv::OpTypeArray, vt, ir_node_2_spv_value[type->element_type()],
-        spir_builder_->int_immediate_number(spir_builder_->i32_type(),
-                                            type->get_constant_shape()[0]));
+        spir_builder_->int_immediate_number(spir_builder_->i32_type(), type->get_constant_shape()[0]));
     ir_node_2_spv_value[type] = vt.id;
     spir_builder_->decorate(spv::OpDecorate, vt, spv::DecorationArrayStride,
                             type->memory_alignment_size(layout_context_));
   }
 };
 
-std::unordered_map<const tinyir::Node *, uint32_t> ir_translate_to_spirv(
-    const tinyir::Block *blk,
-    tinyir::LayoutContext &layout_ctx,
-    IRBuilder *spir_builder) {
+std::unordered_map<const tinyir::Node *, uint32_t> ir_translate_to_spirv(const tinyir::Block *blk,
+                                                                         tinyir::LayoutContext &layout_ctx,
+                                                                         IRBuilder *spir_builder) {
   Translate2Spirv translator(spir_builder, layout_ctx);
   translator.visit(blk);
   return std::move(translator.ir_node_2_spv_value);
 }
-const tinyir::Type *translate_ti_type(tinyir::Block &ir_module,
-                                      const DataType t,
-                                      bool has_buffer_ptr) {
+const tinyir::Type *translate_ti_type(tinyir::Block &ir_module, const DataType t, bool has_buffer_ptr) {
   if (t->is<PrimitiveType>()) {
     return translate_ti_primitive(ir_module, t);
   }
@@ -497,16 +470,14 @@ const tinyir::Type *translate_ti_type(tinyir::Block &ir_module,
     }
   }
   if (t->is<TensorType>()) {
-    return ir_module.emplace_back<ArrayType>(
-        translate_ti_primitive(ir_module, t.get_element_type()),
-        t->as<TensorType>()->get_num_elements());
+    return ir_module.emplace_back<ArrayType>(translate_ti_primitive(ir_module, t.get_element_type()),
+                                             t->as<TensorType>()->get_num_elements());
   }
   if (auto struct_type = t->cast<lang::StructType>()) {
     std::vector<const tinyir::Type *> element_types;
     auto &elements = struct_type->elements();
     for (auto &element : elements) {
-      element_types.push_back(
-          translate_ti_type(ir_module, element.type, has_buffer_ptr));
+      element_types.push_back(translate_ti_type(ir_module, element.type, has_buffer_ptr));
     }
     return ir_module.emplace_back<StructType>(element_types);
   }

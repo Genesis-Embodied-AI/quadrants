@@ -458,10 +458,7 @@ typedef enum {
   CUSPARSE_INDEX_64I = 3   ///< 64-bit signed integer for matrix/vector indices
 } cusparseIndexType_t;
 
-typedef enum {
-  CUSPARSE_INDEX_BASE_ZERO = 0,
-  CUSPARSE_INDEX_BASE_ONE = 1
-} cusparseIndexBase_t;
+typedef enum { CUSPARSE_INDEX_BASE_ZERO = 0, CUSPARSE_INDEX_BASE_ONE = 1 } cusparseIndexBase_t;
 
 typedef enum cudaDataType_t {
   CUDA_R_16F = 2,   /* real as a half */
@@ -514,15 +511,9 @@ typedef enum {
   CUSPARSE_SPGEMM_CSR_ALG_NONDETERMINITIC = 2
 } cusparseSpGEMMAlg_t;
 
-typedef enum {
-  CUSPARSE_POINTER_MODE_HOST = 0,
-  CUSPARSE_POINTER_MODE_DEVICE = 1
-} cusparsePointerMode_t;
+typedef enum { CUSPARSE_POINTER_MODE_HOST = 0, CUSPARSE_POINTER_MODE_DEVICE = 1 } cusparsePointerMode_t;
 
-typedef enum {
-  CUSPARSE_ACTION_SYMBOLIC = 0,
-  CUSPARSE_ACTION_NUMERIC = 1
-} cusparseAction_t;
+typedef enum { CUSPARSE_ACTION_SYMBOLIC = 0, CUSPARSE_ACTION_NUMERIC = 1 } cusparseAction_t;
 
 typedef enum {
   CUSPARSE_CSR2CSC_ALG1 = 1,  // faster than V2 (in general), deterministc
@@ -536,22 +527,12 @@ typedef enum {
   CUSPARSE_MATRIX_TYPE_TRIANGULAR = 3
 } cusparseMatrixType_t;
 
-typedef enum {
-  CUSPARSE_FILL_MODE_LOWER = 0,
-  CUSPARSE_FILL_MODE_UPPER = 1
-} cusparseFillMode_t;
+typedef enum { CUSPARSE_FILL_MODE_LOWER = 0, CUSPARSE_FILL_MODE_UPPER = 1 } cusparseFillMode_t;
 
-typedef enum {
-  CUSPARSE_DIAG_TYPE_NON_UNIT = 0,
-  CUSPARSE_DIAG_TYPE_UNIT = 1
-} cusparseDiagType_t;
+typedef enum { CUSPARSE_DIAG_TYPE_NON_UNIT = 0, CUSPARSE_DIAG_TYPE_UNIT = 1 } cusparseDiagType_t;
 
 // copy from cusolver.h
-typedef enum libraryPropertyType_t {
-  MAJOR_VERSION,
-  MINOR_VERSION,
-  PATCH_LEVEL
-} libraryPropertyType;
+typedef enum libraryPropertyType_t { MAJOR_VERSION, MINOR_VERSION, PATCH_LEVEL } libraryPropertyType;
 
 struct cusolverSpContext;
 typedef struct cusolverSpContext *cusolverSpHandle_t;

@@ -41,10 +41,7 @@ ThreadPool::ThreadPool(int max_num_threads) : max_num_threads(max_num_threads) {
   }
 }
 
-void ThreadPool::run(int splits,
-                     int desired_num_threads,
-                     void *range_for_task_context,
-                     RangeForTaskFunc *func) {
+void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *func) {
   {
     std::lock_guard _(mutex);
     this->range_for_task_context = range_for_task_context;
@@ -80,9 +77,7 @@ void ThreadPool::target() {
     {
       std::unique_lock<std::mutex> lock(mutex);
       slave_cv.wait(lock, [this, last_timestamp, thread_id] {
-        return (timestamp > last_timestamp &&
-                thread_id < desired_num_threads) ||
-               this->exiting;
+        return (timestamp > last_timestamp && thread_id < desired_num_threads) || this->exiting;
       });
       last_timestamp = timestamp;
       if (exiting) {

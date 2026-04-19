@@ -20,12 +20,7 @@ namespace offline_cache {
 
 using Version = std::uint16_t[3];  // {MAJOR, MINOR, PATCH}
 
-enum CleanCacheFlags {
-  NotClean = 0b000,
-  CleanOldVersion = 0b001,
-  CleanOldUsed = 0b010,
-  CleanOldCreated = 0b100
-};
+enum CleanCacheFlags { NotClean = 0b000, CleanOldVersion = 0b001, CleanOldUsed = 0b010, CleanOldCreated = 0b100 };
 
 enum CleanCachePolicy {
   Never = NotClean,
@@ -67,9 +62,7 @@ enum class LoadMetadataError {
 };
 
 template <typename MetadataType>
-inline LoadMetadataError load_metadata_with_checking(
-    MetadataType &result,
-    const std::string &filepath) {
+inline LoadMetadataError load_metadata_with_checking(MetadataType &result, const std::string &filepath) {
   if (!quadrants::path_exists(filepath)) {
     QD_DEBUG("Offline cache metadata file {} not found", filepath);
     return LoadMetadataError::kFileNotFound;
@@ -83,16 +76,13 @@ inline LoadMetadataError load_metadata_with_checking(
   if (!read_from_binary(ver, bytes.data(), bytes.size(), false)) {
     return LoadMetadataError::kCorrupted;
   }
-  if (ver[0] != QD_VERSION_MAJOR || ver[1] != QD_VERSION_MINOR ||
-      ver[2] != QD_VERSION_PATCH) {
-    QD_DEBUG("The offline cache metadata file {} is old (version={}.{}.{})",
-             filepath, ver[0], ver[1], ver[2]);
+  if (ver[0] != QD_VERSION_MAJOR || ver[1] != QD_VERSION_MINOR || ver[2] != QD_VERSION_PATCH) {
+    QD_DEBUG("The offline cache metadata file {} is old (version={}.{}.{})", filepath, ver[0], ver[1], ver[2]);
     return LoadMetadataError::kVersionNotMatched;
   }
 
-  return !read_from_binary(result, bytes.data(), bytes.size())
-             ? LoadMetadataError::kCorrupted
-             : LoadMetadataError::kNoError;
+  return !read_from_binary(result, bytes.data(), bytes.size()) ? LoadMetadataError::kCorrupted
+                                                               : LoadMetadataError::kNoError;
 }
 
 struct CacheCleanerConfig {
@@ -110,29 +100,22 @@ struct CacheCleanerUtils {
   using MetaData = typename MetadataType::Metadata;
 
   // To save metadata as file
-  static bool save_metadata(const CacheCleanerConfig &config,
-                            const MetadataType &data) {
-    write_to_binary_file(
-        data, quadrants::join_path(config.path, config.metadata_filename));
+  static bool save_metadata(const CacheCleanerConfig &config, const MetadataType &data) {
+    write_to_binary_file(data, quadrants::join_path(config.path, config.metadata_filename));
     return true;
   }
 
-  static bool save_debugging_metadata(const CacheCleanerConfig &config,
-                                      const MetadataType &data) {
+  static bool save_debugging_metadata(const CacheCleanerConfig &config, const MetadataType &data) {
     TextSerializer ts;
     ts.serialize_to_json("cache", data);
-    ts.write_to_file(
-        quadrants::join_path(config.path, config.debugging_metadata_filename));
+    ts.write_to_file(quadrants::join_path(config.path, config.debugging_metadata_filename));
     return true;
   }
 
   // To get cache files name
-  static std::vector<std::string> get_cache_files(
-      const CacheCleanerConfig &config,
-      const MetaData &kernel_meta) {
+  static std::vector<std::string> get_cache_files(const CacheCleanerConfig &config, const MetaData &kernel_meta) {
     std::vector<std::string> result;
-    for (const auto &f :
-         get_possible_llvm_cache_filename_by_key(kernel_meta.kernel_key)) {
+    for (const auto &f : get_possible_llvm_cache_filename_by_key(kernel_meta.kernel_key)) {
       result.push_back(f);
     }
     return result;
@@ -143,8 +126,7 @@ struct CacheCleanerUtils {
   }
 
   // To check if a file is cache file
-  static bool is_valid_cache_file(const CacheCleanerConfig &config,
-                                  const std::string &name) {
+  static bool is_valid_cache_file(const CacheCleanerConfig &config, const std::string &name) {
     return true;
   }
 };
@@ -162,10 +144,8 @@ class CacheCleaner {
     QD_ASSERT(!config.metadata_lock_name.empty());
     const auto policy = config.policy;
     const auto &path = config.path;
-    const auto metadata_file =
-        quadrants::join_path(path, config.metadata_filename);
-    const auto debugging_metadata_file =
-        quadrants::join_path(path, config.debugging_metadata_filename);
+    const auto metadata_file = quadrants::join_path(path, config.metadata_filename);
+    const auto debugging_metadata_file = quadrants::join_path(path, config.debugging_metadata_filename);
 
     if (policy == (std::size_t)NotClean) {
       return;
@@ -180,12 +160,9 @@ class CacheCleaner {
 
     // 1. Remove/Update metadata files
     {
-      std::string lock_path =
-          quadrants::join_path(path, config.metadata_lock_name);
+      std::string lock_path = quadrants::join_path(path, config.metadata_lock_name);
       if (!lock_with_file(lock_path)) {
-        QD_WARN(
-            "Lock {} failed. You can run 'ti cache clean -p {}' and try again.",
-            lock_path, path);
+        QD_WARN("Lock {} failed. You can run 'ti cache clean -p {}' and try again.", lock_path, path);
         return;
       }
       auto _ = make_cleanup([&lock_path]() {
@@ -203,20 +180,17 @@ class CacheCleaner {
       Error error = load_metadata_with_checking(cache_data, metadata_file);
       if (error == Error::kFileNotFound) {
         return;
-      } else if (error == Error::kCorrupted ||
-                 error == Error::kVersionNotMatched) {
-        if (policy &
-            CleanOldVersion) {  // Remove cache files and metadata files
+      } else if (error == Error::kCorrupted || error == Error::kVersionNotMatched) {
+        if (policy & CleanOldVersion) {  // Remove cache files and metadata files
           QD_DEBUG("Removing all cache files");
           if (quadrants::remove(metadata_file)) {
             quadrants::remove(debugging_metadata_file);
             Utils::remove_other_files(config);
-            bool success = quadrants::traverse_directory(
-                config.path, [&config](const std::string &name, bool is_dir) {
-                  if (!is_dir && Utils::is_valid_cache_file(config, name)) {
-                    quadrants::remove(quadrants::join_path(config.path, name));
-                  }
-                });
+            bool success = quadrants::traverse_directory(config.path, [&config](const std::string &name, bool is_dir) {
+              if (!is_dir && Utils::is_valid_cache_file(config, name)) {
+                quadrants::remove(quadrants::join_path(config.path, name));
+              }
+            });
             QD_ASSERT(success);
           }
         }
@@ -224,24 +198,19 @@ class CacheCleaner {
       }
 
       if (cache_data.size < config.max_size ||
-          static_cast<std::size_t>(config.cleaning_factor *
-                                   cache_data.dataWrapperByCacheKey.size()) ==
-              0) {
+          static_cast<std::size_t>(config.cleaning_factor * cache_data.dataWrapperByCacheKey.size()) == 0) {
         return;
       }
 
       // LRU or FIFO
       using KerData = std::pair<const std::string, DataWrapper>;
       using Comparator = std::function<bool(const KerData *, const KerData *)>;
-      using PriQueue =
-          std::priority_queue<const KerData *, std::vector<const KerData *>,
-                              Comparator>;
+      using PriQueue = std::priority_queue<const KerData *, std::vector<const KerData *>, Comparator>;
 
       Comparator cmp{nullptr};
       if (policy & CleanOldUsed) {  // LRU
         cmp = [](const KerData *a, const KerData *b) -> bool {
-          return a->second.metadata.last_used_at <
-                 b->second.metadata.last_used_at;
+          return a->second.metadata.last_used_at < b->second.metadata.last_used_at;
         };
       } else if (policy & CleanOldCreated) {  // FIFO
         cmp = [](const KerData *a, const KerData *b) -> bool {
@@ -251,8 +220,7 @@ class CacheCleaner {
 
       if (cmp) {
         PriQueue q(cmp);
-        std::size_t cnt =
-            config.cleaning_factor * cache_data.dataWrapperByCacheKey.size();
+        std::size_t cnt = config.cleaning_factor * cache_data.dataWrapperByCacheKey.size();
         QD_ASSERT(cnt != 0);
         for (const auto &e : cache_data.dataWrapperByCacheKey) {
           if (q.size() == cnt && cmp(&e, q.top())) {
@@ -299,9 +267,7 @@ class CacheCleaner {
 };
 
 std::string mangle_name(const std::string &primal_name, const std::string &key);
-bool try_demangle_name(const std::string &mangled_name,
-                       std::string &primal_name,
-                       std::string &key);
+bool try_demangle_name(const std::string &mangled_name, std::string &primal_name, std::string &key);
 
 }  // namespace offline_cache
 }  // namespace quadrants::lang

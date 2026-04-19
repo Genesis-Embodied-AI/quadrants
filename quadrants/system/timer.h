@@ -71,9 +71,7 @@ class QD_DLL_EXPORT Time {
    protected:
     double get_time() override;
 
-    void print_record(const char *left,
-                      double elapsed,
-                      double average) override;
+    void print_record(const char *left, double elapsed, double average) override;
 
    public:
     explicit TickTimer(std::string name);

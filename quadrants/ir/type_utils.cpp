@@ -44,12 +44,10 @@ int data_type_size(DataType t) {
   if (t->is<TensorType>()) {
     auto tensor_type = t->cast<TensorType>();
     QD_ASSERT(tensor_type->get_element_type());
-    return tensor_type->get_num_elements() *
-           data_type_size(tensor_type->get_element_type());
+    return tensor_type->get_num_elements() * data_type_size(tensor_type->get_element_type());
   }
 
-#define REGISTER_DATA_TYPE(i, j) \
-  else if (t->is_primitive(PrimitiveTypeID::i)) return sizeof(j)
+#define REGISTER_DATA_TYPE(i, j) else if (t->is_primitive(PrimitiveTypeID::i)) return sizeof(j)
 
   REGISTER_DATA_TYPE(f32, float32);
   REGISTER_DATA_TYPE(f64, float64);
@@ -80,9 +78,7 @@ int data_type_size_gfx(DataType t) {
   }
 }
 
-std::string tensor_type_format_helper(const std::vector<int> &shape,
-                                      std::string format_str,
-                                      int dim) {
+std::string tensor_type_format_helper(const std::vector<int> &shape, std::string format_str, int dim) {
   std::string fmt = "[";
   for (int i = 0; i < shape[dim]; ++i) {
     if (dim != shape.size() - 1) {
@@ -129,7 +125,7 @@ std::string data_type_format(DataType dt, Arch arch) {
     return "%u";
   } else if (dt->is_primitive(PrimitiveTypeID::i64)) {
     // Use %lld on Windows.
-    // Discussion: https://github.com/taichi-dev/quadrants/issues/2522
+    // Discussion: https://github.com/taichi-dev/taichi/issues/2522
     // Vulkan does not support printing 64-bit signed integer
     return "%lld";
   } else if (dt->is_primitive(PrimitiveTypeID::u64)) {

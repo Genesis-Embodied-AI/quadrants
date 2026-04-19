@@ -17,9 +17,7 @@ HostMemoryPool::HostMemoryPool() {
            UnifiedAllocator::default_allocator_size / 1024 / 1024);
 }
 
-void *HostMemoryPool::allocate(std::size_t size,
-                               std::size_t alignment,
-                               bool exclusive) {
+void *HostMemoryPool::allocate(std::size_t size, std::size_t alignment, bool exclusive) {
   std::lock_guard<std::mutex> _(mut_allocation_);
 
   if (!allocator_) {
@@ -56,10 +54,8 @@ void *HostMemoryPool::allocate_raw_memory(std::size_t size) {
 
   void *ptr = nullptr;
 #if defined(QD_PLATFORM_UNIX)
-  ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS,
-             -1, 0);
-  QD_ERROR_IF(ptr == MAP_FAILED, "Virtual memory allocation ({} B) failed.",
-              size);
+  ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  QD_ERROR_IF(ptr == MAP_FAILED, "Virtual memory allocation ({} B) failed.", size);
 #else
   MEMORYSTATUSEX stat;
   stat.dwLength = sizeof(stat);
@@ -72,8 +68,7 @@ void *HostMemoryPool::allocate_raw_memory(std::size_t size) {
   ptr = VirtualAlloc(nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
   QD_ERROR_IF(ptr == nullptr, "Virtual memory allocation ({} B) failed.", size);
 #endif
-  QD_ERROR_IF(((uint64_t)ptr) % page_size != 0,
-              "Allocated address ({:}) is not aligned by page size {}", ptr,
+  QD_ERROR_IF(((uint64_t)ptr) % page_size != 0, "Allocated address ({:}) is not aligned by page size {}", ptr,
               page_size);
 
   if (raw_memory_chunks_.count(ptr)) {

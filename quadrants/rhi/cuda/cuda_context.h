@@ -75,6 +75,10 @@ class CUDAContext {
     return compute_capability_;
   }
 
+  int get_max_shared_memory_bytes() const {
+    return max_shared_memory_bytes_;
+  }
+
   int64_t get_clock_rate_khz() const;
 
   bool supports_mem_pool() const {
@@ -89,8 +93,7 @@ class CUDAContext {
     void *new_ctx_;
 
    public:
-    explicit ContextGuard(CUDAContext *new_ctx)
-        : old_ctx_(nullptr), new_ctx_(new_ctx->context_) {
+    explicit ContextGuard(CUDAContext *new_ctx) : old_ctx_(nullptr), new_ctx_(new_ctx->context_) {
       CUDADriver::get_instance().context_get_current(&old_ctx_);
       if (old_ctx_ != new_ctx_)
         new_ctx->make_current();

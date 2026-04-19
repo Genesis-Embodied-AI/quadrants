@@ -209,7 +209,7 @@ def test_linear_k():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_struct_for_branching():
-    # Related issue: https://github.com/taichi-dev/quadrants/issues/704
+    # Related issue: https://github.com/taichi-dev/taichi/issues/704
     x = qd.field(dtype=qd.i32)
     y = qd.field(dtype=qd.i32)
     qd.root.pointer(qd.ij, 128 // 4).dense(qd.ij, 4).place(x, y)
@@ -282,7 +282,7 @@ def test_struct_for_quant():
 
 @test_utils.test(require=qd.extension.sparse)
 def test_struct_for_continue():
-    # Related issue: https://github.com/taichi-dev/quadrants/issues/3272
+    # Related issue: https://github.com/taichi-dev/taichi/issues/3272
     x = qd.field(dtype=qd.i32)
     n = 4
     qd.root.pointer(qd.i, n).dense(qd.i, n).place(x)

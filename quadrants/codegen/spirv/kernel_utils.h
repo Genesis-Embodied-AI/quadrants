@@ -32,8 +32,7 @@ struct TaskAttributes {
     BufferInfo(BufferType buffer_type) : type(buffer_type) {
     }
 
-    BufferInfo(BufferType buffer_type, int root_buffer_id)
-        : type(buffer_type), root_id(root_buffer_id) {
+    BufferInfo(BufferType buffer_type, int root_buffer_id) : type(buffer_type), root_id(root_buffer_id) {
     }
 
     bool operator==(const BufferInfo &other) const {
@@ -148,14 +147,7 @@ class KernelContextAttributes {
     std::size_t field_dim{0};
     ParameterType ptype{ParameterType::kUnknown};
 
-    QD_IO_DEF(name,
-              stride,
-              offset_in_mem,
-              dtype,
-              is_array,
-              element_shape,
-              field_dim,
-              ptype);
+    QD_IO_DEF(name, stride, offset_in_mem, dtype, is_array, element_shape, field_dim, ptype);
   };
 
  public:
@@ -166,15 +158,7 @@ class KernelContextAttributes {
     // Indices of the arg value in the host `Context`.
     std::vector<int> indices;
 
-    QD_IO_DEF(name,
-              stride,
-              offset_in_mem,
-              indices,
-              dtype,
-              is_array,
-              element_shape,
-              field_dim,
-              ptype);
+    QD_IO_DEF(name, stride, offset_in_mem, indices, dtype, is_array, element_shape, field_dim, ptype);
   };
 
   /**
@@ -184,20 +168,11 @@ class KernelContextAttributes {
     // Index of the return value in the host `Context`.
     int index{-1};
 
-    QD_IO_DEF(name,
-              stride,
-              offset_in_mem,
-              index,
-              dtype,
-              is_array,
-              element_shape,
-              field_dim,
-              ptype);
+    QD_IO_DEF(name, stride, offset_in_mem, index, dtype, is_array, element_shape, field_dim, ptype);
   };
 
   KernelContextAttributes() = default;
-  explicit KernelContextAttributes(const Kernel &kernel,
-                                   const DeviceCapabilityConfig *caps);
+  explicit KernelContextAttributes(const Kernel &kernel, const DeviceCapabilityConfig *caps);
 
   /**
    * Whether this kernel has any argument
@@ -206,8 +181,7 @@ class KernelContextAttributes {
     return !arg_attribs_vec_.empty();
   }
 
-  inline const std::vector<std::pair<std::vector<int>, ArgAttributes>> &args()
-      const {
+  inline const std::vector<std::pair<std::vector<int>, ArgAttributes>> &args() const {
     return arg_attribs_vec_;
   }
 
@@ -217,9 +191,7 @@ class KernelContextAttributes {
         return element.second;
       }
     }
-    QD_ERROR(fmt::format(
-        "Unexpected error: ArgAttributes with indices ({}) not found.",
-        fmt::join(indices, ", ")));
+    QD_ERROR(fmt::format("Unexpected error: ArgAttributes with indices ({}) not found.", fmt::join(indices, ", ")));
     return arg_attribs_vec_[0].second;
   }
 
@@ -269,16 +241,9 @@ class KernelContextAttributes {
     return rets_type_;
   }
 
-  std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>>
-      arr_access;
+  std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> arr_access;
 
-  QD_IO_DEF(arg_attribs_vec_,
-            ret_attribs_vec_,
-            args_bytes_,
-            rets_bytes_,
-            arr_access,
-            args_type_,
-            rets_type_);
+  QD_IO_DEF(arg_attribs_vec_, ret_attribs_vec_, args_bytes_, rets_bytes_, arr_access, args_type_, rets_type_);
 
  private:
   std::vector<std::pair<std::vector<int>, ArgAttributes>> arg_attribs_vec_;
