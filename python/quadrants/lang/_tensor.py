@@ -1,33 +1,58 @@
-"""Layout-aware tensor — Phase 1 + Phase 2.
+"""Layout-aware tensor — Phases 1, 1b, 2.
 
-A ``Tensor`` is a logical view of a Quadrants ``Ndarray`` plus a layout
+A ``Tensor`` is a logical view of a Quadrants storage object plus a layout
 permutation that describes how logical dimensions map to physical memory
 dimensions.
 
-Phase 1 (Python scope):
-  - ``Tensor`` class wrapping ``(underlying_ndarray, shape, layout)``
-  - ``tensor(dtype, shape, layout=None)`` factory; ``layout=None`` means identity
-  - layout validation: must be a permutation of ``range(ndim)``
-  - python-scope ``__getitem__`` / ``__setitem__`` translate logical -> physical
-  - ``to_numpy`` / ``from_numpy`` operate on the logical shape
+Storage backend is selectable at construction via :class:`Backend`:
+
+- :attr:`Backend.NDARRAY` (default) wraps a :class:`~quadrants.lang.Ndarray`.
+- :attr:`Backend.FIELD` wraps a Quadrants :func:`~quadrants.lang.impl.field`
+  (SNode-backed storage).
+
+Both share a single python-scope API (``shape``, ``ndim``, ``dtype``,
+``__getitem__`` / ``__setitem__`` with logical indices, ``to_numpy`` /
+``from_numpy``, ``fill``).
 
 Phase 2 (kernel-arg binding):
-  - ``Tensor`` is a ``@dataclasses.dataclass`` with two bridge-recognised fields:
-      * ``underlying``: ``qd.types.ndarray(...)`` — the physical storage,
-        bound at the kernel boundary like a regular ``qd.ndarray``.
-      * ``layout``: ``qd.template`` — a Python tuple captured at trace time
-        so kernels can branch on it via ``qd.static(t.layout == ...)``.
-    This rides the existing dataclass kernel-arg bridge in
-    ``quadrants.lang._kernel_impl_dataclass``: no new annotation surface or
-    binding code is required.
-  - Inside a kernel, users currently write ``t.underlying[physical_idx]``
-    (verbose). Phase 3 (next) adds AST sugar so plain ``t[i, j]`` resolves to
-    the permuted physical access.
+  Each variant is a ``@dataclasses.dataclass`` with two bridge-recognised
+  fields:
+
+  - ``underlying`` — annotation differs per backend so the dataclass
+    kernel-arg bridge picks the right binding path:
+      * :class:`NdarrayTensor` uses ``qd.types.ndarray()``: bridged as a
+        regular ndarray.
+      * :class:`FieldTensor` uses ``qd.template``: fields are runtime
+        singletons captured by-reference at trace time, just like a bare
+        ``qd.field`` kernel arg.
+  - ``layout`` — ``qd.template``, captured as a Python tuple at trace time,
+    available for ``qd.static(t.layout == (1, 0))`` branching.
+
+  Both ride the existing dataclass bridge in
+  ``quadrants.lang._kernel_impl_dataclass`` — no new annotation surface or
+  binding code is required, and the backend distinction lands automatically
+  in the fastcache key via the ``underlying`` field's annotation type.
+
+Inside a kernel users currently write ``t.underlying[physical_idx]`` (verbose).
+Phase 3 (deferred) adds AST sugar so plain ``t[i, j]`` resolves to the
+permuted physical access.
+
+The user-facing factory :func:`tensor` dispatches on a :class:`Backend` enum::
+
+    qd.tensor(qd.f32, shape=(N, B))                              # ndarray
+    qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))               # transposed ndarray
+    qd.tensor(qd.f32, shape=(N, B), backend=qd.Backend.FIELD)    # field
+
+For backward compatibility, ``Tensor`` is an alias for :class:`NdarrayTensor`,
+the default backend variant. Kernels that need to accept a field-backed tensor
+must annotate the parameter with :class:`FieldTensor` explicitly, since the
+dataclass bridge dispatches on the parameter annotation.
 
 See ``perso_hugh/doc/qd_tensor_design.md`` for the full design.
 """
 
 import dataclasses
+import enum
 from typing import Sequence, Tuple
 
 import numpy as np
@@ -36,7 +61,14 @@ from quadrants.lang import impl
 from quadrants.types.annotations import template as _template
 from quadrants.types.ndarray_type import NdarrayType as _NdarrayType
 
-__all__ = ["Tensor", "tensor"]
+__all__ = ["Backend", "Tensor", "NdarrayTensor", "FieldTensor", "tensor"]
+
+
+class Backend(enum.Enum):
+    """Storage backend for :func:`tensor`."""
+
+    NDARRAY = "ndarray"
+    FIELD = "field"
 
 
 def _validate_layout(layout: Sequence[int], ndim: int) -> Tuple[int, ...]:
@@ -74,35 +106,24 @@ def _logical_to_physical_indices(idx: Sequence[int], layout: Sequence[int]) -> T
 
 
 # ---------------------------------------------------------------------------
-# Tensor: dataclass-bridged layout-aware ndarray view.
+# _TensorBase: shared logical/physical-index logic, backend-agnostic.
 # ---------------------------------------------------------------------------
 
-# Field-type marker so the dataclass kernel-arg bridge sees the underlying as
-# a regular qd.ndarray. ``ndim`` is left None here because we want to accept
-# tensors of any rank as kernel args; per-call validation matches at runtime
-# inside ``check_matched`` upstream.
-_UNDERLYING_FIELD_TYPE = _NdarrayType()
 
+class _TensorBase:
+    """Shared layout-aware behaviour for :class:`NdarrayTensor` and :class:`FieldTensor`.
 
-@dataclasses.dataclass
-class Tensor:
-    """Layout-aware logical view of an ``Ndarray``.
+    Subclasses must be ``@dataclasses.dataclass`` with two fields:
 
-    Constructed via :func:`tensor`. Inside ``@qd.kernel`` it behaves as a
-    dataclass with two bridge-recognised fields:
-
-    - ``underlying`` (``qd.types.ndarray()``) — the physical storage.
-    - ``layout`` (``qd.template``) — the permutation tuple, available at
-      trace time via ``qd.static(t.layout == (1, 0))`` etc.
-
-    In Python scope, ``t[i, j]`` uses logical indices and is automatically
-    translated to the physical position. Phase 3 adds the same logical-subscript
-    sugar inside kernels.
+    - ``underlying`` (backend-specific annotation; has ``.shape``, ``.dtype``,
+      subscript, ``fill``, ``to_numpy``, ``from_numpy``)
+    - ``layout`` (``qd.template``; tuple set in ``__post_init__``)
     """
 
-    # Bridge-bound fields. Type annotations matter to the kernel-arg dispatcher.
-    underlying: _UNDERLYING_FIELD_TYPE  # type: ignore[valid-type]
-    layout: _template
+    # Declared here so type checkers see them on the base; concrete dataclass
+    # subclasses override with backend-specific annotations.
+    underlying: object
+    layout: tuple
 
     def __post_init__(self):
         layout_t = _validate_layout(self.layout, len(self.underlying.shape))
@@ -134,10 +155,15 @@ class Tensor:
     def dtype(self):
         return self.underlying.dtype
 
+    @property
+    def backend(self) -> Backend:
+        # Concrete subclass sets this as a class attribute.
+        return self._backend  # pylint: disable=no-member
+
     def __repr__(self):
         return (
-            f"<qd.Tensor shape={self.shape} layout={self.layout} "
-            f"physical_shape={self.physical_shape} dtype={self.dtype}>"
+            f"<qd.{type(self).__name__} shape={self.shape} layout={self.layout} "
+            f"physical_shape={self.physical_shape} dtype={self.dtype} backend={self.backend.value}>"
         )
 
     def _translate_key(self, key) -> Tuple[int, ...]:
@@ -199,8 +225,83 @@ class Tensor:
             self.underlying.from_numpy(physical)
 
 
-def tensor(dtype, shape, layout=None) -> Tensor:
-    """Create a layout-aware :class:`Tensor`.
+# ---------------------------------------------------------------------------
+# Concrete dataclass variants: one per storage backend.
+# ---------------------------------------------------------------------------
+
+# Field-type marker so the dataclass kernel-arg bridge sees the underlying as
+# a regular qd.ndarray. ``ndim`` is left None here because we want to accept
+# tensors of any rank as kernel args; per-call validation matches at runtime
+# inside ``check_matched`` upstream.
+_UNDERLYING_NDARRAY_TYPE = _NdarrayType()
+
+
+@dataclasses.dataclass(repr=False)
+class NdarrayTensor(_TensorBase):
+    """Layout-aware logical view of an ``Ndarray`` (default backend).
+
+    Constructed via :func:`tensor` with ``backend=Backend.NDARRAY`` (default).
+    Kernel-arg binding goes through the standard ndarray path, so passing a
+    :class:`NdarrayTensor` to a kernel costs no extra copies.
+    """
+
+    # Bridge-bound fields. Annotations matter to the kernel-arg dispatcher.
+    underlying: _UNDERLYING_NDARRAY_TYPE  # type: ignore[valid-type]
+    layout: _template
+
+    _backend = Backend.NDARRAY
+
+
+@dataclasses.dataclass(repr=False)
+class FieldTensor(_TensorBase):
+    """Layout-aware logical view of a :func:`~quadrants.lang.impl.field`.
+
+    Constructed via :func:`tensor` with ``backend=Backend.FIELD``. Fields are
+    SNode-backed and bound to kernels by-reference via the ``qd.template``
+    path (the same way bare fields are bound). Useful when the underlying
+    storage benefits from SNode features (sparse layouts, hierarchical
+    placement, ``order=`` overrides).
+
+    Kernel signatures must annotate parameters as :class:`FieldTensor`
+    explicitly (not :class:`Tensor` / :class:`NdarrayTensor`) so the
+    dataclass bridge picks the template binding path for ``underlying``.
+    """
+
+    # ``qd.template`` because qd.field is a runtime singleton, not a transient
+    # ndarray buffer.
+    underlying: _template
+    layout: _template
+
+    _backend = Backend.FIELD
+
+
+# Backwards-compatible alias: ``qd.Tensor`` resolves to the default ndarray
+# variant. New code that needs a field-backed kernel arg must use
+# :class:`FieldTensor` explicitly.
+Tensor = NdarrayTensor
+
+
+# ---------------------------------------------------------------------------
+# User-facing factory.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_backend(backend) -> Backend:
+    if isinstance(backend, Backend):
+        return backend
+    if isinstance(backend, str):
+        # Tolerate string literals for ergonomics, but the canonical form is
+        # the enum value.
+        try:
+            return Backend(backend)
+        except ValueError as exc:
+            valid = ", ".join(repr(b.value) for b in Backend)
+            raise ValueError(f"unknown backend {backend!r}; expected one of {{{valid}}} or a Backend enum") from exc
+    raise TypeError(f"backend must be a Backend enum (got {type(backend).__name__}: {backend!r})")
+
+
+def tensor(dtype, shape, layout=None, backend: Backend = Backend.NDARRAY) -> _TensorBase:
+    """Create a layout-aware tensor.
 
     Args:
         dtype: element data type, e.g. ``qd.f32``, ``qd.i32``.
@@ -209,10 +310,13 @@ def tensor(dtype, shape, layout=None) -> Tensor:
             logical dim ``i`` is stored along physical axis ``p``. ``None``
             (default) means identity. For 2D, ``(1, 0)`` is the canonical
             "transposed in memory" choice.
+        backend: storage backend, a :class:`Backend` enum value. Defaults to
+            :attr:`Backend.NDARRAY`. :attr:`Backend.FIELD` allocates the
+            storage as a Quadrants field instead.
 
     Returns:
-        A :class:`Tensor` wrapping a freshly allocated ``Ndarray`` of the
-        appropriate physical shape.
+        A :class:`NdarrayTensor` or :class:`FieldTensor` wrapping freshly
+        allocated storage of the appropriate physical shape.
     """
     if isinstance(shape, int):
         shape = (shape,)
@@ -222,5 +326,13 @@ def tensor(dtype, shape, layout=None) -> Tensor:
         layout = tuple(range(ndim))
     layout = _validate_layout(layout, ndim)
     physical_shape = _logical_to_physical_shape(shape, layout)
-    underlying = impl.ndarray(dtype, physical_shape)
-    return Tensor(underlying=underlying, layout=layout)
+
+    backend = _coerce_backend(backend)
+    if backend is Backend.NDARRAY:
+        underlying = impl.ndarray(dtype, physical_shape)
+        return NdarrayTensor(underlying=underlying, layout=layout)
+    if backend is Backend.FIELD:
+        underlying = impl.field(dtype, shape=physical_shape)
+        return FieldTensor(underlying=underlying, layout=layout)
+    # Should be unreachable thanks to _coerce_backend.
+    raise ValueError(f"unhandled backend: {backend!r}")
