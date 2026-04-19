@@ -7,6 +7,7 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.exception import get_func_signature
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 
@@ -72,8 +73,6 @@ def extract_struct_locals_from_context(ctx: ASTTransformerFuncContext) -> set[st
     """
     struct_locals = set()
     assert ctx.func is not None
-    from quadrants.lang.exception import get_func_signature
-
     sig = get_func_signature(ctx.func.func)
     parameters = sig.parameters
     for param_name, parameter in parameters.items():
