@@ -2746,8 +2746,7 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
     std::filesystem::create_directories(ir_dump_dir);
 
     for (const auto &task : offloaded_tasks) {
-      std::filesystem::path filename =
-          ir_dump_dir / (task.name + "_llvm.ll");
+      std::filesystem::path filename = ir_dump_dir / (task.name + "_llvm.ll");
       std::error_code EC;
       llvm::raw_fd_ostream dest_file(filename.string(), EC);
       if (!EC) {

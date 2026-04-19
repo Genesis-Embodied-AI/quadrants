@@ -145,7 +145,10 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
     const std::string dumpOutDir = "/tmp/ptx/";
     std::filesystem::create_directories(dumpOutDir);
     for (const auto &dumpName : dump_names) {
-      std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
+      std::string filename = dumpOutDir;
+      filename += "/";
+      filename += dumpName;
+      filename += ".ptx";
       std::ofstream out_file(filename);
       if (out_file.is_open()) {
         out_file << ptx << std::endl;
@@ -159,7 +162,10 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
   if (load_ptx_env != nullptr) {
     const std::string dumpOutDir = "/tmp/ptx/";
     std::string dumpName = moduleToDumpName(M.get());
-    std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
+    std::string filename = dumpOutDir;
+    filename += "/";
+    filename += dumpName;
+    filename += ".ptx";
     std::ifstream in_file(filename);
     if (in_file.is_open()) {
       QD_INFO("Loading PTX from file: {}", filename);
