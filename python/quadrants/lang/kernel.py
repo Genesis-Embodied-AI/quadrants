@@ -24,7 +24,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelCxx,
     KernelLaunchContext,
 )
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import _kernel_impl_dataclass, _tensor_ast, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -220,7 +220,16 @@ class ASTGenerator:
                 struct_locals = pruning.used_vars_by_func_id[ctx.func.func_id]
             # struct locals are the expanded py dataclass fields that we will write to
             # local variables, and will then be available to use in build_Call, later.
-            tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
+            #
+            # Tensor subscript sugar (Phase 3): rewrite ``t[i, j]`` into
+            # ``t.underlying[permuted_idx]`` for any kernel parameter typed as a
+            # qd._TensorBase subclass. The struct-flatten pass below then turns
+            # ``t.underlying`` into the standard flat name. This must run
+            # *before* unpack_ast_struct_expressions so the new ``Attribute``
+            # node it inserts is visible to the flattener.
+            tensor_layouts = _tensor_ast.extract_tensor_params_from_kernel_args(ctx.func.func, ctx.py_args)
+            tree = _tensor_ast.unpack_ast_tensor_subscripts(self.tree, tensor_layouts=tensor_layouts)
+            tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
             transform_tree(tree, ctx)
             if not ctx.is_real_function and not ctx.only_parse_function_def:

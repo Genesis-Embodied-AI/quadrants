@@ -5,7 +5,7 @@ from quadrants._lib.core.quadrants_python import (
     Function as FunctionCxx,
 )
 from quadrants._lib.core.quadrants_python import FunctionKey
-from quadrants.lang import _kernel_impl_dataclass, impl, ops
+from quadrants.lang import _kernel_impl_dataclass, _tensor_ast, impl, ops
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.ast import (
     transform_tree,
@@ -85,6 +85,16 @@ class Func(FuncBase):
 
         struct_locals = _kernel_impl_dataclass.extract_struct_locals_from_context(ctx)
 
+        # Tensor subscript sugar (Phase 3): rewrite ``t[i, j]`` ->
+        # ``t.underlying[permuted_idx]`` for any tensor parameter, then let
+        # the dataclass flatten pass turn ``t.underlying`` into the standard
+        # flat name. The kernel-side CallTransformer already expanded each
+        # Tensor arg into ``(underlying, layout)``, so we look up the layout
+        # by name in arg_metas_expanded rather than in the original py_args.
+        tensor_layouts = _tensor_ast.extract_tensor_params_from_expanded_args(
+            self.func, py_args, self.arg_metas_expanded
+        )
+        tree = _tensor_ast.unpack_ast_tensor_subscripts(tree, tensor_layouts=tensor_layouts)
         tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(tree, struct_locals=struct_locals)
         ret = transform_tree(tree, ctx)
         if not self.is_real_function:
