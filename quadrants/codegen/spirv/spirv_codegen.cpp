@@ -2096,16 +2096,37 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   return ret;
 }
 
+// For primitive float types, access the storage buffer through the native type view instead of
+// the uint-punned view. SPIR-V / Vulkan treats each (descriptor_set, binding) as a distinct
+// variable; `at_buffer` creates a new binding per (buffer, element_type) pair, so the u32 view
+// of a buffer and its f32 view are different variables pointing to the same memory. Without an
+// `Aliased` decoration the driver / SPIRV-Tools is free to assume they do not alias, meaning a
+// plain `OpLoad` through the u32 view is not ordered against a preceding `OpAtomicFAddEXT` on
+// the f32 view at the same address. The reverse-mode pattern `m.grad[i][j,k] += loss.grad;
+// tmp = m.grad[i][j,k]; m.grad[i][j,k] = 0; n.grad += tmp * factor` hits this: the load reads
+// the stale zero initial value, `tmp = 0`, and the adjoint never propagates (`test_ad_dynamic_index.py::
+// test_matrix_non_constant_index[arch=vulkan]` asserts `0.0 == 1.0`). Using the native f32 view
+// for plain load/store keeps them on the same binding as the atomic and removes the aliasing
+// question entirely. Integer types (i32/u32/i16/u16/i8/u8) already route through their own uint
+// view which matches the atomic path, so those stay as-is. `u1` stays on u8 because u1 has no
+// native SPIR-V storage representation.
+static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val, spirv::IRBuilder &ir) {
+  if (dt->is_primitive(PrimitiveTypeID::u1)) {
+    return PrimitiveType::u8;
+  }
+  if (ptr_val.stype.dt == PrimitiveType::u64) {
+    return dt;
+  }
+  if (is_real(dt)) {
+    return dt;
+  }
+  return ir.get_quadrants_uint_type(dt);
+}
+
 spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = ir_->get_quadrants_uint_type(dt);
-
-  if (dt->is_primitive(PrimitiveTypeID::u1)) {
-    ti_buffer_type = PrimitiveType::u8;
-  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = dt;
-  }
+  DataType ti_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
   auto val_bits = ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
@@ -2117,12 +2138,10 @@ spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
 void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = ir_->get_quadrants_uint_type(val.stype.dt);
-
+  DataType ti_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
   if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+    // Stores go through i8 (matching the original path) so a signed i1 narrowing is preserved.
     ti_buffer_type = PrimitiveType::i8;
-  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = val.stype.dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
