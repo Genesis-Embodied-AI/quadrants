@@ -90,10 +90,9 @@ class JITSessionCUDA : public JITSession {
 
 #endif
 
-std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch,
-    ProgramImpl *program_impl);
+std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,
+                                                         const CompileConfig &config,
+                                                         Arch arch,
+                                                         ProgramImpl *program_impl);
 
 }  // namespace quadrants::lang

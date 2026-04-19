@@ -13,9 +13,8 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
   QD_ASSERT(offloaded->task_type == OffloadedTaskType::mesh_for);
 
   DelayedIRModifier modifier;
-  auto stmts = irpass::analysis::gather_statements(
-      offloaded->body.get(),
-      [&](Stmt *stmt) { return stmt->is<MeshIndexConversionStmt>(); });
+  auto stmts = irpass::analysis::gather_statements(offloaded->body.get(),
+                                                   [&](Stmt *stmt) { return stmt->is<MeshIndexConversionStmt>(); });
   for (size_t i = 0; i < stmts.size(); ++i) {
     auto conv_stmt = stmts[i]->cast<MeshIndexConversionStmt>();
     if (conv_stmt->conv_type == mesh::ConvType::l2g) {
@@ -31,19 +30,16 @@ void convert_to_range_for(OffloadedStmt *offloaded) {
   offloaded->const_begin = true;
   offloaded->const_end = true;
   offloaded->begin_value = 0;
-  offloaded->end_value =
-      offloaded->mesh->num_elements.find(offloaded->major_from_type)->second;
+  offloaded->end_value = offloaded->mesh->num_elements.find(offloaded->major_from_type)->second;
   offloaded->mesh = nullptr;
   offloaded->task_type = OffloadedTaskType::range_for;
 }
 
 void maybe_convert(OffloadedStmt *offloaded) {
-  if (offloaded->task_type == OffloadedTaskType::mesh_for &&
-      offloaded->major_to_types.size() == 0) {
+  if (offloaded->task_type == OffloadedTaskType::mesh_for && offloaded->major_to_types.size() == 0) {
     auto stmts = irpass::analysis::gather_statements(  // ti.mesh_patch_idx()
                                                        // relies on mesh-for
-        offloaded->body.get(),
-        [&](Stmt *stmt) { return stmt->is<MeshPatchIndexStmt>(); });
+        offloaded->body.get(), [&](Stmt *stmt) { return stmt->is<MeshPatchIndexStmt>(); });
     if (stmts.size() == 0) {
       convert_to_range_for(offloaded);
     }

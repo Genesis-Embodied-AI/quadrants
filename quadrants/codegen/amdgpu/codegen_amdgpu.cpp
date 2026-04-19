@@ -34,13 +34,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       : TaskCodeGenLLVM(id, config, tlctx, kernel, ir) {
   }
 
-  llvm::Value *create_print(std::string tag,
-                            DataType dt,
-                            llvm::Value *value) override{QD_NOT_IMPLEMENTED}
+  llvm::Value *create_print(std::string tag, DataType dt, llvm::Value *value) override{QD_NOT_IMPLEMENTED}
 
-  std::tuple<llvm::Value *, llvm::Type *> create_value_and_type(
-      llvm::Value *value,
-      DataType dt) {
+  std::tuple<llvm::Value *, llvm::Type *> create_value_and_type(llvm::Value *value, DataType dt) {
     QD_NOT_IMPLEMENTED
   }
 
@@ -94,49 +90,36 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto bb_olt_then = BasicBlock::Create(*llvm_context, "olt_then", func);
         auto bb_olt_else = BasicBlock::Create(*llvm_context, "olt_else");
 
-        auto alloc = builder->CreateAlloca(
-            llvm::Type::getFloatTy(*llvm_context), (unsigned)5);
-        auto newty = llvm::PointerType::get(
-            llvm::Type::getFloatTy(*llvm_context), (unsigned)0);
+        auto alloc = builder->CreateAlloca(llvm::Type::getFloatTy(*llvm_context), (unsigned)5);
+        auto newty = llvm::PointerType::get(llvm::Type::getFloatTy(*llvm_context), (unsigned)0);
         auto cast = builder->CreateAddrSpaceCast(alloc, newty);
-        auto fcmp_oeq = builder->CreateFCmpOEQ(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
+        auto fcmp_oeq = builder->CreateFCmpOEQ(input, llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
         builder->CreateCondBr(fcmp_oeq, bb_oeq_then, bb_oeq_else);
         builder->SetInsertPoint(bb_oeq_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0), cast);
         builder->CreateBr(bb_merge);
         bb_oeq_then = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_oeq_else);
         builder->SetInsertPoint(bb_oeq_else);
-        auto fcmp_olt = builder->CreateFCmpOLT(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
+        auto fcmp_olt = builder->CreateFCmpOLT(input, llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 0));
         builder->CreateCondBr(fcmp_olt, bb_olt_then, bb_olt_else);
         bb_oeq_else = builder->GetInsertBlock();
 
         builder->SetInsertPoint(bb_olt_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), -1),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), -1), cast);
         builder->CreateBr(bb_merge);
         bb_olt_then = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_olt_else);
         builder->SetInsertPoint(bb_olt_else);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 1),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getFloatTy(*llvm_context), 1), cast);
         builder->CreateBr(bb_merge);
         bb_olt_else = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_merge);
         builder->SetInsertPoint(bb_merge);
-        llvm_val[stmt] =
-            builder->CreateLoad(llvm::Type::getFloatTy(*llvm_context), cast);
+        llvm_val[stmt] = builder->CreateLoad(llvm::Type::getFloatTy(*llvm_context), cast);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         auto func = builder->GetInsertBlock()->getParent();
         auto bb_oeq_then = BasicBlock::Create(*llvm_context, "oeq_then", func);
@@ -145,49 +128,36 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto bb_olt_then = BasicBlock::Create(*llvm_context, "olt_then", func);
         auto bb_olt_else = BasicBlock::Create(*llvm_context, "olt_else");
 
-        auto alloc = builder->CreateAlloca(
-            llvm::Type::getDoubleTy(*llvm_context), (unsigned)5);
-        auto newty = llvm::PointerType::get(
-            llvm::Type::getDoubleTy(*llvm_context), (unsigned)0);
+        auto alloc = builder->CreateAlloca(llvm::Type::getDoubleTy(*llvm_context), (unsigned)5);
+        auto newty = llvm::PointerType::get(llvm::Type::getDoubleTy(*llvm_context), (unsigned)0);
         auto cast = builder->CreateAddrSpaceCast(alloc, newty);
-        auto fcmp_oeq = builder->CreateFCmpOEQ(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
+        auto fcmp_oeq = builder->CreateFCmpOEQ(input, llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
         builder->CreateCondBr(fcmp_oeq, bb_oeq_then, bb_oeq_else);
         builder->SetInsertPoint(bb_oeq_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0), cast);
         builder->CreateBr(bb_merge);
         bb_oeq_then = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_oeq_else);
         builder->SetInsertPoint(bb_oeq_else);
-        auto fcmp_olt = builder->CreateFCmpOLT(
-            input,
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
+        auto fcmp_olt = builder->CreateFCmpOLT(input, llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 0));
         builder->CreateCondBr(fcmp_olt, bb_olt_then, bb_olt_else);
         bb_oeq_else = builder->GetInsertBlock();
 
         builder->SetInsertPoint(bb_olt_then);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), -1),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), -1), cast);
         builder->CreateBr(bb_merge);
         bb_olt_then = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_olt_else);
         builder->SetInsertPoint(bb_olt_else);
-        builder->CreateStore(
-            llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 1),
-            cast);
+        builder->CreateStore(llvm::ConstantFP::get(llvm::Type::getDoubleTy(*llvm_context), 1), cast);
         builder->CreateBr(bb_merge);
         bb_olt_else = builder->GetInsertBlock();
 
         func->insert(func->end(), bb_merge);
         builder->SetInsertPoint(bb_merge);
-        llvm_val[stmt] =
-            builder->CreateLoad(llvm::Type::getDoubleTy(*llvm_context), cast);
+        llvm_val[stmt] = builder->CreateLoad(llvm::Type::getDoubleTy(*llvm_context), cast);
       }
     }
     UNARY_STD(cos)
@@ -211,12 +181,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       return nullptr;
     }
     QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
-    PrimitiveTypeID prim_type =
-        stmt->val->ret_type->cast<PrimitiveType>()->type;
+    PrimitiveTypeID prim_type = stmt->val->ret_type->cast<PrimitiveType>()->type;
 
-    std::unordered_map<PrimitiveTypeID,
-                       std::unordered_map<AtomicOpType, std::string>>
-        fast_reductions;
+    std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> fast_reductions;
 
     fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
     fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
@@ -225,21 +192,16 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
     fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
 
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] =
-        "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] =
-        "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] =
-        "reduce_xor_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] = "reduce_and_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] = "reduce_or_i32";
+    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] = "reduce_xor_i32";
 
     AtomicOpType op = stmt->op_type;
     if (fast_reductions.find(prim_type) == fast_reductions.end()) {
       return nullptr;
     }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
-              fast_reductions.at(prim_type).end());
-    return call(fast_reductions.at(prim_type).at(op),
-                {llvm_val[stmt->dest], llvm_val[stmt->val]});
+    QD_ASSERT(fast_reductions.at(prim_type).find(op) != fast_reductions.at(prim_type).end());
+    return call(fast_reductions.at(prim_type).at(op), {llvm_val[stmt->dest], llvm_val[stmt->val]});
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -251,9 +213,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 
     llvm::Function *body;
     {
-      auto guard = get_function_creation_guard(
-          {llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
-           get_tls_buffer_type(), tlctx->get_data_type<int>()});
+      auto guard = get_function_creation_guard({llvm::PointerType::get(get_runtime_type("RuntimeContext"), 0),
+                                                get_tls_buffer_type(), tlctx->get_data_type<int>()});
 
       auto loop_var = create_entry_block_alloca(PrimitiveType::i32);
       loop_vars_llvm[stmt].push_back(loop_var);
@@ -267,8 +228,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 
     auto [begin, end] = get_range_for_bounds(stmt);
     call("gpu_parallel_range_for",
-         {get_arg(0), begin, end, tls_prologue, body, epilogue,
-          tlctx->get_constant(stmt->tls_size)});
+         {get_arg(0), begin, end, tls_prologue, body, epilogue, tlctx->get_constant(stmt->tls_size)});
   }
 
   void create_offload_mesh_for(OffloadedStmt *stmt) override {
@@ -317,8 +277,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (ptr_type->is_bit_pointer()) {
       auto val_type = ptr_type->get_pointee_type();
       auto get_ch = stmt->src->as<GetChStmt>();
-      auto physical_type =
-          tlctx->get_data_type(get_ch->input_snode->physical_type);
+      auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
       auto [byte_ptr, bit_offset] = load_bit_ptr(ptr);
       auto physical_value = builder->CreateLoad(physical_type, byte_ptr);
       if (auto qit = val_type->cast<QuantIntType>()) {
@@ -330,14 +289,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else {
         QD_ASSERT(val_type->is<QuantFloatType>());
         QD_ASSERT(get_ch->input_snode->dt->is<BitStructType>());
-        llvm_val[stmt] = extract_quant_float(
-            physical_value, get_ch->input_snode->dt->as<BitStructType>(),
-            get_ch->output_snode->id_in_bit_struct);
+        llvm_val[stmt] = extract_quant_float(physical_value, get_ch->input_snode->dt->as<BitStructType>(),
+                                             get_ch->output_snode->id_in_bit_struct);
       }
     } else {
       // Byte pointer case.
-      llvm_val[stmt] =
-          builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
     }
   }
 
@@ -376,9 +333,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       if (stmt->task_type == Type::range_for) {
         if (stmt->const_begin && stmt->const_end) {
           int num_threads = stmt->end_value - stmt->begin_value;
-          int grid_dim = ((num_threads % stmt->block_dim) == 0)
-                             ? (num_threads / stmt->block_dim)
-                             : (num_threads / stmt->block_dim) + 1;
+          int grid_dim = ((num_threads % stmt->block_dim) == 0) ? (num_threads / stmt->block_dim)
+                                                                : (num_threads / stmt->block_dim) + 1;
           grid_dim = std::max(grid_dim, 1);
           current_task->grid_dim = std::min(stmt->grid_dim, grid_dim);
         }
@@ -391,8 +347,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         //     &query_max_block_per_sm,
         //     HIP_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
         int num_SMs;
-        AMDGPUDriver::get_instance().device_get_attribute(
-            &num_SMs, HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
+        AMDGPUDriver::get_instance().device_get_attribute(&num_SMs, HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
@@ -415,6 +370,19 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
   }
 
+  void visit(InternalFuncStmt *stmt) override {
+    if (stmt->func_name == "subgroupShuffle" || stmt->func_name == "subgroupBroadcast") {
+      auto index = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
+      llvm_val[stmt] = emit_amdgpu_shuffle(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type, index);
+    } else if (stmt->func_name == "subgroupInvocationId") {
+      llvm_val[stmt] = call("amdgpu_lane_id");
+    } else {
+      TaskCodeGenLLVM::visit(stmt);
+    }
+  }
+
   void visit(BinaryOpStmt *stmt) override {
     auto op = stmt->op_type;
     auto ret_quadrants_type = stmt->ret_type;
@@ -432,13 +400,10 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__ocml_pow_f64", {lhs, rhs});
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
-        auto sitofp_lhs_ =
-            builder->CreateSIToFP(lhs, llvm::Type::getDoubleTy(*llvm_context));
-        auto sitofp_rhs_ =
-            builder->CreateSIToFP(rhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto sitofp_lhs_ = builder->CreateSIToFP(lhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto sitofp_rhs_ = builder->CreateSIToFP(rhs, llvm::Type::getDoubleTy(*llvm_context));
         auto ret_ = call("__ocml_pow_f64", {sitofp_lhs_, sitofp_rhs_});
-        llvm_val[stmt] =
-            builder->CreateFPToSI(ret_, llvm::Type::getInt32Ty(*llvm_context));
+        llvm_val[stmt] = builder->CreateFPToSI(ret_, llvm::Type::getInt32Ty(*llvm_context));
       } else {
         QD_NOT_IMPLEMENTED
       }
@@ -456,25 +421,33 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
  private:
+  llvm::Value *emit_amdgpu_shuffle(llvm::Value *value, DataType dt, llvm::Value *index) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("amdgpu_shuffle_i32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("amdgpu_shuffle_f32", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("amdgpu_shuffle_f64", index, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("amdgpu_shuffle_i64", index, value);
+    QD_ERROR("subgroup shuffle: unsupported type {} on AMDGPU", data_type_name(dt));
+    return nullptr;
+  }
+
   std::tuple<llvm::Value *, llvm::Value *> get_spmd_info() override {
-    auto thread_idx = builder->CreateIntrinsic(Intrinsic::amdgcn_workitem_id_x,
-                                               ArrayRef<llvm::Value *>{});
+    auto thread_idx = builder->CreateIntrinsic(Intrinsic::amdgcn_workitem_id_x, ArrayRef<llvm::Value *>{});
     auto workgroup_dim_ =
-        call("__ockl_get_local_size",
-             llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvm_context), 0));
-    auto block_dim = builder->CreateTrunc(
-        workgroup_dim_, llvm::Type::getInt32Ty(*llvm_context));
+        call("__ockl_get_local_size", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvm_context), 0));
+    auto block_dim = builder->CreateTrunc(workgroup_dim_, llvm::Type::getInt32Ty(*llvm_context));
     return std::make_tuple(thread_idx, block_dim);
   }
 };
 
-LLVMCompiledTask KernelCodeGenAMDGPU::compile_task(
-    int task_codegen_id,
-    const CompileConfig &config,
-    std::unique_ptr<llvm::Module> &&module,
-    IRNode *block) {
-  TaskCodeGenAMDGPU gen(task_codegen_id, config, get_quadrants_llvm_context(),
-                        kernel, block);
+LLVMCompiledTask KernelCodeGenAMDGPU::compile_task(int task_codegen_id,
+                                                   const CompileConfig &config,
+                                                   std::unique_ptr<llvm::Module> &&module,
+                                                   IRNode *block) {
+  TaskCodeGenAMDGPU gen(task_codegen_id, config, get_quadrants_llvm_context(), kernel, block);
   return gen.run_compilation();
 }
 

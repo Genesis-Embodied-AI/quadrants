@@ -20,12 +20,10 @@ class MetalProgramImpl : public GfxProgramImpl {
  public:
   explicit MetalProgramImpl(CompileConfig &config);
 
-  void materialize_runtime(KernelProfilerBase *profiler,
-                           uint64 **result_buffer_ptr) override;
+  void materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr) override;
 
-  void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs) override;
+  void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                 const std::vector<ComputeOpImageRef> &image_refs) override;
 };
 
 }  // namespace quadrants::lang

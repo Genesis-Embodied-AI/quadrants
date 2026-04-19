@@ -10,13 +10,10 @@ namespace {
 // These must not be cached by the loop-invariant caching pass because the
 // AtomicOpStmt writes directly to global memory and any cached load would
 // return a stale value.
-void gather_atomic_dests(
-    IRNode *root,
-    std::unordered_set<const SNode *> &field_snodes,
-    std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>
-        &arr_ids) {
-  auto stmts = irpass::analysis::gather_statements(
-      root, [](Stmt *s) { return s->is<AtomicOpStmt>(); });
+void gather_atomic_dests(IRNode *root,
+                         std::unordered_set<const SNode *> &field_snodes,
+                         std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>> &arr_ids) {
+  auto stmts = irpass::analysis::gather_statements(root, [](Stmt *s) { return s->is<AtomicOpStmt>(); });
   for (auto *s : stmts) {
     auto *dest = s->as<AtomicOpStmt>()->dest;
     if (auto *gptr = dest->cast<GlobalPtrStmt>()) {
@@ -50,51 +47,40 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     ReadWrite = 3,
   };
 
-  typedef std::unordered_map<Stmt *, std::pair<CacheStatus, AllocaStmt *>>
-      CacheMap;
+  typedef std::unordered_map<Stmt *, std::pair<CacheStatus, AllocaStmt *>> CacheMap;
   std::vector<CacheMap> cached_maps;
 
   DelayedIRModifier modifier;
   std::unordered_map<const SNode *, GlobalPtrStmt *> loop_unique_ptr_;
-  std::unordered_map<std::vector<int>,
-                     ExternalPtrStmt *,
-                     hashing::Hasher<std::vector<int>>>
-      loop_unique_arr_ptr_;
+  std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>> loop_unique_arr_ptr_;
   std::unordered_set<MatrixPtrStmt *> loop_unique_matrix_ptr_;
 
   std::unordered_set<Stmt *> dynamic_indexed_ptrs_;
   std::unordered_set<const SNode *> atomic_dest_snodes_;
-  std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>
-      atomic_dest_arr_ids_;
+  std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>> atomic_dest_arr_ids_;
 
   OffloadedStmt *current_offloaded;
 
-  explicit CacheLoopInvariantGlobalVars(const CompileConfig &config)
-      : LoopInvariantDetector(config) {
+  explicit CacheLoopInvariantGlobalVars(const CompileConfig &config) : LoopInvariantDetector(config) {
   }
 
   void visit(OffloadedStmt *stmt) override {
-    if (stmt->task_type == OffloadedTaskType::range_for ||
-        stmt->task_type == OffloadedTaskType::mesh_for ||
+    if (stmt->task_type == OffloadedTaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
         stmt->task_type == OffloadedTaskType::struct_for) {
-      auto uniquely_accessed_pointers =
-          irpass::analysis::gather_uniquely_accessed_pointers(stmt);
+      auto uniquely_accessed_pointers = irpass::analysis::gather_uniquely_accessed_pointers(stmt);
       loop_unique_ptr_ = std::move(std::get<0>(uniquely_accessed_pointers));
       loop_unique_arr_ptr_ = std::move(std::get<1>(uniquely_accessed_pointers));
-      loop_unique_matrix_ptr_ =
-          std::move(std::get<2>(uniquely_accessed_pointers));
+      loop_unique_matrix_ptr_ = std::move(std::get<2>(uniquely_accessed_pointers));
     }
     current_offloaded = stmt;
-    dynamic_indexed_ptrs_ =
-        irpass::analysis::gather_dynamically_indexed_pointers(stmt);
+    dynamic_indexed_ptrs_ = irpass::analysis::gather_dynamically_indexed_pointers(stmt);
     atomic_dest_snodes_.clear();
     atomic_dest_arr_ids_.clear();
     gather_atomic_dests(stmt, atomic_dest_snodes_, atomic_dest_arr_ids_);
 
     // We don't need to visit TLS/BLS prologues/epilogues.
     if (stmt->body) {
-      if (stmt->task_type == OffloadedStmt::TaskType::range_for ||
-          stmt->task_type == OffloadedTaskType::mesh_for ||
+      if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
           stmt->task_type == OffloadedStmt::TaskType::struct_for)
         visit_loop(stmt->body.get());
       else
@@ -108,13 +94,11 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     Stmt *ptr_stmt = nullptr;
     if (stmt->is<GlobalPtrStmt>()) {
       ptr_stmt = stmt->as<GlobalPtrStmt>();
-    } else if (stmt->is<MatrixPtrStmt>() &&
-               stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
+    } else if (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
       ptr_stmt = stmt->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
     } else if (stmt->is<ExternalPtrStmt>()) {
       ptr_stmt = stmt->as<ExternalPtrStmt>();
-    } else if (stmt->is<MatrixPtrStmt>() &&
-               stmt->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
+    } else if (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
       ptr_stmt = stmt->as<MatrixPtrStmt>()->origin->as<ExternalPtrStmt>();
     }
 
@@ -136,10 +120,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     if (stmt->is<GlobalPtrStmt>()) {
       is_global_ptr_stmt = true;
       global_ptr = stmt->as<GlobalPtrStmt>();
-    } else if (stmt->is<MatrixPtrStmt>() &&
-               stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
-      if (loop_unique_matrix_ptr_.find(stmt->as<MatrixPtrStmt>()) ==
-          loop_unique_matrix_ptr_.end()) {
+    } else if (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
+      if (loop_unique_matrix_ptr_.find(stmt->as<MatrixPtrStmt>()) == loop_unique_matrix_ptr_.end()) {
         return false;
       }
 
@@ -149,15 +131,12 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
     if (global_ptr) {
       auto snode = global_ptr->snode;
-      if (loop_unique_ptr_[snode] == nullptr ||
-          loop_unique_ptr_[snode]->indices.empty()) {
+      if (loop_unique_ptr_[snode] == nullptr || loop_unique_ptr_[snode]->indices.empty()) {
         // not uniquely accessed
         return false;
       }
-      if (current_offloaded->mem_access_opt.has_flag(
-              snode, SNodeAccessFlag::block_local) ||
-          current_offloaded->mem_access_opt.has_flag(
-              snode, SNodeAccessFlag::mesh_local)) {
+      if (current_offloaded->mem_access_opt.has_flag(snode, SNodeAccessFlag::block_local) ||
+          current_offloaded->mem_access_opt.has_flag(snode, SNodeAccessFlag::mesh_local)) {
         // BLS does not support write access yet so we keep atomic_adds.
         return false;
       }
@@ -170,10 +149,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     if (stmt->is<ExternalPtrStmt>()) {
       is_external_ptr_stmt = true;
       dest_ptr = stmt->as<ExternalPtrStmt>();
-    } else if (stmt->is<MatrixPtrStmt>() &&
-               stmt->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
-      if (loop_unique_matrix_ptr_.find(stmt->as<MatrixPtrStmt>()) ==
-          loop_unique_matrix_ptr_.end()) {
+    } else if (stmt->is<MatrixPtrStmt>() && stmt->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
+      if (loop_unique_matrix_ptr_.find(stmt->as<MatrixPtrStmt>()) == loop_unique_matrix_ptr_.end()) {
         return false;
       }
 
@@ -205,23 +182,20 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   void add_writeback(AllocaStmt *alloca_stmt, Stmt *global_var, int depth) {
     auto final_value = std::make_unique<LocalLoadStmt>(alloca_stmt);
-    auto global_store =
-        std::make_unique<GlobalStoreStmt>(global_var, final_value.get());
+    auto global_store = std::make_unique<GlobalStoreStmt>(global_var, final_value.get());
     modifier.insert_after(get_loop_stmt(depth), std::move(global_store));
     modifier.insert_after(get_loop_stmt(depth), std::move(final_value));
   }
 
   void set_init_value(AllocaStmt *alloca_stmt, Stmt *global_var, int depth) {
     auto new_global_load = std::make_unique<GlobalLoadStmt>(global_var);
-    auto local_store =
-        std::make_unique<LocalStoreStmt>(alloca_stmt, new_global_load.get());
+    auto local_store = std::make_unique<LocalStoreStmt>(alloca_stmt, new_global_load.get());
     modifier.insert_before(get_loop_stmt(depth), std::move(new_global_load));
     modifier.insert_before(get_loop_stmt(depth), std::move(local_store));
   }
 
   AllocaStmt *cache_global_to_local(Stmt *dest, CacheStatus status, int depth) {
-    if (auto &[cached_status, alloca_stmt] = cached_maps[depth][dest];
-        cached_status != CacheStatus::None) {
+    if (auto &[cached_status, alloca_stmt] = cached_maps[depth][dest]; cached_status != CacheStatus::None) {
       // The global variable has already been cached.
       if (cached_status == CacheStatus::Read && status == CacheStatus::Write) {
         add_writeback(alloca_stmt, dest, depth);
@@ -229,8 +203,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
       }
       return alloca_stmt;
     }
-    auto alloca_unique =
-        std::make_unique<AllocaStmt>(dest->ret_type.ptr_removed());
+    auto alloca_unique = std::make_unique<AllocaStmt>(dest->ret_type.ptr_removed());
     auto alloca_stmt = alloca_unique.get();
     modifier.insert_before(get_loop_stmt(depth), std::move(alloca_unique));
     set_init_value(alloca_stmt, dest, depth);
@@ -271,8 +244,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     return false;
   }
 
-  std::optional<int> find_cache_depth_if_cacheable(Stmt *operand,
-                                                   Block *current_scope) {
+  std::optional<int> find_cache_depth_if_cacheable(Stmt *operand, Block *current_scope) {
     if (is_dynamically_indexed(operand)) {
       return std::nullopt;
     }
@@ -295,8 +267,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   void visit(GlobalLoadStmt *stmt) override {
     if (auto depth = find_cache_depth_if_cacheable(stmt->src, stmt->parent)) {
-      auto alloca_stmt =
-          cache_global_to_local(stmt->src, CacheStatus::Read, depth.value());
+      auto alloca_stmt = cache_global_to_local(stmt->src, CacheStatus::Read, depth.value());
       auto local_load = std::make_unique<LocalLoadStmt>(alloca_stmt);
       stmt->replace_usages_with(local_load.get());
       modifier.insert_before(stmt, std::move(local_load));
@@ -306,10 +277,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   void visit(GlobalStoreStmt *stmt) override {
     if (auto depth = find_cache_depth_if_cacheable(stmt->dest, stmt->parent)) {
-      auto alloca_stmt =
-          cache_global_to_local(stmt->dest, CacheStatus::Write, depth.value());
-      auto local_store =
-          std::make_unique<LocalStoreStmt>(alloca_stmt, stmt->val);
+      auto alloca_stmt = cache_global_to_local(stmt->dest, CacheStatus::Write, depth.value());
+      auto local_store = std::make_unique<LocalStoreStmt>(alloca_stmt, stmt->val);
       stmt->replace_usages_with(local_store.get());
       modifier.insert_before(stmt, std::move(local_store));
       modifier.erase(stmt);
@@ -333,8 +302,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 };
 
 namespace irpass {
-bool cache_loop_invariant_global_vars(IRNode *root,
-                                      const CompileConfig &config) {
+bool cache_loop_invariant_global_vars(IRNode *root, const CompileConfig &config) {
   QD_AUTO_PROF;
   return CacheLoopInvariantGlobalVars::run(root, config);
 }

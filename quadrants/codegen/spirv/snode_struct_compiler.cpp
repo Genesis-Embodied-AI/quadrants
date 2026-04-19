@@ -45,8 +45,7 @@ class StructCompiler {
         struct_elements.push_back(elem_type);
       }
       tinyir::Type *st = ir_module.emplace_back<StructType>(struct_elements);
-      st->set_debug_name(
-          fmt::format("{}_{}", snode_type_name(sn->type), sn->get_name()));
+      st->set_debug_name(fmt::format("{}_{}", snode_type_name(sn->type), sn->get_name()));
       cell_type = st;
 
       if (sn->type == SNodeType::pointer) {
@@ -57,8 +56,7 @@ class StructCompiler {
     if (sn->num_cells_per_container == 1 || sn->is_scalar()) {
       return cell_type;
     } else {
-      return ir_module.emplace_back<ArrayType>(cell_type,
-                                               sn->num_cells_per_container);
+      return ir_module.emplace_back<ArrayType>(cell_type, sn->num_cells_per_container);
     }
   }
 
@@ -80,11 +78,8 @@ class StructCompiler {
         element_strides.push_back({compute_snode_size(ch.get()), i});
         i += 1;
       }
-      std::sort(
-          element_strides.begin(), element_strides.end(),
-          [](const std::pair<size_t, int> &a, const std::pair<size_t, int> &b) {
-            return a.first < b.first;
-          });
+      std::sort(element_strides.begin(), element_strides.end(),
+                [](const std::pair<size_t, int> &a, const std::pair<size_t, int> &b) { return a.first < b.first; });
 
       std::size_t cell_stride = 0;
       for (auto &[snode_size, i] : element_strides) {
@@ -93,21 +88,17 @@ class StructCompiler {
         auto child_offset = cell_stride;
         auto *ch_snode = ch.get();
         cell_stride += snode_size;
-        snode_descriptors_.find(ch_snode->id)
-            ->second.mem_offset_in_parent_cell = child_offset;
+        snode_descriptors_.find(ch_snode->id)->second.mem_offset_in_parent_cell = child_offset;
         ch_snode->offset_bytes_in_parent_cell = child_offset;
       }
       sn_desc.cell_stride = cell_stride;
 
       if (sn->type == SNodeType::bitmasked) {
         size_t num_cells = sn_desc.snode->num_cells_per_container;
-        size_t bitmask_num_words =
-            num_cells % 32 == 0 ? (num_cells / 32) : (num_cells / 32 + 1);
-        sn_desc.container_stride =
-            cell_stride * num_cells + bitmask_num_words * 4;
+        size_t bitmask_num_words = num_cells % 32 == 0 ? (num_cells / 32) : (num_cells / 32 + 1);
+        sn_desc.container_stride = cell_stride * num_cells + bitmask_num_words * 4;
       } else {
-        sn_desc.container_stride =
-            cell_stride * sn_desc.snode->num_cells_per_container;
+        sn_desc.container_stride = cell_stride * sn_desc.snode->num_cells_per_container;
       }
     }
 
@@ -124,14 +115,11 @@ class StructCompiler {
 
     QD_TRACE("SNodeDescriptor");
     QD_TRACE("* snode={}", sn_desc.snode->id);
-    QD_TRACE("* type={} (is_place={})", sn_desc.snode->node_type_name,
-             is_place);
+    QD_TRACE("* type={} (is_place={})", sn_desc.snode->node_type_name, is_place);
     QD_TRACE("* cell_stride={}", sn_desc.cell_stride);
-    QD_TRACE("* num_cells_per_container={}",
-             sn_desc.snode->num_cells_per_container);
+    QD_TRACE("* num_cells_per_container={}", sn_desc.snode->num_cells_per_container);
     QD_TRACE("* container_stride={}", sn_desc.container_stride);
-    QD_TRACE("* total_num_cells_from_root={}",
-             sn_desc.total_num_cells_from_root);
+    QD_TRACE("* total_num_cells_from_root={}", sn_desc.total_num_cells_from_root);
     QD_TRACE("");
 
     QD_ASSERT(snode_descriptors_.find(sn->id) == snode_descriptors_.end());

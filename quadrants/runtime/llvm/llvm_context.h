@@ -26,8 +26,7 @@ class LlvmProgramImpl;
 class QuadrantsLLVMContext {
  private:
   struct ThreadLocalData {
-    std::unique_ptr<llvm::orc::ThreadSafeContext> thread_safe_llvm_context{
-        nullptr};
+    std::unique_ptr<llvm::orc::ThreadSafeContext> thread_safe_llvm_context{nullptr};
     llvm::LLVMContext *llvm_context{nullptr};
     std::unique_ptr<llvm::Module> runtime_module{nullptr};
     std::unordered_map<int, std::unique_ptr<llvm::Module>> struct_modules;
@@ -71,17 +70,15 @@ class QuadrantsLLVMContext {
 
   template <typename T>
   llvm::Type *get_data_type() {
-    return QuadrantsLLVMContext::get_data_type(
-        quadrants::lang::get_data_type<T>());
+    return QuadrantsLLVMContext::get_data_type(quadrants::lang::get_data_type<T>());
   }
 
   std::size_t get_type_size(llvm::Type *type);
 
   std::size_t get_struct_element_offset(llvm::StructType *type, int idx);
 
-  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(
-      const StructType *old_ty,
-      const std::string &layout);
+  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(const StructType *old_ty,
+                                                                         const std::string &layout);
 
   template <typename T>
   llvm::Value *get_constant(T t);
@@ -103,9 +100,8 @@ class QuadrantsLLVMContext {
 
   // remove all functions that are not (directly & indirectly) used by those
   // with export_indicator(func_name) = true
-  static void eliminate_unused_functions(
-      llvm::Module *module,
-      std::function<bool(const std::string &)> export_indicator);
+  static void eliminate_unused_functions(llvm::Module *module,
+                                         std::function<bool(const std::string &)> export_indicator);
 
   void mark_function_as_cuda_kernel(llvm::Function *func, int block_dim = 0);
 
@@ -117,9 +113,7 @@ class QuadrantsLLVMContext {
   llvm::Function *get_struct_function(const std::string &name, int tree_id);
   llvm::Type *get_runtime_type(const std::string &name);
 
-  std::unique_ptr<llvm::Module> new_module(
-      std::string name,
-      llvm::LLVMContext *context = nullptr);
+  std::unique_ptr<llvm::Module> new_module(std::string name, llvm::LLVMContext *context = nullptr);
 
   void delete_snode_tree(int id);
 
@@ -127,18 +121,14 @@ class QuadrantsLLVMContext {
 
   static std::string get_struct_for_func_name(int tls_size);
 
-  LLVMCompiledKernel link_compiled_tasks(
-      std::vector<std::unique_ptr<LLVMCompiledTask>> data_list);
+  LLVMCompiledKernel link_compiled_tasks(std::vector<std::unique_ptr<LLVMCompiledTask>> data_list);
 
   static llvm::DataLayout get_data_layout(Arch arch);
 
  private:
-  std::unique_ptr<llvm::Module> clone_module_to_context(
-      llvm::Module *module,
-      llvm::LLVMContext *target_context);
+  std::unique_ptr<llvm::Module> clone_module_to_context(llvm::Module *module, llvm::LLVMContext *target_context);
 
-  void link_module_with_custom_cuda_library(
-      std::unique_ptr<llvm::Module> &module);
+  void link_module_with_custom_cuda_library(std::unique_ptr<llvm::Module> &module);
 
   void link_module_with_cuda_libdevice(std::unique_ptr<llvm::Module> &module);
 
@@ -148,13 +138,11 @@ class QuadrantsLLVMContext {
 
   void insert_nvvm_annotation(llvm::Function *func, std::string key, int val);
 
-  std::unique_ptr<llvm::Module> clone_module_to_this_thread_context(
-      llvm::Module *module);
+  std::unique_ptr<llvm::Module> clone_module_to_this_thread_context(llvm::Module *module);
 
   ThreadLocalData *get_this_thread_data();
 
-  std::unordered_map<std::thread::id, std::unique_ptr<ThreadLocalData>>
-      per_thread_data_;
+  std::unordered_map<std::thread::id, std::unique_ptr<ThreadLocalData>> per_thread_data_;
 
   Arch arch_;
   llvm::DataLayout data_layout_{""};
@@ -191,8 +179,6 @@ class LlvmModuleBitcodeLoader {
   bool inline_funcs_{false};
 };
 
-std::unique_ptr<llvm::Module> module_from_bitcode_file(
-    const std::string &bitcode_path,
-    llvm::LLVMContext *ctx);
+std::unique_ptr<llvm::Module> module_from_bitcode_file(const std::string &bitcode_path, llvm::LLVMContext *ctx);
 
 }  // namespace quadrants::lang

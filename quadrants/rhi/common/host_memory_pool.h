@@ -17,9 +17,7 @@ class QD_DLL_EXPORT HostMemoryPool {
 
   static HostMemoryPool &get_instance();
 
-  void *allocate(std::size_t size,
-                 std::size_t alignment,
-                 bool exclusive = false);
+  void *allocate(std::size_t size, std::size_t alignment, bool exclusive = false);
   void release(std::size_t size, void *ptr);
   void reset();
   HostMemoryPool();

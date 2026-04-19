@@ -7,9 +7,8 @@ namespace quadrants::lang {
 namespace {
 
 std::unique_ptr<ConstStmt> make_const_i32(int32_t value) {
-  return Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i32),
-      value));
+  return Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i32), value));
 }
 
 TEST(Block, Erase) {

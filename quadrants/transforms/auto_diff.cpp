@@ -11,18 +11,13 @@
 namespace quadrants::lang {
 
 template <typename T>
-Stmt *insert_const(const DataType &dtype,
-                   Stmt *stmt,
-                   const T &value,
-                   bool insert_before_me = false) {
+Stmt *insert_const(const DataType &dtype, Stmt *stmt, const T &value, bool insert_before_me = false) {
   auto type = dtype.ptr_removed();
   Stmt *zero = nullptr;
   if (insert_before_me)
-    zero = stmt->insert_before_me(
-        Stmt::make<ConstStmt>(TypedConstant(type.get_element_type(), value)));
+    zero = stmt->insert_before_me(Stmt::make<ConstStmt>(TypedConstant(type.get_element_type(), value)));
   else
-    zero = stmt->insert_after_me(
-        Stmt::make<ConstStmt>(TypedConstant(type.get_element_type(), value)));
+    zero = stmt->insert_after_me(Stmt::make<ConstStmt>(TypedConstant(type.get_element_type(), value)));
 
   if (type->is<TensorType>()) {
     auto t_dtype = type->as<TensorType>();
@@ -45,15 +40,12 @@ class IndependentBlockMetaData {
 
 class NonLinearOps {
  public:
-  inline static const std::set<TernaryOpType> ternary_collections{
-      TernaryOpType::select};
-  inline static const std::set<UnaryOpType> unary_collections{
-      UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos,
-      UnaryOpType::tanh, UnaryOpType::asin, UnaryOpType::acos,
-      UnaryOpType::exp,  UnaryOpType::log,  UnaryOpType::sqrt};
-  inline static const std::set<BinaryOpType> binary_collections{
-      BinaryOpType::mul, BinaryOpType::div, BinaryOpType::atan2,
-      BinaryOpType::pow};
+  inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
+  inline static const std::set<UnaryOpType> unary_collections{UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos,
+                                                              UnaryOpType::tanh, UnaryOpType::asin, UnaryOpType::acos,
+                                                              UnaryOpType::exp,  UnaryOpType::log,  UnaryOpType::sqrt};
+  inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
+                                                                BinaryOpType::atan2, BinaryOpType::pow};
 };
 
 class IndependentBlocksJudger : public BasicStmtVisitor {
@@ -61,8 +53,7 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
   void visit(LocalLoadStmt *stmt) override {
-    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() ||
-              stmt->src->is<MatrixOfMatrixPtrStmt>());
+    QD_ASSERT(stmt->src->is<AllocaStmt>() || stmt->src->is<MatrixPtrStmt>() || stmt->src->is<MatrixOfMatrixPtrStmt>());
     touched_allocas_.insert(stmt->src);
   }
 
@@ -119,15 +110,13 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
       src = src->as<MatrixPtrStmt>()->origin;
     }
 
-    if ((src->is<ExternalPtrStmt>() &&
-         src->as<ExternalPtrStmt>()
-                 ->base_ptr->as<ArgLoadStmt>()
-                 ->ret_type.ptr_removed()
-                 ->as<StructType>()
-                 ->elements()
-                 .size() > TypeFactory::GRAD_PTR_POS_IN_NDARRAY) ||
-        (src->is<GlobalPtrStmt>() &&
-         src->as<GlobalPtrStmt>()->snode->has_adjoint())) {
+    if ((src->is<ExternalPtrStmt>() && src->as<ExternalPtrStmt>()
+                                               ->base_ptr->as<ArgLoadStmt>()
+                                               ->ret_type.ptr_removed()
+                                               ->as<StructType>()
+                                               ->elements()
+                                               .size() > TypeFactory::GRAD_PTR_POS_IN_NDARRAY) ||
+        (src->is<GlobalPtrStmt>() && src->as<GlobalPtrStmt>()->snode->has_adjoint())) {
       qualified_glb_operations_ = true;
     }
   }
@@ -165,9 +154,7 @@ class IndependentBlocksJudger : public BasicStmtVisitor {
     // To judge whether a block is a smallest IB
     // - If the #1 is satisfied, either an inner most loop or a block without
     // global atomics / global load is an IB
-    ib_meta_data.is_smallest_ib =
-        ib_meta_data.is_ib &&
-        (Judger.qualified_glb_operations_ || Judger.inner_most_loop_);
+    ib_meta_data.is_smallest_ib = ib_meta_data.is_ib && (Judger.qualified_glb_operations_ || Judger.inner_most_loop_);
   }
 
  private:
@@ -185,8 +172,7 @@ class DuplicateIndependentBlocksCleaner : public BasicStmtVisitor {
 
   void check_children_ib(Block *target_block) {
     // Remove the block if it is the child of the block being visiting
-    if (independent_blocks_cleaned_.find(target_block) !=
-        independent_blocks_cleaned_.end()) {
+    if (independent_blocks_cleaned_.find(target_block) != independent_blocks_cleaned_.end()) {
       independent_blocks_cleaned_.erase(target_block);
     }
   }
@@ -200,8 +186,7 @@ class DuplicateIndependentBlocksCleaner : public BasicStmtVisitor {
     stmt->body->accept(this);
   }
 
-  static std::set<Block *> run(
-      const std::vector<std::pair<int, Block *>> &raw_IBs) {
+  static std::set<Block *> run(const std::vector<std::pair<int, Block *>> &raw_IBs) {
     DuplicateIndependentBlocksCleaner cleaner;
     // Remove duplicate IBs
     for (auto const &item : raw_IBs) {
@@ -316,11 +301,9 @@ class IdentifyIndependentBlocks : public BasicStmtVisitor {
       root->accept(&pass);
     }
     // Sort the IBs by their depth from shallow to deep
-    std::sort(pass.independent_blocks_.begin(), pass.independent_blocks_.end(),
-              [](const std::pair<int, Block *> &a,
-                 const std::pair<int, Block *> &b) -> bool {
-                return a.first < b.first;
-              });
+    std::sort(
+        pass.independent_blocks_.begin(), pass.independent_blocks_.end(),
+        [](const std::pair<int, Block *> &a, const std::pair<int, Block *> &b) -> bool { return a.first < b.first; });
 
     QD_ASSERT(!pass.independent_blocks_.empty());
     return DuplicateIndependentBlocksCleaner::run(pass.independent_blocks_);
@@ -347,9 +330,8 @@ class PromoteSSA2LocalVar : public BasicStmtVisitor {
   void visit(Stmt *stmt) override {
     if (execute_once_)
       return;
-    if (!(stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() ||
-          stmt->is<TernaryOpStmt>() || stmt->is<GlobalLoadStmt>() ||
-          stmt->is<LoopIndexStmt>() || stmt->is<AllocaStmt>())) {
+    if (!(stmt->is<UnaryOpStmt>() || stmt->is<BinaryOpStmt>() || stmt->is<TernaryOpStmt>() ||
+          stmt->is<GlobalLoadStmt>() || stmt->is<LoopIndexStmt>() || stmt->is<AllocaStmt>())) {
       // TODO: this list may be incomplete
       return;
     }
@@ -456,8 +438,7 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   void visit(UnaryOpStmt *stmt) override {
     if (is_stack_needed_)
       return;
-    if (NonLinearOps::unary_collections.find(stmt->op_type) !=
-        NonLinearOps::unary_collections.end()) {
+    if (NonLinearOps::unary_collections.find(stmt->op_type) != NonLinearOps::unary_collections.end()) {
       if (stmt->operand == target_alloca_)
         is_stack_needed_ = true;
     }
@@ -468,8 +449,7 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   void visit(BinaryOpStmt *stmt) override {
     if (is_stack_needed_)
       return;
-    if (NonLinearOps::binary_collections.find(stmt->op_type) !=
-        NonLinearOps::binary_collections.end()) {
+    if (NonLinearOps::binary_collections.find(stmt->op_type) != NonLinearOps::binary_collections.end()) {
       if (stmt->lhs == target_alloca_ || stmt->rhs == target_alloca_)
         is_stack_needed_ = true;
     }
@@ -480,10 +460,8 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
   void visit(TernaryOpStmt *stmt) override {
     if (is_stack_needed_)
       return;
-    if (NonLinearOps::ternary_collections.find(stmt->op_type) !=
-        NonLinearOps::ternary_collections.end()) {
-      if (stmt->op1 == target_alloca_ || stmt->op2 == target_alloca_ ||
-          stmt->op3 == target_alloca_)
+    if (NonLinearOps::ternary_collections.find(stmt->op_type) != NonLinearOps::ternary_collections.end()) {
+      if (stmt->op1 == target_alloca_ || stmt->op2 == target_alloca_ || stmt->op3 == target_alloca_)
         is_stack_needed_ = true;
     }
   }
@@ -530,8 +508,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 
   template <typename Store, typename Load>
   void process_store_stmt(Store *stmt) {
-    QD_ASSERT(stmt->template is<LocalStoreStmt>() ||
-              stmt->template is<GlobalStoreStmt>());
+    QD_ASSERT(stmt->template is<LocalStoreStmt>() || stmt->template is<GlobalStoreStmt>());
 
     if (stmt->dest->template is<MatrixPtrStmt>()) {
       auto matrix_ptr_stmt = stmt->dest->template as<MatrixPtrStmt>();
@@ -541,8 +518,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
         return;
       }
 
-      auto tensor_type =
-          orig_stmt->ret_type.ptr_removed()->template as<TensorType>();
+      auto tensor_type = orig_stmt->ret_type.ptr_removed()->template as<TensorType>();
       auto num_elements = tensor_type->get_num_elements();
 
       if (matrix_ptr_stmt->offset->template is<ConstStmt>()) {
@@ -572,8 +548,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 
           $10 : store $0, $9
         */
-        int offset =
-            matrix_ptr_stmt->offset->template as<ConstStmt>()->val.val_int32();
+        int offset = matrix_ptr_stmt->offset->template as<ConstStmt>()->val.val_int32();
 
         QD_ASSERT(offset < num_elements);
 
@@ -585,8 +560,7 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
           }
 
           auto const_i = insert_const(PrimitiveType::i32, stmt, i, true);
-          auto matrix_ptr_stmt_i =
-              Stmt::make<MatrixPtrStmt>(orig_stmt, const_i);
+          auto matrix_ptr_stmt_i = Stmt::make<MatrixPtrStmt>(orig_stmt, const_i);
           matrix_ptr_stmt_i->ret_type = tensor_type->get_element_type();
 
           auto local_load_stmt_i = Stmt::make<Load>(matrix_ptr_stmt_i.get());
@@ -630,17 +604,14 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 
           $7 : store $0, $6
         */
-        auto tensor_type =
-            orig_stmt->ret_type.ptr_removed()->template as<TensorType>();
+        auto tensor_type = orig_stmt->ret_type.ptr_removed()->template as<TensorType>();
         auto num_elements = tensor_type->get_num_elements();
 
         auto tensor_shape = tensor_type->get_shape();
-        auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(
-            tensor_shape, PrimitiveType::i32);
+        auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::i32);
 
         std::vector<Stmt *> val_values(num_elements, stmt->val);
-        std::vector<Stmt *> offset_values(num_elements,
-                                          matrix_ptr_stmt->offset);
+        std::vector<Stmt *> offset_values(num_elements, matrix_ptr_stmt->offset);
         std::vector<Stmt *> index_values(num_elements);
         for (int i = 0; i < num_elements; i++) {
           index_values[i] = insert_const(PrimitiveType::i32, stmt, i, true);
@@ -654,18 +625,15 @@ class RegulateTensorTypedStatements : public BasicStmtVisitor {
 
         auto matrix_index = Stmt::make<MatrixInitStmt>(index_values);
         matrix_index->ret_type = index_tensor_type;
-        auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(
-            tensor_shape, PrimitiveType::u1);
-        auto matrix_eq = Stmt::make<BinaryOpStmt>(
-            BinaryOpType::cmp_eq, matrix_offset.get(), matrix_index.get());
+        auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::u1);
+        auto matrix_eq = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_eq, matrix_offset.get(), matrix_index.get());
         matrix_eq->ret_type = cmp_tensor_type;
 
         auto orig_value = Stmt::make<Load>(orig_stmt);
         orig_value->ret_type = tensor_type;
 
         auto matrix_select =
-            Stmt::make<TernaryOpStmt>(TernaryOpType::select, matrix_eq.get(),
-                                      matrix_val.get(), orig_value.get());
+            Stmt::make<TernaryOpStmt>(TernaryOpType::select, matrix_eq.get(), matrix_val.get(), orig_value.get());
         matrix_select->ret_type = tensor_type;
 
         auto store_stmt = Stmt::make<Store>(orig_stmt, matrix_select.get());
@@ -702,8 +670,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
   int ad_stack_size;
   DelayedIRModifier delayed_modifier_;
 
-  explicit ReplaceLocalVarWithStacks(int ad_stack_size)
-      : ad_stack_size(ad_stack_size) {
+  explicit ReplaceLocalVarWithStacks(int ad_stack_size) : ad_stack_size(ad_stack_size) {
   }
 
   void visit(AllocaStmt *alloc) override {
@@ -718,8 +685,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
       // Note that unlike AllocaStmt, AdStackAllocaStmt does NOT have an 0 as
       // initial value. Therefore here we push an initial 0 value.
       auto zero = insert_const(dtype, stack_alloca_ptr, 0);
-      zero->insert_after_me(
-          Stmt::make<AdStackPushStmt>(stack_alloca_ptr, zero));
+      zero->insert_after_me(Stmt::make<AdStackPushStmt>(stack_alloca_ptr, zero));
     }
   }
 
@@ -743,8 +709,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
           return;
         }
 
-        auto tensor_type =
-            stack_top_stmt->ret_type.ptr_removed()->as<TensorType>();
+        auto tensor_type = stack_top_stmt->ret_type.ptr_removed()->as<TensorType>();
         auto num_elements = tensor_type->get_num_elements();
 
         if (matrix_ptr_stmt->offset->is<ConstStmt>()) {
@@ -772,8 +737,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 
             $10 : store $1, $9
           */
-          int offset =
-              matrix_ptr_stmt->offset->as<ConstStmt>()->val.val_int32();
+          int offset = matrix_ptr_stmt->offset->as<ConstStmt>()->val.val_int32();
 
           QD_ASSERT(offset < num_elements);
 
@@ -785,12 +749,10 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
             }
 
             auto const_i = insert_const(PrimitiveType::i32, stmt, i, true);
-            auto matrix_ptr_stmt_i =
-                Stmt::make<MatrixPtrStmt>(stack_top_stmt, const_i);
+            auto matrix_ptr_stmt_i = Stmt::make<MatrixPtrStmt>(stack_top_stmt, const_i);
             matrix_ptr_stmt_i->ret_type = tensor_type->get_element_type();
 
-            auto local_load_stmt_i =
-                Stmt::make<LocalLoadStmt>(matrix_ptr_stmt_i.get());
+            auto local_load_stmt_i = Stmt::make<LocalLoadStmt>(matrix_ptr_stmt_i.get());
             local_load_stmt_i->ret_type = tensor_type->get_element_type();
 
             values.push_back(local_load_stmt_i.get());
@@ -802,8 +764,7 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
           auto matrix_init_stmt = Stmt::make<MatrixInitStmt>(values);
           matrix_init_stmt->ret_type = tensor_type;
 
-          auto stack_push = Stmt::make<AdStackPushStmt>(stack_top_stmt->stack,
-                                                        matrix_init_stmt.get());
+          auto stack_push = Stmt::make<AdStackPushStmt>(stack_top_stmt->stack, matrix_init_stmt.get());
           stmt->insert_before_me(std::move(matrix_init_stmt));
           stmt->replace_with(std::move(stack_push));
 
@@ -830,17 +791,14 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 
             $7 : store $1, $6
           */
-          auto tensor_type =
-              stack_top_stmt->ret_type.ptr_removed()->as<TensorType>();
+          auto tensor_type = stack_top_stmt->ret_type.ptr_removed()->as<TensorType>();
           auto num_elements = tensor_type->get_num_elements();
 
           auto tensor_shape = tensor_type->get_shape();
-          auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(
-              tensor_shape, PrimitiveType::i32);
+          auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::i32);
 
           std::vector<Stmt *> val_values(num_elements, stmt->val);
-          std::vector<Stmt *> offset_values(num_elements,
-                                            matrix_ptr_stmt->offset);
+          std::vector<Stmt *> offset_values(num_elements, matrix_ptr_stmt->offset);
           std::vector<Stmt *> index_values(num_elements);
           for (int i = 0; i < num_elements; i++) {
             index_values[i] = insert_const(PrimitiveType::i32, stmt, i, true);
@@ -855,23 +813,18 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
           auto matrix_index = Stmt::make<MatrixInitStmt>(index_values);
           matrix_index->ret_type = index_tensor_type;
 
-          auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(
-              tensor_shape, PrimitiveType::u1);
-          auto matrix_eq = Stmt::make<BinaryOpStmt>(
-              BinaryOpType::cmp_eq, matrix_offset.get(), matrix_index.get());
+          auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::u1);
+          auto matrix_eq = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_eq, matrix_offset.get(), matrix_index.get());
           matrix_eq->ret_type = cmp_tensor_type;
 
-          auto matrix_alloca_value =
-              Stmt::make<AdStackLoadTopStmt>(stack_top_stmt->stack);
+          auto matrix_alloca_value = Stmt::make<AdStackLoadTopStmt>(stack_top_stmt->stack);
           matrix_alloca_value->ret_type = tensor_type;
 
-          auto matrix_select = Stmt::make<TernaryOpStmt>(
-              TernaryOpType::select, matrix_eq.get(), matrix_val.get(),
-              matrix_alloca_value.get());
+          auto matrix_select = Stmt::make<TernaryOpStmt>(TernaryOpType::select, matrix_eq.get(), matrix_val.get(),
+                                                         matrix_alloca_value.get());
           matrix_select->ret_type = tensor_type;
 
-          auto stack_push = Stmt::make<AdStackPushStmt>(stack_top_stmt->stack,
-                                                        matrix_select.get());
+          auto stack_push = Stmt::make<AdStackPushStmt>(stack_top_stmt->stack, matrix_select.get());
 
           stmt->insert_before_me(std::move(matrix_val));
           stmt->insert_before_me(std::move(matrix_offset));
@@ -893,16 +846,14 @@ class ReplaceLocalVarWithStacks : public BasicStmtVisitor {
 
   void visit(MatrixPtrStmt *stmt) override {
     if (stmt->origin->is<AdStackAllocaStmt>()) {
-      auto stack_top =
-          Stmt::make<AdStackLoadTopStmt>(stmt->origin, true /*is_ptr*/);
+      auto stack_top = Stmt::make<AdStackLoadTopStmt>(stmt->origin, true /*is_ptr*/);
       stack_top->ret_type = stmt->origin->ret_type;
       stack_top->ret_type.set_is_pointer(true);
 
       Stmt *stack_top_stmt = stack_top.get();
       stmt->insert_before_me(std::move(stack_top));
 
-      auto new_matrix_ptr_stmt =
-          Stmt::make<MatrixPtrStmt>(stack_top_stmt, stmt->offset);
+      auto new_matrix_ptr_stmt = Stmt::make<MatrixPtrStmt>(stack_top_stmt, stmt->offset);
       new_matrix_ptr_stmt->ret_type = stmt->ret_type;
       stmt->replace_with(std::move(new_matrix_ptr_stmt));
     }
@@ -913,8 +864,7 @@ class ReverseOuterLoops : public BasicStmtVisitor {
   using BasicStmtVisitor::visit;
 
  private:
-  explicit ReverseOuterLoops(const std::set<Block *> &IB)
-      : loop_depth_(0), ib_(IB) {
+  explicit ReverseOuterLoops(const std::set<Block *> &IB) : loop_depth_(0), ib_(IB) {
   }
 
   bool is_ib(Block *block) const {
@@ -1010,8 +960,7 @@ class ADTransform : public IRVisitor {
   }
 
   Stmt *sel(Stmt *op1, Stmt *op2, Stmt *op3) {
-    return insert<TernaryOpStmt>(TernaryOpType::select, load(op1), load(op2),
-                                 load(op3));
+    return insert<TernaryOpStmt>(TernaryOpType::select, load(op1), load(op2), load(op3));
   }
 
   Stmt *cos(Stmt *op1) {
@@ -1040,8 +989,7 @@ class ADTransform : public IRVisitor {
 
   template <typename T>
   Stmt *insert_const_for_grad(const DataType &dtype, Stmt *stmt, const T &val) {
-    auto zero = insert<ConstStmt>(
-        TypedConstant(dtype.ptr_removed().get_element_type(), val));
+    auto zero = insert<ConstStmt>(TypedConstant(dtype.ptr_removed().get_element_type(), val));
     if (dtype.ptr_removed()->is<TensorType>()) {
       auto t_dtype = dtype.ptr_removed()->as<TensorType>();
       std::vector<Stmt *> values(t_dtype->get_num_elements(), zero);
@@ -1231,8 +1179,8 @@ class MakeAdjoint : public ADTransform {
       if (is_real(adjoint_dtype.get_element_type())) {
         prim_dtype = adjoint_dtype.get_element_type();
       }
-      adjoint_dtype = TypeFactory::get_instance().get_tensor_type(
-          adjoint_dtype->as<TensorType>()->get_shape(), prim_dtype);
+      adjoint_dtype =
+          TypeFactory::get_instance().get_tensor_type(adjoint_dtype->as<TensorType>()->get_shape(), prim_dtype);
     } else if (stmt->is<MatrixPtrStmt>()) {
       // pass
     } else if (!is_real(adjoint_dtype) || stmt->is<ConstStmt>()) {
@@ -1267,8 +1215,7 @@ class MakeAdjoint : public ADTransform {
       //     q = b[i]
       //     for _ in range(5)
       //         q += a[i]
-      if (stmt->is<GlobalLoadStmt>() &&
-          (stmt->parent->parent_stmt() != nullptr) &&
+      if (stmt->is<GlobalLoadStmt>() && (stmt->parent->parent_stmt() != nullptr) &&
           stmt->parent->parent_stmt()->is<RangeForStmt>()) {
         // Check whether this GlobalLoadStmt is in the body of a for-loop by
         // searching in the backup forward pass If not (Case 1), the alloca
@@ -1288,8 +1235,7 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(UnaryOpStmt *stmt) override {
-    if (stmt->op_type == UnaryOpType::floor ||
-        stmt->op_type == UnaryOpType::ceil) {
+    if (stmt->op_type == UnaryOpType::floor || stmt->op_type == UnaryOpType::ceil) {
       // do nothing
     } else if (stmt->op_type == UnaryOpType::neg) {
       accumulate(stmt->operand, negate(adjoint(stmt)));
@@ -1306,37 +1252,25 @@ class MakeAdjoint : public ADTransform {
       // `tan`.
       QD_NOT_IMPLEMENTED;
     } else if (stmt->op_type == UnaryOpType::tanh) {
-      accumulate(
-          stmt->operand,
-          mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(stmt))));
+      accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(stmt))));
     } else if (stmt->op_type == UnaryOpType::asin) {
-      accumulate(
-          stmt->operand,
-          mul(adjoint(stmt),
-              div(constant(1, stmt->ret_type),
-                  sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
+      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(1, stmt->ret_type),
+                                                       sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
     } else if (stmt->op_type == UnaryOpType::acos) {
-      accumulate(
-          stmt->operand,
-          mul(adjoint(stmt), negate(div(constant(1, stmt->ret_type),
-                                        sqrt(sub(constant(1, stmt->ret_type),
-                                                 sqr(stmt->operand)))))));
+      accumulate(stmt->operand,
+                 mul(adjoint(stmt), negate(div(constant(1, stmt->ret_type),
+                                               sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
     } else if (stmt->op_type == UnaryOpType::exp) {
       accumulate(stmt->operand, mul(adjoint(stmt), stmt));
     } else if (stmt->op_type == UnaryOpType::log) {
       accumulate(stmt->operand, div(adjoint(stmt), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
-      accumulate(stmt->operand,
-                 mul(adjoint(stmt),
-                     div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
+      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::rsqrt) {
-      accumulate(stmt->operand,
-                 mul(adjoint(stmt), mul(constant(-0.5f, stmt->ret_type),
-                                        pow(rsqrt(stmt->operand),
-                                            constant(3, stmt->ret_type)))));
+      accumulate(stmt->operand, mul(adjoint(stmt), mul(constant(-0.5f, stmt->ret_type),
+                                                       pow(rsqrt(stmt->operand), constant(3, stmt->ret_type)))));
     } else if (stmt->op_type == UnaryOpType::cast_value) {
-      if (is_real(stmt->cast_type.get_element_type()) &&
-          is_real(stmt->operand->ret_type.get_element_type())) {
+      if (is_real(stmt->cast_type.get_element_type()) && is_real(stmt->operand->ret_type.get_element_type())) {
         accumulate(stmt->operand, adjoint(stmt));
       }
     } else if (stmt->op_type == UnaryOpType::logic_not) {
@@ -1362,35 +1296,28 @@ class MakeAdjoint : public ADTransform {
       // Do nothing
     } else if (bin->op_type == BinaryOpType::div) {
       accumulate(bin->lhs, div(adjoint(bin), bin->rhs));
-      accumulate(bin->rhs, negate(div(mul(adjoint(bin), bin->lhs),
-                                      mul(bin->rhs, bin->rhs))));
+      accumulate(bin->rhs, negate(div(mul(adjoint(bin), bin->lhs), mul(bin->rhs, bin->rhs))));
     } else if (bin->op_type == BinaryOpType::atan2) {
       auto numerator = add(sqr(bin->lhs), sqr(bin->rhs));
       accumulate(bin->lhs, div(mul(adjoint(bin), bin->rhs), numerator));
       accumulate(bin->rhs, negate(div(mul(adjoint(bin), bin->lhs), numerator)));
     } else if (bin->op_type == BinaryOpType::pow) {
       // d (x ^ y) = x ^ (y-1) * (y * dx + log(x) * x * dy)
-      auto common_coeff = pow(
-          bin->lhs, sub(bin->rhs, constant(1, bin->ret_type)));  // x ^ (y-1)
+      auto common_coeff = pow(bin->lhs, sub(bin->rhs, constant(1, bin->ret_type)));  // x ^ (y-1)
       accumulate(bin->lhs, mul(adjoint(bin), mul(bin->rhs, common_coeff)));
-      accumulate(bin->rhs, mul(adjoint(bin), mul(log(bin->lhs),
-                                                 mul(bin->lhs, common_coeff))));
-    } else if (bin->op_type == BinaryOpType::min ||
-               bin->op_type == BinaryOpType::max) {
-      auto cmp = bin->op_type == BinaryOpType::min ? cmp_lt(bin->lhs, bin->rhs)
-                                                   : cmp_lt(bin->rhs, bin->lhs);
+      accumulate(bin->rhs, mul(adjoint(bin), mul(log(bin->lhs), mul(bin->lhs, common_coeff))));
+    } else if (bin->op_type == BinaryOpType::min || bin->op_type == BinaryOpType::max) {
+      auto cmp = bin->op_type == BinaryOpType::min ? cmp_lt(bin->lhs, bin->rhs) : cmp_lt(bin->rhs, bin->lhs);
       auto zero = insert_const_for_grad(bin->ret_type, bin, 0);
       accumulate(bin->lhs, sel(cmp, adjoint(bin), zero));
       accumulate(bin->rhs, sel(cmp, zero, adjoint(bin)));
     } else if (bin->op_type == BinaryOpType::floordiv) {
       // do nothing
-    } else if (is_comparison(bin->op_type) || is_bit_op(bin->op_type) ||
-               binary_is_logical(bin->op_type)) {
+    } else if (is_comparison(bin->op_type) || is_bit_op(bin->op_type) || binary_is_logical(bin->op_type)) {
       // do nothing
 
     } else {
-      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
-              bin->get_tb());
+      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type), bin->get_tb());
       QD_NOT_IMPLEMENTED;
     }
   }
@@ -1398,12 +1325,8 @@ class MakeAdjoint : public ADTransform {
   void visit(TernaryOpStmt *stmt) override {
     QD_ASSERT(stmt->op_type == TernaryOpType::select);
     auto zero = insert_const_for_grad(stmt->ret_type, stmt, 0);
-    accumulate(stmt->op2,
-               insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1,
-                                     load(adjoint(stmt)), zero));
-    accumulate(stmt->op3,
-               insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1, zero,
-                                     load(adjoint(stmt))));
+    accumulate(stmt->op2, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1, load(adjoint(stmt)), zero));
+    accumulate(stmt->op3, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1, zero, load(adjoint(stmt))));
   }
 
   void visit(IfStmt *if_stmt) override {
@@ -1415,8 +1338,7 @@ class MakeAdjoint : public ADTransform {
       forward_backup = if_stmt->true_statements.get();
 
       current_block = new_if->true_statements.get();
-      for (int i = if_stmt->true_statements->statements.size() - 1; i >= 0;
-           i--) {
+      for (int i = if_stmt->true_statements->statements.size() - 1; i >= 0; i--) {
         if_stmt->true_statements->statements[i]->accept(this);
         // Restore forward pass
         forward_backup = if_stmt->true_statements.get();
@@ -1432,8 +1354,7 @@ class MakeAdjoint : public ADTransform {
       forward_backup = if_stmt->false_statements.get();
 
       current_block = new_if->false_statements.get();
-      for (int i = if_stmt->false_statements->statements.size() - 1; i >= 0;
-           i--) {
+      for (int i = if_stmt->false_statements->statements.size() - 1; i >= 0; i--) {
         if_stmt->false_statements->statements[i]->accept(this);
         // Restore forward pass
         forward_backup = if_stmt->false_statements.get();
@@ -1461,9 +1382,8 @@ class MakeAdjoint : public ADTransform {
     }
     std::reverse(statements.begin(), statements.end());  // reverse-mode AD...
     auto old_alloca_block = alloca_block;
-    auto old_forward_backup =
-        forward_backup;  // store the block which is not inside the current IB,
-                         // such as outer most loop
+    auto old_forward_backup = forward_backup;  // store the block which is not inside the current IB,
+                                               // such as outer most loop
     // Backup the forward pass
     forward_backup = for_stmt->body.get();
     for (auto stmt : statements) {
@@ -1521,8 +1441,7 @@ class MakeAdjoint : public ADTransform {
     // issue global store to adjoint
 
     if (stmt->src->is<ExternalPtrStmt>() ||
-        (stmt->src->is<MatrixPtrStmt>() &&
-         stmt->src->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
+        (stmt->src->is<MatrixPtrStmt>() && stmt->src->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
       ExternalPtrStmt *src = nullptr;
       bool is_ptr_offset = false;
       if (stmt->src->is<MatrixPtrStmt>()) {
@@ -1532,20 +1451,17 @@ class MakeAdjoint : public ADTransform {
         src = stmt->src->as<ExternalPtrStmt>();
       }
       auto arg = src->base_ptr->as<ArgLoadStmt>();
-      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() >
-          TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
+      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() > TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
         QD_ASSERT_INFO(!src->is_grad,
                        "Cannot automatically differentiate through a grad "
                        "tensor, if you really want to do that, pass the grad "
                        "tensor into the kernel directly");
         auto adj_ptr =
-            insert<ExternalPtrStmt>(src->base_ptr, src->indices, src->ndim,
-                                    src->element_shape, /*is_grad=*/true);
+            insert<ExternalPtrStmt>(src->base_ptr, src->indices, src->ndim, src->element_shape, /*is_grad=*/true);
         adj_ptr->ret_type = src->ret_type;
 
         if (is_ptr_offset) {
-          adj_ptr = insert<MatrixPtrStmt>(
-              adj_ptr, stmt->src->as<MatrixPtrStmt>()->offset);
+          adj_ptr = insert<MatrixPtrStmt>(adj_ptr, stmt->src->as<MatrixPtrStmt>()->offset);
           adj_ptr->ret_type = stmt->src->ret_type;
           adj_ptr->ret_type.set_is_pointer(true);
         }
@@ -1555,8 +1471,7 @@ class MakeAdjoint : public ADTransform {
     }
 
     if (stmt->src->is<GlobalPtrStmt>() ||
-        (stmt->src->is<MatrixPtrStmt>() &&
-         stmt->src->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
+        (stmt->src->is<MatrixPtrStmt>() && stmt->src->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
       GlobalPtrStmt *src = nullptr;
       bool is_ptr_offset = false;
       if (stmt->src->is<MatrixPtrStmt>()) {
@@ -1580,8 +1495,7 @@ class MakeAdjoint : public ADTransform {
       auto adj_ptr = insert<GlobalPtrStmt>(snode, src->indices);
       adj_ptr->ret_type = src->ret_type;
       if (is_ptr_offset) {
-        adj_ptr = insert<MatrixPtrStmt>(adj_ptr,
-                                        stmt->src->as<MatrixPtrStmt>()->offset);
+        adj_ptr = insert<MatrixPtrStmt>(adj_ptr, stmt->src->as<MatrixPtrStmt>()->offset);
       }
       insert<AtomicOpStmt>(AtomicOpType::add, adj_ptr, load(adjoint(stmt)));
       return;
@@ -1593,8 +1507,7 @@ class MakeAdjoint : public ADTransform {
 
     Stmt *adjoint_ptr{nullptr};
     if (stmt->dest->is<ExternalPtrStmt>() ||
-        (stmt->dest->is<MatrixPtrStmt>() &&
-         stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
+        (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
       ExternalPtrStmt *dest = nullptr;
       bool is_ptr_offset = false;
       if (stmt->dest->is<MatrixPtrStmt>()) {
@@ -1605,22 +1518,19 @@ class MakeAdjoint : public ADTransform {
       }
 
       auto arg = dest->base_ptr->as<ArgLoadStmt>();
-      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() <=
-          TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
+      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() <= TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
         return;
       }
       QD_ASSERT_INFO(!dest->is_grad,
                      "Cannot automatically differentiate through a grad "
                      "tensor, if you really want to do that, pass the grad "
                      "tensor into the kernel directly");
-      adjoint_ptr = insert<ExternalPtrStmt>(dest->base_ptr, dest->indices,
-                                            dest->ndim, dest->element_shape,
+      adjoint_ptr = insert<ExternalPtrStmt>(dest->base_ptr, dest->indices, dest->ndim, dest->element_shape,
                                             /*is_grad=*/true);
       adjoint_ptr->ret_type = dest->ret_type;
 
       if (is_ptr_offset) {
-        adjoint_ptr = insert<MatrixPtrStmt>(
-            adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
+        adjoint_ptr = insert<MatrixPtrStmt>(adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
         adjoint_ptr->ret_type = stmt->dest->ret_type;
         adjoint_ptr->ret_type.set_is_pointer(true);
       }
@@ -1629,8 +1539,7 @@ class MakeAdjoint : public ADTransform {
     }
 
     if (stmt->dest->is<GlobalPtrStmt>() ||
-        (stmt->dest->is<MatrixPtrStmt>() &&
-         stmt->dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
+        (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
       GlobalPtrStmt *dest = nullptr;
       bool is_ptr_offset = false;
       if (stmt->dest->is<MatrixPtrStmt>()) {
@@ -1650,15 +1559,13 @@ class MakeAdjoint : public ADTransform {
       adjoint_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
       adjoint_ptr->ret_type = dest->ret_type;
       if (is_ptr_offset) {
-        adjoint_ptr = insert<MatrixPtrStmt>(
-            adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
+        adjoint_ptr = insert<MatrixPtrStmt>(adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
       }
       accumulate(stmt->val, insert<GlobalLoadStmt>(adjoint_ptr));
     }
 
     // Clear the gradient after accumulation finished.
-    auto zero =
-        insert_const_for_grad(adjoint_ptr->ret_type.ptr_removed(), stmt, 0);
+    auto zero = insert_const_for_grad(adjoint_ptr->ret_type.ptr_removed(), stmt, 0);
     insert<GlobalStoreStmt>(adjoint_ptr, zero);
 
     stmt->parent->erase(stmt);
@@ -1666,8 +1573,7 @@ class MakeAdjoint : public ADTransform {
 
   void visit(AtomicOpStmt *stmt) override {
     if (stmt->dest->is<ExternalPtrStmt>() ||
-        (stmt->dest->is<MatrixPtrStmt>() &&
-         stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
+        (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>())) {
       ExternalPtrStmt *dest = nullptr;
       bool is_ptr_offset = false;
       if (stmt->dest->is<MatrixPtrStmt>()) {
@@ -1678,20 +1584,17 @@ class MakeAdjoint : public ADTransform {
       }
 
       auto arg = dest->base_ptr->as<ArgLoadStmt>();
-      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() >
-          TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
+      if (arg->ret_type.ptr_removed()->as<StructType>()->elements().size() > TypeFactory::GRAD_PTR_POS_IN_NDARRAY) {
         QD_ASSERT_INFO(!dest->is_grad,
                        "Cannot automatically differentiate through a grad "
                        "tensor, if you really want to do that, pass the grad "
                        "tensor into the kernel directly");
         auto adjoint_ptr =
-            insert<ExternalPtrStmt>(dest->base_ptr, dest->indices, dest->ndim,
-                                    dest->element_shape, /*is_grad=*/true);
+            insert<ExternalPtrStmt>(dest->base_ptr, dest->indices, dest->ndim, dest->element_shape, /*is_grad=*/true);
         adjoint_ptr->ret_type = dest->ret_type;
 
         if (is_ptr_offset) {
-          adjoint_ptr = insert<MatrixPtrStmt>(
-              adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
+          adjoint_ptr = insert<MatrixPtrStmt>(adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
 
           adjoint_ptr->ret_type = stmt->dest->ret_type;
           adjoint_ptr->ret_type.set_is_pointer(true);
@@ -1704,8 +1607,7 @@ class MakeAdjoint : public ADTransform {
     }
 
     if (stmt->dest->is<GlobalPtrStmt>() ||
-        (stmt->dest->is<MatrixPtrStmt>() &&
-         stmt->dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
+        (stmt->dest->is<MatrixPtrStmt>() && stmt->dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>())) {
       GlobalPtrStmt *dest = nullptr;
       bool is_ptr_offset = false;
       if (stmt->dest->is<MatrixPtrStmt>()) {
@@ -1726,8 +1628,7 @@ class MakeAdjoint : public ADTransform {
       auto adjoint_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
       adjoint_ptr->ret_type = dest->ret_type;
       if (is_ptr_offset) {
-        adjoint_ptr = insert<MatrixPtrStmt>(
-            adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
+        adjoint_ptr = insert<MatrixPtrStmt>(adjoint_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
       }
       accumulate(stmt->val, insert<GlobalLoadStmt>(adjoint_ptr));
       stmt->parent->erase(stmt);
@@ -1736,8 +1637,7 @@ class MakeAdjoint : public ADTransform {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    if (stmt->origin->is<GlobalPtrStmt>() ||
-        stmt->origin->is<ExternalPtrStmt>()) {
+    if (stmt->origin->is<GlobalPtrStmt>() || stmt->origin->is<ExternalPtrStmt>()) {
       /*
         The case of MatrixPtrStmt(GlobalPtrStmt, ...) is already handled in
         GlobalPtrStmt, GlobalStoreStmt and AtomicStmt
@@ -1824,23 +1724,18 @@ class MakeAdjoint : public ADTransform {
       auto stmt_adj_matrix_init_stmt = insert<MatrixInitStmt>(stmt_adj_values);
       stmt_adj_matrix_init_stmt->ret_type = tensor_type;
 
-      auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(
-          tensor_shape, PrimitiveType::i32);
+      auto index_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::i32);
       auto indices_matrix_init_stmt = insert<MatrixInitStmt>(indices_values);
       indices_matrix_init_stmt->ret_type = index_tensor_type;
 
       auto offset_matrix_init_stmt = insert<MatrixInitStmt>(offset_values);
       offset_matrix_init_stmt->ret_type = index_tensor_type;
-      auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(
-          tensor_shape, PrimitiveType::u1);
-      auto bin_eq_stmt =
-          insert<BinaryOpStmt>(BinaryOpType::cmp_eq, offset_matrix_init_stmt,
-                               indices_matrix_init_stmt);
+      auto cmp_tensor_type = TypeFactory::get_instance().get_tensor_type(tensor_shape, PrimitiveType::u1);
+      auto bin_eq_stmt = insert<BinaryOpStmt>(BinaryOpType::cmp_eq, offset_matrix_init_stmt, indices_matrix_init_stmt);
       bin_eq_stmt->ret_type = cmp_tensor_type;
 
-      auto select_stmt = insert<TernaryOpStmt>(
-          TernaryOpType::select, bin_eq_stmt, stmt_adj_matrix_init_stmt,
-          zero_matrix_init_stmt);
+      auto select_stmt =
+          insert<TernaryOpStmt>(TernaryOpType::select, bin_eq_stmt, stmt_adj_matrix_init_stmt, zero_matrix_init_stmt);
       adjoint_value = select_stmt;
     }
 
@@ -1954,28 +1849,19 @@ class MakeDual : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt, mul(sub(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::asin) {
-      accumulate(stmt, mul(div(constant(1),
-                               sqrt(sub(constant(1), sqr(stmt->operand)))),
-                           dual(stmt->operand)));
+      accumulate(stmt, mul(div(constant(1), sqrt(sub(constant(1), sqr(stmt->operand)))), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::acos) {
-      accumulate(stmt,
-                 mul(negate(div(constant(1),
-                                sqrt(sub(constant(1), sqr(stmt->operand))))),
-                     dual(stmt->operand)));
+      accumulate(stmt, mul(negate(div(constant(1), sqrt(sub(constant(1), sqr(stmt->operand))))), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::exp) {
       accumulate(stmt, mul(stmt, dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::log) {
       accumulate(stmt, div(dual(stmt->operand), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
-      accumulate(stmt, mul(div(constant(0.5f), sqrt(stmt->operand)),
-                           dual(stmt->operand)));
+      accumulate(stmt, mul(div(constant(0.5f), sqrt(stmt->operand)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::rsqrt) {
-      accumulate(stmt, mul(mul(constant(-0.5f),
-                               pow(rsqrt(stmt->operand), constant(3))),
-                           dual(stmt->operand)));
+      accumulate(stmt, mul(mul(constant(-0.5f), pow(rsqrt(stmt->operand), constant(3))), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::cast_value) {
-      if (is_real(stmt->cast_type.get_element_type()) &&
-          is_real(stmt->operand->ret_type.get_element_type())) {
+      if (is_real(stmt->cast_type.get_element_type()) && is_real(stmt->operand->ret_type.get_element_type())) {
         accumulate(stmt, dual(stmt->operand));
       }
     } else if (stmt->op_type == UnaryOpType::logic_not) {
@@ -2001,23 +1887,18 @@ class MakeDual : public ADTransform {
       // Do nothing
     } else if (bin->op_type == BinaryOpType::div) {
       accumulate(bin, div(dual(bin->lhs), bin->rhs));
-      accumulate(bin, negate(div(mul(dual(bin->rhs), bin->lhs),
-                                 mul(bin->rhs, bin->rhs))));
+      accumulate(bin, negate(div(mul(dual(bin->rhs), bin->lhs), mul(bin->rhs, bin->rhs))));
     } else if (bin->op_type == BinaryOpType::atan2) {
       auto numerator = add(sqr(bin->lhs), sqr(bin->rhs));
       accumulate(bin, div(mul(bin->rhs, dual(bin->lhs)), numerator));
       accumulate(bin, negate(div(mul(bin->lhs, dual(bin->rhs)), numerator)));
     } else if (bin->op_type == BinaryOpType::pow) {
       // d (x ^ y) = x ^ (y-1) * (y * dx + log(x) * x * dy)
-      auto common_coeff =
-          pow(bin->lhs, sub(bin->rhs, constant(1)));  // x ^ (y-1)
+      auto common_coeff = pow(bin->lhs, sub(bin->rhs, constant(1)));  // x ^ (y-1)
       accumulate(bin, mul(dual(bin->lhs), mul(bin->rhs, common_coeff)));
-      accumulate(bin, mul(dual(bin->rhs),
-                          mul(log(bin->lhs), mul(bin->lhs, common_coeff))));
-    } else if (bin->op_type == BinaryOpType::min ||
-               bin->op_type == BinaryOpType::max) {
-      auto cmp = bin->op_type == BinaryOpType::min ? cmp_lt(bin->lhs, bin->rhs)
-                                                   : cmp_lt(bin->rhs, bin->lhs);
+      accumulate(bin, mul(dual(bin->rhs), mul(log(bin->lhs), mul(bin->lhs, common_coeff))));
+    } else if (bin->op_type == BinaryOpType::min || bin->op_type == BinaryOpType::max) {
+      auto cmp = bin->op_type == BinaryOpType::min ? cmp_lt(bin->lhs, bin->rhs) : cmp_lt(bin->rhs, bin->lhs);
       auto zero = insert_const_for_grad(bin->ret_type, bin, 0);
       accumulate(bin, sel(cmp, dual(bin->lhs), zero));
       accumulate(bin, sel(cmp, zero, dual(bin->rhs)));
@@ -2026,8 +1907,7 @@ class MakeDual : public ADTransform {
     } else if (is_comparison(bin->op_type) || is_bit_op(bin->op_type)) {
       // do nothing
     } else {
-      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type),
-              bin->get_tb());
+      QD_WARN("gradient of binary op {}\n{}", binary_op_type_name(bin->op_type), bin->get_tb());
       QD_NOT_IMPLEMENTED
     }
   }
@@ -2035,10 +1915,8 @@ class MakeDual : public ADTransform {
   void visit(TernaryOpStmt *stmt) override {
     QD_ASSERT(stmt->op_type == TernaryOpType::select);
     auto zero = insert_const_for_grad(stmt->ret_type, stmt, 0);
-    accumulate(stmt, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1,
-                                           load(dual(stmt->op2)), zero));
-    accumulate(stmt, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1,
-                                           zero, load(dual(stmt->op3))));
+    accumulate(stmt, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1, load(dual(stmt->op2)), zero));
+    accumulate(stmt, insert<TernaryOpStmt>(TernaryOpType::select, stmt->op1, zero, load(dual(stmt->op3))));
   }
 
   void visit(IfStmt *if_stmt) override {
@@ -2130,8 +2008,7 @@ class MakeDual : public ADTransform {
     auto dual_ptr = insert<GlobalPtrStmt>(snode, src->indices);
     dual_ptr->ret_type = src->ret_type;
     if (is_ptr_offset) {
-      dual_ptr = insert<MatrixPtrStmt>(dual_ptr,
-                                       stmt->src->as<MatrixPtrStmt>()->offset);
+      dual_ptr = insert<MatrixPtrStmt>(dual_ptr, stmt->src->as<MatrixPtrStmt>()->offset);
     }
     accumulate(stmt, insert<GlobalLoadStmt>(dual_ptr));
   }
@@ -2155,8 +2032,7 @@ class MakeDual : public ADTransform {
     auto dual_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
     dual_ptr->ret_type = dest->ret_type;
     if (is_ptr_offset) {
-      dual_ptr = insert<MatrixPtrStmt>(dual_ptr,
-                                       stmt->dest->as<MatrixPtrStmt>()->offset);
+      dual_ptr = insert<MatrixPtrStmt>(dual_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
     }
     insert<AtomicOpStmt>(AtomicOpType::add, dual_ptr, load(dual(stmt->val)));
   }
@@ -2180,8 +2056,7 @@ class MakeDual : public ADTransform {
     auto dual_ptr = insert<GlobalPtrStmt>(snode, dest->indices);
     dual_ptr->ret_type = dest->ret_type;
     if (is_ptr_offset) {
-      dual_ptr = insert<MatrixPtrStmt>(dual_ptr,
-                                       stmt->dest->as<MatrixPtrStmt>()->offset);
+      dual_ptr = insert<MatrixPtrStmt>(dual_ptr, stmt->dest->as<MatrixPtrStmt>()->offset);
     }
     insert<AtomicOpStmt>(AtomicOpType::add, dual_ptr, load(dual(stmt->val)));
   }
@@ -2218,8 +2093,7 @@ class BackupSSA : public BasicStmtVisitor {
   Block *independent_block;
   std::map<Stmt *, Stmt *> backup_alloca;
 
-  explicit BackupSSA(Block *independent_block)
-      : independent_block(independent_block) {
+  explicit BackupSSA(Block *independent_block) : independent_block(independent_block) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -2249,8 +2123,7 @@ class BackupSSA : public BasicStmtVisitor {
       if (op == nullptr) {
         continue;
       }
-      if (std::find(leaf_to_root.begin(), leaf_to_root.end(), op->parent) ==
-              leaf_to_root.end() &&
+      if (std::find(leaf_to_root.begin(), leaf_to_root.end(), op->parent) == leaf_to_root.end() &&
           !op->is<AllocaStmt>()) {
         if (op->is<AdStackLoadTopStmt>()) {
           // Just create another AdStackLoadTopStmt
@@ -2260,15 +2133,13 @@ class BackupSSA : public BasicStmtVisitor {
           // local loaded
           auto stack_alloca = op->as<AdStackAllocaStmt>();
           if (backup_alloca.find(op) == backup_alloca.end()) {
-            auto backup_stack_alloca = Stmt::make<AdStackAllocaStmt>(
-                stack_alloca->dt, stack_alloca->max_size);
+            auto backup_stack_alloca = Stmt::make<AdStackAllocaStmt>(stack_alloca->dt, stack_alloca->max_size);
             auto backup_stack_alloca_ptr = backup_stack_alloca.get();
             independent_block->insert(std::move(backup_stack_alloca), 0);
             backup_alloca[op] = backup_stack_alloca_ptr;
             // Replace usages of all blocks i.e., the entry point for the
             // replace is the top level block
-            irpass::replace_all_usages_with(leaf_to_root.back(), op,
-                                            backup_stack_alloca_ptr);
+            irpass::replace_all_usages_with(leaf_to_root.back(), op, backup_stack_alloca_ptr);
             // Erase the outdated AdStackAllocaStmt
             op->parent->erase(op);
           }
@@ -2276,8 +2147,7 @@ class BackupSSA : public BasicStmtVisitor {
           stmt->set_operand(i, stmt->insert_before_me(op->clone()));
         } else {
           auto alloca = load(op);
-          stmt->set_operand(
-              i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
+          stmt->set_operand(i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
         }
       }
     }
@@ -2389,10 +2259,7 @@ $tmp = mul b3, b2             -->  $tmp = mul $b3, $b2             --> $15 = mul
 $y = mul $tmp, $x             -->  $y = mul $tmp, $x               --> $14 = mul($y_adj, $x)
 */
 // clang-format on
-void auto_diff(IRNode *root,
-               const CompileConfig &config,
-               AutodiffMode autodiff_mode,
-               bool use_stack) {
+void auto_diff(IRNode *root, const CompileConfig &config, AutodiffMode autodiff_mode, bool use_stack) {
   QD_AUTO_PROF;
   if (autodiff_mode == AutodiffMode::kReverse) {
     RegulateTensorTypedStatements::run(root);
@@ -2449,8 +2316,7 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     }
     QD_ASSERT(snode->get_adjoint_checkbit() != nullptr);
     snode = snode->get_adjoint_checkbit();
-    auto global_ptr =
-        stmt->insert_after_me(Stmt::make<GlobalPtrStmt>(snode, src->indices));
+    auto global_ptr = stmt->insert_after_me(Stmt::make<GlobalPtrStmt>(snode, src->indices));
     auto dtype = global_ptr->ret_type.ptr_removed();
 
     auto one = insert_const(dtype, global_ptr, 1, false /*insert_before_me*/);
@@ -2464,22 +2330,18 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
     }
     QD_ASSERT(snode->get_adjoint_checkbit() != nullptr);
     snode = snode->get_adjoint_checkbit();
-    auto global_ptr =
-        stmt->insert_before_me(Stmt::make<GlobalPtrStmt>(snode, dest->indices));
-    auto global_load =
-        stmt->insert_before_me(Stmt::make<GlobalLoadStmt>(global_ptr));
+    auto global_ptr = stmt->insert_before_me(Stmt::make<GlobalPtrStmt>(snode, dest->indices));
+    auto global_load = stmt->insert_before_me(Stmt::make<GlobalLoadStmt>(global_ptr));
     auto dtype = global_ptr->ret_type.ptr_removed();
     auto zero = insert_const(dtype, stmt, 0, /*insert_before_me=*/true);
-    auto check_equal = stmt->insert_before_me(
-        Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_eq, global_load, zero));
+    auto check_equal = stmt->insert_before_me(Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_eq, global_load, zero));
     std::string msg = fmt::format(
         "(kernel={}) Breaks the global data access rule. Snode {} is "
         "overwritten unexpectedly.",
         kernel_name_, dest->snode->get_node_type_name());
     msg += "\n" + stmt->get_tb();
 
-    stmt->insert_before_me(
-        Stmt::make<AssertStmt>(check_equal, msg, std::vector<Stmt *>()));
+    stmt->insert_before_me(Stmt::make<AssertStmt>(check_equal, msg, std::vector<Stmt *>()));
   }
 
   void visit(GlobalStoreStmt *stmt) override {
@@ -2514,9 +2376,7 @@ class GloablDataAccessRuleChecker : public BasicStmtVisitor {
   std::string kernel_name_;
 };
 
-void differentiation_validation_check(IRNode *root,
-                                      const CompileConfig &config,
-                                      const std::string &kernel_name) {
+void differentiation_validation_check(IRNode *root, const CompileConfig &config, const std::string &kernel_name) {
   return irpass::GloablDataAccessRuleChecker::run(root, kernel_name);
 }
 

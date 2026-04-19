@@ -11,9 +11,7 @@ namespace LLVM {
 KernelCompiler::KernelCompiler(Config config) : config_(std::move(config)) {
 }
 
-KernelCompiler::IRNodePtr KernelCompiler::compile(
-    const CompileConfig &compile_config,
-    const Kernel &kernel_def) const {
+KernelCompiler::IRNodePtr KernelCompiler::compile(const CompileConfig &compile_config, const Kernel &kernel_def) const {
   auto ir = irpass::analysis::clone(kernel_def.ir.get());
   bool verbose = compile_config.print_ir;
   if (kernel_def.is_accessor && !compile_config.print_accessor_ir) {
@@ -28,14 +26,12 @@ KernelCompiler::IRNodePtr KernelCompiler::compile(
   return ir;
 }
 
-KernelCompiler::CKDPtr KernelCompiler::compile(
-    const CompileConfig &compile_config,
-    const DeviceCapabilityConfig &device_caps,
-    const Kernel &kernel_def,
-    IRNode &chi_ir) const {
+KernelCompiler::CKDPtr KernelCompiler::compile(const CompileConfig &compile_config,
+                                               const DeviceCapabilityConfig &device_caps,
+                                               const Kernel &kernel_def,
+                                               IRNode &chi_ir) const {
   LLVM::CompiledKernelData::InternalData data;
-  auto codegen = KernelCodeGen::create(compile_config, &kernel_def, &chi_ir,
-                                       *config_.tlctx);
+  auto codegen = KernelCodeGen::create(compile_config, &kernel_def, &chi_ir, *config_.tlctx);
   data.compiled_data = codegen->compile_kernel_to_module();
   data.args.reserve(kernel_def.nested_parameters.size());
   for (const auto &p : kernel_def.nested_parameters)

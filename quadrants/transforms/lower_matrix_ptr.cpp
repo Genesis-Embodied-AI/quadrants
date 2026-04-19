@@ -17,8 +17,7 @@ bool is_aos_matrix_of_global_ptr(MatrixOfGlobalPtrStmt *stmt) {
   SNode *parent_snode = snodes[0]->parent;
   for (auto snode : snodes) {
     QD_ASSERT(snode->type == SNodeType::place);
-    if (snode->parent != parent_snode ||
-        parent_snode->type != SNodeType::dense) {
+    if (snode->parent != parent_snode || parent_snode->type != SNodeType::dense) {
       is_continuous_addr = false;
       break;
     }
@@ -46,8 +45,7 @@ class GatherValidAOSGlobalPtrStmt : public BasicStmtVisitor {
         invalid_aos_global_ptr_stmts_.insert(stmt->origin);
       }
 
-      if (origin->snodes[0]->dt->is<PointerType>() &&
-          origin->snodes[0]->dt->as<PointerType>()->is_bit_pointer()) {
+      if (origin->snodes[0]->dt->is<PointerType>() && origin->snodes[0]->dt->as<PointerType>()->is_bit_pointer()) {
         invalid_aos_global_ptr_stmts_.insert(stmt->origin);
       }
 
@@ -67,11 +65,8 @@ class LowerAOSGlobalPtrStmt : public BasicStmtVisitor {
   DelayedIRModifier delayed_modifier_;
   std::unordered_set<Stmt *> invalid_aos_global_ptr_stmts_;
 
-  explicit LowerAOSGlobalPtrStmt(
-      IRNode *node,
-      std::unordered_set<Stmt *> &invalid_aos_global_ptr_stmts)
-      : immediate_modifier_(node),
-        invalid_aos_global_ptr_stmts_(invalid_aos_global_ptr_stmts) {
+  explicit LowerAOSGlobalPtrStmt(IRNode *node, std::unordered_set<Stmt *> &invalid_aos_global_ptr_stmts)
+      : immediate_modifier_(node), invalid_aos_global_ptr_stmts_(invalid_aos_global_ptr_stmts) {
     node->accept(this);
 
     delayed_modifier_.modify_ir();
@@ -83,8 +78,7 @@ class LowerAOSGlobalPtrStmt : public BasicStmtVisitor {
     auto indices = stmt->indices;
     auto snodes = stmt->snodes;
 
-    if (is_aos && invalid_aos_global_ptr_stmts_.find(stmt) ==
-                      invalid_aos_global_ptr_stmts_.end()) {
+    if (is_aos && invalid_aos_global_ptr_stmts_.find(stmt) == invalid_aos_global_ptr_stmts_.end()) {
       auto new_stmt = std::make_unique<GlobalPtrStmt>(snodes[0], indices);
       new_stmt->ret_type = ret_type;
       new_stmt->ret_type.set_is_pointer(true);
@@ -171,8 +165,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
   template <typename T>
   void scalarize_store_stmt(T *stmt) {
     if (stmt->dest->template is<MatrixOfGlobalPtrStmt>()) {
-      auto matrix_of_global_ptr_stmt =
-          stmt->dest->template as<MatrixOfGlobalPtrStmt>();
+      auto matrix_of_global_ptr_stmt = stmt->dest->template as<MatrixOfGlobalPtrStmt>();
       auto val = stmt->val;
       auto val_tensor_type = val->ret_type->template as<TensorType>();
       int num_elements = val_tensor_type->get_num_elements();
@@ -188,21 +181,18 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       for (int i = 0; i < num_elements; i++) {
         auto const_stmt = std::make_unique<ConstStmt>(TypedConstant(i));
 
-        auto matrix_ptr_stmt =
-            std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
+        auto matrix_ptr_stmt = std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
         matrix_ptr_stmt->ret_type = primitive_type;
         matrix_ptr_stmt->ret_type.set_is_pointer(true);
 
         auto load_stmt = std::make_unique<LocalLoadStmt>(matrix_ptr_stmt.get());
         load_stmt->ret_type = primitive_type;
 
-        auto global_ptr_stmt = std::make_unique<GlobalPtrStmt>(
-            matrix_of_global_ptr_stmt->snodes[i],
-            matrix_of_global_ptr_stmt->indices);
+        auto global_ptr_stmt =
+            std::make_unique<GlobalPtrStmt>(matrix_of_global_ptr_stmt->snodes[i], matrix_of_global_ptr_stmt->indices);
         global_ptr_stmt->ret_type.set_is_pointer(true);
 
-        auto store_stmt =
-            std::make_unique<T>(global_ptr_stmt.get(), load_stmt.get());
+        auto store_stmt = std::make_unique<T>(global_ptr_stmt.get(), load_stmt.get());
 
         delayed_modifier_.insert_before(stmt, std::move(const_stmt));
         delayed_modifier_.insert_before(stmt, std::move(matrix_ptr_stmt));
@@ -214,8 +204,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       delayed_modifier_.erase(stmt);
 
     } else if (stmt->dest->template is<MatrixOfMatrixPtrStmt>()) {
-      auto matrix_of_matrix_ptr_stmt =
-          stmt->dest->template as<MatrixOfMatrixPtrStmt>();
+      auto matrix_of_matrix_ptr_stmt = stmt->dest->template as<MatrixOfMatrixPtrStmt>();
       auto val = stmt->val;
       auto val_tensor_type = val->ret_type->template as<TensorType>();
       int num_elements = val_tensor_type->get_num_elements();
@@ -231,16 +220,14 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       for (int i = 0; i < num_elements; i++) {
         auto const_stmt = std::make_unique<ConstStmt>(TypedConstant(i));
 
-        auto matrix_ptr_stmt =
-            std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
+        auto matrix_ptr_stmt = std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
         matrix_ptr_stmt->ret_type = primitive_type;
         matrix_ptr_stmt->ret_type.set_is_pointer(true);
 
         auto load_stmt = std::make_unique<LocalLoadStmt>(matrix_ptr_stmt.get());
         load_stmt->ret_type = primitive_type;
 
-        auto store_stmt = std::make_unique<T>(
-            matrix_of_matrix_ptr_stmt->stmts[i], load_stmt.get());
+        auto store_stmt = std::make_unique<T>(matrix_of_matrix_ptr_stmt->stmts[i], load_stmt.get());
 
         delayed_modifier_.insert_before(stmt, std::move(const_stmt));
         delayed_modifier_.insert_before(stmt, std::move(matrix_ptr_stmt));
@@ -294,8 +281,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
   template <typename T>
   void scalarize_load_stmt(T *stmt) {
     if (stmt->src->template is<MatrixOfGlobalPtrStmt>()) {
-      auto matrix_of_global_ptr_stmt =
-          stmt->src->template as<MatrixOfGlobalPtrStmt>();
+      auto matrix_of_global_ptr_stmt = stmt->src->template as<MatrixOfGlobalPtrStmt>();
       auto dest_tensor_type = stmt->ret_type->template as<TensorType>();
 
       std::vector<Stmt *> matrix_init_values;
@@ -303,9 +289,8 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
 
       auto primitive_type = dest_tensor_type->get_element_type();
       for (size_t i = 0; i < num_elements; i++) {
-        auto global_ptr_stmt = std::make_unique<GlobalPtrStmt>(
-            matrix_of_global_ptr_stmt->snodes[i],
-            matrix_of_global_ptr_stmt->indices);
+        auto global_ptr_stmt =
+            std::make_unique<GlobalPtrStmt>(matrix_of_global_ptr_stmt->snodes[i], matrix_of_global_ptr_stmt->indices);
         global_ptr_stmt->ret_type.set_is_pointer(true);
 
         auto load_stmt = std::make_unique<T>(global_ptr_stmt.get());
@@ -317,8 +302,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
         delayed_modifier_.insert_before(stmt, std::move(load_stmt));
       }
 
-      auto matrix_init_stmt =
-          std::make_unique<MatrixInitStmt>(matrix_init_values);
+      auto matrix_init_stmt = std::make_unique<MatrixInitStmt>(matrix_init_values);
       matrix_init_stmt->ret_type = stmt->ret_type;
 
       stmt->replace_usages_with(matrix_init_stmt.get());
@@ -326,8 +310,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       delayed_modifier_.erase(stmt);
 
     } else if (stmt->src->template is<MatrixOfMatrixPtrStmt>()) {
-      auto matrix_of_matrix_ptr_stmt =
-          stmt->src->template as<MatrixOfMatrixPtrStmt>();
+      auto matrix_of_matrix_ptr_stmt = stmt->src->template as<MatrixOfMatrixPtrStmt>();
       auto dest_tensor_type = stmt->ret_type->template as<TensorType>();
 
       std::vector<Stmt *> matrix_init_values;
@@ -345,8 +328,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
         delayed_modifier_.insert_before(stmt, std::move(load_stmt));
       }
 
-      auto matrix_init_stmt =
-          std::make_unique<MatrixInitStmt>(matrix_init_values);
+      auto matrix_init_stmt = std::make_unique<MatrixInitStmt>(matrix_init_values);
       matrix_init_stmt->ret_type = stmt->ret_type;
 
       stmt->replace_usages_with(matrix_init_stmt.get());
@@ -423,21 +405,18 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       for (int i = 0; i < num_elements; i++) {
         auto const_stmt = std::make_unique<ConstStmt>(TypedConstant(i));
 
-        auto matrix_ptr_stmt =
-            std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
+        auto matrix_ptr_stmt = std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
         matrix_ptr_stmt->ret_type = primitive_type;
         matrix_ptr_stmt->ret_type.set_is_pointer(true);
 
         auto load_stmt = std::make_unique<LocalLoadStmt>(matrix_ptr_stmt.get());
         load_stmt->ret_type = primitive_type;
 
-        auto global_ptr_stmt = std::make_unique<GlobalPtrStmt>(
-            matrix_of_global_ptr_stmt->snodes[i],
-            matrix_of_global_ptr_stmt->indices);
+        auto global_ptr_stmt =
+            std::make_unique<GlobalPtrStmt>(matrix_of_global_ptr_stmt->snodes[i], matrix_of_global_ptr_stmt->indices);
         global_ptr_stmt->ret_type.set_is_pointer(true);
 
-        auto atomic_stmt = std::make_unique<AtomicOpStmt>(
-            stmt->op_type, global_ptr_stmt.get(), load_stmt.get());
+        auto atomic_stmt = std::make_unique<AtomicOpStmt>(stmt->op_type, global_ptr_stmt.get(), load_stmt.get());
         atomic_stmt->ret_type = primitive_type;
 
         matrix_init_values.push_back(atomic_stmt.get());
@@ -449,8 +428,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
         delayed_modifier_.insert_before(stmt, std::move(atomic_stmt));
       }
 
-      auto matrix_init_stmt =
-          std::make_unique<MatrixInitStmt>(matrix_init_values);
+      auto matrix_init_stmt = std::make_unique<MatrixInitStmt>(matrix_init_values);
       matrix_init_stmt->ret_type = stmt->ret_type;
 
       stmt->replace_usages_with(matrix_init_stmt.get());
@@ -476,17 +454,15 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
       for (int i = 0; i < num_elements; i++) {
         auto const_stmt = std::make_unique<ConstStmt>(TypedConstant(i));
 
-        auto matrix_ptr_stmt =
-            std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
+        auto matrix_ptr_stmt = std::make_unique<MatrixPtrStmt>(alloca_stmt_ptr, const_stmt.get());
         matrix_ptr_stmt->ret_type = primitive_type;
         matrix_ptr_stmt->ret_type.set_is_pointer(true);
 
         auto load_stmt = std::make_unique<LocalLoadStmt>(matrix_ptr_stmt.get());
         load_stmt->ret_type = primitive_type;
 
-        auto atomic_stmt = std::make_unique<AtomicOpStmt>(
-            stmt->op_type, matrix_of_matrix_ptr_stmt->stmts[i],
-            load_stmt.get());
+        auto atomic_stmt =
+            std::make_unique<AtomicOpStmt>(stmt->op_type, matrix_of_matrix_ptr_stmt->stmts[i], load_stmt.get());
         atomic_stmt->ret_type = primitive_type;
 
         matrix_init_values.push_back(atomic_stmt.get());
@@ -497,8 +473,7 @@ class ScalarizeMatrixPtr : public BasicStmtVisitor {
         delayed_modifier_.insert_before(stmt, std::move(atomic_stmt));
       }
 
-      auto matrix_init_stmt =
-          std::make_unique<MatrixInitStmt>(matrix_init_values);
+      auto matrix_init_stmt = std::make_unique<MatrixInitStmt>(matrix_init_values);
       matrix_init_stmt->ret_type = stmt->ret_type;
 
       stmt->replace_usages_with(matrix_init_stmt.get());
@@ -522,28 +497,21 @@ class LowerMatrixPtr : public BasicStmtVisitor {
       auto origin = stmt->origin->as<MatrixOfGlobalPtrStmt>();
       if (stmt->offset->is<ConstStmt>()) {
         auto offset = stmt->offset->as<ConstStmt>();
-        auto lowered = std::make_unique<GlobalPtrStmt>(
-            origin->snodes[offset->val.val_int()], origin->indices);
+        auto lowered = std::make_unique<GlobalPtrStmt>(origin->snodes[offset->val.val_int()], origin->indices);
         lowered->ret_type.set_is_pointer(true);
         stmt->replace_usages_with(lowered.get());
         modifier_.insert_before(stmt, std::move(lowered));
         modifier_.erase(stmt);
       } else {
-        QD_ASSERT_INFO(
-            origin->dynamic_indexable,
-            "Element of the MatrixField is not dynamic indexable.\n{}",
-            stmt->get_tb());
-        auto stride = std::make_unique<ConstStmt>(
-            TypedConstant(origin->dynamic_index_stride));
-        auto offset = std::make_unique<BinaryOpStmt>(
-            BinaryOpType::mul, stmt->offset, stride.get());
+        QD_ASSERT_INFO(origin->dynamic_indexable, "Element of the MatrixField is not dynamic indexable.\n{}",
+                       stmt->get_tb());
+        auto stride = std::make_unique<ConstStmt>(TypedConstant(origin->dynamic_index_stride));
+        auto offset = std::make_unique<BinaryOpStmt>(BinaryOpType::mul, stmt->offset, stride.get());
         offset->ret_type = stmt->offset->ret_type;
 
-        auto ptr_base =
-            std::make_unique<GlobalPtrStmt>(origin->snodes[0], origin->indices);
+        auto ptr_base = std::make_unique<GlobalPtrStmt>(origin->snodes[0], origin->indices);
         ptr_base->ret_type.set_is_pointer(true);
-        auto lowered =
-            std::make_unique<MatrixPtrStmt>(ptr_base.get(), offset.get());
+        auto lowered = std::make_unique<MatrixPtrStmt>(ptr_base.get(), offset.get());
         stmt->replace_usages_with(lowered.get());
         modifier_.insert_before(stmt, std::move(stride));
         modifier_.insert_before(stmt, std::move(offset));

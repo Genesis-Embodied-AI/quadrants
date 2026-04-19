@@ -5,8 +5,7 @@
 
 namespace quadrants::lang {
 
-Function::Function(Program *program, const FunctionKey &func_key)
-    : func_key(func_key) {
+Function::Function(Program *program, const FunctionKey &func_key) : func_key(func_key) {
   this->program = program;
   arch = program->compile_config().arch;
 }

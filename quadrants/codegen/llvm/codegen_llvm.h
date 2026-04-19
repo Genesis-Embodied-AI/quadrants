@@ -23,9 +23,7 @@ class FunctionCreationGuard {
   llvm::BasicBlock *old_entry, *allocas, *entry, *old_final, *final;
   llvm::IRBuilder<>::InsertPoint ip;
 
-  FunctionCreationGuard(TaskCodeGenLLVM *mb,
-                        std::vector<llvm::Type *> arguments,
-                        const std::string &func_name);
+  FunctionCreationGuard(TaskCodeGenLLVM *mb, std::vector<llvm::Type *> arguments, const std::string &func_name);
 
   ~FunctionCreationGuard();
 };
@@ -113,19 +111,15 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *get_runtime();
 
-  void emit_struct_meta_base(const std::string &name,
-                             llvm::Value *node_meta,
-                             SNode *snode);
+  void emit_struct_meta_base(const std::string &name, llvm::Value *node_meta, SNode *snode);
 
-  void create_elementwise_binary(
-      BinaryOpStmt *stmt,
-      std::function<llvm::Value *(llvm::Value *lhs, llvm::Value *rhs)> f);
+  void create_elementwise_binary(BinaryOpStmt *stmt,
+                                 std::function<llvm::Value *(llvm::Value *lhs, llvm::Value *rhs)> f);
 
-  void create_elementwise_cast(
-      UnaryOpStmt *stmt,
-      llvm::Type *to_ty,
-      std::function<llvm::Value *(llvm::Value *, llvm::Type *)> f,
-      bool on_self = false);
+  void create_elementwise_cast(UnaryOpStmt *stmt,
+                               llvm::Type *to_ty,
+                               std::function<llvm::Value *(llvm::Value *, llvm::Type *)> f,
+                               bool on_self = false);
 
   std::unique_ptr<RuntimeObject> emit_struct_meta_object(SNode *snode);
 
@@ -144,19 +138,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
    */
   virtual LLVMCompiledTask run_compilation();
   // For debugging only
-  virtual llvm::Value *create_print(std::string tag,
-                                    DataType dt,
-                                    llvm::Value *value);
+  virtual llvm::Value *create_print(std::string tag, DataType dt, llvm::Value *value);
 
   llvm::Value *create_print(std::string tag, llvm::Value *value);
 
-  void set_struct_to_buffer(const StructType *struct_type,
-                            llvm::Value *buffer,
-                            const std::vector<Stmt *> &elements);
+  void set_struct_to_buffer(const StructType *struct_type, llvm::Value *buffer, const std::vector<Stmt *> &elements);
 
-  llvm::Value *cast_pointer(llvm::Value *val,
-                            std::string dest_ty_name,
-                            int addr_space = 0);
+  llvm::Value *cast_pointer(llvm::Value *val, std::string dest_ty_name, int addr_space = 0);
 
   void emit_list_gen(OffloadedStmt *listgen);
 
@@ -170,9 +158,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Function *get_struct_function(const std::string &name, int tree_id);
 
   template <typename... Args>
-  llvm::Value *call_struct_func(int tree_id,
-                                const std::string &func_name,
-                                Args &&...args);
+  llvm::Value *call_struct_func(int tree_id, const std::string &func_name, Args &&...args);
 
   void create_increment(llvm::Value *ptr, llvm::Value *value);
 
@@ -242,11 +228,10 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   virtual llvm::Value *integral_type_atomic(AtomicOpStmt *stmt);
 
-  virtual llvm::Value *atomic_op_using_cas(
-      llvm::Value *output_address,
-      llvm::Value *val,
-      std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
-      const DataType &type);
+  virtual llvm::Value *atomic_op_using_cas(llvm::Value *output_address,
+                                           llvm::Value *val,
+                                           std::function<llvm::Value *(llvm::Value *, llvm::Value *)> op,
+                                           const DataType &type);
 
   virtual llvm::Value *real_type_atomic(AtomicOpStmt *stmt);
 
@@ -256,11 +241,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   void visit(MatrixPtrStmt *stmt) override;
 
-  void store_quant_int(llvm::Value *ptr,
-                       llvm::Type *physical_type,
-                       QuantIntType *qit,
-                       llvm::Value *value,
-                       bool atomic);
+  void store_quant_int(llvm::Value *ptr, llvm::Type *physical_type, QuantIntType *qit, llvm::Value *value, bool atomic);
 
   void store_quant_fixed(llvm::Value *ptr,
                          llvm::Type *physical_type,
@@ -268,32 +249,21 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
                          llvm::Value *value,
                          bool atomic);
 
-  void store_masked(llvm::Value *ptr,
-                    llvm::Type *ty,
-                    uint64 mask,
-                    llvm::Value *value,
-                    bool atomic);
+  void store_masked(llvm::Value *ptr, llvm::Type *ty, uint64 mask, llvm::Value *value, bool atomic);
 
   void visit(GlobalStoreStmt *stmt) override;
 
-  llvm::Value *quant_int_or_quant_fixed_to_bits(llvm::Value *val,
-                                                Type *input_type,
-                                                llvm::Type *output_type);
+  llvm::Value *quant_int_or_quant_fixed_to_bits(llvm::Value *val, Type *input_type, llvm::Type *output_type);
 
   void visit(BitStructStoreStmt *stmt) override;
 
   void store_quant_floats_with_shared_exponents(BitStructStoreStmt *stmt);
 
-  llvm::Value *extract_quant_float(llvm::Value *physical_value,
-                                   BitStructType *bit_struct,
-                                   int digits_id);
+  llvm::Value *extract_quant_float(llvm::Value *physical_value, BitStructType *bit_struct, int digits_id);
 
-  llvm::Value *extract_quant_int(llvm::Value *physical_value,
-                                 llvm::Value *bit_offset,
-                                 QuantIntType *qit);
+  llvm::Value *extract_quant_int(llvm::Value *physical_value, llvm::Value *bit_offset, QuantIntType *qit);
 
-  llvm::Value *reconstruct_quant_fixed(llvm::Value *digits,
-                                       QuantFixedType *qfxt);
+  llvm::Value *reconstruct_quant_fixed(llvm::Value *digits, QuantFixedType *qfxt);
 
   llvm::Value *reconstruct_quant_float(llvm::Value *input_digits,
                                        llvm::Value *input_exponent_val,
@@ -330,17 +300,14 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
     return false;  // on CPU devices just pass in a pointer
   }
 
-  std::string init_offloaded_task_function(OffloadedStmt *stmt,
-                                           std::string suffix = "");
+  std::string init_offloaded_task_function(OffloadedStmt *stmt, std::string suffix = "");
 
   void finalize_offloaded_task_function();
 
-  FunctionCreationGuard get_function_creation_guard(
-      std::vector<llvm::Type *> argument_types,
-      const std::string &func_name = "function_body");
+  FunctionCreationGuard get_function_creation_guard(std::vector<llvm::Type *> argument_types,
+                                                    const std::string &func_name = "function_body");
 
-  std::tuple<llvm::Value *, llvm::Value *> get_range_for_bounds(
-      OffloadedStmt *stmt);
+  std::tuple<llvm::Value *, llvm::Value *> get_range_for_bounds(OffloadedStmt *stmt);
 
   virtual void create_offload_range_for(OffloadedStmt *stmt) = 0;
 
@@ -404,9 +371,7 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   llvm::Value *extract_digits_from_f32(llvm::Value *f, bool full);
 
-  llvm::Value *extract_digits_from_f32_with_shared_exponent(
-      llvm::Value *f,
-      llvm::Value *shared_exp);
+  llvm::Value *extract_digits_from_f32_with_shared_exponent(llvm::Value *f, llvm::Value *shared_exp);
 
   llvm::Value *get_exponent_offset(llvm::Value *exponent, QuantFloatType *qflt);
 

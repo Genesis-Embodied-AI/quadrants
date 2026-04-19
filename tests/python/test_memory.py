@@ -19,6 +19,37 @@ def test_memory_allocate():
         x[i] = i
 
 
+@pytest.mark.run_in_serial
+@test_utils.test()
+def test_ndarray_exceeds_default_device_memory_gb():
+    # device_memory_GB defaults to 1, so allocate an ndarray whose byte size exceeds 1 GiB to exercise that
+    # on-demand growth works without user-side pool tuning. On AMDGPU this path goes through hipMallocAsync since
+    # ROCm 5.2+; CUDA uses cuMemAllocAsync; CPU/Vulkan/Metal are unaffected by device_memory_GB.
+    n = (1 << 30) // 4 + 1
+    arr = qd.ndarray(qd.i32, shape=(n,))
+    assert arr[0] == 0
+    assert arr[n // 2] == 0
+    assert arr[n - 1] == 0
+
+
+@test_utils.test(require=qd.extension.sparse)
+def test_sparse_field_with_device_memory_pool():
+    # With the device memory pool active on CUDA / AMDGPU, the eager preallocate_runtime_memory() in
+    # materialize_runtime is skipped. Sparse (non-dense) SNode trees depend on a lazy fallback in
+    # initialize_llvm_runtime_snodes to wire up the device-side bump allocator; exercise that path.
+    x = qd.field(qd.i32)
+    qd.root.pointer(qd.i, 32).dense(qd.i, 8).place(x)
+
+    @qd.kernel
+    def write():
+        x[0] = 42
+        x[255] = 7
+
+    write()
+    assert x[0] == 42
+    assert x[255] == 7
+
+
 @test_utils.test(arch=get_host_arch_list())
 def test_oop_memory_leak():
     @qd.data_oriented
