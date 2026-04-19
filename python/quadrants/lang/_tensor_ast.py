@@ -1,7 +1,8 @@
 """AST pass that rewrites tensor subscripts inside ``@qd.kernel`` / ``@qd.func``.
 
-This is the Phase 3 sugar layer: lets users write logical subscripts on a
-:class:`~quadrants.lang._tensor._TensorBase` parameter directly inside a
+This is the Phase 3+ sugar layer: lets users write logical subscripts on a
+:class:`~quadrants.lang._tensor._TensorBase` parameter — *or any tensor
+field nested inside a dataclass parameter* (Phase 5) — directly inside a
 kernel body, e.g.
 
     @qd.kernel
@@ -9,16 +10,27 @@ kernel body, e.g.
         for i, j in qd.ndrange(n0, n1):
             t[i, j] = qd.f32(i + j)            # was: t.underlying[j, i] for layout=(1, 0)
 
-without having to spell out ``t.underlying[...]`` and manually permute
+    @dataclasses.dataclass
+    class Solver:
+        state: qd.Tensor
+        aux: qd.Tensor
+
+    @qd.kernel
+    def step(s: Solver, n0: qd.i32, n1: qd.i32):
+        for i, j in qd.ndrange(n0, n1):
+            s.state[i, j] = ...    # was: s.state.underlying[<perm of state's layout>]
+            s.aux[i, j] += ...     # each tensor field uses its own layout
+
+without having to spell out ``...underlying[...]`` and manually permute
 indices. The permutation is resolved at trace time from the bound
 ``Tensor.layout`` (which is part of the fastcache key, so each layout
 gets its own specialised compilation).
 
 The pass runs *before* the dataclass flattening pass
 (``unpack_ast_struct_expressions``); subscripts get rewritten from
-``t[i, j]`` to ``t.underlying[j, i]``, and the flattening pass then turns
-``t.underlying`` into the flattened name ``__qd_t__qd_underlying`` exactly
-as it does for any other dataclass field access.
+``<path>[i, j]`` to ``<path>.underlying[j, i]``, and the flattening pass
+then turns ``<path>.underlying`` into the standard flat name
+``__qd_<flat path>__qd_underlying``.
 
 Covers:
 - read:           ``x = t[i, j]``
@@ -27,19 +39,27 @@ Covers:
 - 1D / 2D / 3D / arbitrary rank
 - both backends (NdarrayTensor + FieldTensor) — backend-agnostic; only
   ``layout`` and the ``underlying`` attribute name are used.
+- single tensor params *and* tensor fields nested inside a dataclass
+  parameter, including arbitrarily deep nesting (``s.sub.state[i, j]``).
 
-Subscripts where the value is *not* a Name (e.g. ``f(t)[i, j]``) or where
-the Name does not refer to a tensor parameter are left untouched.
+Subscripts whose value is not an attribute path rooted at a registered
+tensor (e.g. ``f(t)[i, j]``, plain ``ndarray[i, j]``) are left untouched.
 """
 
 from __future__ import annotations
 
 import ast
+import dataclasses
 import inspect
 from typing import Any
 
 from quadrants.lang import _tensor
 from quadrants.lang._dataclass_util import create_flat_name
+
+# A tensor "path" is a tuple of attribute names from the kernel parameter
+# down to the tensor field — e.g. ``('t',)`` for a top-level param,
+# ``('s', 'state')`` for a nested field.
+TensorPath = tuple[str, ...]
 
 
 def _is_tensor_param_annotation(annotation: Any) -> bool:
@@ -51,64 +71,154 @@ def _is_tensor_param_annotation(annotation: Any) -> bool:
     )
 
 
-def _tensor_param_names(fn) -> list[str]:
-    """Names of parameters of ``fn`` whose annotation is a tensor backend variant."""
-    return [
-        name
-        for name, parameter in inspect.signature(fn).parameters.items()
-        if _is_tensor_param_annotation(parameter.annotation)
-    ]
+def _walk_dataclass_for_tensor_paths(prefix: TensorPath, dataclass_type: type) -> list[tuple[TensorPath, str]]:
+    """Recursively enumerate tensor fields inside a dataclass.
 
-
-def extract_tensor_params_from_kernel_args(fn, py_args: tuple[Any, ...]) -> dict[str, tuple[int, ...]]:
-    """Return ``{param_name: layout_tuple}`` for every kernel parameter typed
-    as a tensor backend variant.
-
-    Used on the kernel-call path, where ``py_args`` still contains the bound
-    Tensor instances positionally aligned with the function signature.
+    Returns a list of ``(path, layout_lookup_kind)`` pairs. Currently the
+    second element is unused and reserved for future per-backend customisation.
+    Nested dataclasses are walked depth-first.
     """
-    layouts: dict[str, tuple[int, ...]] = {}
+    out: list[tuple[TensorPath, str]] = []
+    for field in dataclasses.fields(dataclass_type):
+        sub_path = prefix + (field.name,)
+        if _is_tensor_param_annotation(field.type):
+            out.append((sub_path, "tensor"))
+        elif dataclasses.is_dataclass(field.type):
+            out.extend(_walk_dataclass_for_tensor_paths(sub_path, field.type))
+    return out
+
+
+def _resolve_tensor_value(root: Any, path_after_root: TensorPath) -> Any | None:
+    """Walk attribute chain from ``root`` to a (possibly nested) tensor value."""
+    val: Any = root
+    for attr in path_after_root:
+        val = getattr(val, attr, None)
+        if val is None:
+            return None
+    return val
+
+
+def extract_tensor_params_from_kernel_args(fn, py_args: tuple[Any, ...]) -> dict[TensorPath, tuple[int, ...]]:
+    """Return ``{path: layout_tuple}`` for every tensor reachable from a
+    kernel parameter — either directly typed as a tensor or nested as a
+    field inside a dataclass parameter.
+
+    Used on the kernel-call path, where ``py_args`` still contains the
+    bound parameter values (Tensor / dataclass instances) positionally
+    aligned with the function signature.
+    """
+    layouts: dict[TensorPath, tuple[int, ...]] = {}
     parameters = inspect.signature(fn).parameters
     for i, (name, parameter) in enumerate(parameters.items()):
-        if not _is_tensor_param_annotation(parameter.annotation):
-            continue
         if i >= len(py_args):
             continue
         bound = py_args[i]
-        if not isinstance(bound, _tensor._TensorBase):
-            # Annotation says tensor but caller passed something else; let the
-            # downstream binder produce the canonical error.
+
+        anno = parameter.annotation
+        if _is_tensor_param_annotation(anno):
+            if not isinstance(bound, _tensor._TensorBase):
+                continue
+            layouts[(name,)] = tuple(bound.layout)
             continue
-        layouts[name] = tuple(bound.layout)
+
+        if dataclasses.is_dataclass(anno):
+            for sub_path, _ in _walk_dataclass_for_tensor_paths((name,), anno):
+                value = _resolve_tensor_value(bound, sub_path[1:])
+                if not isinstance(value, _tensor._TensorBase):
+                    continue
+                layouts[sub_path] = tuple(value.layout)
     return layouts
 
 
 def extract_tensor_params_from_expanded_args(
     fn, py_args: tuple[Any, ...], arg_metas_expanded
-) -> dict[str, tuple[int, ...]]:
-    """Return ``{param_name: layout_tuple}`` for every tensor parameter of a
-    ``qd.func`` whose call has been expanded by the kernel-side
+) -> dict[TensorPath, tuple[int, ...]]:
+    """Return ``{path: layout_tuple}`` for every tensor (top-level or nested)
+    of a ``qd.func`` whose call has been expanded by the kernel-side
     ``CallTransformer``.
 
     The expansion replaces a ``Tensor`` instance with two flat fields named
-    ``__qd_{param}__qd_underlying`` and ``__qd_{param}__qd_layout``; the
-    layout slot's runtime value is the actual layout tuple. We match these
-    by name in ``arg_metas_expanded`` to locate the layout position.
+    ``__qd_{path}__qd_underlying`` and ``__qd_{path}__qd_layout`` (where
+    ``{path}`` is the ``__qd_``-joined dotted path); the layout slot's
+    runtime value is the actual layout tuple. We enumerate candidate paths
+    from the function signature (dataclass-aware), then look the layout up
+    by name in ``arg_metas_expanded``.
     """
     by_name = {meta.name: i for i, meta in enumerate(arg_metas_expanded)}
-    layouts: dict[str, tuple[int, ...]] = {}
-    for name in _tensor_param_names(fn):
-        layout_arg_name = create_flat_name(name, "layout")
+    layouts: dict[TensorPath, tuple[int, ...]] = {}
+    for path in _candidate_tensor_paths(fn):
+        layout_arg_name = _flat_name_for_path(path + ("layout",))
         idx = by_name.get(layout_arg_name)
         if idx is None or idx >= len(py_args):
             continue
         value = py_args[idx]
         if not isinstance(value, tuple):
-            # Pre-trace: layout slot might not yet be a python tuple if pruning
-            # changed the layout; skip and let the original error surface.
             continue
-        layouts[name] = value
+        layouts[path] = value
     return layouts
+
+
+def _candidate_tensor_paths(fn) -> list[TensorPath]:
+    """Static enumeration of every tensor path reachable through ``fn``'s
+    parameters (top-level or nested in a dataclass field)."""
+    paths: list[TensorPath] = []
+    parameters = inspect.signature(fn).parameters
+    for name, parameter in parameters.items():
+        anno = parameter.annotation
+        if _is_tensor_param_annotation(anno):
+            paths.append((name,))
+        elif dataclasses.is_dataclass(anno):
+            paths.extend(p for p, _ in _walk_dataclass_for_tensor_paths((name,), anno))
+    return paths
+
+
+def _flat_name_for_path(path: TensorPath) -> str:
+    """Fold ``('s', 'state', 'underlying')`` into ``'__qd_s__qd_state__qd_underlying'``.
+
+    Mirrors what :func:`unpack_ast_struct_expressions` does at runtime so
+    that name lookups against the dataclass-flatten pass output line up.
+    """
+    if not path:
+        raise ValueError("empty tensor path")
+    name = path[0]
+    for attr in path[1:]:
+        name = create_flat_name(name, attr)
+    return name
+
+
+# ---------------------------------------------------------------------------
+# AST helpers.
+# ---------------------------------------------------------------------------
+
+
+def _attr_chain_path(node: ast.AST) -> TensorPath | None:
+    """If ``node`` is a (possibly-nested) attribute chain rooted at a
+    ``Name``, return the dotted path as a tuple. Otherwise ``None``.
+
+    e.g. ``s.state.underlying`` → ``('s', 'state', 'underlying')``.
+    """
+    parts: list[str] = []
+    cur = node
+    while isinstance(cur, ast.Attribute):
+        parts.append(cur.attr)
+        cur = cur.value
+    if not isinstance(cur, ast.Name):
+        return None
+    parts.append(cur.id)
+    parts.reverse()
+    return tuple(parts)
+
+
+def _path_to_attr_chain(path: TensorPath, ctx: ast.expr_context | None = None) -> ast.expr:
+    """Build an AST for ``path[0].path[1]....path[-1]``."""
+    if ctx is None:
+        ctx = ast.Load()
+    if len(path) == 1:
+        return ast.Name(id=path[0], ctx=ctx)
+    inner: ast.expr = ast.Name(id=path[0], ctx=ast.Load())
+    for attr in path[1:-1]:
+        inner = ast.Attribute(value=inner, attr=attr, ctx=ast.Load())
+    return ast.Attribute(value=inner, attr=path[-1], ctx=ctx)
 
 
 def _permute_slice(slice_node: ast.AST, layout: tuple[int, ...]) -> ast.AST:
@@ -125,19 +235,13 @@ def _permute_slice(slice_node: ast.AST, layout: tuple[int, ...]) -> ast.AST:
     unchanged so we don't accidentally rewrite something exotic.
     """
     if len(layout) == 1:
-        # Identity permutation: nothing to do, regardless of how the user
-        # spelled the single index.
         return slice_node
 
     if not isinstance(slice_node, ast.Tuple):
-        # Single non-tuple index on a multi-dim tensor: caller error, but we
-        # leave the AST alone and let the downstream subscript path raise
-        # with its native error message.
         return slice_node
 
     elts = slice_node.elts
     if len(elts) != len(layout):
-        # Arity mismatch: same reasoning — leave alone.
         return slice_node
 
     permuted: list[ast.AST | None] = [None] * len(layout)
@@ -148,15 +252,15 @@ def _permute_slice(slice_node: ast.AST, layout: tuple[int, ...]) -> ast.AST:
 
 
 class _TensorSubscriptTransformer(ast.NodeTransformer):
-    """Rewrites ``t[idx]`` -> ``t.underlying[permuted_idx]`` for tensor
-    parameters whose layout is given in ``tensor_layouts``.
+    """Rewrites ``<path>[idx]`` -> ``<path>.underlying[permuted_idx]`` for
+    every attribute path registered in ``tensor_layouts``.
 
     The transformer rewrites only the ``Subscript`` *value* and *slice*
     nodes; ``ctx`` (Load / Store / Del) is preserved, so reads, plain
     assignments, and augmented assignments all flow through unchanged.
     """
 
-    def __init__(self, tensor_layouts: dict[str, tuple[int, ...]]) -> None:
+    def __init__(self, tensor_layouts: dict[TensorPath, tuple[int, ...]]) -> None:
         self.tensor_layouts = tensor_layouts
 
     def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
@@ -164,19 +268,15 @@ class _TensorSubscriptTransformer(ast.NodeTransformer):
         # ``t[other[i], j]``) get rewritten before we touch the outer one.
         self.generic_visit(node)
 
-        if not isinstance(node.value, ast.Name):
+        path = _attr_chain_path(node.value)
+        if path is None:
             return node
-        name = node.value.id
-        layout = self.tensor_layouts.get(name)
+        layout = self.tensor_layouts.get(path)
         if layout is None:
             return node
 
         permuted_slice = _permute_slice(node.slice, layout)
-        new_value = ast.Attribute(
-            value=ast.Name(id=name, ctx=ast.Load()),
-            attr="underlying",
-            ctx=ast.Load(),
-        )
+        new_value = _path_to_attr_chain(path + ("underlying",))
         new_value = ast.copy_location(new_value, node.value)
         new_node = ast.Subscript(
             value=new_value,
@@ -186,45 +286,46 @@ class _TensorSubscriptTransformer(ast.NodeTransformer):
         return ast.copy_location(new_node, node)
 
 
-def _make_keepalive_layout_stmt(name: str, lineno: int, col_offset: int) -> ast.stmt:
-    """Synthetic ``__qd_keepalive_<name>_layout = <name>.layout`` statement.
+def _make_keepalive_layout_stmt(path: TensorPath, lineno: int, col_offset: int) -> ast.stmt:
+    """Synthetic ``__qd_keepalive_<flat>_layout = <path>.layout`` statement.
 
-    Inserted at the top of a kernel/func body for each tensor param so that
+    Inserted at the top of a kernel/func body for each tensor path so that
     pruning sees the layout slot as used. The rewrite consumes the layout
     *value* at trace time (folded into the index permutation), but leaves
-    no literal reference to ``t.layout`` in the rewritten body. Without
-    this keepalive, pruning's pass-0 record for a ``qd.func`` would mark
-    ``__qd_<t>__qd_layout`` as unused, and pass-1 would re-trace with the
-    slot stripped — at which point this transformer can no longer learn
-    the layout to permute the subscripts, and ``t[i, j]`` reaches Quadrants
-    unrewritten and crashes.
+    no literal reference to ``<path>.layout`` in the rewritten body.
+    Without this keepalive, pruning's pass-0 record for a ``qd.func`` would
+    mark ``__qd_<flat>__qd_layout`` as unused, and pass-1 would re-trace
+    with the slot stripped — at which point this transformer can no longer
+    learn the layout to permute the subscripts.
 
     Assigning to a discarded local avoids the question of whether a bare
     expression statement is legal in Quadrants scope.
     """
-    target = ast.Name(id=f"__qd_keepalive_{name}_layout", ctx=ast.Store())
-    value = ast.Attribute(
-        value=ast.Name(id=name, ctx=ast.Load()),
-        attr="layout",
-        ctx=ast.Load(),
-    )
+    flat = "_".join(path)
+    target = ast.Name(id=f"__qd_keepalive_{flat}_layout", ctx=ast.Store())
+    value = _path_to_attr_chain(path + ("layout",))
     stmt = ast.Assign(targets=[target], value=value)
-    for node in (target, value, value.value, stmt):
-        node.lineno = lineno
-        node.col_offset = col_offset
-        node.end_lineno = lineno
-        node.end_col_offset = col_offset
+
+    def _stamp(n: ast.AST) -> None:
+        n.lineno = lineno
+        n.col_offset = col_offset
+        n.end_lineno = lineno
+        n.end_col_offset = col_offset
+        for child in ast.iter_child_nodes(n):
+            _stamp(child)
+
+    _stamp(stmt)
     return stmt
 
 
-def unpack_ast_tensor_subscripts(tree: ast.Module, tensor_layouts: dict[str, tuple[int, ...]]) -> ast.Module:
+def unpack_ast_tensor_subscripts(tree: ast.Module, tensor_layouts: dict[TensorPath, tuple[int, ...]]) -> ast.Module:
     """Apply :class:`_TensorSubscriptTransformer` to the tree, in place.
 
     Returns the (possibly mutated) tree with line numbers fixed up. If
     ``tensor_layouts`` is empty this is a near-no-op and skips the walk.
 
     Also injects a tiny "keep-layout-alive" statement at the top of the
-    target function body for each tensor param (see
+    target function body for each tensor path (see
     :func:`_make_keepalive_layout_stmt`).
     """
     if not tensor_layouts:
@@ -232,12 +333,11 @@ def unpack_ast_tensor_subscripts(tree: ast.Module, tensor_layouts: dict[str, tup
     transformer = _TensorSubscriptTransformer(tensor_layouts=tensor_layouts)
     new_tree = transformer.visit(tree)
 
-    # Inject keepalive statements at the top of the function body.
     if isinstance(new_tree, ast.Module) and new_tree.body and isinstance(new_tree.body[0], ast.FunctionDef):
         func_def = new_tree.body[0]
         first_stmt = func_def.body[0] if func_def.body else func_def
         keepalives = [
-            _make_keepalive_layout_stmt(name, first_stmt.lineno, first_stmt.col_offset) for name in tensor_layouts
+            _make_keepalive_layout_stmt(path, first_stmt.lineno, first_stmt.col_offset) for path in tensor_layouts
         ]
         func_def.body = keepalives + func_def.body
 
