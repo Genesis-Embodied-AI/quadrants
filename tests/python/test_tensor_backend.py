@@ -1,4 +1,4 @@
-"""Tests for ``qd.Backend`` (PR 1 of the flexible-tensors plan).
+"""Tests for ``qd.Backend``.
 
 Scope: this PR only ships the enum. No factory, no layout, no kernel
 integration. Tests cover symbol export, value, name, ordering, and IntEnum

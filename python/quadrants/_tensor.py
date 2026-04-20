@@ -1,11 +1,11 @@
-"""Flexible tensors: per-tensor backend and (later) layout.
+"""Tensors: per-tensor backend and (later) layout.
 
 This module is the user-facing entry point for selecting a tensor backend
 (``qd.field`` vs ``qd.ndarray``) on a per-tensor basis. Currently it exports
 only the :class:`Backend` enum; the ``qd.tensor(...)`` factory and
 ``layout=`` support land in subsequent PRs.
 
-See ``docs/source/user_guide/flexible_tensors.md`` for the user guide.
+See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
 
 from enum import IntEnum

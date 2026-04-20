@@ -25,7 +25,7 @@ from quadrants import (
     tools,
     types,
 )
-from quadrants._flexible import *
+from quadrants._tensor import *
 from quadrants._funcs import *
 from quadrants._lib.utils import warn_restricted_version
 from quadrants._logging import *
