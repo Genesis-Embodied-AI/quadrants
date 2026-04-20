@@ -1,10 +1,17 @@
 import math
+import pathlib
+import re
 
 import pytest
 
 import quadrants as qd
 
 from tests import test_utils
+
+# Diffable unary ops whose reverse formula accumulates a constant coefficient onto `stmt->operand` and therefore
+# does not need per-iteration operand spilling on the adstack. Update this set and `unary_collections` in
+# `quadrants/transforms/auto_diff.cpp` together when a new op lands in this class.
+_KNOWN_LINEAR_UNARY_OPS = {"neg"}
 
 _UNARY_OPS_PARAMS = [
     # Ops whose domain is all real values share a single `(step, offset)` pair that keeps the operand inside
@@ -25,6 +32,7 @@ _UNARY_OPS_PARAMS = [
     ("tan", 0.05, 0.0),
     ("log", 0.05, 0.0),
     ("sqrt", 0.05, 0.0),
+    ("rsqrt", 0.05, 0.0),
     ("asin", 0.05, 0.0),
     ("acos", 0.05, 0.0),
 ]
@@ -115,11 +123,10 @@ def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
 @pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "op_name",
-    # Pins MakeDual (forward mode) for the ops whose reverse formulas were just patched (tan/tanh/exp) plus the
-    # two audit-adjacent operand-based ops (log/sqrt). Forward mode is argued safe-by-construction because it
-    # runs in primal order and does not rely on BackupSSA spilling, but that invariant is not itself tested by
-    # the reverse-mode regression above; this test pins it.
-    ["tan", "tanh", "exp", "log", "sqrt"],
+    # Pins MakeDual (forward mode) for every nonlinear unary op currently in `unary_collections`. Forward mode
+    # is argued safe-by-construction because it runs in primal order and does not rely on BackupSSA spilling,
+    # but that invariant is not itself tested by the reverse-mode regression above; this test pins it.
+    ["tan", "tanh", "exp", "log", "sqrt", "rsqrt"],
 )
 @test_utils.test()
 def test_unary_forward_mode_derivative(op_name):
@@ -151,6 +158,57 @@ def test_unary_forward_mode_derivative(op_name):
     expected = float(x_t.grad.sum().item())
 
     assert loss.dual[None] == test_utils.approx(expected, rel=1e-4)
+
+
+def test_unary_collections_audit():
+    # Prevents drift between the Python unary op registry and the C++ `unary_collections` set in
+    # `quadrants/transforms/auto_diff.cpp`. Every unary op whose `MakeAdjoint` branch accumulates onto
+    # `stmt->operand` must be either in `unary_collections` (nonlinear: needs per-iteration operand spilling on
+    # the adstack inside dynamic loops) or in the local `_KNOWN_LINEAR_UNARY_OPS` allow-list (reverse formula
+    # uses a compile-time constant coefficient, so the single-slot spill path is correct for it). Forgetting to
+    # classify a new diffable unary op falls back to the single-slot spill and produces silently wrong gradients
+    # in dynamic loops.
+    src_path = pathlib.Path(__file__).resolve().parents[2] / "quadrants" / "transforms" / "auto_diff.cpp"
+    src = src_path.read_text()
+
+    cc_match = re.search(r"unary_collections\s*\{([^}]+)\}", src)
+    assert cc_match is not None, "unary_collections not located in auto_diff.cpp"
+    cpp_nonlinear = set(re.findall(r"UnaryOpType::(\w+)", cc_match.group(1)))
+
+    make_adjoint_start = src.find("class MakeAdjoint")
+    assert make_adjoint_start != -1, "class MakeAdjoint not located in auto_diff.cpp"
+    adj_start = src.find("void visit(UnaryOpStmt *stmt) override", make_adjoint_start)
+    assert adj_start != -1, "MakeAdjoint::visit(UnaryOpStmt*) not located in auto_diff.cpp"
+    adj_end = src.find("void visit(", adj_start + 10)
+    adj_block = src[adj_start:adj_end]
+    # Split the visitor's if/else-if chain into per-op segments, then classify each segment as "diffable math"
+    # iff its body accumulates onto `stmt->operand`. Two accumulate entry points are recognised: the raw
+    # `accumulate(stmt->operand, ...)` call (used by `neg` and `cast_value`) and the `acc(...)` lambda (used by
+    # every nonlinear branch; `acc` wraps `accumulate_unary_operand_checked` which validates that the adjoint
+    # formula does not read the forward `stmt` directly, and then delegates to `accumulate(stmt->operand, ...)`).
+    # `cast_value` is excluded: its conditional accumulate is gated on real-typed elements and is orthogonal to
+    # the `unary_collections` trade-off.
+    branches = re.split(r"\belse if\b", adj_block)
+    diffable_math = set()
+    for seg in branches:
+        op_match = re.search(r"UnaryOpType::(\w+)", seg)
+        if not op_match:
+            continue
+        if "accumulate(stmt->operand" in seg or re.search(r"\bacc\(", seg):
+            diffable_math.add(op_match.group(1))
+    diffable_math.discard("cast_value")
+
+    missing = diffable_math - cpp_nonlinear - _KNOWN_LINEAR_UNARY_OPS
+    assert not missing, (
+        f"Diffable unary ops not classified as nonlinear or linear: {sorted(missing)}. "
+        f"Add each one to `unary_collections` in quadrants/transforms/auto_diff.cpp (if nonlinear) or to "
+        f"`_KNOWN_LINEAR_UNARY_OPS` in this file (if linear)."
+    )
+    stray = cpp_nonlinear - diffable_math
+    assert not stray, (
+        f"`unary_collections` lists ops with no matching accumulate branch (`accumulate(stmt->operand, ...)` or "
+        f"`acc(...)`) in MakeAdjoint: {sorted(stray)}"
+    )
 
 
 @pytest.mark.xfail(
