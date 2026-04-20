@@ -17,12 +17,7 @@ Functions
    quadrants.lang.simt.subgroup.all_equal
    quadrants.lang.simt.subgroup.broadcast_first
    quadrants.lang.simt.subgroup.reduce_add
-   quadrants.lang.simt.subgroup.reduce_mul
-   quadrants.lang.simt.subgroup.reduce_min
-   quadrants.lang.simt.subgroup.reduce_max
-   quadrants.lang.simt.subgroup.reduce_and
-   quadrants.lang.simt.subgroup.reduce_or
-   quadrants.lang.simt.subgroup.reduce_xor
+   quadrants.lang.simt.subgroup.reduce_all_add
    quadrants.lang.simt.subgroup.inclusive_add
    quadrants.lang.simt.subgroup.inclusive_mul
    quadrants.lang.simt.subgroup.inclusive_min
@@ -60,19 +55,28 @@ Module Contents
 
 .. py:function:: broadcast_first(value)
 
-.. py:function:: reduce_add(value)
+.. py:function:: reduce_add(value, log2_size: template())
 
-.. py:function:: reduce_mul(value)
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
 
-.. py:function:: reduce_min(value)
+   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
+   (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
 
-.. py:function:: reduce_max(value)
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
 
-.. py:function:: reduce_and(value)
 
-.. py:function:: reduce_or(value)
+.. py:function:: reduce_all_add(value, log2_size: template())
 
-.. py:function:: reduce_xor(value)
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+   The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
+   does not exceed the active subgroup size on the target.
+
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
+
 
 .. py:function:: inclusive_add(value)
 
