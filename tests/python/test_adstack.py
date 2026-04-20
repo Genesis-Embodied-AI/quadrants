@@ -1,10 +1,14 @@
 import math
 import pathlib
 import re
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
 import quadrants as qd
+from quadrants.lang.misc import is_extension_supported
 
 from tests import test_utils
 
@@ -425,6 +429,160 @@ def test_adstack_basic_gradient_negative(n_iter):
 
     with pytest.raises(qd.QuadrantsCompilationError, match=r"non static range"):
         compute.grad()
+
+
+def _overflowing_compute(n_elements=1, n_iter=64):
+    # Shared kernel for the overflow tests. Builds `compute`, loads inputs, seeds the output gradient, and returns
+    # `(compute, x, y)` so each test can drive the grad launch and read back assertions itself. `n_iter=64` + 2
+    # adstack preamble pushes = 66 pushes, comfortably above `default_ad_stack_size=32`; `n_elements` controls how
+    # many threads run the overflowing loop in parallel.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    qd.root.dense(qd.i, n_elements).place(x, x.grad)
+    qd.root.place(y, y.grad)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(n_iter):
+                y[None] += qd.sin(v)
+                v = v + 1.0
+
+    for i in range(n_elements):
+        x[i] = 0.1 + 0.01 * i
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n_elements):
+        x.grad[i] = 0.0
+    return compute, x, y
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_raises():
+    # Runs a backward pass with a for-loop longer than the adstack can hold, and asserts the overflow surfaces as a
+    # regular Python exception on the next `qd.sync()` - not a silent wrong gradient and not a process crash. This
+    # is what users see when their differentiable kernel is too deep for the current `ad_stack_size`, and the error
+    # message should tell them how to raise the capacity.
+    #
+    # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
+    # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
+    # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
+    # on sync. The test launches the overflowing grad kernel and calls `qd.sync()` inside the same `pytest.raises`
+    # block so the deferred surfacing point is caught.
+    compute, _, _ = _overflowing_compute()
+    # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
+    # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
+    # matching only the message prefix.
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_flag_resets_after_catch():
+    # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
+    # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
+    # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
+    # impossible.
+    compute, _, _ = _overflowing_compute()
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+    # No new grad launch here - the flag must already be back to zero.
+    qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=1024)
+def test_adstack_large_capacity_resolves_overflow():
+    # Same kernel shape as `test_adstack_overflow_raises`, but with `ad_stack_size=1024` explicitly passed to
+    # `qd.init()`. Asserts that raising the capacity (rather than shrinking the loop) is a valid workaround and
+    # that the backward pass runs to completion with a correct gradient. This is the remediation path the overflow
+    # error message points users at.
+    compute, x, _ = _overflowing_compute()
+    compute.grad()
+    qd.sync()
+
+    # y += sin(v) iterated with v = x[0] + k for k = 0..63, so dy/dx[0] = sum_k cos(x[0] + k).
+    expected = sum(math.cos(0.1 + k) for k in range(64))
+    assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_multithreaded():
+    # Multi-element field so several threads execute the overflowing grad body in parallel. Asserts the overflow
+    # still surfaces as a single Python exception rather than deadlocking, crashing, or racing on the flag. Every
+    # thread writes the same flag value (non-zero), so a race on the write is benign; this test pins that the
+    # read side is also safe (one raise per sync regardless of how many threads flipped the bit).
+    compute, _, _ = _overflowing_compute(n_elements=16)
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+
+
+def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
+    # This test runs the kernel in a child process (not via `@test_utils.test`, which iterates arches), so it
+    # cannot rely on the decorator's `require=qd.extension.adstack` skip. Guard manually: skip if the CPU backend
+    # was not built with the adstack extension, matching what the sibling overflow tests get from the decorator.
+    if not is_extension_supported(qd.cpu, qd.extension.adstack):
+        pytest.skip("adstack extension not available on cpu")
+
+    # If a user launches an overflowing grad kernel and never calls `qd.sync()` before the process exits, the
+    # adstack-overflow flag is still set when Python interpreter teardown invokes `Program::finalize()`. The two
+    # teardown syncs inside `Program::finalize()` must not re-raise a `QuadrantsAssertionError` into the
+    # destructor path - doing so would terminate the process with `std::terminate()` instead of returning a clean
+    # exit code. A subprocess runs the overflowing-grad kernel without calling `qd.sync()` at all and exits; this
+    # test asserts that the child returns with exit code 0 rather than SIGABRT (-6) or any other non-zero code.
+    #
+    # Internal details: `Program::finalize()` invokes `program_impl_->pre_finalize()` before the two teardown
+    # `synchronize()` calls. `LlvmProgramImpl::pre_finalize()` sets `finalizing_ = true` so
+    # `LlvmProgramImpl::synchronize()` short-circuits `check_adstack_overflow()`. Note the flag must be set
+    # *before* those syncs run - setting it only inside `LlvmProgramImpl::finalize()` (which is dispatched after
+    # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
+    # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
+    # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
+    child_script = textwrap.dedent(
+        """
+        import quadrants as qd
+
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
+
+        x = qd.field(qd.f32)
+        y = qd.field(qd.f32)
+        qd.root.dense(qd.i, 1).place(x, x.grad)
+        qd.root.place(y, y.grad)
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                v = x[i]
+                for _ in range(64):
+                    y[None] += qd.sin(v)
+                    v = v + 1.0
+
+        x[0] = 0.1
+        y[None] = 0.0
+        compute()
+        y.grad[None] = 1.0
+        x.grad[0] = 0.0
+        compute.grad()
+        # Intentionally no qd.sync() and no try/except here: the adstack-overflow flag is left set when the
+        # process exits, so teardown must swallow it via the `finalizing_` guard rather than re-raising.
+        """
+    )
+    script_path = tmp_path / "overflow_teardown_child.py"
+    script_path.write_text(child_script)
+    # No `timeout=` on subprocess.run: pytest's own per-test timeout (`--timeout=...` in CI and locally) already
+    # terminates the whole test if the child deadlocks. Adding a second timeout here would only duplicate that
+    # safety net with a different failure mode (TimeoutExpired vs pytest-timeout's clean teardown).
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"child exited with {result.returncode}\n"
+            f"stdout:\n{result.stdout.decode()}\n"
+            f"stderr:\n{result.stderr.decode()}"
+        )
 
 
 def _run_sum_linear(

@@ -238,6 +238,24 @@ std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(SNode *snod
   return (std::size_t)runtime_query<int32>("ListManager_get_num_elements", result_buffer, data_list);
 }
 
+void LlvmRuntimeExecutor::check_adstack_overflow() {
+  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
+  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
+  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
+  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+    return;
+  }
+  auto *runtime_jit_module = get_runtime_jit_module();
+  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
+  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
+  if (flag != 0) {
+    throw QuadrantsAssertionError(
+        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
+        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass "
+        "ad_stack_size=N to qd.init() to raise the capacity.");
+  }
+}
+
 void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
   synchronize();
   auto *runtime_jit_module = get_runtime_jit_module();
@@ -617,6 +635,7 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
 
   QD_TRACE("LLVMRuntime initialized (excluding `root`)");
   llvm_runtime_ = fetch_result<void *>(quadrants_result_buffer_ret_value_id, *result_buffer_ptr);
+  result_buffer_cache_ = *result_buffer_ptr;
   QD_TRACE("LLVMRuntime pointer fetched");
 
   // Preallocate for runtime memory and update to LLVMRuntime
