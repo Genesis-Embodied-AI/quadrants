@@ -577,6 +577,10 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
+  // Dedicated flag for adstack-overflow-specific errors. Separate from `error_code` so assertions (which set
+  // error_code=1 and are only surfaced when `compile_config.debug` is on) do not leak through the always-on poll
+  // that Program::synchronize runs.
+  i64 adstack_overflow_flag = 0;
 
   Ptr result_buffer;
   i32 allocator_lock;
@@ -707,6 +711,14 @@ Ptr get_temporary_pointer(LLVMRuntime *runtime, u64 offset) {
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->set_result(quadrants_result_buffer_error_id, runtime->error_code);
   runtime->error_code = 0;
+}
+
+void runtime_retrieve_and_reset_adstack_overflow(LLVMRuntime *runtime) {
+  // Paired with the relaxed atomic write in `stack_push`. The host calls this only after the thread pool has
+  // joined, so strictly no synchronization is required here, but use `__atomic_exchange_n` anyway to keep the
+  // read/reset symmetric with the write and to avoid annotating the single shared field as half-atomic.
+  i64 flag = __atomic_exchange_n(&runtime->adstack_overflow_flag, (i64)0, __ATOMIC_RELAXED);
+  runtime->set_result(quadrants_result_buffer_error_id, flag);
 }
 
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
@@ -1095,41 +1107,6 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
-// FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
-// Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
-// reduction-pattern offsets (1, 2, 4, 8, 16).
-i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
-  return amdgpu_ds_bpermute((amdgpu_lane_id() + offset) * 4, value);
-}
-
-f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
-  union {
-    f32 f;
-    i32 i;
-  } u;
-  u.f = value;
-  u.i = amdgpu_shuffle_down_i32(offset, u.i);
-  return u.f;
-}
-
-i64 amdgpu_shuffle_down_i64(i32 offset, i64 value) {
-  i32 lo = (i32)(u64)value;
-  i32 hi = (i32)((u64)value >> 32);
-  lo = amdgpu_shuffle_down_i32(offset, lo);
-  hi = amdgpu_shuffle_down_i32(offset, hi);
-  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
-}
-
-f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
-  union {
-    f64 d;
-    i64 i;
-  } u;
-  u.d = value;
-  u.i = amdgpu_shuffle_down_i64(offset, u.i);
-  return u.d;
-}
-
 i32 cuda_lane_id() {
   return thread_idx() & 31;
 }
@@ -1163,38 +1140,6 @@ f64 cuda_shuffle_f64(i32 index, f64 value) {
   } u;
   u.d = value;
   u.i = cuda_shuffle_i64(index, u.i);
-  return u.d;
-}
-
-i32 cuda_shuffle_down_i32(i32 offset, i32 value) {
-  return cuda_shfl_down_sync_i32(0xFFFFFFFF, value, offset, 31);
-}
-
-f32 cuda_shuffle_down_f32(i32 offset, f32 value) {
-  union {
-    f32 f;
-    i32 i;
-  } u;
-  u.f = value;
-  u.i = cuda_shuffle_down_i32(offset, u.i);
-  return u.f;
-}
-
-i64 cuda_shuffle_down_i64(i32 offset, i64 value) {
-  i32 lo = (i32)(u64)value;
-  i32 hi = (i32)((u64)value >> 32);
-  lo = cuda_shuffle_down_i32(offset, lo);
-  hi = cuda_shuffle_down_i32(offset, hi);
-  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
-}
-
-f64 cuda_shuffle_down_f64(i32 offset, f64 value) {
-  union {
-    f64 d;
-    i64 i;
-  } u;
-  u.d = value;
-  u.i = cuda_shuffle_down_i64(offset, u.i);
   return u.d;
 }
 
@@ -1953,9 +1898,17 @@ void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) 
 
 extern "C" {  // local stack operations
 
+// The stack index `n` is clamped on read so that overflow (push past capacity) does not let subsequent pops and
+// top-accesses underflow it and index far out of bounds. The corresponding stack_push sets
+// `runtime->adstack_overflow_flag` and skips the increment instead of trapping, so the host-side launcher
+// surfaces the failure as a Python exception rather than killing the process via __builtin_trap. When n == 0
+// (pop-after-overflow underflow path) we return a pointer to slot 0 - an uninitialized-but-in-bounds slot. The
+// caller will read garbage from it, but the host raises on `runtime->adstack_overflow_flag` before any such
+// value reaches user code.
 Ptr stack_top_primal(Ptr stack, std::size_t element_size) {
   auto n = *(u64 *)stack;
-  return stack + sizeof(u64) + (n - 1) * 2 * element_size;
+  std::size_t idx = n > 0 ? n - 1 : 0;
+  return stack + sizeof(u64) + idx * 2 * element_size;
 }
 
 Ptr stack_top_adjoint(Ptr stack, std::size_t element_size) {
@@ -1968,13 +1921,28 @@ void stack_init(Ptr stack) {
 
 void stack_pop(Ptr stack) {
   auto &n = *(u64 *)stack;
-  n--;
+  if (n > 0) {
+    n--;
+  }
 }
 
-void stack_push(Ptr stack, size_t max_num_elements, std::size_t element_size) {
+void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::size_t element_size) {
   u64 &n = *(u64 *)stack;
+  if (n + 1 > max_num_elements) {
+    // Overflow: the loop has more iterations than the adstack capacity. Skip the push and flip the dedicated
+    // overflow flag so the host launcher throws at sync. Multiple CPU threads can hit this branch concurrently
+    // (thread pool dispatch over a multi-element field), so write the sentinel through `__atomic_store_n` with
+    // relaxed ordering: on x86-64/ARM64 this compiles to a regular naturally-aligned store, but it satisfies the
+    // C++11 memory model (plain non-atomic writes from multiple threads to the same object are a data race, even
+    // when every writer stores the same value). The host only reads the flag from `check_adstack_overflow()`
+    // after the thread pool has joined, so no ordering beyond "happens eventually" is required.
+    // `locked_task` was avoided because the AMDGPU JIT cannot retarget its host-side machinery
+    // (`hipErrorNoBinaryForGpu`). Using a separate field (not `error_code`) keeps this check distinct from
+    // assertion machinery, which is debug-gated.
+    __atomic_store_n(&runtime->adstack_overflow_flag, (i64)1, __ATOMIC_RELAXED);
+    return;
+  }
   n += 1;
-  // TODO: assert n <= max_elements
   std::memset(stack_top_primal(stack, element_size), 0, element_size * 2);
 }
 
