@@ -34,8 +34,7 @@ class DemoteOperations : public BasicStmtVisitor {
       auto loop_guard = builder.get_loop_guard(loop);
       auto current_a = builder.create_local_load(a);
       auto current_b = builder.create_local_load(b);
-      auto if_stmt =
-          builder.create_if(builder.create_cmp_le(current_b, zero_rhs));
+      auto if_stmt = builder.create_if(builder.create_cmp_le(current_b, zero_rhs));
       {
         auto _ = builder.get_if_guard(if_stmt, true);
         builder.create_break();
@@ -72,8 +71,7 @@ class DemoteOperations : public BasicStmtVisitor {
     auto final_result = transform_pow_op_impl(builder, lhs, rhs);
 
     stmt->replace_usages_with(final_result);
-    modifier.insert_before(
-        stmt, VecStatement(std::move(builder.extract_ir()->statements)));
+    modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
     modifier.erase(stmt);
   }
 
@@ -116,8 +114,7 @@ class DemoteOperations : public BasicStmtVisitor {
       IRBuilder builder;
       auto cur_result = transform_pow_op_impl(builder, cur_lhs, cur_rhs);
 
-      modifier.insert_before(
-          stmt, VecStatement(std::move(builder.extract_ir()->statements)));
+      modifier.insert_before(stmt, VecStatement(std::move(builder.extract_ir()->statements)));
       ret_stmts.push_back(cur_result);
     }
     auto new_matrix = Stmt::make<MatrixInitStmt>(ret_stmts);
@@ -127,9 +124,7 @@ class DemoteOperations : public BasicStmtVisitor {
     modifier.erase(stmt);
   }
 
-  std::unique_ptr<Stmt> demote_ifloordiv(BinaryOpStmt *stmt,
-                                         Stmt *lhs,
-                                         Stmt *rhs) {
+  std::unique_ptr<Stmt> demote_ifloordiv(BinaryOpStmt *stmt, Stmt *lhs, Stmt *rhs) {
     auto ret = Stmt::make<BinaryOpStmt>(BinaryOpType::div, lhs, rhs);
     auto zero = Stmt::make<ConstStmt>(TypedConstant(0));
 
@@ -144,24 +139,15 @@ class DemoteOperations : public BasicStmtVisitor {
       zero = std::move(matrix_zero);
     }
 
-    auto lhs_ltz =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_lt, lhs, zero.get());
-    auto rhs_ltz =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_lt, rhs, zero.get());
-    auto rhs_mul_ret =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::mul, rhs, ret.get());
-    auto cond1 = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, lhs_ltz.get(),
-                                          rhs_ltz.get());
-    auto cond2 =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, lhs, zero.get());
-    auto cond3 =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, rhs_mul_ret.get(), lhs);
-    auto cond12 = Stmt::make<BinaryOpStmt>(BinaryOpType::logical_and,
-                                           cond1.get(), cond2.get());
-    auto cond = Stmt::make<BinaryOpStmt>(BinaryOpType::logical_and,
-                                         cond12.get(), cond3.get());
-    auto real_ret =
-        Stmt::make<BinaryOpStmt>(BinaryOpType::sub, ret.get(), cond.get());
+    auto lhs_ltz = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_lt, lhs, zero.get());
+    auto rhs_ltz = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_lt, rhs, zero.get());
+    auto rhs_mul_ret = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, rhs, ret.get());
+    auto cond1 = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, lhs_ltz.get(), rhs_ltz.get());
+    auto cond2 = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, lhs, zero.get());
+    auto cond3 = Stmt::make<BinaryOpStmt>(BinaryOpType::cmp_ne, rhs_mul_ret.get(), lhs);
+    auto cond12 = Stmt::make<BinaryOpStmt>(BinaryOpType::logical_and, cond1.get(), cond2.get());
+    auto cond = Stmt::make<BinaryOpStmt>(BinaryOpType::logical_and, cond12.get(), cond3.get());
+    auto real_ret = Stmt::make<BinaryOpStmt>(BinaryOpType::sub, ret.get(), cond.get());
 
     modifier.insert_before(stmt, std::move(ret));
     modifier.insert_before(stmt, std::move(zero));
@@ -176,9 +162,7 @@ class DemoteOperations : public BasicStmtVisitor {
     return real_ret;
   }
 
-  std::unique_ptr<Stmt> demote_ffloor(BinaryOpStmt *stmt,
-                                      Stmt *lhs,
-                                      Stmt *rhs) {
+  std::unique_ptr<Stmt> demote_ffloor(BinaryOpStmt *stmt, Stmt *lhs, Stmt *rhs) {
     auto div = Stmt::make<BinaryOpStmt>(BinaryOpType::div, lhs, rhs);
     auto floor = Stmt::make<UnaryOpStmt>(UnaryOpType::floor, div.get());
     modifier.insert_before(stmt, std::move(div));
@@ -247,10 +231,8 @@ class DemoteOperations : public BasicStmtVisitor {
       auto unsigned_cast = Stmt::make<UnaryOpStmt>(UnaryOpType::cast_bits, lhs);
       unsigned_cast->as<UnaryOpStmt>()->cast_type =
           is_signed(lhs_prim_type) ? to_unsigned(lhs_prim_type) : lhs_prim_type;
-      auto shift = Stmt::make<BinaryOpStmt>(BinaryOpType::bit_sar,
-                                            unsigned_cast.get(), rhs);
-      auto signed_cast =
-          Stmt::make<UnaryOpStmt>(UnaryOpType::cast_bits, shift.get());
+      auto shift = Stmt::make<BinaryOpStmt>(BinaryOpType::bit_sar, unsigned_cast.get(), rhs);
+      auto signed_cast = Stmt::make<UnaryOpStmt>(UnaryOpType::cast_bits, shift.get());
       signed_cast->as<UnaryOpStmt>()->cast_type = lhs_prim_type;
       signed_cast->ret_type = stmt->ret_type;
       stmt->replace_usages_with(signed_cast.get());
@@ -278,8 +260,7 @@ class DemoteOperations : public BasicStmtVisitor {
       //     return result
       if (is_integral(rhs_type)) {
         transform_pow_op_scalar(stmt, lhs, rhs);
-      } else if (rhs_type->is<TensorType>() && lhs_type->is<TensorType>() &&
-                 is_integral(rhs_type.get_element_type())) {
+      } else if (rhs_type->is<TensorType>() && lhs_type->is<TensorType>() && is_integral(rhs_type.get_element_type())) {
         // For Power with TensorType'd operands, since IfStmt and WhileStmt
         // isn't compatible with TensorType'd condition statement,
         // we have to perform immediate scalarization with help from AllocaStmt.

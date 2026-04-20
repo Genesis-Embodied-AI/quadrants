@@ -27,8 +27,7 @@ inline std::string get_file_name_from_whole_path(const std::string &fn) {
 
 void write(std::string fn, const uint8 *data, std::size_t len) {
   mz_bool status;
-  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"),
-                  "Filename must end with .tcb.zip");
+  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"), "Filename must end with .tcb.zip");
 
   std::string fn_uncompressed = get_file_name_from_whole_path(fn);
   fn_uncompressed = std::string(fn_uncompressed.begin(),
@@ -37,10 +36,9 @@ void write(std::string fn, const uint8 *data, std::size_t len) {
 
   auto s_pComment = "Quadrants Binary File";
 
-  status = mz_zip_add_mem_to_archive_file_in_place(
-      fn.c_str(), fn_uncompressed.c_str(),
-      reinterpret_cast<char *>(const_cast<uint8 *>(data)), len, s_pComment,
-      (uint16)strlen(s_pComment), MZ_BEST_COMPRESSION);
+  status = mz_zip_add_mem_to_archive_file_in_place(fn.c_str(), fn_uncompressed.c_str(),
+                                                   reinterpret_cast<char *>(const_cast<uint8 *>(data)), len, s_pComment,
+                                                   (uint16)strlen(s_pComment), MZ_BEST_COMPRESSION);
   if (!status) {
     QD_ERROR("mz_zip_add_mem_to_archive_file_in_place failed!\n");
   }
@@ -51,8 +49,7 @@ void write(const std::string &fn, const std::string &data) {
 }
 
 std::vector<uint8> read(const std::string fn, bool verbose) {
-  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"),
-                  "Filename must end with .tcb.zip");
+  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"), "Filename must end with .tcb.zip");
 
   mz_zip_archive zip_archive;
   mz_zip_archive_file_stat file_stat;
@@ -72,8 +69,7 @@ std::vector<uint8> read(const std::string fn, bool verbose) {
     QD_TRACE(
         "Filename: {}, Comment: {}, Uncompressed size: {}, Compressed size: "
         "{}, Is Dir: {}\n",
-        file_stat.m_filename, file_stat.m_comment,
-        (uint)file_stat.m_uncomp_size, (uint)file_stat.m_comp_size,
+        file_stat.m_filename, file_stat.m_comment, (uint)file_stat.m_uncomp_size, (uint)file_stat.m_comp_size,
         mz_zip_reader_is_file_a_directory(&zip_archive, 0));
   }
 
@@ -91,8 +87,8 @@ std::vector<uint8> read(const std::string fn, bool verbose) {
   fn_uncompressed = std::string(fn_uncompressed.begin(),
                                 fn_uncompressed.end() - 4);  // remove .zip
   auto archive_filename = fn_uncompressed;
-  auto p = reinterpret_cast<const uint8 *>(mz_zip_reader_extract_file_to_heap(
-      &zip_archive, archive_filename.c_str(), &uncomp_size, 0));
+  auto p = reinterpret_cast<const uint8 *>(
+      mz_zip_reader_extract_file_to_heap(&zip_archive, archive_filename.c_str(), &uncomp_size, 0));
 
   if (!p) {
     mz_zip_reader_end(&zip_archive);
@@ -100,8 +96,7 @@ std::vector<uint8> read(const std::string fn, bool verbose) {
   }
 
   if (verbose) {
-    QD_TRACE("Successfully extracted file {}, size {}", archive_filename,
-             (uint)uncomp_size);
+    QD_TRACE("Successfully extracted file {}, size {}", archive_filename, (uint)uncomp_size);
     QD_TRACE("File data: {}", (const char *)p);
   }
 

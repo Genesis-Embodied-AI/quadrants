@@ -14,8 +14,7 @@ class Expr;
 class SNode;
 class FieldExpression;
 
-using SNodeFieldMap =
-    std::unordered_map<const SNode *, std::shared_ptr<FieldExpression>>;
+using SNodeFieldMap = std::unordered_map<const SNode *, std::shared_ptr<FieldExpression>>;
 
 void place_child(Expr *expr_arg,
                  const std::vector<int> &offset,
@@ -25,7 +24,6 @@ void place_child(Expr *expr_arg,
 
 void make_lazy_place(SNode *snode,
                      SNodeFieldMap *snode_to_fields,
-                     const std::function<void(std::unique_ptr<SNode> &,
-                                              std::vector<Expr> &)> &collect);
+                     const std::function<void(std::unique_ptr<SNode> &, std::vector<Expr> &)> &collect);
 
 }  // namespace quadrants::lang

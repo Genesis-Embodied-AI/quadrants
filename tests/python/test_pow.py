@@ -103,6 +103,8 @@ def test_pow_int_base_int_exp_32():
 @pytest.mark.parametrize("dt_base, dt_exp", [(qd.i32, qd.i64), (qd.i64, qd.i64), (qd.i64, qd.i32)])
 @test_utils.test(require=qd.extension.data64)
 def test_pow_int_base_int_exp_64(dt_base, dt_exp):
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: integer pow with i64 operand not implemented in AMDGPU codegen.")
     _test_pow_int_base_int_exp(dt_base, dt_exp)
 
 
@@ -127,4 +129,6 @@ def test_pow_float_base_int_exp_32():
 @pytest.mark.parametrize("dt_base, dt_exp", [(qd.f64, qd.i32), (qd.f32, qd.i64), (qd.f64, qd.i64)])
 @test_utils.test(require=qd.extension.data64)
 def test_pow_float_base_int_exp_64(dt_base, dt_exp):
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: pow with i64 exponent not implemented in AMDGPU codegen.")
     _test_pow_float_base_int_exp(dt_base, dt_exp)

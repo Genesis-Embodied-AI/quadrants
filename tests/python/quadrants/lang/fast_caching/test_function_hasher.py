@@ -2,8 +2,6 @@ import pathlib
 import shutil
 from typing import Callable
 
-import pytest
-
 from quadrants.lang import _wrap_inspect
 from quadrants.lang._fast_caching import function_hasher
 from quadrants.lang._fast_caching.fast_caching_types import HashedFunctionSourceInfo
@@ -38,7 +36,6 @@ def test_read_file(tmp_path: pathlib.Path) -> None:
 
 
 @test_utils.test()
-@pytest.mark.xfail()
 def test_read_file_with_arrows(monkeypatch, tmp_path: pathlib.Path) -> None:
     """
     This test doesn't actually reproduce the 0xe28094 bug with the hyphen, but anyway

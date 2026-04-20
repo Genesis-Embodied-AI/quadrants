@@ -48,7 +48,7 @@ def test_atomic_add_global_f32():
     run_atomic_add_global_case(qd.f32, 4.2, valproc=lambda x: test_utils.approx(x, rel=1e-5))
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_atomic_min_max_uint():
     x = qd.field(qd.u64, shape=100)
 
@@ -225,8 +225,11 @@ def test_local_atomic_with_if():
     assert ret[None] == 1
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_atomic_sub_with_type_promotion():
+    if qd.lang.impl.current_cfg().arch in (qd.metal, qd.vulkan):
+        pytest.xfail("BUG: SPIR-V codegen does not support unsigned integer negation (OpSNegate).")
+
     # Test Case 1
     @qd.kernel
     def test_u16_sub_u8() -> qd.uint16:
@@ -424,6 +427,47 @@ def test_atomic_max_f32():
         return x
 
     assert max_kernel() == -1.0
+
+
+@pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
+@test_utils.test()
+def test_atomic_float_ops(op, dtype):
+    if qd.cfg.arch in (qd.vulkan, qd.metal):
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        # f16 CAS requires 16-bit integer atomics, unsupported on MoltenVK/Metal
+        if dtype == qd.f16 and not caps.get(qd._lib.core.DeviceCapability.spirv_has_atomic_float16):
+            pytest.skip("Device does not support f16 atomics")
+        if dtype == qd.f64 and not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+            pytest.skip("Device does not support f64")
+    block_dim = 32
+    N = block_dim * 4
+    SCALE = 0.1523
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        # Use multiple threads to test concurrent atomicity
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            val = qd.cast(tid * SCALE, dtype)
+            atomic_op(out[0], val)
+
+    arr = qd.ndarray(dtype, (1,))
+    arr[0] = 0.0
+    kern(arr)
+    # 4 blocks each contributing SCALE * (0 + 1 + ... + 31)
+    nblocks = N // block_dim
+    per_block_sum = SCALE * block_dim * (block_dim - 1) / 2.0
+    expected = {
+        "add": per_block_sum * nblocks,
+        "sub": -per_block_sum * nblocks,
+        "min": 0.0,
+        "max": (block_dim - 1) * SCALE,
+    }
+    rtol = {qd.f16: 1e-3, qd.f64: 1e-10}.get(dtype, 1e-6)
+    assert arr[0] == test_utils.approx(expected[op], rel=rtol)
 
 
 @test_utils.test()

@@ -28,9 +28,7 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
   // ret    : Value of the first child physical coordinates
   using FuncType = int (*)(int, int);
 
-  static FuncType build(const SNode *snode,
-                        QuadrantsLLVMContext *tlctx,
-                        LlvmRuntimeExecutor *executor) {
+  static FuncType build(const SNode *snode, QuadrantsLLVMContext *tlctx, LlvmRuntimeExecutor *executor) {
     InvokeRefineCoordinatesBuilder mb{tlctx};
     mb.run_jit(snode);
     LLVMCompiledTask data;
@@ -46,8 +44,7 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
   }
 
  private:
-  InvokeRefineCoordinatesBuilder(QuadrantsLLVMContext *tlctx)
-      : LLVMModuleBuilder(tlctx->new_module("kernel"), tlctx) {
+  InvokeRefineCoordinatesBuilder(QuadrantsLLVMContext *tlctx) : LLVMModuleBuilder(tlctx->new_module("kernel"), tlctx) {
     this->llvm_context = this->tlctx->get_this_thread_context();
     this->builder = std::make_unique<llvm::IRBuilder<>>(*llvm_context);
   }
@@ -63,11 +60,9 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
     //   return child_coords.val[0];
     // }
     auto *const int32_ty = llvm::Type::getInt32Ty(*llvm_context);
-    auto *const func_ty =
-        llvm::FunctionType::get(int32_ty, {int32_ty, int32_ty},
-                                /*isVarArg=*/false);
-    auto *const func = llvm::Function::Create(
-        func_ty, llvm::Function::ExternalLinkage, kFuncName, module.get());
+    auto *const func_ty = llvm::FunctionType::get(int32_ty, {int32_ty, int32_ty},
+                                                  /*isVarArg=*/false);
+    auto *const func = llvm::Function::Create(func_ty, llvm::Function::ExternalLinkage, kFuncName, module.get());
     std::vector<llvm::Value *> args;
     for (auto &a : func->args()) {
       args.push_back(&a);
@@ -80,22 +75,18 @@ class InvokeRefineCoordinatesBuilder : public LLVMModuleBuilder {
 
     auto *const index0 = tlctx->get_constant(0);
 
-    RuntimeObject parent_coords{kLLVMPhysicalCoordinatesName, this,
-                                builder.get()};
+    RuntimeObject parent_coords{kLLVMPhysicalCoordinatesName, this, builder.get()};
     parent_coords.set("val", index0, parent_coords_first_component);
-    auto *refine_fn_struct = tlctx->get_struct_function(
-        snode->refine_coordinates_func_name(), snode->get_snode_tree_id());
-    auto *refine_fn = llvm::cast<llvm::Function>(
-        module
-            ->getOrInsertFunction(refine_fn_struct->getName(),
-                                  refine_fn_struct->getFunctionType(),
-                                  refine_fn_struct->getAttributes())
-            .getCallee());
+    auto *refine_fn_struct =
+        tlctx->get_struct_function(snode->refine_coordinates_func_name(), snode->get_snode_tree_id());
+    auto *refine_fn = llvm::cast<llvm::Function>(module
+                                                     ->getOrInsertFunction(refine_fn_struct->getName(),
+                                                                           refine_fn_struct->getFunctionType(),
+                                                                           refine_fn_struct->getAttributes())
+                                                     .getCallee());
     used_snode_tree_ids.insert(snode->get_snode_tree_id());
-    RuntimeObject child_coords{kLLVMPhysicalCoordinatesName, this,
-                               builder.get()};
-    builder->CreateCall(refine_fn,
-                        {parent_coords.ptr, child_coords.ptr, child_index});
+    RuntimeObject child_coords{kLLVMPhysicalCoordinatesName, this, builder.get()};
+    builder->CreateCall(refine_fn, {parent_coords.ptr, child_coords.ptr, child_index});
     auto *ret_val = child_coords.get("val", index0);
     builder->CreateRet(ret_val);
 
@@ -126,8 +117,7 @@ class RefineCoordinatesTest : public ::testing::Test {
     auto &leaf_snode = dense_snode_->insert_children(SNodeType::place);
     leaf_snode.dt = PrimitiveType::f32;
 
-    auto sc = std::make_unique<StructCompilerLLVM>(arch_, config_, tlctx_,
-                                                   tlctx_->new_module("struct"),
+    auto sc = std::make_unique<StructCompilerLLVM>(arch_, config_, tlctx_, tlctx_->new_module("struct"),
                                                    /*snode_tree_id=*/0);
     sc->run(*root_snode_);
   }
@@ -147,10 +137,8 @@ class RefineCoordinatesTest : public ::testing::Test {
 };
 
 TEST_F(RefineCoordinatesTest, Basic) {
-  auto *refine_ptr_fn =
-      InvokeRefineCoordinatesBuilder::build(ptr_snode_, tlctx_, executor_);
-  auto *refine_dense_fn =
-      InvokeRefineCoordinatesBuilder::build(dense_snode_, tlctx_, executor_);
+  auto *refine_ptr_fn = InvokeRefineCoordinatesBuilder::build(ptr_snode_, tlctx_, executor_);
+  auto *refine_dense_fn = InvokeRefineCoordinatesBuilder::build(dense_snode_, tlctx_, executor_);
 
   constexpr int kRootPhyCoord = 0;
   for (int i = 0; i < kPointerSize; ++i) {

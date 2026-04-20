@@ -8,18 +8,15 @@ namespace quadrants {
 namespace lang {
 
 std::string get_amdgpu_error_message(uint32 err) {
-  auto err_name_ptr =
-      AMDGPUDriver::get_instance_without_context().get_error_name(err);
-  auto err_string_ptr =
-      AMDGPUDriver::get_instance_without_context().get_error_string(err);
+  auto err_name_ptr = AMDGPUDriver::get_instance_without_context().get_error_name(err);
+  auto err_string_ptr = AMDGPUDriver::get_instance_without_context().get_error_string(err);
   return fmt::format("AMDGPU Error {}: {}", err_name_ptr, err_string_ptr);
 }
 
 AMDGPUDriverBase::AMDGPUDriverBase() {
   disabled_by_env_ = (get_environ_config("QD_ENABLE_AMDGPU", 1) == 0);
   if (disabled_by_env_) {
-    QD_TRACE(
-        "AMDGPU driver disabled by enviroment variable \"QD_ENABLE_AMDGPU\".");
+    QD_TRACE("AMDGPU driver disabled by enviroment variable \"QD_ENABLE_AMDGPU\".");
   }
 }
 
@@ -55,8 +52,7 @@ AMDGPUDriver::AMDGPUDriver() {
 
   int version;
   driver_get_version(&version);
-  QD_TRACE("AMDGPU driver API (v{}.{}) loaded.", version / 1000,
-           version % 1000 / 10);
+  QD_TRACE("AMDGPU driver API (v{}.{}) loaded.", version / 1000, version % 1000 / 10);
 
 #define PER_AMDGPU_FUNCTION(name, symbol_name, ...) \
   name.set(loader_->load_function(#symbol_name));   \
@@ -77,6 +73,22 @@ AMDGPUDriver &AMDGPUDriver::get_instance() {
   // initialize the AMDGPU context so that the driver APIs can be called later
   AMDGPUContext::get_instance();
   return get_instance_without_context();
+}
+
+void AMDGPUDriver::malloc_async(void **dev_ptr, size_t size, void *stream) {
+  if (AMDGPUContext::get_instance().supports_mem_pool()) {
+    malloc_async_impl(dev_ptr, size, stream);
+  } else {
+    malloc(dev_ptr, size);
+  }
+}
+
+void AMDGPUDriver::mem_free_async(void *dev_ptr, void *stream) {
+  if (AMDGPUContext::get_instance().supports_mem_pool()) {
+    mem_free_async_impl(dev_ptr, stream);
+  } else {
+    mem_free(dev_ptr);
+  }
 }
 
 }  // namespace lang

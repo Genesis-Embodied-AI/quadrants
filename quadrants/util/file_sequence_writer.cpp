@@ -8,11 +8,8 @@
 
 namespace quadrants {
 
-FileSequenceWriter::FileSequenceWriter(std::string filename_template,
-                                       std::string file_type)
-    : counter_(0),
-      filename_template_(filename_template),
-      file_type_(file_type) {
+FileSequenceWriter::FileSequenceWriter(std::string filename_template, std::string file_type)
+    : counter_(0), filename_template_(filename_template), file_type_(file_type) {
 }
 
 #ifdef QD_WITH_LLVM

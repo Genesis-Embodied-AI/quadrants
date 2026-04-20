@@ -39,8 +39,7 @@ class LlvmDevice : public Device {
     QD_NOT_IMPLEMENTED
   }
 
-  virtual DeviceAllocation allocate_memory_runtime(
-      const LlvmRuntimeAllocParams &params) {
+  virtual DeviceAllocation allocate_memory_runtime(const LlvmRuntimeAllocParams &params) {
     QD_NOT_IMPLEMENTED;
   }
 
@@ -48,8 +47,7 @@ class LlvmDevice : public Device {
     QD_NOT_IMPLEMENTED;
   }
 
-  virtual uint64_t *allocate_llvm_runtime_memory_jit(
-      const LlvmRuntimeAllocParams &params) {
+  virtual uint64_t *allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
     QD_NOT_IMPLEMENTED;
   }
 };

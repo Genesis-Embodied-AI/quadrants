@@ -18,8 +18,7 @@ std::unique_ptr<ScratchPads> initialize_scratch_pad(OffloadedStmt *offload) {
   QD_ASSERT(offload->task_type == OffloadedTaskType::struct_for);
   std::unique_ptr<ScratchPads> pads;
   pads = std::make_unique<ScratchPads>();
-  for (auto snode : offload->mem_access_opt.get_snodes_with_flag(
-           SNodeAccessFlag::block_local)) {
+  for (auto snode : offload->mem_access_opt.get_snodes_with_flag(SNodeAccessFlag::block_local)) {
     pads->insert(snode);
   }
   BLSAnalyzer bls_analyzer(offload, pads.get());

@@ -11,9 +11,7 @@ class GfxProgramImpl : public ProgramImpl {
   explicit GfxProgramImpl(CompileConfig &config);
   ~GfxProgramImpl() override;
 
-  std::size_t get_snode_num_dynamically_allocated(
-      SNode *snode,
-      uint64 *result_buffer) override {
+  std::size_t get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) override {
     return 0;  // TODO: support sparse
   }
 
@@ -38,8 +36,7 @@ class GfxProgramImpl : public ProgramImpl {
     snode_tree_mgr_->destroy_snode_tree(snode_tree);
   }
 
-  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size,
-                                             uint64 *result_buffer) override;
+  DeviceAllocation allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) override;
 
   bool used_in_kernel(DeviceAllocationId id) override {
     return runtime_->used_in_kernel(id);
@@ -61,9 +58,8 @@ class GfxProgramImpl : public ProgramImpl {
     return snode_tree_mgr_->get_snode_tree_device_ptr(tree_id);
   }
 
-  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(
-      const StructType *old_ty,
-      const std::string &layout) override {
+  std::pair<const StructType *, size_t> get_struct_type_with_data_layout(const StructType *old_ty,
+                                                                         const std::string &layout) override {
     return gfx::GfxRuntime::get_struct_type_with_data_layout(old_ty, layout);
   }
 
@@ -72,8 +68,8 @@ class GfxProgramImpl : public ProgramImpl {
   };
 
   std::string get_kernel_argument_data_layout() override {
-    auto has_buffer_ptr = runtime_->get_ti_device()->get_caps().get(
-        DeviceCapability::spirv_has_physical_storage_buffer);
+    auto has_buffer_ptr =
+        runtime_->get_ti_device()->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer);
     return "1" + std::string(has_buffer_ptr ? "b" : "-");
   };
 

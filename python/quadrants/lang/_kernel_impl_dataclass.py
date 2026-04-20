@@ -4,10 +4,10 @@ from typing import Any
 
 from quadrants.lang import util
 from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
 )
-from quadrants.lang.exception import get_func_signature
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 

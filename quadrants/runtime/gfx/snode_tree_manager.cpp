@@ -28,19 +28,15 @@ void SNodeTreeManager::destroy_snode_tree(SNodeTree *snode_tree) {
   runtime_->root_buffers_[root_id].reset();
 }
 
-size_t SNodeTreeManager::get_field_in_tree_offset(int tree_id,
-                                                  const SNode *child) {
+size_t SNodeTreeManager::get_field_in_tree_offset(int tree_id, const SNode *child) {
   auto &snode_struct = compiled_snode_structs_[tree_id];
-  QD_ASSERT_INFO(
-      snode_struct.snode_descriptors.find(child->id) !=
-              snode_struct.snode_descriptors.end() &&
-          snode_struct.snode_descriptors.at(child->id).snode == child,
-      "Requested SNode not found in compiled SNodeTree");
+  QD_ASSERT_INFO(snode_struct.snode_descriptors.find(child->id) != snode_struct.snode_descriptors.end() &&
+                     snode_struct.snode_descriptors.at(child->id).snode == child,
+                 "Requested SNode not found in compiled SNodeTree");
 
   size_t offset = 0;
   for (const SNode *sn = child; sn; sn = sn->parent) {
-    offset +=
-        snode_struct.snode_descriptors.at(sn->id).mem_offset_in_parent_cell;
+    offset += snode_struct.snode_descriptors.at(sn->id).mem_offset_in_parent_cell;
   }
 
   return offset;
@@ -48,8 +44,7 @@ size_t SNodeTreeManager::get_field_in_tree_offset(int tree_id,
 
 DevicePtr SNodeTreeManager::get_snode_tree_device_ptr(int tree_id) {
   if (tree_id >= runtime_->root_buffers_.size()) {
-    QD_ERROR("tree_id {} out of range {}", tree_id,
-             runtime_->root_buffers_.size());
+    QD_ERROR("tree_id {} out of range {}", tree_id, runtime_->root_buffers_.size());
   }
   return runtime_->root_buffers_[tree_id]->get_ptr();
 }

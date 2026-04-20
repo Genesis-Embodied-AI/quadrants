@@ -12,22 +12,18 @@ CudaDevice::CudaDevice() {
   DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
 }
 
-CudaDevice::AllocInfo CudaDevice::get_alloc_info(
-    const DeviceAllocation handle) {
+CudaDevice::AllocInfo CudaDevice::get_alloc_info(const DeviceAllocation handle) {
   validate_device_alloc(handle);
   return allocations_[handle.alloc_id];
 }
 
-RhiResult CudaDevice::allocate_memory(const AllocParams &params,
-                                      DeviceAllocation *out_devalloc) {
+RhiResult CudaDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   AllocInfo info;
 
-  auto &mem_pool =
-      DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+  auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
 
   bool managed = params.host_read || params.host_write;
-  void *ptr =
-      mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
+  void *ptr = mem_pool.allocate(params.size, DeviceMemoryPool::page_size, managed);
   if (ptr == nullptr) {
     return RhiResult::out_of_memory;
   }
@@ -48,19 +44,16 @@ RhiResult CudaDevice::allocate_memory(const AllocParams &params,
   return RhiResult::success;
 }
 
-DeviceAllocation CudaDevice::allocate_memory_runtime(
-    const LlvmRuntimeAllocParams &params) {
+DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParams &params) {
   AllocInfo info;
   info.size = quadrants::iroundup(params.size, quadrants_page_size);
   if (info.size == 0) {
     info.ptr = nullptr;
   } else if (params.use_memory_pool) {
-    CUDADriver::get_instance().malloc_async((void **)&info.ptr, info.size,
-                                            nullptr);
+    CUDADriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
     info.ptr =
-        DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/)
-            .allocate_with_cache(this, params);
+        DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/).allocate_with_cache(this, params);
   }
 
   if (info.ptr)
@@ -79,15 +72,20 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(
   return alloc;
 }
 
-uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(
-    const LlvmRuntimeAllocParams &params) {
-  params.runtime_jit->call<void *, std::size_t, std::size_t>(
-      "runtime_memory_allocate_aligned", params.runtime, params.size,
-      quadrants_page_size, params.result_buffer);
+uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocParams &params) {
+  // Zero the slot before the JIT call so that a null readback unambiguously signals pool exhaustion (see the
+  // AmdgpuDevice counterpart for why). The existing __assertfail hard-halt on the device side still runs, but we
+  // no longer rely on it to stop the host from dereferencing a stale pointer.
+  uint64 zero = 0;
+  CUDADriver::get_instance().memcpy_host_to_device(params.result_buffer, &zero, sizeof(uint64));
+  params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
+                                                             params.size, quadrants_page_size, params.result_buffer);
   CUDADriver::get_instance().stream_synchronize(nullptr);
   uint64 *ret{nullptr};
-  CUDADriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer,
-                                                   sizeof(uint64));
+  CUDADriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
+  QD_ERROR_IF(ret == nullptr,
+              "Out of CUDA pre-allocated memory. Consider using ti.init(device_memory_fraction=0.9) or "
+              "ti.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
 }
 
@@ -112,17 +110,13 @@ void CudaDevice::dealloc_memory(DeviceAllocation handle) {
     DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/)
         .release(info.size, (uint64_t *)info.ptr, false);
   } else if (!info.use_preallocated) {
-    auto &mem_pool =
-        DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
+    auto &mem_pool = DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/);
     mem_pool.release(info.size, info.ptr, true /*release_raw*/);
   }
   info.ptr = nullptr;
 }
 
-RhiResult CudaDevice::upload_data(DevicePtr *device_ptr,
-                                  const void **data,
-                                  size_t *size,
-                                  int num_alloc) noexcept {
+RhiResult CudaDevice::upload_data(DevicePtr *device_ptr, const void **data, size_t *size, int num_alloc) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -133,19 +127,18 @@ RhiResult CudaDevice::upload_data(DevicePtr *device_ptr,
     }
 
     AllocInfo &info = allocations_[device_ptr[i].alloc_id];
-    CUDADriver::get_instance().memcpy_host_to_device(
-        (uint8_t *)info.ptr + device_ptr[i].offset, (void *)data[i], size[i]);
+    CUDADriver::get_instance().memcpy_host_to_device((uint8_t *)info.ptr + device_ptr[i].offset, (void *)data[i],
+                                                     size[i]);
   }
 
   return RhiResult::success;
 }
 
-RhiResult CudaDevice::readback_data(
-    DevicePtr *device_ptr,
-    void **data,
-    size_t *size,
-    int num_alloc,
-    const std::vector<StreamSemaphore> &wait_sema) noexcept {
+RhiResult CudaDevice::readback_data(DevicePtr *device_ptr,
+                                    void **data,
+                                    size_t *size,
+                                    int num_alloc,
+                                    const std::vector<StreamSemaphore> &wait_sema) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -156,8 +149,7 @@ RhiResult CudaDevice::readback_data(
     }
 
     AllocInfo &info = allocations_[device_ptr[i].alloc_id];
-    CUDADriver::get_instance().memcpy_device_to_host(
-        data[i], (uint8_t *)info.ptr + device_ptr[i].offset, size[i]);
+    CUDADriver::get_instance().memcpy_device_to_host(data[i], (uint8_t *)info.ptr + device_ptr[i].offset, size[i]);
   }
 
   return RhiResult::success;
@@ -175,17 +167,14 @@ RhiResult CudaDevice::map(DeviceAllocation alloc, void **mapped_ptr) {
 
 void CudaDevice::unmap(DeviceAllocation alloc) {
   AllocInfo &info = allocations_[alloc.alloc_id];
-  CUDADriver::get_instance().memcpy_host_to_device(info.ptr, info.mapped,
-                                                   info.size);
+  CUDADriver::get_instance().memcpy_host_to_device(info.ptr, info.mapped, info.size);
   delete[] static_cast<char *>(info.mapped);
   return;
 }
 
 void CudaDevice::memcpy_internal(DevicePtr dst, DevicePtr src, uint64_t size) {
-  void *dst_ptr =
-      static_cast<char *>(allocations_[dst.alloc_id].ptr) + dst.offset;
-  void *src_ptr =
-      static_cast<char *>(allocations_[src.alloc_id].ptr) + src.offset;
+  void *dst_ptr = static_cast<char *>(allocations_[dst.alloc_id].ptr) + dst.offset;
+  void *src_ptr = static_cast<char *>(allocations_[src.alloc_id].ptr) + src.offset;
   CUDADriver::get_instance().memcpy_device_to_device(dst_ptr, src_ptr, size);
 }
 

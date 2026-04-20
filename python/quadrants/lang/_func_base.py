@@ -23,13 +23,13 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
 from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
-    get_func_signature,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.matrix import MatrixType
@@ -388,7 +388,7 @@ class FuncBase:
         return tuple(fused_py_args)
 
     def _get_global_vars(self, _func: Callable) -> dict[str, Any]:
-        # Discussions: https://github.com/taichi-dev/quadrants/issues/282
+        # Discussions: https://github.com/taichi-dev/taichi/issues/282
         global_vars = _func.__globals__.copy()
         freevar_names = _func.__code__.co_freevars
         closure = _func.__closure__
