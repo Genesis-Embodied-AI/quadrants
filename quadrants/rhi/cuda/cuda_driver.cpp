@@ -10,8 +10,7 @@ std::string get_cuda_error_message(uint32 err) {
   const char *err_name_ptr;
   const char *err_string_ptr;
   CUDADriver::get_instance_without_context().get_error_name(err, &err_name_ptr);
-  CUDADriver::get_instance_without_context().get_error_string(err,
-                                                              &err_string_ptr);
+  CUDADriver::get_instance_without_context().get_error_string(err, &err_string_ptr);
   return fmt::format("CUDA Error {}: {}", err_name_ptr, err_string_ptr);
 }
 
@@ -28,8 +27,7 @@ bool CUDADriverBase::load_lib(std::string lib_linux, std::string lib_windows) {
 #elif defined(QD_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
-  static_assert(false,
-                "Quadrants CUDA driver supports only Windows and Linux.");
+  static_assert(false, "Quadrants CUDA driver supports only Windows and Linux.");
 #endif
 
   loader_ = std::make_unique<DynamicLoader>(lib_name);
@@ -42,15 +40,13 @@ bool CUDADriverBase::load_lib(std::string lib_linux, std::string lib_windows) {
   }
 }
 
-bool CUDADriverBase::check_lib_loaded(std::string lib_linux,
-                                      std::string lib_windows) {
+bool CUDADriverBase::check_lib_loaded(std::string lib_linux, std::string lib_windows) {
 #if defined(QD_PLATFORM_LINUX)
   auto lib_name = lib_linux;
 #elif defined(QD_PLATFORM_WINDOWS)
   auto lib_name = lib_windows;
 #else
-  static_assert(false,
-                "Quadrants CUDA driver supports only Windows and Linux.");
+  static_assert(false, "Quadrants CUDA driver supports only Windows and Linux.");
 #endif
 
   return DynamicLoader::check_lib_loaded(lib_name);
@@ -60,21 +56,17 @@ std::string get_lib_name_linux(const std::string &lib_name, int version) {
   return "lib" + lib_name + ".so." + std::to_string(version);
 }
 
-std::string get_lib_name_windows(const std::string &lib_name,
-                                 const std::string &win_arch_name,
-                                 int version) {
+std::string get_lib_name_windows(const std::string &lib_name, const std::string &win_arch_name, int version) {
   return lib_name + win_arch_name + std::to_string(version) + ".dll";
 }
 
-bool CUDADriverBase::try_load_lib_any_version(
-    const std::string &lib_name,
-    const std::string &win_arch_name,
-    const std::vector<int> &versions_to_try) {
+bool CUDADriverBase::try_load_lib_any_version(const std::string &lib_name,
+                                              const std::string &win_arch_name,
+                                              const std::vector<int> &versions_to_try) {
   // Check if any versions of this lib are already loaded.
   for (auto version : versions_to_try) {
     std::string lib_name_linux = get_lib_name_linux(lib_name, version);
-    std::string lib_name_windows =
-        get_lib_name_windows(lib_name, win_arch_name, version);
+    std::string lib_name_windows = get_lib_name_windows(lib_name, win_arch_name, version);
     if (check_lib_loaded(lib_name_linux, lib_name_windows)) {
       load_lib(lib_name_linux, lib_name_windows);
       return true;
@@ -86,8 +78,7 @@ bool CUDADriverBase::try_load_lib_any_version(
   if (!loaded) {
 #ifdef WIN32
     for (auto version : versions_to_try) {
-      std::string lib_name_windows =
-          get_lib_name_windows(lib_name, win_arch_name, version);
+      std::string lib_name_windows = get_lib_name_windows(lib_name, win_arch_name, version);
       loader_ = std::make_unique<DynamicLoader>(lib_name_windows);
       loaded = loader_->loaded();
       if (loaded) {
@@ -128,14 +119,11 @@ CUDADriver::CUDADriver() {
 
   int version;
   driver_get_version(&version);
-  QD_TRACE("CUDA driver API (v{}.{}) loaded.", version / 1000,
-           version % 1000 / 10);
+  QD_TRACE("CUDA driver API (v{}.{}) loaded.", version / 1000, version % 1000 / 10);
 
   // CUDA versions should >= 10.
   if (version < 10000) {
-    QD_WARN(
-        "The Quadrants CUDA backend requires at least CUDA 10.0, got v{}.{}.",
-        version / 1000, version % 1000 / 10);
+    QD_WARN("The Quadrants CUDA backend requires at least CUDA 10.0, got v{}.{}.", version / 1000, version % 1000 / 10);
     return;
   }
 
@@ -197,8 +185,7 @@ bool CUSPARSEDriver::load_cusparse() {
   // Get the CUDA Driver's version
   int cuda_version = CUDADriver::get_instance().get_version_major();
   // Try to load the cusparse lib whose version is derived from the CUDA driver
-  cusparse_loaded_ = try_load_lib_any_version("cusparse", "64_",
-                                              {cuda_version, cuda_version - 1});
+  cusparse_loaded_ = try_load_lib_any_version("cusparse", "64_", {cuda_version, cuda_version - 1});
   if (!cusparse_loaded_) {
     return false;
   }
@@ -230,8 +217,7 @@ bool CUSOLVERDriver::load_cusolver() {
   // Get the CUDA Driver's version
   int cuda_version = CUDADriver::get_instance().get_version_major();
   // Try to load the cusolver lib whose version is derived from the CUDA driver
-  cusolver_loaded_ = try_load_lib_any_version("cusolver", "64_",
-                                              {cuda_version, cuda_version - 1});
+  cusolver_loaded_ = try_load_lib_any_version("cusolver", "64_", {cuda_version, cuda_version - 1});
   if (!cusolver_loaded_) {
     return false;
   }

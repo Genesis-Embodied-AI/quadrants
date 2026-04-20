@@ -3,8 +3,7 @@
 
 namespace quadrants::lang {
 
-CachingAllocator::CachingAllocator(bool merge_upon_release)
-    : merge_upon_release_(merge_upon_release) {
+CachingAllocator::CachingAllocator(bool merge_upon_release) : merge_upon_release_(merge_upon_release) {
 }
 
 void CachingAllocator::merge_and_insert(uint8_t *ptr, std::size_t size) {
@@ -30,9 +29,7 @@ void CachingAllocator::merge_and_insert(uint8_t *ptr, std::size_t size) {
   ptr_map_[ptr] = size;
 }
 
-uint64_t *CachingAllocator::allocate(
-    LlvmDevice *device,
-    const LlvmDevice::LlvmRuntimeAllocParams &params) {
+uint64_t *CachingAllocator::allocate(LlvmDevice *device, const LlvmDevice::LlvmRuntimeAllocParams &params) {
   uint64_t *ret{nullptr};
   auto size_aligned = quadrants::iroundup(params.size, quadrants_page_size);
   auto it_blk = mem_blocks_.lower_bound(std::make_pair(size_aligned, nullptr));
@@ -41,8 +38,7 @@ uint64_t *CachingAllocator::allocate(
     size_t remaining_sz = it_blk->first - size_aligned;
     if (remaining_sz > 0) {
       QD_ASSERT(remaining_sz % quadrants_page_size == 0);
-      auto remaining_head =
-          reinterpret_cast<uint8_t *>(it_blk->second) + size_aligned;
+      auto remaining_head = reinterpret_cast<uint8_t *>(it_blk->second) + size_aligned;
       mem_blocks_.insert(std::make_pair(remaining_sz, remaining_head));
       ptr_map_.insert(std::make_pair(remaining_head, remaining_sz));
     }
@@ -51,8 +47,7 @@ uint64_t *CachingAllocator::allocate(
     ptr_map_.erase(it_blk->second);
 
   } else {
-    ret = reinterpret_cast<uint64_t *>(
-        device->allocate_llvm_runtime_memory_jit(params));
+    ret = reinterpret_cast<uint64_t *>(device->allocate_llvm_runtime_memory_jit(params));
   }
   return ret;
 }

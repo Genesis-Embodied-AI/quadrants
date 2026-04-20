@@ -89,26 +89,19 @@ inline bool is_tensor(DataType dt) {
 }
 
 inline bool is_quant(DataType dt) {
-  return dt->is<QuantIntType>() || dt->is<QuantFixedType>() ||
-         dt->is<QuantFloatType>();
+  return dt->is<QuantIntType>() || dt->is<QuantFixedType>() || dt->is<QuantFloatType>();
 }
 
 inline bool is_real(DataType dt) {
-  return dt->is_primitive(PrimitiveTypeID::f16) ||
-         dt->is_primitive(PrimitiveTypeID::f32) ||
-         dt->is_primitive(PrimitiveTypeID::f64) || dt->is<QuantFixedType>() ||
-         dt->is<QuantFloatType>();
+  return dt->is_primitive(PrimitiveTypeID::f16) || dt->is_primitive(PrimitiveTypeID::f32) ||
+         dt->is_primitive(PrimitiveTypeID::f64) || dt->is<QuantFixedType>() || dt->is<QuantFloatType>();
 }
 
 inline bool is_integral(DataType dt) {
-  return dt->is_primitive(PrimitiveTypeID::i8) ||
-         dt->is_primitive(PrimitiveTypeID::i16) ||
-         dt->is_primitive(PrimitiveTypeID::i32) ||
-         dt->is_primitive(PrimitiveTypeID::i64) ||
-         dt->is_primitive(PrimitiveTypeID::u1) ||
-         dt->is_primitive(PrimitiveTypeID::u8) ||
-         dt->is_primitive(PrimitiveTypeID::u16) ||
-         dt->is_primitive(PrimitiveTypeID::u32) ||
+  return dt->is_primitive(PrimitiveTypeID::i8) || dt->is_primitive(PrimitiveTypeID::i16) ||
+         dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64) ||
+         dt->is_primitive(PrimitiveTypeID::u1) || dt->is_primitive(PrimitiveTypeID::u8) ||
+         dt->is_primitive(PrimitiveTypeID::u16) || dt->is_primitive(PrimitiveTypeID::u32) ||
          dt->is_primitive(PrimitiveTypeID::u64) || dt->is<QuantIntType>();
 }
 
@@ -117,10 +110,8 @@ inline bool is_signed(DataType dt) {
   QD_ASSERT(is_integral(dt));
   if (auto t = dt->cast<QuantIntType>())
     return t->get_is_signed();
-  return dt->is_primitive(PrimitiveTypeID::i8) ||
-         dt->is_primitive(PrimitiveTypeID::i16) ||
-         dt->is_primitive(PrimitiveTypeID::i32) ||
-         dt->is_primitive(PrimitiveTypeID::i64);
+  return dt->is_primitive(PrimitiveTypeID::i8) || dt->is_primitive(PrimitiveTypeID::i16) ||
+         dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::i64);
 }
 
 inline bool is_unsigned(DataType dt) {
@@ -201,8 +192,7 @@ inline TypedConstant get_min_value(DataType dt) {
 class BitStructTypeBuilder {
  public:
   explicit BitStructTypeBuilder(int max_num_bits) {
-    physical_type_ =
-        TypeFactory::get_instance().get_primitive_int_type(max_num_bits);
+    physical_type_ = TypeFactory::get_instance().get_primitive_int_type(max_num_bits);
   }
 
   int add_member(Type *member_type) {
@@ -243,9 +233,8 @@ class BitStructTypeBuilder {
   }
 
   BitStructType *build() const {
-    return TypeFactory::get_instance().get_bit_struct_type(
-        physical_type_, member_types_, member_bit_offsets_, member_exponents_,
-        member_exponent_users_);
+    return TypeFactory::get_instance().get_bit_struct_type(physical_type_, member_types_, member_bit_offsets_,
+                                                           member_exponents_, member_exponent_users_);
   }
 
  private:
@@ -267,8 +256,7 @@ class BitStructTypeBuilder {
     }
     member_total_bits_ += member_qit->get_num_bits();
     auto physical_bits = data_type_bits(physical_type_);
-    QD_ERROR_IF(member_total_bits_ > physical_bits,
-                "BitStructType overflows: {} bits used out of {}.",
+    QD_ERROR_IF(member_total_bits_ > physical_bits, "BitStructType overflows: {} bits used out of {}.",
                 member_total_bits_, physical_bits);
     return old_num_members;
   }

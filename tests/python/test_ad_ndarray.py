@@ -5,7 +5,7 @@ from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
 
 
 @test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)

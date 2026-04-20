@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -7,22 +9,166 @@ from quadrants.math import vec4
 from tests import test_utils
 
 
+@pytest.mark.parametrize(
+    "num_dim, first_shape_delta_size, dtype1, dtype2",
+    [
+        (1, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (2, 0, qd.i8, qd.i8),  # same shape, same dtype — triggers the singleton bug
+        (1, 0, qd.f32, qd.f32),  # same shape, same dtype — triggers the singleton bug
+        (2, 0, qd.u32, qd.u32),  # same shape, same dtype — triggers the singleton bug
+        (1, 0, qd.i8, qd.f32),  # same shape, different dtype
+        (1, 1, qd.i8, qd.i8),  # different shape, same dtype
+        (2, 0, qd.u32, qd.u32),  # different shape, same dtype
+        (1, 1, qd.i8, qd.f32),  # different shape, different dtype
+    ],
+)
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta_size, dtype1, dtype2):
+    # Execute 2 successive offloaded tasks both allocating more than half of
+    # the maximum shared memory available on the device to make sure shared
+    # memory is properly deallocated and per-task address offset is correctly
+    # reset.
+    # Note that in practice, there is a different code path for "statically"
+    # allocated shared memory (which has fixed size 48KB on CUDA) and
+    # "dynamically" allocated shared memory. Some CUDA GPUs support larger
+    # shared memory allocation via dynamic allocation. In such a case, if
+    # some task-level GPU kernel requests more than 48KB, the entire shared
+    # array is dynamically allocated. This requires creating a new LLVM
+    # array type of size 0 with the same dtype as the original tensor (the
+    # actual size is passed at kernel launch time). Creation of this special
+    # type was previously corrupting the original cached tensor type when
+    # several tasks using shared arrays with the same shape and dtype were
+    # involved.
+    # The cached tensor type is a singleton keyed by (shape, dtype) in
+    # TypeFactory, so the corruption only occurs when multiple offloaded tasks
+    # allocate shared arrays with identical shape and dtype. If either differs,
+    # each task gets a distinct tensor type instance and is unaffected.
+    # The corruption would affect ALL tensors of the exact same type, not just
+    # shared memory, because this information is not part of the type but stored
+    # in 'stmt->is_shared'. However, it is only an issue when shared memories
+    # from different offloaded tasks are sharing the same tensor type because at
+    # this point in the codegen path, the IR structure (index calculations,
+    # strides, offsets) has already been baked into the IR statements. The only
+    # place that reads the type during codegen is the AllocaStmt visitor itself,
+    # which uses 'get_num_elements()' to decide between the static/dynamic path
+    # and to compute the LLVM type size.
+
+    block_dim = 32
+    max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=True)
+    # 75% of max shared memory in bytes, converted to element counts
+    shared_array_bytes = int(0.75 * max_shared_bytes)
+    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_delta_size
+    num_elems_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2)
+
+    # Build 1D or 2D shape tuples with the same total number of elements.
+    # For 2D, split into (block_dim, num_elems // block_dim).
+    if num_dim == 1:
+        shape_1 = (num_elems_1,)
+        shape_2 = (num_elems_2,)
+    else:
+        shape_1 = (block_dim, num_elems_1 // block_dim)
+        shape_2 = (block_dim, num_elems_2 // block_dim)
+        num_elems_1 = math.prod(shape_1)
+        num_elems_2 = math.prod(shape_2)
+
+    # Each offloaded task cooperatively fills a large shared array with an
+    # LCG sequence, syncs, then each thread sums a contiguous chunk written
+    # by other threads. This forces the entire shared array to be materialized
+    # — the compiler cannot short-circuit it.
+    chunk_size_1 = num_elems_1 // block_dim
+    chunk_size_2 = num_elems_2 // block_dim
+    cols_1 = shape_1[-1]
+    cols_2 = shape_2[-1]
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray):
+        qd.loop_config(block_dim=block_dim)
+        for tid in range(block_dim):
+            buf = qd.simt.block.SharedArray(shape_1, dtype1)
+            i = tid
+            while i < num_elems_1:
+                if qd.static(num_dim == 2):
+                    buf[i // cols_1, i % cols_1] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
+                else:
+                    buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype1)
+                i += block_dim
+            qd.simt.block.sync()
+            acc = 0
+            j = tid * chunk_size_1
+            end = j + chunk_size_1
+            while j < end:
+                if qd.static(num_dim == 2):
+                    acc += qd.cast(buf[j // cols_1, j % cols_1], qd.i32)
+                else:
+                    acc += qd.cast(buf[j], qd.i32)
+                j += 1
+            out[tid] = acc
+
+        qd.loop_config(block_dim=block_dim)
+        for tid in range(block_dim):
+            buf = qd.simt.block.SharedArray(shape_2, dtype2)
+            i = tid
+            while i < num_elems_2:
+                if qd.static(num_dim == 2):
+                    buf[i // cols_2, i % cols_2] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
+                else:
+                    buf[i] = qd.cast((i * 1103515245 + 12345) % 128, dtype2)
+                i += block_dim
+            qd.simt.block.sync()
+            acc = 0
+            j = tid * chunk_size_2
+            end = j + chunk_size_2
+            while j < end:
+                if qd.static(num_dim == 2):
+                    acc += qd.cast(buf[j // cols_2, j % cols_2], qd.i32)
+                else:
+                    acc += qd.cast(buf[j], qd.i32)
+                j += 1
+            out[tid] = out[tid] + acc
+
+    out = qd.ndarray(dtype=qd.i32, shape=(block_dim,))
+    kern(out)
+
+    # Compute expected values on host
+    vals1 = np.array([(i * 1103515245 + 12345) % 128 for i in range(num_elems_1)], dtype=np.int32)
+    vals2 = np.array([(i * 1103515245 + 12345) % 128 for i in range(num_elems_2)], dtype=np.int32)
+    expected = np.array(
+        [
+            vals1[t * chunk_size_1 : (t + 1) * chunk_size_1].sum()
+            + vals2[t * chunk_size_2 : (t + 1) * chunk_size_2].sum()
+            for t in range(block_dim)
+        ],
+        dtype=np.int32,
+    )
+    assert np.array_equal(out.to_numpy(), expected)
+
+
+@pytest.mark.parametrize("graph", [False, True])
 @test_utils.test(arch=[qd.cuda], print_full_traceback=False)
-def test_large_shared_array():
-    # Skip the GPUs prior to Ampere which doesn't have large dynamical shared memory.
-    if qd.lang.impl.get_cuda_compute_capability() < 86:
-        pytest.skip("Skip the GPUs prior to Ampere")
+def test_large_shared_array(graph):
+    # Any shared memory larger than 48kB requires so-called "dynamic
+    # allocation", which is a special feature that requires toggling some opt-in
+    # flag in gpu kernel context and is currently only supported on CUDA. In
+    # practice, all GPUs supporting this feature have a max shared memory size
+    # of 64kB or more, so hardcoding this value in the unit test guarantees to
+    # exercise this feature, while being safe and consistent across all GPUs.
+    shared_bytes = 65536
+
+    if qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=True) < shared_bytes:
+        pytest.skip("Device does not support large dynamic shared memory")
 
     block_dim = 128
     nBlocks = 64
     N = nBlocks * block_dim
-    v_arr = np.random.randn(N).astype(np.float32)
-    d_arr = np.random.randn(N).astype(np.float32)
-    a_arr = np.zeros(N).astype(np.float32)
-    reference = np.zeros(N).astype(np.float32)
+    v_np = np.random.randn(N).astype(np.float32)
+    d_np = np.random.randn(N).astype(np.float32)
+
+    # Compute a[i] = v[i] * sum(d), i.e. scale each v[i] by the sum of d.
+    # The reference uses a naive double loop; the shared-memory version tiles
+    # d into shared memory blocks for cooperative loading.
 
     @qd.kernel
-    def calc(
+    def scaled_reduce_native(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),
         a: qd.types.ndarray(ndim=1),
@@ -34,8 +180,8 @@ def test_large_shared_array():
                 acc += v_val * d[j]
             a[i] = acc
 
-    @qd.kernel
-    def calc_shared_array(
+    @qd.kernel(graph=graph)
+    def scaled_reduce_shared(
         v: qd.types.ndarray(ndim=1),
         d: qd.types.ndarray(ndim=1),
         a: qd.types.ndarray(ndim=1),
@@ -43,7 +189,7 @@ def test_large_shared_array():
         qd.loop_config(block_dim=block_dim)
         for i in range(nBlocks * block_dim):
             tid = i % block_dim
-            pad = qd.simt.block.SharedArray((65536 // 4,), qd.f32)
+            pad = qd.simt.block.SharedArray((shared_bytes // 4,), qd.f32)
             acc = 0.0
             v_val = v[i]
             for k in range(nBlocks):
@@ -54,12 +200,21 @@ def test_large_shared_array():
                 qd.simt.block.sync()
             a[i] = acc
 
-    calc(v_arr, d_arr, reference)
-    calc_shared_array(v_arr, d_arr, a_arr)
-    assert np.allclose(reference, a_arr)
+    # graph requires device-resident arrays (qd.ndarray or CUDA torch
+    # tensors), not host-resident numpy arrays
+    v_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
+    d_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
+    v_arr.from_numpy(v_np)
+    d_arr.from_numpy(d_np)
+
+    reference = qd.ndarray(dtype=qd.f32, shape=(N,))
+    a_arr = qd.ndarray(dtype=qd.f32, shape=(N,))
+    scaled_reduce_native(v_arr, d_arr, reference)
+    scaled_reduce_shared(v_arr, d_arr, a_arr)
+    assert np.allclose(reference.to_numpy(), a_arr.to_numpy())
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_multiple_shared_array():
     assert qd.cfg is not None
     if qd.cfg.arch == qd.amdgpu:
@@ -67,8 +222,11 @@ def test_multiple_shared_array():
     block_dim = 128
     nBlocks = 64
     N = nBlocks * block_dim * 4
-    v_arr = np.random.randn(N).astype(np.float32)
-    d_arr = np.random.randn(N).astype(np.float32)
+    # Seed the RNG to avoid flaky failures from FP accumulation-order
+    # differences between the reference and tiled shared-memory kernels.
+    rng = np.random.RandomState(42)
+    v_arr = rng.randn(N).astype(np.float32)
+    d_arr = rng.randn(N).astype(np.float32)
     a_arr = np.zeros(N).astype(np.float32)
     reference = np.zeros(N).astype(np.float32)
 
@@ -119,7 +277,7 @@ def test_multiple_shared_array():
     assert np.allclose(reference, a_arr, rtol=1e-4)
 
 
-@test_utils.test(arch=[qd.cuda, qd.vulkan, qd.amdgpu])
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_atomics():
     N = 256
     block_dim = 32
@@ -147,7 +305,133 @@ def test_shared_array_atomics():
     assert arr[224] == sum
 
 
-@test_utils.test(arch=[qd.cuda])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_int_atomic_mul():
+    # Regression test for dest_is_ptr guard on integer atomic_mul.
+    # Without the guard, at_buffer() crashes on shared pointers.
+    N = 64
+    block_dim = 4
+
+    @qd.kernel
+    def kern(out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            sharr = qd.simt.block.SharedArray((block_dim,), qd.i32)
+            sharr[tid] = tid + 1
+            qd.simt.block.sync()
+            qd.atomic_mul(sharr[0], sharr[tid])
+            qd.simt.block.sync()
+            out[i] = sharr[0]
+
+    arr = qd.ndarray(qd.i32, (N,))
+    kern(arr)
+    # sharr[0] starts as 1, then *= 1, *= 2, *= 3, *= 4 -> 24
+    for idx in (0, 4, 8, 60):
+        assert arr[idx] == 24
+
+
+@pytest.mark.parametrize("op", ["add", "sub", "min", "max"])
+@pytest.mark.parametrize("dtype", [qd.f16, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_float_atomics(op, dtype):
+    if dtype == qd.f64:
+        if qd.cfg.arch in (qd.vulkan, qd.metal):
+            caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+            if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+                pytest.skip("Device does not support f64")
+    N = 256
+    block_dim = 32
+    SCALE = 0.1523  # fractional so values are truly non-integer floats
+    # Arithmetic sum: SCALE * (0 + 1 + ... + block_dim-1)
+    expected_sum = SCALE * block_dim * (block_dim - 1) / 2.0
+    atomic_op = getattr(qd, f"atomic_{op}")
+
+    def make_kernel(atomic_fn):
+        @qd.kernel
+        def kern(out: qd.types.ndarray()):
+            qd.loop_config(block_dim=block_dim)
+            for i in range(N):
+                tid = i % block_dim
+                sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+                val = qd.cast(tid * SCALE, dtype)
+                sharr[tid] = val
+                qd.simt.block.sync()
+                atomic_fn(sharr[0], val)
+                qd.simt.block.sync()  # wait for all threads' atomics to complete
+                out[i] = sharr[0]
+
+        return kern
+
+    expected = {
+        "add": expected_sum,
+        "sub": -expected_sum,
+        "min": 0.0,
+        "max": (block_dim - 1) * SCALE,
+    }
+    rtol = 1e-3 if dtype == qd.f16 else 1e-6
+    arr = qd.ndarray(qd.f32, (N))
+    make_kernel(atomic_op)(arr)
+    for idx in (0, 31, 32, 255):
+        assert arr[idx] == test_utils.approx(expected[op], rel=rtol)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [qd.i8, qd.i16, qd.i32, qd.u8, qd.u16, qd.u32, qd.f16, qd.f32, qd.f64, qd.u1],
+)
+@test_utils.test(arch=qd.gpu)
+def test_shared_array_dtypes(dtype):
+    if dtype == qd.f64:
+        if qd.cfg.arch in (qd.vulkan, qd.metal):
+            caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+            if not caps.get(qd._lib.core.DeviceCapability.spirv_has_float64):
+                pytest.skip("Device does not support f64")
+    N = 128
+    block_dim = 32
+    SCALE = 0.1523
+    # Use f32 as output type for sub-32-bit types that ndarrays can't represent
+    out_dtype = qd.f32 if dtype in (qd.f16, qd.u1) else dtype
+
+    @qd.kernel
+    def kern(inp: qd.types.ndarray(), out: qd.types.ndarray()):
+        qd.loop_config(block_dim=block_dim)
+        for i in range(N):
+            tid = i % block_dim
+            sharr = qd.simt.block.SharedArray((block_dim,), dtype)
+            # Store from input tensor (not just tid) to prevent shortcutting
+            sharr[tid] = qd.cast(inp[i], dtype)
+            qd.simt.block.sync()
+            # Read from a different thread's slot to force shared memory use
+            out[i] = sharr[(tid + 1) % block_dim]
+
+    if dtype in (qd.f16, qd.f32, qd.f64):
+        inp_vals = np.array([i % block_dim * SCALE for i in range(N)], dtype=np.float32)
+        inp_dtype = out_dtype
+    else:
+        inp_vals = np.array([i % block_dim for i in range(N)], dtype=np.int32)
+        # Use i32 for bool input - SPIR-V doesn't support f32 -> u1 cast
+        inp_dtype = qd.i32 if dtype == qd.u1 else out_dtype
+    inp = qd.ndarray(inp_dtype, (N,))
+    inp.from_numpy(inp_vals)
+    arr = qd.ndarray(out_dtype, (N,))
+    kern(inp, arr)
+
+    rtol = {qd.f16: 1e-3, qd.f64: 1e-10}.get(dtype, 1e-6)
+    for block_start in (0, 32, 64, 96):
+        for tid in range(block_dim):
+            neighbor = (tid + 1) % block_dim
+            if dtype in (qd.f16, qd.f32, qd.f64):
+                expected = neighbor * SCALE
+                assert arr[block_start + tid] == test_utils.approx(expected, rel=rtol)
+            elif dtype == qd.u1:
+                # qd.cast to u1 maps nonzero -> 1, zero -> 0
+                assert arr[block_start + tid] == (0 if neighbor == 0 else 1)
+            else:
+                assert arr[block_start + tid] == neighbor
+
+
+@test_utils.test(arch=qd.gpu)
 def test_shared_array_tensor_type():
     data_type = vec4
     block_dim = 16
@@ -169,10 +453,14 @@ def test_shared_array_tensor_type():
             y[tid] += shared_mem[tid]
 
     test()
-    assert (y.to_numpy()[0] == [4.0, 8.0, 12.0, 16.0]).all()
+    # Check all tids, not just tid=0. The shared array is flattened from
+    # vec4[16] to f32[64] in SPIR-V, so a stride bug (e.g. accessing element
+    # tid+c instead of tid*4+c) would produce wrong values for tid>0 but
+    # correct values for tid=0 since 0*anything==0.
+    assert (y.to_numpy() == [[4.0, 8.0, 12.0, 16.0]] * block_dim).all()
 
 
-@test_utils.test(arch=[qd.cuda], debug=True)
+@test_utils.test(arch=qd.gpu, debug=True)
 def test_shared_array_matrix():
     @qd.kernel
     def foo():

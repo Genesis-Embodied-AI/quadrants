@@ -30,8 +30,7 @@ class VulkanProgramImpl : public GfxProgramImpl {
   explicit VulkanProgramImpl(CompileConfig &config);
   ~VulkanProgramImpl() override;
 
-  void materialize_runtime(KernelProfilerBase *profiler,
-                           uint64 **result_buffer_ptr) override;
+  void materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr) override;
 
   Device *get_compute_device() override {
     if (embedded_device_) {
@@ -49,9 +48,8 @@ class VulkanProgramImpl : public GfxProgramImpl {
 
   void finalize() override;
 
-  void enqueue_compute_op_lambda(
-      std::function<void(Device *device, CommandList *cmdlist)> op,
-      const std::vector<ComputeOpImageRef> &image_refs) override;
+  void enqueue_compute_op_lambda(std::function<void(Device *device, CommandList *cmdlist)> op,
+                                 const std::vector<ComputeOpImageRef> &image_refs) override;
 
  private:
   std::unique_ptr<vulkan::VulkanDeviceCreator> embedded_device_{nullptr};

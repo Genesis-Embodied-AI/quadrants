@@ -42,6 +42,12 @@ from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import Struct, StructType
+from quadrants.lang.util import (
+    is_from_quadrants_module as _is_from_quadrants_module,
+)
+from quadrants.lang.util import (
+    is_quadrants_internal_file as _is_quadrants_internal_file,
+)
 from quadrants.types import primitive_types
 from quadrants.types.utils import is_integral
 
@@ -87,11 +93,12 @@ class ASTTransformer(Builder):
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
         if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
             if isinstance(node.ptr, (float, int, Field)):
-                message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                if node.id.upper() == node.id:
-                    warnings.warn(message)
-                else:
-                    raise exception.QuadrantsCompilationError(message)
+                if not _is_quadrants_internal_file(ctx.file):
+                    message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
+                    if node.id.upper() == node.id:
+                        warnings.warn(message)
+                    else:
+                        raise exception.QuadrantsCompilationError(message)
         if isinstance(node.ptr, Generator):
             raise ValueError("Cannot store generators in variables, inside kernels or functions")
         return node.ptr
@@ -153,7 +160,7 @@ class ASTTransformer(Builder):
 
         # Keep all generated assign statements and compose single one at last.
         # The variable is introduced to support chained assignments.
-        # Ref https://github.com/taichi-dev/quadrants/issues/2659.
+        # Ref https://github.com/taichi-dev/taichi/issues/2659.
         values = node.value.ptr if is_static_assign else impl.expr_init(node.value.ptr)
 
         for node_target in node.targets:
@@ -624,8 +631,6 @@ class ASTTransformer(Builder):
         # whether it is a method of Dynamic SNode and build the expression if it is by calling
         # build_attribute_if_is_dynamic_snode_method. If we find that it is not a method of Dynamic SNode,
         # we continue to process it as a normal attribute node.
-        from quadrants import math as qd_math  # pylint: disable=import-outside-toplevel
-
         try:
             build_stmt(ctx, node.value)
         except Exception as e:
@@ -682,8 +687,9 @@ class ASTTransformer(Builder):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
-                    if violation and node.value.ptr in [qd_math, math, np]:
-                        # ignore this built-in module
+                    if violation and node.value.ptr in [math, np]:
+                        violation = False
+                    if violation and _is_from_quadrants_module(node.value.ptr):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
@@ -1204,9 +1210,39 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
 
     @staticmethod
+    def _is_graph_do_while_call(node: ast.expr) -> str | None:
+        """If *node* is ``qd.graph_do_while(var)`` return the arg name, else None."""
+        if not isinstance(node, ast.Call):
+            return None
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
+            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
+                return node.args[0].id
+        if isinstance(func, ast.Name) and func.id == "graph_do_while":
+            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
+                return node.args[0].id
+        return None
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
+
+        graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
+        if graph_do_while_arg is not None:
+            kernel = ctx.global_context.current_kernel
+            arg_names = [m.name for m in kernel.arg_metas]
+            if graph_do_while_arg not in arg_names:
+                raise QuadrantsSyntaxError(
+                    f"qd.graph_do_while({graph_do_while_arg!r}) does not match any "
+                    f"parameter of kernel {kernel.func.__name__!r}. "
+                    f"Available parameters: {arg_names}"
+                )
+            if not kernel.use_graph:
+                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
+            kernel.graph_do_while_arg = graph_do_while_arg
+            build_stmts(ctx, node.body)
+            return None
 
         with ctx.loop_scope_guard():
             stmt_dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))

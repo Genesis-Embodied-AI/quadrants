@@ -94,29 +94,30 @@ class QD_DLL_EXPORT Type {
   template <typename T>
   T *as() {
     auto p = cast<T>();
-    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
-                   typeid(T).name());
+    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(), typeid(T).name());
     return p;
   }
 
   template <typename T>
   const T *as() const {
     auto p = cast<T>();
-    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(),
-                   typeid(T).name());
+    QD_ASSERT_INFO(p != nullptr, "Cannot treat {} as {}", this->to_string(), typeid(T).name());
     return p;
   }
 
   template <typename S, typename T>
-  static typename std::enable_if<std::is_base_of_v<Type, T>, void>::type
-  ptr_io(const T *&ptr, S &serializer, bool writing);
+  static typename std::enable_if<std::is_base_of_v<Type, T>, void>::type ptr_io(const T *&ptr,
+                                                                                S &serializer,
+                                                                                bool writing);
 
   using JsonValue = ::liong::json::JsonValue;
   using JsonObject = ::liong::json::JsonObject;
 
   template <typename T>
-  static typename std::enable_if<std::is_base_of_v<Type, T>, void>::type
-  jsonserde_ptr_io(const T *&ptr, JsonValue &value, bool writing, bool strict);
+  static typename std::enable_if<std::is_base_of_v<Type, T>, void>::type jsonserde_ptr_io(const T *&ptr,
+                                                                                          JsonValue &value,
+                                                                                          bool writing,
+                                                                                          bool strict);
 
   // For serialization
   virtual const Type *get_type() const = 0;
@@ -206,8 +207,7 @@ class QD_DLL_EXPORT PrimitiveType : public Type {
   // TODO(type): make 'type' private and add a const getter
   PrimitiveTypeID type;
 
-  explicit PrimitiveType(PrimitiveTypeID type = PrimitiveTypeID::unknown)
-      : Type(TypeKind::Primitive), type(type) {
+  explicit PrimitiveType(PrimitiveTypeID type = PrimitiveTypeID::unknown) : Type(TypeKind::Primitive), type(type) {
   }
 
   std::string to_string() const override;
@@ -228,9 +228,7 @@ class QD_DLL_EXPORT PointerType : public Type {
   PointerType() : Type(TypeKind::Pointer) {};
 
   PointerType(Type *pointee, bool is_bit_pointer)
-      : Type(TypeKind::Pointer),
-        pointee_(pointee),
-        is_bit_pointer_(is_bit_pointer) {
+      : Type(TypeKind::Pointer), pointee_(pointee), is_bit_pointer_(is_bit_pointer) {
   }
 
   Type *get_pointee_type() const {
@@ -313,10 +311,9 @@ struct QD_DLL_EXPORT AbstractDictionaryMember {
 class QD_DLL_EXPORT AbstractDictionaryType : public Type {
  public:
   explicit AbstractDictionaryType(TypeKind type_kind) : Type(type_kind) {};
-  explicit AbstractDictionaryType(
-      TypeKind type_kind,
-      const std::vector<AbstractDictionaryMember> &elements,
-      const std::string &layout = "none")
+  explicit AbstractDictionaryType(TypeKind type_kind,
+                                  const std::vector<AbstractDictionaryMember> &elements,
+                                  const std::string &layout = "none")
       : Type(type_kind), elements_(elements), layout_(layout) {
   }
 
@@ -347,8 +344,7 @@ class QD_DLL_EXPORT AbstractDictionaryType : public Type {
 class QD_DLL_EXPORT StructType : public AbstractDictionaryType {
  public:
   StructType() : AbstractDictionaryType(TypeKind::Struct) {};
-  explicit StructType(const std::vector<AbstractDictionaryMember> &elements,
-                      const std::string &layout = "none")
+  explicit StructType(const std::vector<AbstractDictionaryMember> &elements, const std::string &layout = "none")
       : AbstractDictionaryType(TypeKind::Struct, elements, layout) {
   }
 
@@ -367,8 +363,7 @@ class QD_DLL_EXPORT StructType : public AbstractDictionaryType {
       } else if (auto tensor_type = element.type->cast<TensorType>()) {
         num += tensor_type->get_num_elements();
       } else {
-        QD_ASSERT(element.type->is<PrimitiveType>() ||
-                  element.type->is<PointerType>());
+        QD_ASSERT(element.type->is<PrimitiveType>() || element.type->is<PointerType>());
         num += 1;
       }
     }
@@ -506,8 +501,7 @@ class QD_DLL_EXPORT BitStructType : public Type {
   }
 
   bool get_member_owns_shared_exponent(int i) const {
-    return member_exponents_[i] != -1 &&
-           member_exponent_users_[member_exponents_[i]].size() > 1;
+    return member_exponents_[i] != -1 && member_exponent_users_[member_exponents_[i]].size() > 1;
   }
 
   int get_member_exponent(int i) const {
@@ -520,11 +514,7 @@ class QD_DLL_EXPORT BitStructType : public Type {
 
   const Type *get_type() const override;
 
-  QD_IO_DEF(physical_type_,
-            member_types_,
-            member_bit_offsets_,
-            member_exponents_,
-            member_exponent_users_);
+  QD_IO_DEF(physical_type_, member_types_, member_bit_offsets_, member_exponents_, member_exponent_users_);
 
  private:
   PrimitiveType *physical_type_;
@@ -538,9 +528,7 @@ class QD_DLL_EXPORT QuantArrayType : public Type {
  public:
   QuantArrayType() : Type(TypeKind::QuantArray) {
   }
-  QuantArrayType(PrimitiveType *physical_type,
-                 Type *element_type_,
-                 int num_elements_)
+  QuantArrayType(PrimitiveType *physical_type, Type *element_type_, int num_elements_)
       : Type(TypeKind::QuantArray),
         physical_type_(physical_type),
         element_type_(element_type_),
@@ -548,8 +536,7 @@ class QD_DLL_EXPORT QuantArrayType : public Type {
     if (auto qit = element_type_->cast<QuantIntType>()) {
       element_num_bits_ = qit->get_num_bits();
     } else if (auto qfxt = element_type_->cast<QuantFixedType>()) {
-      element_num_bits_ =
-          qfxt->get_digits_type()->as<QuantIntType>()->get_num_bits();
+      element_num_bits_ = qfxt->get_digits_type()->as<QuantIntType>()->get_num_bits();
     } else {
       QD_ERROR("Quant array only supports quant int/fixed type for now.");
     }
@@ -611,9 +598,7 @@ class TypedConstant {
   }
 
   explicit TypedConstant(DataType dt) : dt(dt) {
-    QD_ASSERT_INFO(dt->is<PrimitiveType>(),
-                   "TypedConstant can only be PrimitiveType, got {}",
-                   dt->to_string());
+    QD_ASSERT_INFO(dt->is<PrimitiveType>(), "TypedConstant can only be PrimitiveType, got {}", dt->to_string());
     value_bits = 0;
   }
 
@@ -716,8 +701,9 @@ class TypedConstant {
 };
 
 template <typename S, typename T>
-typename std::enable_if<std::is_base_of_v<Type, T>, void>::type
-Type::ptr_io(const T *&ptr, S &serializer, bool writing) {
+typename std::enable_if<std::is_base_of_v<Type, T>, void>::type Type::ptr_io(const T *&ptr,
+                                                                             S &serializer,
+                                                                             bool writing) {
   if (writing) {
     if (ptr == nullptr) {
       serializer("type_kind", (TypeKind)-1);
@@ -759,11 +745,10 @@ Type::ptr_io(const T *&ptr, S &serializer, bool writing) {
 }
 
 template <typename T>
-typename std::enable_if<std::is_base_of_v<Type, T>, void>::type
-Type::jsonserde_ptr_io(const T *&ptr,
-                       JsonValue &value,
-                       bool writing,
-                       bool strict) {
+typename std::enable_if<std::is_base_of_v<Type, T>, void>::type Type::jsonserde_ptr_io(const T *&ptr,
+                                                                                       JsonValue &value,
+                                                                                       bool writing,
+                                                                                       bool strict) {
   if (writing) {
     if (ptr == nullptr) {
       value = JsonValue(nullptr);

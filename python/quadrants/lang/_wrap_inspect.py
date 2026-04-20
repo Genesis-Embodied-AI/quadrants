@@ -162,7 +162,7 @@ def _custom_findsource(obj):
                     f"Cannot find source code for Object: {obj}, this \
 is possibly because of you are running Quadrants in an environment that Quadrants's own \
 inspect module cannot find the source. Please report an issue to help us fix: \
-https://github.com/taichi-dev/quadrants/issues"
+https://github.com/Genesis-Embodied-AI/quadrants/issues"
                 )
 
 

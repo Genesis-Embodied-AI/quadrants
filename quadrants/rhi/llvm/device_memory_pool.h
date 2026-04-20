@@ -18,11 +18,9 @@ class QD_DLL_EXPORT DeviceMemoryPool {
   std::unique_ptr<CachingAllocator> allocator_{nullptr};
   static const size_t page_size;
 
-  static DeviceMemoryPool &get_instance(Arch arch,
-                                        bool merge_upon_release = true);
+  static DeviceMemoryPool &get_instance(Arch arch, bool merge_upon_release = true);
 
-  void *allocate_with_cache(LlvmDevice *device,
-                            const LlvmDevice::LlvmRuntimeAllocParams &params);
+  void *allocate_with_cache(LlvmDevice *device, const LlvmDevice::LlvmRuntimeAllocParams &params);
   void *allocate(std::size_t size, std::size_t alignment, bool managed = false);
   void release(std::size_t size, void *ptr, bool release_raw = false);
   void reset();

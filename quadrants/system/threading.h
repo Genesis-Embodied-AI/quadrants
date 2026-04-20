@@ -41,10 +41,7 @@ class ThreadPool {
 
   explicit ThreadPool(int max_num_threads);
 
-  void run(int splits,
-           int desired_num_threads,
-           void *range_for_task_context,
-           RangeForTaskFunc *func);
+  void run(int splits, int desired_num_threads, void *range_for_task_context, RangeForTaskFunc *func);
 
   static void static_run(ThreadPool *pool,
                          int splits,

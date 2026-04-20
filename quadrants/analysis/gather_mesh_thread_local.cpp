@@ -31,8 +31,7 @@ class GatherMeshThreadLocal : public BasicStmtVisitor {
                   MeshElementTypeSet *total_ptr,
                   const CompileConfig &config) {
     QD_ASSERT(offload->task_type == OffloadedStmt::TaskType::mesh_for);
-    GatherMeshThreadLocal analyser(offload, owned_ptr, total_ptr,
-                                   config.optimize_mesh_reordered_mapping);
+    GatherMeshThreadLocal analyser(offload, owned_ptr, total_ptr, config.optimize_mesh_reordered_mapping);
     offload->accept(&analyser);
   }
 
@@ -43,8 +42,7 @@ class GatherMeshThreadLocal : public BasicStmtVisitor {
   }
 
   void visit(MeshRelationAccessStmt *stmt) override {
-    if (mesh::element_order(stmt->from_type()) >
-        mesh::element_order(stmt->to_type)) {
+    if (mesh::element_order(stmt->from_type()) > mesh::element_order(stmt->to_type)) {
       this->total_ptr->insert(stmt->from_type());
     } else {
       this->owned_ptr->insert(stmt->from_type());
@@ -53,8 +51,7 @@ class GatherMeshThreadLocal : public BasicStmtVisitor {
 
   void visit(MeshIndexConversionStmt *stmt) override {
     this->total_ptr->insert(stmt->idx_type);
-    if (optimize_mesh_reordered_mapping &&
-        stmt->conv_type == mesh::ConvType::l2r) {
+    if (optimize_mesh_reordered_mapping && stmt->conv_type == mesh::ConvType::l2r) {
       this->owned_ptr->insert(stmt->idx_type);
     }
   }

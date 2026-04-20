@@ -29,6 +29,10 @@ class FakeCompiledKernelData : public CompiledKernelData {
     return kFakeArch;
   }
 
+  size_t num_tasks() const override {
+    return 0;
+  }
+
   std::unique_ptr<CompiledKernelData> clone() const override {
     return std::make_unique<FakeCompiledKernelData>(data_);
   }
@@ -63,10 +67,7 @@ class FakeKernelCompiler : public KernelCompiler {
     return std::make_unique<Block>();
   }
 
-  CKDPtr compile(const CompileConfig &,
-                 const DeviceCapabilityConfig &,
-                 const Kernel &,
-                 IRNode &) const override {
+  CKDPtr compile(const CompileConfig &, const DeviceCapabilityConfig &, const Kernel &, IRNode &) const override {
     return std::make_unique<FakeCompiledKernelData>("compiled_data");
   }
 };
@@ -74,8 +75,7 @@ class FakeKernelCompiler : public KernelCompiler {
 class KernelCompilationManagerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    temp_dir_ = std::filesystem::temp_directory_path() /
-                ("kcm_test_" + std::to_string(std::time(nullptr)));
+    temp_dir_ = std::filesystem::temp_directory_path() / ("kcm_test_" + std::to_string(std::time(nullptr)));
     std::filesystem::create_directories(temp_dir_);
 
     KernelCompilationManager::Config config;
@@ -107,8 +107,7 @@ TEST_F(KernelCompilationManagerTest, DumpNewKernel) {
   std::string checksum = "test_kernel_key_123";
   mgr_->cache_kernel(checksum, compile_config_, std::move(ckd), kernel);
   mgr_->dump();
-  auto cache_file =
-      temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
+  auto cache_file = temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
   EXPECT_TRUE(std::filesystem::exists(cache_file));
   auto metadata_file = temp_dir_ / "kernel_compilation_manager" / "ticache.tcb";
   EXPECT_TRUE(std::filesystem::exists(metadata_file));
@@ -125,8 +124,7 @@ TEST_F(KernelCompilationManagerTest, CacheExistingKernelThrowsException) {
     mgr_->cache_kernel(checksum, compile_config_, std::move(ckd1), kernel);
   }
   auto ckd2 = std::make_unique<FakeCompiledKernelData>("new_data");
-  EXPECT_ANY_THROW(
-      mgr_->cache_kernel(checksum, compile_config_, std::move(ckd2), kernel));
+  EXPECT_ANY_THROW(mgr_->cache_kernel(checksum, compile_config_, std::move(ckd2), kernel));
 }
 
 TEST_F(KernelCompilationManagerTest, DumpMemCacheOnlyKernel) {
@@ -143,8 +141,7 @@ TEST_F(KernelCompilationManagerTest, DumpMemCacheOnlyKernel) {
   mgr_->dump();
 
   // Verify the kernel data was NOT written to disk
-  auto cache_file =
-      temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
+  auto cache_file = temp_dir_ / "kernel_compilation_manager" / (checksum + ".tic");
   EXPECT_FALSE(std::filesystem::exists(cache_file));
 }
 

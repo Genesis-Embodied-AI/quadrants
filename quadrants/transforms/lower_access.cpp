@@ -27,9 +27,7 @@ class PtrLowererImpl : public ScalarPointerLowerer {
   }
 
  protected:
-  Stmt *handle_snode_at_level(int level,
-                              LinearizeStmt *linearized,
-                              Stmt *last) override;
+  Stmt *handle_snode_at_level(int level, LinearizeStmt *linearized, Stmt *last) override;
 
  private:
   LowerAccess *la_{nullptr};
@@ -46,10 +44,8 @@ class LowerAccess : public IRVisitor {
   const std::vector<SNode *> &kernel_forces_no_activate;
   bool lower_atomic_ptr;
 
-  LowerAccess(const std::vector<SNode *> &kernel_forces_no_activate,
-              bool lower_atomic_ptr)
-      : kernel_forces_no_activate(kernel_forces_no_activate),
-        lower_atomic_ptr(lower_atomic_ptr) {
+  LowerAccess(const std::vector<SNode *> &kernel_forces_no_activate, bool lower_atomic_ptr)
+      : kernel_forces_no_activate(kernel_forces_no_activate), lower_atomic_ptr(lower_atomic_ptr) {
     // TODO: change this to false
     allow_undefined_visitor = true;
     current_struct_for = nullptr;
@@ -87,16 +83,13 @@ class LowerAccess : public IRVisitor {
     current_struct_for = nullptr;
   }
 
-  VecStatement lower_ptr(GlobalPtrStmt *ptr,
-                         bool activate,
-                         SNodeOpType snode_op = SNodeOpType::undefined) {
+  VecStatement lower_ptr(GlobalPtrStmt *ptr, bool activate, SNodeOpType snode_op = SNodeOpType::undefined) {
     VecStatement lowered;
     if (snode_op == SNodeOpType::is_active) {
       // For ti.is_active
       QD_ASSERT(!activate);
     }
-    PtrLowererImpl lowerer{ptr->snode, ptr->indices, snode_op,
-                           ptr->is_bit_vectorized, &lowered};
+    PtrLowererImpl lowerer{ptr->snode, ptr->indices, snode_op, ptr->is_bit_vectorized, &lowered};
     lowerer.set_pointer_needs_activation(activate);
     lowerer.set_lower_access(this);
     lowerer.run();
@@ -106,12 +99,11 @@ class LowerAccess : public IRVisitor {
       // if the global ptr is bit vectorized, we start from the place snode
       // and find the parent quant array snode, use its physical type
       auto parent_ret_type = ptr->snode->parent->physical_type;
-      auto ptr_ret_type =
-          TypeFactory::get_instance().get_pointer_type(parent_ret_type);
+      auto ptr_ret_type = TypeFactory::get_instance().get_pointer_type(parent_ret_type);
       lowered_ptr->ret_type = DataType(ptr_ret_type);
     } else {
-      auto ret_type = TypeFactory::get_instance().get_pointer_type(
-          ptr->ret_type.ptr_removed(), ptr->snode->is_bit_level);
+      auto ret_type =
+          TypeFactory::get_instance().get_pointer_type(ptr->ret_type.ptr_removed(), ptr->snode->is_bit_level);
       lowered_ptr->ret_type = ret_type;
       if (auto get_ch_ptr = lowered_ptr->cast<GetChStmt>()) {
         get_ch_ptr->overrided_dtype = ret_type;
@@ -161,15 +153,12 @@ class LowerAccess : public IRVisitor {
         modifier.replace_with(stmt, std::move(lowered), true);
       } else if (stmt->op_type == SNodeOpType::get_addr) {
         auto lowered = lower_ptr(global_ptr, false);
-        auto cast = lowered.push_back<UnaryOpStmt>(UnaryOpType::cast_bits,
-                                                   lowered.back().get());
-        cast->cast_type = TypeFactory::get_instance().get_primitive_type(
-            PrimitiveTypeID::u64);
+        auto cast = lowered.push_back<UnaryOpStmt>(UnaryOpType::cast_bits, lowered.back().get());
+        cast->cast_type = TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::u64);
         stmt->ptr = lowered.back().get();
         modifier.replace_with(stmt, std::move(lowered));
       } else {
-        auto lowered =
-            lower_ptr(global_ptr, SNodeOpStmt::need_activation(stmt->op_type));
+        auto lowered = lower_ptr(global_ptr, SNodeOpStmt::need_activation(stmt->op_type));
         stmt->ptr = lowered.back().get();
         modifier.insert_before(stmt, std::move(lowered));
       }
@@ -180,8 +169,7 @@ class LowerAccess : public IRVisitor {
     if (!lower_atomic_ptr)
       return;
     if (stmt->dest->is<GlobalPtrStmt>()) {
-      auto lowered = lower_ptr(stmt->dest->as<GlobalPtrStmt>(),
-                               stmt->dest->as<GlobalPtrStmt>()->activate);
+      auto lowered = lower_ptr(stmt->dest->as<GlobalPtrStmt>(), stmt->dest->as<GlobalPtrStmt>()->activate);
       stmt->dest = lowered.back().get();
       modifier.insert_before(stmt, std::move(lowered));
     }
@@ -195,9 +183,7 @@ class LowerAccess : public IRVisitor {
     }
   }
 
-  static bool run(IRNode *node,
-                  const std::vector<SNode *> &kernel_forces_no_activate,
-                  bool lower_atomic) {
+  static bool run(IRNode *node, const std::vector<SNode *> &kernel_forces_no_activate, bool lower_atomic) {
     LowerAccess inst(kernel_forces_no_activate, lower_atomic);
     bool modified = false;
     while (true) {
@@ -217,25 +203,20 @@ void PtrLowererImpl::set_lower_access(LowerAccess *la) {
 
   snodes_on_loop_.clear();
   if (la_->current_struct_for) {
-    for (SNode *s = la_->current_struct_for->snode; s != nullptr;
-         s = s->parent) {
+    for (SNode *s = la_->current_struct_for->snode; s != nullptr; s = s->parent) {
       snodes_on_loop_.insert(s);
     }
   }
 }
 
-Stmt *PtrLowererImpl::handle_snode_at_level(int level,
-                                            LinearizeStmt *linearized,
-                                            Stmt *last) {
+Stmt *PtrLowererImpl::handle_snode_at_level(int level, LinearizeStmt *linearized, Stmt *last) {
   // Check whether |snode| is part of the tree being iterated over by struct for
   auto *snode = snodes()[level];
   bool on_loop_tree = (snodes_on_loop_.find(snode) != snodes_on_loop_.end());
   auto *current_struct_for = la_->current_struct_for;
-  if (on_loop_tree && current_struct_for &&
-      (indices_.size() == current_struct_for->snode->num_active_indices)) {
+  if (on_loop_tree && current_struct_for && (indices_.size() == current_struct_for->snode->num_active_indices)) {
     for (int j = 0; j < (int)indices_.size(); j++) {
-      auto diff = irpass::analysis::value_diff_loop_index(
-          indices_[j], current_struct_for, j);
+      auto diff = irpass::analysis::value_diff_loop_index(indices_[j], current_struct_for, j);
       if (!diff.linear_related()) {
         on_loop_tree = false;
       } else if (j == (int)indices_.size() - 1) {
@@ -251,25 +232,20 @@ Stmt *PtrLowererImpl::handle_snode_at_level(int level,
   }
 
   // Generates the SNode access operations at the current |level|.
-  if ((snode_op_ != SNodeOpType::undefined) &&
-      (level == (int)snodes().size() - 1)) {
+  if ((snode_op_ != SNodeOpType::undefined) && (level == (int)snodes().size() - 1)) {
     // Create a SNodeOp querying if element i(linearized) of node is active
     lowered_->push_back<SNodeOpStmt>(snode_op_, snode, last, linearized);
   } else {
     const bool kernel_forces_no_activate_snode =
-        std::find(la_->kernel_forces_no_activate.begin(),
-                  la_->kernel_forces_no_activate.end(),
-                  snode) != la_->kernel_forces_no_activate.end();
+        std::find(la_->kernel_forces_no_activate.begin(), la_->kernel_forces_no_activate.end(), snode) !=
+        la_->kernel_forces_no_activate.end();
 
     const bool needs_activation =
-        snode->need_activation() && pointer_needs_activation_ &&
-        !kernel_forces_no_activate_snode && !on_loop_tree;
+        snode->need_activation() && pointer_needs_activation_ && !kernel_forces_no_activate_snode && !on_loop_tree;
 
-    auto lookup = lowered_->push_back<SNodeLookupStmt>(snode, last, linearized,
-                                                       needs_activation);
+    auto lookup = lowered_->push_back<SNodeLookupStmt>(snode, last, linearized, needs_activation);
     int chid = snode->child_id(snodes()[level + 1]);
-    if (is_bit_vectorized_ && (snode->type == SNodeType::dense) &&
-        (level == path_length() - 2)) {
+    if (is_bit_vectorized_ && (snode->type == SNodeType::dense) && (level == path_length() - 2)) {
       last = lowered_->push_back<GetChStmt>(lookup, chid,
                                             /*is_bit_vectorized=*/true);
     } else {
@@ -286,11 +262,8 @@ const PassID LowerAccessPass::id = "LowerAccessPass";
 
 namespace irpass {
 
-bool lower_access(IRNode *root,
-                  const CompileConfig &config,
-                  const LowerAccessPass::Args &args) {
-  bool modified =
-      LowerAccess::run(root, args.kernel_forces_no_activate, args.lower_atomic);
+bool lower_access(IRNode *root, const CompileConfig &config, const LowerAccessPass::Args &args) {
+  bool modified = LowerAccess::run(root, args.kernel_forces_no_activate, args.lower_atomic);
   type_check(root, config);
   return modified;
 }

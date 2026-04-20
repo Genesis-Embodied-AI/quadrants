@@ -77,8 +77,7 @@ class CUDADriverFunction {
   }
 
   std::string get_error_message(uint32 err) {
-    return get_cuda_error_message(err) +
-           fmt::format(" while calling {} ({})", name_, symbol_name_);
+    return get_cuda_error_message(err) + fmt::format(" while calling {} ({})", name_, symbol_name_);
   }
 
   uint32 call_with_warning(Args... args) {
@@ -122,8 +121,7 @@ class CUDADriverBase {
 
 class CUDADriver : protected CUDADriverBase {
  public:
-#define PER_CUDA_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
+#define PER_CUDA_FUNCTION(name, symbol_name, ...) CUDADriverFunction<__VA_ARGS__> name;
 #include "quadrants/rhi/cuda/cuda_driver_functions.inc.h"
 #undef PER_CUDA_FUNCTION
 
@@ -166,8 +164,7 @@ class CUSPARSEDriver : protected CUDADriverBase {
  public:
   static CUSPARSEDriver &get_instance();
 
-#define PER_CUSPARSE_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
+#define PER_CUSPARSE_FUNCTION(name, symbol_name, ...) CUDADriverFunction<__VA_ARGS__> name;
 #include "quadrants/rhi/cuda/cusparse_functions.inc.h"
 #undef PER_CUSPARSE_FUNCTION
 
@@ -188,8 +185,7 @@ class CUSOLVERDriver : protected CUDADriverBase {
   // TODO: Add cusolver function APIs
   static CUSOLVERDriver &get_instance();
 
-#define PER_CUSOLVER_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
+#define PER_CUSOLVER_FUNCTION(name, symbol_name, ...) CUDADriverFunction<__VA_ARGS__> name;
 #include "quadrants/rhi/cuda/cusolver_functions.inc.h"
 #undef PER_CUSOLVER_FUNCTION
 
@@ -209,8 +205,7 @@ class CUBLASDriver : protected CUDADriverBase {
  public:
   static CUBLASDriver &get_instance();
 
-#define PER_CUBLAS_FUNCTION(name, symbol_name, ...) \
-  CUDADriverFunction<__VA_ARGS__> name;
+#define PER_CUBLAS_FUNCTION(name, symbol_name, ...) CUDADriverFunction<__VA_ARGS__> name;
 #include "quadrants/rhi/cuda/cublas_functions.inc.h"
 #undef PER_CUBLAS_FUNCTION
 

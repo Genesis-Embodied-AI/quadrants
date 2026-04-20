@@ -55,8 +55,7 @@ void load_metadata_test() {
   write_to_binary_file(gen_old_metadata<MetadataType>(), old_file);
   // Generate corrupted metadata file
   write_to_binary_file(gen_correct_metadata<MetadataType>(), corrupted_file);
-  std::ofstream(corrupted_file, std::ios::app | std::ios::binary)
-      << "I-AM-BAD-BYTES" << std::flush;
+  std::ofstream(corrupted_file, std::ios::app | std::ios::binary) << "I-AM-BAD-BYTES" << std::flush;
 
   using Error = oc::LoadMetadataError;
   Error error = Error::kNoError;

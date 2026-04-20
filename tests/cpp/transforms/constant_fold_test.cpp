@@ -35,8 +35,7 @@ TEST_F(ConstantFoldTest, UnaryNeg) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            -1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), -1);
 }
 
 TEST_F(ConstantFoldTest, UnarySqrt) {
@@ -48,8 +47,7 @@ TEST_F(ConstantFoldTest, UnarySqrt) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            2);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 2);
 }
 
 TEST_F(ConstantFoldTest, UnaryRound) {
@@ -61,8 +59,7 @@ TEST_F(ConstantFoldTest, UnaryRound) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            3);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3);
 }
 
 TEST_F(ConstantFoldTest, UnaryFloor) {
@@ -74,8 +71,7 @@ TEST_F(ConstantFoldTest, UnaryFloor) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            3);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3);
 }
 
 TEST_F(ConstantFoldTest, UnaryCeil) {
@@ -87,8 +83,7 @@ TEST_F(ConstantFoldTest, UnaryCeil) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            4);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 4);
 }
 
 TEST_F(ConstantFoldTest, UnaryBitCast) {
@@ -100,8 +95,7 @@ TEST_F(ConstantFoldTest, UnaryBitCast) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              1.4013e-45, 1e-3);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1.4013e-45, 1e-3);
 }
 
 TEST_F(ConstantFoldTest, UnaryAbs) {
@@ -113,8 +107,7 @@ TEST_F(ConstantFoldTest, UnaryAbs) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              3.4, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3.4, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnarySin) {
@@ -126,8 +119,7 @@ TEST_F(ConstantFoldTest, UnarySin) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              0.84147, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.84147, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryAsin) {
@@ -139,8 +131,7 @@ TEST_F(ConstantFoldTest, UnaryAsin) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              1.5708, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1.5708, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryCos) {
@@ -152,8 +143,7 @@ TEST_F(ConstantFoldTest, UnaryCos) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              0.877582, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.877582, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryAcos) {
@@ -165,8 +155,7 @@ TEST_F(ConstantFoldTest, UnaryAcos) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              1.0471976, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1.0471976, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryTan) {
@@ -178,8 +167,7 @@ TEST_F(ConstantFoldTest, UnaryTan) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              0.546302, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.546302, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryTanh) {
@@ -191,8 +179,7 @@ TEST_F(ConstantFoldTest, UnaryTanh) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              0.462117, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.462117, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryExp) {
@@ -204,8 +191,7 @@ TEST_F(ConstantFoldTest, UnaryExp) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              1.648721, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1.648721, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryLog) {
@@ -217,8 +203,7 @@ TEST_F(ConstantFoldTest, UnaryLog) {
 
   run_constant_fold();
 
-  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-              1.38629, 1e-4);
+  EXPECT_NEAR(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1.38629, 1e-4);
 }
 
 TEST_F(ConstantFoldTest, UnaryBitNot) {
@@ -230,8 +215,7 @@ TEST_F(ConstantFoldTest, UnaryBitNot) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            -2);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), -2);
 }
 
 TEST_F(ConstantFoldTest, UnaryLogicNot) {
@@ -243,8 +227,7 @@ TEST_F(ConstantFoldTest, UnaryLogicNot) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0);
 }
 
 TEST_F(ConstantFoldTest, UnaryCastValue) {
@@ -256,8 +239,7 @@ TEST_F(ConstantFoldTest, UnaryCastValue) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1);
 }
 
 TEST_F(ConstantFoldTest, UnaryRsqrt) {
@@ -269,8 +251,7 @@ TEST_F(ConstantFoldTest, UnaryRsqrt) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0.5);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.5);
 }
 
 TEST_F(ConstantFoldTest, BinaryMul) {
@@ -283,8 +264,7 @@ TEST_F(ConstantFoldTest, BinaryMul) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            2);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 2);
 }
 
 TEST_F(ConstantFoldTest, BinaryAdd) {
@@ -297,8 +277,7 @@ TEST_F(ConstantFoldTest, BinaryAdd) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            3);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3);
 }
 
 TEST_F(ConstantFoldTest, BinarySub) {
@@ -311,8 +290,7 @@ TEST_F(ConstantFoldTest, BinarySub) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            -1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), -1);
 }
 
 TEST_F(ConstantFoldTest, BinaryFloorDiv) {
@@ -325,8 +303,7 @@ TEST_F(ConstantFoldTest, BinaryFloorDiv) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0);
 }
 
 TEST_F(ConstantFoldTest, BinaryDiv) {
@@ -339,8 +316,7 @@ TEST_F(ConstantFoldTest, BinaryDiv) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0.5);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.5);
 }
 
 TEST_F(ConstantFoldTest, BinaryMod) {
@@ -353,8 +329,7 @@ TEST_F(ConstantFoldTest, BinaryMod) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1);
 }
 
 TEST_F(ConstantFoldTest, BinaryMax) {
@@ -367,8 +342,7 @@ TEST_F(ConstantFoldTest, BinaryMax) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            3);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3);
 }
 
 TEST_F(ConstantFoldTest, BinaryMin) {
@@ -381,8 +355,7 @@ TEST_F(ConstantFoldTest, BinaryMin) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            2);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 2);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitAnd) {
@@ -395,8 +368,7 @@ TEST_F(ConstantFoldTest, BinaryBitAnd) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            2);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 2);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitOr) {
@@ -409,8 +381,7 @@ TEST_F(ConstantFoldTest, BinaryBitOr) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            3);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 3);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitShl) {
@@ -423,8 +394,7 @@ TEST_F(ConstantFoldTest, BinaryBitShl) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            12);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 12);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitShrInt32) {
@@ -437,8 +407,7 @@ TEST_F(ConstantFoldTest, BinaryBitShrInt32) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_int(),
-            1073741823);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_int(), 1073741823);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitShrInt64) {
@@ -451,8 +420,7 @@ TEST_F(ConstantFoldTest, BinaryBitShrInt64) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_int(),
-            4611686018427387903);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_int(), 4611686018427387903);
 }
 
 TEST_F(ConstantFoldTest, BinaryBitSar) {
@@ -478,8 +446,7 @@ TEST_F(ConstantFoldTest, BinaryCmpLt) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1);
 }
 
 TEST_F(ConstantFoldTest, BinaryCmpGt) {
@@ -492,8 +459,7 @@ TEST_F(ConstantFoldTest, BinaryCmpGt) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0);
 }
 
 TEST_F(ConstantFoldTest, BinaryCmpGe) {
@@ -506,8 +472,7 @@ TEST_F(ConstantFoldTest, BinaryCmpGe) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1);
 }
 
 TEST_F(ConstantFoldTest, BinaryCmpEq) {
@@ -520,8 +485,7 @@ TEST_F(ConstantFoldTest, BinaryCmpEq) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            1);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 1);
 }
 
 TEST_F(ConstantFoldTest, BinaryCmpNes) {
@@ -534,8 +498,7 @@ TEST_F(ConstantFoldTest, BinaryCmpNes) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0);
 }
 
 TEST_F(ConstantFoldTest, BinaryPow) {
@@ -548,8 +511,7 @@ TEST_F(ConstantFoldTest, BinaryPow) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            4);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 4);
 }
 
 TEST_F(ConstantFoldTest, BinaryAtan2) {
@@ -562,7 +524,6 @@ TEST_F(ConstantFoldTest, BinaryAtan2) {
 
   run_constant_fold();
 
-  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(),
-            0.);
+  EXPECT_EQ(ir->as<Block>()->statements[1]->as<ConstStmt>()->val.val_float(), 0.);
 }
 }  // namespace quadrants::lang

@@ -34,8 +34,7 @@ void signal_handler(int signo) {
   // @archibate found that in fact there are such solution:
   // https://docs.python.org/3/library/faulthandler.html#module-faulthandler
   auto sig_name = signal_name(signo);
-  Logger::get_instance().error(
-      fmt::format("Received signal {} ({})", signo, sig_name), false);
+  Logger::get_instance().error(fmt::format("Received signal {} ({})", signo, sig_name), false);
   exit(-1);
   QD_UNREACHABLE;
 }
@@ -59,8 +58,7 @@ HackedSignalRegister::HackedSignalRegister() {
 #undef QD_REGISTER_SIGNAL_HANDLER
 
   Logger::get_instance().set_print_stacktrace_func(print_traceback);
-  QD_TRACE("Quadrants signal handlers registered. Thread ID = {}",
-           PID::get_pid());
+  QD_TRACE("Quadrants signal handlers registered. Thread ID = {}", PID::get_pid());
 }
 
 HackedSignalRegister::~HackedSignalRegister() {
@@ -78,8 +76,7 @@ HackedSignalRegister::~HackedSignalRegister() {
   QD_UNREGISTER_SIGNAL_HANDLER(SIGFPE);
 
 #undef QD_UNREGISTER_SIGNAL_HANDLER
-  QD_TRACE("Quadrants signal handlers unregistered. Thread ID = {}",
-           PID::get_pid());
+  QD_TRACE("Quadrants signal handlers unregistered. Thread ID = {}", PID::get_pid());
 }
 
 }  // namespace quadrants

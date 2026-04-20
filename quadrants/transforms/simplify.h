@@ -15,8 +15,7 @@ class FullSimplifyPass : public Pass {
     bool autodiff_enabled;
     std::string kernel_name = "";
     bool verbose = false;
-    std::string phase =
-        "";  // Phase identifier (e.g., "simplify_I", "simplify_III")
+    std::string phase = "";  // Phase identifier (e.g., "simplify_I", "simplify_III")
   };
 };
 

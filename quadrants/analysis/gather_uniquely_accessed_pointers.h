@@ -9,8 +9,7 @@ class GatherUniquelyAccessedBitStructsPass : public Pass {
   static const PassID id;
 
   struct Result {
-    std::unordered_map<OffloadedStmt *,
-                       std::unordered_map<const SNode *, GlobalPtrStmt *>>
+    std::unordered_map<OffloadedStmt *, std::unordered_map<const SNode *, GlobalPtrStmt *>>
         uniquely_accessed_bit_structs;
   };
 };

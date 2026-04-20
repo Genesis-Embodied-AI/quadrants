@@ -6,17 +6,14 @@
 
 namespace quadrants::lang {
 
-UnaryOpStmt::UnaryOpStmt(UnaryOpType op_type,
-                         Stmt *operand,
-                         const DebugInfo &dbg_info)
+UnaryOpStmt::UnaryOpStmt(UnaryOpType op_type, Stmt *operand, const DebugInfo &dbg_info)
     : Stmt(dbg_info), op_type(op_type), operand(operand) {
   QD_ASSERT(!operand->is<AllocaStmt>());
   cast_type = PrimitiveType::unknown;
   QD_STMT_REG_FIELDS;
 }
 
-DecorationStmt::DecorationStmt(Stmt *operand,
-                               const std::vector<uint32_t> &decoration)
+DecorationStmt::DecorationStmt(Stmt *operand, const std::vector<uint32_t> &decoration)
     : operand(operand), decoration(decoration) {
   QD_STMT_REG_FIELDS;
 }
@@ -40,10 +37,7 @@ ExternalPtrStmt::ExternalPtrStmt(Stmt *base_ptr,
                                  const std::vector<Stmt *> &indices,
                                  bool is_grad,
                                  BoundaryMode boundary)
-    : base_ptr(base_ptr),
-      indices(indices),
-      is_grad(is_grad),
-      boundary(boundary) {
+    : base_ptr(base_ptr), indices(indices), is_grad(is_grad), boundary(boundary) {
   ndim = indices.size();
   QD_ASSERT(base_ptr != nullptr);
   QD_ASSERT(base_ptr->is<ArgLoadStmt>());
@@ -92,24 +86,19 @@ MatrixOfGlobalPtrStmt::MatrixOfGlobalPtrStmt(const std::vector<SNode *> &snodes,
   QD_STMT_REG_FIELDS;
 }
 
-MatrixOfMatrixPtrStmt::MatrixOfMatrixPtrStmt(const std::vector<Stmt *> &stmts,
-                                             DataType dt)
-    : stmts(stmts) {
+MatrixOfMatrixPtrStmt::MatrixOfMatrixPtrStmt(const std::vector<Stmt *> &stmts, DataType dt) : stmts(stmts) {
   ret_type = dt;
   ret_type.set_is_pointer(true);
   QD_STMT_REG_FIELDS;
 }
 
-MatrixPtrStmt::MatrixPtrStmt(Stmt *origin_input,
-                             Stmt *offset_input,
-                             const DebugInfo &dbg_info) {
+MatrixPtrStmt::MatrixPtrStmt(Stmt *origin_input, Stmt *offset_input, const DebugInfo &dbg_info) {
   origin = origin_input;
   offset = offset_input;
   this->dbg_info = dbg_info;
 
-  if (origin->is<AllocaStmt>() || origin->is<GlobalTemporaryStmt>() ||
-      origin->is<ExternalPtrStmt>() || origin->is<MatrixOfGlobalPtrStmt>() ||
-      origin->is<MatrixOfMatrixPtrStmt>() || origin->is<ThreadLocalPtrStmt>() ||
+  if (origin->is<AllocaStmt>() || origin->is<GlobalTemporaryStmt>() || origin->is<ExternalPtrStmt>() ||
+      origin->is<MatrixOfGlobalPtrStmt>() || origin->is<MatrixOfMatrixPtrStmt>() || origin->is<ThreadLocalPtrStmt>() ||
       origin->is<MatrixPtrStmt>()) {
     auto tensor_type = origin->ret_type.ptr_removed()->cast<TensorType>();
     QD_ASSERT(tensor_type != nullptr);
@@ -137,45 +126,35 @@ bool MatrixPtrStmt::common_statement_eliminable() const {
   return (callable->autodiff_mode == AutodiffMode::kNone);
 }
 
-SNodeOpStmt::SNodeOpStmt(SNodeOpType op_type,
-                         SNode *snode,
-                         Stmt *ptr,
-                         Stmt *val,
-                         const DebugInfo &dbg_info)
+SNodeOpStmt::SNodeOpStmt(SNodeOpType op_type, SNode *snode, Stmt *ptr, Stmt *val, const DebugInfo &dbg_info)
     : Stmt(dbg_info), op_type(op_type), snode(snode), ptr(ptr), val(val) {
   element_type() = PrimitiveType::i32;
   QD_STMT_REG_FIELDS;
 }
 
 bool SNodeOpStmt::activation_related(SNodeOpType op) {
-  return op == SNodeOpType::activate || op == SNodeOpType::deactivate ||
-         op == SNodeOpType::is_active;
+  return op == SNodeOpType::activate || op == SNodeOpType::deactivate || op == SNodeOpType::is_active;
 }
 
 bool SNodeOpStmt::need_activation(SNodeOpType op) {
-  return op == SNodeOpType::activate || op == SNodeOpType::append ||
-         op == SNodeOpType::allocate;
+  return op == SNodeOpType::activate || op == SNodeOpType::append || op == SNodeOpType::allocate;
 }
 
-ExternalTensorShapeAlongAxisStmt::ExternalTensorShapeAlongAxisStmt(
-    int axis,
-    const std::vector<int> &arg_id,
-    const DebugInfo &dbg_info)
+ExternalTensorShapeAlongAxisStmt::ExternalTensorShapeAlongAxisStmt(int axis,
+                                                                   const std::vector<int> &arg_id,
+                                                                   const DebugInfo &dbg_info)
     : Stmt(dbg_info), axis(axis), arg_id(arg_id) {
   QD_STMT_REG_FIELDS;
 }
 
-ExternalTensorBasePtrStmt::ExternalTensorBasePtrStmt(
-    const std::vector<int> &arg_id,
-    bool is_grad,
-    const DebugInfo &dbg_info)
+ExternalTensorBasePtrStmt::ExternalTensorBasePtrStmt(const std::vector<int> &arg_id,
+                                                     bool is_grad,
+                                                     const DebugInfo &dbg_info)
     : Stmt(dbg_info), arg_id(arg_id), is_grad(is_grad) {
   QD_STMT_REG_FIELDS;
 }
 
-LoopUniqueStmt::LoopUniqueStmt(Stmt *input,
-                               const std::vector<SNode *> &covers,
-                               const DebugInfo &dbg_info)
+LoopUniqueStmt::LoopUniqueStmt(Stmt *input, const std::vector<SNode *> &covers, const DebugInfo &dbg_info)
     : Stmt(dbg_info), input(input) {
   for (const auto &sn : covers) {
     if (sn->is_place()) {
@@ -191,8 +170,7 @@ LoopUniqueStmt::LoopUniqueStmt(Stmt *input,
   QD_STMT_REG_FIELDS;
 }
 
-IfStmt::IfStmt(Stmt *cond, const DebugInfo &dbg_info)
-    : Stmt(dbg_info), cond(cond) {
+IfStmt::IfStmt(Stmt *cond, const DebugInfo &dbg_info) : Stmt(dbg_info), cond(cond) {
   QD_STMT_REG_FIELDS;
 }
 
@@ -202,8 +180,7 @@ void IfStmt::set_true_statements(std::unique_ptr<Block> &&new_true_statements) {
     true_statements->set_parent_stmt(this);
 }
 
-void IfStmt::set_false_statements(
-    std::unique_ptr<Block> &&new_false_statements) {
+void IfStmt::set_false_statements(std::unique_ptr<Block> &&new_false_statements) {
   false_statements = std::move(new_false_statements);
   if (false_statements)
     false_statements->set_parent_stmt(this);
@@ -225,7 +202,8 @@ RangeForStmt::RangeForStmt(Stmt *begin,
                            int num_cpu_threads,
                            int block_dim,
                            bool strictly_serialized,
-                           std::string range_hint)
+                           std::string range_hint,
+                           std::string loop_name)
     : begin(begin),
       end(end),
       body(std::move(body)),
@@ -233,18 +211,19 @@ RangeForStmt::RangeForStmt(Stmt *begin,
       num_cpu_threads(num_cpu_threads),
       block_dim(block_dim),
       strictly_serialized(strictly_serialized),
-      range_hint(range_hint) {
+      range_hint(range_hint),
+      loop_name(std::move(loop_name)) {
   reversed = false;
   this->body->set_parent_stmt(this);
   QD_STMT_REG_FIELDS;
 }
 
 std::unique_ptr<Stmt> RangeForStmt::clone() const {
-  auto new_stmt = std::make_unique<RangeForStmt>(
-      begin, end, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim,
-      strictly_serialized);
+  auto new_stmt = std::make_unique<RangeForStmt>(begin, end, body->clone(), is_bit_vectorized, num_cpu_threads,
+                                                 block_dim, strictly_serialized);
   new_stmt->reversed = reversed;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 
@@ -263,10 +242,10 @@ StructForStmt::StructForStmt(SNode *snode,
 }
 
 std::unique_ptr<Stmt> StructForStmt::clone() const {
-  auto new_stmt = std::make_unique<StructForStmt>(
-      snode, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim);
+  auto new_stmt = std::make_unique<StructForStmt>(snode, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim);
   new_stmt->mem_access_opt = mem_access_opt;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 
@@ -287,17 +266,15 @@ MeshForStmt::MeshForStmt(mesh::Mesh *mesh,
 }
 
 std::unique_ptr<Stmt> MeshForStmt::clone() const {
-  auto new_stmt = std::make_unique<MeshForStmt>(
-      mesh, major_from_type, body->clone(), is_bit_vectorized, num_cpu_threads,
-      block_dim);
+  auto new_stmt = std::make_unique<MeshForStmt>(mesh, major_from_type, body->clone(), is_bit_vectorized,
+                                                num_cpu_threads, block_dim);
   new_stmt->major_to_types = major_to_types;
   new_stmt->minor_relation_types = minor_relation_types;
   new_stmt->mem_access_opt = mem_access_opt;
   return new_stmt;
 }
 
-FuncCallStmt::FuncCallStmt(Function *func, const std::vector<Stmt *> &args)
-    : func(func), args(args) {
+FuncCallStmt::FuncCallStmt(Function *func, const std::vector<Stmt *> &args) : func(func), args(args) {
   QD_STMT_REG_FIELDS;
 }
 
@@ -314,8 +291,7 @@ stmt_refs FuncCallStmt::get_store_destination() const {
   return ret;
 }
 
-WhileStmt::WhileStmt(std::unique_ptr<Block> &&body)
-    : mask(nullptr), body(std::move(body)) {
+WhileStmt::WhileStmt(std::unique_ptr<Block> &&body) : mask(nullptr), body(std::move(body)) {
   this->body->set_parent_stmt(this);
   QD_STMT_REG_FIELDS;
 }
@@ -326,29 +302,16 @@ std::unique_ptr<Stmt> WhileStmt::clone() const {
   return new_stmt;
 }
 
-GetChStmt::GetChStmt(Stmt *input_ptr,
-                     int chid,
-                     bool is_bit_vectorized,
-                     const DebugInfo &dbg_info)
-    : Stmt(dbg_info),
-      input_ptr(input_ptr),
-      chid(chid),
-      is_bit_vectorized(is_bit_vectorized) {
+GetChStmt::GetChStmt(Stmt *input_ptr, int chid, bool is_bit_vectorized, const DebugInfo &dbg_info)
+    : Stmt(dbg_info), input_ptr(input_ptr), chid(chid), is_bit_vectorized(is_bit_vectorized) {
   QD_ASSERT(input_ptr->is<SNodeLookupStmt>());
   input_snode = input_ptr->as<SNodeLookupStmt>()->snode;
   output_snode = input_snode->ch[chid].get();
   QD_STMT_REG_FIELDS;
 }
 
-GetChStmt::GetChStmt(Stmt *input_ptr,
-                     SNode *snode,
-                     int chid,
-                     bool is_bit_vectorized,
-                     const DebugInfo &dbg_info)
-    : Stmt(dbg_info),
-      input_ptr(input_ptr),
-      chid(chid),
-      is_bit_vectorized(is_bit_vectorized) {
+GetChStmt::GetChStmt(Stmt *input_ptr, SNode *snode, int chid, bool is_bit_vectorized, const DebugInfo &dbg_info)
+    : Stmt(dbg_info), input_ptr(input_ptr), chid(chid), is_bit_vectorized(is_bit_vectorized) {
   input_snode = snode;
   output_snode = input_snode->ch[chid].get();
   QD_STMT_REG_FIELDS;
@@ -442,11 +405,11 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->bls_size = bls_size;
   new_stmt->mem_access_opt = mem_access_opt;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->loop_name = loop_name;
   return new_stmt;
 }
 
-void OffloadedStmt::all_blocks_accept(IRVisitor *visitor,
-                                      bool skip_mesh_prologue) {
+void OffloadedStmt::all_blocks_accept(IRVisitor *visitor, bool skip_mesh_prologue) {
   if (tls_prologue)
     tls_prologue->accept(visitor);
   if (mesh_prologue && !skip_mesh_prologue)
@@ -462,8 +425,8 @@ void OffloadedStmt::all_blocks_accept(IRVisitor *visitor,
 }
 
 bool is_clear_list_task(const OffloadedStmt *stmt) {
-  return (stmt->task_type == OffloadedStmt::TaskType::serial) &&
-         (stmt->body->size() == 1) && stmt->body->back()->is<ClearListStmt>();
+  return (stmt->task_type == OffloadedStmt::TaskType::serial) && (stmt->body->size() == 1) &&
+         stmt->body->back()->is<ClearListStmt>();
 }
 
 ClearListStmt::ClearListStmt(SNode *snode) : snode(snode) {

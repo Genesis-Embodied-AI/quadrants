@@ -34,8 +34,7 @@ class KernelProfilerAMDGPU : public KernelProfilerBase {
 
   bool statistics_on_traced_records();
 
-  KernelProfilerBase::TaskHandle start_with_handle(
-      const std::string &kernel_name) override;
+  KernelProfilerBase::TaskHandle start_with_handle(const std::string &kernel_name) override;
 
  private:
   std::unique_ptr<EventToolkitAMDGPU> event_toolkit_{nullptr};
@@ -44,10 +43,8 @@ class KernelProfilerAMDGPU : public KernelProfilerBase {
 
 class EventToolkitAMDGPU {
  public:
-  void update_record(uint32_t records_size_after_sync,
-                     std::vector<KernelProfileTracedRecord> &traced_records);
-  KernelProfilerBase::TaskHandle start_with_handle(
-      const std::string &kernel_name);
+  void update_record(uint32_t records_size_after_sync, std::vector<KernelProfileTracedRecord> &traced_records);
+  KernelProfilerBase::TaskHandle start_with_handle(const std::string &kernel_name);
   void update_timeline(std::vector<KernelProfileTracedRecord> &traced_records);
   void clear() {
     event_records_.clear();

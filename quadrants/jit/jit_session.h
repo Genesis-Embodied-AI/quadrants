@@ -25,8 +25,7 @@ class JITSession {
  public:
   JITSession(QuadrantsLLVMContext *tlctx, const CompileConfig &config);
 
-  virtual JITModule *add_module(std::unique_ptr<llvm::Module> M,
-                                int max_reg = 0) = 0;
+  virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0) = 0;
 
   // virtual void remove_module(JITModule *module) = 0;
 

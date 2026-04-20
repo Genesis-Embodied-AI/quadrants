@@ -3,13 +3,16 @@ from typing import NamedTuple
 
 import numpy as np
 import pytest
-import torch
 
 import quadrants as qd
 from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
 from quadrants.lang.kernel_arguments import ArgMetadata
+from quadrants.lang.util import has_pytorch
 
 from tests import test_utils
+
+if has_pytorch():
+    import torch
 
 
 @test_utils.test()
@@ -257,6 +260,8 @@ def test_cache_values_checked() -> None:
     assert h_base != h(False, [diff], [None])
 
 
+@pytest.mark.needs_torch
+@pytest.mark.skipif(not has_pytorch(), reason="PyTorch not installed.")
 @test_utils.test()
 def test_args_hasher_torch_tensor() -> None:
     seen = set()
@@ -271,6 +276,8 @@ def test_args_hasher_torch_tensor() -> None:
             assert hash in seen
 
 
+@pytest.mark.needs_torch
+@pytest.mark.skipif(not has_pytorch(), reason="PyTorch not installed.")
 @test_utils.test()
 def test_args_hasher_custom_torch_tensor() -> None:
     class CustomTensor(torch.Tensor): ...

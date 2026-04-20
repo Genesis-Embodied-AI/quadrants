@@ -24,16 +24,16 @@ QD_FORCE_INLINE T radians(T deg) {
 }
 
 template <typename T>
-QD_FORCE_INLINE
-    typename std::enable_if_t<!std::is_floating_point<T>::value, bool>
-    equal(const T &A, const T &B, float64 tolerance) {
+QD_FORCE_INLINE typename std::enable_if_t<!std::is_floating_point<T>::value, bool> equal(const T &A,
+                                                                                         const T &B,
+                                                                                         float64 tolerance) {
   return maximum(abs(A - B)) <= tolerance;
 }
 
 template <typename T>
-QD_FORCE_INLINE
-    typename std::enable_if_t<std::is_floating_point<T>::value, bool>
-    equal(const T &A, const T &B, float64 tolerance) {
+QD_FORCE_INLINE typename std::enable_if_t<std::is_floating_point<T>::value, bool> equal(const T &A,
+                                                                                        const T &B,
+                                                                                        float64 tolerance) {
   return std::abs(A - B) <= tolerance;
 }
 

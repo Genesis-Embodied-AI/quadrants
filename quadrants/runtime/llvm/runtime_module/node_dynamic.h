@@ -77,8 +77,7 @@ Ptr Dynamic_allocate(Ptr meta_, Ptr node_, i32 *len) {
       });
     }
     if (i < chunk_start + chunk_size) {
-      return *p_chunk_ptr + sizeof(Ptr) +
-             (i - chunk_start) * meta->element_size;
+      return *p_chunk_ptr + sizeof(Ptr) + (i - chunk_start) * meta->element_size;
     }
     p_chunk_ptr = (Ptr *)(*p_chunk_ptr);
     chunk_start += chunk_size;
@@ -101,8 +100,7 @@ Ptr Dynamic_lookup_element(Ptr meta_, Ptr node_, int i) {
     auto chunk_size = meta->chunk_size;
     while (true) {
       if (i < chunk_start + chunk_size) {
-        auto addr =
-            chunk_ptr + sizeof(Ptr) + (i - chunk_start) * meta->element_size;
+        auto addr = chunk_ptr + sizeof(Ptr) + (i - chunk_start) * meta->element_size;
         return addr;
       }
       chunk_ptr = *(Ptr *)chunk_ptr;
