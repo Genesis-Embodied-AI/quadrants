@@ -336,11 +336,10 @@ void Operations::init_internals() {
   // Vulkan ops:
   // workgroupBarrier, workgroupMemoryBarrier, localInvocationId,
   // vkGlobalThreadIdx, subgroupBarrier, subgroupMemoryBarrier, subgroupElect,
-  // subgroupBroadcast, subgroupSize, subgroupInvocationId, subgroupAdd,
-  // subgroupMul, subgroupMin, subgroupMax, subgroupAnd, subgroupOr,
-  // subgroupXor, subgroupInclusiveAdd, subgroupInclusiveMul,
-  // subgroupInclusiveMin, subgroupInclusiveMax, subgroupInclusiveAnd,
-  // subgroupInclusiveOr, subgroupInclusiveXor
+  // subgroupBroadcast, subgroupSize, subgroupInvocationId,
+  // subgroupInclusiveAdd, subgroupInclusiveMul, subgroupInclusiveMin,
+  // subgroupInclusiveMax, subgroupInclusiveAnd, subgroupInclusiveOr,
+  // subgroupInclusiveXor
 
   auto ValueT = tyvar("ValueT");
 
@@ -357,13 +356,10 @@ void Operations::init_internals() {
   POLY_OP(subgroupShuffleUp, false, Signature({}, {ValueT, !u32}, ValueT));
   PLAIN_OP(subgroupSize, i32, false);
   PLAIN_OP(subgroupInvocationId, i32, false);
-  POLY_OP(subgroupAdd, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupMul, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupMin, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupMax, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupAnd, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupOr, false, Signature({}, {ValueT}, ValueT));
-  POLY_OP(subgroupXor, false, Signature({}, {ValueT}, ValueT));
+  // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor
+  // are intentionally absent: the portable `subgroup.reduce_add(value, log2_size)` (and equivalents)
+  // are implemented in Python on top of `subgroupShuffleDown` / `subgroupShuffle` and are the
+  // supported APIs on all backends.
   POLY_OP(subgroupInclusiveAdd, false, Signature({}, {ValueT}, ValueT));
   POLY_OP(subgroupInclusiveMul, false, Signature({}, {ValueT}, ValueT));
   POLY_OP(subgroupInclusiveMin, false, Signature({}, {ValueT}, ValueT));
