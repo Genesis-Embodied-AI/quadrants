@@ -137,5 +137,38 @@ The returned object is interchangeable with its direct equivalent:
 This mirrors the one-liner Genesis already uses to switch backends; the
 helper just makes the pattern first-class.
 
+## Gradients
+
+`needs_grad=True` works on every flexible-tensors factory and on every
+backend, by passing the keyword through to the underlying
+`qd.field` / `qd.ndarray` call:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+# Field-backed primal + grad.
+a = qd.tensor(qd.f32, shape=(4,), needs_grad=True)
+assert a.grad is not None
+
+# Same on the ndarray backend.
+b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY, needs_grad=True)
+assert b.grad is not None
+
+# Kernels write through canonical indices on both primal and grad.
+@qd.kernel
+def write_grad(x: qd.template()):
+    for i in range(4):
+        x.grad[i] = i * 100.0
+
+write_grad(a)
+print(a.grad.to_numpy())   # [0., 100., 200., 300.]
+```
+
+Gradient buffers always share the canonical shape of the primal, on both
+backends. The `needs_grad` keyword also passes through `qd.tensor_vec` and
+`qd.tensor_mat` for compound element types.
+
 Subsequent releases will add a `layout=` keyword for per-tensor physical-memory
 layout.
