@@ -6,6 +6,10 @@ This module is the user-facing entry point for selecting a tensor backend
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
 
+# pylint: disable=import-outside-toplevel
+# (Late imports below are intentional, to break circular import cycles
+# between the tensor entry point and the lang/types subpackages.)
+
 from enum import IntEnum
 
 __all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
@@ -26,9 +30,7 @@ def _with_layout(ndarray, layout):
     layout = tuple(layout)
     ndim = len(ndarray.shape)
     if len(layout) != ndim:
-        raise ValueError(
-            f"layout has {len(layout)} entries but ndarray has {ndim} dims"
-        )
+        raise ValueError(f"layout has {len(layout)} entries but ndarray has {ndim} dims")
     if sorted(layout) != list(range(ndim)):
         raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     ndarray._qd_layout = layout
@@ -62,9 +64,7 @@ def _coerce_backend(backend):
         return Backend(backend)
     except (ValueError, TypeError) as e:
         valid = ", ".join(f"qd.Backend.{m.name}" for m in Backend)
-        raise ValueError(
-            f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}"
-        ) from e
+        raise ValueError(f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}") from e
 
 
 def _layout_to_order(layout, ndim):
@@ -83,14 +83,9 @@ def _layout_to_order(layout, ndim):
     if not isinstance(layout, tuple):
         layout = tuple(layout)
     if len(layout) != ndim:
-        raise ValueError(
-            f"layout has {len(layout)} entries but shape has {ndim} "
-            f"dimensions; they must match"
-        )
+        raise ValueError(f"layout has {len(layout)} entries but shape has {ndim} " f"dimensions; they must match")
     if sorted(layout) != list(range(ndim)):
-        raise ValueError(
-            f"layout={layout!r} is not a permutation of range({ndim})"
-        )
+        raise ValueError(f"layout={layout!r} is not a permutation of range({ndim})")
     if layout == tuple(range(ndim)):
         return None  # identity layout — no order= needed
     return "".join(chr(ord("i") + axis) for axis in layout)
@@ -145,9 +140,7 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
     from quadrants.lang import impl  # late import to break circular dependency
 
     if "order" in kwargs:
-        raise TypeError(
-            "qd.tensor(...) does not accept order=; pass layout=(...) instead"
-        )
+        raise TypeError("qd.tensor(...) does not accept order=; pass layout=(...) instead")
 
     shape_t = (shape,) if isinstance(shape, int) else tuple(shape)
     order = _layout_to_order(layout, len(shape_t)) if layout is not None else None
