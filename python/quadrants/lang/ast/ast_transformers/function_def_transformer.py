@@ -4,6 +4,11 @@ import ast
 import dataclasses
 from typing import Any, Callable
 
+from quadrants._flexible import (
+    _TENSOR_T_FIELD_MARKER,
+    _TENSOR_T_NDARRAY_MARKER,
+    _TensorTAnnotation,
+)
 from quadrants._lib.core.quadrants_python import (
     BoundaryMode,
     DataTypeCxx,
@@ -42,6 +47,31 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
+        # qd.tensor_t value-dispatch. The first slot of this_arg_features
+        # is a string marker placed by _template_mapper_hotpath.
+        if isinstance(annotation, _TensorTAnnotation):
+            assert this_arg_features is not None
+            marker = this_arg_features[0]
+            if marker == _TENSOR_T_NDARRAY_MARKER:
+                raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features[1:]
+                return False, (
+                    kernel_arguments.decl_ndarray_arg,
+                    (
+                        to_quadrants_type(raw_element_type),
+                        ndim,
+                        full_name,
+                        needs_grad,
+                        BoundaryMode(boundary),
+                        layout,
+                    ),
+                )
+            if marker == _TENSOR_T_FIELD_MARKER:
+                # Field branch: behave exactly like a template arg.
+                if name in ctx.template_vars:
+                    return True, ctx.template_vars[name]
+                assert ctx.global_vars is not None
+                return True, ctx.global_vars.get(name)
+            raise AssertionError(f"unknown qd.tensor_t marker: {marker!r}")
         if annotation == annotations.template or isinstance(annotation, annotations.template):
             if name in ctx.template_vars:
                 return True, ctx.template_vars[name]

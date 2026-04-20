@@ -225,6 +225,7 @@ user_api[qd] = [
     "tensor",
     "tensor_annotation",
     "tensor_mat",
+    "tensor_t",
     "tensor_vec",
     "tools",
     "types",

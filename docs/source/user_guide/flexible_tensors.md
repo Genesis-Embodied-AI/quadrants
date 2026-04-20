@@ -246,6 +246,44 @@ g = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0), needs_grad=True)
 assert g.grad.shape == (4, 5)   # canonical
 ```
 
+## Polymorphic kernel arguments: `qd.tensor_t`
+
+`qd.tensor_annotation(backend)` lets you pick **one** annotation per run. For
+the rarer case where you'd like the **same kernel object** to accept either
+backend (e.g. for backend-sweep benchmarks, or library code that doesn't want
+to know how its callers allocated their tensors), use `qd.tensor_t`:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+@qd.kernel
+def fill(x: qd.tensor_t):
+    for i in range(x.shape[0]):
+        x[i] = i
+
+a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
+b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+
+fill(a)   # field branch — compiled like qd.template()
+fill(b)   # ndarray branch — compiled like qd.types.ndarray()
+```
+
+Each branch gets its own kernel-cache entry, so swapping backends triggers
+recompilation only for the branch that changed. Layout-tagged ndarrays are
+respected too:
+
+```python
+c = qd.tensor(qd.f32, shape=(2, 3), backend=qd.Backend.NDARRAY, layout=(1, 0))
+fill_2d(c)   # ndarray branch + layout-aware subscript rewrite
+```
+
+Genesis-style code that already picks a backend at module load should keep
+using `qd.tensor_annotation(backend)` — it has zero runtime dispatch and
+matches today's homogeneous-per-run usage. Reach for `qd.tensor_t` when you
+genuinely need both branches alive at once.
+
 Quadrants rejects mismatched / invalid layouts up front:
 
 ```python

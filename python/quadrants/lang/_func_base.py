@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
 
 import numpy as np
 
+from quadrants._flexible import _TensorTAnnotation
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
@@ -51,6 +52,10 @@ if TYPE_CHECKING:
     from .kernel import Kernel
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
+
+# Default ndarray annotation used when qd.tensor_t resolves to the ndarray
+# branch at launch time. Defined at module scope to avoid per-call alloc.
+_TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
 from ._template_mapper import TemplateMapper
@@ -156,6 +161,9 @@ class FuncBase:
                 elif annotation_type is StructType:
                     pass
                 elif annotation_type is template or annotation is template:
+                    pass
+                elif isinstance(annotation, template):
+                    # Catch Template subclasses (e.g. qd.tensor_t).
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
                     pass
@@ -444,6 +452,19 @@ class FuncBase:
 
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
+
+        # qd.tensor_t value-dispatch at launch time. Re-target the
+        # annotation to the concrete branch resolved from the runtime
+        # value, then fall through to the existing dispatch logic.
+        if needed_arg_basetype is _TensorTAnnotation:
+            if isinstance(v, Ndarray):
+                needed_arg_type = _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION
+                needed_arg_type_id = id(needed_arg_type)
+                needed_arg_basetype = type(needed_arg_type)
+            else:
+                # Field/SNode/scalar template: launch path is a no-op
+                # (templates don't set kernel args).
+                return 0, True
 
         # Note: do not use sth like "needed == f32". That would be slow.
         if needed_arg_type_id in primitive_types.real_type_ids:

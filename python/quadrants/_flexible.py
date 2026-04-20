@@ -8,7 +8,47 @@ See ``docs/source/user_guide/flexible_tensors.md`` for the user guide.
 
 from enum import IntEnum
 
-__all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
+from quadrants.types.annotations import Template
+
+__all__ = [
+    "Backend",
+    "tensor",
+    "tensor_annotation",
+    "tensor_mat",
+    "tensor_t",
+    "tensor_vec",
+]
+
+
+class _TensorTAnnotation(Template):
+    """Polymorphic kernel-argument annotation: dispatches at call time.
+
+    A kernel parameter annotated with ``qd.tensor_t`` accepts **either**
+    a field/SNode (treated like ``qd.template()``) **or** a flexible-tensor
+    ``Ndarray`` / ``AnyArray`` (treated like ``qd.types.ndarray()``).
+
+    The cache key is salted with the resolved branch, so a single
+    ``@qd.kernel`` definition can serve both backends without
+    cross-contamination between compiled instances.
+
+    Inherits from :class:`~quadrants.types.annotations.Template` so the
+    upfront template-slot detection in ``_func_base.py`` registers
+    ``tensor_t`` slots. The actual dispatch happens at extract-time
+    (``_template_mapper_hotpath._extract_arg``) and at AST-build-time
+    (``function_def_transformer._decl_and_create_variable``).
+    """
+
+    def __init__(self):
+        super().__init__()
+
+
+tensor_t = _TensorTAnnotation()
+"""Singleton polymorphic annotation; see :class:`_TensorTAnnotation`."""
+
+# Marker tuples prefixed onto cache keys to keep field-resolved and
+# ndarray-resolved instantiations of the same tensor_t slot distinct.
+_TENSOR_T_FIELD_MARKER = "__qd_tensor_t_field__"
+_TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 
 # ----------------------------------------------------------------------------
 # Internal: attach layout metadata to an existing Ndarray.

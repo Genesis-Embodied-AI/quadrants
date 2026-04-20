@@ -32,6 +32,11 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
+from quadrants._flexible import (
+    _TENSOR_T_FIELD_MARKER,
+    _TENSOR_T_NDARRAY_MARKER,
+    _TensorTAnnotation,
+)
 from quadrants._lib import core as _qd_core
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -47,6 +52,11 @@ from quadrants.types import (
     sparse_matrix_builder,
     template,
 )
+
+# Default ndarray annotation for tensor_t-resolved-as-ndarray. Defining at
+# module scope avoids re-allocating per call. boundary defaults to UNSAFE
+# (the same default a bare ``qd.types.ndarray()`` would produce).
+_TENSOR_T_NDARRAY_ANNOTATION = ndarray_type.NdarrayType()
 
 AnnotationType = Union[
     template,
@@ -64,6 +74,28 @@ _primitive_types = {int, float, bool}
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
     annotation_type = type(annotation)
     arg_type = type(arg)
+    # qd.tensor_t: value-dispatch. Ndarray-shaped values flow through the
+    # ndarray feature path; everything else falls through to the template
+    # path (Field, SNode, primitives). Both branches are salted with a
+    # marker so cache keys disambiguate.
+    if annotation_type is _TensorTAnnotation:
+        if issubclass(arg_type, (Ndarray, AnyArray)):
+            return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
+                _extract_arg(
+                    raise_on_templated_floats,
+                    arg,
+                    _TENSOR_T_NDARRAY_ANNOTATION,
+                    arg_name,
+                )
+            )
+        # Fall through to the template path below by retargeting the
+        # annotation. Wrap the result with a field marker so its cache
+        # entry is distinct from the ndarray branch above.
+        annotation = template
+        annotation_type = type(template)
+        return (_TENSOR_T_FIELD_MARKER,) + (
+            _extract_arg(raise_on_templated_floats, arg, template, arg_name),
+        )
     if annotation is template or annotation_type is template:
         if arg_type is SNode:
             return arg.ptr
