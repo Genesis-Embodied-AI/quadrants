@@ -173,8 +173,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
     CUDADriver::get_instance().memcpy_device_to_host_async(host_result_buffer, device_result_buffer,
                                                            ctx.result_buffer_size, active_stream);
   }
-  CUDADriver::get_instance().mem_free_async(device_result_buffer,
-                                            active_stream);
+  CUDADriver::get_instance().mem_free_async(device_result_buffer, active_stream);
   // copy data back to host
   if (transfers.size() > 0) {
     CUDADriver::get_instance().stream_synchronize(active_stream);

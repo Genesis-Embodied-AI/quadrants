@@ -13,8 +13,7 @@ namespace quadrants::lang {
 
 thread_local void *CUDAContext::stream_ = nullptr;
 
-CUDAContext::CUDAContext()
-    : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()) {
+CUDAContext::CUDAContext() : profiler_(nullptr), driver_(CUDADriver::get_instance_without_context()) {
   // CUDA initialization
   dev_count_ = 0;
   driver_.init(0);
