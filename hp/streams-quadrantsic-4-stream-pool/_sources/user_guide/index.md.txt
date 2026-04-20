@@ -3,16 +3,67 @@
 ```{toctree}
 :caption: Getting started
 :maxdepth: 1
+:titlesonly:
 
-user_guide/getting_started
-user_guide/supported_systems
-user_guide/tensor_types
-user_guide/static
-user_guide/sub_functions
-user_guide/scalar_tensors
-user_guide/synchronization
-user_guide/compound_types
-user_guide/python_backend
-user_guide/quirks
-user_guide/troubleshooting
+getting_started
+supported_systems
+```
+
+```{toctree}
+:caption: Core concepts
+:maxdepth: 1
+:titlesonly:
+
+tensor_types
+scalar_tensors
+matrix_vector
+compound_types
+static
+sub_functions
+parallelization
+```
+
+```{toctree}
+:caption: Integration
+:maxdepth: 1
+:titlesonly:
+
+interop
+```
+
+```{toctree}
+:caption: SIMT primitives
+:maxdepth: 1
+:titlesonly:
+
+tile16
+```
+
+```{toctree}
+:caption: Performance
+:maxdepth: 1
+:titlesonly:
+
+graph
+perf_dispatch
+```
+
+```{toctree}
+:caption: Reference
+:maxdepth: 1
+:titlesonly:
+
+unsupported_python
+python_backend
+debug
+quirks
+troubleshooting
+```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
 ```
