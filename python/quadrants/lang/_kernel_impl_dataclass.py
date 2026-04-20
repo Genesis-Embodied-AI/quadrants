@@ -8,7 +8,6 @@ from quadrants.lang._signature import get_func_signature
 from quadrants.lang.ast import (
     ASTTransformerFuncContext,
 )
-from quadrants.lang.exception import get_func_signature
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 
