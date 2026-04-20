@@ -88,6 +88,12 @@ class TaskCodegen : public IRVisitor {
   void visit(WhileStmt *stmt) override;
   void visit(WhileControlStmt *stmt) override;
   void visit(ContinueStmt *stmt) override;
+  void visit(AdStackAllocaStmt *stmt) override;
+  void visit(AdStackPushStmt *stmt) override;
+  void visit(AdStackPopStmt *stmt) override;
+  void visit(AdStackLoadTopStmt *stmt) override;
+  void visit(AdStackLoadTopAdjStmt *stmt) override;
+  void visit(AdStackAccAdjointStmt *stmt) override;
 
  private:
   void emit_headers();
@@ -187,6 +193,25 @@ class TaskCodegen : public IRVisitor {
   std::unordered_map<const Stmt *, PhysicalPtrComponents> physical_ptr_components_;
 
   bool use_volatile_buffer_access_{false};
+
+  struct AdStackSpirv {
+    spirv::Value count_var;    // u32, Function scope - current number of entries
+    spirv::Value primal_arr;   // Array<storage_type, max_size>, Function scope
+    spirv::Value adjoint_arr;  // Array<storage_type, max_size>, Function scope
+    // `elem_type` is the logical loop-carried value's SPIR-V type (e.g. bool for a u1 adstack). `storage_type`
+    // is what the backing array is actually declared as: identical to `elem_type` except for u1, where the
+    // array is declared as i32 because `IRBuilder::get_array_type` silently promotes OpTypeBool (which has no
+    // defined storage layout under LogicalAddressing) to i32. Push/LoadTop/AccAdjoint must use `storage_type`
+    // for the OpAccessChain / load-store pair, and cast between `elem_type` and `storage_type` around the
+    // caller-visible value - otherwise SPIR-V codegen emits `OpAccessChain %_ptr_Function_bool %arr_of_int_N`,
+    // which spirv-val rejects with "result type OpTypeBool does not match the type that results from
+    // indexing into OpTypeInt" and AMD's native Vulkan driver runs anyway and segfaults the dispatch.
+    spirv::SType elem_type;
+    spirv::SType storage_type;
+    uint32_t max_size{0};
+  };
+  std::unordered_map<const Stmt *, AdStackSpirv> ad_stacks_;
+  spirv::Value ad_stack_access(spirv::Value arr, spirv::Value index, const spirv::SType &elem_type);
 };
 }  // namespace detail
 }  // namespace spirv
