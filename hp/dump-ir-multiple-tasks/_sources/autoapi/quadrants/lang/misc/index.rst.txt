@@ -298,7 +298,7 @@ Module Contents
        10
 
 
-.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, block_dim_adaptive=True, bit_vectorize=False)
+.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, block_dim_adaptive=True, bit_vectorize=False, name=None)
 
    Sets directives for the next loop
 
@@ -312,6 +312,8 @@ Module Contents
    :type block_dim_adaptive: bool
    :param bit_vectorize: Whether to enable bit vectorization of struct fors on quant_arrays.
    :type bit_vectorize: bool
+   :param name: Optional name for this loop, used in GPU kernel names for profiling and debugging.
+   :type name: str
 
    Examples::
 
@@ -356,7 +358,7 @@ Module Contents
    Marks a while loop as a CUDA graph do-while conditional node.
 
    Used as ``while qd.graph_do_while(flag):`` inside a
-   ``@qd.kernel(gpu_graph=True)`` kernel. The loop body repeats while
+   ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
@@ -365,7 +367,7 @@ Module Contents
 
    This function should not be called directly at runtime; it is
    recognised and transformed during AST compilation.
-   Requires ``@qd.kernel(gpu_graph=True)``.
+   Requires ``@qd.kernel(graph=True)``.
 
 
 .. py:function:: global_thread_idx()
