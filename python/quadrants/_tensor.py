@@ -38,9 +38,7 @@ def _coerce_backend(backend):
         return Backend(backend)
     except (ValueError, TypeError) as e:
         valid = ", ".join(f"qd.Backend.{m.name}" for m in Backend)
-        raise ValueError(
-            f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}"
-        ) from e
+        raise ValueError(f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}") from e
 
 
 def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
@@ -74,6 +72,7 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         ValueError: If ``backend`` is not a valid :class:`Backend` member.
     """
     backend = _coerce_backend(backend)
+    # pylint: disable=import-outside-toplevel
     from quadrants.lang import impl  # late import to break circular dependency
 
     if backend is Backend.FIELD:

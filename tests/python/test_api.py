@@ -222,6 +222,7 @@ user_api[qd] = [
     "tan",
     "tanh",
     "template",
+    "tensor",
     "tools",
     "types",
     "u1",
