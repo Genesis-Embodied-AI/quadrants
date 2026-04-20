@@ -426,15 +426,28 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
       finalize_offloaded_task_function();
-      // TODO
-      // use amdgpu-jargons to replace nvidias'
+      // Wavefront size is 64.  Workgroups smaller than the wavefront
+      // size are not handled reliably by the HSA runtime when the kernel
+      // uses scratch memory (which we do via addrspacecast'd alloca's).
+      // In that case the kernel launch fails with
+      // HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION / hipErrorIllegalAddress.
+      constexpr int kAmdgpuWavefrontSize = 64;
+      int effective_block_dim = stmt->block_dim;
+      if ((stmt->task_type == Type::range_for ||
+           stmt->task_type == Type::struct_for ||
+           stmt->task_type == Type::mesh_for) &&
+          effective_block_dim > 0 &&
+          effective_block_dim < kAmdgpuWavefrontSize) {
+        effective_block_dim = kAmdgpuWavefrontSize;
+      }
+
       current_task->grid_dim = stmt->grid_dim;
       if (stmt->task_type == Type::range_for) {
         if (stmt->const_begin && stmt->const_end) {
           int num_threads = stmt->end_value - stmt->begin_value;
-          int grid_dim = ((num_threads % stmt->block_dim) == 0)
-                             ? (num_threads / stmt->block_dim)
-                             : (num_threads / stmt->block_dim) + 1;
+          int grid_dim = ((num_threads % effective_block_dim) == 0)
+                             ? (num_threads / effective_block_dim)
+                             : (num_threads / effective_block_dim) + 1;
           grid_dim = std::max(grid_dim, 1);
           current_task->grid_dim = std::min(stmt->grid_dim, grid_dim);
         }
@@ -448,12 +461,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
             &max_threads_per_sm,
             HIP_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, 0);
         int query_max_block_per_sm =
-            (max_threads_per_sm > 0 && stmt->block_dim > 0)
-                ? (max_threads_per_sm / stmt->block_dim)
+            (max_threads_per_sm > 0 && effective_block_dim > 0)
+                ? (max_threads_per_sm / effective_block_dim)
                 : 32;
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
-      current_task->block_dim = stmt->block_dim;
+      current_task->block_dim = effective_block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
