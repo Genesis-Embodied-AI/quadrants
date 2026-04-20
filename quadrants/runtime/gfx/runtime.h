@@ -145,6 +145,17 @@ class QD_DLL_EXPORT GfxRuntime {
 
   std::vector<std::unique_ptr<DeviceAllocationGuard>> ctx_buffers_;
 
+  // Single u32 SSBO written by kernels that overflow an adstack. Allocated lazily on the first launch that binds
+  // BufferType::AdStackOverflow and then reused across launches; synchronize() reads it, raises if non-zero, and
+  // zeros it for the next window.
+  std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
+
+  // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
+  // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw
+  // there would call `std::terminate()` and crash the process; the user-visible raise should happen at the
+  // user's own `qd.sync()` site, not during teardown). Mirrors LlvmProgramImpl's `finalizing_` flag.
+  bool finalizing_{false};
+
   std::unique_ptr<CommandList> current_cmdlist_{nullptr};
   high_res_clock::time_point current_cmdlist_pending_since_;
 
