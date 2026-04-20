@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 import quadrants as qd
@@ -13,6 +15,9 @@ _UNARY_OPS_PARAMS = [
     ("abs", 0.3, -0.4),
     # Ops restricted to positive/subunit operands use a smaller step and zero offset to
     # stay inside their domain across every `x_val` and `n_iter` combination.
+    # `tan` joins this positive-domain group because its singularity at pi/2 ~= 1.57 lies outside
+    # the positive-path operand's reach for every `x_val` and `n_iter` combination.
+    ("tan", 0.05, 0.0),
     ("log", 0.05, 0.0),
     ("sqrt", 0.05, 0.0),
     ("asin", 0.05, 0.0),
@@ -100,3 +105,46 @@ def test_adstack_unary_loop_carried(op_name, step, offset, x_val, n_iter):
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
     _run_unary_loop_carried(qd.f64, op_name, step, offset, x_val, n_iter, rel_tol=1e-12)
+
+
+@pytest.mark.xfail(
+    reason="Reverse-mode NaN/Inf poisoning semantics is TBD. PyTorch propagates forward NaN into the backward graph "
+    "(e.g. `log(-0.3).backward()` gives NaN), but Quadrants evaluates the reverse formula directly and returns a "
+    "finite gradient. Either behaviour is defensible; picking a consistent rule is a separate design decision.",
+    strict=True,
+)
+@pytest.mark.parametrize(
+    "op_name,x_val",
+    [
+        # `(log, -0.3)` puts the operand outside the op's domain so the forward result is NaN. PyTorch's
+        # backward poisons the gradient with NaN; Quadrants currently evaluates `1 / operand = -3.333`
+        # verbatim and returns that finite number. This test documents that specific divergence as the
+        # expected-failure mode.
+        ("log", -0.3),
+    ],
+)
+@test_utils.test()
+def test_adstack_nan_propagation(op_name, x_val):
+    # Pins the open question about reverse-mode NaN propagation. For each out-of-domain input the forward output
+    # is NaN (both Quadrants and PyTorch agree). In reverse, PyTorch's backward pass propagates the NaN into the
+    # gradient (`x.grad = NaN`) because a single NaN anywhere in the forward graph poisons every dependent grad.
+    # Quadrants instead runs the analytical formula and returns a finite number. Which behaviour is "correct" is a
+    # design call; the test is marked `xfail(strict=True)` so a deliberate change of semantics in either direction
+    # forces a reviewer decision.
+    qd_op = getattr(qd, op_name)
+
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        y[None] = qd_op(x[None])
+
+    x[None] = x_val
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+
+    assert math.isnan(x.grad[None])
