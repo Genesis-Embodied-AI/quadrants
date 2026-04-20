@@ -57,8 +57,8 @@ def test_shared_array_not_accumulated_across_offloads(num_dim, first_shape_delta
     max_shared_bytes = qd.lang.impl.get_max_shared_memory_bytes(is_lowerbound_ok=True)
     # 75% of max shared memory in bytes, converted to element counts
     shared_array_bytes = int(0.75 * max_shared_bytes)
-    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(dtype1) + first_shape_delta_size
-    num_elems_2 = shared_array_bytes // qd._lib.core.data_type_size(dtype2)
+    num_elems_1 = shared_array_bytes // qd._lib.core.data_type_size(qd.lang.util.cook_dtype(dtype1)) + first_shape_delta_size
+    num_elems_2 = shared_array_bytes // qd._lib.core.data_type_size(qd.lang.util.cook_dtype(dtype2))
 
     # Build 1D or 2D shape tuples with the same total number of elements.
     # For 2D, split into (block_dim, num_elems // block_dim).
