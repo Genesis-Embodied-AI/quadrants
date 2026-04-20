@@ -10,9 +10,44 @@ The thread's lane index (tid) is obtained internally via ``subgroup.invocation_i
 pass it.  See docs/source/user_guide/tile16.md for usage documentation.
 """
 
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 from typing import Any, NoReturn
 
 import quadrants as qd
+
+if _TYPE_CHECKING:
+
+    class _Tile16x16Proto:  # noqa: E303
+        """Static type stub so pyright sees Tile16x16 methods correctly."""
+
+        SIZE: int
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
+        @classmethod
+        def zeros(cls) -> "_Tile16x16Proto": ...  # noqa: E704
+        @classmethod
+        def eye(cls) -> "_Tile16x16Proto": ...  # noqa: E704
+        def eye_(self) -> None: ...  # noqa: E704
+        def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
+        def solve_triangular_(self, B: "_Tile16x16Proto", lower: bool = True) -> None: ...  # noqa: E704
+        def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
+        def _store(
+            self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
+        ) -> None: ...  # noqa: E704
+        def _load3d(
+            self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
+        ) -> None: ...  # noqa: E704
+        def _store3d(
+            self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
+        ) -> None: ...  # noqa: E704
+        def _get_col(self, k: Any) -> Any: ...  # noqa: E704
+        def _set_col(self, k: Any, val: Any) -> None: ...  # noqa: E704
+        def _ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
+        def _trsm(self, L: "_Tile16x16Proto") -> None: ...  # noqa: E704
+        def __isub__(self, other: Any) -> "_Tile16x16Proto": ...  # noqa: E704
+        def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
+        def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
+
 
 _TILE = 16
 
@@ -151,18 +186,18 @@ class _TileRefProxy:
 _tile16_cache = {}
 
 
-def _make_tile16x16(dtype=None):
+def _make_tile16x16(dtype=None) -> "type[_Tile16x16Proto]":
     """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
-    Returns a qd.dataclass type with 16 fields (r0-r15), zeros/eye factories, and _load/_store/eye_ methods.
+    This is an internal factory. Use ``qd.simt.Tile16x16`` (the proxy) instead.
     """
     if dtype is None:
         dtype = qd.f32
     if dtype in _tile16_cache:
-        return _tile16_cache[dtype]
+        return _tile16_cache[dtype]  # pyright: ignore[reportReturnType]
     cls = _make_tile16x16_class(dtype)
     _tile16_cache[dtype] = cls
-    return cls
+    return cls  # pyright: ignore[reportReturnType]
 
 
 def _make_tile16x16_class(dtype):
@@ -477,3 +512,42 @@ def _make_tile16x16_class(dtype):
 
     result.eye = _eye  # type: ignore[reportAttributeAccessIssue]
     return result
+
+
+class _Tile16x16Proxy:
+    """Proxy for dtype-at-point-of-use tile creation.
+
+    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel. The dtype is resolved at kernel compilation
+    time, defaulting to the compile config's ``default_fp`` if omitted.
+    """
+
+    SIZE = _TILE
+
+    @staticmethod
+    def _resolve(dtype):
+        from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
+        from quadrants.lang.exception import (  # pylint: disable=import-outside-toplevel
+            QuadrantsSyntaxError,
+        )
+
+        arch = impl.current_cfg().arch
+        if arch in (qd.cpu, qd.x64, getattr(qd, "arm64", None)):
+            raise QuadrantsSyntaxError(
+                "Tile16x16 requires a GPU backend (cuda, metal, vulkan, amdgpu). " f"Current arch is {arch}."
+            )
+        if dtype is None:
+            dtype = impl.get_runtime().default_fp
+        if dtype in _tile16_cache:
+            return _tile16_cache[dtype]
+        return _make_tile16x16(dtype)
+
+    def zeros(self, *, dtype=None):
+        """Zero-initialized tile."""
+        return self._resolve(dtype)()
+
+    def eye(self, *, dtype=None):
+        """Identity tile (diagonal = 1, rest = 0)."""
+        return self._resolve(dtype).eye()
+
+
+Tile16x16Proxy = _Tile16x16Proxy()

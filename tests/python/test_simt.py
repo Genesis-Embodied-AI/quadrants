@@ -682,6 +682,59 @@ def test_subgroup_shuffle_xor_pattern(dtype):
     assert dst[3] == src[2]
 
 
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down(dtype):
+    """shuffle_down: each lane reads from lane_id + offset."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            dst[i] = subgroup.shuffle_down(src[i], qd.u32(1))
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lane 0 reads from lane 1, lane 1 from lane 2, lane 2 from lane 3
+    # (within the guaranteed min subgroup of 4 lanes, lane 3's result is undefined)
+    assert dst[0] == src[1]
+    assert dst[1] == src[2]
+    assert dst[2] == src[3]
+
+
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.f64])
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_shuffle_down_reduction(dtype):
+    """Tree reduction via shuffle_down, summing 4 values."""
+    _skip_if_f64_unsupported(dtype)
+    N = 64
+    src = qd.field(dtype=dtype, shape=N)
+    dst = qd.field(dtype=dtype, shape=N)
+
+    @qd.kernel
+    def foo():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            val = src[i]
+            val = val + subgroup.shuffle_down(val, qd.u32(2))
+            val = val + subgroup.shuffle_down(val, qd.u32(1))
+            dst[i] = val
+
+    _init_field(src, N, dtype)
+
+    foo()
+
+    # Lane 0 should have sum of lanes 0-3 (within the min subgroup of 4)
+    expected = sum(src[i] for i in range(4))
+    assert abs(dst[0] - expected) < 1e-5
+
+
 @test_utils.test(arch=qd.gpu)
 def test_subgroup_invocation_id_range():
     """Verify invocation IDs are non-negative."""

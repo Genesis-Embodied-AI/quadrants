@@ -1095,6 +1095,41 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
+// FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
+// Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
+// reduction-pattern offsets (1, 2, 4, 8, 16).
+i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
+  return amdgpu_ds_bpermute((amdgpu_lane_id() + offset) * 4, value);
+}
+
+f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_shuffle_down_i32(offset, u.i);
+  return u.f;
+}
+
+i64 amdgpu_shuffle_down_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_shuffle_down_i32(offset, lo);
+  hi = amdgpu_shuffle_down_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = amdgpu_shuffle_down_i64(offset, u.i);
+  return u.d;
+}
+
 i32 cuda_lane_id() {
   return thread_idx() & 31;
 }
@@ -1128,6 +1163,38 @@ f64 cuda_shuffle_f64(i32 index, f64 value) {
   } u;
   u.d = value;
   u.i = cuda_shuffle_i64(index, u.i);
+  return u.d;
+}
+
+i32 cuda_shuffle_down_i32(i32 offset, i32 value) {
+  return cuda_shfl_down_sync_i32(0xFFFFFFFF, value, offset, 31);
+}
+
+f32 cuda_shuffle_down_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = cuda_shuffle_down_i32(offset, u.i);
+  return u.f;
+}
+
+i64 cuda_shuffle_down_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = cuda_shuffle_down_i32(offset, lo);
+  hi = cuda_shuffle_down_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 cuda_shuffle_down_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = cuda_shuffle_down_i64(offset, u.i);
   return u.d;
 }
 
