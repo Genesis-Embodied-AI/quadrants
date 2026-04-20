@@ -793,8 +793,7 @@ i32 quadrants_assert_format_ctx(RuntimeContext *context,
                                 const char *format,
                                 int num_arguments,
                                 uint64 *arguments) {
-  quadrants_assert_format(context->runtime, test, format, num_arguments,
-                          arguments);
+  quadrants_assert_format(context->runtime, test, format, num_arguments, arguments);
 #if !ARCH_cuda && !ARCH_amdgpu
   if (enable_assert && test == 0) {
     context->cpu_assert_failed = 1;

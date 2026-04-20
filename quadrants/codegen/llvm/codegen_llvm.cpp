@@ -1171,17 +1171,12 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   args.emplace_back(
       builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
 
-  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx"
-                                        : "quadrants_assert_format",
-                        std::move(args));
+  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
 
   if (use_ctx_variant) {
-    auto *assert_abort =
-        llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
-    auto *assert_cont =
-        llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
-    auto *failed =
-        builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
+    auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
+    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
+    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
     builder->CreateCondBr(failed, assert_abort, assert_cont);
     builder->SetInsertPoint(assert_abort);
     builder->CreateRetVoid();
