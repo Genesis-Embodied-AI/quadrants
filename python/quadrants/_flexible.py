@@ -8,7 +8,7 @@ See ``docs/source/user_guide/flexible_tensors.md`` for the user guide.
 
 from enum import IntEnum
 
-__all__ = ["Backend", "tensor"]
+__all__ = ["Backend", "tensor", "tensor_mat", "tensor_vec"]
 
 
 class Backend(IntEnum):
@@ -80,4 +80,73 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         return impl.field(dtype, shape, **kwargs)
     if backend is Backend.NDARRAY:
         return impl.ndarray(dtype, shape, **kwargs)
+    raise AssertionError(f"unhandled Backend member: {backend!r}")
+
+
+def tensor_vec(n, dtype, shape, *, backend=Backend.FIELD, **kwargs):
+    """Allocate a tensor whose elements are length-``n`` vectors.
+
+    Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by
+    the ``backend=`` keyword.
+
+    Args:
+        n (int): Length of each vector element.
+        dtype: Element data type (e.g. ``qd.f32``).
+        shape: Shape of the tensor (excluding the vector dimension) as an
+            ``int`` or tuple of ``int``.
+        backend (Backend, optional): Storage backend. Defaults to
+            :attr:`Backend.FIELD`.
+        **kwargs: Forwarded verbatim to the underlying ``qd.Vector.field`` /
+            ``qd.Vector.ndarray`` call. ``qd.Vector.ndarray`` does not accept
+            extra keyword arguments today.
+
+    Example::
+
+        >>> import quadrants as qd
+        >>> qd.init(arch=qd.x64)
+        >>> v = qd.tensor_vec(3, qd.f32, shape=(4,))
+        >>> u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+    """
+    backend = _coerce_backend(backend)
+    from quadrants.lang.matrix import Vector  # late import
+
+    if backend is Backend.FIELD:
+        return Vector.field(n, dtype, shape, **kwargs)
+    if backend is Backend.NDARRAY:
+        return Vector.ndarray(n, dtype, shape, **kwargs)
+    raise AssertionError(f"unhandled Backend member: {backend!r}")
+
+
+def tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
+    """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
+
+    Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by
+    the ``backend=`` keyword.
+
+    Args:
+        n (int): Number of rows of each matrix element.
+        m (int): Number of columns of each matrix element.
+        dtype: Element data type (e.g. ``qd.f32``).
+        shape: Shape of the tensor (excluding the matrix dimensions) as an
+            ``int`` or tuple of ``int``.
+        backend (Backend, optional): Storage backend. Defaults to
+            :attr:`Backend.FIELD`.
+        **kwargs: Forwarded verbatim to the underlying ``qd.Matrix.field`` /
+            ``qd.Matrix.ndarray`` call. ``qd.Matrix.ndarray`` does not accept
+            extra keyword arguments today.
+
+    Example::
+
+        >>> import quadrants as qd
+        >>> qd.init(arch=qd.x64)
+        >>> a = qd.tensor_mat(2, 3, qd.f32, shape=(4,))
+        >>> b = qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+    """
+    backend = _coerce_backend(backend)
+    from quadrants.lang.matrix import Matrix  # late import
+
+    if backend is Backend.FIELD:
+        return Matrix.field(n, m, dtype, shape, **kwargs)
+    if backend is Backend.NDARRAY:
+        return Matrix.ndarray(n, m, dtype, shape, **kwargs)
     raise AssertionError(f"unhandled Backend member: {backend!r}")

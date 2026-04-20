@@ -77,6 +77,31 @@ qd.tensor(qd.f32, shape=(3,), backend="field")  # ValueError
 Integer values (`0`, `1`) are accepted because `Backend` is an `IntEnum`, but
 prefer the named members for clarity at call sites.
 
-Subsequent releases will add `qd.tensor_vec` / `qd.tensor_mat` for compound
-element types, a `qd.tensor_annotation(backend)` helper for kernel argument
-typing, and a `layout=` keyword for per-tensor physical-memory layout.
+## Vector and matrix tensors
+
+For tensors whose elements are vectors or matrices, use `qd.tensor_vec` and
+`qd.tensor_mat`. They dispatch over `qd.Vector.field` / `qd.Vector.ndarray`
+and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively, with the same
+`backend=` keyword:
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+# A 1-D tensor of 4 length-3 vectors, on the field backend (default).
+v = qd.tensor_vec(3, qd.f32, shape=(4,))
+
+# Same shape, on the ndarray backend.
+u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+
+# A 1-D tensor of 3 (2x2) matrices, on the field backend.
+m = qd.tensor_mat(2, 2, qd.f32, shape=(3,))
+```
+
+These match the existing `qd.Vector.*` / `qd.Matrix.*` factories one-for-one;
+`qd.tensor_vec` / `qd.tensor_mat` simply add the per-tensor `backend=` knob.
+
+Subsequent releases will add a `qd.tensor_annotation(backend)` helper for
+kernel argument typing, and a `layout=` keyword for per-tensor physical-memory
+layout.
