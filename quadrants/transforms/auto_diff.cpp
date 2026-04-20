@@ -42,8 +42,8 @@ class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
   inline static const std::set<UnaryOpType> unary_collections{
-      UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos, UnaryOpType::tan, UnaryOpType::tanh,
-      UnaryOpType::asin, UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt};
+      UnaryOpType::abs,  UnaryOpType::sin, UnaryOpType::cos, UnaryOpType::tan,  UnaryOpType::tanh, UnaryOpType::asin,
+      UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt, UnaryOpType::rsqrt};
   inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
                                                                 BinaryOpType::atan2, BinaryOpType::pow};
 };
@@ -1246,56 +1246,83 @@ class MakeAdjoint : public ADTransform {
     return adjoint_stmt[stmt];
   }
 
+  // For ops in `NonLinearOps::unary_collections` the reverse formula must NOT read the forward `stmt`
+  // directly - only `stmt->operand` (adstack-backed), `adjoint(stmt)`, and constants. BackupSSA spills the
+  // forward stmt to a single plain alloca overwritten each iteration, so reading `stmt` from a reversed
+  // dynamic loop would use the last-iteration value regardless of which reverse iteration is running. This
+  // helper walks the value-tree at IR-transform time and asserts the invariant; paired with the Python
+  // meta-test `test_unary_collections_audit` (which catches "forgot to add to unary_collections"), it
+  // covers both halves of the class of bugs the per-op audit used to miss.
+  void accumulate_unary_operand_checked(UnaryOpStmt *stmt, Stmt *value) {
+    if (NonLinearOps::unary_collections.find(stmt->op_type) != NonLinearOps::unary_collections.end()) {
+      std::unordered_set<const Stmt *> visited;
+      std::function<void(const Stmt *)> walk = [&](const Stmt *s) {
+        if (!s || visited.count(s))
+          return;
+        visited.insert(s);
+        QD_ASSERT_INFO(s != stmt,
+                       "MakeAdjoint adjoint formula for UnaryOpType::{} reads the forward stmt directly. It "
+                       "must read `stmt->operand` (adstack-backed) instead - see the tan/tanh/exp branches "
+                       "for the recompute pattern.",
+                       unary_op_type_name(stmt->op_type));
+        for (auto *op : s->get_operands())
+          walk(op);
+      };
+      walk(value);
+    }
+    accumulate(stmt->operand, value);
+  }
+
   void visit(UnaryOpStmt *stmt) override {
+    auto acc = [&](Stmt *value) { accumulate_unary_operand_checked(stmt, value); };
     if (stmt->op_type == UnaryOpType::floor || stmt->op_type == UnaryOpType::ceil) {
       // do nothing
     } else if (stmt->op_type == UnaryOpType::neg) {
       accumulate(stmt->operand, negate(adjoint(stmt)));
     } else if (stmt->op_type == UnaryOpType::abs) {
-      accumulate(stmt->operand, mul(adjoint(stmt), sgn(stmt->operand)));
+      acc(mul(adjoint(stmt), sgn(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::sin) {
-      accumulate(stmt->operand, mul(adjoint(stmt), cos(stmt->operand)));
+      acc(mul(adjoint(stmt), cos(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::cos) {
-      accumulate(stmt->operand, negate(mul(adjoint(stmt), sin(stmt->operand))));
+      acc(negate(mul(adjoint(stmt), sin(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
       // d/dx tan(x) = 1 + tan(x)^2. Recompute tan(operand) rather than reusing the forward value: the primal is
       // per-iteration inside dynamic loops but BackupSSA only spills forward values to a single plain alloca, so
       // reading the forward tan would use the last-iteration value in the reversed loop. The operand, in contrast,
       // rides the adstack through its LocalLoad, so a fresh tan on it is per-iteration correct.
-      accumulate(stmt->operand, mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
+      acc(mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       // Recompute tanh(operand) in the reverse pass instead of reusing the forward stmt value. In dynamic loops
       // BackupSSA spills the forward stmt to a single plain alloca overwritten each iteration, so the reversed
       // loop would read the last-iteration tanh for every backward step. The operand rides the adstack through
       // LocalLoad, so a fresh tanh on it is per-iteration correct. Trade-off: tanh is evaluated twice per
       // iteration (once forward, once backward); caching the forward value on the adstack is a future optimization.
-      accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(tanh(stmt->operand)))));
+      acc(mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(tanh(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::asin) {
-      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(1, stmt->ret_type),
-                                                       sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
+      acc(mul(adjoint(stmt),
+              div(constant(1, stmt->ret_type), sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
     } else if (stmt->op_type == UnaryOpType::acos) {
-      accumulate(stmt->operand,
-                 mul(adjoint(stmt), negate(div(constant(1, stmt->ret_type),
-                                               sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
+      acc(mul(adjoint(stmt),
+              negate(div(constant(1, stmt->ret_type), sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
     } else if (stmt->op_type == UnaryOpType::exp) {
       // See the tanh case above: recompute exp on the adstack-backed operand so the reversed loop sees the
       // per-iteration value rather than the last-forward value spilled by BackupSSA. Same trade-off as tanh: exp
       // is evaluated twice per iteration (once forward, once backward); caching the forward value on the adstack
       // is a future optimization.
-      accumulate(stmt->operand, mul(adjoint(stmt), exp(stmt->operand)));
+      acc(mul(adjoint(stmt), exp(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::log) {
       // No recompute workaround needed: the reverse formula `1 / operand` reads `stmt->operand` directly (which
       // is adstack-backed via LocalLoad inside dynamic loops), not the forward `log(operand)` stmt value.
-      accumulate(stmt->operand, div(adjoint(stmt), stmt->operand));
+      acc(div(adjoint(stmt), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
       // No recompute workaround needed: the reverse formula reads `stmt->operand` (adstack-backed via LocalLoad
       // inside dynamic loops, gated on `unary_collections` membership) and recomputes `sqrt(operand)` from it,
       // not the forward `sqrt(operand)` stmt value. Unlike tanh/exp this case was already operand-based before
       // the recompute fix landed; the structure mirrors log above.
-      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
+      acc(mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::rsqrt) {
-      accumulate(stmt->operand, mul(adjoint(stmt), mul(constant(-0.5f, stmt->ret_type),
-                                                       pow(rsqrt(stmt->operand), constant(3, stmt->ret_type)))));
+      acc(mul(adjoint(stmt),
+              mul(constant(-0.5f, stmt->ret_type), pow(rsqrt(stmt->operand), constant(3, stmt->ret_type)))));
     } else if (stmt->op_type == UnaryOpType::cast_value) {
       if (is_real(stmt->cast_type.get_element_type()) && is_real(stmt->operand->ret_type.get_element_type())) {
         accumulate(stmt->operand, adjoint(stmt));
