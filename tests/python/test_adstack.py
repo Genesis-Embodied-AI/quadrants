@@ -7,12 +7,17 @@ import quadrants as qd
 from tests import test_utils
 
 _UNARY_OPS_PARAMS = [
-    # Ops whose domain is all real values use a step/offset that makes the operand cross
-    # zero as `j` advances, so the per-iteration sign varies. `abs` especially needs this:
-    # its derivative is piecewise-constant, so a non-crossing operand would pass trivially.
+    # Ops whose domain is all real values share a single `(step, offset)` pair that keeps the operand inside
+    # the domain and, for `abs`/`sin`/`cos`, forces it to cross zero as `j` advances so the per-iteration
+    # gradient sign actually varies. `abs` especially needs the sign-crossing: its derivative is piecewise-
+    # constant, so a non-crossing operand would pass trivially. `exp`/`tanh` do not need the crossing (their
+    # derivatives stay positive) but the same parameters work because their domain is all reals; they live
+    # in this group on that basis alone.
     ("sin", 0.3, -0.4),
     ("cos", 0.3, -0.4),
     ("abs", 0.3, -0.4),
+    ("tanh", 0.3, -0.4),
+    ("exp", 0.3, -0.4),
     # Ops restricted to positive/subunit operands use a smaller step and zero offset to
     # stay inside their domain across every `x_val` and `n_iter` combination.
     # `tan` joins this positive-domain group because its singularity at pi/2 ~= 1.57 lies outside
@@ -105,6 +110,47 @@ def test_adstack_unary_loop_carried(op_name, step, offset, x_val, n_iter):
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
     _run_unary_loop_carried(qd.f64, op_name, step, offset, x_val, n_iter, rel_tol=1e-12)
+
+
+@pytest.mark.needs_torch
+@pytest.mark.parametrize(
+    "op_name",
+    # Pins MakeDual (forward mode) for the ops whose reverse formulas were just patched (tan/tanh/exp) plus the
+    # two audit-adjacent operand-based ops (log/sqrt). Forward mode is argued safe-by-construction because it
+    # runs in primal order and does not rely on BackupSSA spilling, but that invariant is not itself tested by
+    # the reverse-mode regression above; this test pins it.
+    ["tan", "tanh", "exp", "log", "sqrt"],
+)
+@test_utils.test()
+def test_unary_forward_mode_derivative(op_name):
+    import torch
+
+    N = 4
+    x = qd.field(qd.f32, shape=N)
+    loss = qd.field(qd.f32, shape=())
+    qd.root.lazy_dual()
+
+    qd_op = getattr(qd, op_name)
+    torch_op = getattr(torch, op_name)
+
+    @qd.kernel
+    def kern():
+        for i in x:
+            loss[None] += qd_op(x[i])
+
+    for i in range(N):
+        x[i] = 0.1 * (i + 1)
+
+    seed = [1.0] * N
+    with qd.ad.FwdMode(loss=loss, param=x, seed=seed):
+        kern()
+
+    x_t = torch.tensor([0.1 * (i + 1) for i in range(N)], dtype=torch.float32, requires_grad=True)
+    l_t = torch_op(x_t).sum()
+    l_t.backward()
+    expected = float(x_t.grad.sum().item())
+
+    assert loss.dual[None] == test_utils.approx(expected, rel=1e-4)
 
 
 @pytest.mark.xfail(
