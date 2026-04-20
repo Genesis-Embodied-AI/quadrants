@@ -487,6 +487,20 @@
 </div>
 </section>
 </section>
+<section id="sharedarray-support">
+<h2>SharedArray support<a class="headerlink" href="#sharedarray-support" title="Link to this heading">#</a></h2>
+<p>Tiles can load from and store to <code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code> using the same slice syntax as device arrays:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">),</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
+<span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>          <span class="c1"># store tile to shared memory</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+<span class="n">t2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t2</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>      <span class="c1"># load tile from shared memory</span>
+</pre></div>
+</div>
+<p>Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (<code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">sh[K0:K1,</span> <span class="pre">col]</span></code>) also work with SharedArray.</p>
+</section>
 <section id="kernel-structure">
 <h2>Kernel structure<a class="headerlink" href="#kernel-structure" title="Link to this heading">#</a></h2>
 <section id="block-size">
@@ -632,6 +646,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#combined-cholesky-triangular-solve">Combined Cholesky + triangular solve</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sharedarray-support">SharedArray support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure">Kernel structure</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-size">Block size</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#subgroup-size">Subgroup size</a></li>
