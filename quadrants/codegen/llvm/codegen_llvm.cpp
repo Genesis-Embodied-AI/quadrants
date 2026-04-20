@@ -1727,6 +1727,10 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
+  // Reset the adstack function-scope accumulator for this task. The budget is per-task (per LLVM
+  // function), so the count must not carry over from the previous offloaded stmt.
+  ad_stack_fn_scope_bytes_ = 0;
+
   task_function_type =
       llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context), {llvm::PointerType::get(context_ty, 0)}, false);
 
@@ -2106,6 +2110,38 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
   auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->size_in_bytes());
+
+  // Guard against LLVM worker-thread stack overflow before silent memory corruption ensues.
+  // Gated on CPU arches because only there do LLVM allocas become worker-thread stack frame slots bounded by
+  // the OS thread-stack limit. On CUDA / AMDGPU the same LLVM allocas are lowered to per-thread GPU local
+  // memory (a separate address space sized by the driver, not shared with the CPU call stack), so the 256 KB
+  // CPU-stack budget is not meaningful there and the check would falsely reject valid GPU kernels with
+  // f64 loop-carried variables (4 adstacks at `ad_stack_size=4096` already cross 256 KB).
+  //
+  // Adstacks are allocated at function entry (`create_entry_block_alloca`) so they are live for the entire
+  // task invocation and their sizes sum directly into the LLVM stack frame. A kernel that exceeds the thread
+  // stack does not fault at the push - it simply trashes adjacent stack memory, and downstream reverse-mode
+  // accumulators read zero, producing silently-wrong gradients that look indistinguishable from a broken
+  // backward chain. Fail loudly with a message that tells the user how to unblock: either lower
+  // `ad_stack_size`, shrink the per-kernel adstack count by shifting some dynamic loops back to
+  // `qd.static(range(...))` unrolls, or use a backend that heap-backs adstacks.
+  //
+  // Budget: 256 KB leaves headroom inside the ~512 KB default macOS secondary-thread stack for other locals
+  // and nested call frames. Linux defaults are larger (~8 MB), so the same limit is strictly conservative
+  // there.
+  if (arch_is_cpu(current_arch())) {
+    constexpr std::size_t kFnScopeAdStackBudgetBytes = 256 * 1024;
+    ad_stack_fn_scope_bytes_ += stmt->size_in_bytes();
+    QD_ERROR_IF(ad_stack_fn_scope_bytes_ > kFnScopeAdStackBudgetBytes,
+                "LLVM autodiff-stack budget exceeded: cumulative `AdStackAllocaStmt` size {} bytes in task "
+                "'{}' crosses the {} byte function-scope budget. Every adstack is allocated on the worker "
+                "thread stack, so scaling past this point silently corrupts the stack frame and zeros the "
+                "reverse-mode gradient without raising. Options: lower `ad_stack_size=N` in `qd.init()`, "
+                "reduce the number of loop-carried values in dynamic reverse-mode loops, or keep the "
+                "existing `qd.static(range(...))` unrolls on the reverse-mode path.",
+                ad_stack_fn_scope_bytes_, current_task->name, kFnScopeAdStackBudgetBytes);
+  }
+
   auto alloca = create_entry_block_alloca(type, sizeof(int64));
   llvm_val[stmt] = builder->CreateBitCast(alloca, llvm::PointerType::getUnqual(*llvm_context));
   call("stack_init", llvm_val[stmt]);
