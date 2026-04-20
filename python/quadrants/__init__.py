@@ -25,11 +25,11 @@ from quadrants import (
     tools,
     types,
 )
-from quadrants._tensor import *
 from quadrants._funcs import *
 from quadrants._lib.utils import warn_restricted_version
 from quadrants._logging import *
 from quadrants._snode import *
+from quadrants._tensor import *
 from quadrants.lang import *  # pylint: disable=W0622 # TODO(archibate): It's `quadrants.lang.core` overriding `quadrants.core`
 from quadrants.lang.intrinsics import *
 from quadrants.types.annotations import *

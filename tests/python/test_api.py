@@ -54,6 +54,7 @@ def _get_expected_matrix_apis():
 
 user_api = {}
 user_api[qd] = [
+    "Backend",
     "BitpackedFields",
     "CRITICAL",
     "DEBUG",
@@ -221,6 +222,10 @@ user_api[qd] = [
     "tan",
     "tanh",
     "template",
+    "tensor",
+    "tensor_annotation",
+    "tensor_mat",
+    "tensor_vec",
     "tools",
     "types",
     "u1",

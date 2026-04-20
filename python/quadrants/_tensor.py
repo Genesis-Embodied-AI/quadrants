@@ -38,9 +38,7 @@ def _coerce_backend(backend):
         return Backend(backend)
     except (ValueError, TypeError) as e:
         valid = ", ".join(f"qd.Backend.{m.name}" for m in Backend)
-        raise ValueError(
-            f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}"
-        ) from e
+        raise ValueError(f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}") from e
 
 
 def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
@@ -74,7 +72,8 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         ValueError: If ``backend`` is not a valid :class:`Backend` member.
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang import impl  # late import to break circular dependency
+    # pylint: disable=import-outside-toplevel  # late import to break circular dependency
+    from quadrants.lang import impl
 
     if backend is Backend.FIELD:
         return impl.field(dtype, shape, **kwargs)
@@ -108,7 +107,8 @@ def tensor_vec(n, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang.matrix import Vector  # late import
+    # pylint: disable=import-outside-toplevel  # late import
+    from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
         return Vector.field(n, dtype, shape, **kwargs)
@@ -143,7 +143,8 @@ def tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> b = qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang.matrix import Matrix  # late import
+    # pylint: disable=import-outside-toplevel  # late import
+    from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
         return Matrix.field(n, m, dtype, shape, **kwargs)
@@ -183,8 +184,9 @@ def tensor_annotation(backend):
         helper just hides the conditional behind one call.
     """
     backend = _coerce_backend(backend)
-    from quadrants import types as _types  # late import
-    from quadrants.types.annotations import template  # late import
+    # pylint: disable=import-outside-toplevel  # late imports
+    from quadrants import types as _types
+    from quadrants.types.annotations import template
 
     if backend is Backend.FIELD:
         return template()
