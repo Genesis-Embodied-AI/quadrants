@@ -93,6 +93,21 @@ def cxx_to_py(dtype_cxx: DataTypeCxx) -> "type[PrimitiveBase]":
     return PrimitiveBase._registry[dtype_cxx]
 
 
+# Wrap C++ helpers that take a DataTypeCxx so they also accept PrimitiveBase
+# Python wrapper classes (e.g. qd.i8). The C++ binding only accepts DataTypeCxx,
+# so we transparently unwrap PrimitiveBase subclasses to their .cxx attribute.
+_orig_data_type_size = qd_python_core.data_type_size
+
+
+def _data_type_size(dtype: Any) -> int:
+    if isinstance(dtype, type) and issubclass(dtype, PrimitiveBase):
+        dtype = dtype.cxx
+    return _orig_data_type_size(dtype)
+
+
+qd_python_core.data_type_size = _data_type_size
+
+
 # ========================================
 # Floating point types
 # ========================================
