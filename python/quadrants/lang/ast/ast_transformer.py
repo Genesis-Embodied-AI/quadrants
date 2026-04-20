@@ -267,7 +267,7 @@ class ASTTransformer(Builder):
         build_stmt(ctx, node.slice)
         if not ASTTransformer.is_tuple(node.slice):
             node.slice.ptr = [node.slice.ptr]
-        # Flexible-tensors layout: AnyArray with non-identity ``_qd_layout``
+        # Tensors layout: AnyArray with non-identity ``_qd_layout``
         # has its canonical indices permuted into physical-storage order
         # before forwarding. None and identity layouts are handled
         # transparently (no rewrite => byte-identical IR for legacy code).

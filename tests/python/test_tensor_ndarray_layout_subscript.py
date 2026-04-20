@@ -1,14 +1,14 @@
-"""Tests for the AnyArray subscript-rewrite (PR 8).
+"""Tests for the AnyArray subscript-rewrite.
 
 Covers the metadata-flow + AST-rewrite plumbing only — the user-facing
 ``qd.tensor(..., backend=NDARRAY, layout=...)`` enable-and-physical-shape
-remapping lands in PR 13. To exercise the rewrite end-to-end without
+remapping lands in an earlier change. To exercise the rewrite end-to-end without
 that, this file uses the internal ``_with_layout`` helper to tag an
 ndarray allocated at the *physical* shape with a canonical-axis layout.
 
-Conventions (read carefully — user-facing semantics will be different in PR 13):
+Conventions (read carefully — user-facing semantics will be different in an earlier change):
 - The ndarray is allocated at the **physical** shape, then tagged.
-- ``ndarray.shape`` continues to report the physical shape (PR 13 will
+- ``ndarray.shape`` continues to report the physical shape (an earlier change will
   switch this to canonical).
 - Inside a kernel, indices are interpreted as **canonical**: ``x[i, j]``
   means logical index ``(i, j)`` and the rewrite turns it into physical
@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants._flexible import _with_layout
+from quadrants._tensor import _with_layout
 
 from tests import test_utils
 

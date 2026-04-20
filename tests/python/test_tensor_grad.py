@@ -1,4 +1,4 @@
-"""Tests for ``needs_grad=True`` on the flexible-tensors factories (PR 5).
+"""Tests for ``needs_grad=True`` on the tensor factories.
 
 The factories already pass ``needs_grad`` through to ``qd.field`` /
 ``qd.ndarray`` via ``**kwargs`` (PRs 2-3); this PR adds explicit coverage

@@ -1,9 +1,9 @@
 """Regression: layout= + needs_grad= preserves canonical indexing on the
-field backend (PR 7).
+field backend.
 
-This is a test-only PR: PR 6 added the layout= keyword and PR 5 covered
+This is a test-only PR: an earlier change added the layout= keyword and an earlier change covered
 needs_grad pass-through. The combination was checked at allocation time
-in PR 6 (test_layout_field_with_needs_grad_allocates_grad) but not yet
+in an earlier change (test_layout_field_with_needs_grad_allocates_grad) but not yet
 exercised through a kernel write/read on the grad buffer with a non-
 identity layout. That's the gap this PR closes.
 

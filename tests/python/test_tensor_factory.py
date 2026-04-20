@@ -1,8 +1,8 @@
-"""Tests for ``qd.tensor`` scalar dispatch (PR 2 of flexible-tensors).
+"""Tests for ``qd.tensor`` scalar dispatch.
 
 Scope: scalar-element tensor allocation via ``qd.tensor()`` dispatching to
 ``qd.field`` or ``qd.ndarray`` based on the ``backend=`` kwarg. No layout,
-no vec/mat (those land in PR 3 / PR 6).
+no vec/mat.
 """
 
 import pytest

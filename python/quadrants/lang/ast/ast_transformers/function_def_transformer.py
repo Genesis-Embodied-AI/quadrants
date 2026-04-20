@@ -61,7 +61,7 @@ class FunctionDefTransformer:
             ndim: int
             needs_grad: bool
             boundary: int
-            # Flexible-tensors layout is the trailing slot; None for legacy / identity.
+            # Tensors layout is the trailing slot; None for legacy / identity.
             raw_element_type, ndim, needs_grad, boundary, layout = this_arg_features
             return False, (
                 kernel_arguments.decl_ndarray_arg,

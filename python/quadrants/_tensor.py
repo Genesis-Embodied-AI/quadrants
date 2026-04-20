@@ -1,9 +1,9 @@
-"""Flexible tensors: per-tensor backend and (later) layout.
+"""Tensors: per-tensor backend and (later) layout.
 
 This module is the user-facing entry point for selecting a tensor backend
 (``qd.field`` vs ``qd.ndarray``) on a per-tensor basis.
 
-See ``docs/source/user_guide/flexible_tensors.md`` for the user guide.
+See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
 
 from enum import IntEnum
@@ -13,7 +13,7 @@ __all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
 # ----------------------------------------------------------------------------
 # Internal: attach layout metadata to an existing Ndarray.
 #
-# Public API for ndarray + non-identity layout lands in PR 13 (the
+# Public API for ndarray + non-identity layout lands in an earlier change (the
 # qd.tensor(..., backend=NDARRAY, layout=...) path is currently gated by
 # NotImplementedError). Until then, this private helper exists so the AST
 # subscript-rewrite plumbing can be exercised end-to-end in tests without
