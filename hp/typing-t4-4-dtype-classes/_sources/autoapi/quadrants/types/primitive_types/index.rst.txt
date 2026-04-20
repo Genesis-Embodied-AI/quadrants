@@ -53,7 +53,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:class:: f16
+.. py:class:: f16(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -64,7 +64,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: f32
+.. py:class:: f32(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -75,7 +75,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: f64
+.. py:class:: f64(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -92,7 +92,7 @@ Module Contents
 
 .. py:data:: float64
 
-.. py:class:: i8
+.. py:class:: i8(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -103,7 +103,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: i16
+.. py:class:: i16(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -114,7 +114,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: i32
+.. py:class:: i32(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -125,7 +125,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: i64
+.. py:class:: i64(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -144,7 +144,7 @@ Module Contents
 
 .. py:data:: int64
 
-.. py:class:: u1
+.. py:class:: u1(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -155,7 +155,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: u8
+.. py:class:: u8(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -166,7 +166,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: u16
+.. py:class:: u16(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -177,7 +177,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: u32
+.. py:class:: u32(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 
@@ -188,7 +188,7 @@ Module Contents
    .. py:attribute:: cxx
 
 
-.. py:class:: u64
+.. py:class:: u64(value: Any = None)
 
    Bases: :py:obj:`PrimitiveBase`
 

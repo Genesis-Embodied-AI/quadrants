@@ -315,7 +315,7 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.types.primitive_types</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Union</span>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">qd_python_core</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataTypeCxx</span>
@@ -391,6 +391,13 @@
 
     <span class="n">cxx</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">DataTypeCxx</span><span class="p">]</span>
     <span class="n">_registry</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="n">DataTypeCxx</span><span class="p">,</span> <span class="s2">&quot;type[PrimitiveBase]&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c1"># NOTE: __init__ is never executed at runtime because PrimitiveMeta.__call__</span>
+    <span class="c1"># short-circuits class instantiation and returns cls.cxx(value) directly.</span>
+    <span class="c1"># This stub exists purely so pyright recognises ``f32(value)`` etc. as a</span>
+    <span class="c1"># legal call site (pyright uses __init__/__new__ signatures, not metaclass</span>
+    <span class="c1"># __call__, when type-checking class instantiation).</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">__init_subclass__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__init_subclass__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
