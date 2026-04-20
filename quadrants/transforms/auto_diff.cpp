@@ -1210,7 +1210,7 @@ class MakeAdjoint : public ADTransform {
       adjoint_stmt[stmt] = alloca.get();
 
       // We need to insert the alloca in the block of GlobalLoadStmt when the
-      // GlobalLoadStmt is not inside a range-for
+      // GlobalLoadStmt is not inside the currently-processed range-for.
       // Code sample:
       // a and b require grad
       // Case 1 (GlobalLoadStmt is outside the for-loop, compute 5 times and
@@ -1227,18 +1227,29 @@ class MakeAdjoint : public ADTransform {
       //     q = b[i]
       //     for _ in range(5)
       //         q += a[i]
-      if (stmt->is<GlobalLoadStmt>() && (stmt->parent->parent_stmt() != nullptr) &&
-          stmt->parent->parent_stmt()->is<RangeForStmt>()) {
-        // Check whether this GlobalLoadStmt is in the body of a for-loop by
-        // searching in the backup forward pass If not (Case 1), the alloca
-        // should not be clear every iteration, therefore, we need to insert the
-        // alloca in the block of the GlobalLoadStmt i.e., where GlobalLoadStmt
-        // is defined
-        if (forward_backup->locate(stmt->as<GlobalLoadStmt>()) == -1) {
-          stmt->as<GlobalLoadStmt>()->parent->insert(std::move(alloca), 0);
-        } else {
-          alloca_block->insert(std::move(alloca), 0);
+      if (stmt->is<GlobalLoadStmt>() && forward_backup->locate(stmt->as<GlobalLoadStmt>()) == -1) {
+        // Case 1: the GlobalLoadStmt lives in a block outside the currently-processed range-for iteration. Its
+        // adjoint must persist across all iterations of the inner reversed loop, so the alloca cannot live in the
+        // current alloca_block (which would be the inner reversed loop body). Walk up from the primal's enclosing
+        // block until we hit one whose owning statement unconditionally dominates both the forward and the reverse
+        // code (a loop / offloaded / kernel body, not an if / while body): visit(IfStmt) emits the reverse code
+        // into a brand new sibling IfStmt, not back into the forward if-body, so an alloca placed inside the
+        // forward branch is SSA-invalid from the reverse branch's point of view and gets DCE'd into silently-zero
+        // gradients.
+        Block *target = stmt->as<GlobalLoadStmt>()->parent;
+        while (target != nullptr) {
+          Stmt *parent_stmt = target->parent_stmt();
+          if (parent_stmt == nullptr || parent_stmt->is<RangeForStmt>() || parent_stmt->is<StructForStmt>() ||
+              parent_stmt->is<OffloadedStmt>() || parent_stmt->is<MeshForStmt>()) {
+            break;
+          }
+          target = parent_stmt->parent;
         }
+        // Reaching a null target means the primal's enclosing-block chain is broken (an unparented block). Falling
+        // back to alloca_block here would silently restore the pre-fix bug (adjoint eliminated as DCE on the
+        // reverse branch); hard-assert instead so malformed IR surfaces loudly.
+        QD_ASSERT(target != nullptr);
+        target->insert(std::move(alloca), 0);
       } else {
         alloca_block->insert(std::move(alloca), 0);
       }
