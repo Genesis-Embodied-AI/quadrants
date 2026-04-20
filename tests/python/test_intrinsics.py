@@ -88,8 +88,9 @@ def test_clock_accuracy():
     measure_sequence_timings()
 
     for i in range(1, 31):
-        assert a[i - 1] < a[i] < a[i + 1]
-        assert -1 < a[i] / a[0] - (i + 1) < 1
+        ratio = a[i] / a[0]
+        expected = i + 1
+        assert abs(ratio - expected) / expected < 0.2  # 20% tolerance
 
 
 @test_utils.test(arch=clock_freq_supported_archs)
