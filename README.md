@@ -76,7 +76,7 @@ On Genesis simulator (Linux + NVIDIA 5090):
 
 ### Compiler upgrades
 
-* Upgraded to LLVM 20
+* Upgraded to LLVM 22
 * Enabled ARM support
 
 ---
@@ -85,6 +85,7 @@ On Genesis simulator (Linux + NVIDIA 5090):
 ## Prerequisites
 - Python 3.10-3.13
 - Mac OS 14, 15, Windows, or Ubuntu 22.04-24.04 or compatible
+- ROCm 5.2 or newer for AMD GPU support
 
 ## Procedure
 ```

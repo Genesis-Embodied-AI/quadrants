@@ -7,8 +7,7 @@ namespace quadrants::lang {
 namespace {
 
 inline bool stmt_location_did_not_change(Stmt *stmt, int location) {
-  return location >= 0 && location < stmt->parent->size() &&
-         stmt->parent->statements[location].get() == stmt;
+  return location >= 0 && location < stmt->parent->size() && stmt->parent->statements[location].get() == stmt;
 }
 
 }  // namespace
@@ -62,9 +61,7 @@ IRBuilder::LoopGuard::~LoopGuard() {
   }
 }
 
-IRBuilder::IfGuard::IfGuard(IRBuilder &builder,
-                            IfStmt *if_stmt,
-                            bool true_branch)
+IRBuilder::IfGuard::IfGuard(IRBuilder &builder, IfStmt *if_stmt, bool true_branch)
     : builder_(builder), if_stmt_(if_stmt) {
   location_ = (int)if_stmt_->parent->size() - 1;
   if (true_branch) {
@@ -89,18 +86,13 @@ RangeForStmt *IRBuilder::create_range_for(Stmt *begin,
                                           int num_cpu_threads,
                                           int block_dim,
                                           bool strictly_serialized) {
-  return insert(Stmt::make_typed<RangeForStmt>(
-      begin, end, std::make_unique<Block>(), is_bit_vectorized, num_cpu_threads,
-      block_dim, strictly_serialized));
+  return insert(Stmt::make_typed<RangeForStmt>(begin, end, std::make_unique<Block>(), is_bit_vectorized,
+                                               num_cpu_threads, block_dim, strictly_serialized));
 }
 
-StructForStmt *IRBuilder::create_struct_for(SNode *snode,
-                                            bool is_bit_vectorized,
-                                            int num_cpu_threads,
-                                            int block_dim) {
-  return insert(Stmt::make_typed<StructForStmt>(
-      snode, std::make_unique<Block>(), is_bit_vectorized, num_cpu_threads,
-      block_dim));
+StructForStmt *IRBuilder::create_struct_for(SNode *snode, bool is_bit_vectorized, int num_cpu_threads, int block_dim) {
+  return insert(
+      Stmt::make_typed<StructForStmt>(snode, std::make_unique<Block>(), is_bit_vectorized, num_cpu_threads, block_dim));
 }
 
 MeshForStmt *IRBuilder::create_mesh_for(mesh::Mesh *mesh,
@@ -108,9 +100,8 @@ MeshForStmt *IRBuilder::create_mesh_for(mesh::Mesh *mesh,
                                         bool is_bit_vectorized,
                                         int num_cpu_threads,
                                         int block_dim) {
-  return insert(Stmt::make_typed<MeshForStmt>(
-      mesh, element_type, std::make_unique<Block>(), is_bit_vectorized,
-      num_cpu_threads, block_dim));
+  return insert(Stmt::make_typed<MeshForStmt>(mesh, element_type, std::make_unique<Block>(), is_bit_vectorized,
+                                              num_cpu_threads, block_dim));
 }
 
 WhileStmt *IRBuilder::create_while_true() {
@@ -129,8 +120,7 @@ ContinueStmt *IRBuilder::create_continue() {
   return insert(Stmt::make_typed<ContinueStmt>());
 }
 
-FuncCallStmt *IRBuilder::create_func_call(Function *func,
-                                          const std::vector<Stmt *> &args) {
+FuncCallStmt *IRBuilder::create_func_call(Function *func, const std::vector<Stmt *> &args) {
   return insert(Stmt::make_typed<FuncCallStmt>(func, args));
 }
 
@@ -139,48 +129,40 @@ LoopIndexStmt *IRBuilder::get_loop_index(Stmt *loop, int index) {
 }
 
 ConstStmt *IRBuilder::get_int32(int32 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i32),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i32), value)));
 }
 
 ConstStmt *IRBuilder::get_int64(int64 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i64),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::i64), value)));
 }
 
 ConstStmt *IRBuilder::get_uint32(uint32 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::u32),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::u32), value)));
 }
 
 ConstStmt *IRBuilder::get_uint64(uint64 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::u64),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::u64), value)));
 }
 
 ConstStmt *IRBuilder::get_float32(float32 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f32),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f32), value)));
 }
 
 ConstStmt *IRBuilder::get_float64(float64 value) {
-  return insert(Stmt::make_typed<ConstStmt>(TypedConstant(
-      TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f64),
-      value)));
+  return insert(Stmt::make_typed<ConstStmt>(
+      TypedConstant(TypeFactory::get_instance().get_primitive_type(PrimitiveTypeID::f64), value)));
 }
 
 RandStmt *IRBuilder::create_rand(DataType value_type) {
   return insert(Stmt::make_typed<RandStmt>(value_type));
 }
 
-ArgLoadStmt *IRBuilder::create_arg_load(const std::vector<int> &arg_id,
-                                        DataType dt,
-                                        bool is_ptr) {
+ArgLoadStmt *IRBuilder::create_arg_load(const std::vector<int> &arg_id, DataType dt, bool is_ptr) {
   return insert(Stmt::make_typed<ArgLoadStmt>(arg_id, dt, is_ptr,
                                               /*create_load*/ true));
 }
@@ -378,8 +360,7 @@ BinaryOpStmt *IRBuilder::create_logical_or(Stmt *l, Stmt *r) {
 }
 
 BinaryOpStmt *IRBuilder::create_logical_and(Stmt *l, Stmt *r) {
-  return insert(
-      Stmt::make_typed<BinaryOpStmt>(BinaryOpType::logical_and, l, r));
+  return insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::logical_and, l, r));
 }
 
 AtomicOpStmt *IRBuilder::create_atomic_add(Stmt *dest, Stmt *val) {
@@ -399,29 +380,23 @@ AtomicOpStmt *IRBuilder::create_atomic_min(Stmt *dest, Stmt *val) {
 }
 
 AtomicOpStmt *IRBuilder::create_atomic_and(Stmt *dest, Stmt *val) {
-  return insert(
-      Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_and, dest, val));
+  return insert(Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_and, dest, val));
 }
 
 AtomicOpStmt *IRBuilder::create_atomic_or(Stmt *dest, Stmt *val) {
-  return insert(
-      Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_or, dest, val));
+  return insert(Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_or, dest, val));
 }
 
 AtomicOpStmt *IRBuilder::create_atomic_xor(Stmt *dest, Stmt *val) {
-  return insert(
-      Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_xor, dest, val));
+  return insert(Stmt::make_typed<AtomicOpStmt>(AtomicOpType::bit_xor, dest, val));
 }
 
 AtomicOpStmt *IRBuilder::create_atomic_mul(Stmt *dest, Stmt *val) {
   return insert(Stmt::make_typed<AtomicOpStmt>(AtomicOpType::mul, dest, val));
 }
 
-TernaryOpStmt *IRBuilder::create_select(Stmt *cond,
-                                        Stmt *true_result,
-                                        Stmt *false_result) {
-  return insert(Stmt::make_typed<TernaryOpStmt>(TernaryOpType::select, cond,
-                                                true_result, false_result));
+TernaryOpStmt *IRBuilder::create_select(Stmt *cond, Stmt *true_result, Stmt *false_result) {
+  return insert(Stmt::make_typed<TernaryOpStmt>(TernaryOpType::select, cond, true_result, false_result));
 }
 
 AllocaStmt *IRBuilder::create_local_var(DataType dt) {
@@ -436,22 +411,15 @@ void IRBuilder::create_local_store(AllocaStmt *ptr, Stmt *data) {
   insert(Stmt::make_typed<LocalStoreStmt>(ptr, data));
 }
 
-GlobalPtrStmt *IRBuilder::create_global_ptr(
-    SNode *snode,
-    const std::vector<Stmt *> &indices) {
+GlobalPtrStmt *IRBuilder::create_global_ptr(SNode *snode, const std::vector<Stmt *> &indices) {
   return insert(Stmt::make_typed<GlobalPtrStmt>(snode, indices));
 }
 
-ExternalPtrStmt *IRBuilder::create_external_ptr(
-    ArgLoadStmt *ptr,
-    const std::vector<Stmt *> &indices,
-    bool is_grad) {
-  return insert(Stmt::make_typed<ExternalPtrStmt>(ptr, indices, indices.size(),
-                                                  std::vector<int>(), is_grad));
+ExternalPtrStmt *IRBuilder::create_external_ptr(ArgLoadStmt *ptr, const std::vector<Stmt *> &indices, bool is_grad) {
+  return insert(Stmt::make_typed<ExternalPtrStmt>(ptr, indices, indices.size(), std::vector<int>(), is_grad));
 }
 
-AdStackAllocaStmt *IRBuilder::create_ad_stack(const DataType &dt,
-                                              std::size_t max_size) {
+AdStackAllocaStmt *IRBuilder::create_ad_stack(const DataType &dt, std::size_t max_size) {
   return insert(Stmt::make_typed<AdStackAllocaStmt>(dt, max_size));
 }
 
@@ -467,8 +435,7 @@ AdStackLoadTopStmt *IRBuilder::ad_stack_load_top(AdStackAllocaStmt *stack) {
   return insert(Stmt::make_typed<AdStackLoadTopStmt>(stack));
 }
 
-AdStackLoadTopAdjStmt *IRBuilder::ad_stack_load_top_adjoint(
-    AdStackAllocaStmt *stack) {
+AdStackLoadTopAdjStmt *IRBuilder::ad_stack_load_top_adjoint(AdStackAllocaStmt *stack) {
   return insert(Stmt::make_typed<AdStackLoadTopAdjStmt>(stack));
 }
 
@@ -476,36 +443,27 @@ MatrixInitStmt *IRBuilder::create_matrix_init(std::vector<Stmt *> elements) {
   return insert(Stmt::make_typed<MatrixInitStmt>(elements));
 }
 
-void IRBuilder::ad_stack_accumulate_adjoint(AdStackAllocaStmt *stack,
-                                            Stmt *val) {
+void IRBuilder::ad_stack_accumulate_adjoint(AdStackAllocaStmt *stack, Stmt *val) {
   insert(Stmt::make_typed<AdStackAccAdjointStmt>(stack, val));
 }
 
 // Mesh related.
 
-MeshRelationAccessStmt *IRBuilder::get_relation_size(
-    mesh::Mesh *mesh,
-    Stmt *mesh_idx,
-    mesh::MeshElementType to_type) {
-  return insert(
-      Stmt::make_typed<MeshRelationAccessStmt>(mesh, mesh_idx, to_type));
+MeshRelationAccessStmt *IRBuilder::get_relation_size(mesh::Mesh *mesh, Stmt *mesh_idx, mesh::MeshElementType to_type) {
+  return insert(Stmt::make_typed<MeshRelationAccessStmt>(mesh, mesh_idx, to_type));
 }
 
-MeshRelationAccessStmt *IRBuilder::get_relation_access(
-    mesh::Mesh *mesh,
-    Stmt *mesh_idx,
-    mesh::MeshElementType to_type,
-    Stmt *neighbor_idx) {
-  return insert(Stmt::make_typed<MeshRelationAccessStmt>(
-      mesh, mesh_idx, to_type, neighbor_idx));
+MeshRelationAccessStmt *IRBuilder::get_relation_access(mesh::Mesh *mesh,
+                                                       Stmt *mesh_idx,
+                                                       mesh::MeshElementType to_type,
+                                                       Stmt *neighbor_idx) {
+  return insert(Stmt::make_typed<MeshRelationAccessStmt>(mesh, mesh_idx, to_type, neighbor_idx));
 }
 
 MeshPatchIndexStmt *IRBuilder::get_patch_index() {
   return insert(Stmt::make_typed<MeshPatchIndexStmt>());
 }
-ArgLoadStmt *IRBuilder::create_ndarray_arg_load(const std::vector<int> &arg_id,
-                                                DataType dt,
-                                                int ndim) {
+ArgLoadStmt *IRBuilder::create_ndarray_arg_load(const std::vector<int> &arg_id, DataType dt, int ndim) {
   auto type = TypeFactory::get_instance().get_ndarray_struct_type(dt, ndim);
 
   return insert(Stmt::make_typed<ArgLoadStmt>(arg_id, type, /*is_ptr=*/true,

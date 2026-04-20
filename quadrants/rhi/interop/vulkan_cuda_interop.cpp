@@ -23,23 +23,19 @@ HANDLE get_device_mem_handle(VkDeviceMemory &mem, VkDevice device) {
   HANDLE handle;
 
   VkMemoryGetWin32HandleInfoKHR memory_get_win32_handle_info = {};
-  memory_get_win32_handle_info.sType =
-      VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR;
+  memory_get_win32_handle_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR;
   memory_get_win32_handle_info.pNext = nullptr;
   memory_get_win32_handle_info.memory = mem;
-  memory_get_win32_handle_info.handleType =
-      VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+  memory_get_win32_handle_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 
   auto fpGetMemoryWin32HandleKHR =
-      (PFN_vkGetMemoryWin32HandleKHR)vkGetDeviceProcAddr(
-          device, "vkGetMemoryWin32HandleKHR");
+      (PFN_vkGetMemoryWin32HandleKHR)vkGetDeviceProcAddr(device, "vkGetMemoryWin32HandleKHR");
 
   if (fpGetMemoryWin32HandleKHR == nullptr) {
     QD_ERROR("vkGetMemoryFdKHR is nullptr");
   }
 
-  auto result =
-      fpGetMemoryWin32HandleKHR(device, &memory_get_win32_handle_info, &handle);
+  auto result = fpGetMemoryWin32HandleKHR(device, &memory_get_win32_handle_info, &handle);
   if (result != VK_SUCCESS) {
     QD_ERROR("vkGetMemoryWin32HandleKHR failed");
   }
@@ -54,11 +50,9 @@ int get_device_mem_handle(VkDeviceMemory &mem, VkDevice device) {
   memory_get_fd_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
   memory_get_fd_info.pNext = nullptr;
   memory_get_fd_info.memory = mem;
-  memory_get_fd_info.handleType =
-      VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+  memory_get_fd_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
 
-  auto fpGetMemoryFdKHR =
-      (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
+  auto fpGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
 
   if (fpGetMemoryFdKHR == nullptr) {
     QD_ERROR("vkGetMemoryFdKHR is nullptr");
@@ -70,9 +64,7 @@ int get_device_mem_handle(VkDeviceMemory &mem, VkDevice device) {
 #endif
 
 #ifdef _WIN64
-CUexternalMemory import_vk_memory_object_from_handle(HANDLE handle,
-                                                     unsigned long long size,
-                                                     bool is_dedicated) {
+CUexternalMemory import_vk_memory_object_from_handle(HANDLE handle, unsigned long long size, bool is_dedicated) {
   CUexternalMemory ext_mem = nullptr;
   CUDA_EXTERNAL_MEMORY_HANDLE_DESC desc = {};
 
@@ -89,9 +81,7 @@ CUexternalMemory import_vk_memory_object_from_handle(HANDLE handle,
   return ext_mem;
 }
 #else
-CUexternalMemory import_vk_memory_object_from_handle(int fd,
-                                                     unsigned long long size,
-                                                     bool is_dedicated) {
+CUexternalMemory import_vk_memory_object_from_handle(int fd, unsigned long long size, bool is_dedicated) {
   CUexternalMemory ext_mem = nullptr;
   CUDA_EXTERNAL_MEMORY_HANDLE_DESC desc = {};
 
@@ -108,9 +98,7 @@ CUexternalMemory import_vk_memory_object_from_handle(int fd,
 }
 #endif
 
-void *map_buffer_onto_external_memory(CUexternalMemory ext_mem,
-                                      unsigned long long offset,
-                                      unsigned long long size) {
+void *map_buffer_onto_external_memory(CUexternalMemory ext_mem, unsigned long long offset, unsigned long long size) {
   void *ptr = nullptr;
   CUDA_EXTERNAL_MEMORY_BUFFER_DESC desc = {};
 
@@ -119,8 +107,7 @@ void *map_buffer_onto_external_memory(CUexternalMemory ext_mem,
   desc.offset = offset;
   desc.size = size;
 
-  CUDADriver::get_instance().external_memory_get_mapped_buffer(
-      (CUdeviceptr *)&ptr, ext_mem, &desc);
+  CUDADriver::get_instance().external_memory_get_mapped_buffer((CUdeviceptr *)&ptr, ext_mem, &desc);
   return ptr;
 }
 
@@ -130,8 +117,7 @@ void *get_cuda_memory_pointer(VkDeviceMemory mem,
                               VkDeviceSize buffer_size,
                               VkDevice device) {
   auto handle = get_device_mem_handle(mem, device);
-  CUexternalMemory externalMem =
-      import_vk_memory_object_from_handle(handle, mem_size, false);
+  CUexternalMemory externalMem = import_vk_memory_object_from_handle(handle, mem_size, false);
   return map_buffer_onto_external_memory(externalMem, offset, buffer_size);
 }
 
@@ -148,33 +134,25 @@ void memcpy_cuda_to_vulkan(DevicePtr dst, DevicePtr src, uint64_t size) {
   DeviceAllocation dst_alloc(dst);
   DeviceAllocation src_alloc(src);
 
-  static std::unordered_map<
-      VulkanDevice *,
-      std::unordered_map<CudaDevice *,
-                         std::unordered_map<int, unsigned char *>>>
+  static std::unordered_map<VulkanDevice *, std::unordered_map<CudaDevice *, std::unordered_map<int, unsigned char *>>>
       alloc_base_ptrs_all;
-  std::unordered_map<int, unsigned char *> &alloc_base_ptrs =
-      alloc_base_ptrs_all[vk_dev][cuda_dev];
+  std::unordered_map<int, unsigned char *> &alloc_base_ptrs = alloc_base_ptrs_all[vk_dev][cuda_dev];
 
   if (alloc_base_ptrs.find(dst_alloc.alloc_id) == alloc_base_ptrs.end()) {
-    auto [base_mem, alloc_offset, alloc_size] =
-        vk_dev->get_vkmemory_offset_size(dst_alloc);
+    auto [base_mem, alloc_offset, alloc_size] = vk_dev->get_vkmemory_offset_size(dst_alloc);
     // this might be smaller than the actual size of the VkDeviceMemory, but it
     // is big enough to cover the region of this buffer, so it's fine.
     size_t mem_size = alloc_offset + alloc_size;
-    void *alloc_base_ptr = get_cuda_memory_pointer(
-        base_mem, /*mem_size=*/mem_size, /*offset=*/alloc_offset,
-        /*buffer_size=*/alloc_size, vk_dev->vk_device());
+    void *alloc_base_ptr = get_cuda_memory_pointer(base_mem, /*mem_size=*/mem_size, /*offset=*/alloc_offset,
+                                                   /*buffer_size=*/alloc_size, vk_dev->vk_device());
     alloc_base_ptrs[dst_alloc.alloc_id] = (unsigned char *)alloc_base_ptr;
   }
 
-  unsigned char *dst_cuda_ptr =
-      alloc_base_ptrs.at(dst_alloc.alloc_id) + dst.offset;
+  unsigned char *dst_cuda_ptr = alloc_base_ptrs.at(dst_alloc.alloc_id) + dst.offset;
 
   CudaDevice::AllocInfo src_alloc_info = cuda_dev->get_alloc_info(src_alloc);
 
-  unsigned char *src_cuda_ptr =
-      (unsigned char *)src_alloc_info.ptr + src.offset;
+  unsigned char *src_cuda_ptr = (unsigned char *)src_alloc_info.ptr + src.offset;
 
   cuda_memcpy(dst_cuda_ptr, src_cuda_ptr, size);
 }
@@ -186,33 +164,25 @@ void memcpy_vulkan_to_cuda(DevicePtr dst, DevicePtr src, uint64_t size) {
   DeviceAllocation dst_alloc(dst);
   DeviceAllocation src_alloc(src);
 
-  static std::unordered_map<
-      VulkanDevice *,
-      std::unordered_map<CudaDevice *,
-                         std::unordered_map<int, unsigned char *>>>
+  static std::unordered_map<VulkanDevice *, std::unordered_map<CudaDevice *, std::unordered_map<int, unsigned char *>>>
       alloc_base_ptrs_all;
-  std::unordered_map<int, unsigned char *> &alloc_base_ptrs =
-      alloc_base_ptrs_all[vk_dev][cuda_dev];
+  std::unordered_map<int, unsigned char *> &alloc_base_ptrs = alloc_base_ptrs_all[vk_dev][cuda_dev];
 
   if (alloc_base_ptrs.find(src_alloc.alloc_id) == alloc_base_ptrs.end()) {
-    auto [base_mem, alloc_offset, alloc_size] =
-        vk_dev->get_vkmemory_offset_size(src_alloc);
+    auto [base_mem, alloc_offset, alloc_size] = vk_dev->get_vkmemory_offset_size(src_alloc);
     // this might be smaller than the actual size of the VkDeviceMemory, but it
     // is big enough to cover the region of this buffer, so it's fine.
     size_t mem_size = alloc_offset + alloc_size;
-    void *alloc_base_ptr = get_cuda_memory_pointer(
-        base_mem, /*mem_size=*/mem_size, /*offset=*/alloc_offset,
-        /*buffer_size=*/alloc_size, vk_dev->vk_device());
+    void *alloc_base_ptr = get_cuda_memory_pointer(base_mem, /*mem_size=*/mem_size, /*offset=*/alloc_offset,
+                                                   /*buffer_size=*/alloc_size, vk_dev->vk_device());
     alloc_base_ptrs[src_alloc.alloc_id] = (unsigned char *)alloc_base_ptr;
   }
 
-  unsigned char *src_cuda_ptr =
-      alloc_base_ptrs.at(src_alloc.alloc_id) + src.offset;
+  unsigned char *src_cuda_ptr = alloc_base_ptrs.at(src_alloc.alloc_id) + src.offset;
 
   CudaDevice::AllocInfo dst_alloc_info = cuda_dev->get_alloc_info(dst_alloc);
 
-  unsigned char *dst_cuda_ptr =
-      (unsigned char *)dst_alloc_info.ptr + dst.offset;
+  unsigned char *dst_cuda_ptr = (unsigned char *)dst_alloc_info.ptr + dst.offset;
 
   cuda_memcpy(dst_cuda_ptr, src_cuda_ptr, size);
 }

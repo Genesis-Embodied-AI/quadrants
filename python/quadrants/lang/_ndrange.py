@@ -9,23 +9,25 @@ from quadrants.lang import ops
 from quadrants.lang.exception import QuadrantsSyntaxError, QuadrantsTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import Matrix
+from quadrants.lang.util import has_pytorch as _has_pytorch
 from quadrants.types.utils import is_integral
 
+if _has_pytorch():
+    import torch  # pylint: disable=C0411
 
-def _coerce_to_int(v):
-    """Convert 0-d tensors to int for ndrange bounds in python backend.
-
-    On the python backend, ndrange bounds like a.shape[0] arrive as
-    0-d torch tensors rather than plain ints. This unwraps them.
-    """
-    if isinstance(v, (int, float, np.integer)):
+    def _coerce_to_int(v):
+        """Convert 0-d torch tensors to int for ndrange bounds."""
+        if isinstance(v, (int, float, np.integer, Expr)):
+            return v
+        if isinstance(v, torch.Tensor) and v.ndim == 0:
+            return int(v.item())
         return v
-    # Only reached on python backend, where torch is guaranteed available
-    import torch  # pylint: disable=C0415
 
-    if isinstance(v, torch.Tensor) and v.ndim == 0:
-        return int(v.item())
-    return v
+else:
+
+    def _coerce_to_int(v):
+        """Identity passthrough when torch is not available."""
+        return v
 
 
 class _Ndrange:

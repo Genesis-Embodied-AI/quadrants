@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 
 from quadrants._lib import core as _qd_core
-from quadrants.lang import impl
+from quadrants.lang import _ndarray_pickle, impl
 
 # Cache enum value at module level for fast lookup in hot paths
 _arch_metal = _qd_core.Arch.metal
@@ -46,6 +46,11 @@ class Ndarray:
         self.grad: "TensorNdarray | None" = None
         # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
+
+    def __reduce__(self):
+        """Pickle support. Gradients (``.grad``) are not preserved because
+        they are considered transient computation state."""
+        return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
         if impl is not None and impl.get_runtime is not None and impl.get_runtime() is not None:

@@ -21,9 +21,7 @@ struct QD_DLL_EXPORT VirtualDir {
   // Load the first `size` bytes from the file at `path` in the virtual
   // directory. Returns the number of bytes read. Returns 0 if the file doesn't
   // exist.
-  virtual size_t load_file(const std::string &path,
-                           void *data,
-                           size_t size) const = 0;
+  virtual size_t load_file(const std::string &path, void *data, size_t size) const = 0;
 
   template <typename T>
   bool load_file(const std::string &path, std::vector<T> &data) const {

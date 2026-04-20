@@ -17,8 +17,7 @@ class IRCloner : public IRVisitor {
  public:
   enum Phase { register_operand_map, replace_operand } phase;
 
-  explicit IRCloner(IRNode *other_node)
-      : other_node(other_node), phase(register_operand_map) {
+  explicit IRCloner(IRNode *other_node) : other_node(other_node), phase(register_operand_map) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }

@@ -8,11 +8,9 @@ from quadrants.lang.util import has_pytorch
 
 from tests import test_utils
 
-archs_support_f16 = [qd.cpu, qd.cuda, qd.vulkan]
-
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_snode_read_write():
     dtype = qd.f16
     x = qd.field(dtype, shape=())
@@ -22,7 +20,7 @@ def test_snode_read_write():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_float16():
     dtype = qd.float16
     x = qd.field(dtype, shape=())
@@ -32,7 +30,7 @@ def test_float16():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_to_numpy():
     n = 16
     x = qd.field(qd.f16, shape=n)
@@ -49,7 +47,7 @@ def test_to_numpy():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_from_numpy():
     n = 16
     y = qd.field(dtype=qd.f16, shape=n)
@@ -67,9 +65,10 @@ def test_from_numpy():
         assert z[i] == i * 3
 
 
+@pytest.mark.needs_torch
 @pytest.mark.sm70
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_to_torch():
     n = 16
     x = qd.field(qd.f16, shape=n)
@@ -86,9 +85,10 @@ def test_to_torch():
         assert y[i] == 2 * i
 
 
+@pytest.mark.needs_torch
 @pytest.mark.sm70
 @pytest.mark.skipif(not has_pytorch(), reason="Pytorch not installed.")
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_from_torch():
     import torch
 
@@ -110,7 +110,7 @@ def test_from_torch():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_binary_op():
     dtype = qd.f16
     x = qd.field(dtype, shape=())
@@ -130,7 +130,7 @@ def test_binary_op():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_rand_promote():
     dtype = qd.f16
     x = qd.field(dtype, shape=(4, 4))
@@ -145,7 +145,7 @@ def test_rand_promote():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_unary_op():
     dtype = qd.f16
     x = qd.field(dtype, shape=())
@@ -164,8 +164,11 @@ def test_unary_op():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_extra_unary_promote():
+    if qd.lang.impl.current_cfg().arch == qd.amdgpu:
+        pytest.xfail("BUG: AMDGPU runtime does not provide OCML symbol __ocml_fasb_f16 (f16 fabs).")
+
     dtype = qd.f16
     x = qd.field(dtype, shape=())
     y = qd.field(dtype, shape=())
@@ -180,7 +183,7 @@ def test_extra_unary_promote():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16, exclude=qd.vulkan)
+@test_utils.test(exclude=qd.vulkan)
 def test_binary_extra_promote():
     x = qd.field(dtype=qd.f16, shape=())
     y = qd.field(dtype=qd.f16, shape=())
@@ -197,7 +200,7 @@ def test_binary_extra_promote():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_arg_f16():
     dtype = qd.f16
     x = qd.field(dtype, shape=())
@@ -213,7 +216,7 @@ def test_arg_f16():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_fractal_f16():
     n = 320
     pixels = qd.field(dtype=qd.f16, shape=(n * 2, n))
@@ -238,7 +241,7 @@ def test_fractal_f16():
 
 # TODO(): Vulkan support
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_atomic_add_f16():
     f = qd.field(dtype=qd.f16, shape=(2))
 
@@ -259,7 +262,7 @@ def test_atomic_add_f16():
 
 # TODO(): Vulkan support
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_atomic_max_f16():
     f = qd.field(dtype=qd.f16, shape=(2))
 
@@ -280,7 +283,7 @@ def test_atomic_max_f16():
 
 # TODO(): Vulkan support
 @pytest.mark.sm70
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_atomic_min_f16():
     f = qd.field(dtype=qd.f16, shape=(2))
 
@@ -300,7 +303,7 @@ def test_atomic_min_f16():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16)
+@test_utils.test()
 def test_cast_f32_to_f16():
     @qd.kernel
     def func() -> qd.f16:
@@ -312,7 +315,7 @@ def test_cast_f32_to_f16():
 
 
 @pytest.mark.sm70
-@test_utils.test(arch=archs_support_f16, require=qd.extension.data64)
+@test_utils.test(require=qd.extension.data64)
 def test_cast_f64_to_f16():
     @qd.kernel
     def func() -> qd.f16:

@@ -16,8 +16,7 @@ using EvalContext = ArithmeticInterpretor::EvalContext;
 std::vector<Stmt *> get_raw_statements(const Block *block) {
   const auto &stmts = block->statements;
   std::vector<Stmt *> res(stmts.size());
-  std::transform(stmts.begin(), stmts.end(), res.begin(),
-                 [](const std::unique_ptr<Stmt> &s) { return s.get(); });
+  std::transform(stmts.begin(), stmts.end(), res.begin(), [](const std::unique_ptr<Stmt> &s) { return s.get(); });
   return res;
 }
 
@@ -28,8 +27,7 @@ class EvalVisitor : public IRVisitor {
     invoke_default_visitor = true;
   }
 
-  std::optional<TypedConstant> run(const CodeRegion &region,
-                                   const EvalContext &init_ctx) {
+  std::optional<TypedConstant> run(const CodeRegion &region, const EvalContext &init_ctx) {
     context_ = init_ctx;
     failed_ = false;
 
@@ -145,9 +143,7 @@ class EvalVisitor : public IRVisitor {
   }
 
   template <typename T>
-  void insert_or_failed(const Stmt *stmt,
-                        DataType dt,
-                        std::optional<T> val_opt) {
+  void insert_or_failed(const Stmt *stmt, DataType dt, std::optional<T> val_opt) {
     if (!val_opt) {
       failed_ = true;
       return;
@@ -166,9 +162,8 @@ class EvalVisitor : public IRVisitor {
 
 }  // namespace
 
-std::optional<TypedConstant> ArithmeticInterpretor::evaluate(
-    const CodeRegion &region,
-    const EvalContext &init_ctx) const {
+std::optional<TypedConstant> ArithmeticInterpretor::evaluate(const CodeRegion &region,
+                                                             const EvalContext &init_ctx) const {
   EvalVisitor ev;
   return ev.run(region, init_ctx);
 }

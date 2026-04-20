@@ -1,14 +1,52 @@
 # Parallelization
 
-Each top-level for-loop will be parallelized, within a kernel
-- adding a non-static `if` over the top of a for-loop will lead to the for-loop not being parallelized
-- a for-loop inside one or more inlined @qd.func, and/or static `if` will be still be parallelized however
+Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.
 
-Each top-level for-loop will be launched as a separate GPU kernel, under the hood.
-
-The top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
-- if statements where the conditional is `qd.static`
+A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
+- `if` statements where the conditional is `qd.static`
 - inline functions (`@qd.func`)
+
+Note that adding a non-static `if` over the top of a for-loop will lead to the for-loop NOT being parallelized.
+
+## Multi-dimensional parallelization with qd.ndrange
+
+Since only top-level for loops are parallelized, nested for loops will run sequentially on each thread. To parallelize over multiple dimensions, use `qd.ndrange()` to flatten them into a single top-level loop:
+
+```python
+@qd.kernel
+def process_image(image: qd.Template) -> None:
+    for row, col, channel in qd.ndrange(height, width, 3):
+        image[row, col, channel] = row + col
+```
+
+This launches `height * width * 3` threads in parallel, rather than only parallelizing the outer loop.
+
+### Syntax
+
+Each argument to `qd.ndrange` is either:
+- an integer `n`, meaning `range(0, n)`
+- a tuple `(start, end)`, meaning `range(start, end)`
+
+```python
+@qd.kernel
+def compute(a: qd.Template) -> None:
+    for i, j in qd.ndrange((2, 10), 5):
+        a[i, j] = i * 10 + j
+    # i ranges over 2..9, j ranges over 0..4
+```
+
+### qd.grouped with qd.ndrange
+
+`qd.grouped()` packs the loop indices into a single vector, which is useful for writing dimension-independent code:
+
+```python
+@qd.kernel
+def fill(a: qd.Template) -> None:
+    for I in qd.grouped(qd.ndrange(4, 8, 16)):
+        a[I] = I[0] + I[1] + I[2]
+```
+
+`I` is a `qd.Vector` with one element per dimension.
 
 ## Does GPU kernel launch latency matter?
 
@@ -20,10 +58,9 @@ If kernel launch latency is a bottleneck, then you can look into:
 - getting each kernel to do more work, to increase the relative runtime of the kernel relative to launch time
 - reducing kernel launch time
 
-To reduce kernel launch time, the following options are available:
-- field args launch more quickly than ndarray args
-- global fields incur no launch latency
-- reducing the number and complexity kernel parameters reduces the kernel launch latency
+Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:
+- field args incur less launch latency than ndarray args
+- global fields incur no parameter-related launch latency
 
 ## Global memory
 
@@ -44,19 +81,19 @@ Typically, Quadrants kernels use `atomic_` operations for synchronization. This 
 
 When using shared memory, there are various barriers and fences that can be used, to ensure that writes from all threads so far have completed, and now threads are free to read from memory written by other threads.
 
-However, these fences and barriers do not work for global memory, at least, not across all thread blocks.
+However, these fences and barriers do not work for global memory.
 
-To synchronize writes across all threads in a kernel, you'll need to finish the current kernel, and launch a new kernel.
+To synchronize writes to global memory, you'll need to finish the current kernel, and launch a new kernel.
 
 ## Avoiding synchronization
 
-If there is a way of partitioning data such that no thread ever needs to read data written by another thread, then there is no need for synchronization, and the kernels will run quickly.
+If there is a way of partitioning data such that no thread ever needs to read data written by another thread, then there is no need for synchronization.
 
 ## Maximizing GPU core utilization
 
-A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores (a bit more in each case, but 16k and 20k is easier to remember). In Quadrants, the top level for loop is parallelized over gpu threads:
+A 4090 GPU has ~16,000 cores. A 5090 GPU has ~20,000 cores. In Quadrants, the top level for loop is parallelized over gpu threads:
 
-```
+```python
 @qd.kernel
 def k1() -> None:
     for i_b in range(B):  # parallelized across B GPU threads

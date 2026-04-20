@@ -14,8 +14,7 @@ class CachingAllocator {
  public:
   explicit CachingAllocator(bool merge_upon_release = true);
 
-  uint64_t *allocate(LlvmDevice *device,
-                     const LlvmDevice::LlvmRuntimeAllocParams &params);
+  uint64_t *allocate(LlvmDevice *device, const LlvmDevice::LlvmRuntimeAllocParams &params);
   void release(size_t sz, uint64_t *ptr);
 
  private:

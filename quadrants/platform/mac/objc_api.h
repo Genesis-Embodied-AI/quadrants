@@ -16,8 +16,7 @@ namespace mac {
 template <typename R, typename O, typename... Args>
 R cast_call(O *i, const char *select, Args... args) {
   using func = R (*)(id, SEL, Args...);
-  return ((func)(objc_msgSend))(reinterpret_cast<id>(i), sel_getUid(select),
-                                args...);
+  return ((func)(objc_msgSend))(reinterpret_cast<id>(i), sel_getUid(select), args...);
 }
 
 template <typename O, typename... Args>
@@ -28,8 +27,7 @@ id call(O *i, const char *select, Args... args) {
 template <typename R = id, typename... Args>
 R clscall(const char *class_name, const char *select, Args... args) {
   using func = R (*)(id, SEL, Args...);
-  return ((func)(objc_msgSend))((id)objc_getClass(class_name),
-                                sel_getUid(select), args...);
+  return ((func)(objc_msgSend))((id)objc_getClass(class_name), sel_getUid(select), args...);
 }
 
 template <typename O>

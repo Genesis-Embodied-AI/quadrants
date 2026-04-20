@@ -16,10 +16,7 @@ class StructCompilerLLVM : public StructCompiler, public LLVMModuleBuilder {
                      std::unique_ptr<llvm::Module> &&module,
                      int snode_tree_id);
 
-  StructCompilerLLVM(Arch arch,
-                     LlvmProgramImpl *prog,
-                     std::unique_ptr<llvm::Module> &&module,
-                     int snode_tree_id);
+  StructCompilerLLVM(Arch arch, LlvmProgramImpl *prog, std::unique_ptr<llvm::Module> &&module, int snode_tree_id);
 
   void generate_types(SNode &snode) override;
 
@@ -27,8 +24,7 @@ class StructCompilerLLVM : public StructCompiler, public LLVMModuleBuilder {
 
   void run(SNode &node) override;
 
-  llvm::Function *create_function(llvm::FunctionType *ft,
-                                  std::string func_name);
+  llvm::Function *create_function(llvm::FunctionType *ft, std::string func_name);
 
   void generate_refine_coordinates(SNode *snode);
 

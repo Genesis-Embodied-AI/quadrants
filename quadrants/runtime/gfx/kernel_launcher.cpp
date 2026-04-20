@@ -7,18 +7,38 @@ namespace gfx {
 KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 }
 
-void KernelLauncher::launch_kernel(
-    const lang::CompiledKernelData &compiled_kernel_data,
-    LaunchContextBuilder &ctx) {
-  auto handle = register_kernel(compiled_kernel_data);
-  config_.gfx_runtime_->launch_kernel(handle, ctx);
+void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchContextBuilder &ctx) {
+  const ArgArrayPtrKey key{ctx.graph_do_while_arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+  auto it = ctx.array_ptrs.find(key);
+  QD_ASSERT(it != ctx.array_ptrs.end());
+
+  auto *device = config_.gfx_runtime_->get_ti_device();
+  DeviceAllocation alloc = *(static_cast<DeviceAllocation *>(it->second));
+  DevicePtr dev_ptr = alloc.get_ptr(0);
+
+  int32_t flag_val;
+  do {
+    config_.gfx_runtime_->launch_kernel(handle, ctx);
+    config_.gfx_runtime_->synchronize();
+    void *host_ptr = &flag_val;
+    size_t sz = sizeof(int32_t);
+    QD_ASSERT(device->readback_data(&dev_ptr, &host_ptr, &sz, 1) == RhiResult::success);
+  } while (flag_val != 0);
 }
 
-KernelLauncher::Handle KernelLauncher::register_kernel(
-    const lang::CompiledKernelData &compiled_kernel_data) {
+void KernelLauncher::launch_kernel(const lang::CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
+  auto handle = register_kernel(compiled_kernel_data);
+
+  if (ctx.graph_do_while_arg_id >= 0) {
+    launch_offloaded_tasks_with_do_while(handle, ctx);
+  } else {
+    config_.gfx_runtime_->launch_kernel(handle, ctx);
+  }
+}
+
+KernelLauncher::Handle KernelLauncher::register_kernel(const lang::CompiledKernelData &compiled_kernel_data) {
   if (!compiled_kernel_data.get_handle()) {
-    const auto *spirv_compiled =
-        dynamic_cast<const spirv::CompiledKernelData *>(&compiled_kernel_data);
+    const auto *spirv_compiled = dynamic_cast<const spirv::CompiledKernelData *>(&compiled_kernel_data);
     const auto &spirv_data = spirv_compiled->get_internal_data();
     gfx::GfxRuntime::RegisterParams params;
     params.kernel_attribs = spirv_data.metadata.kernel_attribs;

@@ -191,7 +191,7 @@ def test_local_matrix_non_constant_index():
     _test_local_matrix_non_constant_index()
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_local_matrix_non_constant_index_real_matrix():
     _test_local_matrix_non_constant_index()
 
@@ -298,7 +298,7 @@ def test_matrix_to_list():
 
 @test_utils.test()
 def test_matrix_needs_grad():
-    # Just make sure the usage doesn't crash, see https://github.com/taichi-dev/quadrants/pull/1545
+    # Just make sure the usage doesn't crash, see https://github.com/taichi-dev/taichi/pull/1545
     n = 8
     m1 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
     m2 = qd.Matrix.field(2, 2, qd.f32, n, needs_grad=True)
@@ -376,7 +376,7 @@ def test_copy_matrix_in_quadrants_scope():
     test()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.sparse, debug=True)
 def test_matrix_field_dynamic_index_stride():
     # placeholders
     temp_a = qd.field(qd.f32)
@@ -679,7 +679,7 @@ def test_matrix_vector_multiplication():
     foo()
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_local_matrix_read():
     s = qd.field(qd.i32, shape=())
 
@@ -694,7 +694,7 @@ def test_local_matrix_read():
             assert s[None] == i * 3 + j
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_local_matrix_read_without_assign():
     @qd.kernel
     def local_vector_read(i: qd.i32) -> qd.i32:
@@ -704,7 +704,7 @@ def test_local_matrix_read_without_assign():
         assert local_vector_read(i) == i
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_local_matrix_indexing_in_loop():
     s = qd.field(qd.i32, shape=(3, 3))
 
@@ -721,7 +721,7 @@ def test_local_matrix_indexing_in_loop():
             assert s[i, j] == i * 3 + j + 1
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_local_matrix_indexing_ops():
     @qd.kernel
     def element_write() -> qd.i32:
@@ -775,7 +775,7 @@ def test_local_matrix_index_check():
         bar()
 
 
-@test_utils.test(arch=[qd.cuda, qd.cpu], real_matrix_scalarize=False, debug=True)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False, debug=True)
 def test_elementwise_ops():
     @qd.kernel
     def test():
@@ -1168,7 +1168,7 @@ def test_cross_scope_matrix_atomic_ops():
 
 @test_utils.test(debug=True)
 def test_global_tmp_overwrite():
-    # https://github.com/taichi-dev/quadrants/issues/6663
+    # https://github.com/taichi-dev/taichi/issues/6663
     @qd.kernel
     def foo() -> qd.i32:
         p = qd.Matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -1220,7 +1220,7 @@ def test_matrix_type_inference():
     foo()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_matrix_arithmatics():
     f = qd.ndarray(qd.math.vec4, 4)
 

@@ -10,9 +10,8 @@ class StatementsTransformer : public BasicStmtVisitor {
  public:
   using BasicStmtVisitor::visit;
 
-  StatementsTransformer(
-      std::function<bool(Stmt *)> filter,
-      std::function<void(Stmt *, DelayedIRModifier *)> transformer)
+  StatementsTransformer(std::function<bool(Stmt *)> filter,
+                        std::function<void(Stmt *, DelayedIRModifier *)> transformer)
       : filter_(std::move(filter)), transformer_(std::move(transformer)) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
@@ -48,12 +47,10 @@ class StatementsTransformer : public BasicStmtVisitor {
 
 namespace irpass {
 
-bool transform_statements(
-    IRNode *root,
-    std::function<bool(Stmt *)> filter,
-    std::function<void(Stmt *, DelayedIRModifier *)> transformer) {
-  return StatementsTransformer::run(root, std::move(filter),
-                                    std::move(transformer));
+bool transform_statements(IRNode *root,
+                          std::function<bool(Stmt *)> filter,
+                          std::function<void(Stmt *, DelayedIRModifier *)> transformer) {
+  return StatementsTransformer::run(root, std::move(filter), std::move(transformer));
 }
 
 }  // namespace irpass
