@@ -26,11 +26,7 @@ class OffloadedTask {
         grid_dim(grid_dim),
         dynamic_shared_array_bytes(dynamic_shared_array_bytes),
         stream_parallel_group_id(stream_parallel_group_id) {};
-  QD_IO_DEF(name,
-            block_dim,
-            grid_dim,
-            dynamic_shared_array_bytes,
-            stream_parallel_group_id);
+  QD_IO_DEF(name, block_dim, grid_dim, dynamic_shared_array_bytes, stream_parallel_group_id);
 };
 
 struct LLVMCompiledTask {

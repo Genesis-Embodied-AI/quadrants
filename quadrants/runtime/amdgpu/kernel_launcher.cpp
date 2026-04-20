@@ -44,8 +44,8 @@ void KernelLauncher::launch_offloaded_tasks(JITModule *amdgpu_module,
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
         AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
-        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes,
-                              {(void *)&context_pointer}, {arg_size});
+        amdgpu_module->launch(t.name, t.grid_dim, t.block_dim, t.dynamic_shared_array_bytes, {(void *)&context_pointer},
+                              {arg_size});
       }
 
       for (auto &[sid, s] : stream_by_id) {
