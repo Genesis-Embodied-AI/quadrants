@@ -1,4 +1,4 @@
-"""Tests for ``qd.tensor_vec`` / ``qd.tensor_mat`` (PR 3)."""
+"""Tests for ``qd.tensor_vec`` / ``qd.tensor_mat``."""
 
 import pytest
 

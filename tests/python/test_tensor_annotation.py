@@ -1,4 +1,4 @@
-"""Tests for ``qd.tensor_annotation`` (PR 4)."""
+"""Tests for ``qd.tensor_annotation``."""
 
 import pytest
 
