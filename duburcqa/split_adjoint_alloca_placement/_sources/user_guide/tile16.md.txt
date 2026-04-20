@@ -4,20 +4,17 @@
 
 This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
-Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required.
+Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
 
 ## Quick start
 
 ```python
 import quadrants as qd
-from quadrants.lang.simt._tile16 import _make_tile16x16
-
-Tile = _make_tile16x16(qd.f32)
-N = Tile.SIZE  # 16
 
 @qd.func
 def my_blocked_op(A, row0, col0, eps):
-    t = Tile.zeros()
+    N = qd.simt.Tile16x16.SIZE
+    t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
     t[:] = A[row0:row0+N, col0:col0+N]
     t.cholesky_(eps)
     A[row0:row0+N, col0:col0+N] = t
@@ -25,18 +22,21 @@ def my_blocked_op(A, row0, col0, eps):
 
 ## Creating a tile
 
-```python
-Tile = _make_tile16x16(qd.f32)   # or qd.f64
+Tiles are created inside kernels or `@qd.func` functions:
 
-t = Tile.zeros()       # all zeros
-t = Tile.eye()         # 16x16 identity
+```python
+# inside a kernel or @qd.func:
+t = qd.simt.Tile16x16.zeros(dtype=qd.f32)    # all zeros, f32
+t = qd.simt.Tile16x16.zeros(dtype=qd.f64)    # all zeros, f64
+t = qd.simt.Tile16x16.eye(dtype=qd.f32)      # 16x16 identity, f32
+t = qd.simt.Tile16x16.eye(dtype=qd.f64)      # 16x16 identity, f64
 ```
 
-`_make_tile16x16` returns a `qd.dataclass` type whose 16 fields (`r0`–`r15`) are the scalar registers for one row. The result is cached per dtype.
+The `dtype` argument is optional — if omitted it defaults to the runtime's `default_fp` (usually `qd.f32`). The underlying tile dataclass has 16 fields (`r0`–`r15`) — the scalar registers for one row.
 
 ## Loading and storing
 
-Load/store transfers data between a tile and device memory arrays using slice syntax. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
+Load/store transfers data between a tile and device memory arrays using slice syntax. Both `qd.ndarray` and `qd.field` are supported. Each thread accesses row `row0 + tid`, where `tid` is the thread's subgroup lane index (obtained internally via `subgroup.invocation_id()`).
 
 ### Slice syntax
 
@@ -51,8 +51,8 @@ arr[batch, row0:row1, col0:col1] = t       # store to 3D array
 ### Slice value rules
 
 - **Both start and stop indices are required.** `arr[:N, :N]` and `arr[0:, 0:]` are not allowed; write `arr[0:N, 0:N]`.
-- **Row range** `[row0, row1)`: thread `tid` accesses row `row0 + tid`. Threads where `row0 + tid >= row1` are skipped. Additionally, rows beyond the array's shape are skipped. Typically `row1 = row0 + Tile.SIZE`, but smaller ranges work for partial tiles.
-- **Column range** `[col0, col1)`: each active thread loads/stores columns `col0` through `min(col1, arr.shape[-1]) - 1`. Tile columns beyond this range are left as zero (load) or skipped (store). At most `Tile.SIZE` columns are accessed (tile registers `r0`–`r15` map to `col0`, `col0+1`, …, `col0+15`).
+- **Row range** `[row0, row1)`: thread `tid` accesses row `row0 + tid`. Threads where `row0 + tid >= row1` are skipped. Additionally, rows beyond the array's shape are skipped. Typically `row1 = row0 + qd.simt.Tile16x16.SIZE`, but smaller ranges work for partial tiles.
+- **Column range** `[col0, col1)`: each active thread loads/stores columns `col0` through `min(col1, arr.shape[-1]) - 1`. Tile columns beyond this range are left as zero (load) or skipped (store). At most `qd.simt.Tile16x16.SIZE` columns are accessed (tile registers `r0`–`r15` map to `col0`, `col0+1`, …, `col0+15`).
 - **Batch index** (3D only): a scalar integer indexing the leading dimension.
 
 ### Notes
@@ -64,8 +64,8 @@ The `[:]` on the load LHS is required — it distinguishes an in-place tile load
 For padding partial tiles in blocked algorithms:
 
 ```python
-t = Tile.eye()    # create a new identity tile
-t.eye_()         # or reset an existing tile to identity in-place
+t = qd.simt.Tile16x16.eye(dtype=qd.f32)    # create a new identity tile
+t.eye_()                                     # or reset an existing tile to identity in-place
 ```
 
 Each thread sets its diagonal element to 1.0 and all others to 0.0.
@@ -107,20 +107,49 @@ L.solve_triangular_(B)
 
 Solves `X @ L^T = B` in-place, replacing `B` with `X`. `L` must be a lower-triangular, non-singular tile (all diagonal elements non-zero, e.g. from `cholesky_()`). Only `lower=True` is supported; passing `lower=False` raises `TypeError`.
 
+### Combined Cholesky + triangular solve
+
+A common pattern is to factorize a tile and immediately solve against it:
+
+```python
+L = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+L[:] = A[0:N, 0:N]
+L.cholesky_(eps)
+B = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+B[:] = rhs[0:N, 0:N]
+L.solve_triangular_(B)
+rhs[0:N, 0:N] = B
+```
+
+## SharedArray support
+
+Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
+
+```python
+sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
+t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t[:] = src[0:N, 0:N]
+sh[0:N, 0:N] = t          # store tile to shared memory
+qd.simt.block.sync()
+t2 = qd.simt.Tile16x16.zeros(dtype=qd.f32)
+t2[:] = sh[0:N, 0:N]      # load tile from shared memory
+```
+
+Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (`v = sh[K0:K1, col]`) also work with SharedArray.
+
 ## Kernel structure
 
 ### Block size
 
-Set `block_dim=Tile.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
+Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
 
 ```python
-N = Tile.SIZE
-
 @qd.kernel
 def my_kernel(A: qd.types.NDArray[qd.f32, 3]):
+    N = qd.simt.Tile16x16.SIZE
     qd.loop_config(block_dim=N)
     for i in range(A.shape[0]):
-        t = Tile.zeros()
+        t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
         t[:] = A[i, 0:N, 0:N]
         t.cholesky_(1e-6)
         A[i, 0:N, 0:N] = t
@@ -132,21 +161,19 @@ Tile operations communicate between threads using `qd.simt.subgroup.shuffle`. Th
 
 ## f64 support
 
-Pass `qd.f64` to the factory for double precision:
+Pass `dtype=qd.f64` for double precision:
 
 ```python
-Tile64 = _make_tile16x16(qd.f64)
+t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
 ```
-
-Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in tests.
 
 ## Method reference
 
 | Operation | Description |
 |-----------|-------------|
-| `Tile.zeros()` | Create a zero-initialized tile |
-| `Tile.eye()` | Create an identity tile |
-| `Tile.SIZE` | Tile dimension constant (16) |
+| `qd.simt.Tile16x16.zeros(dtype=...)` | Create a zero-initialized tile |
+| `qd.simt.Tile16x16.eye(dtype=...)` | Create an identity tile |
+| `qd.simt.Tile16x16.SIZE` | Tile dimension constant (16) |
 | `t[:] = arr[r0:r1, c0:c1]` | Load from 2D array |
 | `t[:] = arr[i, r0:r1, c0:c1]` | Load from 3D array |
 | `arr[r0:r1, c0:c1] = t` | Store to 2D array |
@@ -156,3 +183,15 @@ Not all GPU backends support f64. Use `test_utils.skip_if_f64_unsupported()` in 
 | `t -= qd.outer(a, b)` | General rank-1 subtract |
 | `t.cholesky_(eps)` | In-place Cholesky factorization |
 | `L.solve_triangular_(B)` | Triangular solve (in-place on B) |
+
+## Example: blocked Cholesky
+
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
+
+Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
+
+| Kernel | Threads | Time (us) | vs baseline |
+|--------|--------:|----------:|------------:|
+| baseline (scalar Crout, shared mem) | 64 | 2766 | 1.00x |
+| blocked (scalar Crout, shared mem) | 16 | 2556 | 1.08x |
+| **tile16 (Tile16x16, no shared memory)** | 16 | 533 | **5.19x** |
