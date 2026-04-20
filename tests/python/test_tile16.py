@@ -799,94 +799,72 @@ def test_tile_slice_proxy_misuse_errors():
     assert "not a value" in repr(vec_proxy)
 
 
+@pytest.mark.parametrize(
+    "bad_slice,match",
+    [
+        ("neg_row", "Negative indices"),
+        ("neg_col", "Negative indices"),
+        ("no_start", "start and stop indices are required"),
+        ("no_stop", "start and stop indices are required"),
+    ],
+)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_load_negative_row_raises():
+def test_tile16_load_slice_errors(bad_slice, match):
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = s[-1:tile_size, 0:tile_size]
+            if qd.static(bad_slice == "neg_row"):
+                t[:] = s[-1:tile_size, 0:tile_size]
+            elif qd.static(bad_slice == "neg_col"):
+                t[:] = s[0:tile_size, -1:tile_size]
+            elif qd.static(bad_slice == "no_start"):
+                t[:] = s[:tile_size, 0:tile_size]
+            elif qd.static(bad_slice == "no_stop"):
+                t[:] = s[0:, 0:tile_size]
             d[0:tile_size, 0:tile_size] = t
 
-    with pytest.raises(QuadrantsSyntaxError, match="Negative indices"):
-        k1(src, dst)
+    with pytest.raises(QuadrantsSyntaxError, match=match):
+        k1(src, dst, bad_slice)
 
 
+@pytest.mark.parametrize(
+    "bad_slice,match",
+    [
+        ("neg_row", "Negative indices"),
+        ("neg_col", "Negative indices"),
+        ("no_start", "start and stop indices are required"),
+        ("no_stop", "start and stop indices are required"),
+    ],
+)
 @test_utils.test(arch=qd.gpu)
-def test_tile16_load_negative_col_raises():
+def test_tile16_store_slice_errors(bad_slice, match):
     src = qd.ndarray(qd.f32, (_TILE, _TILE))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = s[0:tile_size, -1:tile_size]
-            d[0:tile_size, 0:tile_size] = t
-
-    with pytest.raises(QuadrantsSyntaxError, match="Negative indices"):
-        k1(src, dst)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_load_missing_start_raises():
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = s[:tile_size, 0:tile_size]
-            d[0:tile_size, 0:tile_size] = t
-
-    with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
-        k1(src, dst)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_load_missing_stop_raises():
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            t[:] = s[0:, 0:tile_size]
-            d[0:tile_size, 0:tile_size] = t
-
-    with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
-        k1(src, dst)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_store_missing_stop_raises():
-    src = qd.ndarray(qd.f32, (_TILE, _TILE))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
             t[:] = s[0:tile_size, 0:tile_size]
-            d[0:, 0:tile_size] = t
+            if qd.static(bad_slice == "neg_row"):
+                d[-1:tile_size, 0:tile_size] = t
+            elif qd.static(bad_slice == "neg_col"):
+                d[0:tile_size, -1:tile_size] = t
+            elif qd.static(bad_slice == "no_start"):
+                d[:tile_size, 0:tile_size] = t
+            elif qd.static(bad_slice == "no_stop"):
+                d[0:, 0:tile_size] = t
 
-    with pytest.raises(QuadrantsSyntaxError, match="start and stop indices are required"):
-        k1(src, dst)
+    with pytest.raises(QuadrantsSyntaxError, match=match):
+        k1(src, dst, bad_slice)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1017,44 +995,27 @@ def test_tile16_augassign_non_outer_raises():
         k1(src)
 
 
+@pytest.mark.parametrize("bad_slice", ["no_stop", "no_start"])
 @test_utils.test(arch=qd.gpu)
-def test_tile16_vec_slice_missing_stop_raises():
-    """arr[0:, col] must be rejected (vec slice missing stop)."""
+def test_tile16_vec_slice_errors(bad_slice):
     src = qd.ndarray(qd.f32, (_TILE, 2))
     dst = qd.ndarray(qd.f32, (_TILE, _TILE))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], bad_slice: qd.Template):
         qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
         tile_size = qd.simt.Tile16x16.SIZE
         for _ in range(tile_size):
             t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            v = s[0:, 0]
+            if qd.static(bad_slice == "no_stop"):
+                v = s[0:, 0]
+            elif qd.static(bad_slice == "no_start"):
+                v = s[:tile_size, 0]
             t -= qd.outer(v, v)
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_tile16_vec_slice_missing_start_raises():
-    """arr[:16, col] must be rejected (vec slice missing start)."""
-    src = qd.ndarray(qd.f32, (_TILE, 2))
-    dst = qd.ndarray(qd.f32, (_TILE, _TILE))
-
-    @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=qd.simt.Tile16x16.SIZE)
-        tile_size = qd.simt.Tile16x16.SIZE
-        for _ in range(tile_size):
-            t = qd.simt.Tile16x16.zeros(dtype=qd.f32)
-            v = s[:tile_size, 0]
-            t -= qd.outer(v, v)
-            d[0:tile_size, 0:tile_size] = t
-
-    with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst)
+        k1(src, dst, bad_slice)
 
 
 # =============================================================================
