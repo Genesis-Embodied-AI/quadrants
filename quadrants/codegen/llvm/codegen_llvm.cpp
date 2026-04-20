@@ -2397,8 +2397,7 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
 
   if (get_environ_config(LOAD_IR_ENV.data())) {
     QD_ASSERT(!offloaded_tasks.empty());
-    std::filesystem::path filename =
-        ir_dump_dir / (offloaded_tasks[0].name + "_llvm.ll");
+    std::filesystem::path filename = ir_dump_dir / (offloaded_tasks[0].name + "_llvm.ll");
     llvm::SMDiagnostic err;
     auto loaded_module = llvm::parseAssemblyFile(filename.string(), err, *llvm_context);
     if (!loaded_module) {
