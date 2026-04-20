@@ -1,15 +1,15 @@
 % Note for contributors: this page grows incrementally. Each PR in the
-% flexible-tensors series (`hp/tensor-stork-N`) adds the section that
+% tensor series (``) adds the section that
 % documents whatever new user-visible behaviour landed in that PR.
 % Sections describe only currently-shipped functionality.
 
-# Flexible tensors
+# Tensors
 
 Quadrants offers two underlying tensor implementations, [`qd.field`](#fields)
 and [`qd.ndarray`](#ndarrays). They have different runtime/compile-time
 trade-offs, and different physical memory layouts can suit different kernels.
 
-The flexible-tensors API lets you pick both the **backend** and (in a future
+The tensor API lets you pick both the **backend** and (in a future
 release) the **physical layout** on a per-tensor basis at allocation time.
 The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
@@ -139,7 +139,7 @@ helper just makes the pattern first-class.
 
 ## Gradients
 
-`needs_grad=True` works on every flexible-tensors factory and on every
+`needs_grad=True` works on every tensor factory and on every
 backend, by passing the keyword through to the underlying
 `qd.field` / `qd.ndarray` call:
 
