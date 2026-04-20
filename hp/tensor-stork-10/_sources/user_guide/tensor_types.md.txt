@@ -4,7 +4,7 @@ There are two core tensor types:
 - ndarray (`qd.ndarray`)
 - field (`qd.field`)
 
-See also [`flexible_tensors`](flexible_tensors.md) for a unified
+See also [`tensor`](tensor.md) for a unified
 `qd.tensor(...)` factory that picks between the two via a `backend=` keyword.
 
 In addition, when used from a qd kernel, fields can be:

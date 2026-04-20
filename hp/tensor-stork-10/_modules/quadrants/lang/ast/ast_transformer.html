@@ -621,7 +621,7 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">is_tuple</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
-        <span class="c1"># Flexible-tensors layout: AnyArray with non-identity ``_qd_layout``</span>
+        <span class="c1"># Tensors layout: AnyArray with non-identity ``_qd_layout``</span>
         <span class="c1"># has its canonical indices permuted into physical-storage order</span>
         <span class="c1"># before forwarding. None and identity layouts are handled</span>
         <span class="c1"># transparently (no rewrite =&gt; byte-identical IR for legacy code).</span>
