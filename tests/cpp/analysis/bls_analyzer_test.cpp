@@ -30,12 +30,10 @@ class BLSAnalyzerTest : public ::testing::Test {
     for_stmt_ = std::make_unique<OffloadedStmt>(
         /*task_type=*/OffloadedTaskType::struct_for,
         /*arch=*/Arch::x64, nullptr);
-    for_stmt_->mem_access_opt.add_flag(child_snode_,
-                                       SNodeAccessFlag::block_local);
+    for_stmt_->mem_access_opt.add_flag(child_snode_, SNodeAccessFlag::block_local);
     pads_.insert(child_snode_);
 
-    builder_.set_insertion_point(
-        {/*block=*/for_stmt_->body.get(), /*position=*/0});
+    builder_.set_insertion_point({/*block=*/for_stmt_->body.get(), /*position=*/0});
   }
 
   std::unique_ptr<SNode> root_snode_{nullptr};

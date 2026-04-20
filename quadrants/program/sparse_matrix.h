@@ -15,11 +15,7 @@ class SparseMatrix;
 
 class SparseMatrixBuilder {
  public:
-  SparseMatrixBuilder(int rows,
-                      int cols,
-                      int max_num_triplets,
-                      DataType dtype,
-                      const std::string &storage_format);
+  SparseMatrixBuilder(int rows, int cols, int max_num_triplets, DataType dtype, const std::string &storage_format);
 
   ~SparseMatrixBuilder();
   void print_triplets_eigen();
@@ -59,13 +55,10 @@ class SparseMatrixBuilder {
 class SparseMatrix {
  public:
   SparseMatrix() : rows_(0), cols_(0), dtype_(PrimitiveType::f32) {};
-  SparseMatrix(int rows, int cols, DataType dt = PrimitiveType::f32)
-      : rows_{rows}, cols_(cols), dtype_(dt) {};
-  SparseMatrix(SparseMatrix &sm)
-      : rows_(sm.rows_), cols_(sm.cols_), dtype_(sm.dtype_) {
+  SparseMatrix(int rows, int cols, DataType dt = PrimitiveType::f32) : rows_{rows}, cols_(cols), dtype_(dt) {};
+  SparseMatrix(SparseMatrix &sm) : rows_(sm.rows_), cols_(sm.cols_), dtype_(sm.dtype_) {
   }
-  SparseMatrix(SparseMatrix &&sm)
-      : rows_(sm.rows_), cols_(sm.cols_), dtype_(sm.dtype_) {
+  SparseMatrix(SparseMatrix &&sm) : rows_(sm.rows_), cols_(sm.cols_), dtype_(sm.dtype_) {
   }
   virtual ~SparseMatrix() = default;
 
@@ -73,10 +66,7 @@ class SparseMatrix {
     QD_NOT_IMPLEMENTED;
   };
 
-  virtual void build_csr_from_coo(void *coo_row_ptr,
-                                  void *coo_col_ptr,
-                                  void *coo_values_ptr,
-                                  int nnz) {
+  virtual void build_csr_from_coo(void *coo_row_ptr, void *coo_col_ptr, void *coo_values_ptr, int nnz) {
     QD_NOT_IMPLEMENTED;
   }
   inline const int num_rows() const {
@@ -122,19 +112,15 @@ class SparseMatrix {
 template <class EigenMatrix>
 class EigenSparseMatrix : public SparseMatrix {
  public:
-  explicit EigenSparseMatrix(int rows, int cols, DataType dt)
-      : SparseMatrix(rows, cols, dt), matrix_(rows, cols) {
+  explicit EigenSparseMatrix(int rows, int cols, DataType dt) : SparseMatrix(rows, cols, dt), matrix_(rows, cols) {
   }
   EigenSparseMatrix(EigenSparseMatrix &sm)
-      : SparseMatrix(sm.num_rows(), sm.num_cols(), sm.dtype_),
-        matrix_(sm.matrix_) {
+      : SparseMatrix(sm.num_rows(), sm.num_cols(), sm.dtype_), matrix_(sm.matrix_) {
   }
   EigenSparseMatrix(EigenSparseMatrix &&sm)
-      : SparseMatrix(sm.num_rows(), sm.num_cols(), sm.dtype_),
-        matrix_(sm.matrix_) {
+      : SparseMatrix(sm.num_rows(), sm.num_cols(), sm.dtype_), matrix_(sm.matrix_) {
   }
-  explicit EigenSparseMatrix(const EigenMatrix &em)
-      : SparseMatrix(em.rows(), em.cols()), matrix_(em) {
+  explicit EigenSparseMatrix(const EigenMatrix &em) : SparseMatrix(em.rows(), em.cols()), matrix_(em) {
   }
 
   ~EigenSparseMatrix() override = default;
@@ -158,8 +144,7 @@ class EigenSparseMatrix : public SparseMatrix {
     return *this;
   };
 
-  friend EigenSparseMatrix operator+(const EigenSparseMatrix &lhs,
-                                     const EigenSparseMatrix &rhs) {
+  friend EigenSparseMatrix operator+(const EigenSparseMatrix &lhs, const EigenSparseMatrix &rhs) {
     return EigenSparseMatrix(lhs.matrix_ + rhs.matrix_);
   };
 
@@ -168,8 +153,7 @@ class EigenSparseMatrix : public SparseMatrix {
     return *this;
   }
 
-  friend EigenSparseMatrix operator-(const EigenSparseMatrix &lhs,
-                                     const EigenSparseMatrix &rhs) {
+  friend EigenSparseMatrix operator-(const EigenSparseMatrix &lhs, const EigenSparseMatrix &rhs) {
     return EigenSparseMatrix(lhs.matrix_ - rhs.matrix_);
   };
 
@@ -186,8 +170,7 @@ class EigenSparseMatrix : public SparseMatrix {
     return EigenSparseMatrix(sm.matrix_ * scale);
   }
 
-  friend EigenSparseMatrix operator*(const EigenSparseMatrix &lhs,
-                                     const EigenSparseMatrix &rhs) {
+  friend EigenSparseMatrix operator*(const EigenSparseMatrix &lhs, const EigenSparseMatrix &rhs) {
     return EigenSparseMatrix(lhs.matrix_.cwiseProduct(rhs.matrix_));
   }
 
@@ -222,8 +205,7 @@ class EigenSparseMatrix : public SparseMatrix {
 
 class CuSparseMatrix : public SparseMatrix {
  public:
-  explicit CuSparseMatrix(int rows, int cols, DataType dt)
-      : SparseMatrix(rows, cols, dt) {
+  explicit CuSparseMatrix(int rows, int cols, DataType dt) : SparseMatrix(rows, cols, dt) {
 #if defined(QD_WITH_CUDA)
     if (!CUSPARSEDriver::get_instance().is_loaded()) {
       bool load_success = CUSPARSEDriver::get_instance().load_cusparse();
@@ -248,50 +230,38 @@ class CuSparseMatrix : public SparseMatrix {
         csr_val_(csr_val),
         nnz_(nnz) {
   }
-  CuSparseMatrix(const CuSparseMatrix &sm)
-      : SparseMatrix(sm.rows_, sm.cols_, sm.dtype_), matrix_(sm.matrix_) {
+  CuSparseMatrix(const CuSparseMatrix &sm) : SparseMatrix(sm.rows_, sm.cols_, sm.dtype_), matrix_(sm.matrix_) {
   }
 
   ~CuSparseMatrix() override;
 
   // TODO: Overload +=, -= and *=
-  friend std::unique_ptr<SparseMatrix> operator+(const CuSparseMatrix &lhs,
-                                                 const CuSparseMatrix &rhs) {
+  friend std::unique_ptr<SparseMatrix> operator+(const CuSparseMatrix &lhs, const CuSparseMatrix &rhs) {
     auto m = lhs.addition(rhs, 1.0, 1.0);
     return m;
   };
 
-  friend std::unique_ptr<SparseMatrix> operator-(const CuSparseMatrix &lhs,
-                                                 const CuSparseMatrix &rhs) {
+  friend std::unique_ptr<SparseMatrix> operator-(const CuSparseMatrix &lhs, const CuSparseMatrix &rhs) {
     return lhs.addition(rhs, 1.0, -1.0);
   };
 
-  friend std::unique_ptr<SparseMatrix> operator*(const CuSparseMatrix &sm,
-                                                 float scale) {
+  friend std::unique_ptr<SparseMatrix> operator*(const CuSparseMatrix &sm, float scale) {
     return sm.addition(sm, scale, 0.0);
   }
 
-  friend std::unique_ptr<SparseMatrix> operator*(float scale,
-                                                 const CuSparseMatrix &sm) {
+  friend std::unique_ptr<SparseMatrix> operator*(float scale, const CuSparseMatrix &sm) {
     return sm.addition(sm, scale, 0.0);
   }
 
-  std::unique_ptr<SparseMatrix> addition(const CuSparseMatrix &other,
-                                         const float alpha,
-                                         const float beta) const;
+  std::unique_ptr<SparseMatrix> addition(const CuSparseMatrix &other, const float alpha, const float beta) const;
 
   std::unique_ptr<SparseMatrix> matmul(const CuSparseMatrix &other) const;
 
-  std::unique_ptr<SparseMatrix> gemm(const CuSparseMatrix &other,
-                                     const float alpha,
-                                     const float beta) const;
+  std::unique_ptr<SparseMatrix> gemm(const CuSparseMatrix &other, const float alpha, const float beta) const;
 
   std::unique_ptr<SparseMatrix> transpose() const;
 
-  void build_csr_from_coo(void *coo_row_ptr,
-                          void *coo_col_ptr,
-                          void *coo_values_ptr,
-                          int nnz) override;
+  void build_csr_from_coo(void *coo_row_ptr, void *coo_col_ptr, void *coo_values_ptr, int nnz) override;
 
   void nd_spmv(Program *prog, const Ndarray &x, const Ndarray &y);
 
@@ -328,14 +298,8 @@ class CuSparseMatrix : public SparseMatrix {
   int nnz_{0};
 };
 
-std::unique_ptr<SparseMatrix> make_sparse_matrix(
-    int rows,
-    int cols,
-    DataType dt,
-    const std::string &storage_format);
-std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(int rows,
-                                                    int cols,
-                                                    DataType dt);
+std::unique_ptr<SparseMatrix> make_sparse_matrix(int rows, int cols, DataType dt, const std::string &storage_format);
+std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(int rows, int cols, DataType dt);
 std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(cusparseSpMatDescr_t mat,
                                                     int rows,
                                                     int cols,
@@ -345,7 +309,5 @@ std::unique_ptr<SparseMatrix> make_cu_sparse_matrix(cusparseSpMatDescr_t mat,
                                                     void *csr_val_,
                                                     int nnz);
 
-void make_sparse_matrix_from_ndarray(Program *prog,
-                                     SparseMatrix &sm,
-                                     const Ndarray &ndarray);
+void make_sparse_matrix_from_ndarray(Program *prog, SparseMatrix &sm, const Ndarray &ndarray);
 }  // namespace quadrants::lang

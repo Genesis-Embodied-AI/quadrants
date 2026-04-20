@@ -122,8 +122,7 @@ inline std::vector<StackFrame> stack_trace() {
   bool first = true;
 
   std::vector<StackFrame> frames;
-  while (StackWalk(machine, process, thread, &frame, &context, NULL,
-                   SymFunctionTableAccess, SymGetModuleBase, NULL)) {
+  while (StackWalk(machine, process, thread, &frame, &context, NULL, SymFunctionTableAccess, SymGetModuleBase, NULL)) {
     StackFrame f = {};
     f.address = frame.AddrPC.Offset;
 
@@ -136,8 +135,7 @@ inline std::vector<StackFrame> stack_trace() {
     moduleBase = SymGetModuleBase(process, frame.AddrPC.Offset);
 
     char moduelBuff[MAX_PATH];
-    if (moduleBase &&
-        GetModuleFileNameA((HINSTANCE)moduleBase, moduelBuff, MAX_PATH)) {
+    if (moduleBase && GetModuleFileNameA((HINSTANCE)moduleBase, moduelBuff, MAX_PATH)) {
       f.module = basename(moduelBuff);
     } else {
       f.module = "Unknown Module";
@@ -169,8 +167,7 @@ inline std::vector<StackFrame> stack_trace() {
       f.line = line.LineNumber;
     } else {
       DWORD error = GetLastError();
-      trace("Failed to resolve line for 0x%X: %u\n", frame.AddrPC.Offset,
-            error);
+      trace("Failed to resolve line for 0x%X: %u\n", frame.AddrPC.Offset, error);
       f.line = 0;
     }
 
@@ -218,18 +215,15 @@ void print_traceback() {
     char addr[48] = {};
     // split the string, take out chunks out of stack trace
     // we are primarily interested in module, function and address
-    sscanf(strs[i], "%*s %s %s %s %*s %d", module_name, addr, function_symbol,
-           &offset);
+    sscanf(strs[i], "%*s %s %s %s %*s %d", module_name, addr, function_symbol, &offset);
 
     int valid_cpp_name = 0;
     //  if this is a C++ library, symbol will be demangled
     //  on success function returns 0
-    char *function_name =
-        abi::__cxa_demangle(function_symbol, NULL, 0, &valid_cpp_name);
+    char *function_name = abi::__cxa_demangle(function_symbol, NULL, 0, &valid_cpp_name);
 
     char stack_frame[4096] = {};
-    sprintf(stack_frame, "* %28s | %7d | %s", module_name, offset,
-            function_name);
+    sprintf(stack_frame, "* %28s | %7d | %s", module_name, offset, function_name);
     if (function_name != nullptr)
       free(function_name);
 
@@ -266,8 +260,7 @@ void print_traceback() {
     int i;
     for (i = 0; i < (int)trace.size(); i++) {
       std::cout << trace[i];
-      if (i > function_start + 3 &&
-          (i - 3 - function_start) % function_width == 0) {
+      if (i > function_start + 3 && (i - 3 - function_start) % function_width == 0) {
         std::cout << " |" << std::endl << " ";
         for (int j = 0; j < function_start; j++) {
           std::cout << " ";
@@ -275,9 +268,7 @@ void print_traceback() {
         std::cout << " | ";
       }
     }
-    for (int j = 0;
-         j < function_width + 2 - (i - 3 - function_start) % function_width;
-         j++) {
+    for (int j = 0; j < function_width + 2 - (i - 3 - function_start) % function_width; j++) {
       std::cout << " ";
     }
     std::cout << "|" << std::endl;
@@ -289,20 +280,16 @@ void print_traceback() {
 #elif defined(_WIN64)
   // Windows
   fmt::print(fg(fmt::color::magenta), "***********************************\n");
-  fmt::print(fg(fmt::color::magenta),
-             "* Quadrants Compiler Stack Traceback *\n");
+  fmt::print(fg(fmt::color::magenta), "* Quadrants Compiler Stack Traceback *\n");
   fmt::print(fg(fmt::color::magenta), "***********************************\n");
 
   std::vector<dbg::StackFrame> stack = dbg::stack_trace();
   for (unsigned int i = 0; i < stack.size(); i++) {
-    fmt::print(fg(fmt::color::magenta),
-               fmt::format("0x{:x}: ", stack[i].address));
+    fmt::print(fg(fmt::color::magenta), fmt::format("0x{:x}: ", stack[i].address));
     fmt::print(fg(fmt::color::red), stack[i].name);
     if (stack[i].file != std::string(""))
-      fmt::print(fg(fmt::color::magenta),
-                 fmt::format("(line {} in {})", stack[i].line, stack[i].file));
-    fmt::print(fg(fmt::color::magenta),
-               fmt::format(" in {}\n", stack[i].module));
+      fmt::print(fg(fmt::color::magenta), fmt::format("(line {} in {})", stack[i].line, stack[i].file));
+    fmt::print(fg(fmt::color::magenta), fmt::format(" in {}\n", stack[i].module));
   }
 #else
   // Based on http://man7.org/linux/man-pages/man3/backtrace.3.html
@@ -320,8 +307,7 @@ void print_traceback() {
   }
 
   fmt::print(fg(fmt::color::magenta), "***********************************\n");
-  fmt::print(fg(fmt::color::magenta),
-             "* Quadrants Compiler Stack Traceback *\n");
+  fmt::print(fg(fmt::color::magenta), "* Quadrants Compiler Stack Traceback *\n");
   fmt::print(fg(fmt::color::magenta), "***********************************\n");
 
   // j = 0: quadrants::print_traceback
@@ -340,8 +326,7 @@ void print_traceback() {
 
       int status = -1;
 
-      demangled_name_ =
-          abi::__cxa_demangle(name.c_str(), nullptr, nullptr, &status);
+      demangled_name_ = abi::__cxa_demangle(name.c_str(), nullptr, nullptr, &status);
 
       if (demangled_name_) {
         name = std::string(demangled_name_);
@@ -359,10 +344,9 @@ void print_traceback() {
   std::free(strings);
 #endif
 
-  fmt::print(
-      fg(fmt::color::orange),
-      "\nInternal error occurred. Check out this page for possible solutions:\n"
-      "https://docs.taichi-lang.org/docs/install\n");
+  fmt::print(fg(fmt::color::orange),
+             "\nInternal error occurred. Check out this page for possible solutions:\n"
+             "https://docs.taichi-lang.org/docs/install\n");
 }
 
 }  // namespace quadrants

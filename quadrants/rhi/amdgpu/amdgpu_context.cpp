@@ -15,8 +15,7 @@ namespace lang {
 
 thread_local void *AMDGPUContext::stream_ = nullptr;
 
-AMDGPUContext::AMDGPUContext()
-    : driver_(AMDGPUDriver::get_instance_without_context()) {
+AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_context()) {
   dev_count_ = 0;
   driver_.init(0);
   driver_.device_get_count(&dev_count_);
@@ -32,8 +31,7 @@ AMDGPUContext::AMDGPUContext()
   QD_TRACE("AMDGPU: Retained primary context: {}", context_);
 
   const auto GB = std::pow(1024.0, 3.0);
-  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB",
-           get_total_memory() / GB, get_free_memory() / GB);
+  QD_TRACE("Total memory {:.2f} GB; free memory {:.2f} GB", get_total_memory() / GB, get_free_memory() / GB);
 
   void *hip_device_prop = std::malloc(HIP_DEVICE_PROPERTIES_STRUCT_SIZE);
   driver_.device_get_prop(hip_device_prop, device_);
@@ -60,12 +58,9 @@ AMDGPUContext::AMDGPUContext()
   // We can do this safely because hipDeviceProp_t is larger in R0600 then
   // R0000, so using the field offset values in ROCm 5 on a ROCm 6 struct can
   // never cause an out-of-bounds access.
-  compute_capability_ =
-      (*((int *)(hip_device_prop) + int(HIP_DEVICE_MAJOR))) * 100;
-  compute_capability_ +=
-      (*((int *)(hip_device_prop) + int(HIP_DEVICE_MINOR))) * 10;
-  mcpu_ =
-      std::string((char *)((int *)hip_device_prop + HIP_DEVICE_GCN_ARCH_NAME));
+  compute_capability_ = (*((int *)(hip_device_prop) + int(HIP_DEVICE_MAJOR))) * 100;
+  compute_capability_ += (*((int *)(hip_device_prop) + int(HIP_DEVICE_MINOR))) * 10;
+  mcpu_ = std::string((char *)((int *)hip_device_prop + HIP_DEVICE_GCN_ARCH_NAME));
   // Basic sanity check on mcpu_ to ensure we're calling R0000 instead of R0600
   if (mcpu_.empty() || mcpu_.substr(0, 3) != "gfx") {
     // ROCm 6 starts with 60000000
@@ -75,18 +70,34 @@ AMDGPUContext::AMDGPUContext()
           "version {} is not ROCm 6",
           runtime_version);
     }
-    compute_capability_ =
-        (*((int *)(hip_device_prop) + int(HIP_DEVICE_MAJOR_6))) * 100;
-    compute_capability_ +=
-        (*((int *)(hip_device_prop) + int(HIP_DEVICE_MINOR_6))) * 10;
-    mcpu_ = std::string(
-        (char *)((int *)(hip_device_prop) + int(HIP_DEVICE_GCN_ARCH_NAME_6)));
+    compute_capability_ = (*((int *)(hip_device_prop) + int(HIP_DEVICE_MAJOR_6))) * 100;
+    compute_capability_ += (*((int *)(hip_device_prop) + int(HIP_DEVICE_MINOR_6))) * 10;
+    mcpu_ = std::string((char *)((int *)(hip_device_prop) + int(HIP_DEVICE_GCN_ARCH_NAME_6)));
   }
   // Strip out xnack/ecc from name
   mcpu_ = mcpu_.substr(0, mcpu_.find(":"));
   std::free(hip_device_prop);
 
   QD_TRACE("Emitting AMDGPU code for {}", mcpu_);
+
+  // Probe async memory-pool support (hipMallocAsync / hipFreeAsync) so the LLVM executor can skip the fixed-size
+  // device_memory_GB preallocation, the same way the CUDA backend does via cuMemAllocAsync. This feature requires
+  // ROCm >= 5.2; earlier runtimes are not supported by quadrants. Use the non-throwing .call() variant so a future
+  // hipDeviceAttribute_t reshuffle degrades to "no pool" rather than aborting init.
+  int device_supports_mem_pool = 0;
+  uint32 attr_err = driver_.device_get_attribute.call(
+      &device_supports_mem_pool, HIP_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, 0 /*device ordinal*/);
+
+  if (attr_err == HIP_SUCCESS && device_supports_mem_pool) {
+    supports_mem_pool_ = true;
+    void *default_mem_pool = nullptr;
+    driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
+    // Match CUDAContext: keep up to 128 MiB cached in the pool between alloc cycles. Larger workloads are served by the
+    // pool growing on demand.
+    constexpr uint64 kMemPoolReleaseThreshold = 128ull * 1024 * 1024;
+    driver_.mem_pool_set_attribute(default_mem_pool, HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+                                   (void *)&kMemPoolReleaseThreshold);
+  }
 }
 
 std::size_t AMDGPUContext::get_total_memory() {
@@ -115,8 +126,7 @@ int AMDGPUContext::get_args_byte(std::vector<int> arg_sizes) {
   for (auto &size : arg_sizes) {
     naive_add += size;
     if (size < 32) {
-      if ((byte_cnt + size) % 32 > (byte_cnt) % 32 ||
-          (byte_cnt + size) % 32 == 0)
+      if ((byte_cnt + size) % 32 > (byte_cnt) % 32 || (byte_cnt + size) % 32 == 0)
         byte_cnt += size;
       else
         byte_cnt += 32 - byte_cnt % 32 + size;
@@ -130,15 +140,12 @@ int AMDGPUContext::get_args_byte(std::vector<int> arg_sizes) {
   return byte_cnt;
 }
 
-void AMDGPUContext::pack_args(std::vector<void *> arg_pointers,
-                              std::vector<int> arg_sizes,
-                              char *arg_packed) {
+void AMDGPUContext::pack_args(std::vector<void *> arg_pointers, std::vector<int> arg_sizes, char *arg_packed) {
   int byte_cnt = 0;
   for (int ii = 0; ii < arg_pointers.size(); ii++) {
     // The parameter is taken as a vec4
     if (arg_sizes[ii] < 32) {
-      if ((byte_cnt + arg_sizes[ii]) % 32 > (byte_cnt % 32) ||
-          (byte_cnt + arg_sizes[ii]) % 32 == 0) {
+      if ((byte_cnt + arg_sizes[ii]) % 32 > (byte_cnt % 32) || (byte_cnt + arg_sizes[ii]) % 32 == 0) {
         std::memcpy(arg_packed + byte_cnt, arg_pointers[ii], arg_sizes[ii]);
         byte_cnt += arg_sizes[ii];
       } else {
@@ -171,13 +178,10 @@ void AMDGPUContext::launch(void *func,
   KernelProfilerBase::TaskHandle task_handle;
   // Kernel launch
   if (profiler_) {
-    KernelProfilerAMDGPU *profiler_amdgpu =
-        dynamic_cast<KernelProfilerAMDGPU *>(profiler_);
+    KernelProfilerAMDGPU *profiler_amdgpu = dynamic_cast<KernelProfilerAMDGPU *>(profiler_);
     std::string primal_task_name, key;
-    bool valid =
-        offline_cache::try_demangle_name(task_name, primal_task_name, key);
-    profiler_amdgpu->trace(task_handle, valid ? primal_task_name : task_name,
-                           func, grid_dim, block_dim, 0);
+    bool valid = offline_cache::try_demangle_name(task_name, primal_task_name, key);
+    profiler_amdgpu->trace(task_handle, valid ? primal_task_name : task_name, func, grid_dim, block_dim, 0);
   }
 
   auto context_guard = AMDGPUContext::get_instance().get_guard();
@@ -187,10 +191,8 @@ void AMDGPUContext::launch(void *func,
   pack_args(arg_pointers, arg_sizes, packed_arg);
   if (grid_dim > 0) {
     std::lock_guard<std::mutex> _(lock_);
-    void *config[] = {(void *)0x01, (void *)packed_arg, (void *)0x02,
-                      (void *)&pack_size, (void *)0x03};
-    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1,
-                          dynamic_shared_mem_bytes, stream_, nullptr,
+    void *config[] = {(void *)0x01, (void *)packed_arg, (void *)0x02, (void *)&pack_size, (void *)0x03};
+    driver_.launch_kernel(func, grid_dim, 1, 1, block_dim, 1, 1, dynamic_shared_mem_bytes, stream_, nullptr,
                           reinterpret_cast<void **>(&config));
   }
   std::free(packed_arg);

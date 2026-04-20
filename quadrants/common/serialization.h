@@ -47,8 +47,7 @@ class Unit;
 namespace type {
 
 template <typename T>
-using remove_cvref =
-    typename std::remove_cv<typename std::remove_reference<T>::type>;
+using remove_cvref = typename std::remove_cv<typename std::remove_reference<T>::type>;
 
 template <typename T>
 using remove_cvref_t = typename remove_cvref<T>::type;
@@ -77,9 +76,7 @@ constexpr size_t count_delim(const char (&str)[N], char delim) {
 template <size_t DelimN>
 struct StrDelimSplitter {
   template <size_t StrsN>
-  static constexpr std::array<std::string_view, DelimN> make(
-      const char (&str)[StrsN],
-      char delim) {
+  static constexpr std::array<std::string_view, DelimN> make(const char (&str)[StrsN], char delim) {
     std::array<std::string_view, DelimN> res;
     const char *head = &(str[0]);
     size_t si = 0;
@@ -103,19 +100,14 @@ struct StrDelimSplitter {
 };
 
 template <typename SER, size_t N, typename T>
-void serialize_kv_impl(SER &ser,
-                       const std::array<std::string_view, N> &keys,
-                       T &&val) {
+void serialize_kv_impl(SER &ser, const std::array<std::string_view, N> &keys, T &&val) {
   std::string key{keys[N - 1]};
   ser(key.c_str(), val);
 }
 
 template <typename SER, size_t N, typename T, typename... Args>
 typename std::enable_if<!std::is_same<SER, TextSerializer>::value, void>::type
-serialize_kv_impl(SER &ser,
-                  const std::array<std::string_view, N> &keys,
-                  T &&head,
-                  Args &&...rest) {
+serialize_kv_impl(SER &ser, const std::array<std::string_view, N> &keys, T &&head, Args &&...rest) {
   constexpr auto i = (N - 1 - sizeof...(Args));
   std::string key{keys[i]};
   ser(key.c_str(), head);
@@ -126,10 +118,7 @@ serialize_kv_impl(SER &ser,
 // non-last object.
 template <typename SER, size_t N, typename T, typename... Args>
 typename std::enable_if<std::is_same<SER, TextSerializer>::value, void>::type
-serialize_kv_impl(SER &ser,
-                  const std::array<std::string_view, N> &keys,
-                  T &&head,
-                  Args &&...rest) {
+serialize_kv_impl(SER &ser, const std::array<std::string_view, N> &keys, T &&head, Args &&...rest) {
   constexpr auto i = (N - 1 - sizeof...(Args));
   std::string key{keys[i]};
   ser(key.c_str(), head, true);
@@ -154,22 +143,18 @@ serialize_kv_impl(SER &ser,
 // compile time.
 // 2. Invoke serializer::operator("arg", arg) for each arg in __VA_ARGS__. This
 // is implemented inside detail::serialize_kv_impl.
-#define QD_IO(...)                                                     \
-  do {                                                                 \
-    constexpr size_t kDelimN = detail::count_delim(#__VA_ARGS__, ','); \
-    constexpr auto kSplitStrs =                                        \
-        detail::StrDelimSplitter<kDelimN>::make(#__VA_ARGS__, ',');    \
-    detail::serialize_kv_impl(serializer, kSplitStrs, __VA_ARGS__);    \
+#define QD_IO(...)                                                                          \
+  do {                                                                                      \
+    constexpr size_t kDelimN = detail::count_delim(#__VA_ARGS__, ',');                      \
+    constexpr auto kSplitStrs = detail::StrDelimSplitter<kDelimN>::make(#__VA_ARGS__, ','); \
+    detail::serialize_kv_impl(serializer, kSplitStrs, __VA_ARGS__);                         \
   } while (0)
 
-#define QD_SERIALIZER_IS(T)                                                 \
-  (std::is_same<typename std::remove_reference<decltype(serializer)>::type, \
-                T>())
+#define QD_SERIALIZER_IS(T) (std::is_same<typename std::remove_reference<decltype(serializer)>::type, T>())
 
 #if !defined(QD_ARCH_x86)
-static_assert(
-    sizeof(std::size_t) == sizeof(uint64_t),
-    "sizeof(std::size_t) should be 8. Try compiling with 64bit mode.");
+static_assert(sizeof(std::size_t) == sizeof(uint64_t),
+              "sizeof(std::size_t) should be 8. Try compiling with 64bit mode.");
 #endif
 template <typename T, typename S>
 struct IO {
@@ -193,9 +178,8 @@ class Serializer {
   template <typename T>
   struct has_io {
     template <typename T_>
-    static constexpr auto helper(T_ *) -> std::is_same<
-        decltype((std::declval<T_>().io(std::declval<Serializer &>()))),
-        void>;
+    static constexpr auto helper(T_ *)
+        -> std::is_same<decltype((std::declval<T_>().io(std::declval<Serializer &>()))), void>;
 
     template <typename>
     static constexpr auto helper(...) -> std::false_type;
@@ -209,11 +193,9 @@ class Serializer {
   template <typename T>
   struct has_ptr_io {
     template <typename T_>
-    static constexpr auto helper(T_ *)
-        -> std::is_same<decltype((T_::ptr_io(std::declval<const T_ *&>(),
-                                             std::declval<Serializer &>(),
-                                             std::declval<bool>()))),
-                        void>;
+    static constexpr auto helper(T_ *) -> std::is_same<
+        decltype((T_::ptr_io(std::declval<const T_ *&>(), std::declval<Serializer &>(), std::declval<bool>()))),
+        void>;
 
     template <typename>
     static constexpr auto helper(...) -> std::false_type;
@@ -227,8 +209,7 @@ class Serializer {
   template <typename T>
   struct has_free_io {
     template <typename T_>
-    static constexpr auto helper(T_ *) ->
-        typename IO<T_, Serializer>::implemented;
+    static constexpr auto helper(T_ *) -> typename IO<T_, Serializer>::implemented;
 
     template <typename>
     static constexpr auto helper(...) -> std::false_type;
@@ -271,13 +252,10 @@ inline std::vector<uint8_t> read_data_from_file(const std::string &fn) {
   }
 }
 
-inline void write_data_to_file(const std::string &fn,
-                               uint8_t *data,
-                               std::size_t size) {
+inline void write_data_to_file(const std::string &fn, uint8_t *data, std::size_t size) {
   std::FILE *f = fopen(fn.c_str(), "wb");
   if (f == nullptr) {
-    QD_ERROR("Cannot open file [{}] for writing. (Does the directory exist?)",
-             fn);
+    QD_ERROR("Cannot open file [{}] for writing. (Does the directory exist?)", fn);
     QD_ASSERT(f != nullptr);
   }
   if (ends_with(fn, ".tcb.zip")) {
@@ -296,8 +274,7 @@ class BinarySerializer : public Serializer {
  private:
   template <typename T>
   inline static constexpr bool is_elementary_type_v =
-      !has_io<T>::value && !std::is_pointer<T>::value && !std::is_enum_v<T> &&
-      std::is_pod_v<T>;
+      !has_io<T>::value && !std::is_pointer<T>::value && !std::is_enum_v<T> && std::is_pod_v<T>;
 
  public:
   std::vector<uint8_t> data;
@@ -310,8 +287,7 @@ class BinarySerializer : public Serializer {
   using Base::assets;
 
   template <bool writing_ = writing>
-  typename std::enable_if<!writing_, bool>::type initialize(
-      const std::string &fn) {
+  typename std::enable_if<!writing_, bool>::type initialize(const std::string &fn) {
     data = read_data_from_file(fn);
     if (data.size() == 0) {
       return false;
@@ -340,9 +316,8 @@ class BinarySerializer : public Serializer {
   }
 
   template <bool writing_ = writing>
-  typename std::enable_if<writing_, bool>::type initialize(
-      std::size_t preserved_ = std::size_t(0),
-      void *c_data = nullptr) {
+  typename std::enable_if<writing_, bool>::type initialize(std::size_t preserved_ = std::size_t(0),
+                                                           void *c_data = nullptr) {
     std::size_t n = 0;
     head = 0;
     if (preserved_ != 0) {
@@ -361,9 +336,7 @@ class BinarySerializer : public Serializer {
   }
 
   template <bool writing_ = writing>
-  typename std::enable_if<!writing_, void>::type initialize(
-      void *raw_data,
-      std::size_t preserved_ = std::size_t(0)) {
+  typename std::enable_if<!writing_, void>::type initialize(void *raw_data, std::size_t preserved_ = std::size_t(0)) {
     if (preserved_ != 0) {
       QD_ASSERT(raw_data == nullptr);
       data.resize(preserved_);
@@ -428,21 +401,17 @@ class BinarySerializer : public Serializer {
       // TODO: why do I have to let it write to tmp, otherwise I get Sig Fault?
       // Take care of std::vector<bool> ...
       using Traw = typename type::remove_cvref_t<T>;
-      std::vector<
-          std::conditional_t<std::is_same<Traw, bool>::value, uint8, Traw>>
-          tmp(n);
+      std::vector<std::conditional_t<std::is_same<Traw, bool>::value, uint8, Traw>> tmp(n);
       for (std::size_t i = 0; i < n; i++) {
         this->process(tmp[i]);
       }
-      std::memcpy(const_cast<typename std::remove_cv<T>::type *>(val), &tmp[0],
-                  sizeof(tmp[0]) * tmp.size());
+      std::memcpy(const_cast<typename std::remove_cv<T>::type *>(val), &tmp[0], sizeof(tmp[0]) * tmp.size());
     }
   }
 
   // Elementary data types
   template <typename T>
-  typename std::enable_if_t<is_elementary_type_v<T>, void> process(
-      const T &val) {
+  typename std::enable_if_t<is_elementary_type_v<T>, void> process(const T &val) {
     static_assert(!std::is_reference<T>::value, "T cannot be reference");
     static_assert(!std::is_const<T>::value, "T cannot be const");
     static_assert(!std::is_volatile<T>::value, "T cannot be volatile");
@@ -478,8 +447,7 @@ class BinarySerializer : public Serializer {
 
   // Unique Pointers to non-quadrants-unit Types
   template <typename T>
-  typename std::enable_if<!type::is_unit<T>::value, void>::type process(
-      const std::unique_ptr<T> &val_) {
+  typename std::enable_if<!type::is_unit<T>::value, void>::type process(const std::unique_ptr<T> &val_) {
     auto &val = get_writable(val_);
     if (writing) {
       this->process(ptr_to_int(val.get()));
@@ -506,8 +474,7 @@ class BinarySerializer : public Serializer {
 
   // Unique Pointers to quadrants-unit Types
   template <typename T>
-  typename std::enable_if<type::is_unit<T>::value, void>::type process(
-      const std::unique_ptr<T> &val_) {
+  typename std::enable_if<type::is_unit<T>::value, void>::type process(const std::unique_ptr<T> &val_) {
     auto &val = get_writable(val_);
     if (writing) {
       this->process(val->get_name());
@@ -532,9 +499,7 @@ class BinarySerializer : public Serializer {
 
   // Raw pointers (no ownership)
   template <typename T>
-  typename std::enable_if<std::is_pointer<T>::value &&
-                              !has_ptr_io<std::remove_pointer_t<T>>::value,
-                          void>::type
+  typename std::enable_if<std::is_pointer<T>::value && !has_ptr_io<std::remove_pointer_t<T>>::value, void>::type
   process(const T &val_) {
     auto &val = get_writable(val_);
     if (writing) {
@@ -550,18 +515,15 @@ class BinarySerializer : public Serializer {
       this->process(val_ptr);
       if (val_ptr != 0) {
         QD_ASSERT(assets.find(val_ptr) != assets.end());
-        val = reinterpret_cast<typename std::remove_pointer<T>::type *>(
-            assets[val_ptr]);
+        val = reinterpret_cast<typename std::remove_pointer<T>::type *>(assets[val_ptr]);
       }
     }
   }
 
   // Pointer with a custom serialization function.
   template <typename T>
-  typename std::enable_if<std::is_pointer<T>::value &&
-                              has_ptr_io<std::remove_pointer_t<T>>::value,
-                          void>::type
-  process(const T &val_) {
+  typename std::enable_if<std::is_pointer<T>::value && has_ptr_io<std::remove_pointer_t<T>>::value, void>::type process(
+      const T &val_) {
     using T_ = std::remove_pointer_t<T>;
     auto &val = get_writable(val_);
     T_::ptr_io((const T_ *&)val, *this, writing);
@@ -685,8 +647,7 @@ class TextSerializer : public Serializer {
 
   template <typename T>
   inline static constexpr bool is_elementary_type_v =
-      !has_io<T>::value && !has_free_io<T>::value && !std::is_enum_v<T> &&
-      std::is_pod_v<T> && !std::is_pointer_v<T>;
+      !has_io<T>::value && !has_free_io<T>::value && !std::is_enum_v<T> && std::is_pod_v<T> && !std::is_pointer_v<T>;
 
  public:
   TextSerializer() {
@@ -724,14 +685,11 @@ class TextSerializer : public Serializer {
   }
 
   template <typename T, std::size_t n>
-  using is_compact =
-      typename std::integral_constant<bool,
-                                      std::is_arithmetic<T>::value && (n < 7)>;
+  using is_compact = typename std::integral_constant<bool, std::is_arithmetic<T>::value && (n < 7)>;
 
   // C-array
   template <typename T, std::size_t n>
-  std::enable_if_t<is_compact<T, n>::value, void> process(
-      const TArray<T, n> &val) {
+  std::enable_if_t<is_compact<T, n>::value, void> process(const TArray<T, n> &val) {
     std::stringstream ss;
     ss << "{";
     for (std::size_t i = 0; i < n; i++) {
@@ -746,8 +704,7 @@ class TextSerializer : public Serializer {
 
   // C-array
   template <typename T, std::size_t n>
-  std::enable_if_t<!is_compact<T, n>::value, void> process(
-      const TArray<T, n> &val) {
+  std::enable_if_t<!is_compact<T, n>::value, void> process(const TArray<T, n> &val) {
     add_raw("{");
     indent_++;
     for (std::size_t i = 0; i < n; i++) {
@@ -763,8 +720,7 @@ class TextSerializer : public Serializer {
 
   // std::array
   template <typename T, std::size_t n>
-  std::enable_if_t<is_compact<T, n>::value, void> process(
-      const StdTArray<T, n> &val) {
+  std::enable_if_t<is_compact<T, n>::value, void> process(const StdTArray<T, n> &val) {
     std::stringstream ss;
     ss << "{";
     for (std::size_t i = 0; i < n; i++) {
@@ -779,8 +735,7 @@ class TextSerializer : public Serializer {
 
   // std::array
   template <typename T, std::size_t n>
-  std::enable_if_t<!is_compact<T, n>::value, void> process(
-      const StdTArray<T, n> &val) {
+  std::enable_if_t<!is_compact<T, n>::value, void> process(const StdTArray<T, n> &val) {
     add_raw("{");
     indent_++;
     for (std::size_t i = 0; i < n; i++) {
@@ -806,10 +761,7 @@ class TextSerializer : public Serializer {
   // Pointer with a custom serialization function.
   // TODO: switch to concept when C++20 is available
   template <typename T>
-  std::enable_if_t<std::is_pointer_v<T> &&
-                       has_ptr_io<std::remove_pointer_t<T>>::value,
-                   void>
-  process(const T &val) {
+  std::enable_if_t<std::is_pointer_v<T> && has_ptr_io<std::remove_pointer_t<T>>::value, void> process(const T &val) {
     add_raw("ptr {");
     indent_++;
     using T_ = std::remove_pointer_t<T>;
@@ -937,18 +889,14 @@ class TextSerializer : public Serializer {
 };
 
 template <typename T>
-typename std::enable_if<Serializer::has_io<T>::value, std::ostream &>::type
-operator<<(std::ostream &os, const T &t) {
+typename std::enable_if<Serializer::has_io<T>::value, std::ostream &>::type operator<<(std::ostream &os, const T &t) {
   os << TextSerializer::serialize("value", t);
   return os;
 }
 
 // Returns true if deserialization succeeded.
 template <typename T>
-bool read_from_binary(T &t,
-                      const void *bin,
-                      std::size_t len,
-                      bool match_all = true) {
+bool read_from_binary(T &t, const void *bin, std::size_t len, bool match_all = true) {
   BinaryInputSerializer reader;
   reader.initialize(const_cast<void *>(bin));
   if (len != reader.retrieve_length()) {
@@ -989,16 +937,13 @@ void write_to_binary_stream(const T &t, std::ostream &os) {
 }
 
 // Compile-Time Tests
-static_assert(std::is_same<decltype(Serializer::get_writable(
-                               std::declval<const std::vector<int> &>())),
-                           std::vector<int> &>(),
-              "");
+static_assert(
+    std::is_same<decltype(Serializer::get_writable(std::declval<const std::vector<int> &>())), std::vector<int> &>(),
+    "");
 
 static_assert(
-    std::is_same<
-        decltype(Serializer::get_writable(
-            std::declval<const std::vector<std::unique_ptr<int>> &>())),
-        std::vector<std::unique_ptr<int>> &>(),
+    std::is_same<decltype(Serializer::get_writable(std::declval<const std::vector<std::unique_ptr<int>> &>())),
+                 std::vector<std::unique_ptr<int>> &>(),
     "");
 
 #ifdef QD_INCLUDED

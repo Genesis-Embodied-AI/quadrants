@@ -110,7 +110,7 @@ def _is_appveyor():
 
 @pytest.mark.skipif(os.environ.get("QD_LITE_TEST") or "0", reason="Lite test")
 @pytest.mark.run_in_serial
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test()
 def test_mpm88_numpy_and_ndarray():
     import numpy as np
 

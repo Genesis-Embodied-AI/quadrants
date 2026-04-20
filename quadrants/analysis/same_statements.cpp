@@ -26,10 +26,9 @@ class IRNodeComparator : public IRVisitor {
  public:
   bool same;
 
-  explicit IRNodeComparator(
-      IRNode *other_node,
-      const std::optional<std::unordered_map<int, int>> &id_map,
-      bool check_same_value)
+  explicit IRNodeComparator(IRNode *other_node,
+                            const std::optional<std::unordered_map<int, int>> &id_map,
+                            bool check_same_value)
       : other_node_(other_node) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
@@ -119,8 +118,7 @@ class IRNodeComparator : public IRVisitor {
     //  GlobalPtrStmt::common_statement_eliminable() is false.
 
     const bool identical_stmts_can_have_different_value =
-        stmt_has_value && !stmt->common_statement_eliminable() &&
-        !stmt->is<GlobalPtrStmt>();
+        stmt_has_value && !stmt->common_statement_eliminable() && !stmt->is<GlobalPtrStmt>();
     // Note that we do not need to test !stmt2->common_statement_eliminable()
     // because if this condition does not hold,
     // same_value(stmt1, stmt2) returns false anyway.
@@ -137,8 +135,7 @@ class IRNodeComparator : public IRVisitor {
         // And we cannot use irpass::analysis::definitely_same_address()
         // directly because that function does not support id_map.
 
-        if (stmt->as<GlobalPtrStmt>()->snode->id !=
-            other->as<GlobalPtrStmt>()->snode->id) {
+        if (stmt->as<GlobalPtrStmt>()->snode->id != other->as<GlobalPtrStmt>()->snode->id) {
           same = false;
           return;
         }
@@ -166,8 +163,7 @@ class IRNodeComparator : public IRVisitor {
       if (stmt->is<RangeAssumptionStmt>()) {
         // Special case: we do not care about the "base" operand when checking
         // whether two RangeAssumptionStmts share the same value.
-        check_mapping(stmt->as<RangeAssumptionStmt>()->input,
-                      other->as<RangeAssumptionStmt>()->input);
+        check_mapping(stmt->as<RangeAssumptionStmt>()->input, other->as<RangeAssumptionStmt>()->input);
         operand_checked = true;
       }
     }
@@ -275,10 +271,7 @@ class IRNodeComparator : public IRVisitor {
 };
 
 namespace irpass::analysis {
-bool same_statements(
-    IRNode *root1,
-    IRNode *root2,
-    const std::optional<std::unordered_map<int, int>> &id_map) {
+bool same_statements(IRNode *root1, IRNode *root2, const std::optional<std::unordered_map<int, int>> &id_map) {
   // When id_map is std::nullopt by default, this function tests if
   // root1 and root2 are the same, i.e., have the same type,
   // the same operands and the same fields.
@@ -321,9 +314,7 @@ bool same_statements(
                                /*check_same_value=*/false);
 }
 
-bool same_value(Stmt *stmt1,
-                Stmt *stmt2,
-                const std::optional<std::unordered_map<int, int>> &id_map) {
+bool same_value(Stmt *stmt1, Stmt *stmt2, const std::optional<std::unordered_map<int, int>> &id_map) {
   // Test if two statements definitely have the same value.
   if (stmt1 == stmt2)
     return true;

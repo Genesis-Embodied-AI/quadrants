@@ -99,7 +99,7 @@ def test_python_scope_linalg():
     assert y.all() == 0
 
 
-@test_utils.test(arch=[qd.x64, qd.cuda, qd.metal])
+@test_utils.test(arch=[qd.x64, qd.cuda, qd.amdgpu, qd.metal])
 def test_16_min_max():
     @qd.kernel
     def min_u16(a: qd.u16, b: qd.u16) -> qd.u16:
@@ -149,7 +149,7 @@ def test_32_min_max():
     assert max_i32(a, b) == max(a, b)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_64_min_max():
     @qd.kernel
     def min_u64(a: qd.u64, b: qd.u64) -> qd.u64:

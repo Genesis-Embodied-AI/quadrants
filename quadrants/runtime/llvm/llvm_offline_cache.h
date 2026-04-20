@@ -118,8 +118,7 @@ struct LlvmOfflineCache {
   // ** Find a way to name each SNodeTree **
   std::unordered_map<int, FieldCacheData> fields;  // key = snode_tree_id
 
-  std::unordered_map<std::string, KernelCacheData>
-      kernels;  // key = kernel_name
+  std::unordered_map<std::string, KernelCacheData> kernels;  // key = kernel_name
 
   // NOTE: The "version" must be the first field to be serialized
   QD_IO_DEF(version, size, fields, kernels);

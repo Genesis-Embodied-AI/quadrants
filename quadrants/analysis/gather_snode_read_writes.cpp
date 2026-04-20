@@ -9,8 +9,7 @@ namespace quadrants::lang {
 namespace irpass::analysis {
 
 // Returns the set of SNodes that are read or written
-std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>>
-gather_snode_read_writes(IRNode *root) {
+std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>> gather_snode_read_writes(IRNode *root) {
   std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>> accessed;
   irpass::analysis::gather_statements(root, [&](Stmt *stmt) {
     Stmt *ptr = nullptr;

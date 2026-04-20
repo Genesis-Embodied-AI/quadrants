@@ -15,17 +15,14 @@ class logger;
 }
 
 #ifdef _WIN64
-#define __FILENAME__ \
-  (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
+#define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
 #else
-#define __FILENAME__ \
-  (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #endif
 
-#define SPD_AUGMENTED_LOG(X, ...)                                        \
-  quadrants::Logger::get_instance().X(                                   \
-      fmt::format("[{}:{}@{}] ", __FILENAME__, __FUNCTION__, __LINE__) + \
-      fmt::format(__VA_ARGS__))
+#define SPD_AUGMENTED_LOG(X, ...)                                                                        \
+  quadrants::Logger::get_instance().X(fmt::format("[{}:{}@{}] ", __FILENAME__, __FUNCTION__, __LINE__) + \
+                                      fmt::format(__VA_ARGS__))
 
 #if defined(QD_PLATFORM_WINDOWS)
 #define QD_UNREACHABLE __assume(0);

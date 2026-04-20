@@ -11,13 +11,7 @@ class Stmt;
 
 class Function : public Callable {
  public:
-  enum class IRStage : int {
-    None = 0,
-    AST = 1,
-    InitialIR = 2,
-    BeforeLowerAccess = 3,
-    OptimizedIR = 4
-  };
+  enum class IRStage : int { None = 0, AST = 1, InitialIR = 2, BeforeLowerAccess = 3, OptimizedIR = 4 };
 
   FunctionKey func_key;
 

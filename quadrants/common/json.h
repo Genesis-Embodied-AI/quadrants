@@ -67,8 +67,7 @@ class JsonElementEnumerator {
   std::vector<JsonValue>::const_iterator beg_, end_;
 
  public:
-  explicit JsonElementEnumerator(const std::vector<JsonValue> &arr)
-      : beg_(arr.cbegin()), end_(arr.cend()) {
+  explicit JsonElementEnumerator(const std::vector<JsonValue> &arr) : beg_(arr.cbegin()), end_(arr.cend()) {
   }
 
   std::vector<JsonValue>::const_iterator begin() const {
@@ -83,8 +82,7 @@ class JsonFieldEnumerator {
   std::map<std::string, JsonValue>::const_iterator beg_, end_;
 
  public:
-  explicit JsonFieldEnumerator(const std::map<std::string, JsonValue> &obj)
-      : beg_(obj.cbegin()), end_(obj.cend()) {
+  explicit JsonFieldEnumerator(const std::map<std::string, JsonValue> &obj) : beg_(obj.cbegin()), end_(obj.cend()) {
   }
 
   std::map<std::string, JsonValue>::const_iterator begin() const {
@@ -110,12 +108,9 @@ struct JsonObject {
   std::map<std::string, JsonValue> inner;
 
   inline JsonObject() = default;
-  inline explicit JsonObject(std::map<std::string, JsonValue> &&b)
-      : inner(std::move(b)) {
+  inline explicit JsonObject(std::map<std::string, JsonValue> &&b) : inner(std::move(b)) {
   }
-  inline JsonObject(
-      std::initializer_list<std::pair<const std::string, JsonValue>> &&fields)
-      : inner(fields) {
+  inline JsonObject(std::initializer_list<std::pair<const std::string, JsonValue>> &&fields) : inner(fields) {
   }
 };
 
@@ -159,22 +154,17 @@ struct JsonValue {
   }
   inline explicit JsonValue(long long num) : ty(L_JSON_INT), num_int(num) {
   }
-  inline explicit JsonValue(unsigned long long num)
-      : ty(L_JSON_INT), num_int(num) {
+  inline explicit JsonValue(unsigned long long num) : ty(L_JSON_INT), num_int(num) {
   }
   inline explicit JsonValue(const char *str) : ty(L_JSON_STRING), str(str) {
   }
-  inline explicit JsonValue(const std::string &str)
-      : ty(L_JSON_STRING), str(str) {
+  inline explicit JsonValue(const std::string &str) : ty(L_JSON_STRING), str(str) {
   }
-  inline explicit JsonValue(std::string &&str)
-      : ty(L_JSON_STRING), str(std::forward<std::string>(str)) {
+  inline explicit JsonValue(std::string &&str) : ty(L_JSON_STRING), str(std::forward<std::string>(str)) {
   }
-  inline explicit JsonValue(JsonObject &&obj)
-      : ty(L_JSON_OBJECT), obj(std::move(obj.inner)) {
+  inline explicit JsonValue(JsonObject &&obj) : ty(L_JSON_OBJECT), obj(std::move(obj.inner)) {
   }
-  inline explicit JsonValue(JsonArray &&arr)
-      : ty(L_JSON_ARRAY), arr(std::move(arr.inner)) {
+  inline explicit JsonValue(JsonArray &&arr) : ty(L_JSON_ARRAY), arr(std::move(arr.inner)) {
   }
 
   inline JsonValue &operator[](const char *key) {

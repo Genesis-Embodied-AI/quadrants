@@ -23,13 +23,7 @@ class CompiledKernelData : public lang::CompiledKernelData {
     const StructType *args_type = nullptr;
     size_t args_size{0};
 
-    QD_IO_DEF(args,
-              rets,
-              compiled_data,
-              ret_type,
-              ret_size,
-              args_type,
-              args_size);
+    QD_IO_DEF(args, rets, compiled_data, ret_type, ret_size, args_type, args_size);
 
     InternalData() = default;
 
@@ -50,6 +44,9 @@ class CompiledKernelData : public lang::CompiledKernelData {
   CompiledKernelData(Arch arch, InternalData data);
 
   Arch arch() const override;
+  size_t num_tasks() const override {
+    return data_.compiled_data.tasks.size();
+  }
   std::unique_ptr<lang::CompiledKernelData> clone() const override;
 
   Err check() const override;
@@ -58,8 +55,7 @@ class CompiledKernelData : public lang::CompiledKernelData {
     return data_;
   }
 
-  std::string debug_dump_to_string()
-      const override;  // for debug/dev/testing only
+  std::string debug_dump_to_string() const override;  // for debug/dev/testing only
 
  protected:
   Err load_impl(const CompiledKernelDataFile &file) override;

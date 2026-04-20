@@ -413,7 +413,7 @@ def test_matrix_ndarray_quadrants_scope():
     _test_matrix_ndarray_quadrants_scope()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_matrix_ndarray_quadrants_scope_real_matrix():
     _test_matrix_ndarray_quadrants_scope()
 
@@ -439,7 +439,7 @@ def test_matrix_ndarray_quadrants_scope_struct_for():
     _test_matrix_ndarray_quadrants_scope_struct_for()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_matrix_ndarray_quadrants_scope_struct_for_real_matrix():
     _test_matrix_ndarray_quadrants_scope_struct_for()
 
@@ -478,7 +478,7 @@ def test_vector_ndarray_quadrants_scope():
     _test_vector_ndarray_quadrants_scope()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_vector_ndarray_quadrants_scope_real_matrix():
     _test_vector_ndarray_quadrants_scope()
 
@@ -594,7 +594,7 @@ def _test_size_in_bytes():
     assert b._get_nelement() == 5
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], require=qd.extension.data64)
 def test_size_in_bytes():
     _test_size_in_bytes()
 
@@ -645,7 +645,7 @@ def test_ndarray_grouped():
     _test_ndarray_grouped()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], real_matrix_scalarize=False)
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu], real_matrix_scalarize=False)
 def test_ndarray_grouped_real_matrix():
     _test_ndarray_grouped()
 
@@ -1039,8 +1039,9 @@ def test_pass_ndarray_to_func():
     assert foo(weight) == 42.0
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_pass_ndarray_to_real_func():
+
     @qd.real_func
     def bar(weight: qd.types.NDArray[qd.f32, 3]) -> qd.f32:
         return weight[1, 1, 1]
@@ -1054,7 +1055,7 @@ def test_pass_ndarray_to_real_func():
     assert foo(weight) == 42.0
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_pass_ndarray_outside_kernel_to_real_func():
     weight = qd.ndarray(dtype=qd.f32, shape=(2, 2, 2))
 
@@ -1138,8 +1139,9 @@ def test_ndarray_arg_builtin_float_type():
     assert foo(x) == 42
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_vector_ndarray_arg():
+
     @qd.real_func
     def foo(x: qd.types.NDArray[vec3, 1]) -> vec3:
         return x[0]
@@ -1153,7 +1155,7 @@ def test_real_func_vector_ndarray_arg():
     assert (test(x) == vec3(1, 2, 3)).all()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_real_func_write_ndarray_cfg():
     @qd.real_func
     def bar(a: qd.types.NDArray[qd.types.vector(3, float), 1]):

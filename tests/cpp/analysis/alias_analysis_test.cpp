@@ -13,13 +13,10 @@ namespace irpass {
 namespace analysis {
 namespace {
 
-std::vector<Stmt *> make_const_indices(const std::vector<int> indices,
-                                       IRBuilder *builder) {
+std::vector<Stmt *> make_const_indices(const std::vector<int> indices, IRBuilder *builder) {
   std::vector<Stmt *> result;
   result.reserve(indices.size());
-  std::for_each(indices.begin(), indices.end(), [builder, &result](int i) {
-    result.push_back(builder->get_int32(i));
-  });
+  std::for_each(indices.begin(), indices.end(), [builder, &result](int i) { result.push_back(builder->get_int32(i)); });
   return result;
 }
 

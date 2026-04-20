@@ -144,6 +144,7 @@ user_api[qd] = [
     "get_addr",
     "global_thread_idx",
     "gpu",
+    "graph_do_while",
     "grouped",
     "i",
     "i16",
