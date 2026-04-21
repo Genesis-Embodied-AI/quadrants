@@ -7,6 +7,7 @@ entries for each branch.
 """
 
 import numpy as np
+import pytest
 
 import quadrants as qd
 from quadrants._tensor import _TensorAnnotation
@@ -139,6 +140,58 @@ def test_tensor_layouts_keep_separate_cache_entries():
     assert len(k._primal.mapper.mapping) == 1
     k(a_swap)
     assert len(k._primal.mapper.mapping) == 2
+
+
+# ----------------------------------------------------------------------------
+# Vector / matrix element types: qd.Tensor must dispatch the compound-element
+# tensors built by qd.Vector.tensor / qd.Matrix.tensor on both backends.
+# ----------------------------------------------------------------------------
+
+
+BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
+BACKEND_IDS = ["field", "ndarray"]
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+def test_tensor_dispatch_vector_element(backend):
+    """qd.Tensor must accept Vector-element tensors on both backends and
+    let kernels write each component through canonical indexing."""
+    qd.init(arch=qd.x64)
+    a = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
+
+    @qd.kernel
+    def fill(x: qd.Tensor):
+        for i in range(4):
+            x[i][0] = float(i)
+            x[i][1] = float(i) + 0.5
+            x[i][2] = float(i) + 0.25
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape[0] == 4
+    np.testing.assert_allclose(arr[2, 0], 2.0)
+    np.testing.assert_allclose(arr[2, 1], 2.5)
+    np.testing.assert_allclose(arr[2, 2], 2.25)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+def test_tensor_dispatch_matrix_element(backend):
+    """qd.Tensor must accept Matrix-element tensors on both backends."""
+    qd.init(arch=qd.x64)
+    a = qd.Matrix.tensor(2, 3, qd.f32, shape=(2,), backend=backend)
+
+    @qd.kernel
+    def fill(x: qd.Tensor):
+        for i in range(2):
+            for r in range(2):
+                for c in range(3):
+                    x[i][r, c] = float(i * 100 + r * 10 + c)
+
+    fill(a)
+    arr = a.to_numpy()
+    assert arr.shape[0] == 2
+    np.testing.assert_allclose(arr[1, 1, 2], 112.0)
+    np.testing.assert_allclose(arr[0, 0, 0], 0.0)
 
 
 # ----------------------------------------------------------------------------
