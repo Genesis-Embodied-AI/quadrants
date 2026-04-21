@@ -60,7 +60,6 @@ __all__ = [
     "math",
     "sparse",
     "tensor",
-    "tensor_annotation",
     "tools",
     "types",
 ]
