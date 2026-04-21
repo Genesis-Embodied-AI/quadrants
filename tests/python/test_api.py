@@ -40,6 +40,7 @@ def _get_expected_matrix_apis():
         "outer_product",
         "rows",
         "sum",
+        "tensor",
         "to_list",
         "to_numpy",
         "trace",
