@@ -83,6 +83,49 @@ def test_layout_field_rank4_all_permutations(layout):
     assert a.shape == (2, 3, 4, 5)
 
 
+# Higher-rank sampled layouts: full enumeration is infeasible (rank 12 alone
+# is 12! ≈ 479M permutations). The rank-3/rank-4 sweeps above already
+# enumerate exhaustively; the cases below random-sample the higher-rank
+# space to back the user-guide claim that "any permutation up to
+# quadrants_max_num_indices (12) is supported". A fixed seed per (rank,
+# trial) keeps the suite deterministic so a regression on a particular
+# permutation always reproduces.
+def _sampled_layouts(rank, num_samples, seed_base=0):
+    import random  # pylint: disable=import-outside-toplevel
+
+    out = [tuple(range(rank))]  # always include identity
+    rng = random.Random(seed_base + rank)
+    seen = {out[0]}
+    while len(out) < num_samples + 1:
+        candidate = list(range(rank))
+        rng.shuffle(candidate)
+        candidate = tuple(candidate)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        out.append(candidate)
+    return out
+
+
+@pytest.mark.parametrize("rank", [5, 8, 12])
+@pytest.mark.parametrize("trial", list(range(4)))
+def test_layout_field_higher_rank_sampled_permutations(rank, trial):
+    """Random-sample the rank-5 / rank-8 / rank-12 layout space on the
+    field backend and check that every sampled permutation allocates and
+    reports the canonical shape unchanged. Backs the user-guide claim
+    of 'any permutation up to quadrants_max_num_indices (12)'.
+
+    NDARRAY non-identity layout is gated by NotImplementedError on this
+    branch; the parametrized-over-backend version of this test lands
+    later (when ndarray subscript rewriting is in place)."""
+    qd.init(arch=qd.x64)
+    layouts = _sampled_layouts(rank, num_samples=5)
+    layout = layouts[trial % len(layouts)]
+    canonical = tuple(2 + (i % 3) for i in range(rank))  # small distinct-ish dims
+    a = qd.tensor(qd.f32, shape=canonical, layout=layout)
+    assert a.shape == canonical
+
+
 # ----------------------------------------------------------------------------
 # Validation errors
 # ----------------------------------------------------------------------------
