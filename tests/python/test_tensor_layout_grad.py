@@ -1,15 +1,10 @@
-"""Regression: layout= + needs_grad= preserves canonical indexing on the
-field backend.
+"""Layout + needs_grad combination: canonical indexing on the grad buffer
+must keep working for non-identity physical layouts on both backends.
 
-This is a test-only PR: an earlier change added the layout= keyword and an earlier change covered
-needs_grad pass-through. The combination was checked at allocation time
-in an earlier change (test_layout_field_with_needs_grad_allocates_grad) but not yet
-exercised through a kernel write/read on the grad buffer with a non-
-identity layout. That's the gap this PR closes.
-
-Pre-impl POC Q3b already established this works; these tests pin it down
-in the suite so a regression in upstream Quadrants (e.g. grad SNode no
-longer inheriting axis_seq from the primal) would surface immediately.
+Pre-impl POC Q3b established this works on FIELD (axis_seq propagation
+to the grad SNode); the NDARRAY equivalent is the ``_qd_layout`` tag
+being copied onto the companion grad ndarray. These tests pin both
+contracts in the suite so an upstream regression surfaces immediately.
 """
 
 import itertools
@@ -20,84 +15,171 @@ import quadrants as qd
 
 from tests import test_utils
 
+BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
+BACKEND_IDS = ["field", "ndarray"]
 
+
+def _to_numpy_shape(canonical, layout, backend):
+    """Shape of ``a.to_numpy()`` after a layout-tagged allocation.
+
+    FIELD's to_numpy() returns the canonical shape regardless of physical
+    storage; NDARRAY's to_numpy() currently returns the physical
+    (permuted) shape (this asymmetry is tracked separately).
+    """
+    if backend is qd.Backend.FIELD:
+        return canonical
+    return tuple(canonical[i] for i in layout)
+
+
+def _to_numpy_idx(canonical_idx, layout, backend):
+    """Translate a canonical multi-index to the index needed to read
+    ``a.to_numpy()``, accounting for the FIELD vs NDARRAY asymmetry."""
+    if backend is qd.Backend.FIELD:
+        return canonical_idx
+    return tuple(canonical_idx[i] for i in layout)
+
+
+# ----------------------------------------------------------------------------
+# Rank-2 canonical kernel roundtrip on a transposed-storage tensor.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_layout_field_grad_canonical_kernel_roundtrip_rank2():
-    """Write to primal and grad through a kernel using canonical indices on
-    a transposed-storage field. Both must read back canonically."""
-    a = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0), needs_grad=True)
+def test_layout_grad_canonical_kernel_roundtrip_rank2(backend):
+    canonical = (4, 5)
+    layout = (1, 0)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
 
-    @qd.kernel
-    def write_primal(x: qd.template()):
-        for i, j in qd.ndrange(4, 5):
-            x[i, j] = i * 10.0 + j
+    if backend is qd.Backend.FIELD:
 
-    @qd.kernel
-    def write_grad(x: qd.template()):
-        for i, j in qd.ndrange(4, 5):
-            x.grad[i, j] = i * 100.0 + j * 10.0
+        @qd.kernel
+        def write_primal(x: qd.template()):
+            for i, j in qd.ndrange(4, 5):
+                x[i, j] = i * 10.0 + j
+
+        @qd.kernel
+        def write_grad(x: qd.template()):
+            for i, j in qd.ndrange(4, 5):
+                x.grad[i, j] = i * 100.0 + j * 10.0
+
+    else:
+
+        @qd.kernel
+        def write_primal(x: qd.types.ndarray()):
+            for i, j in qd.ndrange(4, 5):
+                x[i, j] = i * 10.0 + j
+
+        @qd.kernel
+        def write_grad(x: qd.types.ndarray()):
+            for i, j in qd.ndrange(4, 5):
+                x.grad[i, j] = i * 100.0 + j * 10.0
 
     write_primal(a)
     write_grad(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal.shape == grad.shape == (4, 5)
-    assert primal[1, 2] == 12.0
-    assert grad[1, 2] == 120.0
-    assert primal[3, 4] == 34.0
-    assert grad[3, 4] == 340.0
+    assert primal.shape == grad.shape == _to_numpy_shape(canonical, layout, backend)
+    for canonical_idx, expected_primal, expected_grad in [
+        ((1, 2), 12.0, 120.0),
+        ((3, 4), 34.0, 340.0),
+    ]:
+        physical = _to_numpy_idx(canonical_idx, layout, backend)
+        assert primal[physical] == expected_primal
+        assert grad[physical] == expected_grad
 
 
+# ----------------------------------------------------------------------------
+# Rank-3 canonical kernel roundtrip — single non-trivial permutation.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_layout_field_grad_canonical_kernel_roundtrip_rank3_kij():
-    """Same as above but rank 3 with a non-trivial permutation."""
-    a = qd.tensor(qd.f32, shape=(2, 3, 4), layout=(2, 0, 1), needs_grad=True)
+def test_layout_grad_canonical_kernel_roundtrip_rank3_kij(backend):
+    canonical = (2, 3, 4)
+    layout = (2, 0, 1)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
 
-    @qd.kernel
-    def write_primal(x: qd.template()):
-        for i, j, k in qd.ndrange(2, 3, 4):
-            x[i, j, k] = i * 100.0 + j * 10.0 + k
+    if backend is qd.Backend.FIELD:
 
-    @qd.kernel
-    def write_grad(x: qd.template()):
-        for i, j, k in qd.ndrange(2, 3, 4):
-            x.grad[i, j, k] = i * 1000.0 + j * 100.0 + k * 10.0
+        @qd.kernel
+        def write_primal(x: qd.template()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x[i, j, k] = i * 100.0 + j * 10.0 + k
+
+        @qd.kernel
+        def write_grad(x: qd.template()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x.grad[i, j, k] = i * 1000.0 + j * 100.0 + k * 10.0
+
+    else:
+
+        @qd.kernel
+        def write_primal(x: qd.types.ndarray()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x[i, j, k] = i * 100.0 + j * 10.0 + k
+
+        @qd.kernel
+        def write_grad(x: qd.types.ndarray()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x.grad[i, j, k] = i * 1000.0 + j * 100.0 + k * 10.0
 
     write_primal(a)
     write_grad(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal.shape == grad.shape == (2, 3, 4)
-    assert primal[1, 2, 3] == 123.0
-    assert grad[1, 2, 3] == 1230.0
+    assert primal.shape == grad.shape == _to_numpy_shape(canonical, layout, backend)
+    physical = _to_numpy_idx((1, 2, 3), layout, backend)
+    assert primal[physical] == 123.0
+    assert grad[physical] == 1230.0
 
 
+# ----------------------------------------------------------------------------
+# Rank-3 perm sweep: every layout produces a canonical-indexable primal+grad.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
-def test_layout_field_grad_all_rank3_permutations(layout):
-    """Every rank-3 permutation produces canonical-indexable primal and grad."""
+def test_layout_grad_all_rank3_permutations(layout, backend):
     qd.init(arch=qd.x64)
-    a = qd.tensor(qd.f32, shape=(2, 3, 4), layout=layout, needs_grad=True)
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
 
-    @qd.kernel
-    def fill(x: qd.template()):
-        for i, j, k in qd.ndrange(2, 3, 4):
-            x[i, j, k] = i * 100.0 + j * 10.0 + k
-            x.grad[i, j, k] = 1000.0 + i * 100.0 + j * 10.0 + k
+    if backend is qd.Backend.FIELD:
+
+        @qd.kernel
+        def fill(x: qd.template()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x[i, j, k] = i * 100.0 + j * 10.0 + k
+                x.grad[i, j, k] = 1000.0 + i * 100.0 + j * 10.0 + k
+
+    else:
+
+        @qd.kernel
+        def fill(x: qd.types.ndarray()):
+            for i, j, k in qd.ndrange(2, 3, 4):
+                x[i, j, k] = i * 100.0 + j * 10.0 + k
+                x.grad[i, j, k] = 1000.0 + i * 100.0 + j * 10.0 + k
 
     fill(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    assert primal.shape == (2, 3, 4)
-    assert grad.shape == (2, 3, 4)
-    assert primal[1, 2, 3] == 123.0
-    assert grad[1, 2, 3] == 1123.0
+    expected_shape = _to_numpy_shape(canonical, tuple(layout), backend)
+    assert primal.shape == expected_shape
+    assert grad.shape == expected_shape
+    physical = _to_numpy_idx((1, 2, 3), tuple(layout), backend)
+    assert primal[physical] == 123.0
+    assert grad[physical] == 1123.0
 
 
 # ----------------------------------------------------------------------------
-# NDARRAY backend: layout= + needs_grad= must propagate the layout tag onto
-# the companion grad ndarray. Otherwise a kernel write to x.grad[i, j, ...]
-# bypasses the canonical->physical subscript rewrite and lands in the wrong
-# physical slot.
+# NDARRAY-only: the _qd_layout tag is the NDARRAY-side mechanism for
+# carrying the layout to kernels and to the companion grad. FIELD uses a
+# different storage mechanism (axis_seq inside the SNode tree); see the
+# rank-2/3 kernel-roundtrip tests above for the FIELD-side equivalent of
+# this contract.
 # ----------------------------------------------------------------------------
 
 
@@ -107,69 +189,3 @@ def test_layout_ndarray_grad_tag_propagates_rank2():
     assert a.grad is not None
     assert getattr(a, "_qd_layout", None) == (1, 0)
     assert getattr(a.grad, "_qd_layout", None) == (1, 0)
-
-
-@test_utils.test(arch=qd.cpu)
-def test_layout_ndarray_grad_canonical_kernel_roundtrip_rank2():
-    """Write primal and grad through a kernel using canonical indices on a
-    transposed-storage ndarray. Both must land at the correct physical slot
-    (Ndarray.to_numpy() returns the physical, permuted view — see
-    ``test_factory_layout_rank2_value_check``)."""
-    a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(1, 0), needs_grad=True)
-
-    @qd.kernel
-    def write_primal(x: qd.types.ndarray()):
-        for i, j in qd.ndrange(4, 5):
-            x[i, j] = i * 10.0 + j
-
-    @qd.kernel
-    def write_grad(x: qd.types.ndarray()):
-        for i, j in qd.ndrange(4, 5):
-            x.grad[i, j] = i * 100.0 + j * 10.0
-
-    write_primal(a)
-    write_grad(a)
-    primal = a.to_numpy()
-    grad = a.grad.to_numpy()
-    assert primal.shape == grad.shape == (5, 4)
-    # canonical (i=1, j=2) -> physical (j, i) = (2, 1)
-    assert primal[2, 1] == 12.0
-    assert grad[2, 1] == 120.0
-    # canonical (i=3, j=4) -> physical (4, 3)
-    assert primal[4, 3] == 34.0
-    assert grad[4, 3] == 340.0
-
-
-@pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
-def test_layout_ndarray_grad_all_rank3_permutations(layout):
-    """Every rank-3 permutation tags both primal and grad, and kernels see
-    canonical-indexable primal and grad buffers."""
-    qd.init(arch=qd.x64)
-    a = qd.tensor(qd.f32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=layout, needs_grad=True)
-    layout_t = tuple(layout)
-    if layout_t == (0, 1, 2):
-        # identity -> qd.tensor collapses to no _qd_layout tag
-        assert getattr(a, "_qd_layout", None) is None
-        assert getattr(a.grad, "_qd_layout", None) is None
-    else:
-        assert getattr(a, "_qd_layout", None) == layout_t
-        assert getattr(a.grad, "_qd_layout", None) == layout_t
-
-    @qd.kernel
-    def fill(x: qd.types.ndarray()):
-        for i, j, k in qd.ndrange(2, 3, 4):
-            x[i, j, k] = i * 100.0 + j * 10.0 + k
-            x.grad[i, j, k] = 1000.0 + i * 100.0 + j * 10.0 + k
-
-    fill(a)
-    primal = a.to_numpy()
-    grad = a.grad.to_numpy()
-    # Ndarray.to_numpy() returns the physical (permuted) view — translate
-    # canonical (1, 2, 3) -> physical via the layout permutation.
-    canonical_idx = (1, 2, 3)
-    physical_idx = tuple(canonical_idx[axis] for axis in layout_t)
-    physical_shape = tuple((2, 3, 4)[axis] for axis in layout_t)
-    assert primal.shape == physical_shape
-    assert grad.shape == physical_shape
-    assert primal[physical_idx] == 123.0
-    assert grad[physical_idx] == 1123.0

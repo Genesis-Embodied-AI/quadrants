@@ -67,20 +67,37 @@ def test_layout_field_kernel_canonical_indexing_rank2():
     assert arr[0, 3] == 3
 
 
+BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
+BACKEND_IDS = ["field", "ndarray"]
+
+
+def _expected_factory_shape(canonical, layout, backend):
+    """``a.shape`` after allocation, accounting for FIELD canonical vs
+    NDARRAY physical reporting (the canonical-vs-physical bug is tracked
+    separately; this helper localises the asymmetry)."""
+    if backend is qd.Backend.FIELD:
+        return canonical
+    return tuple(canonical[axis] for axis in layout)
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
-def test_layout_field_rank3_all_permutations(layout):
-    """Every rank-3 permutation must allocate without error."""
+def test_layout_rank3_all_permutations(layout, backend):
+    """Every rank-3 permutation must allocate without error on both backends."""
     qd.init(arch=qd.x64)
-    a = qd.tensor(qd.f32, shape=(2, 3, 4), layout=layout)
-    assert a.shape == (2, 3, 4)
+    canonical = (2, 3, 4)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
+    assert tuple(a.shape) == _expected_factory_shape(canonical, layout, backend)
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(4))))
-def test_layout_field_rank4_all_permutations(layout):
-    """Every rank-4 permutation must allocate without error."""
+def test_layout_rank4_all_permutations(layout, backend):
+    """Every rank-4 permutation must allocate without error on both backends."""
     qd.init(arch=qd.x64)
-    a = qd.tensor(qd.f32, shape=(2, 3, 4, 5), layout=layout)
-    assert a.shape == (2, 3, 4, 5)
+    canonical = (2, 3, 4, 5)
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
+    assert tuple(a.shape) == _expected_factory_shape(canonical, layout, backend)
 
 
 # ----------------------------------------------------------------------------
@@ -137,8 +154,9 @@ def test_layout_nonidentity_ndarray_rank3_accepted():
 # ----------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_layout_field_with_needs_grad_allocates_grad():
-    a = qd.tensor(qd.f32, shape=(4, 5), layout=(1, 0), needs_grad=True)
+def test_layout_with_needs_grad_allocates_grad(backend):
+    a = qd.tensor(qd.f32, shape=(4, 5), backend=backend, layout=(1, 0), needs_grad=True)
     assert a.grad is not None
-    assert a.grad.shape == a.shape == (4, 5)
+    assert tuple(a.grad.shape) == tuple(a.shape)
