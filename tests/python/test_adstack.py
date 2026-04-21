@@ -347,23 +347,18 @@ def test_adstack_basic_gradient_negative(n_iter):
 
 
 @test_utils.test(
-    arch=qd.metal,
     require=qd.extension.adstack,
-    ad_stack_size=65536,
+    ad_stack_size=4096,
 )
-def test_adstack_shader_compile_failure_raises():
-    # Asks the compiler to build a Metal shader whose per-thread private-memory footprint is too large for Apple's
-    # shader translator to accept. The test asserts the kernel fails to build with a regular Python `RuntimeError`
-    # saying the pipeline couldn't be created, instead of silently launching a null pipeline (which would either
-    # crash the process or corrupt subsequent kernels).
+def test_adstack_large_capacity_heap_backed():
+    # Runs a backward pass with a deliberately huge (4096-slot) adstack and asserts the gradient comes out
+    # correctly. With the old Function-scope storage the shader compile would fail because the per-thread private
+    # memory footprint exceeded what Metal/MoltenVK accepts; with heap-backed storage the same kernel fits.
     #
-    # Internal detail: the oversized `ad_stack_size` combined with several independent loop-carried variables
-    # forces enough Function-scope private memory per thread that Apple's MSL translator rejects the pipeline
-    # with `XPC_ERROR_CONNECTION_INTERRUPTED` at create time. A single loop-carried variable is not enough - the
-    # Metal compiler is willing to spill a single oversized private array to device memory on its own and the
-    # pipeline still builds; four independent adstacks at the same capacity defeat the spill heuristic. The test
-    # is restricted to Metal because Vulkan drivers vary widely on what per-thread Function-scope footprint they
-    # will accept, so calibrating a single threshold that every CI Vulkan driver rejects is brittle.
+    # Internal detail: the per-thread slice now lives in an SSBO sliced by `invoc_id * stride` instead of an
+    # on-chip Array<f32, max_size>, so the per-thread shader footprint is O(1) regardless of `max_size`. Covers
+    # the happy path of the heap-backed storage: allocation, push/pop with `count_var` still Function-scope,
+    # LoadTop indexing into the slice, `AccAdjoint` back into the heap.
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
     qd.root.dense(qd.i, 1).place(x, x.grad)
@@ -372,31 +367,192 @@ def test_adstack_shader_compile_failure_raises():
     @qd.kernel
     def compute():
         for i in x:
-            a = x[i]
-            b = x[i]
-            c = x[i]
-            d = x[i]
-            for _ in range(10):
-                a = qd.sin(a)
-                b = qd.sin(b)
-                c = qd.sin(c)
-                d = qd.sin(d)
-            y[None] += a + b + c + d
+            v = x[i]
+            for _ in range(128):
+                y[None] += qd.sin(v)
+                v = v + 1.0
 
     x[0] = 0.1
     y[None] = 0.0
     compute()
     y.grad[None] = 1.0
     x.grad[0] = 0.0
-    with pytest.raises(RuntimeError, match=r"[Ff]ailed to create pipeline"):
+    compute.grad()
+
+    expected = sum(math.cos(0.1 + k) for k in range(128))
+    assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_mixed_f32_and_non_f32():
+    # Runs a backward pass through a dynamic loop that carries both a float (`v`) and an integer counter (`j`), and
+    # asserts the gradient on the float comes out correctly. Mixing the two types in one kernel exercises both
+    # adstack storage paths at once.
+    #
+    # Internal detail: on SPIR-V, f32 adstacks live in BufferType::AdStackHeapFloat while i32/u1 adstacks share
+    # BufferType::AdStackHeapInt (u1 reinterpreted as i32 via `ir_->cast(...)` at push/load). A codegen regression
+    # in either path (e.g. pre-scan miscounting into the wrong stride, or the Push/Pop visitors routing to the
+    # wrong heap_kind) would surface as a wrong gradient.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    qd.root.dense(qd.i, 1).place(x, x.grad)
+    qd.root.place(y, y.grad)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            j = 0
+            for _ in range(5):
+                y[None] += v * qd.cast(j + 1, qd.f32)
+                j = j + 1
+                v = v + 0.1
+
+    x[0] = 1.0
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad()
+    # d y / d x[0] = sum_{k=0..4} (k+1): v at iter k is x[0] + 0.1*k, weight is k+1, so coefficient on x[0] is
+    # sum_{k=0..4} (k+1) = 15.
+    assert x.grad[0] == test_utils.approx(15.0, rel=1e-4)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_many_non_f32_stacks_heap_backed():
+    # Regression test for macOS Metal. Deeply nested reverse-mode kernels create one i32 adstack per dynamic loop
+    # (to replay the counter) and one u1 adstack per data-dependent if (to replay the branch). Function-scope
+    # storage makes the per-thread private-memory footprint grow linearly with the number of adstacks, and the
+    # Apple MSL compiler rejects shaders past a few dozen slots; at ~100+ slots the pipeline creation XPC-times
+    # out. The heap-backing path keeps Function-scope memory bounded so such kernels compile and run correctly.
+    #
+    # The test packs many sibling loops + ifs into a single kernel so the reverse pass allocates several i32 and u1
+    # adstacks at once, then asserts the gradient is still correct. Correctness is the load-bearing assertion: a
+    # mis-offset between adstacks on the shared int heap would alias one stack's primal slice onto another and
+    # produce a wrong gradient. CPU backends store adstacks as regular memory and are unaffected; this primarily
+    # guards the SPIR-V heap_int path.
+    n = 3
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            # Six sibling dynamic loops + six data-dependent ifs inside each. Each dynamic for-loop creates an i32
+            # adstack for its counter; each branch on a float-derived predicate creates a u1 adstack for the flag.
+            # Written as explicit duplicated loops rather than a meta-for so the adstack count is unambiguous
+            # (meta-loops with `qd.static` would unroll to one adstack per instantiation anyway, but expanding
+            # manually keeps the intent auditable when this test is inspected during a failure).
+            for a in range(4):
+                if qd.cast(a, qd.f32) < v:
+                    v = v * 1.1
+                else:
+                    v = v + 0.01
+            for b in range(4):
+                if v > qd.cast(b, qd.f32):
+                    v = v * 1.05
+                else:
+                    v = v - 0.01
+            for c in range(4):
+                if v * 0.5 > qd.cast(c, qd.f32):
+                    v = v + 0.1
+                else:
+                    v = v * 0.99
+            for d in range(4):
+                if v + qd.cast(d, qd.f32) > 0.0:
+                    v = v * 1.02
+                else:
+                    v = v + 0.02
+            for e in range(4):
+                if v - qd.cast(e, qd.f32) > 0.0:
+                    v = v * 0.97
+                else:
+                    v = v + 0.03
+            for f in range(4):
+                if v * 2.0 > qd.cast(f, qd.f32):
+                    v = v + 0.05
+                else:
+                    v = v * 1.03
+            y[None] += v
+
+    x_vals = [1.0, 2.0, 3.0]
+    for i in range(n):
+        x[i] = x_vals[i]
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    # Finite-difference reference. A symbolic gradient would require tracking which branch each if took at every
+    # iteration, which is exactly what the adstack replays for us; FD keeps the test oracle independent of the
+    # code under test.
+    h = 1e-3
+    for i in range(n):
+        x[i] = x_vals[i] + h
+        y[None] = 0.0
+        compute()
+        y_plus = y[None]
+        x[i] = x_vals[i] - h
+        y[None] = 0.0
+        compute()
+        y_minus = y[None]
+        x[i] = x_vals[i]
+        expected = (y_plus - y_minus) / (2.0 * h)
+        assert x.grad[i] == test_utils.approx(expected, rel=1e-2, abs=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.metal, qd.vulkan])
+def test_adstack_rejects_unsupported_type():
+    # Skip on Vulkan drivers without shaderInt8: those reject i8 at the SPIR-V type gate (`spirv_ir_builder`
+    # `QD_ERROR("Type i8 not supported")`) well before the adstack codegen guard fires, which would fail this
+    # test with the wrong error message. Metal always reports spirv_has_int8=1 so it never skips here.
+    caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+    if not caps.get(qd._lib.core.DeviceCapability.spirv_has_int8):
+        pytest.skip("device lacks shaderInt8 - i8 is rejected at the SPIR-V type gate, not the adstack guard")
+
+    # SPIR-V codegen refuses non-{f32, i32, u1} loop-carried variables in reverse-mode AD: the adstack heap-backing
+    # only packs f32 and i32 (with u1 reinterpreted as i32); wider/other types have no home there. A Function-scope
+    # fallback is not offered because it is unusable for real workloads on Metal/MoltenVK (per-thread private-memory
+    # budget is exceeded) - silently falling back would paper over a correctness/perf cliff. Pins the hard error
+    # with a match on the user-facing message so a future regression (accidental fallback to Function-scope) or a
+    # rename of the error string is caught.
+    #
+    # Internal detail: uses i8 as the probe type rather than f64 because Metal / MoltenVK rejects f64 at the
+    # field-writer stage before the adstack codegen path is reached, whereas i8 is supported on both SPIR-V
+    # backends (`spirv_has_int8`) and reaches the adstack guard. Any other type outside the supported set
+    # (f16, i16, i64, u8, u16, u32, u64, f64) would do; i8 is the widest-supported of the rejected options.
+    x = qd.field(qd.i8)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+    qd.root.dense(qd.i, 1).place(x)
+    # needs_grad on the i8 field is meaningless (gradients do not flow through integer casts); the adstack
+    # appears because the reverse pass replays the loop-carried i8 `v` value across the dynamic loop.
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(4):
+                v = v + qd.cast(1, qd.i8)
+            y[None] += qd.cast(v, qd.f32)
+
+    x[0] = 0
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    with pytest.raises(RuntimeError, match=r"f32, i32, and u1"):
         compute.grad()
 
 
 def _overflowing_compute(n_elements=1, n_iter=64):
     # Shared kernel for the overflow tests. Builds `compute`, loads inputs, seeds the output gradient, and returns
     # `(compute, x, y)` so each test can drive the grad launch and read back assertions itself. `n_iter=64` + 2
-    # adstack preamble pushes = 66 pushes, comfortably above `default_ad_stack_size=32`; `n_elements` controls how
-    # many threads run the overflowing loop in parallel.
+    # adstack preamble pushes = 66 pushes, comfortably above the `ad_stack_size=32` override that every caller
+    # places on the `@test_utils.test` decorator; `n_elements` controls how many threads run the overflowing loop
+    # in parallel.
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
     qd.root.dense(qd.i, n_elements).place(x, x.grad)
@@ -468,6 +624,69 @@ def test_adstack_large_capacity_resolves_overflow():
     # y += sin(v) iterated with v = x[0] + k for k = 0..63, so dy/dx[0] = sum_k cos(x[0] + k).
     expected = sum(math.cos(0.1 + k) for k in range(64))
     assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=4096, offline_cache=False)
+def test_adstack_heap_backed_exceeds_old_threadstack_budget():
+    # Pins the LLVM heap-backed adstack: the cumulative per-thread adstack footprint may exceed the ~256 KB
+    # secondary-thread stack budget that the old `create_entry_block_alloca` path enforced. Kernel has eight f32
+    # loop-carried variables at `ad_stack_size=4096`, so the per-thread adstack total is `8 * (8 + 4096 * 8) =
+    # 262,208 bytes` - 64 bytes past the old 262,144 byte ceiling. Before the heap-backing work the LLVM codegen
+    # hard-errored this at compile time via `QD_ERROR_IF(ad_stack_fn_scope_bytes_ > kFnScopeAdStackBudgetBytes,
+    # ...)`; SPIR-V compiled but overflowed the Metal / MoltenVK private-memory budget at shader-compile time.
+    # Now both arches allocate the slice inside `runtime->adstack_heap_buffer` (LLVM) or the per-dispatch
+    # SSBO (SPIR-V) and the kernel runs to completion with a correct gradient on every arch.
+    #
+    # `offline_cache=False` is load-bearing for the unfixed-tree check: with the cache on, a run that previously
+    # succeeded against a heap-backed runtime would still produce the right gradient via the cached bitcode even
+    # after the codegen changes are reverted. The test must force a fresh compile every run so the `QD_ERROR_IF`
+    # on the unfixed tree actually fires and terminates the process.
+    #
+    # Internal details: each outer element `i` drives eight independent recurrences `a_k = a_k * 0.9 + x[i]` at
+    # the same trip count (`n_iter`). The reverse pass pushes once for the initial value plus once per iteration,
+    # so each adstack needs `n_iter + 2` slots; at `ad_stack_size=4096` we only use a few of those slots per
+    # adstack but the slab still has to be allocated at full capacity. The gradient reduces to a closed form
+    # `d/dx[i] sum_k (sum_j 0.9^j)` per recurrence, giving `dy/dx[i] = 8 * sum_j 0.9^j for j in 0..n_iter-1`.
+    n = 4
+    n_iter = 32
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            a0 = 0.0
+            a1 = 0.0
+            a2 = 0.0
+            a3 = 0.0
+            a4 = 0.0
+            a5 = 0.0
+            a6 = 0.0
+            a7 = 0.0
+            for _ in range(n_iter):
+                a0 = a0 * 0.9 + x[i]
+                a1 = a1 * 0.9 + x[i]
+                a2 = a2 * 0.9 + x[i]
+                a3 = a3 * 0.9 + x[i]
+                a4 = a4 * 0.9 + x[i]
+                a5 = a5 * 0.9 + x[i]
+                a6 = a6 * 0.9 + x[i]
+                a7 = a7 * 0.9 + x[i]
+            y[None] += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7
+
+    for i in range(n):
+        x[i] = 0.1 * (i + 1)
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n):
+        x.grad[i] = 0.0
+    compute.grad()
+    qd.sync()
+
+    geom = sum(0.9**j for j in range(n_iter))
+    for i in range(n):
+        assert x.grad[i] == test_utils.approx(8.0 * geom, rel=1e-3)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
@@ -543,15 +762,37 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
         )
 
 
-@test_utils.test(require=qd.extension.adstack)
-def test_adstack_near_capacity():
-    # Runs a backward pass with a for-loop sized to just barely fit inside the adstack (one iteration away from
-    # overflow) and asserts the gradient comes out correctly. Companion to `test_adstack_overflow_raises` - this is
-    # the "and it still works at the boundary" side.
+@pytest.mark.parametrize(
+    "n_iter,overflows",
+    [
+        # Positive: 30 iterations => 32 pushes fits exactly inside a 32-slot adstack. The reverse pass of a
+        # dynamic loop emits one push per iteration plus two setup pushes (initial adjoint slot and primal
+        # starting value), so K+2 is the tight bound and this case is the "and it still works at the boundary"
+        # companion to the overflow variant below.
+        (30, False),
+        # Negative: 31 iterations => 33 pushes trips the overflow branch at push #33 and flips
+        # `runtime->adstack_overflow_flag`. The host surfaces that flag as `QuadrantsAssertionError` on the
+        # next `qd.sync()` - regardless of `compile_config.debug`. Pin the exact user-facing remediation in
+        # the match pattern so a future rephrase of the exception message that drops `default_ad_stack_size`
+        # shows up here.
+        (31, True),
+    ],
+)
+@test_utils.test(require=qd.extension.adstack, default_ad_stack_size=32)
+def test_adstack_near_capacity(n_iter, overflows):
+    # Boundary of the compile-time adstack capacity, parametrized on both sides of the K+2=size bound. Uses
+    # `default_ad_stack_size=32` on the decorator to override the program-wide default (256) so the boundary
+    # stays at K=30 regardless of future default bumps. This keeps the test shape small - no long f32
+    # accumulation drift, no tolerance relaxation. Companion to `test_adstack_overflow_raises` which uses the
+    # explicit `ad_stack_size=32` knob; here we pin the `default_ad_stack_size` knob separately because the
+    # two knobs take different code paths (`ad_stack_size > 0` forces every adstack to exactly that size;
+    # `default_ad_stack_size` is only the fallback for adaptive stacks whose trip count the compiler could
+    # not prove).
     #
-    # Internal detail: the transform emits two adstack pushes before the loop body (one for the initial adjoint
-    # slot, one for the primal's starting value), so a loop of K iterations produces K+2 pushes. With
-    # `default_ad_stack_size=32`, that bounds K at 30.
+    # Internal details: see `feedback_tests_must_pin_the_bug.md` for the rule. Both parametrize variants must
+    # fail on the unfixed tree (where `default_ad_stack_size` was not exposed to `qd.init` - the decorator
+    # `default_ad_stack_size=32` would be a no-op on a program-wide default of 256, so both K=30 and K=31
+    # would pass, and this test would stop pinning the knob).
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
     qd.root.dense(qd.i, 1).place(x, x.grad)
@@ -561,7 +802,7 @@ def test_adstack_near_capacity():
     def compute():
         for i in x:
             v = x[i]
-            for _ in range(30):
+            for _ in range(n_iter):
                 y[None] += qd.sin(v)
                 v = v + 1.0
 
@@ -570,10 +811,18 @@ def test_adstack_near_capacity():
     compute()
     y.grad[None] = 1.0
     x.grad[0] = 0.0
-    compute.grad()
 
-    expected = sum(math.cos(0.1 + k) for k in range(30))
-    assert x.grad[0] == test_utils.approx(expected, rel=1e-4)
+    if overflows:
+        # Match the `default_ad_stack_size` remediation in the exception message so a rephrase that drops
+        # this specific token (e.g. reverting to the old `ad_stack_size=N`-only guidance) is caught here.
+        with pytest.raises((AssertionError, RuntimeError), match=r"default_ad_stack_size"):
+            compute.grad()
+            qd.sync()
+    else:
+        compute.grad()
+        qd.sync()
+        expected = sum(math.cos(0.1 + k) for k in range(n_iter))
+        assert x.grad[0] == test_utils.approx(expected, rel=1e-4)
 
 
 def _run_sum_linear(qd_dtype, use_static_loop, use_varying_coeff, n_iter, rel_tol):
@@ -971,3 +1220,97 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
         "reverse-mode AD emitted 'Loading variable N before anything is stored to it' warnings for a Vector "
         "subscript-assign + self-referencing in-place op pattern; stderr was:\n" + stderr
     )
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.metal, qd.vulkan], ad_stack_size=4096)
+def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
+    # Regression test: a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
+    # `qd.ndrange(arr.shape[0], arr.shape[1])`) used to inherit `advisory_total_num_threads =
+    # kMaxNumThreadsGridStrideLoop = 131072` from the SPIR-V codegen fallback, and the runtime sized the
+    # per-dispatch adstack heap as `131072 * per_thread_stride * sizeof(float)`. For this kernel's ten
+    # loop-carried f32 variables at `ad_stack_size=4096`, that is `131072 * 10 * 2 * 4096 * 4 bytes = 40
+    # GiB`. Apple Silicon's `MTLDevice.maxBufferLength` is ~75% of unified memory (e.g. ~28 GiB on an M4 Max
+    # with 48 GiB unified, smaller on lower-end configs), so the allocation failed. Before the RHI layer
+    # checked for nil, that failure was silently wrapped as `RhiResult::success` with a nil MTLBuffer; every
+    # downstream `setBuffer:atIndex:2` bound nil, writes dropped and reads returned 0, and the backward
+    # produced NaN gradients without any error. With the fix, the codegen records the shape-lookup product
+    # backing the runtime-resolved `end_stmt` into `RangeForAttributes::end_shape_product`, the runtime
+    # `launch_kernel` reads each shape from the `LaunchContextBuilder` args buffer and tightens
+    # `advisory_total_num_threads` to `actual_iter_count = rows * cols = 6`, so only ~240 KB of adstack heap
+    # is allocated and the gradient is correct.
+    #
+    # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the pre-fix
+    # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the
+    # test would otherwise silently pass on hardware with large unified memory. Scoped to Metal and Vulkan
+    # because only the SPIR-V heap-backed adstack path depends on the advisory thread count for sizing; the
+    # LLVM path sizes the adstack slab once per runtime against `num_cpu_threads`, so CPU cannot exhibit the
+    # symptom. The finite-difference cross-check pins correctness so a future regression that silently
+    # returns the wrong gradient (e.g. 0 from a nil binding that still ends up bound for some other reason)
+    # trips the assertion rather than passing on the not-NaN check alone.
+    rows, cols = 2, 3
+
+    @qd.kernel
+    def compute(arr: qd.types.NDArray, out: qd.types.NDArray) -> None:
+        for i, j in qd.ndrange(arr.shape[0], arr.shape[1]):
+            v0 = arr[i, j]
+            v1 = arr[i, j] + 0.1
+            v2 = arr[i, j] + 0.2
+            v3 = arr[i, j] + 0.3
+            v4 = arr[i, j] + 0.4
+            v5 = arr[i, j] + 0.5
+            v6 = arr[i, j] + 0.6
+            v7 = arr[i, j] + 0.7
+            v8 = arr[i, j] + 0.8
+            v9 = arr[i, j] + 0.9
+            for _ in range(3):
+                v0 = v0 * 1.01 + 0.01
+                v1 = v1 * 1.02 + 0.02
+                v2 = v2 * 1.03 + 0.03
+                v3 = v3 * 1.04 + 0.04
+                v4 = v4 * 1.05 + 0.05
+                v5 = v5 * 1.06 + 0.06
+                v6 = v6 * 1.07 + 0.07
+                v7 = v7 * 1.08 + 0.08
+                v8 = v8 * 1.09 + 0.09
+                v9 = v9 * 1.10 + 0.10
+            out[0] += v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9
+
+    arr_np = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    arr = qd.ndarray(qd.f32, shape=(rows, cols), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(1,), needs_grad=True)
+    arr.from_numpy(arr_np)
+    arr.grad.from_numpy(np.zeros_like(arr_np))
+    out.from_numpy(np.zeros((1,), dtype=np.float32))
+    out.grad.from_numpy(np.ones((1,), dtype=np.float32))
+
+    compute(arr, out)
+    compute.grad(arr, out)
+    qd.sync()
+
+    got_grad = arr.grad.to_numpy()
+    assert not np.isnan(got_grad).any(), f"ndrange-over-shape grad returned NaN: {got_grad}"
+
+    # Finite-difference oracle. Independent of the backward emission so a wrong-but-non-NaN gradient (the
+    # failure mode when the adstack heap was bound to Metal's nil-fallback and reads came back as zero)
+    # still trips the assertion.
+    h = 1e-3
+    fd = np.zeros_like(arr_np)
+    arr_plus = qd.ndarray(qd.f32, shape=(rows, cols))
+    arr_minus = qd.ndarray(qd.f32, shape=(rows, cols))
+    out_scalar = qd.ndarray(qd.f32, shape=(1,))
+    for i in range(rows):
+        for j in range(cols):
+            tmp = arr_np.copy()
+            tmp[i, j] += h
+            arr_plus.from_numpy(tmp)
+            out_scalar.from_numpy(np.zeros((1,), dtype=np.float32))
+            compute(arr_plus, out_scalar)
+            y_plus = out_scalar.to_numpy()[0]
+            tmp = arr_np.copy()
+            tmp[i, j] -= h
+            arr_minus.from_numpy(tmp)
+            out_scalar.from_numpy(np.zeros((1,), dtype=np.float32))
+            compute(arr_minus, out_scalar)
+            y_minus = out_scalar.to_numpy()[0]
+            fd[i, j] = (y_plus - y_minus) / (2.0 * h)
+    np.testing.assert_allclose(got_grad, fd, rtol=1e-2, atol=1e-3)

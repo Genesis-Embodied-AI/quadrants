@@ -53,13 +53,14 @@ struct CompileConfig {
   int gpu_max_reg;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
-  // Fallback adstack capacity used when the Quadrants compiler cannot statically determine the worst-case loop trip
-  // count. LLVM now heap-backs the primal/adjoint slots via a per-runtime slab sized
-  // `num_threads * per_thread_stride` by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch, so the
-  // per-thread worker-stack budget that bounded the previous Function-scope implementation no longer applies on
-  // CPU / CUDA / AMDGPU. SPIR-V still allocates per-thread Function-scope arrays at this stage, so the default
-  // stays small for now (the heap-backing on Metal / Vulkan that lifts this constraint lands in a follow-up PR).
-  int default_ad_stack_size{32};
+  // Fallback adstack capacity used when the Quadrants compiler cannot statically determine the worst-case loop
+  // trip count. Both backends now heap-back the primal / adjoint slots: SPIR-V via per-dispatch StorageBuffers
+  // (`BufferType::AdStackHeapFloat` + `AdStackHeapInt`, sliced by invocation), LLVM via a per-runtime slab sized
+  // `num_threads * per_thread_stride` by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch. The
+  // per-thread on-chip / worker-stack budget that bounded the previous Function-scope implementation no longer
+  // applies, so the default is raised from 32 to 256 to cover the flat trip count of a typical `qd.ndrange` over
+  // two 16-wide dimensions. Runtime push overflow is surfaced as a Python exception.
+  int default_ad_stack_size{256};
 
   int saturating_grid_dim;
   int max_block_dim;
