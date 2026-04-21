@@ -878,20 +878,22 @@ def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
 @test_utils.test(require=qd.extension.adstack, default_ad_stack_size=32)
 def test_adstack_near_capacity(n_iter, overflows):
     # Boundary of the compile-time adstack capacity, parametrized on both sides of the K+2=size bound. Uses
-    # `default_ad_stack_size=32` on the decorator to override the program-wide default (256) so the boundary
-    # stays at K=30 regardless of future default bumps. This keeps the test shape small - no long f32
-    # accumulation drift, no tolerance relaxation. Companion to `test_adstack_overflow_raises` which uses the
-    # explicit `ad_stack_size=32` knob; here we pin the `default_ad_stack_size` knob separately because the
-    # two knobs take different code paths (`ad_stack_size > 0` forces every adstack to exactly that size;
+    # `default_ad_stack_size=32` on the decorator to override the program-wide default so the boundary stays
+    # at K=30 regardless of future default bumps. This keeps the test shape small - no long f32 accumulation
+    # drift, no tolerance relaxation. Companion to `test_adstack_overflow_raises` which uses the explicit
+    # `ad_stack_size=32` knob; here we pin the `default_ad_stack_size` knob separately because the two knobs
+    # take different code paths (`ad_stack_size > 0` forces every adstack to exactly that size;
     # `default_ad_stack_size` is only the fallback for adaptive stacks whose trip count the compiler could
     # not prove).
     #
-    # Internal details: see `feedback_tests_must_pin_the_bug.md` for the rule. Both parametrize variants must
-    # fail on the unfixed tree (where `default_ad_stack_size` was not exposed to `qd.init` - the decorator
-    # `default_ad_stack_size=32` would be a no-op on a program-wide default of 256, so both K=30 and K=31
-    # would pass, and this test would stop pinning the knob).
+    # Internal details: the trip count is loaded from a runtime field (`n_iter_fld`) rather than a Python
+    # int constant so the structural pre-pass in `irpass::determine_ad_stack_size` cannot fold the range
+    # bounds. That keeps the adstack in the adaptive / Bellman-Ford fallback path where
+    # `default_ad_stack_size=32` is the cap being pinned. With a constant `range(n_iter)` the pre-pass would
+    # resolve `max_size = n_iter` directly and this test would stop exercising the default-fallback knob.
     x = qd.field(qd.f32)
     y = qd.field(qd.f32)
+    n_iter_fld = qd.field(qd.i32, shape=())
     qd.root.dense(qd.i, 1).place(x, x.grad)
     qd.root.place(y, y.grad)
 
@@ -899,11 +901,12 @@ def test_adstack_near_capacity(n_iter, overflows):
     def compute():
         for i in x:
             v = x[i]
-            for _ in range(n_iter):
+            for _ in range(n_iter_fld[None]):
                 y[None] += qd.sin(v)
                 v = v + 1.0
 
     x[0] = 0.1
+    n_iter_fld[None] = n_iter
     y[None] = 0.0
     compute()
     y.grad[None] = 1.0
@@ -1424,3 +1427,99 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
             y_minus = out_scalar.to_numpy()[0]
             fd[i, j] = (y_plus - y_minus) / (2.0 * h)
     np.testing.assert_allclose(got_grad, fd, rtol=1e-2, atol=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.vulkan, qd.metal], default_ad_stack_size=1)
+def test_adstack_bounded_inner_loop_not_capped_by_default_ad_stack_size():
+    # Pins that reverse-mode AD on SPIR-V backends through a statically bounded inner `range(N)`
+    # does NOT fall back to `default_ad_stack_size` when determining the adstack capacity. A
+    # deliberately tiny `default_ad_stack_size=1` is passed via `qd.init(...)`; a single-iteration
+    # cap would trigger a runtime adstack-overflow exception inside the `n_iter = 5` inner loop.
+    # The test asserts that the backward kernel runs to completion with a correct gradient instead.
+    #
+    # Internal details: `irpass::determine_ad_stack_size` runs a structural pre-pass that walks
+    # each adaptive `AdStackAllocaStmt`'s push sites and computes `max_size` from the product of
+    # enclosing `RangeForStmt` trip counts when every enclosing range has a constant integer
+    # begin/end (folded through `BinaryOpStmt`). The CFG Bellman-Ford analyzer that runs afterwards
+    # flags any push inside a loop as a "positive loop" and falls back to `default_ad_stack_size`,
+    # so without the pre-pass every adstack inside a bounded inner loop would share that overly
+    # pessimistic cap. The per-loop product, the CFG-analyzer skip of already-resolved stacks, and
+    # the end-to-end "tiny default doesn't overflow a bounded-loop kernel" invariant are what this
+    # test guards against regressing. The test is restricted to SPIR-V backends (Vulkan / Metal)
+    # because the LLVM backend rewrites inner-range bounds through `LoopIndexStmt` in a shape the
+    # structural analyzer does not fold; LLVM's function-scope adstack fallback absorbs the
+    # over-sized capacity cheaply, so the user-visible out-of-memory failure only surfaces on the
+    # heap-backed SPIR-V path.
+    x = qd.field(qd.f32, shape=(1,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(5):
+                v = qd.sin(v) + 0.1
+            y[None] += v
+
+    n_iter = 5
+
+    x[0] = 0.3
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad()
+
+    v = 0.3
+    dv_dx = 1.0
+    for _ in range(n_iter):
+        dv_dx = math.cos(v) * dv_dx
+        v = math.sin(v) + 0.1
+    # `pytest.approx` rather than `test_utils.approx` so the tight f32 tolerance isn't floored to the
+    # backend `get_rel_eps()` - a wrong gradient from an unresolved adstack would drift by orders of
+    # magnitude, not parts per million, but a tight bound still catches subtler regressions.
+    assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.vulkan, qd.metal], default_ip=qd.i64)
+def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
+    # Pins that the structural pre-pass in `irpass::determine_ad_stack_size` accepts integer
+    # `ConstStmt` loop bounds of any signed or unsigned width (not just i32). A kernel compiled
+    # with `default_ip=qd.i64` materialises `RangeForStmt` begin/end as i64 `ConstStmt`s; the
+    # pre-pass's interval evaluator (`try_eval_int_range`) must read `ConstStmt` leaves through
+    # `val_int()` / `val_uint()` rather than hard-coding `val_int32()`, which would trip a dtype
+    # assert inside `TypedConstant` and abort compilation before the Bellman-Ford fallback could
+    # take over.
+    #
+    # Internal details: a simple `for _ in range(3)` reverse-mode kernel is enough to exercise
+    # the const-leaf read path; if the evaluator trips the dtype assert the test fails at
+    # `compute.grad()` with an assertion inside quadrants rather than at the numerical
+    # comparison. Kept on SPIR-V backends for the same reason as the sibling test above (LLVM's
+    # `LoopIndexStmt` inner-range rewrite is unrelated to this code path).
+    x = qd.field(qd.f32, shape=(1,), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(3):
+                v = qd.sin(v) + 0.1
+            y[None] += v
+
+    x[0] = 0.2
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad()
+
+    v = 0.2
+    dv_dx = 1.0
+    for _ in range(3):
+        dv_dx = math.cos(v) * dv_dx
+        v = math.sin(v) + 0.1
+    # `default_ip=qd.i64` only forces i64 loop bounds; floating-point arithmetic stays at
+    # `default_fp` (f32). `pytest.approx` bypasses the backend `get_rel_eps()` floor so the tight
+    # bound actually bites.
+    assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)

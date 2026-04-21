@@ -1285,6 +1285,14 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
       Stmt *stmt = nodes[i]->block->statements[j].get();
       if (auto *stack = stmt->cast<AdStackAllocaStmt>()) {
+        // Skip stacks whose size has already been resolved by an earlier pass (e.g. the structural
+        // pre-pass in `irpass::determine_ad_stack_size` that handles bounded inner loops without
+        // running Bellman-Ford). Without this guard the Bellman-Ford pass unconditionally
+        // overwrites `stack->max_size` at the bottom of its per-stack loop - with 0 when the stack
+        // has no push/pop in the CFG - clobbering the upstream result.
+        if (stack->max_size != 0) {
+          continue;
+        }
         all_stacks.insert(stack);
         max_increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
         increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
