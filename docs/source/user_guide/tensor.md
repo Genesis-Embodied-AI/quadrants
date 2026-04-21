@@ -152,13 +152,6 @@ fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
 
-Layout-tagged ndarrays are respected too:
-
-```python
-c = qd.tensor(qd.f32, shape=(2, 3), backend=qd.Backend.NDARRAY, layout=(1, 0))
-fill_2d(c)   # ndarray branch + layout-aware subscript rewrite
-```
-
 Quadrants rejects mismatched / invalid layouts up front:
 
 ```python
