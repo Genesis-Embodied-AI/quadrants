@@ -1,5 +1,7 @@
 #include "quadrants/runtime/gfx/runtime.h"
 #include "quadrants/program/program.h"
+#include "quadrants/program/launch_context_builder.h"
+#include "quadrants/ir/type_factory.h"
 #include "quadrants/common/filesystem.hpp"
 
 // FIXME: (penguinliong) Special offer for `run_codegen`. Find a new home for it
@@ -9,6 +11,7 @@
 #include <chrono>
 #include <array>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -510,7 +513,33 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
-    const int group_x = (attribs.advisory_total_num_threads + attribs.advisory_num_threads_per_group - 1) /
+
+    // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range
+    // end as a product of ndarray-shape lookups (see `RangeForAttributes::end_shape_product`). Without this cap, a
+    // grad kernel whose range is runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop =
+    // 131072` from the codegen fallback, and the adstack-heap sizing below multiplies that by the per-thread stride
+    // to request (e.g.) 48 GB for a 1-iteration B=1 workload - exceeding Metal's `maxBufferLength` and producing a
+    // hard RHI error. The in-shader grid-stride loop handles any dispatched thread count >= 1 correctly; a tight cap
+    // just means each dispatched thread processes fewer strides of idle work.
+    int effective_advisory_threads = attribs.advisory_total_num_threads;
+    if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
+      const auto &range = *attribs.range_for_attribs;
+      // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
+      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of spirv_codegen.cpp,
+      // near line 1833 at time of writing), so `range.begin` is the literal begin value, not a
+      // gtmp offset.
+      int64_t iter_end = 1;
+      for (const auto &ref : range.end_shape_product) {
+        std::vector<int> indices = ref.arg_id;
+        indices.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+        indices.push_back(ref.axis);
+        iter_end *= int64_t(host_ctx.get_struct_arg<int32_t>(indices));
+      }
+      int64_t iter_count = std::max<int64_t>(0, iter_end - int64_t(range.begin));
+      effective_advisory_threads =
+          int(std::min<int64_t>(int64_t(effective_advisory_threads), std::max<int64_t>(1, iter_count)));
+    }
+    const int group_x = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
                         attribs.advisory_num_threads_per_group;
     std::unique_ptr<ShaderResourceSet> bindings = device_->create_resource_set_unique();
     for (auto &bind : attribs.buffer_binds) {
@@ -533,6 +562,95 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           current_cmdlist_->buffer_barrier(*adstack_overflow_buffer_);
         }
         bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
+      } else if (bind.buffer.type == BufferType::AdStackHeapFloat) {
+        // SPIR-V adstack primal/adjoint storage for f32 adstacks. Sized for the actual dispatched thread count
+        // (`group_x * block_dim`, which rounds `advisory_total_num_threads` up to a workgroup multiple) rather
+        // than the advisory so threads past the advisory - which still own an `invoc_id * stride` slice - stay
+        // in-bounds even if they ever reach a push/pop. Grown on demand and reused across launches; contents do
+        // not need to persist across kernels. On empty fields (`dispatched_threads == 0`) no push/pop can
+        // actually execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer (which
+        // trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal).
+        size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
+        // The shader uses u64 index arithmetic for `invoc_id * stride + offset + count` when the device has
+        // Int64; without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases
+        // threads into one another's heap slice. Assert at launch time rather than emit silent corruption.
+        QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
+                           size_t(attribs.ad_stack_heap_per_thread_stride_float) * dispatched_threads <=
+                               std::numeric_limits<uint32_t>::max(),
+                       "adstack f32 heap offset would overflow u32 on a device without Int64: "
+                       "stride={} dispatched_threads={}",
+                       attribs.ad_stack_heap_per_thread_stride_float, dispatched_threads);
+        size_t required = size_t(attribs.ad_stack_heap_per_thread_stride_float) * dispatched_threads * sizeof(float);
+        if (required == 0) {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        } else {
+          if (!adstack_heap_buffer_float_ || adstack_heap_buffer_float_size_ < required) {
+            // Amortized doubling: mirrors `LlvmRuntimeExecutor::ensure_adstack_heap`. Without it, a sequence of
+            // launches with monotonically increasing dispatch sizes (e.g. BFS / frontier expansion) between
+            // `synchronize()` calls would reallocate on every launch and leave every displaced buffer sitting in
+            // `ctx_buffers_` until the next sync, accumulating O(K^2 * N) bytes of live-but-unused GPU memory.
+            // Doubling bounds the reallocations at O(log K) and the live memory at O(K * N).
+            size_t new_size = std::max(required, 2 * adstack_heap_buffer_float_size_);
+            auto [buf, res] = device_->allocate_memory_unique(
+                {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+            // Fallback when the amortized-doubling size overshoots a device limit (e.g. Metal's
+            // `maxBufferLength` capping `2 * old_size` even when `required` alone would fit): retry at exactly
+            // `required` bytes before aborting the process. Trade-off is losing amortization on the retry path;
+            // still correct because the next grow will reset amortization against the new, smaller base.
+            if (res != RhiResult::success && new_size > required) {
+              new_size = required;
+              std::tie(buf, res) = device_->allocate_memory_unique(
+                  {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+            }
+            QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack heap float buffer (size={})",
+                           new_size);
+            // Defer the old buffer's free until the current cmdlist is submitted and synced: the previous launch
+            // may still be in flight and referencing the old allocation, so freeing it synchronously here (via
+            // `DeviceAllocationGuard`'s destructor, which runs on the `std::move` reassignment below) would
+            // produce a GPU-side use-after-free. `ctx_buffers_` is cleared in `synchronize()` /
+            // `device_to_host(...)` after the stream has drained, which is exactly the lifetime we need.
+            if (adstack_heap_buffer_float_) {
+              ctx_buffers_.push_back(std::move(adstack_heap_buffer_float_));
+            }
+            adstack_heap_buffer_float_ = std::move(buf);
+            adstack_heap_buffer_float_size_ = new_size;
+          }
+          bindings->rw_buffer(bind.binding, *adstack_heap_buffer_float_);
+        }
+      } else if (bind.buffer.type == BufferType::AdStackHeapInt) {
+        // SPIR-V adstack primal/adjoint storage for i32 and u1 adstacks. Same grow-on-demand policy and same
+        // empty-dispatch guard as the float buffer above. Same u32-overflow guard as the float branch too.
+        size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
+        QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
+                           size_t(attribs.ad_stack_heap_per_thread_stride_int) * dispatched_threads <=
+                               std::numeric_limits<uint32_t>::max(),
+                       "adstack i32/u1 heap offset would overflow u32 on a device without Int64: "
+                       "stride={} dispatched_threads={}",
+                       attribs.ad_stack_heap_per_thread_stride_int, dispatched_threads);
+        size_t required = size_t(attribs.ad_stack_heap_per_thread_stride_int) * dispatched_threads * sizeof(int32_t);
+        if (required == 0) {
+          bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
+        } else {
+          if (!adstack_heap_buffer_int_ || adstack_heap_buffer_int_size_ < required) {
+            // Same amortized-doubling rationale as the float heap above.
+            size_t new_size = std::max(required, 2 * adstack_heap_buffer_int_size_);
+            auto [buf, res] = device_->allocate_memory_unique(
+                {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+            // Same amortized-doubling overshoot fallback as the float heap above (Metal `maxBufferLength`).
+            if (res != RhiResult::success && new_size > required) {
+              new_size = required;
+              std::tie(buf, res) = device_->allocate_memory_unique(
+                  {new_size, /*host_write=*/false, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+            }
+            QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack heap int buffer (size={})", new_size);
+            if (adstack_heap_buffer_int_) {
+              ctx_buffers_.push_back(std::move(adstack_heap_buffer_int_));
+            }
+            adstack_heap_buffer_int_ = std::move(buf);
+            adstack_heap_buffer_int_size_ = new_size;
+          }
+          bindings->rw_buffer(bind.binding, *adstack_heap_buffer_int_);
+        }
       } else if (bind.buffer.type == BufferType::Args) {
         bindings->buffer(bind.binding, args_buffer ? *args_buffer : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::Rets) {
@@ -636,8 +754,8 @@ void GfxRuntime::synchronize() {
     device_->unmap(*adstack_overflow_buffer_);
     QD_ERROR_IF(flag_val != 0,
                 "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-                "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass "
-                "ad_stack_size=N to qd.init() to raise the capacity.");
+                "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass a larger "
+                "`default_ad_stack_size=N` to `qd.init()` to raise the capacity. See documentation for details.");
   }
   fflush(stdout);
 }
@@ -648,9 +766,9 @@ StreamSemaphore GfxRuntime::flush() {
     sema = device_->get_compute_stream()->submit(current_cmdlist_.get());
     current_cmdlist_ = nullptr;
     // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has
-    // finished executing. Any deferred-free buffer queued into `ctx_buffers_` may still be referenced by
-    // commands in flight; dropping the unique_ptrs here would be a GPU-side use-after-free. Only
-    // `synchronize()` clears the vector, after `wait_idle()` has drained the stream.
+    // finished executing. The deferred-free buffers in ctx_buffers_ (e.g. the old adstack heap buffer left over
+    // after a grow-on-demand resize) may still be referenced by commands in flight. Only `synchronize()` clears
+    // the vector, after `wait_idle()` has drained the stream.
   } else {
     auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);
