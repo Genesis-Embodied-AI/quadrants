@@ -95,7 +95,7 @@ def test_tensor_kernel_roundtrip(backend):
     """Allocate via ``qd.tensor()``, fill in a kernel, read back via numpy.
 
     Uses the backend-appropriate annotation (``qd.template()`` for FIELD,
-    ``qd.types.ndarray()`` for NDARRAY); the polymorphic ``qd.tensor_t``
+    ``qd.types.ndarray()`` for NDARRAY); the polymorphic ``qd.Tensor``
     annotation is not yet available on this branch.
     """
     a = qd.tensor(qd.i32, shape=(4,), backend=backend)

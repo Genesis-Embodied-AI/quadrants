@@ -11,7 +11,7 @@ from quadrants._lib.core.quadrants_python import (
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
-    _TensorTAnnotation,
+    _TensorAnnotation,
 )
 from quadrants.lang import (
     _ndarray,
@@ -47,9 +47,9 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
-        # qd.tensor_t value-dispatch. The first slot of this_arg_features
+        # qd.Tensor value-dispatch. The first slot of this_arg_features
         # is a string marker placed by _template_mapper_hotpath.
-        if isinstance(annotation, _TensorTAnnotation):
+        if isinstance(annotation, _TensorAnnotation):
             assert this_arg_features is not None
             marker = this_arg_features[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
@@ -71,7 +71,7 @@ class FunctionDefTransformer:
                     return True, ctx.template_vars[name]
                 assert ctx.global_vars is not None
                 return True, ctx.global_vars.get(name)
-            raise AssertionError(f"unknown qd.tensor_t marker: {marker!r}")
+            raise AssertionError(f"unknown qd.Tensor marker: {marker!r}")
         if annotation == annotations.template or isinstance(annotation, annotations.template):
             if name in ctx.template_vars:
                 return True, ctx.template_vars[name]

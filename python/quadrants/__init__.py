@@ -53,6 +53,7 @@ del warn_restricted_version
 
 __all__ = [
     "Backend",
+    "Tensor",
     "ad",
     "algorithms",
     "experimental",
@@ -60,10 +61,6 @@ __all__ = [
     "math",
     "sparse",
     "tensor",
-    "tensor_annotation",
-    "tensor_mat",
-    "tensor_t",
-    "tensor_vec",
     "tools",
     "types",
 ]

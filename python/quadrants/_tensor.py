@@ -17,16 +17,15 @@ from quadrants.types.annotations import Template
 
 __all__ = [
     "Backend",
+    "Tensor",
     "tensor",
-    "tensor_annotation",
-    "tensor_t",
 ]
 
 
-class _TensorTAnnotation(Template):
+class _TensorAnnotation(Template):
     """Polymorphic kernel-argument annotation: dispatches at call time.
 
-    A kernel parameter annotated with ``qd.tensor_t`` accepts **either**
+    A kernel parameter annotated with ``qd.Tensor`` accepts **either**
     a field/SNode (treated like ``qd.template()``) **or** a tensor
     ``Ndarray`` / ``AnyArray`` (treated like ``qd.types.ndarray()``).
 
@@ -36,7 +35,7 @@ class _TensorTAnnotation(Template):
 
     Inherits from :class:`~quadrants.types.annotations.Template` so the
     upfront template-slot detection in ``_func_base.py`` registers
-    ``tensor_t`` slots. The actual dispatch happens at extract-time
+    ``qd.Tensor`` slots. The actual dispatch happens at extract-time
     (``_template_mapper_hotpath._extract_arg``) and at AST-build-time
     (``function_def_transformer._decl_and_create_variable``).
     """
@@ -45,11 +44,11 @@ class _TensorTAnnotation(Template):
         super().__init__()
 
 
-tensor_t = _TensorTAnnotation()
-"""Singleton polymorphic annotation; see :class:`_TensorTAnnotation`."""
+Tensor = _TensorAnnotation()
+"""Singleton polymorphic annotation; see :class:`_TensorAnnotation`."""
 
 # Marker tuples prefixed onto cache keys to keep field-resolved and
-# ndarray-resolved instantiations of the same tensor_t slot distinct.
+# ndarray-resolved instantiations of the same qd.Tensor slot distinct.
 _TENSOR_T_FIELD_MARKER = "__qd_tensor_t_field__"
 _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 
@@ -288,43 +287,3 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def tensor_annotation(backend):
-    """Return the kernel-argument annotation appropriate for ``backend``.
-
-    Mirrors the Genesis ``V_ANNOTATION = qd.types.ndarray() if use_ndarray
-    else qd.template`` pattern as a single first-class call. Use it once, at
-    module load time, to build a uniform annotation that you then attach to
-    every tensor kernel argument:
-
-    .. code-block:: python
-
-        V_ANNOTATION = qd.tensor_annotation(qd.Backend.FIELD)
-
-        @qd.kernel
-        def fill(x: V_ANNOTATION):
-            for i in qd.ndrange(x.shape[0]):
-                x[i] = 1.0
-
-    Args:
-        backend (Backend): The backend whose tensors will be passed to
-            kernels annotated with the returned object.
-
-    Returns:
-        An object suitable for use as a kernel-argument type annotation:
-
-        - For ``Backend.FIELD``: an instance of ``qd.template()``.
-        - For ``Backend.NDARRAY``: an instance of ``qd.types.ndarray()``.
-
-        Both forms are interchangeable with their direct equivalents — the
-        helper just hides the conditional behind one call.
-    """
-    backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel  # late imports
-    from quadrants import types as _types
-    from quadrants.types.annotations import template
-
-    if backend is Backend.FIELD:
-        return template()
-    if backend is Backend.NDARRAY:
-        return _types.ndarray()
-    raise AssertionError(f"unhandled Backend member: {backend!r}")

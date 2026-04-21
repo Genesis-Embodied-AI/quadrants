@@ -36,7 +36,7 @@ from quadrants._lib import core as _qd_core
 from quadrants._tensor import (
     _TENSOR_T_FIELD_MARKER,
     _TENSOR_T_NDARRAY_MARKER,
-    _TensorTAnnotation,
+    _TensorAnnotation,
 )
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -53,7 +53,7 @@ from quadrants.types import (
     template,
 )
 
-# Default ndarray annotation for tensor_t-resolved-as-ndarray. Defining at
+# Default ndarray annotation for Tensor-resolved-as-ndarray. Defining at
 # module scope avoids re-allocating per call. boundary defaults to UNSAFE
 # (the same default a bare ``qd.types.ndarray()`` would produce).
 _TENSOR_T_NDARRAY_ANNOTATION = ndarray_type.NdarrayType()
@@ -74,11 +74,11 @@ _primitive_types = {int, float, bool}
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
     annotation_type = type(annotation)
     arg_type = type(arg)
-    # qd.tensor_t: value-dispatch. Ndarray-shaped values flow through the
+    # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the
     # ndarray feature path; everything else falls through to the template
     # path (Field, SNode, primitives). Both branches are salted with a
     # marker so cache keys disambiguate.
-    if annotation_type is _TensorTAnnotation:
+    if annotation_type is _TensorAnnotation:
         if issubclass(arg_type, (Ndarray, AnyArray)):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(

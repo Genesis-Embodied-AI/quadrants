@@ -20,7 +20,7 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import KernelLaunchContext
-from quadrants._tensor import _TensorTAnnotation
+from quadrants._tensor import _TensorAnnotation
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 from quadrants.types.enums import Layout
 from quadrants.types.utils import is_signed
 
-# Default ndarray annotation used when qd.tensor_t resolves to the ndarray
+# Default ndarray annotation used when qd.Tensor resolves to the ndarray
 # branch at launch time. Defined at module scope to avoid per-call alloc.
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
@@ -163,7 +163,7 @@ class FuncBase:
                 elif annotation_type is template or annotation is template:
                     pass
                 elif isinstance(annotation, template):
-                    # Catch Template subclasses (e.g. qd.tensor_t).
+                    # Catch Template subclasses (e.g. qd.Tensor).
                     pass
                 elif annotation_type is type and is_dataclass(annotation):
                     pass
@@ -453,10 +453,10 @@ class FuncBase:
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
 
-        # qd.tensor_t value-dispatch at launch time. Re-target the
+        # qd.Tensor value-dispatch at launch time. Re-target the
         # annotation to the concrete branch resolved from the runtime
         # value, then fall through to the existing dispatch logic.
-        if needed_arg_basetype is _TensorTAnnotation:
+        if needed_arg_basetype is _TensorAnnotation:
             if isinstance(v, Ndarray):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
