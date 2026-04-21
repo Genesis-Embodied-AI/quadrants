@@ -88,6 +88,40 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
     }
   }
 
+  for (auto &F : *llvm_module) {
+    if (F.isDeclaration() || F.empty())
+      continue;
+    if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+      continue;
+    if (F.hasFnAttribute("amdgpu-flat-work-group-size"))
+      continue;  // already set (e.g., on runtime kernels via
+                 // mark_function_as_amdgpu_kernel-equivalent paths)
+    llvm::StringRef inherited;
+    for (auto *U : F.users()) {
+      auto *CB = llvm::dyn_cast<llvm::CallBase>(U);
+      if (!CB)
+        continue;
+      // Direct call only — function-pointer args (e.g., body fn passed
+      // as `RangeForTaskFunc *func` to gpu_parallel_range_for) are
+      // skipped because the use is the function pointer itself, not a
+      // call to it. `alwaysinline` on gpu_parallel_range_for
+      // collapses the function-pointer indirection so the body fn ends
+      // up with direct callers in the kernel entry.
+      if (CB->getCalledOperand() != &F)
+        continue;
+      auto *Caller = CB->getFunction();
+      if (Caller && Caller->getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL &&
+          Caller->hasFnAttribute("amdgpu-flat-work-group-size")) {
+        inherited =
+            Caller->getFnAttribute("amdgpu-flat-work-group-size").getValueAsString();
+        break;
+      }
+    }
+    if (inherited.empty())
+      inherited = "1,128";  // conservative fallback
+    F.addFnAttr("amdgpu-flat-work-group-size", inherited);
+  }
+
   auto *daz_type = llvm::Type::getInt8Ty(llvm_module->getContext());
   auto *daz_init = llvm::ConstantInt::get(daz_type, 1);
   auto *daz_var = new llvm::GlobalVariable(
@@ -222,6 +256,15 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   extra_fpm.add(llvm::createLoopStrengthReducePass());
   extra_fpm.add(llvm::createSeparateConstOffsetFromGEPPass(false));
   extra_fpm.add(llvm::createEarlyCSEPass(true));
+
+  // The pass walks every load/store, calls originatesFromScratch() to
+  // distinguish scratch-derived pointers (preserved as flat) from runtime/
+  // Ndarray-derived pointers (converted to addrspace(1) → global_load).
+  // Targets the residual flat_load_* on the LLVMRuntime-field-load chain
+  // downstream of get_runtime() returning addrspace(0). Conservative walk
+  // handles PHI/Select/AddrSpaceCast(srcAS=5)
+  // and stops at LoadInst — secondary loads through GEPs ARE converted.
+  extra_fpm.add(new AMDGPUFlatToGlobalLoadStorePass());
   extra_fpm.doInitialization();
   for (auto func = llvm_module->begin(); func != llvm_module->end(); ++func)
     extra_fpm.run(*func);

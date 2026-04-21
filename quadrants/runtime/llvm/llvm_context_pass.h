@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Function.h"
@@ -123,24 +124,66 @@ struct AMDGPUFlatToGlobalLoadStorePass : public FunctionPass {
   static inline char ID{0};
   AMDGPUFlatToGlobalLoadStorePass() : FunctionPass(ID) {}
 
-  static bool originatesFromScratch(llvm::Value *ptr) {
+  static bool originatesFromScratch(llvm::Value *ptr,
+                                    llvm::SmallPtrSetImpl<llvm::Value *> &Visited) {
     auto *origin = ptr->stripPointerCasts();
+    if (!Visited.insert(origin).second)
+      return false;  // already on the walk path — break the cycle
+    {
+      unsigned originAS = origin->getType()->isPointerTy()
+                              ? origin->getType()->getPointerAddressSpace()
+                              : 0;
+      if (originAS != 0 && originAS != 1)
+        return true;
+    }
     if (llvm::isa<llvm::AllocaInst>(origin))
       return true;
     if (auto *ASC = llvm::dyn_cast<llvm::AddrSpaceCastInst>(origin))
       if (ASC->getSrcAddressSpace() == 5)
         return true;
+    if (auto *GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(origin)) {
+      if (originatesFromScratch(GEP->getPointerOperand(), Visited))
+        return true;
+    }
     if (auto *PHI = llvm::dyn_cast<llvm::PHINode>(origin)) {
       for (unsigned i = 0; i < PHI->getNumIncomingValues(); ++i)
-        if (originatesFromScratch(PHI->getIncomingValue(i)))
+        if (originatesFromScratch(PHI->getIncomingValue(i), Visited))
           return true;
     }
     if (auto *Sel = llvm::dyn_cast<llvm::SelectInst>(origin)) {
-      if (originatesFromScratch(Sel->getTrueValue()) ||
-          originatesFromScratch(Sel->getFalseValue()))
+      if (originatesFromScratch(Sel->getTrueValue(), Visited) ||
+          originatesFromScratch(Sel->getFalseValue(), Visited))
+        return true;
+    }
+    if (auto *Arg = llvm::dyn_cast<llvm::Argument>(origin)) {
+      llvm::Function *F = Arg->getParent();
+      unsigned ArgNo = Arg->getArgNo();
+      bool any_direct_caller = false;
+      bool all_callers_non_scratch = true;
+      for (auto *U : F->users()) {
+        auto *CB = llvm::dyn_cast<llvm::CallBase>(U);
+        if (!CB)
+          continue;
+        if (CB->getCalledOperand() != F)
+          continue;
+        if (ArgNo >= CB->arg_size())
+          continue;
+        any_direct_caller = true;
+        llvm::SmallPtrSet<llvm::Value *, 16> CallerVisited;
+        if (originatesFromScratch(CB->getArgOperand(ArgNo), CallerVisited)) {
+          all_callers_non_scratch = false;
+          break;
+        }
+      }
+      if (!any_direct_caller || !all_callers_non_scratch)
         return true;
     }
     return false;
+  }
+
+  static bool originatesFromScratch(llvm::Value *ptr) {
+    llvm::SmallPtrSet<llvm::Value *, 16> Visited;
+    return originatesFromScratch(ptr, Visited);
   }
 
   bool runOnFunction(llvm::Function &F) override {
