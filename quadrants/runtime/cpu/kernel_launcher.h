@@ -13,6 +13,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
   struct Context {
     std::vector<TaskFunc> task_funcs;
+    // Parallel vector to `task_funcs`: `ad_stack_needed_bytes[i]` is the exact adstack heap size required
+    // before dispatching task i on this kernel. Precomputed at `register_llvm_kernel` time from the
+    // `OffloadedTask::ad_stack` sizing info. 0 means the task has no adstack and the launcher skips the
+    // ensure call. CPU sizing is always `static_num_threads` (set by codegen to `num_cpu_threads` for
+    // non-serial tasks, 1 for serial) so no launch-time gtmps resolution is needed on this backend.
+    std::vector<std::size_t> ad_stack_needed_bytes;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
   };
 
@@ -23,8 +29,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
   Handle register_llvm_kernel(const LLVM::CompiledKernelData &compiled) override;
 
  private:
-  void launch_offloaded_tasks(LaunchContextBuilder &ctx, const std::vector<TaskFunc> &task_funcs);
-  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const std::vector<TaskFunc> &task_funcs);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                              const std::vector<TaskFunc> &task_funcs,
+                              const std::vector<std::size_t> &ad_stack_needed_bytes);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
+                                            const std::vector<TaskFunc> &task_funcs,
+                                            const std::vector<std::size_t> &ad_stack_needed_bytes);
 
   std::vector<Context> contexts_;
 };
