@@ -69,10 +69,11 @@ def test_tensor_invalid_backend_raises():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_kwargs_pass_through_to_field():
-    """Field-only kwargs like ``offset=`` reach the underlying ``qd.field``."""
-    a = qd.tensor(qd.f32, shape=(4, 5), offset=(1, 2))
+    """Field-only kwargs like ``needs_grad=`` reach the underlying ``qd.field``."""
+    a = qd.tensor(qd.f32, shape=(4, 5), needs_grad=True)
     assert isinstance(a, qd.ScalarField)
     assert a.shape == (4, 5)
+    assert a.grad is not None
 
 
 @test_utils.test(arch=qd.cpu)

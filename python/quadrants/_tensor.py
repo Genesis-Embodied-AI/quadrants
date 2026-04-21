@@ -6,6 +6,10 @@ This module is the user-facing entry point for selecting a tensor backend
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
 
+# pylint: disable=import-outside-toplevel
+# (Late imports below are intentional, to break circular import cycles
+# between the tensor entry point and the lang/types subpackages.)
+
 from enum import IntEnum
 
 __all__ = ["Backend", "tensor", "tensor_annotation", "tensor_mat", "tensor_vec"]
@@ -265,9 +269,9 @@ def tensor_annotation(backend):
         helper just hides the conditional behind one call.
     """
     backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel
-    from quadrants import types as _types  # late import
-    from quadrants.types.annotations import template  # late import
+    # pylint: disable=import-outside-toplevel  # late imports
+    from quadrants import types as _types
+    from quadrants.types.annotations import template
 
     if backend is Backend.FIELD:
         return template()
