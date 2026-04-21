@@ -378,9 +378,9 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="tensors">
 <h1>Tensors<a class="headerlink" href="#tensors" title="Link to this heading">#</a></h1>
-<p>Quadrants offers two underlying tensor implementations, <a class="reference internal" href="../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.BitpackedFields.fields" title="quadrants.lang.field.BitpackedFields.fields"><span class="xref myst py py-attr"><code class="docutils literal notranslate"><span class="pre">qd.field</span></code></span></a>
-and <a class="reference internal" href="#ndarrays"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></span></a>. They have different runtime/compile-time
-trade-offs, and different physical memory layouts can suit different kernels.</p>
+<p>Quadrants offers two underlying tensor implementations, <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> and
+<code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. They have different runtime/compile-time trade-offs, and
+different physical memory layouts can suit different kernels.</p>
 <p>The tensor API lets you pick both the <strong>backend</strong> and (in a future
 release) the <strong>physical layout</strong> on a per-tensor basis at allocation time.
 The rest of the system (kernels, fastcache, autograd) stays out of the way.</p>
