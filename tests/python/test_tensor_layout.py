@@ -117,23 +117,20 @@ def _sampled_layouts(rank, num_samples, seed_base=0):
     return out
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("rank", [5, 8, 12])
 @pytest.mark.parametrize("trial", list(range(4)))
-def test_layout_field_higher_rank_sampled_permutations(rank, trial):
-    """Random-sample the rank-5 / rank-8 / rank-12 layout space on the
-    field backend and check that every sampled permutation allocates and
+def test_layout_higher_rank_sampled_permutations(rank, trial, backend):
+    """Random-sample the rank-5 / rank-8 / rank-12 layout space on both
+    backends and check that every sampled permutation allocates and
     reports the canonical shape unchanged. Backs the user-guide claim
-    of 'any permutation up to quadrants_max_num_indices (12)'.
-
-    NDARRAY non-identity layout is gated by NotImplementedError on this
-    branch; the parametrized-over-backend version of this test lands
-    later (when ndarray subscript rewriting is in place)."""
+    of 'any permutation up to quadrants_max_num_indices (12)'."""
     qd.init(arch=qd.x64)
     layouts = _sampled_layouts(rank, num_samples=5)
     layout = layouts[trial % len(layouts)]
     canonical = tuple(2 + (i % 3) for i in range(rank))  # small distinct-ish dims
-    a = qd.tensor(qd.f32, shape=canonical, layout=layout)
-    assert a.shape == canonical
+    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
+    assert tuple(a.shape) == canonical
 
 
 # ----------------------------------------------------------------------------
