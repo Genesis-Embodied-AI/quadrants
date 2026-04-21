@@ -1,8 +1,3 @@
-% Note for contributors: this page grows incrementally. Each PR in the
-% tensor series (``) adds the section that
-% documents whatever new user-visible behaviour landed in that PR.
-% Sections describe only currently-shipped functionality.
-
 # Tensors
 
 Quadrants offers two underlying tensor implementations, [`qd.field`](#fields)
