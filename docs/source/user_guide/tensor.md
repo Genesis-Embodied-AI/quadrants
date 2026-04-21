@@ -21,17 +21,6 @@ and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 | `qd.Backend.FIELD` | `qd.field` | Faster at runtime; recompiles when any dimension size changes. |
 | `qd.Backend.NDARRAY` | `qd.ndarray` | Slightly slower at runtime but avoids recompilation when sizes change. |
 
-```python
-import quadrants as qd
-
-qd.Backend.FIELD       # IntEnum member, value 0
-qd.Backend.NDARRAY     # IntEnum member, value 1
-
-int(qd.Backend.FIELD)  # 0
-qd.Backend["FIELD"]    # qd.Backend.FIELD
-qd.Backend(1)          # qd.Backend.NDARRAY
-```
-
 The choice is per tensor: a single program can freely mix backends.
 
 ## Allocating a tensor with `qd.tensor()`
