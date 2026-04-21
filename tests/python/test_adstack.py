@@ -128,14 +128,13 @@ def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
 @pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "op_name",
-    # Pins MakeDual (forward mode) for every nonlinear unary op currently in `unary_collections` whose forward
-    # formula actually reuses the forward `stmt` value (the case where the BackupSSA concern from reverse mode
-    # would matter if MakeDual ran in reverse order). Forward mode is argued safe-by-construction because it
-    # runs in primal order, so `stmt` is the current-iteration value and reusing it is correct; this test pins
-    # that forward-order invariant. The set is {tan, tanh, exp, log, sqrt, rsqrt} — the six ops whose MakeAdjoint
-    # recompute audit was the focus of the prior PRs in the chain. The sign/absolute-value siblings (abs, sin,
-    # cos, asin, acos) have operand-only MakeDual formulas where there is no stmt reuse to audit; they are
-    # covered by `test_adstack_unary_loop_carried` in the reverse-mode direction already.
+    # Pins MakeDual (forward mode) for every nonlinear unary op whose MakeAdjoint (reverse-mode) recompute audit was the
+    # focus of PRs 1-4 of this chain: {tan, tanh, exp, log, sqrt, rsqrt}. Forward mode is argued safe-by-construction
+    # because it runs in primal order, so the primal value is the current-iteration value by definition - there is no
+    # stale-read hazard analogous to the reverse-mode one the audit targeted. This test pins that forward-order safety
+    # argument per audited op so a future MakeDual refactor cannot regress it silently. The sign/absolute-value siblings
+    # (abs, sin, cos, asin, acos) are covered by `test_adstack_unary_loop_carried` in the reverse-mode direction already
+    # and were not part of the audit.
     ["tan", "tanh", "exp", "log", "sqrt", "rsqrt"],
 )
 @test_utils.test()
