@@ -3,6 +3,10 @@
 Scope: scalar-element tensor allocation via ``qd.tensor()`` dispatching to
 ``qd.field`` or ``qd.ndarray`` based on the ``backend=`` kwarg. No layout,
 no vec/mat.
+
+Each behavioural test is parametrized over both backends so coverage stays
+symmetric. Tests that probe a single dispatch path (default backend,
+field-only kwarg passthrough, error paths) keep their original shape.
 """
 
 import pytest
@@ -10,6 +14,13 @@ import pytest
 import quadrants as qd
 
 from tests import test_utils
+
+BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
+BACKEND_IDS = ["field", "ndarray"]
+
+
+def _expected_type(backend):
+    return qd.ScalarField if backend is qd.Backend.FIELD else qd.Ndarray
 
 
 @test_utils.test(arch=qd.cpu)
@@ -19,44 +30,39 @@ def test_tensor_default_backend_is_field():
     assert a.shape == (4, 5)
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_field_backend_explicit():
-    a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.FIELD)
-    assert isinstance(a, qd.ScalarField)
+def test_tensor_explicit_backend_allocates(backend):
+    a = qd.tensor(qd.f32, shape=(4, 5), backend=backend)
+    assert isinstance(a, _expected_type(backend))
     assert a.shape == (4, 5)
 
 
+@pytest.mark.parametrize(
+    "backend_int,expected",
+    [(0, qd.Backend.FIELD), (1, qd.Backend.NDARRAY)],
+    ids=["int0=field", "int1=ndarray"],
+)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_ndarray_backend():
-    a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY)
-    assert isinstance(a, qd.Ndarray)
-    assert a.shape == (4, 5)
-
-
-@test_utils.test(arch=qd.cpu)
-def test_tensor_int_backend_value_accepted():
+def test_tensor_int_backend_value_accepted(backend_int, expected):
     """``backend=0`` and ``backend=1`` work too — IntEnum coercion."""
-    field_t = qd.tensor(qd.f32, shape=(3,), backend=0)
-    ndarray_t = qd.tensor(qd.f32, shape=(3,), backend=1)
-    assert isinstance(field_t, qd.ScalarField)
-    assert isinstance(ndarray_t, qd.Ndarray)
+    a = qd.tensor(qd.f32, shape=(3,), backend=backend_int)
+    assert isinstance(a, _expected_type(expected))
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_dtype_propagation():
-    a = qd.tensor(qd.i32, shape=(4,))
-    b = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
+def test_tensor_dtype_propagation(backend):
+    a = qd.tensor(qd.i32, shape=(4,), backend=backend)
     assert a.dtype == qd.i32
-    assert b.dtype == qd.i32
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_int_shape_normalised():
+def test_tensor_int_shape_normalised(backend):
     """Passing an int as shape works the same as a 1-tuple."""
-    a = qd.tensor(qd.f32, shape=8)
-    b = qd.tensor(qd.f32, shape=8, backend=qd.Backend.NDARRAY)
+    a = qd.tensor(qd.f32, shape=8, backend=backend)
     assert a.shape == (8,)
-    assert b.shape == (8,)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -76,27 +82,30 @@ def test_tensor_kwargs_pass_through_to_field():
     assert a.grad is not None
 
 
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
-def test_tensor_field_then_kernel_roundtrip():
-    a = qd.tensor(qd.i32, shape=(4,))
+def test_tensor_kernel_roundtrip(backend):
+    """Allocate via ``qd.tensor()``, fill in a kernel, read back via numpy.
 
-    @qd.kernel
-    def fill(x: qd.template()):
-        for i in range(4):
-            x[i] = i * 2
+    Uses the backend-appropriate annotation (``qd.template()`` for FIELD,
+    ``qd.types.ndarray()`` for NDARRAY); the polymorphic ``qd.tensor_t``
+    annotation is not yet available on this branch.
+    """
+    a = qd.tensor(qd.i32, shape=(4,), backend=backend)
+
+    if backend is qd.Backend.FIELD:
+
+        @qd.kernel
+        def fill(x: qd.template()):
+            for i in range(4):
+                x[i] = i * 2
+
+    else:
+
+        @qd.kernel
+        def fill(x: qd.types.ndarray()):
+            for i in range(4):
+                x[i] = i * 2
 
     fill(a)
     assert list(a.to_numpy()) == [0, 2, 4, 6]
-
-
-@test_utils.test(arch=qd.cpu)
-def test_tensor_ndarray_then_kernel_roundtrip():
-    a = qd.tensor(qd.i32, shape=(4,), backend=qd.Backend.NDARRAY)
-
-    @qd.kernel
-    def fill(x: qd.types.ndarray()):
-        for i in range(4):
-            x[i] = i * 3
-
-    fill(a)
-    assert list(a.to_numpy()) == [0, 3, 6, 9]
