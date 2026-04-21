@@ -63,13 +63,19 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // The task_codegen_id represents the id of the offloaded task
   int task_codegen_id{0};
 
-  // Running total of bytes reserved by `AdStackAllocaStmt`s emitted via `create_entry_block_alloca` in
-  // the current task. Every adstack lives at function scope on the worker-thread stack, so the sum of
-  // their sizes adds directly to the LLVM stack frame. If the sum exceeds the worker thread's stack
-  // (~512 KB on macOS, 8 MB on Linux by default) the frame silently clobbers adjacent stack pages,
-  // which has shown up in Genesis-style kernels as zero gradients with no SIGBUS. We raise before
-  // codegen emits anything that cannot run correctly.
-  std::size_t ad_stack_fn_scope_bytes_{0};
+  // Per-task heap-backed adstack state. Replaces the function-scope `create_entry_block_alloca` that used to
+  // bound the cumulative adstack size by the worker-thread stack limit (~512 KB on macOS secondary threads).
+  // `ad_stack_per_thread_stride_` is the sum of `AdStackAllocaStmt::size_in_bytes()` (aligned up to 8) for every
+  // adstack in the current offloaded task - each thread owns exactly this many bytes inside
+  // `runtime->adstack_heap_buffer`. `ad_stack_offsets_` maps each alloca to its offset within the per-thread slice
+  // (i.e. the sum of sizes of siblings visited earlier in the pre-scan). Both are populated by a pre-scan of the
+  // task body in `init_offloaded_task_function` before any codegen runs, so later sibling allocas do not shift an
+  // earlier alloca's offset out from under a cached SSA pointer. `ad_stack_heap_base_llvm_` caches the SSA value
+  // returned by `LLVMRuntime_get_adstack_heap_buffer(runtime)` at the top of the task body - emitted once and
+  // reused at every AdStack* visit to avoid redundant runtime calls. All three reset to empty / nullptr per task.
+  std::size_t ad_stack_per_thread_stride_{0};
+  std::unordered_map<const AdStackAllocaStmt *, std::size_t> ad_stack_offsets_;
+  llvm::Value *ad_stack_heap_base_llvm_{nullptr};
 
   std::unordered_map<const Stmt *, std::vector<llvm::Value *>> loop_vars_llvm;
 
@@ -342,6 +348,15 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   void visit(InternalFuncStmt *stmt) override;
 
   // Stack statements
+
+  // Emits a single `LLVMRuntime_get_adstack_heap_buffer(runtime)` load into `entry_block` on first use for the current
+  // task, caching the returned base pointer in `ad_stack_heap_base_llvm_`. Subsequent AdStack* visit sites reuse the
+  // cached SSA value. Emitting into `entry_block` (rather than at the first visit site) guarantees the base pointer
+  // dominates every AdStack* in the task - two sibling adstacks in separate branches of an `if` statement would
+  // otherwise bind to the first branch's SSA value and fail `verifyFunction`. The heap itself is sized and grown
+  // host-side by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch; the kernel just reads the published
+  // pointer.
+  void ensure_ad_stack_heap_base_llvm();
 
   void visit(AdStackAllocaStmt *stmt) override;
 
