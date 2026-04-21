@@ -53,7 +53,7 @@ def test_layout_field_rank2_transposed():
 @test_utils.test(arch=qd.cpu)
 def test_layout_field_kernel_canonical_indexing_rank2():
     """Writing canonical indices through a kernel works, regardless of layout."""
-    a = qd.tensor(qd.i32, shape=(3, 4), layout=(1, 0))
+    a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.FIELD, layout=(1, 0))
 
     @qd.kernel
     def fill(x: qd.template()):

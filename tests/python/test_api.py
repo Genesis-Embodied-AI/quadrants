@@ -48,7 +48,6 @@ def _get_expected_matrix_apis():
         "unit",
         "zero",
         "get_shape",
-        "tensor",
     ]
     res = base + _get_matrix_swizzle_apis()
     return sorted(res)
@@ -370,10 +369,11 @@ user_api[qd.MatrixNdarray] = [
     "fill",
     "from_numpy",
     "get_type",
+    "shape",
     "to_dlpack",
     "to_numpy",
 ]
-user_api[qd.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "to_dlpack"]
+user_api[qd.Ndarray] = ["copy_from", "element_shape", "fill", "get_type", "shape", "to_dlpack"]
 user_api[qd.SNode] = [
     "bitmasked",
     "deactivate_all",
@@ -406,6 +406,7 @@ user_api[qd.ScalarNdarray] = [
     "fill",
     "from_numpy",
     "get_type",
+    "shape",
     "to_dlpack",
     "to_numpy",
 ]
@@ -430,6 +431,7 @@ user_api[qd.VectorNdarray] = [
     "fill",
     "from_numpy",
     "get_type",
+    "shape",
     "to_dlpack",
     "to_numpy",
 ]

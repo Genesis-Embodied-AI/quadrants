@@ -74,16 +74,19 @@ def stringify_obj_type(
     """
     arg_type = type(obj)
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}]"
+        shape = obj.shape or ()
+        return f"[nd-{obj.dtype}-{len(shape)}]"
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        shape = obj.shape or ()
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(shape)}]"
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
         return None
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        shape = obj.shape or ()
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(shape)}]"
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):
