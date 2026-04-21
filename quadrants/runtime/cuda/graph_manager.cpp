@@ -262,6 +262,22 @@ bool GraphManager::try_launch(int launch_id,
               "graph=True is not supported for kernels with struct return "
               "values; remove graph=True or avoid returning values");
 
+  // Adstack-bearing kernels cannot go through the graph path. `ensure_adstack_heap` must run on the host
+  // between the serial range_for-bounds kernel and the range_for kernel itself (the serial stores
+  // `end_value` into `runtime->temporaries`, the host reads it back via DtoH and sizes the heap
+  // accordingly); both kernels are baked into the graph so the host never gets a chance to run in between.
+  // For graph-compatible, statically-bounded adstack kernels, codegen still sets
+  // `static_num_threads = grid_dim * block_dim` and we could size the heap once at graph build, but that
+  // path is not exercised today and the existing `grad_ptr != nullptr` guard below rejects the standard
+  // autograd entry points that would hit it. Fail loudly instead of silently running with a nullptr
+  // `runtime->adstack_heap_buffer`.
+  for (const auto &task : offloaded_tasks) {
+    QD_ERROR_IF(task.ad_stack.per_thread_stride > 0,
+                "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
+                "(task '{}' has per_thread_stride={}). Launch without graph=True.",
+                task.name, task.ad_stack.per_thread_stride);
+  }
+
   resolve_ctx_ndarray_ptrs(ctx, parameters, executor);
 
   auto it = cache_.find(launch_id);

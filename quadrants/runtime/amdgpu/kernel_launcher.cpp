@@ -1,15 +1,57 @@
 #include "quadrants/runtime/amdgpu/kernel_launcher.h"
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/program/launch_context_builder.h"
+#include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
 namespace quadrants::lang {
 namespace amdgpu {
+
+namespace {
+
+// Resolve the adstack thread count this task needs sizing for.
+//
+// For const-bound range_for and non-range_for tasks, codegen has already made `static_num_threads` tight
+// (`grid_dim * block_dim` with `grid_dim` clamped to `ceil((end-begin)/block_dim)` for const range_for), so
+// we return it directly.
+//
+// For dynamic-bound range_for tasks, resolve `end - begin` by reading the values codegen stashed into
+// `runtime->temporaries` via a host-side DtoH memcpy. Mirrors `runtime/cuda/kernel_launcher.cpp`.
+std::size_t resolve_num_threads(const OffloadedTask &task, LlvmRuntimeExecutor *executor) {
+  if (!task.ad_stack.dynamic_gpu_range_for) {
+    return task.ad_stack.static_num_threads;
+  }
+  const auto &info = task.ad_stack;
+  std::int32_t begin = info.begin_const_value;
+  std::int32_t end = info.end_const_value;
+  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+    if (info.begin_offset_bytes >= 0) {
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                         sizeof(std::int32_t));
+    }
+    if (info.end_offset_bytes >= 0) {
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                         sizeof(std::int32_t));
+    }
+  }
+  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+  // `linear_thread_idx()`, so only `static_num_threads = grid_dim * block_dim` slices can be touched
+  // concurrently. See the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+  return std::min(iter, task.ad_stack.static_num_threads);
+}
+
+}  // namespace
 
 void KernelLauncher::launch_offloaded_tasks(JITModule *amdgpu_module,
                                             const std::vector<OffloadedTask> &offloaded_tasks,
                                             void *context_pointer,
                                             int arg_size) {
+  auto *executor = get_runtime_executor();
   for (const auto &task : offloaded_tasks) {
+    if (task.ad_stack.per_thread_stride > 0) {
+      executor->ensure_adstack_heap(task.ad_stack.per_thread_stride * resolve_num_threads(task, executor));
+    }
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {(void *)&context_pointer}, {arg_size});
@@ -169,12 +211,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   // Since we always allocating above then we should always free
   AMDGPUDriver::get_instance().mem_free(device_result_buffer);
-  // Free the per-launch `RuntimeContext` device allocation synchronously. `hipFree` synchronizes implicitly
-  // with pending kernels on the device, so this is safe even when the launches above were asynchronous.
-  // Done here rather than through `AMDGPUContext`'s deferred-free list because that list used to be drained
-  // by `LlvmRuntimeExecutor::synchronize`, which any mid-launch host-side query that calls synchronize would
-  // then free out from under an in-flight launch, and HIP would recycle the freed address for a subsequent
-  // allocation, clobbering the `RuntimeContext` the next task still reads from.
+  // Free the per-launch `RuntimeContext` device allocation. `hipFree` synchronizes implicitly with pending
+  // kernels on the device, so this is safe even when the launches above were asynchronous. Done here rather
+  // than through `AMDGPUContext`'s deferred free list because that list used to be drained by
+  // `LlvmRuntimeExecutor::synchronize`, which is also called from `fetch_result_uint64` during
+  // `ensure_adstack_heap`'s field-pointer query -- that path would hipFree `context_pointer` mid-launch, and
+  // HIP could recycle the freed address for the adstack heap allocated right after, clobbering the
+  // `RuntimeContext` the next task still reads from.
   AMDGPUDriver::get_instance().mem_free(context_pointer);
 }
 
