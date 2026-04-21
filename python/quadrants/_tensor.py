@@ -137,7 +137,8 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
             together with ``Backend.NDARRAY``.
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang import impl  # late import to break circular dependency
+    # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
+    from quadrants.lang import impl
 
     if "order" in kwargs:
         raise TypeError("qd.tensor(...) does not accept order=; pass layout=(...) instead")
@@ -186,7 +187,8 @@ def tensor_vec(n, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang.matrix import Vector  # late import
+    # pylint: disable-next=import-outside-toplevel  # late import
+    from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
         return Vector.field(n, dtype, shape, **kwargs)
@@ -221,7 +223,8 @@ def tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> b = qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    from quadrants.lang.matrix import Matrix  # late import
+    # pylint: disable-next=import-outside-toplevel  # late import
+    from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
         return Matrix.field(n, m, dtype, shape, **kwargs)
@@ -261,8 +264,9 @@ def tensor_annotation(backend):
         helper just hides the conditional behind one call.
     """
     backend = _coerce_backend(backend)
-    from quadrants import types as _types  # late import
-    from quadrants.types.annotations import template  # late import
+    # pylint: disable=import-outside-toplevel  # late imports
+    from quadrants import types as _types
+    from quadrants.types.annotations import template
 
     if backend is Backend.FIELD:
         return template()
