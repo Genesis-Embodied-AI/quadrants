@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tile16x16: register-resident 16x16 tiles &#8212; Quadrants 0.6.3 documentation</title>
+    <title>Tile16x16: register-resident 16x16 tiles &#8212; Quadrants 0.7.1 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,12 +38,12 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
-    <script src="../_static/documentation_options.js?v=b8503983"></script>
+    <script src="../_static/documentation_options.js?v=5a057da9"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,10 +60,10 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="CUDA Graph" href="graph.html" />
-    <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
+    <link rel="prev" title="Subgroup primitives" href="subgroup.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.6.3" />
+  <meta name="docsearch:version" content="0.7.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -81,7 +81,9 @@
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -129,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.6.3 documentation</p>
+    <p class="title logo__title">Quadrants 0.7.1 documentation</p>
   
 </a></div>
     
@@ -297,6 +299,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
@@ -487,6 +490,20 @@
 </div>
 </section>
 </section>
+<section id="sharedarray-support">
+<h2>SharedArray support<a class="headerlink" href="#sharedarray-support" title="Link to this heading">#</a></h2>
+<p>Tiles can load from and store to <code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code> using the same slice syntax as device arrays:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sh</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">SIZE</span><span class="p">),</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>
+<span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span>          <span class="c1"># store tile to shared memory</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+<span class="n">t2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">Tile16x16</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">t2</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="n">N</span><span class="p">]</span>      <span class="c1"># load tile from shared memory</span>
+</pre></div>
+</div>
+<p>Column clamping applies the same way as for device arrays — columns beyond the SharedArray width are left as zero on load or skipped on store. Column vector slices (<code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">sh[K0:K1,</span> <span class="pre">col]</span></code>) also work with SharedArray.</p>
+</section>
 <section id="kernel-structure">
 <h2>Kernel structure<a class="headerlink" href="#kernel-structure" title="Link to this heading">#</a></h2>
 <section id="block-size">
@@ -565,6 +582,38 @@
 </table>
 </div>
 </section>
+<section id="example-blocked-cholesky">
+<h2>Example: blocked Cholesky<a class="headerlink" href="#example-blocked-cholesky" title="Link to this heading">#</a></h2>
+<p>See <a class="reference download internal" download="" href="../_downloads/10e91aecf2d7d697024a911dd28bc249/cholesky_blocked.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">misc/demos/cholesky_blocked.py</span></code></span></a> for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).</p>
+<p>Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Kernel</p></th>
+<th class="head text-right"><p>Threads</p></th>
+<th class="head text-right"><p>Time (us)</p></th>
+<th class="head text-right"><p>vs baseline</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>baseline (scalar Crout, shared mem)</p></td>
+<td class="text-right"><p>64</p></td>
+<td class="text-right"><p>2766</p></td>
+<td class="text-right"><p>1.00x</p></td>
+</tr>
+<tr class="row-odd"><td><p>blocked (scalar Crout, shared mem)</p></td>
+<td class="text-right"><p>16</p></td>
+<td class="text-right"><p>2556</p></td>
+<td class="text-right"><p>1.08x</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>tile16 (Tile16x16, no shared memory)</strong></p></td>
+<td class="text-right"><p>16</p></td>
+<td class="text-right"><p>533</p></td>
+<td class="text-right"><p><strong>5.19x</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 </section>
 
 
@@ -578,12 +627,12 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="interop.html"
+       href="subgroup.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Numpy and Torch interop</p>
+        <p class="prev-next-title">Subgroup primitives</p>
       </div>
     </a>
     <a class="right-next"
@@ -632,6 +681,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#combined-cholesky-triangular-solve">Combined Cholesky + triangular solve</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#sharedarray-support">SharedArray support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure">Kernel structure</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-size">Block size</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#subgroup-size">Subgroup size</a></li>
@@ -639,6 +689,7 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#f64-support">f64 support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#method-reference">Method reference</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-blocked-cholesky">Example: blocked Cholesky</a></li>
 </ul>
   </nav></div>
 
@@ -664,8 +715,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -699,7 +750,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
 </p></div>
       
     </div>
