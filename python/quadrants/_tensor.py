@@ -285,5 +285,3 @@ def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     if backend is Backend.NDARRAY:
         return Matrix.ndarray(n, m, dtype, shape, **forwarded)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
-
-
