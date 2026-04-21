@@ -131,6 +131,14 @@ Any permutation is supported, up to Quadrants' `quadrants_max_num_indices`
 (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the
 underlying allocator.
 
+Quadrants rejects mismatched / invalid layouts up front:
+
+```python
+qd.tensor(qd.f32, shape=(4, 5), layout=(0, 1, 2))   # ValueError: wrong length
+qd.tensor(qd.f32, shape=(4, 5), layout=(0, 0))      # ValueError: not a permutation
+qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
+```
+
 ## Annotating kernel arguments: `qd.Tensor`
 
 Kernel parameter annotations use `qd.Tensor` regardless of backend:
@@ -150,12 +158,4 @@ b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 fill(a)   # field branch
 fill(b)   # ndarray branch
-```
-
-Quadrants rejects mismatched / invalid layouts up front:
-
-```python
-qd.tensor(qd.f32, shape=(4, 5), layout=(0, 1, 2))   # ValueError: wrong length
-qd.tensor(qd.f32, shape=(4, 5), layout=(0, 0))      # ValueError: not a permutation
-qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
 ```
