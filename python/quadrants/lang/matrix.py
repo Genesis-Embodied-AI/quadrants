@@ -1016,6 +1016,34 @@ class Matrix(QuadrantsOperations):
             arr._set_grad(cls.ndarray(n, m, dtype, shape, needs_grad=False))
         return arr
 
+    @classmethod
+    def tensor(cls, n, m, dtype, shape, **kwargs):
+        """Allocate a tensor whose elements are ``n``-by-``m`` matrices.
+
+        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
+        for matrix-valued elements. Selects between ``qd.Matrix.field`` and
+        ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
+
+        Args:
+            n (int): Number of rows of each matrix element.
+            m (int): Number of columns of each matrix element.
+            dtype: Element data type (e.g. ``qd.f32``).
+            shape: Shape of the tensor (excluding the matrix dimensions) as
+                an ``int`` or tuple of ``int``.
+            backend (qd.Backend, optional): Storage backend. Defaults to
+                ``qd.Backend.FIELD``.
+            **kwargs: Forwarded verbatim to the underlying
+                ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
+
+        Example::
+
+            >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
+            >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+        """
+        from quadrants._tensor import _tensor_mat  # pylint: disable=C0415
+
+        return _tensor_mat(n, m, dtype, shape, **kwargs)
+
     @staticmethod
     def rows(rows):
         """Constructs a matrix by concatenating a list of
@@ -1207,6 +1235,33 @@ class Vector(Matrix):
                 )
             arr._set_grad(cls.ndarray(n, dtype, shape, needs_grad=False))
         return arr
+
+    @classmethod
+    def tensor(cls, n, dtype, shape, **kwargs):
+        """Allocate a tensor whose elements are length-``n`` vectors.
+
+        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
+        for vector-valued elements. Selects between ``qd.Vector.field`` and
+        ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
+
+        Args:
+            n (int): Length of each vector element.
+            dtype: Element data type (e.g. ``qd.f32``).
+            shape: Shape of the tensor (excluding the vector dimension) as
+                an ``int`` or tuple of ``int``.
+            backend (qd.Backend, optional): Storage backend. Defaults to
+                ``qd.Backend.FIELD``.
+            **kwargs: Forwarded verbatim to the underlying
+                ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
+
+        Example::
+
+            >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
+            >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+        """
+        from quadrants._tensor import _tensor_vec  # pylint: disable=C0415
+
+        return _tensor_vec(n, dtype, shape, **kwargs)
 
 
 class MatrixField(Field):

@@ -1,4 +1,10 @@
-"""Tests for ``qd.tensor_vec`` / ``qd.tensor_mat``."""
+"""Tests for ``qd.Vector.tensor`` / ``qd.Matrix.tensor`` factory classmethods.
+
+These are the per-tensor backend dispatchers for vector- and matrix-element
+tensors, parallel to scalar ``qd.tensor()``. The dispatch implementation
+lives in ``quadrants/_tensor.py`` as ``_tensor_vec`` / ``_tensor_mat``
+(private); the public surface is the classmethods exercised here.
+"""
 
 import pytest
 
@@ -7,42 +13,42 @@ import quadrants as qd
 from tests import test_utils
 
 # ----------------------------------------------------------------------------
-# qd.tensor_vec
+# qd.Vector.tensor
 # ----------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_default_backend_matches_vector_field():
-    a = qd.tensor_vec(3, qd.f32, shape=(4,))
+def test_vector_tensor_default_backend_matches_vector_field():
+    a = qd.Vector.tensor(3, qd.f32, shape=(4,))
     b = qd.Vector.field(3, qd.f32, shape=(4,))
     assert type(a) is type(b)
     assert a.shape == b.shape == (4,)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_field_explicit():
-    a = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.FIELD)
+def test_vector_tensor_field_explicit():
+    a = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.FIELD)
     ref = qd.Vector.field(3, qd.f32, shape=(4,))
     assert type(a) is type(ref)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_ndarray_matches_vector_ndarray():
-    a = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+def test_vector_tensor_ndarray_matches_vector_ndarray():
+    a = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     ref = qd.Vector.ndarray(3, qd.f32, shape=(4,))
     assert type(a) is type(ref)
     assert a.shape == ref.shape == (4,)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_invalid_backend_raises():
+def test_vector_tensor_invalid_backend_raises():
     with pytest.raises(ValueError, match="backend="):
-        qd.tensor_vec(3, qd.f32, shape=(4,), backend="oops")
+        qd.Vector.tensor(3, qd.f32, shape=(4,), backend="oops")
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_kernel_roundtrip_field():
-    v = qd.tensor_vec(3, qd.f32, shape=(4,))
+def test_vector_tensor_kernel_roundtrip_field():
+    v = qd.Vector.tensor(3, qd.f32, shape=(4,))
 
     @qd.kernel
     def fill(x: qd.template()):
@@ -57,8 +63,8 @@ def test_tensor_vec_kernel_roundtrip_field():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_vec_kernel_roundtrip_ndarray():
-    v = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+def test_vector_tensor_kernel_roundtrip_ndarray():
+    v = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
@@ -73,35 +79,35 @@ def test_tensor_vec_kernel_roundtrip_ndarray():
 
 
 # ----------------------------------------------------------------------------
-# qd.tensor_mat
+# qd.Matrix.tensor
 # ----------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_mat_default_backend_matches_matrix_field():
-    a = qd.tensor_mat(2, 3, qd.f32, shape=(4,))
+def test_matrix_tensor_default_backend_matches_matrix_field():
+    a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
     b = qd.Matrix.field(2, 3, qd.f32, shape=(4,))
     assert type(a) is type(b)
     assert a.shape == b.shape == (4,)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_mat_ndarray_matches_matrix_ndarray():
-    a = qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+def test_matrix_tensor_ndarray_matches_matrix_ndarray():
+    a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     ref = qd.Matrix.ndarray(2, 3, qd.f32, shape=(4,))
     assert type(a) is type(ref)
     assert a.shape == ref.shape == (4,)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_mat_invalid_backend_raises():
+def test_matrix_tensor_invalid_backend_raises():
     with pytest.raises(ValueError, match="backend="):
-        qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=99)
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=99)
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_mat_kernel_roundtrip_field():
-    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,))
+def test_matrix_tensor_kernel_roundtrip_field():
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 
     @qd.kernel
     def fill(x: qd.template()):
@@ -118,8 +124,8 @@ def test_tensor_mat_kernel_roundtrip_field():
 
 
 @test_utils.test(arch=qd.cpu)
-def test_tensor_mat_kernel_roundtrip_ndarray():
-    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY)
+def test_matrix_tensor_kernel_roundtrip_ndarray():
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY)
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
@@ -133,3 +139,14 @@ def test_tensor_mat_kernel_roundtrip_ndarray():
     assert arr.shape == (3, 2, 2)
     assert arr[1, 0, 1] == 101.0
     assert arr[2, 1, 0] == 210.0
+
+
+# ----------------------------------------------------------------------------
+# Privacy guard: tensor_vec / tensor_mat are no longer in the public API.
+# ----------------------------------------------------------------------------
+
+
+def test_tensor_vec_mat_not_public():
+    """Ensure the old top-level names were dropped from the public surface."""
+    assert not hasattr(qd, "tensor_vec"), "qd.tensor_vec leaked into public API"
+    assert not hasattr(qd, "tensor_mat"), "qd.tensor_mat leaked into public API"
