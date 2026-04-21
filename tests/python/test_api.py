@@ -223,6 +223,7 @@ user_api[qd] = [
     "tanh",
     "template",
     "tensor",
+    "tensor_annotation",
     "tensor_mat",
     "tensor_vec",
     "tools",

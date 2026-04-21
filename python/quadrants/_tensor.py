@@ -184,8 +184,8 @@ def tensor_annotation(backend):
         helper just hides the conditional behind one call.
     """
     backend = _coerce_backend(backend)
-    from quadrants import types as _types  # late import
-    from quadrants.types.annotations import template  # late import
+    from quadrants import types as _types  # pylint: disable=import-outside-toplevel
+    from quadrants.types.annotations import template  # pylint: disable=import-outside-toplevel
 
     if backend is Backend.FIELD:
         return template()
