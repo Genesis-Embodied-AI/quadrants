@@ -24,6 +24,21 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::Root) {
     return std::string("Root: ") + std::to_string(b.root_id);
   }
+  if (b.type == BufferType::ListGen) {
+    return "ListGen";
+  }
+  if (b.type == BufferType::ExtArr) {
+    return "ExtArr";
+  }
+  if (b.type == BufferType::AdStackOverflow) {
+    return "AdStackOverflow";
+  }
+  if (b.type == BufferType::AdStackHeapFloat) {
+    return "AdStackHeapFloat";
+  }
+  if (b.type == BufferType::AdStackHeapInt) {
+    return "AdStackHeapInt";
+  }
   QD_ERROR("unrecognized buffer type");
 }
 
