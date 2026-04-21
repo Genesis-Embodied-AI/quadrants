@@ -321,10 +321,13 @@ def test_adstack_nan_propagation_f64(op_name, x_val):
     assert math.isnan(x.grad[None])
 
 
-def _run_basic_gradient(qd_dtype, n_iter, rel_tol, approx=test_utils.approx):
+def _run_basic_gradient(qd_dtype, n_iter, rel_tol, approx=test_utils.approx, abs_tol=None):
     # Builds the kernel, runs forward + backward, and asserts a correct gradient. `approx` defaults to
     # `test_utils.approx` which is correct for f32 (its backend-specific floor kicks in); f64 callers must pass
     # `pytest.approx` to honor a tight `rel_tol=1e-14` that `test_utils.approx` would otherwise floor to 1e-6.
+    # `abs_tol` is forwarded as `abs=` to the approx; f64 callers must pass `abs_tol=0` because pytest.approx's
+    # default `abs=1e-12` would otherwise dominate for the expected magnitudes here (~0.6-0.95), making the
+    # effective tolerance ~1e-12 absolute rather than 1e-14 relative and missing f32-narrowing regressions.
     # The adstack is structurally required here so the backward compiler can reverse the dynamic `range(n_iter)`
     # at all; the companion `test_adstack_basic_gradient_negative` pins that disabling the adstack raises
     # `QuadrantsCompilationError("non static range")`. Value-correctness of the per-iteration `v` spilled on the
@@ -356,8 +359,11 @@ def _run_basic_gradient(qd_dtype, n_iter, rel_tol, approx=test_utils.approx):
     # `v = v * 0.95 + 0.01` iterated n_iter times gives v_final = 0.95**n_iter * x[i] + const, so
     # dv_final/dx[i] == 0.95**n_iter independent of x[i], and dy/dx[i] equals the same quantity.
     expected = 0.95**n_iter
+    approx_kwargs = {"rel": rel_tol}
+    if abs_tol is not None:
+        approx_kwargs["abs"] = abs_tol
     for i in range(n):
-        assert x.grad[i] == approx(expected, rel=rel_tol)
+        assert x.grad[i] == approx(expected, **approx_kwargs)
 
 
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
@@ -383,10 +389,12 @@ def test_adstack_basic_gradient(n_iter):
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_adstack_basic_gradient_f64(n_iter):
-    # f64 counterpart of `test_adstack_basic_gradient`. Uses `pytest.approx` so the tight `rel_tol=1e-14` is
-    # honored; `test_utils.approx` would floor it to `get_rel_eps()` (typically 1e-6) and silently pass an
-    # f32-precision regression.
-    _run_basic_gradient(qd.f64, n_iter=n_iter, rel_tol=1e-14, approx=pytest.approx)
+    # f64 counterpart of `test_adstack_basic_gradient`. Uses `pytest.approx` so the tight `rel_tol=1e-14` is honored;
+    # `test_utils.approx` would floor it to `get_rel_eps()` (typically 1e-6) and silently pass an f32-precision
+    # regression. `abs_tol=0` disables pytest.approx's default `abs=1e-12` floor, which would otherwise dominate for
+    # the expected magnitudes `0.95**n_iter in [~0.6, 0.95]` and make the effective tolerance ~1e-12 absolute rather
+    # than 1e-14 relative; that is still ~100x looser than f64 roundoff and would miss an f32-narrowing regression.
+    _run_basic_gradient(qd.f64, n_iter=n_iter, rel_tol=1e-14, approx=pytest.approx, abs_tol=0)
 
 
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
@@ -419,7 +427,9 @@ def test_adstack_basic_gradient_negative(n_iter):
         compute.grad()
 
 
-def _run_sum_linear(qd_dtype, use_static_loop, use_varying_coeff, n_iter, rel_tol, approx=test_utils.approx):
+def _run_sum_linear(
+    qd_dtype, use_static_loop, use_varying_coeff, n_iter, rel_tol, approx=test_utils.approx, abs_tol=None
+):
     n = 4
     x = qd.field(qd_dtype, shape=n, needs_grad=True)
     y = qd.field(qd_dtype, shape=(), needs_grad=True)
@@ -445,8 +455,11 @@ def _run_sum_linear(qd_dtype, use_static_loop, use_varying_coeff, n_iter, rel_to
     compute.grad()
 
     expected = sum(a + 1 for a in range(n_iter)) if use_varying_coeff else float(n_iter)
+    approx_kwargs = {"rel": rel_tol}
+    if abs_tol is not None:
+        approx_kwargs["abs"] = abs_tol
     for i in range(n):
-        assert x.grad[i] == approx(expected, rel=rel_tol)
+        assert x.grad[i] == approx(expected, **approx_kwargs)
 
 
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
@@ -476,5 +489,12 @@ def test_adstack_sum_linear(use_static_loop, use_varying_coeff, n_iter):
 @pytest.mark.parametrize("use_varying_coeff", [True, False])
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
 def test_adstack_sum_linear_f64(use_static_loop, use_varying_coeff, n_iter):
-    # f64 counterpart uses `pytest.approx` so the tight rel_tol is not floored by `test_utils.approx`.
-    _run_sum_linear(qd.f64, use_static_loop, use_varying_coeff, n_iter, rel_tol=1e-14, approx=pytest.approx)
+    # f64 counterpart uses `pytest.approx` so the tight rel_tol is not floored by `test_utils.approx`, and
+    # `abs_tol=0` disables pytest.approx's default `abs=1e-12` floor so the 1e-14 relative tolerance is actually
+    # honored. Note: the expected gradients here are integers in `{1, 3, 6, 10, 55}` which are exactly representable
+    # in both f32 and f64, so this test cannot catch an f32-narrowing regression of the backward pass regardless of
+    # tolerance - the value coverage comes from `test_adstack_basic_gradient_f64` whose non-integer expected values
+    # genuinely exercise the f64 precision floor. Kept here to preserve the shape coverage (static/dynamic inner
+    # loop x varying/constant coefficient) at f64 since a future type-narrowing bug that depends on shape might
+    # still surface through compile-time / structural differences between f32 and f64 codegen paths.
+    _run_sum_linear(qd.f64, use_static_loop, use_varying_coeff, n_iter, rel_tol=1e-14, approx=pytest.approx, abs_tol=0)
