@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../_static/styles/theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
-<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+  <link href="../../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../_static/scripts/fontawesome.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
-<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
 
     <script src="../../../../_static/documentation_options.js?v=73d9a94e"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
@@ -81,7 +81,9 @@
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -849,7 +851,7 @@ Structure (AOS) or Structure Of Array (SOA).</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.ndarray">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.ndarray" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.ndarray" title="Link to this definition">#</a></dt>
 <dd><p>Defines a Quadrants ndarray with matrix elements.
 This function must be called in Python scope, and after <cite>qd.init</cite> is called.</p>
 <dl class="field-list simple">
@@ -859,6 +861,11 @@ This function must be called in Python scope, and after <cite>qd.init</cite> is 
 <li><p><strong>m</strong> (<em>int</em>) – Number of columns of the matrix.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
+<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, allocate a companion grad
+ndarray of the same shape and dtype, accessible via
+<code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point)
+type. Defaults to False. Silently ignored on the python
+backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
 </ul>
 </dd>
 </dl>
@@ -1055,7 +1062,7 @@ you can even initialize a matrix with an empty list:
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Vector.ndarray">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.ndarray" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.ndarray" title="Link to this definition">#</a></dt>
 <dd><p>Defines a Quadrants ndarray with vector elements.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1063,6 +1070,11 @@ you can even initialize a matrix with an empty list:
 <li><p><strong>n</strong> (<em>int</em>) – Size of the vector.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
+<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, allocate a companion grad
+ndarray of the same shape and dtype, accessible via
+<code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point)
+type. Defaults to False. Silently ignored on the python
+backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
 </ul>
 </dd>
 </dl>
@@ -1548,8 +1560,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2"></script>
-<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1583,7 +1595,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
 </p></div>
       
     </div>
