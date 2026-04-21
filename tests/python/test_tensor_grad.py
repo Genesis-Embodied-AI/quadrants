@@ -69,21 +69,21 @@ def test_tensor_ndarray_grad_kernel_roundtrip():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_vec_field_needs_grad():
-    v = qd.tensor_vec(3, qd.f32, shape=(2,), needs_grad=True)
+    v = qd.Vector.tensor(3, qd.f32, shape=(2,), needs_grad=True)
     assert v.grad is not None
     assert v.grad.shape == v.shape
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_mat_field_needs_grad():
-    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), needs_grad=True)
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), needs_grad=True)
     assert m.grad is not None
     assert m.grad.shape == m.shape
 
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_vec_ndarray_needs_grad_allocates_grad():
-    v = qd.tensor_vec(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    v = qd.Vector.tensor(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
     assert v.grad is not None
     assert tuple(v.grad.shape) == tuple(v.shape)
     assert v.grad.element_shape == v.element_shape
@@ -91,7 +91,7 @@ def test_tensor_vec_ndarray_needs_grad_allocates_grad():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_mat_ndarray_needs_grad_allocates_grad():
-    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
     assert m.grad is not None
     assert tuple(m.grad.shape) == tuple(m.shape)
     assert m.grad.element_shape == m.element_shape
@@ -99,7 +99,7 @@ def test_tensor_mat_ndarray_needs_grad_allocates_grad():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_vec_ndarray_grad_kernel_roundtrip():
-    v = qd.tensor_vec(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    v = qd.Vector.tensor(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
 
     @qd.kernel
     def write_primal(x: qd.types.ndarray()):
@@ -123,7 +123,7 @@ def test_tensor_vec_ndarray_grad_kernel_roundtrip():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_mat_ndarray_grad_kernel_roundtrip():
-    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
 
     @qd.kernel
     def write_primal(x: qd.types.ndarray()):
@@ -153,7 +153,7 @@ def test_tensor_vec_ndarray_needs_grad_rejects_int_dtype():
     import pytest
 
     with pytest.raises(qd.QuadrantsRuntimeError, match="needs_grad"):
-        qd.tensor_vec(3, qd.i32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+        qd.Vector.tensor(3, qd.i32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -161,4 +161,4 @@ def test_tensor_mat_ndarray_needs_grad_rejects_int_dtype():
     import pytest
 
     with pytest.raises(qd.QuadrantsRuntimeError, match="needs_grad"):
-        qd.tensor_mat(2, 2, qd.i32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+        qd.Matrix.tensor(2, 2, qd.i32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
