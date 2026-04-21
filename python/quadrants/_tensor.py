@@ -163,7 +163,17 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
         arr = impl.ndarray(dtype, physical_shape, **kwargs)
-        return _with_layout(arr, layout_t)
+        _with_layout(arr, layout_t)
+        # If the primal was allocated with needs_grad=True, impl.ndarray has
+        # already allocated a same-shape companion grad ndarray and wired it
+        # via _set_grad. That grad array is untagged though, so kernel code
+        # reading x.grad[i, j, ...] would bypass the canonical->physical
+        # subscript rewrite. Propagate the layout tag onto the grad so both
+        # primal and grad share the same permuted view.
+        grad = getattr(arr, "grad", None)
+        if grad is not None:
+            _with_layout(grad, layout_t)
+        return arr
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
