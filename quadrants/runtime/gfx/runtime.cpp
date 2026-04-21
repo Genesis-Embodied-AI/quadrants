@@ -647,7 +647,10 @@ StreamSemaphore GfxRuntime::flush() {
   if (current_cmdlist_) {
     sema = device_->get_compute_stream()->submit(current_cmdlist_.get());
     current_cmdlist_ = nullptr;
-    ctx_buffers_.clear();
+    // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has
+    // finished executing. Any deferred-free buffer queued into `ctx_buffers_` may still be referenced by
+    // commands in flight; dropping the unique_ptrs here would be a GPU-side use-after-free. Only
+    // `synchronize()` clears the vector, after `wait_idle()` has drained the stream.
   } else {
     auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);

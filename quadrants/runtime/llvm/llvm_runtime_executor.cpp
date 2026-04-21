@@ -194,10 +194,6 @@ void LlvmRuntimeExecutor::synchronize() {
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-    // A better way
-    // use `hipFreeAsync` to free the device kernel arg mem
-    // notice: rocm version
-    AMDGPUContext::get_instance().free_kernel_arg_pointer();
 #else
     QD_ERROR("No AMDGPU support");
 #endif
@@ -638,11 +634,16 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint
   result_buffer_cache_ = *result_buffer_ptr;
   QD_TRACE("LLVMRuntime pointer fetched");
 
-  // Preallocate for runtime memory and update to LLVMRuntime
+  // Preallocate for runtime memory and update to LLVMRuntime. The bump-allocator chunk is always populated
+  // eagerly on CUDA / AMDGPU, even when the driver reports a memory pool, because device-side runtime
+  // helpers (sparse SNode activation through `NodeManager`, random-state init, etc.) call
+  // `LLVMRuntime::allocate_aligned` from a kernel, which falls through to the host-only `host_allocator`
+  // function pointer when the chunk is empty and traps the device with an invalid PC / illegal address. The
+  // driver mem pool is still used for user-facing allocations through `llvm_device()->allocate_memory`
+  // (Ndarrays, snode tree fields); this eager preallocation only covers the internal bump allocator that
+  // device-side runtime helpers reach into.
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
-    if (!use_device_memory_pool()) {
-      preallocate_runtime_memory();
-    }
+    preallocate_runtime_memory();
   }
 
   if (config_.arch == Arch::cuda) {
