@@ -34,9 +34,9 @@ def _mat_reference(backend):
 
 
 @test_utils.test(arch=qd.cpu)
-def test_vector_tensor_default_backend_matches_vector_field():
+def test_vector_tensor_default_backend_matches_vector_ndarray():
     a = qd.Vector.tensor(3, qd.f32, shape=(4,))
-    b = qd.Vector.field(3, qd.f32, shape=(4,))
+    b = qd.Vector.ndarray(3, qd.f32, shape=(4,))
     assert type(a) is type(b)
     assert a.shape == b.shape == (4,)
 
@@ -54,6 +54,18 @@ def test_vector_tensor_explicit_backend_matches_underlying(backend):
 def test_vector_tensor_invalid_backend_raises():
     with pytest.raises(ValueError, match="backend="):
         qd.Vector.tensor(3, qd.f32, shape=(4,), backend="oops")
+
+
+@test_utils.test(arch=qd.cpu)
+def test_vector_tensor_rejects_unknown_kwarg():
+    """``qd.Vector.tensor`` shares the same kwarg-validation contract as
+    ``qd.tensor``: backend-specific knobs and typos raise ``TypeError``."""
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Vector.tensor(3, qd.f32, shape=(4,), order="ji")
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Vector.tensor(3, qd.f32, shape=(4,), offset=(1,))
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Vector.tensor(3, qd.f32, shape=(4,), nonsense=42)
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -89,9 +101,9 @@ def test_vector_tensor_kernel_roundtrip(backend):
 
 
 @test_utils.test(arch=qd.cpu)
-def test_matrix_tensor_default_backend_matches_matrix_field():
+def test_matrix_tensor_default_backend_matches_matrix_ndarray():
     a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
-    b = qd.Matrix.field(2, 3, qd.f32, shape=(4,))
+    b = qd.Matrix.ndarray(2, 3, qd.f32, shape=(4,))
     assert type(a) is type(b)
     assert a.shape == b.shape == (4,)
 
@@ -109,6 +121,18 @@ def test_matrix_tensor_explicit_backend_matches_underlying(backend):
 def test_matrix_tensor_invalid_backend_raises():
     with pytest.raises(ValueError, match="backend="):
         qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=99)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_tensor_rejects_unknown_kwarg():
+    """``qd.Matrix.tensor`` shares the same kwarg-validation contract as
+    ``qd.tensor``: backend-specific knobs and typos raise ``TypeError``."""
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), order="ji")
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), offset=(1,))
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), nonsense=42)
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
