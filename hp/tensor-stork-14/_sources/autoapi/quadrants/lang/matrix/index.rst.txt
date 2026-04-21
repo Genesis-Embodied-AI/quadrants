@@ -850,9 +850,6 @@ Module Contents
    .. py:attribute:: layout
 
 
-   .. py:attribute:: shape
-
-
    .. py:attribute:: element_type
 
 
@@ -924,9 +921,6 @@ Module Contents
 
 
    .. py:attribute:: layout
-
-
-   .. py:attribute:: shape
 
 
    .. py:attribute:: element_type
