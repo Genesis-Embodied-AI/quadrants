@@ -78,9 +78,10 @@ def test_tensor_rejects_unknown_kwarg():
     """Backend-specific knobs and typos are rejected up front; users who
     genuinely need a backend-specific knob must drop down to ``qd.field``
     or ``qd.ndarray`` directly. Only kwargs that are never going to be
-    accepted are listed here — branch-specific kwargs (``needs_grad=``
-    on PR 5, ``layout=`` on PR 6) get their own acceptance + rejection
-    tests on the branch where they land."""
+    accepted are listed here — branch-specific kwargs (``layout=`` on
+    PR 6) get their own acceptance + rejection tests on the branch where
+    they land. ``needs_grad=`` is accepted as of this branch (see
+    ``test_tensor_grad.py``)."""
     with pytest.raises(TypeError, match="unexpected keyword"):
         qd.tensor(qd.f32, shape=(4, 5), order="ji")
     with pytest.raises(TypeError, match="unexpected keyword"):

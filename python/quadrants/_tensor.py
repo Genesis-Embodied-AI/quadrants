@@ -50,9 +50,8 @@ def _coerce_backend(backend):
 # directly — they have explicitly opted out of the unified tensor API.
 #
 # The set grows as later branches add features:
-# - PR 5: ``needs_grad``
 # - PR 6: ``layout``
-_ACCEPTED_KWARGS = frozenset({"backend"})
+_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
 
 
 def _validate_kwargs(kwargs, *, factory_name):
