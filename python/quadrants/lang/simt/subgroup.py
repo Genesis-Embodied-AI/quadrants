@@ -1,6 +1,9 @@
-# type: ignore
+# pyright: reportInvalidTypeForm=false
 
 from quadrants.lang import impl
+from quadrants.lang.kernel_impl import func
+from quadrants.types.annotations import template
+from quadrants.types.primitive_types import u32
 
 
 def barrier():
@@ -47,32 +50,43 @@ def invocation_id():
     return impl.call_internal("subgroupInvocationId", with_runtime_context=False)
 
 
-def reduce_add(value):
-    return impl.call_internal("subgroupAdd", value, with_runtime_context=False)
+@func
+def reduce_add(value, log2_size: template()):
+    """Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
+
+    The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
+    Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
+    (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+    shuffle+add operations in the calling kernel's IR.
+    """
+    for i in impl.static(range(log2_size)):
+        offset = impl.static(1 << (log2_size - 1 - i))
+        value = value + shuffle_down(value, u32(offset))
+    return value
 
 
-def reduce_mul(value):
-    return impl.call_internal("subgroupMul", value, with_runtime_context=False)
+@func
+def reduce_all_add(value, log2_size: template()):
+    """Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+    The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
+    does not exceed the active subgroup size on the target.
+
+    ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+    shuffle+add operations in the calling kernel's IR.
+    """
+    lane = invocation_id()
+    for i in impl.static(range(log2_size)):
+        mask = impl.static(1 << i)
+        value = value + shuffle(value, u32(lane ^ mask))
+    return value
 
 
-def reduce_min(value):
-    return impl.call_internal("subgroupMin", value, with_runtime_context=False)
-
-
-def reduce_max(value):
-    return impl.call_internal("subgroupMax", value, with_runtime_context=False)
-
-
-def reduce_and(value):
-    return impl.call_internal("subgroupAnd", value, with_runtime_context=False)
-
-
-def reduce_or(value):
-    return impl.call_internal("subgroupOr", value, with_runtime_context=False)
-
-
-def reduce_xor(value):
-    return impl.call_internal("subgroupXor", value, with_runtime_context=False)
+# reduce_mul / reduce_min / reduce_max / reduce_and / reduce_or / reduce_xor (no-arg, SPIR-V-only)
+# have been removed.  Build sized portable replacements on top of `shuffle_down` / `shuffle`
+# following the same pattern as `reduce_add` / `reduce_all_add` above when needed.
 
 
 def inclusive_add(value):
@@ -164,12 +178,7 @@ __all__ = [
     "all_equal",
     "broadcast_first",
     "reduce_add",
-    "reduce_mul",
-    "reduce_min",
-    "reduce_max",
-    "reduce_and",
-    "reduce_or",
-    "reduce_xor",
+    "reduce_all_add",
     "inclusive_add",
     "inclusive_mul",
     "inclusive_min",
