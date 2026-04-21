@@ -217,10 +217,13 @@ b = qd.tensor(qd.f32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0,
 
 `shape=` is the **canonical** shape — what you index inside kernels.
 The factory allocates the underlying ndarray at the *physical* (permuted)
-shape and tags it so kernel subscripts are translated automatically:
+shape and tags it so kernel subscripts are translated automatically.
+``tensor.shape`` always returns the canonical shape regardless of the
+physical layout, on both backends:
 
 ```python
 a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(1, 0))
+assert a.shape == (3, 4)                # canonical, regardless of layout
 
 @qd.kernel
 def fill(x: qd.types.ndarray()):
@@ -231,13 +234,10 @@ fill(a)
 a.to_numpy().shape == (4, 3)            # physical shape (canonical permuted)
 ```
 
-```{note}
-On the ndarray backend, `tensor.shape` currently reports the **physical**
-shape (the underlying `Ndarray` does not yet expose a separate canonical
-view). The `to_numpy()` view is similarly physical. This asymmetry
-between the FIELD and NDARRAY backends will be tightened in a future
-release; the kernel-side semantics are already canonical on both.
-```
+``to_numpy()`` is the explicit physical-view escape hatch and returns the
+permuted (physical) shape on the ndarray backend; on the field backend
+``to_numpy()`` returns the canonical shape because field's
+canonical-vs-physical translation happens entirely inside the SNode tree.
 
 `layout=` composes naturally with `needs_grad=True`: the grad SNode
 inherits the same physical permutation as the primal, and both expose the

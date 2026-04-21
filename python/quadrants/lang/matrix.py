@@ -1759,7 +1759,7 @@ class MatrixNdarray(Ndarray):
         self.dtype = cook_dtype(dtype)
 
         self.layout = Layout.AOS
-        self.shape = tuple(shape)
+        self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((self.n, self.m), self.dtype).get_ptr())
         # TODO: we should pass in element_type, shape, layout instead.
         self.arr = impl.get_runtime().prog.create_ndarray(
@@ -1827,7 +1827,7 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def __deepcopy__(self, memo=None):
-        ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self.shape)
+        ret_arr = MatrixNdarray(self.n, self.m, self.dtype, self._physical_shape)
         ret_arr.copy_from(self)
         return ret_arr
 
@@ -1874,7 +1874,7 @@ class VectorNdarray(Ndarray):
         self.dtype = cook_dtype(dtype)
 
         self.layout = Layout.AOS
-        self.shape = tuple(shape)
+        self._physical_shape = tuple(shape)
         self.element_type = DataTypeCxxWrapper(_type_factory.get_tensor_type((n,), self.dtype).get_ptr())
         self.arr = impl.get_runtime().prog.create_ndarray(
             cook_dtype(self.element_type),
@@ -1941,7 +1941,7 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def __deepcopy__(self, memo=None):
-        ret_arr = VectorNdarray(self.n, self.dtype, self.shape)
+        ret_arr = VectorNdarray(self.n, self.dtype, self._physical_shape)
         ret_arr.copy_from(self)
         return ret_arr
 

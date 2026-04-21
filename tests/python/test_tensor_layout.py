@@ -71,33 +71,26 @@ BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
 
 
-def _expected_factory_shape(canonical, layout, backend):
-    """``a.shape`` after allocation, accounting for FIELD canonical vs
-    NDARRAY physical reporting (the canonical-vs-physical bug is tracked
-    separately; this helper localises the asymmetry)."""
-    if backend is qd.Backend.FIELD:
-        return canonical
-    return tuple(canonical[axis] for axis in layout)
-
-
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(3))))
 def test_layout_rank3_all_permutations(layout, backend):
-    """Every rank-3 permutation must allocate without error on both backends."""
+    """Every rank-3 permutation must allocate without error on both
+    backends, and ``shape`` is canonical regardless of layout."""
     qd.init(arch=qd.x64)
     canonical = (2, 3, 4)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
-    assert tuple(a.shape) == _expected_factory_shape(canonical, layout, backend)
+    assert tuple(a.shape) == canonical
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", list(itertools.permutations(range(4))))
 def test_layout_rank4_all_permutations(layout, backend):
-    """Every rank-4 permutation must allocate without error on both backends."""
+    """Every rank-4 permutation must allocate without error on both
+    backends, and ``shape`` is canonical regardless of layout."""
     qd.init(arch=qd.x64)
     canonical = (2, 3, 4, 5)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
-    assert tuple(a.shape) == _expected_factory_shape(canonical, layout, backend)
+    assert tuple(a.shape) == canonical
 
 
 # ----------------------------------------------------------------------------
@@ -137,15 +130,17 @@ def test_order_kwarg_rejected():
 def test_layout_nonidentity_ndarray_accepted():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(1, 0))
-    # Allocated at the physical (permuted) shape.
-    assert tuple(a.shape) == (5, 4)
+    # Canonical shape regardless of layout; physical buffer is permuted.
+    assert tuple(a.shape) == (4, 5)
+    assert tuple(a._physical_shape) == (5, 4)
     assert a._qd_layout == (1, 0)
 
 
 def test_layout_nonidentity_ndarray_rank3_accepted():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.f32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
-    assert tuple(a.shape) == (4, 2, 3)
+    assert tuple(a.shape) == (2, 3, 4)
+    assert tuple(a._physical_shape) == (4, 2, 3)
     assert a._qd_layout == (2, 0, 1)
 
 

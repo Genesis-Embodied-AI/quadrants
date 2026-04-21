@@ -22,9 +22,13 @@ BACKEND_IDS = ["field", "ndarray"]
 def _to_numpy_shape(canonical, layout, backend):
     """Shape of ``a.to_numpy()`` after a layout-tagged allocation.
 
-    FIELD's to_numpy() returns the canonical shape regardless of physical
-    storage; NDARRAY's to_numpy() currently returns the physical
-    (permuted) shape (this asymmetry is tracked separately).
+    FIELD's ``to_numpy()`` returns the canonical shape regardless of
+    physical storage; NDARRAY's ``to_numpy()`` returns the physical
+    (permuted) view (the explicit physical-view escape hatch).
+
+    Note: ``a.shape`` itself is canonical on both backends — this helper
+    is specifically for reading back from the numpy buffer, which is
+    where the FIELD/NDARRAY asymmetry lives.
     """
     if backend is qd.Backend.FIELD:
         return canonical
@@ -50,6 +54,9 @@ def test_layout_grad_canonical_kernel_roundtrip_rank2(backend):
     canonical = (4, 5)
     layout = (1, 0)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
+    # Canonical shape on both primal and grad regardless of backend or layout.
+    assert tuple(a.shape) == canonical
+    assert tuple(a.grad.shape) == canonical
 
     if backend is qd.Backend.FIELD:
 

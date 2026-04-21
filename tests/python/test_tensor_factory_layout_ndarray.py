@@ -6,11 +6,12 @@ longer need the internal ``_with_layout`` helper.
 
 Contract verified here:
 
-- ``shape`` is the **canonical** shape the user indexes inside kernels.
-- The underlying allocation is sized to the *physical* (permuted) shape.
-- ``ndarray.shape`` continues to report the physical shape (the
-  underlying ``Ndarray`` does not yet expose a separate canonical view —
-  this is documented in the user guide).
+- ``shape`` is the **canonical** shape the user indexes inside kernels;
+  ``Ndarray.shape`` inverts the layout permutation when ``_qd_layout``
+  is set so the user-facing contract is consistent across backends.
+- The underlying allocation is sized to the *physical* (permuted) shape;
+  ``to_numpy()`` is the explicit physical-view escape hatch and still
+  returns the physical shape.
 - The instance is auto-tagged with ``_qd_layout`` so kernel subscripts
   ``x[i, j, ...]`` are rewritten correctly.
 - ``order=`` is still rejected as a keyword.
@@ -61,16 +62,18 @@ def test_factory_rejects_order_kwarg():
 def test_factory_non_identity_layout_allocates_physical_and_tags():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(1, 0))
-    # Physical shape is (4, 3) — the canonical (3, 4) permuted.
-    assert tuple(a.shape) == (4, 3)
+    # Canonical shape is what the user passed; physical buffer is (4, 3).
+    assert tuple(a.shape) == (3, 4)
+    assert tuple(a._physical_shape) == (4, 3)
     assert a._qd_layout == (1, 0)
 
 
 def test_factory_non_identity_rank3_layout_allocates_physical_and_tags():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.i32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
-    # canonical (2, 3, 4), layout (2, 0, 1) => physical = (4, 2, 3)
-    assert tuple(a.shape) == (4, 2, 3)
+    # Canonical (2, 3, 4); physical buffer = (4, 2, 3) per layout (2, 0, 1).
+    assert tuple(a.shape) == (2, 3, 4)
+    assert tuple(a._physical_shape) == (4, 2, 3)
     assert a._qd_layout == (2, 0, 1)
 
 
@@ -93,9 +96,9 @@ def test_factory_validates_layout_is_permutation():
 
 @test_utils.test(arch=qd.cpu)
 def test_factory_layout_rank2_transpose_matches_direct_transpose():
-    """Same kernel + same canonical shape, two backends:
-    - direct (no layout) reports physical = canonical = (3, 4).
-    - factory-tagged (layout=(1, 0)) reports physical = (4, 3).
+    """Same kernel + same canonical shape, two ndarrays:
+    - direct (no layout): canonical == physical == (3, 4).
+    - factory-tagged (layout=(1, 0)): canonical == (3, 4), physical == (4, 3).
     Their numpy views must be transposes of each other.
     """
     M, N = 3, 4
@@ -138,8 +141,10 @@ def test_factory_layout_rank3_all_permutations(layout):
     canonical = (2, 3, 4)
     a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
 
+    # User-facing shape is canonical regardless of layout.
+    assert tuple(a.shape) == canonical
     physical = tuple(canonical[axis] for axis in layout)
-    assert tuple(a.shape) == physical
+    assert tuple(a._physical_shape) == physical
     # Identity layout collapses to no tag (matches the FIELD path).
     if layout == tuple(range(3)):
         assert getattr(a, "_qd_layout", None) is None
@@ -168,6 +173,8 @@ def test_factory_layout_rank3_all_permutations(layout):
 def test_factory_layout_augassign():
     M, N = 2, 3
     a = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY, layout=(1, 0))
+    # Sanity-check the canonical shape contract before exercising augassign.
+    assert tuple(a.shape) == (M, N)
 
     @qd.kernel
     def init(x: qd.types.ndarray()):
@@ -210,9 +217,13 @@ def test_factory_layout_needs_grad_inherits_layout():
             x[i, j] = float(i * 10 + j)
             x.grad[i, j] = float(i * 100 + j * 10)
 
+    # Canonical shape is (M, N) on both primal and grad; grad inherits
+    # the same _qd_layout tag.
+    assert tuple(a.shape) == tuple(a.grad.shape) == (M, N)
     fill(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
+    # to_numpy returns the physical view (the explicit escape hatch).
     assert primal.shape == grad.shape == (N, M)
     assert primal[2, 1] == 12.0
     assert grad[2, 1] == 120.0

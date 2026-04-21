@@ -38,13 +38,17 @@ class Ndarray:
 
     def __init__(self):
         self.host_accessor = None
-        self.shape = None
+        # `_physical_shape` is the underlying storage shape (matches the C++
+        # ndarray buffer). `shape` is exposed as a property: when a layout
+        # tag (`_qd_layout`) is present it returns the *canonical* shape the
+        # user indexes inside kernels; otherwise it returns the physical
+        # shape (which is the same thing).
+        self._physical_shape = None
         self.element_type = None
         self.dtype = None
         self.arr = None
         self.layout = Layout.AOS
         self.grad: "TensorNdarray | None" = None
-        # we register with runtime, in order to enable reset to work later
         impl.get_runtime().ndarrays.add(self)
 
     def __reduce__(self):
@@ -72,13 +76,38 @@ class Ndarray:
         self.arr = None
         self.grad = None
         self.host_accessor = None
-        self.shape = None
+        self._physical_shape = None
         self.element_type = None
         self.dtype = None
         self.layout = None
 
+    @property
+    def shape(self):
+        """Canonical shape the user sees and indexes inside kernels.
+
+        On a layout-tagged ndarray (``_qd_layout`` set), the underlying
+        buffer is allocated at the *physical* (permuted) shape; this
+        property inverts the layout permutation so callers see the
+        canonical shape they passed to ``qd.tensor(..., shape=)``.
+
+        On an untagged ndarray (no layout, or identity layout) physical
+        and canonical coincide and this returns the physical shape.
+
+        ``to_numpy()`` deliberately keeps returning the *physical* view —
+        it is the explicit physical-view escape hatch.
+        """
+        phys = self._physical_shape
+        layout = getattr(self, "_qd_layout", None)
+        if phys is None or layout is None:
+            return phys
+        n = len(phys)
+        inv = [0] * n
+        for src_axis, dst_axis in enumerate(layout):
+            inv[dst_axis] = src_axis
+        return tuple(phys[inv[i]] for i in range(n))
+
     def get_type(self):
-        return NdarrayTypeMetadata(self.element_type, self.shape, self.grad is not None)
+        return NdarrayTypeMetadata(self.element_type, self._physical_shape, self.grad is not None)
 
     @property
     def element_shape(self):
@@ -304,7 +333,7 @@ class ScalarNdarray(Ndarray):
             self.arr = impl.get_runtime().prog.create_ndarray(
                 self.dtype, arr_shape, layout=Layout.NULL, zero_fill=True, dbg_info=_qd_core.DebugInfo(get_traceback())
             )
-        self.shape = tuple(self.arr.shape)
+        self._physical_shape = tuple(self.arr.shape)
         self.element_type = dtype
 
     @property
@@ -330,7 +359,7 @@ class ScalarNdarray(Ndarray):
         self._ndarray_from_numpy(arr)
 
     def __deepcopy__(self, memo=None):
-        ret_arr = ScalarNdarray(self.dtype, self.shape)
+        ret_arr = ScalarNdarray(self.dtype, self._physical_shape)
         ret_arr.copy_from(self)
         return ret_arr
 

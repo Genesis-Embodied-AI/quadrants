@@ -27,9 +27,13 @@ def serialize(ndarray: Any) -> dict[str, Any]:
     dtype_name = _DTYPE_TO_NAME.get(ndarray.dtype)
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
+    # Use the physical shape so it matches the physical layout of
+    # `to_numpy()`. Layout tags are intentionally dropped on pickle (a
+    # separate `_qd_layout` round-trip is tracked as a follow-up); the
+    # restored ndarray is always layout-free.
     return {
         "version": _PICKLE_VERSION,
-        "shape": ndarray.shape,
+        "shape": ndarray._physical_shape,  # pylint: disable=protected-access
         "element_type": dtype_name,
         "element_shape": ndarray.element_shape,
         "data": ndarray.to_numpy(),
