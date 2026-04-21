@@ -72,8 +72,8 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, **kwargs):
         ValueError: If ``backend`` is not a valid :class:`Backend` member.
     """
     backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel  # late import to break circular dependency
-    from quadrants.lang import impl
+    # late import to break circular dependency
+    from quadrants.lang import impl  # pylint: disable=import-outside-toplevel
 
     if backend is Backend.FIELD:
         return impl.field(dtype, shape, **kwargs)
@@ -107,8 +107,8 @@ def tensor_vec(n, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> u = qd.tensor_vec(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel  # late import
-    from quadrants.lang.matrix import Vector
+    # late import
+    from quadrants.lang.matrix import Vector  # pylint: disable=import-outside-toplevel
 
     if backend is Backend.FIELD:
         return Vector.field(n, dtype, shape, **kwargs)
@@ -143,8 +143,8 @@ def tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
         >>> b = qd.tensor_mat(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
     """
     backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel  # late import
-    from quadrants.lang.matrix import Matrix
+    # late import
+    from quadrants.lang.matrix import Matrix  # pylint: disable=import-outside-toplevel
 
     if backend is Backend.FIELD:
         return Matrix.field(n, m, dtype, shape, **kwargs)
@@ -184,12 +184,10 @@ def tensor_annotation(backend):
         helper just hides the conditional behind one call.
     """
     backend = _coerce_backend(backend)
-    # pylint: disable=import-outside-toplevel  # late imports
-    from quadrants import types as _types
-    from quadrants.types.annotations import template
+    from quadrants import types as _types  # pylint: disable=import-outside-toplevel
 
     if backend is Backend.FIELD:
-        return template()
+        return _types.template()
     if backend is Backend.NDARRAY:
         return _types.ndarray()
     raise AssertionError(f"unhandled Backend member: {backend!r}")
