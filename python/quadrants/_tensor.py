@@ -1,7 +1,8 @@
-"""Tensors: per-tensor backend and (later) layout.
+"""Tensors: per-tensor backend and layout.
 
 This module is the user-facing entry point for selecting a tensor backend
-(``qd.field`` vs ``qd.ndarray``) on a per-tensor basis.
+(``qd.field`` vs ``qd.ndarray``) and an optional physical memory layout
+on a per-tensor basis.
 
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 """
@@ -67,6 +68,38 @@ def _coerce_backend(backend):
         raise ValueError(f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}") from e
 
 
+# Kwargs explicitly accepted by the unified tensor factories (in addition
+# to the positional ``dtype`` / ``shape`` / ``n`` / ``m``). The factories
+# hard-validate against these sets so typos and backend-specific options
+# don't silently work on one backend and raise cryptic errors deep in the
+# other. Users who need backend-specific knobs (e.g. ``offset=`` for field
+# offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` /
+# ``qd.ndarray`` directly — they have explicitly opted out of the unified
+# tensor API.
+#
+# ``layout=`` is on the scalar ``qd.tensor`` factory only; the
+# Vector/Matrix factories reject it because layout semantics over an
+# extra element axis are out of scope for now.
+_SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
+_VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
+
+
+def _validate_kwargs(kwargs, *, factory_name, accepted):
+    # Special-case ``order=``: it's the most likely typo for users coming
+    # from ``qd.field``, so give them a directly actionable hint.
+    if "order" in kwargs:
+        raise TypeError(
+            f"{factory_name}(...) does not accept order=; pass layout=(...) instead"
+        )
+    extra = set(kwargs) - accepted
+    if extra:
+        accepted_str = ", ".join(sorted(accepted | {"dtype", "shape"}))
+        raise TypeError(
+            f"{factory_name}() got unexpected keyword argument(s) "
+            f"{sorted(extra)!r}; accepted: {accepted_str}"
+        )
+
+
 def _layout_to_order(layout, ndim):
     """Validate ``layout`` and translate it to the ``order=`` string accepted
     by :func:`quadrants.field`.
@@ -91,7 +124,7 @@ def _layout_to_order(layout, ndim):
     return "".join(chr(ord("i") + axis) for axis in layout)
 
 
-def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
+def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
     """Allocate a tensor on the chosen backend, optionally with a custom
     physical layout.
 
@@ -103,7 +136,7 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
             type from ``qd.types``).
         shape: Shape of the tensor as an ``int`` or tuple of ``int``.
         backend (Backend, optional): Storage backend. Defaults to
-            :attr:`Backend.FIELD`.
+            :attr:`Backend.NDARRAY`.
         layout (tuple of int, optional): Permutation of canonical axes
             describing the physical memory nesting order, outermost first.
             For a rank-N tensor, must be a permutation of ``range(N)``.
@@ -114,10 +147,8 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
             (the shape you index inside kernels). The underlying
             allocation is automatically sized to the permuted *physical*
             shape, and kernel subscripts ``x[i, j, ...]`` are rewritten
-            to hit the right physical slot.
-        **kwargs: Forwarded verbatim to the underlying ``qd.field`` or
-            ``qd.ndarray`` call. Cannot include ``order=`` — use ``layout=``
-            instead.
+            to hit the right physical slot. Supported on both
+            ``Backend.FIELD`` and ``Backend.NDARRAY``.
 
     Returns:
         A ``ScalarField`` when ``backend == Backend.FIELD``, or an
@@ -138,31 +169,32 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
     Raises:
         ValueError: If ``backend`` is not a valid :class:`Backend` member,
             or if ``layout`` is not a permutation of ``range(len(shape))``.
+        TypeError: If any keyword argument outside the accepted set is
+            passed (see ``_SCALAR_ACCEPTED_KWARGS``).
     """
+    _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
+    forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
     from quadrants.lang import impl
-
-    if "order" in kwargs:
-        raise TypeError("qd.tensor(...) does not accept order=; pass layout=(...) instead")
 
     shape_t = (shape,) if isinstance(shape, int) else tuple(shape)
     order = _layout_to_order(layout, len(shape_t)) if layout is not None else None
 
     if backend is Backend.FIELD:
         if order is not None:
-            kwargs["order"] = order
-        return impl.field(dtype, shape, **kwargs)
+            forwarded["order"] = order
+        return impl.field(dtype, shape, **forwarded)
     if backend is Backend.NDARRAY:
         if order is None:
-            return impl.ndarray(dtype, shape, **kwargs)
+            return impl.ndarray(dtype, shape, **forwarded)
         # Non-identity layout: allocate at the physical (permuted) shape
         # and tag the result so the kernel-side subscript rewrite picks
         # up the canonical -> physical translation.
         assert layout is not None  # implied by `order is not None`
         layout_t = tuple(layout)
         physical_shape = tuple(shape_t[axis] for axis in layout_t)
-        arr = impl.ndarray(dtype, physical_shape, **kwargs)
+        arr = impl.ndarray(dtype, physical_shape, **forwarded)
         _with_layout(arr, layout_t)
         # If the primal was allocated with needs_grad=True, impl.ndarray has
         # already allocated a same-shape companion grad ndarray and wired it
@@ -177,39 +209,47 @@ def tensor(dtype, shape, *, backend=Backend.FIELD, layout=None, **kwargs):
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_vec(n, dtype, shape, *, backend=Backend.FIELD, **kwargs):
+def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
     Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected
     by the ``backend=`` keyword. Not part of the public API — call
-    ``qd.Vector.tensor(...)`` instead.
+    ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against
+    ``_VEC_MAT_ACCEPTED_KWARGS`` (no ``layout=`` — layout semantics over
+    an extra element axis are out of scope for now).
     """
+    _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
+    forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
     from quadrants.lang.matrix import Vector
 
     if backend is Backend.FIELD:
-        return Vector.field(n, dtype, shape, **kwargs)
+        return Vector.field(n, dtype, shape, **forwarded)
     if backend is Backend.NDARRAY:
-        return Vector.ndarray(n, dtype, shape, **kwargs)
+        return Vector.ndarray(n, dtype, shape, **forwarded)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
-def _tensor_mat(n, m, dtype, shape, *, backend=Backend.FIELD, **kwargs):
+def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
     Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected
     by the ``backend=`` keyword. Not part of the public API — call
-    ``qd.Matrix.tensor(...)`` instead.
+    ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against
+    ``_VEC_MAT_ACCEPTED_KWARGS`` (no ``layout=`` — layout semantics over
+    an extra element axis are out of scope for now).
     """
+    _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
+    forwarded = {k: v for k, v in kwargs.items() if k != "backend"}
     # pylint: disable-next=import-outside-toplevel  # late import to break circular dependency
     from quadrants.lang.matrix import Matrix
 
     if backend is Backend.FIELD:
-        return Matrix.field(n, m, dtype, shape, **kwargs)
+        return Matrix.field(n, m, dtype, shape, **forwarded)
     if backend is Backend.NDARRAY:
-        return Matrix.ndarray(n, m, dtype, shape, **kwargs)
+        return Matrix.ndarray(n, m, dtype, shape, **forwarded)
     raise AssertionError(f"unhandled Backend member: {backend!r}")
 
 
