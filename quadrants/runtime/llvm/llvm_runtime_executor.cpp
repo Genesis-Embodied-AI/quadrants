@@ -194,10 +194,6 @@ void LlvmRuntimeExecutor::synchronize() {
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-    // A better way
-    // use `hipFreeAsync` to free the device kernel arg mem
-    // notice: rocm version
-    AMDGPUContext::get_instance().free_kernel_arg_pointer();
 #else
     QD_ERROR("No AMDGPU support");
 #endif

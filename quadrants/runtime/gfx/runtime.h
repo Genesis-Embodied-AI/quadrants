@@ -143,6 +143,20 @@ class QD_DLL_EXPORT GfxRuntime {
   // FIXME: Support proper multiple lists
   std::unique_ptr<DeviceAllocationGuard> listgen_buffer_;
 
+  // Deferred-free buffers associated with queued-but-not-yet-completed cmdlists. `flush()` leaves this
+  // untouched after submit (any buffer here may still be referenced by an in-flight command); only
+  // `synchronize()` clears it, after `wait_idle()` drains the stream. Across repeated `flush()` calls without
+  // an intervening sync this can accumulate in principle - one batch per flush - but every workload in
+  // Quadrants touches a Python-side observable (result fetch, `to_numpy()`, field readback, etc.) between
+  // kernel launches and those paths trigger an implicit `synchronize()` that drains the queue.
+  //
+  // A bounded-FIFO / semaphore-keyed retirement scheme was considered (see the `is_signaled()` discussion in
+  // the closed PR #538) and rejected as net-negative: the FIFO variant trades a theoretical growth path for
+  // a real, measurable blocking stall every N flushes, at an arbitrary threshold. The non-blocking polling
+  // variant is the one worth doing, but only if a real workload motivates it - that requires
+  // `bool is_signaled() const` on `StreamSemaphoreObject` and per-backend implementations (`vkGetFenceStatus`
+  // on Vulkan, `MTLSharedEvent` on Metal, trivial on CPU), an RHI public-surface change that should stand
+  // alone when it lands.
   std::vector<std::unique_ptr<DeviceAllocationGuard>> ctx_buffers_;
 
   // Single u32 SSBO written by kernels that overflow an adstack. Allocated lazily on the first launch that binds
