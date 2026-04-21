@@ -975,7 +975,7 @@ class Matrix(QuadrantsOperations):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, m, dtype, shape):
+    def ndarray(cls, n, m, dtype, shape, needs_grad=False):
         """Defines a Quadrants ndarray with matrix elements.
         This function must be called in Python scope, and after `qd.init` is called.
 
@@ -984,6 +984,11 @@ class Matrix(QuadrantsOperations):
             m (int): Number of columns of the matrix.
             dtype (DataType): Data type of each value.
             shape (Union[int, tuple[int]]): Shape of the ndarray.
+            needs_grad (bool, optional): If True, allocate a companion grad
+                ndarray of the same shape and dtype, accessible via
+                ``arr.grad``. Requires ``dtype`` to be a real (floating-point)
+                type. Defaults to False. Silently ignored on the python
+                backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example::
 
@@ -1001,7 +1006,15 @@ class Matrix(QuadrantsOperations):
             batch_ndim = len(shape)
             shape = (*shape, m, n)
             return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
-        return MatrixNdarray(n, m, dtype, shape)
+        arr = MatrixNdarray(n, m, dtype, shape)
+        if needs_grad:
+            dt = cook_dtype(dtype)
+            if not qd_python_core.is_real(dt):
+                raise QuadrantsRuntimeError(
+                    f"{dtype} is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."
+                )
+            arr._set_grad(cls.ndarray(n, m, dtype, shape, needs_grad=False))
+        return arr
 
     @staticmethod
     def rows(rows):
@@ -1158,13 +1171,18 @@ class Vector(Matrix):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, dtype, shape):
+    def ndarray(cls, n, dtype, shape, needs_grad=False):
         """Defines a Quadrants ndarray with vector elements.
 
         Args:
             n (int): Size of the vector.
             dtype (DataType): Data type of each value.
             shape (Union[int, tuple[int]]): Shape of the ndarray.
+            needs_grad (bool, optional): If True, allocate a companion grad
+                ndarray of the same shape and dtype, accessible via
+                ``arr.grad``. Requires ``dtype`` to be a real (floating-point)
+                type. Defaults to False. Silently ignored on the python
+                backend (matches the scalar ``qd.ndarray`` behaviour).
 
         Example:
             The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
@@ -1180,7 +1198,15 @@ class Vector(Matrix):
             batch_ndim = len(shape)
             shape = (*shape, n)
             return py_tensor.create_tensor(shape, dtype_to_torch_dtype(dtype), batch_ndim=batch_ndim)
-        return VectorNdarray(n, dtype, shape)
+        arr = VectorNdarray(n, dtype, shape)
+        if needs_grad:
+            dt = cook_dtype(dtype)
+            if not qd_python_core.is_real(dt):
+                raise QuadrantsRuntimeError(
+                    f"{dtype} is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."
+                )
+            arr._set_grad(cls.ndarray(n, dtype, shape, needs_grad=False))
+        return arr
 
 
 class MatrixField(Field):

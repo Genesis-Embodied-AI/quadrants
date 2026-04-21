@@ -1,8 +1,10 @@
 """Tests for ``needs_grad=True`` on the tensor factories.
 
-The factories already pass ``needs_grad`` through to ``qd.field`` /
-``qd.ndarray`` via ``**kwargs`` (PRs 2-3); this PR adds explicit coverage
-to lock that behaviour as part of the public contract.
+The factories pass ``needs_grad`` through to ``qd.field`` / ``qd.ndarray``
+via ``**kwargs``; ``qd.Vector.ndarray`` / ``qd.Matrix.ndarray`` accept
+``needs_grad`` and allocate a companion grad ndarray of matching shape and
+element type (real-only). These tests lock that behaviour as part of the
+public contract on every (factory, backend) combination.
 """
 
 import quadrants as qd
@@ -79,7 +81,84 @@ def test_tensor_mat_field_needs_grad():
     assert m.grad.shape == m.shape
 
 
-# Note: qd.Vector.ndarray and qd.Matrix.ndarray do not currently accept
-# needs_grad=True (see quadrants/lang/matrix.py). qd.tensor_vec/_mat with
-# backend=NDARRAY inherits that limitation. The scalar ndarray backend
-# (qd.tensor + Backend.NDARRAY) does support needs_grad — covered above.
+@test_utils.test(arch=qd.cpu)
+def test_tensor_vec_ndarray_needs_grad_allocates_grad():
+    v = qd.tensor_vec(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    assert v.grad is not None
+    assert tuple(v.grad.shape) == tuple(v.shape)
+    assert v.grad.element_shape == v.element_shape
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_mat_ndarray_needs_grad_allocates_grad():
+    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    assert m.grad is not None
+    assert tuple(m.grad.shape) == tuple(m.shape)
+    assert m.grad.element_shape == m.element_shape
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_vec_ndarray_grad_kernel_roundtrip():
+    v = qd.tensor_vec(3, qd.f32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+
+    @qd.kernel
+    def write_primal(x: qd.types.ndarray()):
+        for i in range(2):
+            for j in qd.static(range(3)):
+                x[i][j] = i * 10.0 + j
+
+    @qd.kernel
+    def write_grad(x: qd.types.ndarray()):
+        for i in range(2):
+            for j in qd.static(range(3)):
+                x.grad[i][j] = i * 100.0 + j * 10.0
+
+    write_primal(v)
+    write_grad(v)
+    primal = v.to_numpy()
+    grad = v.grad.to_numpy()
+    assert primal[0, 0] == 0.0 and primal[1, 2] == 12.0
+    assert grad[0, 0] == 0.0 and grad[1, 2] == 120.0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_mat_ndarray_grad_kernel_roundtrip():
+    m = qd.tensor_mat(2, 2, qd.f32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
+
+    @qd.kernel
+    def write_primal(x: qd.types.ndarray()):
+        for i in range(3):
+            for r in qd.static(range(2)):
+                for c in qd.static(range(2)):
+                    x[i][r, c] = i * 10.0 + r * 2.0 + c
+
+    @qd.kernel
+    def write_grad(x: qd.types.ndarray()):
+        for i in range(3):
+            for r in qd.static(range(2)):
+                for c in qd.static(range(2)):
+                    x.grad[i][r, c] = i * 100.0 + r * 20.0 + c * 10.0
+
+    write_primal(m)
+    write_grad(m)
+    primal = m.to_numpy()
+    grad = m.grad.to_numpy()
+    assert primal[2, 1, 1] == 23.0
+    assert grad[2, 1, 1] == 230.0
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_vec_ndarray_needs_grad_rejects_int_dtype():
+    """needs_grad=True requires a real (floating-point) element dtype."""
+    import pytest
+
+    with pytest.raises(qd.QuadrantsRuntimeError, match="needs_grad"):
+        qd.tensor_vec(3, qd.i32, shape=(2,), backend=qd.Backend.NDARRAY, needs_grad=True)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_mat_ndarray_needs_grad_rejects_int_dtype():
+    import pytest
+
+    with pytest.raises(qd.QuadrantsRuntimeError, match="needs_grad"):
+        qd.tensor_mat(2, 2, qd.i32, shape=(3,), backend=qd.Backend.NDARRAY, needs_grad=True)
