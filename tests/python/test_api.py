@@ -47,6 +47,7 @@ def _get_expected_matrix_apis():
         "unit",
         "zero",
         "get_shape",
+        "tensor",
     ]
     res = base + _get_matrix_swizzle_apis()
     return sorted(res)

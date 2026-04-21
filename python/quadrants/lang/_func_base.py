@@ -14,7 +14,7 @@ from dataclasses import (
 
 # Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type
+from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Type, cast
 
 import numpy as np
 
@@ -458,9 +458,13 @@ class FuncBase:
         # value, then fall through to the existing dispatch logic.
         if needed_arg_basetype is _TensorTAnnotation:
             if isinstance(v, Ndarray):
-                needed_arg_type = _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION
+                needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
+                # Re-widen v to avoid pyright narrowing it to Ndarray for the
+                # remainder of the function (the dispatch logic below treats
+                # v as Any and inspects attributes that don't exist on Ndarray).
+                v = cast(Any, v)
             else:
                 # Field/SNode/scalar template: launch path is a no-op
                 # (templates don't set kernel args).
