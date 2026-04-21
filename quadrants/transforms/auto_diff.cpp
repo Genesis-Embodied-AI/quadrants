@@ -1720,6 +1720,19 @@ class MakeAdjoint : public ADTransform {
     // the codegen step then fails with "Adaptive autodiff stack's size should have been determined".
     Stmt *reverse_cond = if_stmt->cond;
     AdStackAllocaStmt *snap_stack_ptr = nullptr;
+    // Narrow guard: only the bare `AdStackLoadTopStmt` shape needs the explicit snapshot below. A
+    // compound cond (e.g. `BinaryOp(cmp_lt, AdStackLoadTopStmt(x_stack), threshold)` from `if x <
+    // threshold` when `x` has been promoted to an adstack by `ReplaceLocalVarWithStacks`) is
+    // already handled correctly by `BackupSSA::generic_visit`'s else-branch (`load(op)` path at
+    // the end of that function): it spills the forward-time value of the whole cond stmt -
+    // including the embedded `AdStackLoadTopStmt` read - into a dedicated alloca via a
+    // `LocalStoreStmt` emitted immediately after the forward cond, then the reverse IfStmt's
+    // operand becomes a `LocalLoadStmt` of that alloca. That captures the forward-time cond
+    // exactly. The bare-`AdStackLoadTopStmt` case is special because `generic_visit` takes a
+    // different branch for that shape (clone-branch): it emits a fresh `AdStackLoadTopStmt` at
+    // reverse time, which re-reads the stack top AFTER the body's pushes and therefore sees the
+    // wrong cond value. The snap-stack below is the dedicated fix for that single shape - no
+    // recursive walk needed for compound conds because the spill branch already covers them.
     if (if_stmt->cond->is<AdStackLoadTopStmt>()) {
       auto *cond_stack = if_stmt->cond->as<AdStackLoadTopStmt>()->stack->as<AdStackAllocaStmt>();
       if (body_pushes_to_stack(if_stmt, cond_stack)) {
