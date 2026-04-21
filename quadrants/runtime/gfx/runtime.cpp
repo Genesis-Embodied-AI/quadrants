@@ -734,6 +734,9 @@ void GfxRuntime::synchronize() {
       profiler_->insert_record(record.first, record.second);
     }
   }
+  // `wait_idle()` above guarantees every cmdlist that ever referenced a buffer in `pending_retirements_` or
+  // `ctx_buffers_` has completed on the GPU, so both can be dropped here unconditionally.
+  pending_retirements_.clear();
   ctx_buffers_.clear();
   ndarrays_in_use_.clear();
   // Async adstack-overflow report: every launch in this sync window that overflowed wrote a non-zero sentinel into
@@ -763,10 +766,24 @@ StreamSemaphore GfxRuntime::flush() {
   if (current_cmdlist_) {
     sema = device_->get_compute_stream()->submit(current_cmdlist_.get());
     current_cmdlist_ = nullptr;
-    // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has
-    // finished executing. The deferred-free buffers in ctx_buffers_ (e.g. the old adstack heap buffer left over
-    // after a grow-on-demand resize) may still be referenced by commands in flight. Only `synchronize()` clears
-    // the vector, after `wait_idle()` has drained the stream.
+    // Pair the just-queued semaphore with the current batch of deferred-free buffers and push onto the
+    // retirement FIFO. `ctx_buffers_` is then ready to accept the next submission's deferred-frees.
+    //
+    // Bound the FIFO at `kPendingRetirementsDepth` entries: when the queue is full we block on the oldest
+    // entry's semaphore, drain it, and pop it before pushing the new one. The wait is almost always a no-op
+    // in steady state (the oldest submission has long since completed by the time `kPendingRetirementsDepth`
+    // more flushes have piled on top of it), but it's a hard upper bound on how much deferred-free memory
+    // can be queued up in async workloads that never call `synchronize()` - which is precisely the path that
+    // allowed unbounded growth before this PR. See the field-level comment on `pending_retirements_` for the
+    // Ideal non-blocking variant and why it is deferred to follow-up work.
+    if (pending_retirements_.size() >= kPendingRetirementsDepth) {
+      device_->get_compute_stream()->command_sync();
+      pending_retirements_.clear();
+    }
+    if (!ctx_buffers_.empty()) {
+      pending_retirements_.emplace_back(sema, std::move(ctx_buffers_));
+      ctx_buffers_.clear();
+    }
   } else {
     auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);

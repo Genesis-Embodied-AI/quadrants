@@ -1,8 +1,10 @@
 #pragma once
 #include "quadrants/util/lang_util.h"
 
+#include <deque>
 #include <vector>
 #include <chrono>
+#include <utility>
 
 #include "quadrants/rhi/device.h"
 #include "quadrants/codegen/spirv/snode_struct_compiler.h"
@@ -144,6 +146,23 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<DeviceAllocationGuard> listgen_buffer_;
 
   std::vector<std::unique_ptr<DeviceAllocationGuard>> ctx_buffers_;
+
+  // Bounded FIFO of (submission semaphore, deferred-free buffers) pairs built up across `flush()` calls without
+  // an intervening `synchronize()`. Each `flush()` snapshots the current `ctx_buffers_` and pairs it with the
+  // semaphore returned by the submit, then enqueues the pair here and resets `ctx_buffers_` for the next
+  // submission batch. On the `kPendingRetirementsDepth + 1`-th flush without a sync, the oldest pair is drained
+  // via `wait_semaphore()` before the new one is pushed — the FIFO depth acts as a hard cap on how many queued
+  // batches may be live at once, so async workloads that call `flush()` repeatedly without `synchronize()`
+  // cannot grow unbounded.
+  //
+  // This is the bounded-wait approximation of the Ideal semaphore-keyed retirement pattern (non-blocking poll of
+  // each semaphore's signaled status). The truly non-blocking variant requires a `bool is_signaled() const` op on
+  // `StreamSemaphoreObject` implemented per RHI backend (`vkGetFenceStatus` on Vulkan, `MTLSharedEvent` on Metal,
+  // trivial on CPU); adding it is an RHI public-surface change that is left as follow-up. The current FIFO-depth
+  // bound is correct (never reclaims an in-flight allocation, never grows unbounded) and the occasional
+  // wait at the oldest entry is almost always a no-op in steady state.
+  static constexpr std::size_t kPendingRetirementsDepth = 3;
+  std::deque<std::pair<StreamSemaphore, std::vector<std::unique_ptr<DeviceAllocationGuard>>>> pending_retirements_;
 
   // Single u32 SSBO written by kernels that overflow an adstack. Allocated lazily on the first launch that binds
   // BufferType::AdStackOverflow and then reused across launches; synchronize() reads it, raises if non-zero, and
