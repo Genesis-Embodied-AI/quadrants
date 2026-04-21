@@ -224,7 +224,6 @@ user_api[qd] = [
     "tanh",
     "template",
     "tensor",
-    "tensor_annotation",
     "tools",
     "types",
     "u1",
