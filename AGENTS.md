@@ -8,7 +8,7 @@ In order to reduce the risk of changes, changes should minimize the "contact are
 
 - Ideally, a new feature should be added in new files as much as possible, and modifications to existing code kept to a minimum.
 - When there is a choice of two ways to implement a new feature, and one is more integrated and one is more partitioned, choose the more partitioned one — the one with the minimum contact area with existing code.
-- When existing code must be touched, keep the diff small, localized, and reversible.
+- When existing code must be touched, keep the diff small and localized.
 
 Code-review agents: flag PRs that unnecessarily expand the contact area with existing code when a more partitioned alternative is feasible.
 
