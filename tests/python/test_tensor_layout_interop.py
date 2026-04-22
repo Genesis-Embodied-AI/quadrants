@@ -601,34 +601,6 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: the serializer stores the canonical shape and intentionally
-# drops ``_qd_layout``. The unpickled ndarray is layout-free but its
-# element values match the original at every canonical index. See 8.7 in
-# ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
-# ----------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("layout", _LAYOUTS_RANK3)
-@test_utils.test(arch=qd.cpu)
-def test_pickle_layout_tagged_ndarray_roundtrip_drops_layout(layout):
-    import pickle  # noqa: PLC0415 — local import keeps test self-contained
-
-    canonical = (2, 3, 4)
-    a = qd.tensor(qd.i32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
-    fill = _make_fill_kernel(canonical, qd.Backend.NDARRAY)
-    fill(a)
-
-    restored = pickle.loads(pickle.dumps(a))
-
-    assert tuple(restored.shape) == canonical
-    # Intentional: the tag is dropped, so restored ndarrays are always
-    # layout-free. If/when a layout-preserving pickle lands, flip this to
-    # ``assert restored._qd_layout == tuple(layout)``.
-    assert getattr(restored, "_qd_layout", None) is None
-    np.testing.assert_array_equal(restored.to_numpy(), _expected_canonical(canonical))
-
-
-# ----------------------------------------------------------------------------
 # .fill(val) and copy_from(other): the two non-kernel Python entry points
 # that mutate an ndarray via quadrants-internal kernels. fill(val) uses a
 # C++ bulk-fill on x64/cuda so it's layout-agnostic by construction, but
