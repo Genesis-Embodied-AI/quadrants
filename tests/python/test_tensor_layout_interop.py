@@ -60,7 +60,13 @@ def _expected_canonical(shape):
 
 def _make_fill_kernel(shape, backend):
     """Build a kernel that fills its argument with the same canonical
-    values as :func:`_expected_canonical`."""
+    values as :func:`_expected_canonical`.
+
+    Iterates the canonical index space via ``qd.grouped(qd.ndrange(*shape))``
+    rather than ``qd.grouped(x)``: on a layout-tagged ndarray ``grouped(x)``
+    yields physical indices, which would interact with the canonical→physical
+    AST rewrite on ``x[I]`` and produce a double-permutation.
+    """
     coeffs = []
     rolling = 1
     for dim in reversed(shape):
@@ -72,7 +78,7 @@ def _make_fill_kernel(shape, backend):
 
         @qd.kernel
         def fill(x: qd.template()):
-            for I in qd.grouped(x):
+            for I in qd.grouped(qd.ndrange(*shape)):
                 acc = 0
                 for d in qd.static(range(len(shape))):
                     acc += I[d] * coeffs[d]
@@ -82,7 +88,7 @@ def _make_fill_kernel(shape, backend):
 
         @qd.kernel
         def fill(x: qd.types.ndarray()):
-            for I in qd.grouped(x):
+            for I in qd.grouped(qd.ndrange(*shape)):
                 acc = 0
                 for d in qd.static(range(len(shape))):
                     acc += I[d] * coeffs[d]
