@@ -9,6 +9,7 @@
 #include "llvm/Transforms/Scalar/EarlyCSE.h"
 #include "llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <fstream>
 #include <cstdlib>
@@ -47,6 +48,13 @@ JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M,
 
 std::string JITSessionAMDGPU::compile_module_to_hsaco(
     std::unique_ptr<llvm::Module> &llvm_module) {
+  static std::once_flag amdgpu_cl_flags;
+  std::call_once(amdgpu_cl_flags, [] {
+    const char *args[] = {"quadrants",
+                          "-force-vector-interleave=8"};
+    llvm::cl::ParseCommandLineOptions(2, args);
+  });
+
   llvm::legacy::FunctionPassManager function_pass_manager_addrcast(
       llvm_module.get());
   function_pass_manager_addrcast.add(
