@@ -57,13 +57,15 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
   function_pass_manager_addrcast.doFinalization();
 
   for (auto &F : *llvm_module) {
-    // Match CUDA parity: jit_cuda.cpp:332-335 unconditionally applies
-    // unsafe-fp-math to ALL functions via hardcoded kFTZDenorms=1.
-    // Enables FMA contraction, reciprocal for division, and operation
-    // reordering. Applied to all functions (not just kernels) because
-    // internal body functions contain the actual FP compute.
+    // Apply FP and AMDGPU attributes to ALL functions (not just kernels)
+    // so that runtime functions have compatible attributes with kernels.
+    // Attribute mismatches between caller and callee prevent LLVM's inliner
+    // from inlining runtime functions into kernels, which blocks
+    // InferAddressSpaces from promoting flat pointers to global.
     F.addFnAttr("unsafe-fp-math", "true");
     F.addFnAttr("no-signed-zeros-fp-math", "true");
+    F.addFnAttr("amdgpu-ieee", "false");
+    F.addFnAttr("amdgpu-dx10-clamp", "false");
 
     if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
       const std::string kernel_name = F.getName().str();
@@ -83,8 +85,6 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(
         F.addFnAttr("amdgpu-waves-per-eu", "1,2");
       }
       F.addFnAttr("uniform-work-group-size", "true");
-      F.addFnAttr("amdgpu-ieee", "false");
-      F.addFnAttr("amdgpu-dx10-clamp", "false");
     }
   }
 
