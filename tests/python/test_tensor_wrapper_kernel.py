@@ -1,9 +1,9 @@
-"""Kernel-side tests for the opt-in ``qd._Tensor`` wrapper (stork-17 POC).
+"""Kernel-side tests for the ``qd.Tensor`` wrapper.
 
-Pins two contracts that the upcoming full migration depends on:
+Pins two contracts:
 
 1. **Cache stability under wrapping.** Calling the same kernel with a
-   ``_Tensor(impl)`` wrapper and with the bare ``impl`` must produce
+   ``Tensor(impl)`` wrapper and with the bare ``impl`` must produce
    exactly *one* compiled-kernel cache entry, not two. This is gotcha A
    from the design doc (§8.11): the unwrap hook must run *before*
    ``TemplateMapper.lookup`` computes ``id``-based hashes.
@@ -11,6 +11,10 @@ Pins two contracts that the upcoming full migration depends on:
 2. **Functional equivalence.** A kernel called with a wrapper must read
    and write the same memory as the same kernel called with the bare
    impl, on both backends. No data corruption, no shape confusion.
+
+Stork-19 flipped ``qd.tensor()`` to return wrappers, so to construct a
+*bare* impl for these tests we drop down to ``qd.field`` / ``qd.ndarray``
+directly. Wrapping then goes through ``qd.Tensor(impl)``.
 """
 
 import pytest
@@ -21,6 +25,12 @@ from tests import test_utils
 
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
+
+
+def _alloc_bare(backend, dtype, shape):
+    if backend is qd.Backend.FIELD:
+        return qd.field(dtype, shape)
+    return qd.ndarray(dtype, shape)
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -35,8 +45,8 @@ def test_kernel_accepts_wrapper_and_writes_correctly(backend):
         for i in range(4):
             x[i] = i + 1
 
-    a = qd.tensor(qd.i32, shape=(4,), backend=backend)
-    fill(qd._Tensor(a))
+    a = _alloc_bare(backend, qd.i32, (4,))
+    fill(qd.Tensor(a))
 
     expected = [1, 2, 3, 4]
     assert list(a.to_numpy()) == expected
@@ -45,7 +55,7 @@ def test_kernel_accepts_wrapper_and_writes_correctly(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_kernel_cache_no_fragmentation_under_wrapping(backend):
-    """Calling with bare impl and with ``_Tensor(impl)`` must hit the same
+    """Calling with bare impl and with ``Tensor(impl)`` must hit the same
     cache entry: gotcha A regression test.
     """
 
@@ -56,7 +66,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
         for i in range(2):
             x[i] = x[i] + 0
 
-    a = qd.tensor(qd.i32, shape=(2,), backend=backend)
+    a = _alloc_bare(backend, qd.i32, (2,))
     # ``noop`` is a ``QuadrantsCallable``; the actual ``Kernel`` (which
     # owns the JIT cache) lives at ``._primal``.
     cache = noop._primal.materialized_kernels
@@ -64,7 +74,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
     noop(a)
     n_after_bare = len(cache)
 
-    noop(qd._Tensor(a))
+    noop(qd.Tensor(a))
     n_after_wrapped = len(cache)
 
     assert n_after_wrapped == n_after_bare, (
@@ -75,7 +85,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
     )
 
     # And a fresh wrapper around the same impl must also hit the same entry.
-    noop(qd._Tensor(a))
+    noop(qd.Tensor(a))
     assert len(cache) == n_after_bare
 
 
@@ -93,8 +103,8 @@ def test_kernel_wrapper_round_trips_through_to_numpy(backend):
         for i, j in qd.ndrange(3, 4):
             x[i, j] = i * 10 + j
 
-    a = qd.tensor(qd.i32, shape=(3, 4), backend=backend)
-    t = qd._Tensor(a)
+    a = _alloc_bare(backend, qd.i32, (3, 4))
+    t = qd.Tensor(a)
     fill(t)
 
     arr = t._impl.to_numpy()

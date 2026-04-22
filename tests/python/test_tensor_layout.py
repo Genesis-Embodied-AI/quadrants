@@ -172,16 +172,20 @@ def test_layout_nonidentity_ndarray_accepted():
     a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(1, 0))
     # Canonical shape regardless of layout; physical buffer is permuted.
     assert tuple(a.shape) == (4, 5)
-    assert tuple(a._physical_shape) == (5, 4)
-    assert a._qd_layout == (1, 0)
+    assert a.layout == (1, 0)
+    impl = a._unwrap()
+    assert tuple(impl._physical_shape) == (5, 4)
+    assert impl._qd_layout == (1, 0)
 
 
 def test_layout_nonidentity_ndarray_rank3_accepted():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.f32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
     assert tuple(a.shape) == (2, 3, 4)
-    assert tuple(a._physical_shape) == (4, 2, 3)
-    assert a._qd_layout == (2, 0, 1)
+    assert a.layout == (2, 0, 1)
+    impl = a._unwrap()
+    assert tuple(impl._physical_shape) == (4, 2, 3)
+    assert impl._qd_layout == (2, 0, 1)
 
 
 # ----------------------------------------------------------------------------

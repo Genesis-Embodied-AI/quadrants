@@ -596,9 +596,10 @@ def test_genesis_shaped_dofs_batch_layout(backend):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: the serializer stores the canonical shape and intentionally
-# drops ``_qd_layout``. The unpickled ndarray is layout-free but its
-# element values match the original at every canonical index. See 8.7 in
+# Pickle: as of stork-19 ``qd.tensor()`` returns a ``qd.Tensor`` wrapper,
+# whose ``__reduce__`` round-trips via ``to_numpy()`` (the canonical view)
+# and rebuilds a fresh wrapper without the layout tag. The element values
+# at every canonical index match the original. See 8.7 in
 # ``perso_hugh/doc/quadrants-tensor.md`` for rationale.
 # ----------------------------------------------------------------------------
 
@@ -616,10 +617,10 @@ def test_pickle_layout_tagged_ndarray_roundtrip_drops_layout(layout):
     restored = pickle.loads(pickle.dumps(a))
 
     assert tuple(restored.shape) == canonical
-    # Intentional: the tag is dropped, so restored ndarrays are always
-    # layout-free. If/when a layout-preserving pickle lands, flip this to
-    # ``assert restored._qd_layout == tuple(layout)``.
-    assert getattr(restored, "_qd_layout", None) is None
+    # Intentional: the layout tag is dropped on round-trip; restored
+    # tensors are always layout-free. If/when a layout-preserving pickle
+    # lands, flip this to ``assert restored.layout == tuple(layout)``.
+    assert restored.layout is None
     np.testing.assert_array_equal(restored.to_numpy(), _expected_canonical(canonical))
 
 

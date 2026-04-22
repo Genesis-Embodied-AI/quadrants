@@ -128,11 +128,12 @@ def _alloc_bare(backend, dtype, canonical, layout):
     """Allocate a bare impl with the given layout, mirroring the factory
     logic. Used by the wrapper-from-bare tests below."""
     if backend is qd.Backend.FIELD:
-        order = layout if not _is_identity(layout) else None
-        kwargs = {"order": order} if order is not None else {}
-        f = qd.field(dtype, canonical, **kwargs)
-        if not _is_identity(layout):
-            f._qd_field_layout = tuple(layout)
+        if _is_identity(layout):
+            return qd.field(dtype, canonical)
+        # qd.field expects ``order=`` as an axis-char string ("ji", "kij", ...)
+        order = "".join(chr(ord("i") + ax) for ax in layout)
+        f = qd.field(dtype, canonical, order=order)
+        f._qd_field_layout = tuple(layout)
         return f
     # NDARRAY
     if _is_identity(layout):
