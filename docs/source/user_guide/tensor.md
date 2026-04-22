@@ -141,8 +141,10 @@ qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
 
 ## Interop with NumPy and PyTorch
 
-Every Python-side accessor — `tensor.shape`, `tensor.to_numpy()`,
-`tensor.from_numpy(...)`, `tensor.to_dlpack()` (and therefore anything
+Every Python-side accessor — `tensor.shape`, `tensor.layout`,
+`tensor.to_numpy()`, `tensor.to_numpy(dtype=...)`,
+`tensor.from_numpy(...)`, `tensor.to_torch(device=...)`,
+`tensor.from_torch(...)`, `tensor.to_dlpack()` (and therefore anything
 built on top of it like `torch.utils.dlpack.from_dlpack`) — returns the
 **canonical view**: the shape you passed at allocation time, indexed in
 canonical axis order.
@@ -154,6 +156,7 @@ about that:
 ```python
 a = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
 assert a.shape == (N, B)                 # canonical
+assert a.layout == (1, 0)                # introspectable
 assert a.to_numpy().shape == (N, B)      # canonical view of the same data
 
 # Round-trips work in canonical-shape terms.
@@ -167,7 +170,16 @@ assert (a.to_numpy() == src).all()
 import torch
 t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
 assert tuple(t.shape) == (N, B)
+
+# ``to_torch`` / ``from_torch`` are equivalent on either backend.
+out = a.to_torch()
+assert tuple(out.shape) == (N, B)
+a.from_torch(out)
 ```
+
+The exact same surface is available on both backends — switching
+`qd.tensor(..., backend=qd.Backend.FIELD/NDARRAY)` does not require
+any other code change at the call site.
 
 Gradient buffers behave identically: `a.grad.to_numpy()` returns the
 canonical view of the gradient.
