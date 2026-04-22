@@ -1518,6 +1518,8 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
   if (lower < upper) {
     (*ctx->task)(&this_thread_context, tls_buffer, &ctx->list->get<Element>(element_id), lower, upper);
   }
+  if (this_thread_context.cpu_assert_failed)
+    ctx->context->cpu_assert_failed = 1;
 }
 
 void parallel_struct_for(RuntimeContext *context,
@@ -1609,7 +1611,7 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
     }
   } else if (ctx.step == -1) {
     int block_start = ctx.end - task_id * ctx.block_size;
-    int block_end = std::max(ctx.begin, block_start * ctx.block_size);
+    int block_end = std::max(ctx.begin, block_start - ctx.block_size);
     for (int i = block_start - 1; i >= block_end; i--) {
       ctx.body(&this_thread_context, tls_ptr, i);
       if (this_thread_context.cpu_assert_failed)
@@ -1619,6 +1621,8 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
 
   if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
     ctx.epilogue(&this_thread_context, tls_ptr);
+  if (this_thread_context.cpu_assert_failed)
+    ctx.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1719,6 +1723,8 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
         break;
     }
   }
+  if (this_thread_context.cpu_assert_failed)
+    ctx.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_mesh_for(RuntimeContext *context,
