@@ -142,6 +142,14 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   pb.registerLoopAnalyses(lam);
   pb.crossRegisterProxies(lam, fam, cgam, mam);
 
+  // Annotate innermost loops with interleave-count=8 via IR metadata so the
+  // LLVM loop vectorizer uses it. This is scoped to this compilation pipeline
+  // and avoids mutating process-wide command-line state.
+  pb.registerLoopOptimizerEndEPCallback(
+      [](llvm::LoopPassManager &lpm, llvm::OptimizationLevel) {
+        lpm.addPass(AMDGPUSetLoopInterleavePass(8));
+      });
+
   llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
 
   // Run the new optimization pipeline
