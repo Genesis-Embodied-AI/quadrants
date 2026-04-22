@@ -120,19 +120,40 @@ def test_to_numpy_accepts_dtype_kwarg(backend, layout):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: removed from both backends. Both must raise the same exception
-# type so downstream code can write one ``except`` clause.
+# Pickle: pre-existing asymmetry preserved. ``Ndarray`` supports pickle
+# (round-trips via ``to_numpy()``); ``Field`` doesn't, because adding it
+# would require re-allocating SNodes after the runtime is materialized.
+#
+# The user-stated scope of the qd.tensor symmetry work is to make the
+# ``qd.tensor(...)`` *behavior* symmetric, not to delete pre-existing
+# functionality from the underlying types. Symmetric pickle is planned
+# for the upcoming ``Tensor`` wrapper (§8.11), which will round-trip via
+# ``to_numpy()`` + reconstruct, working uniformly on both backends. Until
+# then this test pins the *current* (asymmetric) behavior so further
+# refactors don't accidentally change it.
 # ----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
-def test_pickle_raises_on_both_backends(backend, layout):
+def test_pickle_ndarray_works(layout):
     import pickle  # noqa: PLC0415
 
     canonical = (3, 4)
-    a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
+    a = qd.tensor(qd.f32, shape=canonical, backend=qd.Backend.NDARRAY, layout=layout)
+    blob = pickle.dumps(a)
+    restored = pickle.loads(blob)
+    assert restored.shape == canonical
+    assert restored.dtype == qd.f32
+
+
+@pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
+@test_utils.test(arch=qd.cpu)
+def test_pickle_field_raises(layout):
+    import pickle  # noqa: PLC0415
+
+    canonical = (3, 4)
+    a = qd.tensor(qd.f32, shape=canonical, backend=qd.Backend.FIELD, layout=layout)
     with pytest.raises((TypeError, pickle.PicklingError, AttributeError, NotImplementedError)):
         pickle.dumps(a)
 
