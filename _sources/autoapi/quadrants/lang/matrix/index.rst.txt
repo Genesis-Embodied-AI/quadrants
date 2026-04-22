@@ -430,7 +430,7 @@ Module Contents
 
 
 
-   .. py:method:: ndarray(n, m, dtype, shape, needs_grad=False)
+   .. py:method:: ndarray(n, m, dtype, shape)
       :classmethod:
 
 
@@ -445,48 +445,12 @@ Module Contents
       :type dtype: DataType
       :param shape: Shape of the ndarray.
       :type shape: Union[int, tuple[int]]
-      :param needs_grad: If True, allocate a companion grad
-                         ndarray of the same shape and dtype, accessible via
-                         ``arr.grad``. Requires ``dtype`` to be a real (floating-point)
-                         type. Defaults to False. Silently ignored on the python
-                         backend (matches the scalar ``qd.ndarray`` behaviour).
-      :type needs_grad: bool, optional
 
       Example::
 
           The code below shows how a Quadrants ndarray with matrix elements             can be declared and defined::
 
               >>> x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))
-
-
-
-   .. py:method:: tensor(n, m, dtype, shape, **kwargs)
-      :classmethod:
-
-
-      Allocate a tensor whose elements are ``n``-by-``m`` matrices.
-
-      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
-      for matrix-valued elements. Selects between ``qd.Matrix.field`` and
-      ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.
-
-      :param n: Number of rows of each matrix element.
-      :type n: int
-      :param m: Number of columns of each matrix element.
-      :type m: int
-      :param dtype: Element data type (e.g. ``qd.f32``).
-      :param shape: Shape of the tensor (excluding the matrix dimensions) as
-                    an ``int`` or tuple of ``int``.
-      :param backend: Storage backend. Defaults to
-                      ``qd.Backend.FIELD``.
-      :type backend: qd.Backend, optional
-      :param \*\*kwargs: Forwarded verbatim to the underlying
-                         ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
-
-      Example::
-
-          >>> a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
-          >>> b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 
 
@@ -658,7 +622,7 @@ Module Contents
 
 
 
-   .. py:method:: ndarray(n, dtype, shape, needs_grad=False)
+   .. py:method:: ndarray(n, dtype, shape)
       :classmethod:
 
 
@@ -670,46 +634,12 @@ Module Contents
       :type dtype: DataType
       :param shape: Shape of the ndarray.
       :type shape: Union[int, tuple[int]]
-      :param needs_grad: If True, allocate a companion grad
-                         ndarray of the same shape and dtype, accessible via
-                         ``arr.grad``. Requires ``dtype`` to be a real (floating-point)
-                         type. Defaults to False. Silently ignored on the python
-                         backend (matches the scalar ``qd.ndarray`` behaviour).
-      :type needs_grad: bool, optional
 
       .. rubric:: Example
 
       The code below shows how a Quadrants ndarray with vector elements can be declared and defined::
 
           >>> x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))
-
-
-
-   .. py:method:: tensor(n, dtype, shape, **kwargs)
-      :classmethod:
-
-
-      Allocate a tensor whose elements are length-``n`` vectors.
-
-      Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()``
-      for vector-valued elements. Selects between ``qd.Vector.field`` and
-      ``qd.Vector.ndarray`` based on the ``backend=`` keyword.
-
-      :param n: Length of each vector element.
-      :type n: int
-      :param dtype: Element data type (e.g. ``qd.f32``).
-      :param shape: Shape of the tensor (excluding the vector dimension) as
-                    an ``int`` or tuple of ``int``.
-      :param backend: Storage backend. Defaults to
-                      ``qd.Backend.FIELD``.
-      :type backend: qd.Backend, optional
-      :param \*\*kwargs: Forwarded verbatim to the underlying
-                         ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
-
-      Example::
-
-          >>> v = qd.Vector.tensor(3, qd.f32, shape=(4,))
-          >>> u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 
 
 
@@ -850,6 +780,9 @@ Module Contents
    .. py:attribute:: layout
 
 
+   .. py:attribute:: shape
+
+
    .. py:attribute:: element_type
 
 
@@ -921,6 +854,9 @@ Module Contents
 
 
    .. py:attribute:: layout
+
+
+   .. py:attribute:: shape
 
 
    .. py:attribute:: element_type

@@ -616,30 +616,6 @@
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_unpack_layout_vector_index</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">layout_len</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If ``index`` is a rank-1 Vector of length ``layout_len``, return</span>
-<span class="sd">        its component list so the layout permutation can be applied</span>
-<span class="sd">        per-axis. Otherwise return ``[index]`` unchanged.</span>
-
-<span class="sd">        Handles both forms a single subscript can take inside a kernel:</span>
-
-<span class="sd">        - ``Matrix`` (Python class) — produced when the kernel runs on the</span>
-<span class="sd">          python backend, e.g. ``qd.grouped(field)`` returning a</span>
-<span class="sd">          ``[Matrix([i, j])]`` list.</span>
-<span class="sd">        - ``Expr`` with tensor shape ``(N,)`` — produced by</span>
-<span class="sd">          ``matrix.make_matrix(loop_indices, ...)`` in</span>
-<span class="sd">          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`,</span>
-<span class="sd">          which is what real kernels see for ``for I in qd.grouped(...)``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">n</span> <span class="o">==</span> <span class="n">layout_len</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
-            <span class="n">shape</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">layout_len</span><span class="p">:</span>
-                <span class="k">return</span> <span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">layout_len</span><span class="p">)]</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">index</span><span class="p">]</span>
-
-    <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Subscript">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Subscript">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Subscript</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
@@ -647,27 +623,6 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">is_tuple</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
-        <span class="c1"># Tensors layout: AnyArray with non-identity ``_qd_layout``</span>
-        <span class="c1"># has its canonical indices permuted into physical-storage order</span>
-        <span class="c1"># before forwarding. None and identity layouts are handled</span>
-        <span class="c1"># transparently (no rewrite =&gt; byte-identical IR for legacy code).</span>
-        <span class="c1">#</span>
-        <span class="c1"># Two indexing forms must be permuted:</span>
-        <span class="c1"># 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is</span>
-        <span class="c1">#    already a list of N scalars; permute by axis.</span>
-        <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix</span>
-        <span class="c1">#    coming from ``qd.grouped(...)``: unpack into N scalars first,</span>
-        <span class="c1">#    then permute. Without this, ``x[I]`` writes at canonical</span>
-        <span class="c1">#    indices into the smaller physical buffer — silently OOB on</span>
-        <span class="c1">#    permuted layouts.</span>
-        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_unpack_layout_vector_index</span><span class="p">(</span>
-                    <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
-                <span class="p">)</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
-                <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">layout</span><span class="p">]</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">:</span>
@@ -1557,21 +1512,7 @@
                 <span class="n">loop_indices</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_var_list</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">loop_var</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">ast_builder</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">)</span>
                 <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">)</span>
                 <span class="n">impl</span><span class="o">.</span><span class="n">begin_frontend_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">expr_group</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">)</span>
-                <span class="c1"># Layout-tagged ndarrays: the runtime delivers *physical*</span>
-                <span class="c1"># loop indices (one per axis of the underlying buffer), but</span>
-                <span class="c1"># the user-visible ``I`` must be canonical so that ``x[I]``</span>
-                <span class="c1"># round-trips correctly through the canonical-&gt;physical AST</span>
-                <span class="c1"># rewrite in :func:`build_Subscript`. Reorder the indices</span>
-                <span class="c1"># so position ``m`` carries the canonical-axis-``m`` value.</span>
-                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">):</span>
-                    <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
-                        <span class="n">invperm</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
-                    <span class="n">user_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">loop_indices</span><span class="p">[</span><span class="n">invperm</span><span class="p">[</span><span class="n">m</span><span class="p">]]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">))]</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">user_indices</span> <span class="o">=</span> <span class="n">loop_indices</span>
-                <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">make_matrix</span><span class="p">(</span><span class="n">user_indices</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">))</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">make_matrix</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">))</span>
                 <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_frontend_struct_for</span><span class="p">()</span>
             <span class="k">else</span><span class="p">:</span>

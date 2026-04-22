@@ -376,79 +376,64 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.broadcast_first" title="quadrants.lang.simt.subgroup.broadcast_first"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_first</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_add" title="quadrants.lang.simt.subgroup.reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_add" title="quadrants.lang.simt.subgroup.reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add</span></code></a>(value, log2_size)</p></td>
+<td><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_all_add" title="quadrants.lang.simt.subgroup.reduce_all_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a>(value, log2_size)</p></td>
+<td><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_mul" title="quadrants.lang.simt.subgroup.reduce_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_mul</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_min" title="quadrants.lang.simt.subgroup.reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_min</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_max" title="quadrants.lang.simt.subgroup.reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_max</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_and" title="quadrants.lang.simt.subgroup.reduce_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_and</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_or" title="quadrants.lang.simt.subgroup.reduce_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_or</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.reduce_xor" title="quadrants.lang.simt.subgroup.reduce_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_xor</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_add" title="quadrants.lang.simt.subgroup.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_mul" title="quadrants.lang.simt.subgroup.inclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_mul</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_min" title="quadrants.lang.simt.subgroup.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_max" title="quadrants.lang.simt.subgroup.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_and" title="quadrants.lang.simt.subgroup.inclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_and</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_or" title="quadrants.lang.simt.subgroup.inclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_or</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.inclusive_xor" title="quadrants.lang.simt.subgroup.inclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_xor</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_add" title="quadrants.lang.simt.subgroup.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_mul" title="quadrants.lang.simt.subgroup.exclusive_mul"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_mul</span></code></a>(value)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_xor" title="quadrants.lang.simt.subgroup.shuffle_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_xor</span></code></a>(value, mask)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_min" title="quadrants.lang.simt.subgroup.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_up" title="quadrants.lang.simt.subgroup.shuffle_up"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_up</span></code></a>(value, offset)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_max" title="quadrants.lang.simt.subgroup.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_and" title="quadrants.lang.simt.subgroup.exclusive_and"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_and</span></code></a>(value)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_or" title="quadrants.lang.simt.subgroup.exclusive_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_or</span></code></a>(value)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.exclusive_xor" title="quadrants.lang.simt.subgroup.exclusive_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_xor</span></code></a>(value)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_xor" title="quadrants.lang.simt.subgroup.shuffle_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_xor</span></code></a>(value, mask)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_up" title="quadrants.lang.simt.subgroup.shuffle_up"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_up</span></code></a>(value, offset)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_down" title="quadrants.lang.simt.subgroup.shuffle_down"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_down</span></code></a>(value, offset)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_down" title="quadrants.lang.simt.subgroup.shuffle_down"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_down</span></code></a>(value, offset)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -494,38 +479,24 @@
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_add">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_add" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_add" title="Link to this definition">#</a></dt>
+<dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree.</p>
+<p>The result is valid in lane 0 of each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> group; other lanes hold partial sums.
+Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> does not exceed the active subgroup size on the target
+(32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).</p>
+<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully unrolled into <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>
+shuffle+add operations in the calling kernel’s IR.</p>
+</dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_mul">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_mul" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_min">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_min" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_max">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_max" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_and">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_and</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_and"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_and" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_or">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_or" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_xor">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_xor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_xor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_xor" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.reduce_all_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">reduce_all_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#reduce_all_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.reduce_all_add" title="Link to this definition">#</a></dt>
+<dd><p>Sum <code class="docutils literal notranslate"><span class="pre">value</span></code> across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes via a butterfly XOR.</p>
+<p>The result is broadcast to all <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> lanes.  Caller must ensure <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>
+does not exceed the active subgroup size on the target.</p>
+<p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> is a compile-time template; the body is fully unrolled into <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>
+shuffle+add operations in the calling kernel’s IR.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.inclusive_add">
@@ -677,12 +648,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.all_equal"><code class="docutils literal notranslate"><span class="pre">all_equal()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.broadcast_first"><code class="docutils literal notranslate"><span class="pre">broadcast_first()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_add"><code class="docutils literal notranslate"><span class="pre">reduce_add()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_mul"><code class="docutils literal notranslate"><span class="pre">reduce_mul()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_min"><code class="docutils literal notranslate"><span class="pre">reduce_min()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_max"><code class="docutils literal notranslate"><span class="pre">reduce_max()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_and"><code class="docutils literal notranslate"><span class="pre">reduce_and()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_or"><code class="docutils literal notranslate"><span class="pre">reduce_or()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_xor"><code class="docutils literal notranslate"><span class="pre">reduce_xor()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.reduce_all_add"><code class="docutils literal notranslate"><span class="pre">reduce_all_add()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_add"><code class="docutils literal notranslate"><span class="pre">inclusive_add()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_mul"><code class="docutils literal notranslate"><span class="pre">inclusive_mul()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.subgroup.inclusive_min"><code class="docutils literal notranslate"><span class="pre">inclusive_min()</span></code></a></li>
