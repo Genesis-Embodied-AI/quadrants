@@ -24,6 +24,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelCxx,
     KernelLaunchContext,
 )
+from quadrants._tensor_wrapper import Tensor as _Tensor_cls
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -569,6 +570,25 @@ class Kernel(FuncBase):
 
         self.raise_on_templated_floats = config.raise_on_templated_floats
         py_args = self.fuse_args(is_func=False, is_pyfunc=False, py_args=py_args, kwargs=kwargs, global_context=None)
+        # Tensor-wrapper unwrap (POC, stork-17). Substitute each
+        # ``qd._Tensor`` instance with its underlying ``Ndarray``/
+        # ``ScalarField`` impl *before* anything downstream observes the
+        # arg tuple — including the autograd tape (uses identity), the
+        # template mapper (cache-keys on ``id(arg)``), ``_extract_arg``,
+        # and the AST builder. This guarantees JIT cache stability:
+        # ``id(Tensor(impl))`` differs across constructions, but
+        # ``id(impl)`` is stable, so wrapper-or-not yields identical
+        # cache keys.
+        #
+        # Fast path: most calls have no wrappers. The check is one
+        # ``type(...) is _Tensor`` per arg (cheaper than ``isinstance``
+        # and short-circuits on the first non-wrapper). If a wrapper is
+        # found we materialise a new tuple with each wrapper replaced by
+        # ``arg._impl``; otherwise ``py_args`` is passed through unchanged.
+        for _a in py_args:
+            if type(_a) is _Tensor_cls:
+                py_args = tuple(a._impl if type(a) is _Tensor_cls else a for a in py_args)
+                break
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
