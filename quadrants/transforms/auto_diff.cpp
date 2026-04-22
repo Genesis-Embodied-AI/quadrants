@@ -41,9 +41,9 @@ class IndependentBlockMetaData {
 class NonLinearOps {
  public:
   inline static const std::set<TernaryOpType> ternary_collections{TernaryOpType::select};
-  inline static const std::set<UnaryOpType> unary_collections{UnaryOpType::abs,  UnaryOpType::sin,  UnaryOpType::cos,
-                                                              UnaryOpType::tanh, UnaryOpType::asin, UnaryOpType::acos,
-                                                              UnaryOpType::exp,  UnaryOpType::log,  UnaryOpType::sqrt};
+  inline static const std::set<UnaryOpType> unary_collections{
+      UnaryOpType::abs,  UnaryOpType::sin, UnaryOpType::cos, UnaryOpType::tan,  UnaryOpType::tanh, UnaryOpType::asin,
+      UnaryOpType::acos, UnaryOpType::exp, UnaryOpType::log, UnaryOpType::sqrt, UnaryOpType::rsqrt};
   inline static const std::set<BinaryOpType> binary_collections{BinaryOpType::mul, BinaryOpType::div,
                                                                 BinaryOpType::atan2, BinaryOpType::pow};
 };
@@ -975,6 +975,18 @@ class ADTransform : public IRVisitor {
     return insert<UnaryOpStmt>(UnaryOpType::log, load(op1));
   }
 
+  Stmt *tan(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::tan, load(op1));
+  }
+
+  Stmt *tanh(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::tanh, load(op1));
+  }
+
+  Stmt *exp(Stmt *op1) {
+    return insert<UnaryOpStmt>(UnaryOpType::exp, load(op1));
+  }
+
   Stmt *pow(Stmt *op1, Stmt *op2) {
     return insert<BinaryOpStmt>(BinaryOpType::pow, load(op1), load(op2));
   }
@@ -1198,7 +1210,7 @@ class MakeAdjoint : public ADTransform {
       adjoint_stmt[stmt] = alloca.get();
 
       // We need to insert the alloca in the block of GlobalLoadStmt when the
-      // GlobalLoadStmt is not inside a range-for
+      // GlobalLoadStmt is not inside the currently-processed range-for.
       // Code sample:
       // a and b require grad
       // Case 1 (GlobalLoadStmt is outside the for-loop, compute 5 times and
@@ -1215,18 +1227,29 @@ class MakeAdjoint : public ADTransform {
       //     q = b[i]
       //     for _ in range(5)
       //         q += a[i]
-      if (stmt->is<GlobalLoadStmt>() && (stmt->parent->parent_stmt() != nullptr) &&
-          stmt->parent->parent_stmt()->is<RangeForStmt>()) {
-        // Check whether this GlobalLoadStmt is in the body of a for-loop by
-        // searching in the backup forward pass If not (Case 1), the alloca
-        // should not be clear every iteration, therefore, we need to insert the
-        // alloca in the block of the GlobalLoadStmt i.e., where GlobalLoadStmt
-        // is defined
-        if (forward_backup->locate(stmt->as<GlobalLoadStmt>()) == -1) {
-          stmt->as<GlobalLoadStmt>()->parent->insert(std::move(alloca), 0);
-        } else {
-          alloca_block->insert(std::move(alloca), 0);
+      if (stmt->is<GlobalLoadStmt>() && forward_backup->locate(stmt->as<GlobalLoadStmt>()) == -1) {
+        // Case 1: the GlobalLoadStmt lives in a block outside the currently-processed range-for iteration. Its
+        // adjoint must persist across all iterations of the inner reversed loop, so the alloca cannot live in the
+        // current alloca_block (which would be the inner reversed loop body). Walk up from the primal's enclosing
+        // block until we hit one whose owning statement unconditionally dominates both the forward and the reverse
+        // code (a loop / offloaded / kernel body, not an if / while body): visit(IfStmt) emits the reverse code
+        // into a brand new sibling IfStmt, not back into the forward if-body, so an alloca placed inside the
+        // forward branch is SSA-invalid from the reverse branch's point of view and gets DCE'd into silently-zero
+        // gradients.
+        Block *target = stmt->as<GlobalLoadStmt>()->parent;
+        while (target != nullptr) {
+          Stmt *parent_stmt = target->parent_stmt();
+          if (parent_stmt == nullptr || parent_stmt->is<RangeForStmt>() || parent_stmt->is<StructForStmt>() ||
+              parent_stmt->is<OffloadedStmt>() || parent_stmt->is<MeshForStmt>()) {
+            break;
+          }
+          target = parent_stmt->parent;
         }
+        // Reaching a null target means the primal's enclosing-block chain is broken (an unparented block). Falling
+        // back to alloca_block here would silently restore the pre-fix bug (adjoint eliminated as DCE on the
+        // reverse branch); hard-assert instead so malformed IR surfaces loudly.
+        QD_ASSERT(target != nullptr);
+        target->insert(std::move(alloca), 0);
       } else {
         alloca_block->insert(std::move(alloca), 0);
       }
@@ -1234,41 +1257,83 @@ class MakeAdjoint : public ADTransform {
     return adjoint_stmt[stmt];
   }
 
+  // For ops in `NonLinearOps::unary_collections` the reverse formula must NOT read the forward `stmt`
+  // directly - only `stmt->operand` (adstack-backed), `adjoint(stmt)`, and constants. BackupSSA spills the
+  // forward stmt to a single plain alloca overwritten each iteration, so reading `stmt` from a reversed
+  // dynamic loop would use the last-iteration value regardless of which reverse iteration is running. This
+  // helper walks the value-tree at IR-transform time and asserts the invariant; paired with the Python
+  // meta-test `test_unary_collections_audit` (which catches "forgot to add to unary_collections"), it
+  // covers both halves of the class of bugs the per-op audit used to miss.
+  void accumulate_unary_operand_checked(UnaryOpStmt *stmt, Stmt *value) {
+    if (NonLinearOps::unary_collections.find(stmt->op_type) != NonLinearOps::unary_collections.end()) {
+      std::unordered_set<const Stmt *> visited;
+      std::function<void(const Stmt *)> walk = [&](const Stmt *s) {
+        if (!s || visited.count(s))
+          return;
+        visited.insert(s);
+        QD_ASSERT_INFO(s != stmt,
+                       "MakeAdjoint adjoint formula for UnaryOpType::{} reads the forward stmt directly. It "
+                       "must read `stmt->operand` (adstack-backed) instead - see the tan/tanh/exp branches "
+                       "for the recompute pattern.",
+                       unary_op_type_name(stmt->op_type));
+        for (auto *op : s->get_operands())
+          walk(op);
+      };
+      walk(value);
+    }
+    accumulate(stmt->operand, value);
+  }
+
   void visit(UnaryOpStmt *stmt) override {
+    auto acc = [&](Stmt *value) { accumulate_unary_operand_checked(stmt, value); };
     if (stmt->op_type == UnaryOpType::floor || stmt->op_type == UnaryOpType::ceil) {
       // do nothing
     } else if (stmt->op_type == UnaryOpType::neg) {
       accumulate(stmt->operand, negate(adjoint(stmt)));
     } else if (stmt->op_type == UnaryOpType::abs) {
-      accumulate(stmt->operand, mul(adjoint(stmt), sgn(stmt->operand)));
+      acc(mul(adjoint(stmt), sgn(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::sin) {
-      accumulate(stmt->operand, mul(adjoint(stmt), cos(stmt->operand)));
+      acc(mul(adjoint(stmt), cos(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::cos) {
-      accumulate(stmt->operand, negate(mul(adjoint(stmt), sin(stmt->operand))));
+      acc(negate(mul(adjoint(stmt), sin(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
-      // The derivative of `tan` is `1 / cos^2`, which has many singular points
-      // causing NaNs. Though the NaNs are expected, it is error prone and hard
-      // to debug. Therefore we currently don't support computing derivative for
-      // `tan`.
-      QD_NOT_IMPLEMENTED;
+      // d/dx tan(x) = 1 + tan(x)^2. Recompute tan(operand) rather than reusing the forward value: the primal is
+      // per-iteration inside dynamic loops but BackupSSA only spills forward values to a single plain alloca, so
+      // reading the forward tan would use the last-iteration value in the reversed loop. The operand, in contrast,
+      // rides the adstack through its LocalLoad, so a fresh tan on it is per-iteration correct.
+      acc(mul(adjoint(stmt), add(constant(1, stmt->ret_type), sqr(tan(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::tanh) {
-      accumulate(stmt->operand, mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(stmt))));
+      // Recompute tanh(operand) in the reverse pass instead of reusing the forward stmt value. In dynamic loops
+      // BackupSSA spills the forward stmt to a single plain alloca overwritten each iteration, so the reversed
+      // loop would read the last-iteration tanh for every backward step. The operand rides the adstack through
+      // LocalLoad, so a fresh tanh on it is per-iteration correct. Trade-off: tanh is evaluated twice per
+      // iteration (once forward, once backward); caching the forward value on the adstack is a future optimization.
+      acc(mul(adjoint(stmt), sub(constant(1, stmt->ret_type), sqr(tanh(stmt->operand)))));
     } else if (stmt->op_type == UnaryOpType::asin) {
-      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(1, stmt->ret_type),
-                                                       sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
+      acc(mul(adjoint(stmt),
+              div(constant(1, stmt->ret_type), sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand))))));
     } else if (stmt->op_type == UnaryOpType::acos) {
-      accumulate(stmt->operand,
-                 mul(adjoint(stmt), negate(div(constant(1, stmt->ret_type),
-                                               sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
+      acc(mul(adjoint(stmt),
+              negate(div(constant(1, stmt->ret_type), sqrt(sub(constant(1, stmt->ret_type), sqr(stmt->operand)))))));
     } else if (stmt->op_type == UnaryOpType::exp) {
-      accumulate(stmt->operand, mul(adjoint(stmt), stmt));
+      // See the tanh case above: recompute exp on the adstack-backed operand so the reversed loop sees the
+      // per-iteration value rather than the last-forward value spilled by BackupSSA. Same trade-off as tanh: exp
+      // is evaluated twice per iteration (once forward, once backward); caching the forward value on the adstack
+      // is a future optimization.
+      acc(mul(adjoint(stmt), exp(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::log) {
-      accumulate(stmt->operand, div(adjoint(stmt), stmt->operand));
+      // No recompute workaround needed: the reverse formula `1 / operand` reads `stmt->operand` directly (which
+      // is adstack-backed via LocalLoad inside dynamic loops), not the forward `log(operand)` stmt value.
+      acc(div(adjoint(stmt), stmt->operand));
     } else if (stmt->op_type == UnaryOpType::sqrt) {
-      accumulate(stmt->operand, mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
+      // No recompute workaround needed: the reverse formula reads `stmt->operand` (adstack-backed via LocalLoad
+      // inside dynamic loops, gated on `unary_collections` membership) and recomputes `sqrt(operand)` from it,
+      // not the forward `sqrt(operand)` stmt value. Unlike tanh/exp this case was already operand-based before
+      // the recompute fix landed; the structure mirrors log above.
+      acc(mul(adjoint(stmt), div(constant(0.5f, stmt->ret_type), sqrt(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::rsqrt) {
-      accumulate(stmt->operand, mul(adjoint(stmt), mul(constant(-0.5f, stmt->ret_type),
-                                                       pow(rsqrt(stmt->operand), constant(3, stmt->ret_type)))));
+      acc(mul(adjoint(stmt),
+              mul(constant(-0.5f, stmt->ret_type), pow(rsqrt(stmt->operand), constant(3, stmt->ret_type)))));
     } else if (stmt->op_type == UnaryOpType::cast_value) {
       if (is_real(stmt->cast_type.get_element_type()) && is_real(stmt->operand->ret_type.get_element_type())) {
         accumulate(stmt->operand, adjoint(stmt));
@@ -1841,11 +1906,10 @@ class MakeDual : public ADTransform {
     } else if (stmt->op_type == UnaryOpType::cos) {
       accumulate(stmt, negate(mul(sin(stmt->operand), dual(stmt->operand))));
     } else if (stmt->op_type == UnaryOpType::tan) {
-      // The derivative of `tan` is `1 / cos^2`, which has many singular points
-      // causing NaNs. Though the NaNs are expected, it is error prone and hard
-      // to debug. Therefore we currently don't support computing derivative for
-      // `tan`.
-      QD_NOT_IMPLEMENTED;
+      // d/dx tan(x) = 1 + tan(x)^2. Forward mode executes in primal order, so `stmt` is the
+      // current-iteration tan value - no BackupSSA stale-value concern; reusing it is per-iteration
+      // correct.
+      accumulate(stmt, mul(add(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::tanh) {
       accumulate(stmt, mul(sub(constant(1), sqr(stmt)), dual(stmt->operand)));
     } else if (stmt->op_type == UnaryOpType::asin) {
