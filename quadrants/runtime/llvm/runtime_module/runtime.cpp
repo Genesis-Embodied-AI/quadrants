@@ -1597,8 +1597,10 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
 
   if (ctx.prologue) {
     ctx.prologue(&this_thread_context, tls_ptr);
-    if (this_thread_context.cpu_assert_failed)
+    if (this_thread_context.cpu_assert_failed) {
+      ctx.context->cpu_assert_failed = 1;
       return;
+    }
   }
 
   if (ctx.step == 1) {
