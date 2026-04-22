@@ -219,3 +219,90 @@ fill(b)   # ndarray branch
 The kernel argument is unwrapped to the bare impl before the
 template-mapper / AST sees it, so kernel bodies still write `x[i, j]`
 and pay no per-call cost for the wrapper.
+
+## Pickle
+
+`qd.Tensor` objects are picklable on **both** backends, including under
+non-identity layouts. Round-trip preserves the canonical data, the
+dtype, the shape, and the layout:
+
+```python
+import pickle
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+a = qd.tensor(qd.f32, shape=(3, 4), backend=qd.Backend.FIELD, layout=(1, 0))
+a.from_numpy(np.arange(12, dtype=np.float32).reshape(3, 4))
+
+restored = pickle.loads(pickle.dumps(a))
+assert isinstance(restored, qd.Tensor)
+assert restored.shape == (3, 4)
+assert restored.layout == (1, 0)
+assert (restored.to_numpy() == a.to_numpy()).all()
+```
+
+Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips
+through `to_numpy()` plus a `qd.tensor(...)` reallocation on load). The
+bare `qd.field` type does not support pickle directly — `qd.Tensor` is
+the unit of serialization.
+
+## Wrapping a bare tensor: `qd.wrap`
+
+If you have a bare `qd.field` / `qd.ndarray` / `qd.Vector.field` /
+`qd.Matrix.field` / `qd.Vector.ndarray` / `qd.Matrix.ndarray` impl
+(e.g. from older code or library boundaries) and want the unified
+`qd.Tensor` surface around it, use `qd.wrap(impl)`. It picks the most
+specific subclass (`Tensor`, `VectorTensor`, `MatrixTensor`):
+
+```python
+import quadrants as qd
+
+qd.init(arch=qd.x64)
+
+a = qd.ndarray(qd.f32, shape=(4, 5))
+t = qd.wrap(a)
+assert isinstance(t, qd.Tensor)
+assert t._unwrap() is a   # same underlying impl
+```
+
+`qd.wrap` is the only sanctioned way to construct a wrapper around a
+bare impl after the fact. The `qd.Tensor(impl)` constructor itself
+rejects double-wrapping so you can't accidentally end up with a
+`Tensor` containing a `Tensor`.
+
+## Cross-backend `copy_from` is not supported
+
+`tensor.copy_from(other)` requires both tensors to share the same
+backend. Mixed-backend copies are deliberately unsupported because the
+intended deployment model is process-wide, homogeneous backend
+selection (e.g. via a `GS_ENABLE_NDARRAY` env var):
+
+```python
+a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
+b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+a.copy_from(b)   # raises: cross-backend copy unsupported
+```
+
+If you genuinely need to move data across backends, route it through
+NumPy (or DLPack/Torch): `a.from_numpy(b.to_numpy())`.
+
+## Known asymmetry: real-dtype `.grad` stub on the field backend
+
+For tensors of a real (`f32` / `f64`) dtype allocated **without**
+`needs_grad=True`, the field backend currently allocates a zombie
+gradient stub anyway, so `t.grad` returns a wrapper around it. The
+ndarray backend correctly reports `t.grad is None` in the same case:
+
+```python
+t_field = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
+t_nd    = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
+
+t_field.grad   # currently a Tensor wrapper around a zombie field
+t_nd.grad      # None
+```
+
+Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are
+symmetric (`grad is None` on both backends regardless of `needs_grad`).
+This asymmetry is tracked as a follow-up; it does not affect kernels
+that opt in to autograd via `needs_grad=True`.

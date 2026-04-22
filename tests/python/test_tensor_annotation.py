@@ -220,3 +220,93 @@ def test_tensor_is_in_qd_namespace():
     from quadrants._tensor import Tensor as direct
 
     assert direct is qd.Tensor
+
+
+# ----------------------------------------------------------------------------
+# Module-scope kernel decl with qd.Tensor annotation.
+#
+# This is the *Genesis* pattern: every Genesis kernel is a module-level
+# global, decorated with ``@qd.kernel`` at import time — long before
+# ``qd.init()`` runs and long before any tensor is allocated. The tests
+# above all decorate inside the test body (after ``@test_utils.test``
+# has called ``qd.init()``), so they don't exercise this code path.
+#
+# Pinning here that:
+# - The decorator is happy with ``qd.Tensor`` evaluated at module load
+#   time (i.e. before any qd.init).
+# - First call lazily compiles for whatever backend / layout the arg
+#   actually has.
+# - The four (backend × layout) combinations called against the *same*
+#   module-level kernel object produce four distinct cache entries with
+#   no fragmentation, and each writes the right canonical values.
+# Runs on whatever archs the test runner targets (no ``arch=`` filter)
+# so cpu and gpu codegen are both covered.
+# ----------------------------------------------------------------------------
+
+
+_MOD_M, _MOD_N = 3, 4
+_MOD_LAYOUTS = [(0, 1), (1, 0)]
+_MOD_LAYOUT_IDS = ["identity", "transposed"]
+
+
+@qd.kernel
+def _module_level_fill_2d(x: qd.Tensor):
+    # Canonical indexing on both axes; the AST rewrite (ndarray) /
+    # SNode order (field) handles non-identity layouts so this same
+    # kernel body is correct under any permutation.
+    for i, j in qd.ndrange(_MOD_M, _MOD_N):
+        x[i, j] = i * 100 + j
+
+
+def _expected_canonical():
+    out = np.zeros((_MOD_M, _MOD_N), dtype=np.int32)
+    for i in range(_MOD_M):
+        for j in range(_MOD_N):
+            out[i, j] = i * 100 + j
+    return out
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
+@pytest.mark.parametrize("layout", _MOD_LAYOUTS, ids=_MOD_LAYOUT_IDS)
+@test_utils.test()
+def test_module_level_qd_tensor_kernel(backend, layout):
+    a = qd.tensor(qd.i32, shape=(_MOD_M, _MOD_N), backend=backend, layout=layout)
+    _module_level_fill_2d(a)
+    np.testing.assert_array_equal(a.to_numpy(), _expected_canonical())
+
+
+@test_utils.test()
+def test_module_level_qd_tensor_kernel_all_combos_share_decl():
+    """The same module-level kernel object, called against all four
+    (backend × layout) combos, must produce four distinct cache entries
+    (one per combo) and write correct canonical values for each.
+
+    Mirrors the Genesis pattern after the stork-20 ``set_gravity``
+    collapse: one decl, multiple backend/layout instances at runtime.
+    """
+    expected = _expected_canonical()
+    n_before = len(_module_level_fill_2d._primal.mapper.mapping)
+
+    tensors = []
+    for backend in BACKENDS:
+        for layout in _MOD_LAYOUTS:
+            t = qd.tensor(qd.i32, shape=(_MOD_M, _MOD_N), backend=backend, layout=layout)
+            _module_level_fill_2d(t)
+            tensors.append((backend, layout, t))
+
+    for backend, layout, t in tensors:
+        np.testing.assert_array_equal(
+            t.to_numpy(),
+            expected,
+            err_msg=f"backend={backend} layout={layout}",
+        )
+
+    n_after = len(_module_level_fill_2d._primal.mapper.mapping)
+    # Exactly four new entries — one per (backend, layout) combo.
+    # Catches both wrapper-unwrap-hook fragmentation (would push count
+    # higher) and accidental cache collision between layouts (would
+    # push it lower and silently reuse the wrong compiled code).
+    assert n_after - n_before == 4, (
+        f"expected 4 new cache entries (one per backend×layout combo), "
+        f"got {n_after - n_before}"
+    )
