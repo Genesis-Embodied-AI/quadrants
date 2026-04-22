@@ -128,6 +128,12 @@ class ProgramImpl {
   virtual void finalize() {
   }
 
+  // Hook invoked by `Program::finalize()` before any teardown sync. Lets backends flip state (e.g. the LLVM
+  // `finalizing_` flag used to suppress adstack-overflow polling) so the two `Program::synchronize()` calls that
+  // precede `finalize()` do not throw into the Program destructor path.
+  virtual void pre_finalize() {
+  }
+
   virtual uint64 fetch_result_uint64(int i, uint64 *result_buffer) {
     return result_buffer[i];
   }

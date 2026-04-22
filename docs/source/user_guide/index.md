@@ -32,6 +32,14 @@ interop
 ```
 
 ```{toctree}
+:caption: Autodiff
+:maxdepth: 1
+:titlesonly:
+
+autodiff
+```
+
+```{toctree}
 :caption: SIMT primitives
 :maxdepth: 1
 :titlesonly:
