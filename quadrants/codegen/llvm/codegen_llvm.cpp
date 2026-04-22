@@ -1475,7 +1475,13 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(
 
   {
     int bits = data_type_bits(type);
-    llvm::PointerType *typeIntPtr = llvm::PointerType::getUnqual(*llvm_context);
+    // Preserve dest's address space; AMDGPU SNode-derived dests arrive
+    // here in addrspace(1) and a cross-addrspace bitcast is invalid IR.
+    unsigned dest_as = dest->getType()->isPointerTy()
+                           ? dest->getType()->getPointerAddressSpace()
+                           : 0;
+    llvm::PointerType *typeIntPtr =
+        llvm::PointerType::get(*llvm_context, dest_as);
     llvm::IntegerType *typeIntTy = get_integer_type(bits);
 
     old_val = builder->CreateLoad(val->getType(), dest);

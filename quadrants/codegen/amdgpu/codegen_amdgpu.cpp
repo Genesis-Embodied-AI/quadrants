@@ -189,8 +189,20 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
     QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
               fast_reductions.at(prim_type).end());
+    // SNode pointer chain (GetRootStmt/SNodeLookupStmt/GetChStmt) propagates
+    // addrspace(1) on AMDGPU. The runtime reduce_*_* helpers in
+    // runtime.cpp:DEFINE_REDUCTION are declared with generic (addrspace 0)
+    // pointer parameters. Cast the destination back to addrspace(0) so
+    // check_func_call_signature accepts the call; InferAddressSpaces in O3
+    // can re-promote downstream loads/stores after inlining.
+    llvm::Value *dest = llvm_val[stmt->dest];
+    if (dest && dest->getType()->isPointerTy() &&
+        dest->getType()->getPointerAddressSpace() == 1) {
+      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
+      dest = builder->CreateAddrSpaceCast(dest, ptr_as0);
+    }
     return call(fast_reductions.at(prim_type).at(op),
-                {llvm_val[stmt->dest], llvm_val[stmt->val]});
+                {dest, llvm_val[stmt->val]});
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -341,53 +353,92 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     return load;
   }
 
-  void visit(GlobalLoadStmt *stmt) override {
-    auto ptr = llvm_val[stmt->src];
-    auto ptr_type = stmt->src->ret_type->as<PointerType>();
-    if (ptr_type->is_bit_pointer()) {
-      if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-        bool should_cache_as_read_only =
-            current_offload->mem_access_opt.has_flag(
-                get_ch->output_snode, SNodeAccessFlag::read_only);
-        create_global_load(stmt, should_cache_as_read_only);
-      } else {
-        create_global_load(stmt, false);
-      }
+  void visit(MatrixPtrStmt *stmt) override {
+    // Base codegen unconditionally bitcasts/inttoptrs the origin into
+    // addrspace(0), which strips any addrspace tag propagated from a
+    // SNode chain or applied at ExternalPtrStmt/etc. Preserve the origin
+    // address space here so matrix-element accesses on global / LDS /
+    // scratch-backed origins land in the correct memory unit.
+    auto *origin_ptr = llvm_val[stmt->origin];
+    unsigned origin_as = origin_ptr->getType()->isPointerTy()
+                             ? origin_ptr->getType()->getPointerAddressSpace()
+                             : 0;
+    if (stmt->offset_used_as_index()) {
+      auto *origin_pointee_ty =
+          tlctx->get_data_type(stmt->origin->ret_type.ptr_removed());
+      auto *casted_ptr = builder->CreateBitCast(
+          origin_ptr, llvm::PointerType::get(origin_pointee_ty, origin_as));
+      llvm_val[stmt] = builder->CreateGEP(
+          origin_pointee_ty, casted_ptr,
+          {tlctx->get_constant(0), llvm_val[stmt->offset]});
     } else {
-      // SNode data lives in hipMalloc'd global memory. Cast pointer to
-      // addrspace(1) so LLVM emits global_load instead of flat_load,
-      // avoiding the FLAT unit's runtime address-space resolution.
-      auto *load_ty = tlctx->get_data_type(stmt->ret_type);
-      bool read_only = false;
-      if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-        read_only = current_offload->mem_access_opt.has_flag(
-            get_ch->output_snode, SNodeAccessFlag::read_only);
-      }
-      auto *ptr_as1 = llvm::PointerType::get(load_ty, 1);
-      auto *cast_ptr = builder->CreateAddrSpaceCast(ptr, ptr_as1);
-      auto *load = builder->CreateLoad(load_ty, cast_ptr);
-      if (read_only) {
-        auto *md = llvm::MDNode::get(builder->getContext(), {});
-        load->setMetadata(llvm::LLVMContext::MD_invariant_load, md);
-      }
-      llvm_val[stmt] = load;
+      auto *origin_address = builder->CreatePtrToInt(
+          origin_ptr, llvm::Type::getInt64Ty(*llvm_context));
+      auto *address_offset = builder->CreateSExt(
+          llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));
+      auto *target_address =
+          builder->CreateAdd(origin_address, address_offset);
+      auto pointee_ty = tlctx->get_data_type(stmt->ret_type.ptr_removed());
+      llvm_val[stmt] = builder->CreateIntToPtr(
+          target_address, llvm::PointerType::get(pointee_ty, origin_as));
     }
   }
 
-  void visit(GlobalStoreStmt *stmt) override {
-    QD_ASSERT(llvm_val[stmt->val]);
-    QD_ASSERT(llvm_val[stmt->dest]);
-    auto ptr_type = stmt->dest->ret_type->as<PointerType>();
-    if (ptr_type->is_bit_pointer()) {
-      TaskCodeGenLLVM::visit(stmt);
-    } else {
-      // Cast to addrspace(1) for global_store instead of flat_store.
-      auto *val_ty = llvm_val[stmt->val]->getType();
-      auto *ptr_as1 = llvm::PointerType::get(val_ty, 1);
-      auto *cast_ptr =
-          builder->CreateAddrSpaceCast(llvm_val[stmt->dest], ptr_as1);
-      builder->CreateStore(llvm_val[stmt->val], cast_ptr);
+  void visit(ExternalPtrStmt *stmt) override {
+    // Ndarray data lives in hipMalloc'd global memory. Base produces the
+    // pointer in addrspace(0); tag it as addrspace(1) at the source so
+    // downstream loads/stores emit global_load/store via InferAddressSpaces.
+    TaskCodeGenLLVM::visit(stmt);
+    auto *current = llvm_val[stmt];
+    if (current && current->getType()->isPointerTy() &&
+        current->getType()->getPointerAddressSpace() != 1) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
     }
+  }
+
+  void visit(GlobalTemporaryStmt *stmt) override {
+    // Global temporaries live in the runtime's global temporary buffer
+    // (hipMalloc'd). Same source-tagging pattern as ExternalPtrStmt.
+    TaskCodeGenLLVM::visit(stmt);
+    auto *current = llvm_val[stmt];
+    if (current && current->getType()->isPointerTy() &&
+        current->getType()->getPointerAddressSpace() != 1) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
+    }
+  }
+
+  void visit(BlockLocalPtrStmt *stmt) override {
+    // BLS lives in addrspace(3) LDS via the bls_buffer global var. Base
+    // visitor GEPs into bls_buffer (preserves addrspace(3)) but then
+    // PointerCasts to addrspace(0), which forces every BLS access through
+    // the FLAT unit (~50 cycle latency vs ds_load_* at ~4-12 cycles) and
+    // breaks correctness in any path that interprets the LDS-derived flat
+    // pointer as global. Skip the cast and keep addrspace(3).
+    QD_ASSERT(bls_buffer);
+    auto *base = bls_buffer;  // already addrspace(3)
+    auto *ptr =
+        builder->CreateGEP(base->getValueType(), base,
+                           {tlctx->get_constant(0), llvm_val[stmt->offset]});
+    auto *ptr_ty_lds = llvm::PointerType::get(
+        tlctx->get_data_type(stmt->ret_type.ptr_removed()), 3);
+    llvm_val[stmt] = builder->CreatePointerCast(ptr, ptr_ty_lds);
+  }
+
+  void visit(GlobalLoadStmt *stmt) override {
+    // Minimal override: pointer arrives with the correct addrspace from
+    // the source visitors above (or GetCh chain for SNode), so base
+    // CreateLoad lowers to the right ISA without a consumer-side cast.
+    // The only thing we add over base is plumbing the read_only flag
+    // through to create_intrinsic_load so SNode loads marked with
+    // SNodeAccessFlag::read_only get !invariant.load metadata for LICM.
+    bool should_cache_as_read_only = false;
+    if (auto get_ch = stmt->src->cast<GetChStmt>()) {
+      should_cache_as_read_only = current_offload->mem_access_opt.has_flag(
+          get_ch->output_snode, SNodeAccessFlag::read_only);
+    }
+    create_global_load(stmt, should_cache_as_read_only);
   }
 
   // BLS / shared memory buffer allocation
@@ -426,28 +477,13 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         QD_NOT_IMPLEMENTED
       }
       finalize_offloaded_task_function();
-      // Wavefront size is 64.  Workgroups smaller than the wavefront
-      // size are not handled reliably by the HSA runtime when the kernel
-      // uses scratch memory (which we do via addrspacecast'd alloca's).
-      // In that case the kernel launch fails with
-      // HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION / hipErrorIllegalAddress.
-      constexpr int kAmdgpuWavefrontSize = 64;
-      int effective_block_dim = stmt->block_dim;
-      if ((stmt->task_type == Type::range_for ||
-           stmt->task_type == Type::struct_for ||
-           stmt->task_type == Type::mesh_for) &&
-          effective_block_dim > 0 &&
-          effective_block_dim < kAmdgpuWavefrontSize) {
-        effective_block_dim = kAmdgpuWavefrontSize;
-      }
-
       current_task->grid_dim = stmt->grid_dim;
       if (stmt->task_type == Type::range_for) {
         if (stmt->const_begin && stmt->const_end) {
           int num_threads = stmt->end_value - stmt->begin_value;
-          int grid_dim = ((num_threads % effective_block_dim) == 0)
-                             ? (num_threads / effective_block_dim)
-                             : (num_threads / effective_block_dim) + 1;
+          int grid_dim = ((num_threads % stmt->block_dim) == 0)
+                             ? (num_threads / stmt->block_dim)
+                             : (num_threads / stmt->block_dim) + 1;
           grid_dim = std::max(grid_dim, 1);
           current_task->grid_dim = std::min(stmt->grid_dim, grid_dim);
         }
@@ -461,12 +497,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
             &max_threads_per_sm,
             HIP_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, 0);
         int query_max_block_per_sm =
-            (max_threads_per_sm > 0 && effective_block_dim > 0)
-                ? (max_threads_per_sm / effective_block_dim)
+            (max_threads_per_sm > 0 && stmt->block_dim > 0)
+                ? (max_threads_per_sm / stmt->block_dim)
                 : 32;
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
-      current_task->block_dim = effective_block_dim;
+      current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
