@@ -1588,12 +1588,16 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
   alignas(8) char tls_buffer[ctx.tls_size];
 #pragma clang diagnostic pop
   auto tls_ptr = &tls_buffer[0];
-  if (ctx.prologue)
-    ctx.prologue(ctx.context, tls_ptr);
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
   this_thread_context.cpu_assert_failed = 0;
+
+  if (ctx.prologue) {
+    ctx.prologue(&this_thread_context, tls_ptr);
+    if (this_thread_context.cpu_assert_failed)
+      return;
+  }
 
   if (ctx.step == 1) {
     int block_start = ctx.begin + task_id * ctx.block_size;
@@ -1614,7 +1618,7 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
   }
 
   if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
-    ctx.epilogue(ctx.context, tls_ptr);
+    ctx.epilogue(&this_thread_context, tls_ptr);
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1701,13 +1705,19 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
   int block_end = std::min(block_start + ctx.block_size, ctx.num_patches);
 
   for (int idx = block_start; idx < block_end; idx++) {
-    if (ctx.prologue)
-      ctx.prologue(ctx.context, tls_ptr, idx);
+    if (ctx.prologue) {
+      ctx.prologue(&this_thread_context, tls_ptr, idx);
+      if (this_thread_context.cpu_assert_failed)
+        break;
+    }
     ctx.body(&this_thread_context, tls_ptr, idx);
     if (this_thread_context.cpu_assert_failed)
       break;
-    if (ctx.epilogue)
-      ctx.epilogue(ctx.context, tls_ptr, idx);
+    if (ctx.epilogue) {
+      ctx.epilogue(&this_thread_context, tls_ptr, idx);
+      if (this_thread_context.cpu_assert_failed)
+        break;
+    }
   }
 }
 
