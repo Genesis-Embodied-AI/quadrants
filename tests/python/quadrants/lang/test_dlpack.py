@@ -177,13 +177,20 @@ def test_dlpack_2_arrays(tensor_type):
 
 @test_utils.test(arch=dlpack_arch)
 def test_dlpack_non_sequenced_axes():
+    """Fields whose SNode chain places axes in a non-i,j,k order (here
+    i, k, j) must still produce a *canonical* DLPack view: shape in
+    canonical (i, j, k) order, with permuted strides reflecting the
+    actual physical memory layout. Mirrors the ndarray-side
+    layout-tagged behaviour."""
     field_ikj = qd.field(qd.f32)
     qd.root.dense(qd.i, 3).dense(qd.k, 2).dense(qd.j, 4).place(field_ikj)
-    # create the field (since we arent initializing its value in any way, which would implicilty
-    # call qd.sync())
     qd.sync()
-    with pytest.raises(RuntimeError):
-        qd_to_torch(field_ikj)
+    t = qd_to_torch(field_ikj)
+    # canonical (i, j, k) shape: extents 3, 4, 2.
+    assert tuple(t.shape) == (3, 4, 2)
+    # Physical memory layout is (i, k, j), so the canonical view is not
+    # contiguous — the strides reflect the actual SNode order.
+    assert not t.is_contiguous()
 
 
 @test_utils.test(arch=dlpack_arch)

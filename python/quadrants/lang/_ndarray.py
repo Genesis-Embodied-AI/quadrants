@@ -88,6 +88,12 @@ class Ndarray:
         (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view
         of the physical buffer with no data movement. On untagged
         ndarrays this is byte-identical to the legacy export.
+
+        Mirrors the field-backend behaviour: ``to_dlpack()`` on a field
+        allocated via ``qd.tensor(..., backend=qd.Backend.FIELD,
+        layout=...)`` (translated to ``order=...``) likewise returns a
+        canonical view via permuted strides — see the C++
+        ``field_to_dlpack`` SNode-walk path.
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
