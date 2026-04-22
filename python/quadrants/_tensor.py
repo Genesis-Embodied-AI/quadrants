@@ -240,9 +240,13 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         # introspection-only field tag in a separate namespace to avoid
         # accidentally double-permuting field IR.
         if layout is not None:
-            f._qd_field_layout = tuple(layout)
-            if getattr(f, "grad", None) is not None:
-                f.grad._qd_field_layout = tuple(layout)
+            # Stashed on the field instance as a plain attribute (pybind
+            # classes don't declare it; setattr silences pyright's
+            # reportAttributeAccessIssue for this introspection-only tag).
+            setattr(f, "_qd_field_layout", tuple(layout))
+            grad = getattr(f, "grad", None)
+            if grad is not None:
+                setattr(grad, "_qd_field_layout", tuple(layout))
         return f
     if backend is Backend.NDARRAY:
         if order is None:
