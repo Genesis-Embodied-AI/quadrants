@@ -190,5 +190,6 @@ def test_layout_grad_all_rank3_permutations(layout, backend):
 def test_layout_ndarray_grad_tag_propagates_rank2():
     a = qd.tensor(qd.f32, shape=(4, 5), backend=qd.Backend.NDARRAY, layout=(1, 0), needs_grad=True)
     assert a.grad is not None
-    assert getattr(a, "_qd_layout", None) == (1, 0)
-    assert getattr(a.grad, "_qd_layout", None) == (1, 0)
+    impl = a._unwrap()
+    assert getattr(impl, "_qd_layout", None) == (1, 0)
+    assert getattr(a.grad._unwrap(), "_qd_layout", None) == (1, 0)

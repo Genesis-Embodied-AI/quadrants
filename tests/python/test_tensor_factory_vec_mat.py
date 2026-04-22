@@ -35,9 +35,13 @@ def _mat_reference(backend):
 
 @test_utils.test(arch=qd.cpu)
 def test_vector_tensor_default_backend_matches_vector_ndarray():
+    """Post stork-19 ``qd.Vector.tensor`` returns a ``qd.VectorTensor``
+    wrapper; the underlying impl must match what ``qd.Vector.ndarray``
+    returns directly."""
     a = qd.Vector.tensor(3, qd.f32, shape=(4,))
     b = qd.Vector.ndarray(3, qd.f32, shape=(4,))
-    assert type(a) is type(b)
+    assert isinstance(a, qd.VectorTensor)
+    assert type(a._unwrap()) is type(b)
     assert a.shape == b.shape == (4,)
 
 
@@ -46,7 +50,8 @@ def test_vector_tensor_default_backend_matches_vector_ndarray():
 def test_vector_tensor_explicit_backend_matches_underlying(backend):
     a = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=backend)
     ref = _vec_reference(backend)(3, qd.f32, shape=(4,))
-    assert type(a) is type(ref)
+    assert isinstance(a, qd.VectorTensor)
+    assert type(a._unwrap()) is type(ref)
     assert a.shape == ref.shape == (4,)
 
 
@@ -108,7 +113,8 @@ def test_vector_tensor_kernel_roundtrip(backend):
 def test_matrix_tensor_default_backend_matches_matrix_ndarray():
     a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))
     b = qd.Matrix.ndarray(2, 3, qd.f32, shape=(4,))
-    assert type(a) is type(b)
+    assert isinstance(a, qd.MatrixTensor)
+    assert type(a._unwrap()) is type(b)
     assert a.shape == b.shape == (4,)
 
 
@@ -117,7 +123,8 @@ def test_matrix_tensor_default_backend_matches_matrix_ndarray():
 def test_matrix_tensor_explicit_backend_matches_underlying(backend):
     a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=backend)
     ref = _mat_reference(backend)(2, 3, qd.f32, shape=(4,))
-    assert type(a) is type(ref)
+    assert isinstance(a, qd.MatrixTensor)
+    assert type(a._unwrap()) is type(ref)
     assert a.shape == ref.shape == (4,)
 
 

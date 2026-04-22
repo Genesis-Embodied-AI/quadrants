@@ -48,11 +48,23 @@ _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 def _with_layout(ndarray, layout):
     """Tag ``ndarray`` with a canonical-axis permutation. Internal.
 
+    Accepts either a bare ``Ndarray`` or a ``Tensor`` wrapper around one;
+    in the wrapper case the tag goes on the underlying impl so the
+    kernel-arg unwrap hook (and the AST rewrite that gates on
+    ``_qd_layout``) sees it.
+
     If a companion ``grad`` ndarray exists (allocated by
     ``needs_grad=True``), the tag is propagated to it so kernel code
     reading ``x.grad[...]`` goes through the same canonical->physical
     AST rewrite as ``x[...]``.
     """
+    # Unwrap Tensor wrappers transparently. Imported lazily to dodge the
+    # _tensor_wrapper -> _tensor cycle.
+    from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+
+    if isinstance(ndarray, _TensorWrapper):
+        ndarray = ndarray._unwrap()
+
     layout = tuple(layout)
     ndim = len(ndarray.shape)
     if len(layout) != ndim:

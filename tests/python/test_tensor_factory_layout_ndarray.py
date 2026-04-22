@@ -36,7 +36,7 @@ from tests import test_utils
 def test_factory_no_layout_does_not_tag():
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY)
-    assert getattr(a, "_qd_layout", None) is None
+    assert getattr(a._unwrap(), "_qd_layout", None) is None
     assert tuple(a.shape) == (3, 4)
 
 
@@ -44,7 +44,7 @@ def test_factory_identity_layout_does_not_tag():
     """Identity layout collapses to ``None`` (matches the FIELD path)."""
     qd.init(arch=qd.x64)
     a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(0, 1))
-    assert getattr(a, "_qd_layout", None) is None
+    assert getattr(a._unwrap(), "_qd_layout", None) is None
     assert tuple(a.shape) == (3, 4)
 
 
@@ -64,8 +64,9 @@ def test_factory_non_identity_layout_allocates_physical_and_tags():
     a = qd.tensor(qd.i32, shape=(3, 4), backend=qd.Backend.NDARRAY, layout=(1, 0))
     # Canonical shape is what the user passed; physical buffer is (4, 3).
     assert tuple(a.shape) == (3, 4)
-    assert tuple(a._physical_shape) == (4, 3)
-    assert a._qd_layout == (1, 0)
+    impl = a._unwrap()
+    assert tuple(impl._physical_shape) == (4, 3)
+    assert impl._qd_layout == (1, 0)
 
 
 def test_factory_non_identity_rank3_layout_allocates_physical_and_tags():
@@ -73,8 +74,9 @@ def test_factory_non_identity_rank3_layout_allocates_physical_and_tags():
     a = qd.tensor(qd.i32, shape=(2, 3, 4), backend=qd.Backend.NDARRAY, layout=(2, 0, 1))
     # Canonical (2, 3, 4); physical buffer = (4, 2, 3) per layout (2, 0, 1).
     assert tuple(a.shape) == (2, 3, 4)
-    assert tuple(a._physical_shape) == (4, 2, 3)
-    assert a._qd_layout == (2, 0, 1)
+    impl = a._unwrap()
+    assert tuple(impl._physical_shape) == (4, 2, 3)
+    assert impl._qd_layout == (2, 0, 1)
 
 
 def test_factory_validates_layout_length():
@@ -146,12 +148,13 @@ def test_factory_layout_rank3_all_permutations(layout):
     # User-facing shape is canonical regardless of layout.
     assert tuple(a.shape) == canonical
     physical = tuple(canonical[axis] for axis in layout)
-    assert tuple(a._physical_shape) == physical
+    impl = a._unwrap()
+    assert tuple(impl._physical_shape) == physical
     # Identity layout collapses to no tag (matches the FIELD path).
     if layout == tuple(range(3)):
-        assert getattr(a, "_qd_layout", None) is None
+        assert getattr(impl, "_qd_layout", None) is None
     else:
-        assert a._qd_layout == layout
+        assert impl._qd_layout == layout
 
     @qd.kernel
     def fill(x: qd.types.ndarray()):
