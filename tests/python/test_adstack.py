@@ -1,10 +1,15 @@
 import math
 import pathlib
 import re
+import subprocess
+import sys
+import textwrap
 
+import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang.misc import is_extension_supported
 
 from tests import test_utils
 
@@ -20,21 +25,26 @@ _UNARY_OPS_PARAMS = [
     # constant, so a non-crossing operand would pass trivially. `exp`/`tanh` do not need the crossing (their
     # derivatives stay positive) but the same parameters work because their domain is all reals; they live
     # in this group on that basis alone.
-    ("sin", 0.3, -0.4),
-    ("cos", 0.3, -0.4),
-    ("abs", 0.3, -0.4),
-    ("tanh", 0.3, -0.4),
-    ("exp", 0.3, -0.4),
+    ("sin", 0.3, -0.4, 1e-4),
+    ("cos", 0.3, -0.4, 1e-4),
+    ("abs", 0.3, -0.4, 1e-4),
+    ("tanh", 0.3, -0.4, 1e-4),
+    ("exp", 0.3, -0.4, 1e-4),
     # Ops restricted to positive/subunit operands use a smaller step and zero offset to
     # stay inside their domain across every `x_val` and `n_iter` combination.
     # `tan` joins this positive-domain group because its singularity at pi/2 ~= 1.57 lies outside
     # the positive-path operand's reach for every `x_val` and `n_iter` combination.
-    ("tan", 0.05, 0.0),
-    ("log", 0.05, 0.0),
-    ("sqrt", 0.05, 0.0),
-    ("rsqrt", 0.05, 0.0),
-    ("asin", 0.05, 0.0),
-    ("acos", 0.05, 0.0),
+    ("tan", 0.05, 0.0, 1e-4),
+    ("log", 0.05, 0.0, 1e-4),
+    ("sqrt", 0.05, 0.0, 1e-4),
+    ("rsqrt", 0.05, 0.0, 1e-4),
+    # asin/acos use a looser 1e-3 at f32 because native Vulkan asin/acos intrinsics on AMDGPU drift from the
+    # CPU/PyTorch reference by ~1e-4 in single precision at n_iter=10. A per-iteration replay regression (the
+    # one this test pins against) offsets the result by orders of magnitude, not parts per ten thousand, so
+    # 1e-3 still catches it with plenty of margin. Other arches (CPU, Metal, CUDA) comfortably hit 1e-4 for
+    # asin/acos too; the looser tolerance is just to keep the test green across drivers.
+    ("asin", 0.05, 0.0, 1e-3),
+    ("acos", 0.05, 0.0, 1e-3),
 ]
 
 
@@ -90,9 +100,9 @@ def _run_unary_loop_carried(qd_dtype, op_name, step, offset, x_val, n_iter, rel_
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @pytest.mark.parametrize("x_val", [0.001, 0.15, 0.26, 0.399])
-@pytest.mark.parametrize("op_name,step,offset", _UNARY_OPS_PARAMS)
+@pytest.mark.parametrize("op_name,step,offset,tol", _UNARY_OPS_PARAMS)
 @test_utils.test(require=qd.extension.adstack)
-def test_adstack_unary_loop_carried(op_name, step, offset, x_val, n_iter):
+def test_adstack_unary_loop_carried(op_name, step, offset, tol, x_val, n_iter):
     # Cross-check `d/dx sum_j op(x + j * step + offset)` against PyTorch autograd for a parametrized unary `op`.
     # Each op is sampled at interior values and at the edge of its domain: `x_val = 0.001` drives the positive-path
     # operand against 0 (log/sqrt gradients blow up there), `x_val = 0.399` drives it against 1 (asin/acos
@@ -113,15 +123,18 @@ def test_adstack_unary_loop_carried(op_name, step, offset, x_val, n_iter):
     # reversed loop then reads the last-iteration value for every backward step - which at `n_iter >= 3` produces
     # a wrong gradient. That is the regression this test pins against: any unary op dropped from the supported set
     # causes the multi-iteration parametrize variants to fail.
-    _run_unary_loop_carried(qd.f32, op_name, step, offset, x_val, n_iter, rel_tol=1e-4)
+    _run_unary_loop_carried(qd.f32, op_name, step, offset, x_val, n_iter, rel_tol=tol)
 
 
 @pytest.mark.needs_torch
 @pytest.mark.parametrize("n_iter", [1, 3, 10])
 @pytest.mark.parametrize("x_val", [0.001, 0.15, 0.26, 0.399])
-@pytest.mark.parametrize("op_name,step,offset", _UNARY_OPS_PARAMS)
+@pytest.mark.parametrize("op_name,step,offset,tol", _UNARY_OPS_PARAMS)
 @test_utils.test(require=[qd.extension.adstack, qd.extension.data64], default_fp=qd.f64)
-def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
+def test_adstack_unary_loop_carried_f64(op_name, step, offset, tol, x_val, n_iter):
+    # f64 uses the same parametrize as f32 to keep ops in lockstep, but ignores the per-op f32 tolerance: f64
+    # hits near-machine-precision on every backend, so a single tight global tolerance catches every drift.
+    del tol
     _run_unary_loop_carried(qd.f64, op_name, step, offset, x_val, n_iter, rel_tol=1e-12)
 
 
@@ -427,6 +440,239 @@ def test_adstack_basic_gradient_negative(n_iter):
         compute.grad()
 
 
+@test_utils.test(
+    arch=qd.metal,
+    require=qd.extension.adstack,
+    ad_stack_size=65536,
+)
+def test_adstack_shader_compile_failure_raises():
+    # Asks the compiler to build a Metal shader whose per-thread private-memory footprint is too large for Apple's
+    # shader translator to accept. The test asserts the kernel fails to build with a regular Python `RuntimeError`
+    # saying the pipeline couldn't be created, instead of silently launching a null pipeline (which would either
+    # crash the process or corrupt subsequent kernels).
+    #
+    # Internal detail: the oversized `ad_stack_size` combined with several independent loop-carried variables
+    # forces enough Function-scope private memory per thread that Apple's MSL translator rejects the pipeline
+    # with `XPC_ERROR_CONNECTION_INTERRUPTED` at create time. A single loop-carried variable is not enough - the
+    # Metal compiler is willing to spill a single oversized private array to device memory on its own and the
+    # pipeline still builds; four independent adstacks at the same capacity defeat the spill heuristic. The test
+    # is restricted to Metal because Vulkan drivers vary widely on what per-thread Function-scope footprint they
+    # will accept, so calibrating a single threshold that every CI Vulkan driver rejects is brittle.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    qd.root.dense(qd.i, 1).place(x, x.grad)
+    qd.root.place(y, y.grad)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            a = x[i]
+            b = x[i]
+            c = x[i]
+            d = x[i]
+            for _ in range(10):
+                a = qd.sin(a)
+                b = qd.sin(b)
+                c = qd.sin(c)
+                d = qd.sin(d)
+            y[None] += a + b + c + d
+
+    x[0] = 0.1
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    with pytest.raises(RuntimeError, match=r"[Ff]ailed to create pipeline"):
+        compute.grad()
+
+
+def _overflowing_compute(n_elements=1, n_iter=64):
+    # Shared kernel for the overflow tests. Builds `compute`, loads inputs, seeds the output gradient, and returns
+    # `(compute, x, y)` so each test can drive the grad launch and read back assertions itself. `n_iter=64` + 2
+    # adstack preamble pushes = 66 pushes, comfortably above `default_ad_stack_size=32`; `n_elements` controls how
+    # many threads run the overflowing loop in parallel.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    qd.root.dense(qd.i, n_elements).place(x, x.grad)
+    qd.root.place(y, y.grad)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(n_iter):
+                y[None] += qd.sin(v)
+                v = v + 1.0
+
+    for i in range(n_elements):
+        x[i] = 0.1 + 0.01 * i
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n_elements):
+        x.grad[i] = 0.0
+    return compute, x, y
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_raises():
+    # Runs a backward pass with a for-loop longer than the adstack can hold, and asserts the overflow surfaces as a
+    # regular Python exception on the next `qd.sync()` - not a silent wrong gradient and not a process crash. This
+    # is what users see when their differentiable kernel is too deep for the current `ad_stack_size`, and the error
+    # message should tell them how to raise the capacity.
+    #
+    # Internal detail: both LLVM and SPIR-V defer the error to the next `qd.sync()` (same pattern as CUDA async
+    # errors) so we do not pay a sync-per-launch. LLVM polls `runtime->adstack_overflow_flag` from
+    # `LlvmProgramImpl::synchronize()` via `check_adstack_overflow()`; SPIR-V's gfx runtime raises via `QD_ERROR`
+    # on sync. The test launches the overflowing grad kernel and calls `qd.sync()` inside the same `pytest.raises`
+    # block so the deferred surfacing point is caught.
+    compute, _, _ = _overflowing_compute()
+    # On LLVM the runtime raises QuadrantsAssertionError (subclass of AssertionError) from
+    # check_adstack_overflow; on SPIR-V the gfx runtime raises RuntimeError via QD_ERROR. We accept either,
+    # matching only the message prefix.
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_flag_resets_after_catch():
+    # Once `check_adstack_overflow()` raises, the runtime must clear its overflow flag so a subsequent `qd.sync()`
+    # (with no new overflowing grad launch in between) returns normally. Without the reset the user would see a
+    # stale overflow exception every time they sync after the first one, which makes diagnosis and recovery
+    # impossible.
+    compute, _, _ = _overflowing_compute()
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+    # No new grad launch here - the flag must already be back to zero.
+    qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=1024)
+def test_adstack_large_capacity_resolves_overflow():
+    # Same kernel shape as `test_adstack_overflow_raises`, but with `ad_stack_size=1024` explicitly passed to
+    # `qd.init()`. Asserts that raising the capacity (rather than shrinking the loop) is a valid workaround and
+    # that the backward pass runs to completion with a correct gradient. This is the remediation path the overflow
+    # error message points users at.
+    compute, x, _ = _overflowing_compute()
+    compute.grad()
+    qd.sync()
+
+    # y += sin(v) iterated with v = x[0] + k for k = 0..63, so dy/dx[0] = sum_k cos(x[0] + k).
+    expected = sum(math.cos(0.1 + k) for k in range(64))
+    assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
+def test_adstack_overflow_multithreaded():
+    # Multi-element field so several threads execute the overflowing grad body in parallel. Asserts the overflow
+    # still surfaces as a single Python exception rather than deadlocking, crashing, or racing on the flag. Every
+    # thread writes the same flag value (non-zero), so a race on the write is benign; this test pins that the
+    # read side is also safe (one raise per sync regardless of how many threads flipped the bit).
+    compute, _, _ = _overflowing_compute(n_elements=16)
+    with pytest.raises((AssertionError, RuntimeError), match=r"[Aa]dstack overflow"):
+        compute.grad()
+        qd.sync()
+
+
+def test_adstack_overflow_during_teardown_does_not_abort(tmp_path):
+    # This test runs the kernel in a child process (not via `@test_utils.test`, which iterates arches), so it
+    # cannot rely on the decorator's `require=qd.extension.adstack` skip. Guard manually: skip if the CPU backend
+    # was not built with the adstack extension, matching what the sibling overflow tests get from the decorator.
+    if not is_extension_supported(qd.cpu, qd.extension.adstack):
+        pytest.skip("adstack extension not available on cpu")
+
+    # If a user launches an overflowing grad kernel and never calls `qd.sync()` before the process exits, the
+    # adstack-overflow flag is still set when Python interpreter teardown invokes `Program::finalize()`. The two
+    # teardown syncs inside `Program::finalize()` must not re-raise a `QuadrantsAssertionError` into the
+    # destructor path - doing so would terminate the process with `std::terminate()` instead of returning a clean
+    # exit code. A subprocess runs the overflowing-grad kernel without calling `qd.sync()` at all and exits; this
+    # test asserts that the child returns with exit code 0 rather than SIGABRT (-6) or any other non-zero code.
+    #
+    # Internal details: `Program::finalize()` invokes `program_impl_->pre_finalize()` before the two teardown
+    # `synchronize()` calls. `LlvmProgramImpl::pre_finalize()` sets `finalizing_ = true` so
+    # `LlvmProgramImpl::synchronize()` short-circuits `check_adstack_overflow()`. Note the flag must be set
+    # *before* those syncs run - setting it only inside `LlvmProgramImpl::finalize()` (which is dispatched after
+    # them) is too late. The subprocess is launched from a temp file because `python -c "<kernel>"` breaks
+    # Quadrants' kernel source-inspect (`getsourcelines` cannot find the source of an inlined `-c` string); the
+    # grad call is deliberately left unsynced so this is the teardown path, not the user-catch path.
+    child_script = textwrap.dedent(
+        """
+        import quadrants as qd
+
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
+
+        x = qd.field(qd.f32)
+        y = qd.field(qd.f32)
+        qd.root.dense(qd.i, 1).place(x, x.grad)
+        qd.root.place(y, y.grad)
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                v = x[i]
+                for _ in range(64):
+                    y[None] += qd.sin(v)
+                    v = v + 1.0
+
+        x[0] = 0.1
+        y[None] = 0.0
+        compute()
+        y.grad[None] = 1.0
+        x.grad[0] = 0.0
+        compute.grad()
+        # Intentionally no qd.sync() and no try/except here: the adstack-overflow flag is left set when the
+        # process exits, so teardown must swallow it via the `finalizing_` guard rather than re-raising.
+        """
+    )
+    script_path = tmp_path / "overflow_teardown_child.py"
+    script_path.write_text(child_script)
+    # No `timeout=` on subprocess.run: pytest's own per-test timeout (`--timeout=...` in CI and locally) already
+    # terminates the whole test if the child deadlocks. Adding a second timeout here would only duplicate that
+    # safety net with a different failure mode (TimeoutExpired vs pytest-timeout's clean teardown).
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"child exited with {result.returncode}\n"
+            f"stdout:\n{result.stdout.decode()}\n"
+            f"stderr:\n{result.stderr.decode()}"
+        )
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_near_capacity():
+    # Runs a backward pass with a for-loop sized to just barely fit inside the adstack (one iteration away from
+    # overflow) and asserts the gradient comes out correctly. Companion to `test_adstack_overflow_raises` - this is
+    # the "and it still works at the boundary" side.
+    #
+    # Internal detail: the transform emits two adstack pushes before the loop body (one for the initial adjoint
+    # slot, one for the primal's starting value), so a loop of K iterations produces K+2 pushes. With
+    # `default_ad_stack_size=32`, that bounds K at 30.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    qd.root.dense(qd.i, 1).place(x, x.grad)
+    qd.root.place(y, y.grad)
+
+    @qd.kernel
+    def compute():
+        for i in x:
+            v = x[i]
+            for _ in range(30):
+                y[None] += qd.sin(v)
+                v = v + 1.0
+
+    x[0] = 0.1
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[0] = 0.0
+    compute.grad()
+
+    expected = sum(math.cos(0.1 + k) for k in range(30))
+    assert x.grad[0] == test_utils.approx(expected, rel=1e-4)
+
+
 def _run_sum_linear(
     qd_dtype, use_static_loop, use_varying_coeff, n_iter, rel_tol, approx=test_utils.approx, abs_tol=None
 ):
@@ -498,3 +744,409 @@ def test_adstack_sum_linear_f64(use_static_loop, use_varying_coeff, n_iter):
     # loop x varying/constant coefficient) at f64 since a future type-narrowing bug that depends on shape might
     # still surface through compile-time / structural differences between f32 and f64 codegen paths.
     _run_sum_linear(qd.f64, use_static_loop, use_varying_coeff, n_iter, rel_tol=1e-14, approx=pytest.approx, abs_tol=0)
+
+
+def test_adstack_codegen_budget_guard_runs_in_child_process(tmp_path):
+    # Per-task codegen guard: the sum of `AdStackAllocaStmt::size_in_bytes()` in a single LLVM task must not cross
+    # the ~256 KB CPU worker-thread stack budget. Beyond that the frame silently clobbers adjacent stack memory and
+    # the reverse pass returns zero / garbage gradients. The guard runs inside the LLVM compilation worker thread
+    # pool; the underlying `QD_ERROR_IF` throws across a thread boundary that does not propagate the exception
+    # back to Python, so it surfaces as a loud `std::terminate` / SIGABRT rather than a catchable Python
+    # exception. The test runs the overflowing kernel in a child process and asserts the child aborts with a
+    # non-zero exit code and the guard message reaches stderr; that is enough to prove the guard fires and does
+    # not let silent stack-frame clobbering through.
+    if not is_extension_supported(qd.cpu, qd.extension.adstack):
+        pytest.skip("adstack extension not available on cpu")
+    if not is_extension_supported(qd.cpu, qd.extension.data64):
+        pytest.skip("f64 extension not available on cpu")
+
+    _run_budget_guard_child(tmp_path)
+
+
+def _run_budget_guard_child(tmp_path):
+    child_script = textwrap.dedent(
+        """
+        import quadrants as qd
+
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=4096, default_fp=qd.f64)
+
+        n = 4
+        x = qd.field(qd.f64, shape=n, needs_grad=True)
+        y = qd.field(qd.f64, shape=(), needs_grad=True)
+        n_iter = qd.field(qd.i32, shape=())
+
+        @qd.kernel
+        def compute():
+            for i in x:
+                v1 = x[i]
+                v2 = x[i]
+                v3 = x[i]
+                v4 = x[i]
+                v5 = x[i]
+                for _ in range(n_iter[None]):
+                    v1 = qd.sin(v1)
+                    v2 = qd.sin(v2)
+                    v3 = qd.sin(v3)
+                    v4 = qd.sin(v4)
+                    v5 = qd.sin(v5)
+                y[None] += v1 + v2 + v3 + v4 + v5
+
+        for i in range(n):
+            x[i] = 0.1 + 0.1 * i
+        n_iter[None] = 3
+        y[None] = 0.0
+        compute()
+        y.grad[None] = 1.0
+        for i in range(n):
+            x.grad[i] = 0.0
+        compute.grad()
+        """
+    )
+    script_path = tmp_path / "budget_guard_child.py"
+    script_path.write_text(child_script)
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=True, check=False)
+    assert (
+        result.returncode != 0
+    ), "child exited with returncode 0 but the budget guard was expected to terminate the process"
+    combined = (result.stdout + result.stderr).decode()
+    assert "autodiff-stack budget exceeded" in combined, (
+        f"expected guard message in child output; got:\nstdout:\n{result.stdout.decode()}\n"
+        f"stderr:\n{result.stderr.decode()}"
+    )
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_runtime_if_wrapping_loop_with_carried_var():
+    # Pins the MakeAdjoint::visit(RangeForStmt) current_block-restore behaviour. Reverse-mode AD through a dynamic
+    # for-loop with a loop-carried float, nested inside a runtime-guarded `if`, must emit its post-loop reverse
+    # stmts (stack-underflow cleanup and the `accumulate x.grad[i]` on the initial-value stmt) as siblings *after*
+    # the reversed for-loop, not inside its body. Without the save/restore of `current_block` around the per-stmt
+    # iteration, these stmts land inside the body and the gradient is silently wrong
+    # (e.g. `1 + 1 + 1 = 3.0` instead of `1 + 0.95 + 0.95**2 = 2.8525`). Compile-time-true `if` branches do not
+    # trigger the pattern because simplify folds them away before reverse-mode is applied.
+    #
+    # This shape is common in user code: a reverse-mode kernel reads fields through runtime index-range guards
+    # around dynamic-loop bodies that carry floats across iterations. Without the save/restore this produces NaN
+    # on Metal and zero-valued gradients on CPU.
+    n_iter = 4
+    n_active = 3
+    n_max = n_active + 2  # outer loop iterates past n_active; body guarded by `i < n_active`.
+
+    x = qd.field(qd.f32, shape=n_max, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+    n_arr = qd.field(qd.i32, shape=())
+
+    @qd.kernel
+    def compute():
+        for i in range(n_max):
+            if i < n_arr[None]:
+                v = x[i]
+                acc = 0.0
+                for _ in range(n_iter):
+                    acc = acc + v
+                    v = v * 0.95 + 0.01
+                y[None] += acc
+
+    for i in range(n_max):
+        x[i] = 1.0 + 0.1 * i
+    n_arr[None] = n_active
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    for i in range(n_max):
+        x.grad[i] = 0.0
+    compute.grad()
+
+    expected = sum(0.95**k for k in range(n_iter))
+    for i in range(n_active):
+        assert x.grad[i] == test_utils.approx(expected, rel=1e-4)
+    for i in range(n_active, n_max):
+        assert x.grad[i] == 0.0
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_if_cond_snapshot_through_dynamic_for():
+    # Pins MakeAdjoint::visit(IfStmt) cond-snapshot behaviour. Reverse-mode AD through a runtime `if` whose
+    # cond is a stack-backed alloca load, nested inside a dynamic-range for-loop, must evaluate the reverse
+    # if-cond at the forward-time value - not by re-running `stack_load_top` at reverse-time. Without the
+    # snapshot, BackupSSA's cross-block clone of `if_stmt->cond` re-reads the cond's backing adstack at
+    # reverse time, where the top has advanced due to the short-circuit push emitted inside the forward if
+    # body; the reverse branch flips, the accumulation never runs, and gradients silently come out all-zero.
+    #
+    # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, store-to-load forwarding
+    # collapses the tautological `if (stack_load_top after push_true) { ... }` short-circuit wrapper before
+    # MakeAdjoint sees it, and the multi-push-per-iter pattern that drives the bug vanishes. The outer
+    # `qd.ndrange` (not a plain Python `for`) is required: the plain-`for` variant keeps the outer index as
+    # a direct loop index rather than a cast alloca, and the enclosing-loop cast is what forces the inner
+    # cond alloca to be stack-promoted. `qd.cast(i_b, qd.i32)` is also load-bearing for the same reason -
+    # without it the cond alloca stays unpromoted and the bug does not surface. The inner-loop bound `n[None]`
+    # pulled from a field, not a Python literal, forces the inner for to be compiled as a runtime-dynamic
+    # range rather than statically unrolled; the buggy stack clone cannot arise on the fully-unrolled path.
+    # The min shape is 2 iterations (`i == 0` writes a vector from `x`; else reads a constant `c[i]`); the
+    # expected grad `[1, 1, 1, 0]` makes a flipped reverse branch visible immediately because flipping drops
+    # the `x[0..2]` accumulation entirely and the whole grad comes out `[0, 0, 0, 0]`.
+    vec3 = qd.types.vector(3, qd.f32)
+
+    outputs = qd.field(dtype=vec3, shape=(2, 1), needs_grad=True)
+    constants = qd.field(dtype=vec3, shape=(2,))
+    n_iter = qd.field(dtype=qd.i32, shape=())
+    inputs = qd.field(dtype=qd.f32, shape=(4, 1), needs_grad=True)
+
+    @qd.kernel
+    def my_kernel():
+        for i_batch in qd.ndrange(outputs.shape[1]):
+            i_batch = qd.cast(i_batch, qd.i32)
+            for i_inner in range(n_iter[None]):
+                if i_inner == 0:
+                    outputs[i_inner, i_batch] = qd.Vector(
+                        [inputs[0, i_batch], inputs[1, i_batch], inputs[2, i_batch]], dt=qd.f32
+                    )
+                else:
+                    outputs[i_inner, i_batch] = constants[i_inner]
+
+    outputs.grad.from_numpy(np.ones((2, 1, 3), dtype=np.float32))
+    n_iter[None] = 2
+
+    my_kernel.grad()
+
+    grad = inputs.grad.to_numpy().squeeze()
+    assert grad[0] == 1.0
+    assert grad[1] == 1.0
+    assert grad[2] == 1.0
+    assert grad[3] == 0.0
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False, ad_stack_size=32)
+def test_adstack_if_cond_snapshot_adaptive_sizing():
+    # Reverse-mode AD through an `if/elif/elif/else` chain inside a dynamic for-loop must compile
+    # and produce the correct per-input gradient. The companion test above pins the silently-zero
+    # gradient bug on a single `if/else`; this one pins a compile-time crash that only surfaces
+    # once the chain has several arms with distinct stack-backed conds.
+    #
+    # Internal details: every arm of the chain lowers to its own IfStmt whose cond is an
+    # AdStackLoadTopStmt, so MakeAdjoint emits one snapshot adstack per arm. The crash is not
+    # about gradient values - it is a codegen abort ("Adaptive autodiff stack's size should have
+    # been determined") that fires when the adaptive-sizing pass leaves any one of those snapshot
+    # stacks with max_size still zero. Four arms is the smallest shape where that pass's
+    # Bellman-Ford walk reliably fails to size at least one snapshot stack; a single `if/else` is
+    # always sized successfully. `ad_stack_size=32` is load-bearing - the default `ad_stack_size=0`
+    # (adaptive) puts the cond stack itself through the same sizing pass, which incidentally sizes
+    # the snapshot stacks too; only when the cond stack is stamped with a fixed size and skipped by
+    # the pass does the snapshot-stack-only walk expose the miscount. Every caveat from the companion
+    # test about `cfg_optimization=False`, the `qd.ndrange`/`qd.cast` pair, and the runtime-dynamic
+    # inner-range bound still applies - without them the snapshot adstack is never created at all
+    # and the crash cannot arise.
+    vec3 = qd.types.vector(3, qd.f32)
+
+    outputs = qd.field(dtype=vec3, shape=(4, 1), needs_grad=True)
+    constants = qd.field(dtype=vec3, shape=(4,))
+    n_iter = qd.field(dtype=qd.i32, shape=())
+    inputs = qd.field(dtype=qd.f32, shape=(4, 1), needs_grad=True)
+
+    @qd.kernel
+    def my_kernel():
+        for i_batch in qd.ndrange(outputs.shape[1]):
+            i_batch = qd.cast(i_batch, qd.i32)
+            for i_inner in range(n_iter[None]):
+                if i_inner == 0:
+                    outputs[i_inner, i_batch] = qd.Vector(
+                        [inputs[0, i_batch], inputs[1, i_batch], inputs[2, i_batch]], dt=qd.f32
+                    )
+                elif i_inner == 1:
+                    outputs[i_inner, i_batch] = qd.Vector(
+                        [inputs[1, i_batch], inputs[2, i_batch], inputs[3, i_batch]], dt=qd.f32
+                    )
+                elif i_inner == 2:
+                    outputs[i_inner, i_batch] = qd.Vector(
+                        [inputs[0, i_batch], inputs[2, i_batch], inputs[3, i_batch]], dt=qd.f32
+                    )
+                else:
+                    outputs[i_inner, i_batch] = constants[i_inner]
+
+    outputs.grad.from_numpy(np.ones((4, 1, 3), dtype=np.float32))
+    n_iter[None] = 4
+
+    my_kernel.grad()
+
+    grad = inputs.grad.to_numpy().squeeze()
+    assert grad[0] == 2.0
+    assert grad[1] == 2.0
+    assert grad[2] == 3.0
+    assert grad[3] == 2.0
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_sibling_for_loops_reverse_order():
+    # Reverse-mode AD through two sibling dynamic for-loops in the same container, where the second loop reads a global
+    # that the first loop wrote, must execute the second loop's reverse before the first loop's reverse. Otherwise the
+    # first-loop reverse reads an uninitialised (zero) adjoint of the intermediate global, clears it, and the gradient
+    # the second-loop reverse later populates propagates nowhere. Left unfixed, `inputs.grad` comes out all-zeros
+    # despite a well-defined non-zero analytic derivative.
+    #
+    # Internal details: MakeAdjoint runs per-IB, and for this shape both sibling fors' bodies are their own IBs
+    # (innermost loops with global ops). The reverse-mode transform therefore never visits the container block that
+    # holds them, so nothing flips their order. ReverseOuterLoops flips each loop's `reversed` iteration direction but
+    # historically left sibling order alone; the fix adds a pairwise swap of sibling for-loops inside every non-IB
+    # container block the pass walks through. Non-loop statements (range-bound loads, alloca, etc.) stay at their
+    # original positions so SSA operands still dominate both swapped fors. The outer `for _ in range(1)` dummy is the
+    # smallest shape that places the two siblings inside a non-IB container (the frontend rejects a bare sequence of
+    # top-level for-loops as "mixed usage of for-loops and statements without looping"); `n[None]` from a field forces
+    # the inner ranges to be dynamic so the bug manifests (static-unrolled ranges go through a different path that
+    # already works).
+    size = 3
+    n = qd.field(qd.i32, shape=())
+
+    inputs = qd.field(qd.f32, shape=size, needs_grad=True)
+    weights = qd.field(qd.f32, shape=size)
+    scratch = qd.field(qd.f32, shape=size, needs_grad=True)
+    outputs = qd.field(qd.f32, shape=size, needs_grad=True)
+
+    @qd.kernel
+    def my_kernel():
+        for _ in range(1):
+            for i in range(n[None]):
+                scratch[i] = inputs[i]
+            for i in range(n[None]):
+                outputs[i] = scratch[i] * weights[i]
+
+    n[None] = size
+    for i in range(size):
+        inputs[i] = float(i + 1)
+        weights[i] = float(i + 1) * 0.5
+
+    my_kernel()
+    outputs.grad.from_numpy(np.ones(size, dtype=np.float32))
+    my_kernel.grad()
+
+    grad = inputs.grad.to_numpy()
+    for i in range(size):
+        assert grad[i] == float(i + 1) * 0.5
+
+
+@pytest.mark.parametrize("n", [3, 5])
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_inner_for_bound_is_enclosing_loop_index(n):
+    # Reverse-mode AD must handle a triangular-nested loop, where an inner for-loop's upper bound is itself an
+    # enclosing loop's index (a per-iteration value, not a loop invariant). The kernel mirrors a classic
+    # lower-triangular sweep like an in-place Cholesky update. `w` additionally accumulates a linear function of
+    # the outer counter alongside the inner sum, so both a per-iteration value and its reverse-mode gradient flow
+    # are exercised. `x` entries are distinct (0.1, 0.2, ...) so the inner for's contribution to each `x.grad[k]`
+    # differs per iteration; a uniform `x` would collapse several contributions into the same number and would
+    # let a reverse pass over the wrong iteration range still match the expected sum.
+    #
+    # Internal details: two pieces of the autodiff pipeline are load-bearing together.
+    # (1) AdStackAllocaJudger::visit(RangeForStmt) recognises allocas whose LocalLoad feeds a RangeForStmt begin or
+    #     end and promotes them to an adstack, so each forward iteration pushes the current bound and each reverse
+    #     iteration pops the matching one. This is the only promotion path for a pure loop-counter alloca (LOAD-only
+    #     into the inner bound, no LOAD-then-STORE cycle), so the `local_loaded_` short-circuit in visit(LocalStoreStmt)
+    #     cannot cover it. The comparison has to resolve the LocalLoad chain (compare `ll->src` to the backup, not
+    #     the operand itself or the cursor) because `begin`/`end` are always value-producing stmts, not the alloca,
+    #     and the mutable cursor only names the first matching load's instance.
+    # (2) BackupSSA::visit(RangeForStmt) spills cross-block operands on the for-stmt itself (not just its body), so
+    #     the reverse clone's `end` operand - pointing at the forward-scope AdStackLoadTop - is rematerialised via
+    #     op->clone() inside the reverse scope (the existing AdStackLoadTopStmt branch in generic_visit).
+    # Without either piece, this kernel fails: IR-verify reports `RangeForStmt cannot have operand LocalLoadStmt`
+    # without (2); LLVM codegen hits "Instruction does not dominate all uses" without (2) after (1); or the reverse
+    # inner-loop iteration count is the last forward value without (1), silently corrupting gradients for the
+    # earliest inner indices (those visited most often across outer iterations) - bigger `n` exposes more affected
+    # indices, which is why the parametrize sweep catches a regression that a single small `n` can alias past.
+    x = qd.field(qd.f32, shape=n, needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+    w = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in range(n):
+            for j in range(n):
+                if i < n and j < i + 1:
+                    s = 0.0
+                    for k in range(j):
+                        s = s + x[k] * x[k]
+                    w[None] += qd.cast(j, qd.f32) * x[i]
+                    y[None] += qd.sqrt(qd.math.clamp(x[i] + 1.0 - s, 0.01, 1e9))
+
+    x_vals = [0.1 * (k + 1) for k in range(n)]
+    for k in range(n):
+        x[k] = x_vals[k]
+    y[None] = 0.0
+    w[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    w.grad[None] = 1.0
+    for k in range(n):
+        x.grad[k] = 0.0
+    compute.grad()
+
+    expected = [0.0] * n
+    for i in range(n):
+        for j in range(i + 1):
+            s = sum(x_vals[k] * x_vals[k] for k in range(j))
+            arg = x_vals[i] + 1.0 - s
+            d_arg = 1.0 / (2.0 * arg**0.5)
+            expected[i] += d_arg
+            for k in range(j):
+                expected[k] += d_arg * (-2.0 * x_vals[k])
+            # w_contribution = cast(j) * x[i]: d/dx[i] += j
+            expected[i] += float(j)
+    for k in range(n):
+        assert x.grad[k] == test_utils.approx(expected[k], rel=1e-4)
+
+
+def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
+    # Exercises reverse-mode differentiation of a common Vector pattern: a small Vector is built with a literal
+    # initializer, one slot is overwritten by static subscript, and the whole Vector is then used in an in-place
+    # op whose right-hand side reads the same Vector (e.g. a self-normalization `q *= q.norm_sqr()`). The test
+    # guards that the backward compile completes without emitting any "Loading variable N before anything is
+    # stored to it" UD-chain warnings, which is the signature of a reverse-grad kernel that would read
+    # uninitialized adjoint slots at runtime.
+    #
+    # Internal details: the pattern lives on the experimental adstack path (`ad_stack_experimental_enabled=True`),
+    # where `ReplaceLocalVarWithStacks` lowers every stack-backed static subscript store into a full-tensor push.
+    # Devs modifying `ReplaceLocalVarWithStacks::visit(LocalStoreStmt)` or the reach-in analysis in
+    # `ir/control_flow_graph.cpp` must preserve the invariant that every non-target slot in that rebuilt tensor
+    # has a reaching definition the store-to-load-forwarding walker can see - otherwise the warning fires here.
+    # The warning is emitted by the C++ logger during `kernel.grad()` compilation, so the check runs in a
+    # subprocess to capture stderr reliably regardless of log-sink state in the parent test session.
+    child_script = textwrap.dedent(
+        """
+        import quadrants as qd
+
+        qd.init(arch=qd.cpu, ad_stack_experimental_enabled=True, ad_stack_size=32)
+
+
+        @qd.func
+        def f(x):
+            q = qd.Vector([0.0, 0.0, 0.0, 0.0], dt=qd.f32)
+            q[1] = x
+            q *= q.norm_sqr()
+            return q
+
+
+        x = qd.field(qd.f32, shape=(), needs_grad=True)
+        y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+
+        @qd.kernel
+        def k():
+            q = f(x[None])
+            y[None] = q[0] + q[1] + q[2] + q[3]
+
+
+        x[None] = 1.5
+        k()
+        y.grad[None] = 1.0
+        k.grad()
+        """
+    )
+    script_path = tmp_path / "vector_subscript_selfop.py"
+    script_path.write_text(child_script)
+    env_no_cache = {"QD_OFFLINE_CACHE": "0"}
+    import os
+
+    env = {**os.environ, **env_no_cache}
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=True, check=True, env=env)
+    stderr = result.stderr.decode()
+    assert "Loading variable" not in stderr, (
+        "reverse-mode AD emitted 'Loading variable N before anything is stored to it' warnings for a Vector "
+        "subscript-assign + self-referencing in-place op pattern; stderr was:\n" + stderr
+    )

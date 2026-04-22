@@ -307,6 +307,11 @@ void Program::finalize() {
     return;
   }
 
+  // Notify the backend that teardown has started before the two teardown syncs below. On LLVM this flips
+  // `LlvmProgramImpl::finalizing_` so `check_adstack_overflow()` short-circuits: otherwise a pending overflow
+  // flag from a kernel the user never synced explicitly would throw into the Program destructor path.
+  program_impl_->pre_finalize();
+
   synchronize();
   QD_TRACE("Program finalizing...");
 

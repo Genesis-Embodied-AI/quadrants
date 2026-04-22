@@ -53,6 +53,12 @@ class LlvmRuntimeExecutor {
 
   void check_runtime_error(uint64 *result_buffer);
 
+  // Poll the runtime's adstack-overflow flag and raise if set. Unlike check_runtime_error, this runs
+  // unconditionally at every synchronize() (not gated on `compile_config.debug`) because adstack overflow silently
+  // corrupts gradients and we do not want to hide it. Safe to call before materialize_runtime() -- no-op when the
+  // cached result buffer is not yet populated.
+  void check_adstack_overflow();
+
   uint64_t *get_device_alloc_info_ptr(const DeviceAllocation &alloc);
 
   const CompileConfig &get_config() const {
@@ -132,6 +138,11 @@ class LlvmRuntimeExecutor {
   std::unique_ptr<JITSession> jit_session_{nullptr};
   JITModule *runtime_jit_module_{nullptr};
   void *llvm_runtime_{nullptr};
+  // Non-owning cache of the Program-owned result buffer so internal polls (adstack overflow, etc.) can be
+  // invoked from `synchronize()` without threading the pointer through the public API. Ownership stays with
+  // `Program` for its lifetime; reallocating or repointing `Program::result_buffer` mid-run would invalidate
+  // this cache, so avoid that.
+  uint64 *result_buffer_cache_{nullptr};
 
   std::unique_ptr<ThreadPool> thread_pool_{nullptr};
   std::shared_ptr<Device> device_{nullptr};

@@ -20,11 +20,15 @@ namespace spirv {
  * Per offloaded task attributes.
  */
 struct TaskAttributes {
-  enum class BufferType { Root, GlobalTmps, Args, Rets, ListGen, ExtArr };
+  enum class BufferType { Root, GlobalTmps, Args, Rets, ListGen, ExtArr, AdStackOverflow };
 
   struct BufferInfo {
     BufferType type;
     int root_id{-1};  // only used if type==Root or type==ExtArr
+    // For type==ExtArr only: true selects the gradient mirror of the ndarray argument instead of its data buffer.
+    // Reverse-mode AD kernels need a distinct StorageBuffer binding so data and grad end up in different device
+    // allocations on backends without physical_storage_buffer.
+    bool is_grad{false};
 
     BufferInfo() = default;
 
@@ -32,11 +36,15 @@ struct TaskAttributes {
     BufferInfo(BufferType buffer_type) : type(buffer_type) {
     }
 
-    BufferInfo(BufferType buffer_type, int root_buffer_id) : type(buffer_type), root_id(root_buffer_id) {
+    BufferInfo(BufferType buffer_type, int root_buffer_id, bool is_grad = false)
+        : type(buffer_type), root_id(root_buffer_id), is_grad(is_grad) {
     }
 
     bool operator==(const BufferInfo &other) const {
       if (type != other.type) {
+        return false;
+      }
+      if (type == BufferType::ExtArr && is_grad != other.is_grad) {
         return false;
       }
       if (type == BufferType::Root || type == BufferType::ExtArr) {
@@ -45,7 +53,7 @@ struct TaskAttributes {
       return true;
     }
 
-    QD_IO_DEF(type, root_id);
+    QD_IO_DEF(type, root_id, is_grad);
   };
 
   struct BufferInfoHasher {
@@ -56,6 +64,15 @@ struct TaskAttributes {
 
       size_t hash_result = hash<BufferType>()(buf.type);
       hash_result ^= buf.root_id;
+      // Mix `is_grad` only for ExtArr: operator== only looks at `is_grad` when type == ExtArr, so doing the
+      // same here keeps the hasher consistent with equality. Hashing `is_grad` on other BufferTypes would
+      // split equal keys across buckets and violate the unordered-container invariant.
+      // 0x9e3779b9 is the `hash_combine` golden-ratio fractional constant (same one boost::hash_combine uses).
+      // Preferred over `(size_t)is_grad << 16` because root_id values near 0x10000 would collide with a shifted
+      // is_grad bit; the full-word constant keeps the two axes independent.
+      if (buf.type == BufferType::ExtArr && buf.is_grad) {
+        hash_result ^= std::size_t(0x9e3779b9ULL);
+      }
       return hash_result;
     }
   };
