@@ -28,18 +28,34 @@ endif()
 if (QD_WITH_VULKAN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_VULKAN")
     if (APPLE)
-        # The latest Molten-vk v1.2.0 and v1.1.11 breaks GGUI: mpm3d_ggui.py
-        # So we have to manually download and install Molten-vk v1.10.0
-        #
-        # Uncomment the following lines if the mpm3d_ggui.py runs well with the latest Molten-vk
-        #find_library(MOLTEN_VK libMoltenVK.dylib PATHS $HOMEBREW_CELLAR/molten-vk $VULKAN_SDK REQUIRED)
-        #configure_file(${MOLTEN_VK} ${CMAKE_BINARY_DIR}/libMoltenVK.dylib COPYONLY)
-        #message(STATUS "MoltenVK library ${MOLTEN_VK}")
-
-        if(NOT EXISTS ${CMAKE_BINARY_DIR}/libMoltenVK.dylib)
-            execute_process(COMMAND curl -L -o ${CMAKE_BINARY_DIR}/libMoltenVK.zip https://github.com/taichi-dev/taichi_assets/files/9977436/libMoltenVK.dylib.zip)
-            execute_process(COMMAND tar -xf ${CMAKE_BINARY_DIR}/libMoltenVK.zip --directory ${CMAKE_BINARY_DIR})
+        # MoltenVK comes from the LunarG Vulkan SDK (`./build.py --shell` handles the download and exports
+        # `MOLTENVK_DIR` pointing at `$VULKAN_SDK/lib`, where LunarG drops `libMoltenVK.dylib` flat). There
+        # is no legacy-pin fallback on purpose: the prior third-party dylib predates
+        # `VK_KHR_buffer_device_address` and is unusable for the on-device adstack sizer. A build without a
+        # real SDK hard-fails here rather than shipping a Vulkan runtime that hard-errors every
+        # reverse-mode kernel at launch time.
+        if(DEFINED ENV{MOLTENVK_DIR})
+            set(_MVK_ROOT "$ENV{MOLTENVK_DIR}")
+        elseif(DEFINED ENV{VULKAN_SDK})
+            set(_MVK_ROOT "$ENV{VULKAN_SDK}/lib")
+        else()
+            set(_MVK_ROOT "")
         endif()
+        set(MOLTEN_VK "")
+        if(_MVK_ROOT)
+            find_file(MOLTEN_VK libMoltenVK.dylib NO_DEFAULT_PATH PATHS "${_MVK_ROOT}")
+        endif()
+        if(NOT MOLTEN_VK)
+            message(FATAL_ERROR
+                "MoltenVK: neither `$MOLTENVK_DIR` nor `$VULKAN_SDK` is set, or no `libMoltenVK.dylib` is "
+                "present under them. On macOS, run `./build.py --shell` (fetches LunarG's Vulkan SDK and "
+                "exports both vars), or install the LunarG Vulkan SDK globally, before configuring "
+                "Quadrants with `QD_WITH_VULKAN=ON`. The adstack sizer shader requires a MoltenVK with "
+                "`VK_KHR_buffer_device_address` (>= 1.2.1); shipping an older pin would hard-error every "
+                "reverse-mode kernel at launch time.")
+        endif()
+        message(STATUS "MoltenVK: using LunarG Vulkan SDK copy at ${MOLTEN_VK}")
+        configure_file(${MOLTEN_VK} ${CMAKE_BINARY_DIR}/libMoltenVK.dylib COPYONLY)
         install(FILES ${CMAKE_BINARY_DIR}/libMoltenVK.dylib DESTINATION ${INSTALL_LIB_DIR}/runtime)
     endif()
     add_subdirectory(vulkan)

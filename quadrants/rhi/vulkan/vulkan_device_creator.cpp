@@ -834,12 +834,15 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
 
       if (CHECK_VERSION(1, 3) || buffer_device_address_feature.bufferDeviceAddress) {
         if (device_supported_features.shaderInt64) {
-// Temporarily disable it on macOS:
-// https://github.com/taichi-dev/taichi/issues/6295
-// (penguinliong) Temporarily disabled (until device capability is ready).
-#if !defined(__APPLE__) && false
+          // The prior gate was `#if !defined(__APPLE__) && false`, a kill-switch referencing Taichi issue
+          // #6295 (broken BDA on the 2022-era MoltenVK pinned in `quadrants/rhi/CMakeLists.txt`). That
+          // pin has since been replaced with a LunarG-SDK-sourced MoltenVK (>= 1.3, sporting working
+          // `vkGetBufferDeviceAddress`), and the extension feature bit above already gates against devices
+          // that don't advertise BDA - so there is no reason to hard-disable PSB on Apple (or anywhere).
+          // Without this cap the adstack sizer shader hard-errors at launch time on every reverse-mode
+          // kernel because `$ENV{VULKAN_SDK}`-backed MoltenVK can't be distinguished from the legacy pin
+          // by capability alone.
           caps.set(DeviceCapability::spirv_has_physical_storage_buffer, true);
-#endif
         }
       }
       *pNextEnd = &buffer_device_address_feature;
