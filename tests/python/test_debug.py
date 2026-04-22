@@ -251,7 +251,9 @@ def test_do_while_oob_does_not_loop_forever():
         c: qd.types.ndarray(dtype=qd.i32, ndim=0),
     ):
         while qd.graph_do_while(c):
-            for i in range(10):
+            # Serial loop so that cpu_assert_failed is set on the shared context
+            # (parallel range_for only sets it on per-thread copies).
+            for i in qd.static(range(10)):
                 a[i] = 1.0
             for i in range(1):
                 c[()] = c[()] - 1
