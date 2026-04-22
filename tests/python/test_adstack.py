@@ -1,10 +1,17 @@
 import math
+import pathlib
+import re
 
 import pytest
 
 import quadrants as qd
 
 from tests import test_utils
+
+# Diffable unary ops whose reverse formula accumulates a constant coefficient onto `stmt->operand` and therefore
+# does not need per-iteration operand spilling on the adstack. Update this set and `unary_collections` in
+# `quadrants/transforms/auto_diff.cpp` together when a new op lands in this class.
+_KNOWN_LINEAR_UNARY_OPS = {"neg"}
 
 _UNARY_OPS_PARAMS = [
     # Ops whose domain is all real values share a single `(step, offset)` pair that keeps the operand inside
@@ -25,6 +32,7 @@ _UNARY_OPS_PARAMS = [
     ("tan", 0.05, 0.0),
     ("log", 0.05, 0.0),
     ("sqrt", 0.05, 0.0),
+    ("rsqrt", 0.05, 0.0),
     ("asin", 0.05, 0.0),
     ("acos", 0.05, 0.0),
 ]
@@ -120,15 +128,14 @@ def test_adstack_unary_loop_carried_f64(op_name, step, offset, x_val, n_iter):
 @pytest.mark.needs_torch
 @pytest.mark.parametrize(
     "op_name",
-    # Pins MakeDual (forward mode) for the ops whose reverse formulas were just patched (tan/tanh/exp) plus the
-    # two audit-adjacent operand-based ops (log/sqrt). Forward mode is argued safe-by-construction because it
-    # runs in primal order and does not rely on BackupSSA spilling, but that invariant is not itself tested by
-    # the reverse-mode regression above; this test pins it. Note the asymmetry with MakeAdjoint::tanh / exp:
-    # this PR's reverse-mode recompute of `tanh(stmt->operand)` / `exp(stmt->operand)` has a detailed comment
-    # explaining why reusing the forward `stmt` would be wrong under BackupSSA; the forward-mode formulas
-    # reuse the same `stmt` value without a safety comment because MakeDual runs in primal order, so `stmt`
-    # is the current-iteration value. This test pins that forward-order invariant.
-    ["tan", "tanh", "exp", "log", "sqrt"],
+    # Pins MakeDual (forward mode) for every nonlinear unary op whose MakeAdjoint (reverse-mode) recompute audit was the
+    # focus of PRs 1-4 of this chain: {tan, tanh, exp, log, sqrt, rsqrt}. Forward mode is argued safe-by-construction
+    # because it runs in primal order, so the primal value is the current-iteration value by definition - there is no
+    # stale-read hazard analogous to the reverse-mode one the audit targeted. This test pins that forward-order safety
+    # argument per audited op so a future MakeDual refactor cannot regress it silently. The sign/absolute-value siblings
+    # (abs, sin, cos, asin, acos) are covered by `test_adstack_unary_loop_carried` in the reverse-mode direction already
+    # and were not part of the audit.
+    ["tan", "tanh", "exp", "log", "sqrt", "rsqrt"],
 )
 @test_utils.test()
 def test_unary_forward_mode_derivative(op_name):
@@ -162,24 +169,80 @@ def test_unary_forward_mode_derivative(op_name):
     assert loss.dual[None] == test_utils.approx(expected, rel=1e-4)
 
 
-def _run_nan_propagation(qd_dtype, op_name, x_val):
-    qd_op = getattr(qd, op_name)
+def test_unary_collections_audit():
+    # Prevents drift between the Python unary op registry and the C++ `unary_collections` set in
+    # `quadrants/transforms/auto_diff.cpp`. Every unary op whose `MakeAdjoint` branch accumulates onto
+    # `stmt->operand` must be either in `unary_collections` (nonlinear: needs per-iteration operand spilling on
+    # the adstack inside dynamic loops) or in the local `_KNOWN_LINEAR_UNARY_OPS` allow-list (reverse formula
+    # uses a compile-time constant coefficient, so the single-slot spill path is correct for it). Forgetting to
+    # classify a new diffable unary op falls back to the single-slot spill and produces silently wrong gradients
+    # in dynamic loops.
+    #
+    # Four invariants are checked, all of them symmetric:
+    #   (1) Every diffable-math op detected in MakeAdjoint is in `cpp_nonlinear` OR in `_KNOWN_LINEAR_UNARY_OPS`.
+    #   (2) Every op in `cpp_nonlinear` has a matching diffable-math branch in MakeAdjoint.
+    #   (3) Every op in `_KNOWN_LINEAR_UNARY_OPS` has a matching diffable-math branch in MakeAdjoint.
+    #   (4) `cpp_nonlinear` and `_KNOWN_LINEAR_UNARY_OPS` are disjoint (an op cannot be both nonlinear and linear).
+    src_path = pathlib.Path(__file__).resolve().parents[2] / "quadrants" / "transforms" / "auto_diff.cpp"
+    src = src_path.read_text()
 
-    x = qd.field(qd_dtype, shape=(), needs_grad=True)
-    y = qd.field(qd_dtype, shape=(), needs_grad=True)
+    cc_match = re.search(r"unary_collections\s*\{([^}]+)\}", src)
+    assert cc_match is not None, "unary_collections not located in auto_diff.cpp"
+    cpp_nonlinear = set(re.findall(r"UnaryOpType::(\w+)", cc_match.group(1)))
 
-    @qd.kernel
-    def compute():
-        y[None] = qd_op(x[None])
+    make_adjoint_start = src.find("class MakeAdjoint")
+    assert make_adjoint_start != -1, "class MakeAdjoint not located in auto_diff.cpp"
+    adj_start = src.find("void visit(UnaryOpStmt *stmt) override", make_adjoint_start)
+    assert adj_start != -1, "MakeAdjoint::visit(UnaryOpStmt*) not located in auto_diff.cpp"
+    adj_end = src.find("void visit(", adj_start + 10)
+    assert adj_end != -1, "next visitor method after MakeAdjoint::visit(UnaryOpStmt*) not found"
+    adj_block = src[adj_start:adj_end]
+    # Split the visitor's if/else-if chain into per-op segments, then classify each segment as "diffable math"
+    # iff its body accumulates onto `stmt->operand`. Two accumulate entry points are recognised: the raw
+    # `accumulate(stmt->operand, ...)` call (used by `neg` and `cast_value`) and the `acc(...)` lambda (used by
+    # every nonlinear branch; `acc` wraps `accumulate_unary_operand_checked` which validates that the adjoint
+    # formula does not read the forward `stmt` directly, and then delegates to `accumulate(stmt->operand, ...)`).
+    # `cast_value` is excluded: its conditional accumulate is gated on real-typed elements and is orthogonal to
+    # the `unary_collections` trade-off.
+    #
+    # Use `re.findall` rather than `re.search` so a future branch that ORs multiple `UnaryOpType::X` conditions
+    # (e.g. `op_type == floor || op_type == ceil`) still classifies every op in the branch — capturing just the
+    # first match would silently skip later ops in an OR chain.
+    branches = re.split(r"\belse if\b", adj_block)
+    diffable_math = set()
+    for seg in branches:
+        ops_in_seg = re.findall(r"UnaryOpType::(\w+)", seg)
+        if not ops_in_seg:
+            continue
+        if "accumulate(stmt->operand" in seg or re.search(r"\bacc\(", seg):
+            diffable_math.update(ops_in_seg)
+    diffable_math.discard("cast_value")
 
-    x[None] = x_val
-    y[None] = 0.0
-    compute()
-    y.grad[None] = 1.0
-    x.grad[None] = 0.0
-    compute.grad()
+    overlap = cpp_nonlinear & _KNOWN_LINEAR_UNARY_OPS
+    assert not overlap, (
+        f"Ops appear in BOTH `unary_collections` and `_KNOWN_LINEAR_UNARY_OPS`: {sorted(overlap)}. "
+        f"An op must be classified as exactly one of (nonlinear, linear); otherwise the per-op audits below "
+        f"silently cancel out."
+    )
 
-    assert math.isnan(x.grad[None])
+    missing = diffable_math - cpp_nonlinear - _KNOWN_LINEAR_UNARY_OPS
+    assert not missing, (
+        f"Diffable unary ops not classified as nonlinear or linear: {sorted(missing)}. "
+        f"Add each one to `unary_collections` in quadrants/transforms/auto_diff.cpp (if nonlinear) or to "
+        f"`_KNOWN_LINEAR_UNARY_OPS` in this file (if linear)."
+    )
+    stray_nonlinear = cpp_nonlinear - diffable_math
+    assert not stray_nonlinear, (
+        f"`unary_collections` lists ops with no matching accumulate branch (`accumulate(stmt->operand, ...)` or "
+        f"`acc(...)`) in MakeAdjoint: {sorted(stray_nonlinear)}. Either remove them from `unary_collections` or "
+        f"restore the MakeAdjoint branch."
+    )
+    stray_linear = _KNOWN_LINEAR_UNARY_OPS - diffable_math
+    assert not stray_linear, (
+        f"`_KNOWN_LINEAR_UNARY_OPS` lists ops with no matching accumulate branch in MakeAdjoint: "
+        f"{sorted(stray_linear)}. Either remove them from `_KNOWN_LINEAR_UNARY_OPS` or restore the MakeAdjoint "
+        f"branch; an entry here without a visitor means the op silently has no gradient implementation."
+    )
 
 
 @pytest.mark.xfail(
@@ -208,7 +271,23 @@ def test_adstack_nan_propagation(op_name, x_val):
     # Quadrants instead runs the analytical formula and returns a finite number. Which behaviour is "correct" is a
     # design call; the test is marked `xfail(strict=True)` so a deliberate change of semantics in either direction
     # forces a reviewer decision.
-    _run_nan_propagation(qd.f32, op_name, x_val)
+    qd_op = getattr(qd, op_name)
+
+    x = qd.field(qd.f32, shape=(), needs_grad=True)
+    y = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        y[None] = qd_op(x[None])
+
+    x[None] = x_val
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+
+    assert math.isnan(x.grad[None])
 
 
 @pytest.mark.xfail(
@@ -223,4 +302,20 @@ def test_adstack_nan_propagation_f64(op_name, x_val):
     # (PyTorch's backward graph propagates NaN regardless of dtype; Quadrants' reverse formula `1 / operand`
     # produces a finite number in both f32 and f64). Parametrizing over dtype ensures a future decision to change
     # semantics cannot accidentally fix one dtype and miss the other.
-    _run_nan_propagation(qd.f64, op_name, x_val)
+    qd_op = getattr(qd, op_name)
+
+    x = qd.field(qd.f64, shape=(), needs_grad=True)
+    y = qd.field(qd.f64, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        y[None] = qd_op(x[None])
+
+    x[None] = x_val
+    y[None] = 0.0
+    compute()
+    y.grad[None] = 1.0
+    x.grad[None] = 0.0
+    compute.grad()
+
+    assert math.isnan(x.grad[None])
