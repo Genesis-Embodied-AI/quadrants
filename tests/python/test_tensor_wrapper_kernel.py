@@ -57,12 +57,15 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
             x[i] = x[i] + 0
 
     a = qd.tensor(qd.i32, shape=(2,), backend=backend)
+    # ``noop`` is a ``QuadrantsCallable``; the actual ``Kernel`` (which
+    # owns the JIT cache) lives at ``.wrapper``.
+    cache = noop.wrapper.materialized_kernels
 
     noop(a)
-    n_after_bare = len(noop.materialized_kernels)
+    n_after_bare = len(cache)
 
     noop(qd._Tensor(a))
-    n_after_wrapped = len(noop.materialized_kernels)
+    n_after_wrapped = len(cache)
 
     assert n_after_wrapped == n_after_bare, (
         f"cache fragmented: {n_after_bare} entries after bare-impl call, "
@@ -73,7 +76,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
 
     # And a fresh wrapper around the same impl must also hit the same entry.
     noop(qd._Tensor(a))
-    assert len(noop.materialized_kernels) == n_after_bare
+    assert len(cache) == n_after_bare
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
