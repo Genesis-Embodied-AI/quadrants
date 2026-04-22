@@ -62,9 +62,9 @@ def test_tensor_accepts_ndarray_with_layout():
 
     fill(a)
     arr = a.to_numpy()
-    assert arr.shape == (N, M)
-    # canonical (i=2, j=3) -> physical (3, 2)
-    assert arr[3, 2] == 203
+    # to_numpy() returns the canonical view on layout-tagged ndarrays.
+    assert arr.shape == (M, N)
+    assert arr[2, 3] == 203
 
 
 # ----------------------------------------------------------------------------

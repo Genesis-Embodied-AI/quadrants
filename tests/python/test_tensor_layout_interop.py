@@ -62,10 +62,13 @@ def _make_fill_kernel(shape, backend):
     """Build a kernel that fills its argument with the same canonical
     values as :func:`_expected_canonical`.
 
-    Iterates the canonical index space via ``qd.grouped(qd.ndrange(*shape))``
-    rather than ``qd.grouped(x)``: on a layout-tagged ndarray ``grouped(x)``
-    yields physical indices, which would interact with the canonical→physical
-    AST rewrite on ``x[I]`` and produce a double-permutation.
+    Uses explicit per-axis ``x[i, j, ...]`` indexing (one kernel per rank)
+    rather than ``x[I]`` with a Vector index from ``grouped(...)``. The
+    canonical→physical AST rewrite at :func:`build_Subscript` only fires
+    when the subscript arity matches ``_qd_layout`` length, which means
+    ``x[I]`` (single Vector) bypasses the rewrite and writes at the
+    physical positions of canonical indices — silently OOB on permuted
+    layouts.
     """
     coeffs = []
     rolling = 1
@@ -74,25 +77,28 @@ def _make_fill_kernel(shape, backend):
         rolling *= max(dim, 1) * 10
     coeffs = list(reversed(coeffs))
 
-    if backend is qd.Backend.FIELD:
+    annotation = qd.template() if backend is qd.Backend.FIELD else qd.types.ndarray()
+
+    if len(shape) == 2:
+        c0, c1 = coeffs
+        d0, d1 = shape
 
         @qd.kernel
-        def fill(x: qd.template()):
-            for I in qd.grouped(qd.ndrange(*shape)):
-                acc = 0
-                for d in qd.static(range(len(shape))):
-                    acc += I[d] * coeffs[d]
-                x[I] = acc
+        def fill(x: annotation):
+            for i, j in qd.ndrange(d0, d1):
+                x[i, j] = i * c0 + j * c1
+
+    elif len(shape) == 3:
+        c0, c1, c2 = coeffs
+        d0, d1, d2 = shape
+
+        @qd.kernel
+        def fill(x: annotation):
+            for i, j, k in qd.ndrange(d0, d1, d2):
+                x[i, j, k] = i * c0 + j * c1 + k * c2
 
     else:
-
-        @qd.kernel
-        def fill(x: qd.types.ndarray()):
-            for I in qd.grouped(qd.ndrange(*shape)):
-                acc = 0
-                for d in qd.static(range(len(shape))):
-                    acc += I[d] * coeffs[d]
-                x[I] = acc
+        raise NotImplementedError(f"_make_fill_kernel: rank {len(shape)} not supported")
 
     return fill
 
