@@ -168,7 +168,7 @@ def test_ndarray_oob_cpu_raises_not_segfaults():
 def test_ndarray_oob_cpu_small_array():
     """Reproduces the pattern from the temperature-sensor segfault: a kernel
     accesses a very small (shape-1) array with an index that goes out of
-    bounds.  Before the longjmp fix this would SIGSEGV on CPU in debug mode."""
+    bounds.  Before the cpu_assert_failed fix this would SIGSEGV on CPU in debug mode."""
     small = qd.ndarray(dtype=qd.f32, shape=(1,))
     small.fill(42.0)
 
@@ -208,7 +208,7 @@ def test_ndarray_oob_cpu_2d():
     gdb_trigger=False,
 )
 def test_ndarray_inbounds_cpu_still_works():
-    """Verify that the setjmp/longjmp mechanism does not break normal
+    """Verify that the cpu_assert_failed mechanism does not break normal
     in-bounds ndarray access."""
     n = 8
     arr = qd.ndarray(dtype=qd.f32, shape=(n,))
