@@ -2487,6 +2487,23 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     call("RuntimeContext_set_result_buffer", new_ctx, result_buffer_u64);
   }
   call(llvm_func, new_ctx);
+
+  if (arch_is_cpu(current_arch())) {
+    auto *zero = tlctx->get_constant(0);
+    auto *field_idx = tlctx->get_constant(4);
+    auto *callee_flag_ptr = builder->CreateGEP(context_ty, new_ctx, {zero, field_idx});
+    auto *callee_flag = builder->CreateLoad(tlctx->get_data_type<int32>(), callee_flag_ptr);
+    auto *failed = builder->CreateICmpNE(callee_flag, tlctx->get_constant(0));
+    auto *func_abort = llvm::BasicBlock::Create(*llvm_context, "func_abort", func);
+    auto *func_cont = llvm::BasicBlock::Create(*llvm_context, "func_cont", func);
+    builder->CreateCondBr(failed, func_abort, func_cont);
+    builder->SetInsertPoint(func_abort);
+    auto *caller_flag_ptr = builder->CreateGEP(context_ty, get_context(), {zero, field_idx});
+    builder->CreateStore(callee_flag, caller_flag_ptr);
+    builder->CreateRetVoid();
+    builder->SetInsertPoint(func_cont);
+  }
+
   llvm_val[stmt] = result_buffer;
 }
 
