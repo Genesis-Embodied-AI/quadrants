@@ -2474,8 +2474,7 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
   if (arch_is_cpu(current_arch())) {
-    auto *flag_ptr = builder->CreateGEP(context_ty, new_ctx, {tlctx->get_constant(0), tlctx->get_constant(4)});
-    builder->CreateStore(tlctx->get_constant(0), flag_ptr);
+    call("RuntimeContext_set_cpu_assert_failed", new_ctx, tlctx->get_constant(0));
   }
   if (!stmt->func->parameter_list.empty()) {
     auto *buffer = create_entry_block_alloca(tlctx->get_data_type(stmt->func->args_type));
@@ -2493,17 +2492,13 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
   call(llvm_func, new_ctx);
 
   if (arch_is_cpu(current_arch())) {
-    auto *zero = tlctx->get_constant(0);
-    auto *field_idx = tlctx->get_constant(4);
-    auto *callee_flag_ptr = builder->CreateGEP(context_ty, new_ctx, {zero, field_idx});
-    auto *callee_flag = builder->CreateLoad(tlctx->get_data_type<int32>(), callee_flag_ptr);
+    auto *callee_flag = call("RuntimeContext_get_cpu_assert_failed", new_ctx);
     auto *failed = builder->CreateICmpNE(callee_flag, tlctx->get_constant(0));
     auto *func_abort = llvm::BasicBlock::Create(*llvm_context, "func_abort", func);
     auto *func_cont = llvm::BasicBlock::Create(*llvm_context, "func_cont", func);
     builder->CreateCondBr(failed, func_abort, func_cont);
     builder->SetInsertPoint(func_abort);
-    auto *caller_flag_ptr = builder->CreateGEP(context_ty, get_context(), {zero, field_idx});
-    builder->CreateStore(callee_flag, caller_flag_ptr);
+    call("RuntimeContext_set_cpu_assert_failed", get_context(), callee_flag);
     builder->CreateRetVoid();
     builder->SetInsertPoint(func_cont);
   }
