@@ -288,6 +288,7 @@
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Tensor types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
@@ -299,7 +300,6 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
@@ -385,6 +385,8 @@
 <li><p>ndarray (<code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>)</p></li>
 <li><p>field (<code class="docutils literal notranslate"><span class="pre">qd.field</span></code>)</p></li>
 </ul>
+<p>See also <a class="reference internal" href="tensor.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">tensor</span></code></span></a> for a unified
+<code class="docutils literal notranslate"><span class="pre">qd.tensor(...)</span></code> factory that picks between the two via a <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword.</p>
 <p>In addition, when used from a qd kernel, fields can be:</p>
 <ul class="simple">
 <li><p>referenced as a global variable</p></li>
