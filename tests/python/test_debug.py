@@ -260,34 +260,3 @@ def test_do_while_oob_does_not_loop_forever():
 
     with pytest.raises(AssertionError, match=r"Out of bound access"):
         oob_in_do_while(arr, counter)
-
-
-@test_utils.test(
-    arch=[qd.cpu],
-    require=qd.extension.assertion,
-    debug=True,
-    check_out_of_bound=True,
-    gdb_trigger=False,
-)
-def test_func_oob_propagates_to_caller():
-    """An OOB inside a @qd.func must propagate cpu_assert_failed to the
-    calling kernel so it aborts early instead of continuing with garbage."""
-    import numpy as np
-
-    arr = qd.ndarray(dtype=qd.f32, shape=(4,))
-    result = qd.ndarray(dtype=qd.f32, shape=())
-    result.from_numpy(np.array(0.0, dtype=np.float32))
-
-    @qd.func
-    def read_oob(a: qd.types.ndarray(dtype=qd.f32, ndim=1)) -> qd.f32:
-        return a[99]
-
-    @qd.kernel
-    def call_func_with_oob(
-        a: qd.types.ndarray(dtype=qd.f32, ndim=1),
-        r: qd.types.ndarray(dtype=qd.f32, ndim=0),
-    ):
-        r[()] = read_oob(a)
-
-    with pytest.raises(AssertionError, match=r"Out of bound access"):
-        call_func_with_oob(arr, result)

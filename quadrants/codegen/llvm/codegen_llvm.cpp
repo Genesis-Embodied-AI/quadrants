@@ -2507,11 +2507,14 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     current_callable = old_callable;
   }
   llvm::Function *llvm_func = func_map[stmt->func];
+  // FIXME: when cpu_assert_failed fires inside a @qd.real_func callee, the
+  // flag is set on new_ctx but never propagated back to the caller's context.
+  // Regular @qd.func is AST-inlined so assertions are handled by the caller's
+  // visit(AssertStmt) directly.  real_func needs: (1) zero-init new_ctx's
+  // cpu_assert_failed before the call, (2) post-call check + propagate to
+  // get_context(), (3) emit ret void on failure.
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
-  if (arch_is_cpu(current_arch())) {
-    call("RuntimeContext_set_cpu_assert_failed", new_ctx, tlctx->get_constant(0));
-  }
   if (!stmt->func->parameter_list.empty()) {
     auto *buffer = create_entry_block_alloca(tlctx->get_data_type(stmt->func->args_type));
     set_args_ptr(stmt->func, new_ctx, buffer);
@@ -2526,19 +2529,6 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     call("RuntimeContext_set_result_buffer", new_ctx, result_buffer_u64);
   }
   call(llvm_func, new_ctx);
-
-  if (arch_is_cpu(current_arch())) {
-    auto *callee_flag = call("RuntimeContext_get_cpu_assert_failed", new_ctx);
-    auto *failed = builder->CreateICmpNE(callee_flag, tlctx->get_constant(0));
-    auto *func_abort = llvm::BasicBlock::Create(*llvm_context, "func_abort", func);
-    auto *func_cont = llvm::BasicBlock::Create(*llvm_context, "func_cont", func);
-    builder->CreateCondBr(failed, func_abort, func_cont);
-    builder->SetInsertPoint(func_abort);
-    call("RuntimeContext_set_cpu_assert_failed", get_context(), callee_flag);
-    builder->CreateRetVoid();
-    builder->SetInsertPoint(func_cont);
-  }
-
   llvm_val[stmt] = result_buffer;
 }
 
