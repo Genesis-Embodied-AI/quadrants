@@ -2473,6 +2473,10 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
   llvm::Function *llvm_func = func_map[stmt->func];
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
+  if (arch_is_cpu(current_arch())) {
+    auto *flag_ptr = builder->CreateGEP(context_ty, new_ctx, {tlctx->get_constant(0), tlctx->get_constant(4)});
+    builder->CreateStore(tlctx->get_constant(0), flag_ptr);
+  }
   if (!stmt->func->parameter_list.empty()) {
     auto *buffer = create_entry_block_alloca(tlctx->get_data_type(stmt->func->args_type));
     set_args_ptr(stmt->func, new_ctx, buffer);
