@@ -195,23 +195,21 @@ class Ndarray:
     def _ndarray_to_numpy(self):
         """Converts ndarray to a numpy array.
 
-        Returns the *canonical* view: on a layout-tagged ndarray the
-        underlying buffer is read at its physical shape and the result
-        is transposed back into canonical axis order so callers always
-        see the shape they passed to ``qd.tensor(..., shape=)``. On an
-        untagged ndarray this is a no-op transpose (identity layout).
+        Returns the *canonical* view: the output array has
+        ``self.shape`` (the user-facing shape passed to
+        ``qd.tensor(..., shape=)``) and is filled by a kernel whose
+        canonical iteration is mapped to the underlying physical
+        buffer through the AST layout-permutation. Untagged ndarrays
+        see canonical == physical and pay no extra cost.
 
         Returns:
             numpy.ndarray: The result numpy array, in canonical axis order.
         """
-        arr = np.zeros(shape=self.arr.total_shape(), dtype=to_numpy_type(self.dtype))
+        arr = np.zeros(shape=tuple(self.shape), dtype=to_numpy_type(self.dtype))
         from quadrants._kernels import ndarray_to_ext_arr  # pylint: disable=C0415
 
         ndarray_to_ext_arr(self, arr)
         impl.get_runtime().sync()
-        layout = getattr(self, "_qd_layout", None)
-        if not _is_identity_layout(layout):
-            arr = np.transpose(arr, _invert_layout(layout))
         return arr
 
     @python_scope
@@ -236,10 +234,11 @@ class Ndarray:
         """Loads all values from a numpy array.
 
         ``arr.shape`` is validated against the *canonical* shape (what
-        ``self.shape`` reports). On a layout-tagged ndarray the input is
-        permuted into the underlying physical-storage axis order before
-        being staged into the buffer, so callers don't have to reason
-        about the physical layout at all.
+        ``self.shape`` reports). The ``ext_arr_to_ndarray`` kernel
+        iterates ``arr`` canonically and writes through ``ndarray[I]``,
+        so on layout-tagged destinations the AST permutation routes
+        canonical positions into the underlying physical buffer
+        without any python-side transpose.
 
         Args:
             arr (numpy.ndarray): The source numpy array, in canonical
@@ -250,10 +249,6 @@ class Ndarray:
         canonical_shape = tuple(self.shape)
         if canonical_shape != tuple(arr.shape):
             raise ValueError(f"Mismatch shape: {canonical_shape} expected, but {tuple(arr.shape)} provided")
-        layout = getattr(self, "_qd_layout", None)
-        if not _is_identity_layout(layout):
-            # canonical -> physical: see _invert_layout docstring for the derivation.
-            arr = np.transpose(arr, layout)
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
 
