@@ -189,8 +189,20 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
     QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
               fast_reductions.at(prim_type).end());
+    // SNode pointer chain (GetRootStmt/SNodeLookupStmt/GetChStmt) propagates
+    // addrspace(1) on AMDGPU. The runtime reduce_*_* helpers in
+    // runtime.cpp:DEFINE_REDUCTION are declared with generic (addrspace 0)
+    // pointer parameters. Cast the destination back to addrspace(0) so
+    // check_func_call_signature accepts the call; InferAddressSpaces in O3
+    // can re-promote downstream loads/stores after inlining.
+    llvm::Value *dest = llvm_val[stmt->dest];
+    if (dest && dest->getType()->isPointerTy() &&
+        dest->getType()->getPointerAddressSpace() == 1) {
+      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
+      dest = builder->CreateAddrSpaceCast(dest, ptr_as0);
+    }
     return call(fast_reductions.at(prim_type).at(op),
-                {llvm_val[stmt->dest], llvm_val[stmt->val]});
+                {dest, llvm_val[stmt->val]});
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -341,6 +353,36 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     return load;
   }
 
+  // Predicate: returns true when the pointer source is local-storage-derived
+  // (TLS scratch buffer or BLS / LDS shared array) and therefore must NOT be
+  // addrspace(1)-cast. Walks through MatrixPtrStmt indirection to find the
+  // underlying storage origin (matrix-typed TLS/BLS access).
+  //
+  // Background: Quadrants `GlobalLoadStmt`/`GlobalStoreStmt` cover any
+  // pointer dereference — SNodes, external arrays (ndarray), TLS, BLS, and
+  // global temporaries (statements.h:770-803). The first three of those plus
+  // global temporaries genuinely live in hipMalloc'd global memory and
+  // benefit from `addrspace(1)` (emits `global_load/store` instead of
+  // `flat_load/store`, ~10-15 cycles saved per access on CDNA3 ISA §11.6;
+  // -18.5% wall on monolith per CODE-VF-002). TLS and BLS do NOT — TLS is
+  // an `addrspace(5)` scratch alloca passed as a flat pointer; BLS is
+  // `addrspace(3)` LDS. Forcing those to `addrspace(1)` materializes
+  // invalid global addresses and triggers
+  // HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION at launch.
+  static bool is_local_storage_source(Stmt *stmt) {
+    while (stmt) {
+      if (auto *m = stmt->cast<MatrixPtrStmt>()) {
+        stmt = m->origin;
+        continue;
+      }
+      break;
+    }
+    if (!stmt) {
+      return false;
+    }
+    return stmt->is<ThreadLocalPtrStmt>() || stmt->is<BlockLocalPtrStmt>();
+  }
+
   void visit(GlobalLoadStmt *stmt) override {
     auto ptr = llvm_val[stmt->src];
     auto ptr_type = stmt->src->ret_type->as<PointerType>();
@@ -353,10 +395,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else {
         create_global_load(stmt, false);
       }
+    } else if (is_local_storage_source(stmt->src)) {
+      TaskCodeGenLLVM::visit(stmt);
     } else {
-      // SNode data lives in hipMalloc'd global memory. Cast pointer to
-      // addrspace(1) so LLVM emits global_load instead of flat_load,
-      // avoiding the FLAT unit's runtime address-space resolution.
+      // Genuinely-global source (SNode / ExternalPtr / GlobalTemporary):
+      // cast to addrspace(1) so LLVM emits global_load.
       auto *load_ty = tlctx->get_data_type(stmt->ret_type);
       bool read_only = false;
       if (auto get_ch = stmt->src->cast<GetChStmt>()) {
@@ -380,8 +423,10 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     auto ptr_type = stmt->dest->ret_type->as<PointerType>();
     if (ptr_type->is_bit_pointer()) {
       TaskCodeGenLLVM::visit(stmt);
+    } else if (is_local_storage_source(stmt->dest)) {
+      TaskCodeGenLLVM::visit(stmt);
     } else {
-      // Cast to addrspace(1) for global_store instead of flat_store.
+      // Genuinely-global dest: cast to addrspace(1) for global_store.
       auto *val_ty = llvm_val[stmt->val]->getType();
       auto *ptr_as1 = llvm::PointerType::get(val_ty, 1);
       auto *cast_ptr =
