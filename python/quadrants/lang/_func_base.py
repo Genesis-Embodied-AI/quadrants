@@ -460,13 +460,29 @@ class FuncBase:
             )
         actual_argument_slot += 1
 
+        # ``qd.Tensor`` wrappers passed as struct fields. The top-level
+        # kernel-arg unwrap hook in ``Kernel.__call__`` strips wrappers
+        # off positional / keyword args before they reach the
+        # template-mapper or this dispatch path, but it does **not**
+        # walk into struct args. When the recursion below descends into
+        # a ``@qd.data_oriented`` (or plain dataclass) struct field
+        # whose value is a wrapper, we land here with ``needed_arg_type``
+        # set to whatever annotation the struct declared on the field
+        # (e.g. ``NdarrayType``) and ``v`` set to a ``Tensor`` instance.
+        # Unwrap defensively so the rest of the function sees the bare
+        # impl, matching what callers expect post-stork-19. Idempotent
+        # for top-level args (already unwrapped).
+        if isinstance(v, _TensorClass):
+            v = v._unwrap()
+
         needed_arg_type_id = id(needed_arg_type)
         needed_arg_basetype = type(needed_arg_type)
 
         # qd.Tensor value-dispatch at launch time. Re-target the
         # annotation to the concrete branch resolved from the runtime
         # value, then fall through to the existing dispatch logic.
-        # Wrapper instances are unwrapped earlier (in ``Kernel.__call__``);
+        # Wrapper instances are unwrapped earlier (in ``Kernel.__call__``,
+        # plus the defensive in-struct unwrap immediately above);
         # by the time we get here ``v`` is always the bare impl.
         if needed_arg_type is _TensorClass:
             if isinstance(v, Ndarray):

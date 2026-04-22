@@ -72,6 +72,18 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+    # ``qd.Tensor`` wrappers passed as struct fields. Top-level
+    # kernel-arg unwrap in ``Kernel.__call__`` covers direct args, but
+    # the dataclass-field recursion at the bottom of this function
+    # walks struct attributes via raw ``getattr``, so a wrapper stored
+    # as a struct field arrives here un-stripped with its declared
+    # annotation (e.g. ``qd.types.NDArray[qd.f32, 2]``). Without this
+    # unwrap the function falls through to the "external arrays" path
+    # (line ~149) which technically reads ``.shape`` off the wrapper
+    # but produces a meaningless cache key. See ``perso_hugh/doc/
+    # quadrants-tensor.md`` §8.14. Idempotent for top-level args.
+    if isinstance(arg, _TensorClass):
+        arg = arg._unwrap()
     annotation_type = type(annotation)
     arg_type = type(arg)
     # qd.Tensor: value-dispatch. Ndarray-shaped values flow through the

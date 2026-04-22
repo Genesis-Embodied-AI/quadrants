@@ -725,6 +725,19 @@ class ASTTransformer(Builder):
             node.ptr = next(field.type for field in dataclasses.fields(node.value.ptr))
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
+            # ``qd.Tensor`` wrappers reached via attribute access on a
+            # ``@qd.data_oriented`` struct field at AST-build time. The
+            # IR layer downstream of this (``build_Subscript`` ->
+            # ``impl.subscript``) only knows about ``Ndarray`` / ``Field``
+            # / ``Expr``; the wrapper is host-side. Unwrap here so
+            # ``state.a[i, j]`` inside a kernel body resolves to the bare
+            # impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are
+            # unwrapped earlier in ``Kernel.__call__``; this handles the
+            # in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``
+            # §8.14.
+            from quadrants._tensor_wrapper import Tensor as _TensorClass  # pylint: disable=C0415
+            if isinstance(node.ptr, _TensorClass):
+                node.ptr = node.ptr._unwrap()
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason
