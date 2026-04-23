@@ -5,18 +5,19 @@ SNode (not N nested rank-1 SNodes), uses AST subscript rewrites instead
 of nested SNode lookup, and preserves identical semantics for host and
 kernel access, ``get_addr``, ``to_dlpack``, and autograd.
 """
+
 import itertools
 
-import numpy as np
 import pytest
 
 import quadrants as qd
-from tests import test_utils
 
+from tests import test_utils
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _order_string(layout):
     """Convert an integer layout tuple to the axis-char order string."""
@@ -32,6 +33,7 @@ def _all_non_identity_perms(dim):
 # ---------------------------------------------------------------------------
 # IR-level test: flat rank-N SNode, single linearize+lookup per subscript
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("layout", [(1, 0), (0, 1)])
 @test_utils.test(arch=qd.cpu)
@@ -72,6 +74,7 @@ def test_flat_snode_rank3(layout):
 # Semantic test: host write + kernel read round-trip
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("layout", [(1, 0)])
 @test_utils.test(arch=qd.cpu)
 def test_host_kernel_roundtrip_rank2(layout):
@@ -96,6 +99,7 @@ def test_host_kernel_roundtrip_rank2(layout):
 # Semantic test: kernel write + host read round-trip
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("layout", [(1, 0)])
 @test_utils.test(arch=qd.cpu)
 def test_kernel_host_roundtrip_rank2(layout):
@@ -118,6 +122,7 @@ def test_kernel_host_roundtrip_rank2(layout):
 # ---------------------------------------------------------------------------
 # get_addr test: layout-tagged field addresses match default-layout field
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("layout", [(1, 0)])
 @test_utils.test(arch=qd.cpu)
@@ -153,14 +158,13 @@ def test_get_addr_matches_default_layout(layout):
         for j in range(Y):
             off_l = addr(f_layout, i, j) - base_l
             off_d = addr(f_default, j, i) - base_d
-            assert off_l == off_d, (
-                f"addr offset mismatch at ({i},{j}): layout={off_l}, default={off_d}"
-            )
+            assert off_l == off_d, f"addr offset mismatch at ({i},{j}): layout={off_l}, default={off_d}"
 
 
 # ---------------------------------------------------------------------------
 # to_dlpack canonical-view test
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("layout", [(1, 0)])
 @test_utils.test(arch=qd.cpu)
@@ -191,11 +195,12 @@ def test_to_dlpack_canonical_shape(layout):
 # _qd_layout attribute test
 # ---------------------------------------------------------------------------
 
+
 @test_utils.test(arch=qd.cpu)
 def test_qd_layout_attribute_set():
     """Fields created with order= must have _qd_layout set."""
-    f = qd.field(qd.f32, shape=(5, 7), order='ji')
-    assert hasattr(f, '_qd_layout')
+    f = qd.field(qd.f32, shape=(5, 7), order="ji")
+    assert hasattr(f, "_qd_layout")
     assert f._qd_layout == (1, 0)
     assert f.layout == (1, 0)
 
@@ -204,18 +209,19 @@ def test_qd_layout_attribute_set():
 def test_qd_layout_attribute_none_default():
     """Fields created without order= must NOT have _qd_layout set."""
     f = qd.field(qd.f32, shape=(5, 7))
-    assert not hasattr(f, '_qd_layout') or f._qd_layout is None
+    assert not hasattr(f, "_qd_layout") or f._qd_layout is None
 
 
 # ---------------------------------------------------------------------------
 # shape property test
 # ---------------------------------------------------------------------------
 
+
 @test_utils.test(arch=qd.cpu)
 def test_canonical_shape_with_layout():
     """field.shape must report canonical shape even when physical is permuted."""
     X, Y = 5, 7
-    f = qd.field(qd.f32, shape=(X, Y), order='ji')
+    f = qd.field(qd.f32, shape=(X, Y), order="ji")
     assert f.shape == (X, Y), f"Expected canonical shape {(X,Y)}, got {f.shape}"
 
 
@@ -223,11 +229,12 @@ def test_canonical_shape_with_layout():
 # Vector field with layout
 # ---------------------------------------------------------------------------
 
+
 @test_utils.test(arch=qd.cpu)
 def test_vector_field_layout_roundtrip():
     """Vector.field with order= should work correctly."""
     X, Y = 4, 5
-    v = qd.Vector.field(2, dtype=qd.f32, shape=(X, Y), order='ji')
+    v = qd.Vector.field(2, dtype=qd.f32, shape=(X, Y), order="ji")
 
     @qd.kernel
     def fill(v: qd.template()):
@@ -239,14 +246,15 @@ def test_vector_field_layout_roundtrip():
     for i in range(X):
         for j in range(Y):
             val = v[i, j]
-            assert val[0] == float(i) and val[1] == float(j), (
-                f"Mismatch at [{i},{j}]: got {val}, expected [{float(i)}, {float(j)}]"
-            )
+            assert val[0] == float(i) and val[1] == float(
+                j
+            ), f"Mismatch at [{i},{j}]: got {val}, expected [{float(i)}, {float(j)}]"
 
 
 # ---------------------------------------------------------------------------
 # qd.tensor factory with Backend.FIELD and layout
 # ---------------------------------------------------------------------------
+
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_field_backend_layout():
@@ -268,15 +276,16 @@ def test_tensor_field_backend_layout():
 # Autograd: grad field also gets flat SNode + layout tag
 # ---------------------------------------------------------------------------
 
+
 @test_utils.test(arch=qd.cpu)
 def test_grad_field_has_flat_snode():
     """The gradient field of a layout-tagged field should also have a flat
     SNode (same depth) and be tagged with _qd_layout."""
     X, Y = 5, 7
-    f = qd.field(qd.f32, shape=(X, Y), order='ji', needs_grad=True)
+    f = qd.field(qd.f32, shape=(X, Y), order="ji", needs_grad=True)
     qd.sync()
 
-    assert hasattr(f.grad, '_qd_layout')
+    assert hasattr(f.grad, "_qd_layout")
     assert f.grad._qd_layout == (1, 0)
 
     place_snode = f.grad._snode

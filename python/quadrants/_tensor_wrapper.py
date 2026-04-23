@@ -41,7 +41,6 @@ from __future__ import annotations
 import typing
 from functools import cached_property
 
-
 __all__ = [
     "Tensor",
     "VectorTensor",
@@ -81,10 +80,8 @@ class Tensor:
         from quadrants.lang.field import Field
 
         if not isinstance(impl, (Ndarray, Field)):
-            raise TypeError(
-                f"Tensor(impl) requires an Ndarray or Field; got {type(impl).__name__}"
-            )
-        self._impl = impl
+            raise TypeError(f"Tensor(impl) requires an Ndarray or Field; got {type(impl).__name__}")
+        self._impl: typing.Any = impl
 
     # ------------------------------------------------------------------
     # Identity / debug
@@ -93,10 +90,7 @@ class Tensor:
     def __repr__(self) -> str:
         layout = self.layout
         layout_repr = "" if layout is None else f", layout={layout!r}"
-        return (
-            f"Tensor(shape={self.shape!r}, dtype={self.dtype!r}, "
-            f"backend={self._backend_name()}{layout_repr})"
-        )
+        return f"Tensor(shape={self.shape!r}, dtype={self.dtype!r}, " f"backend={self._backend_name()}{layout_repr})"
 
     def _backend_name(self) -> str:
         from quadrants.lang._ndarray import Ndarray
@@ -159,6 +153,7 @@ class Tensor:
         layout = getattr(self._impl, "_qd_layout", None)
         if _is_identity(layout):
             return None
+        assert layout is not None
         return tuple(layout)
 
     @staticmethod
@@ -174,15 +169,11 @@ class Tensor:
         if isinstance(key, int):
             # Rank-1 only; for rank>1 we require a tuple/list.
             if len(layout) != 1:
-                raise TypeError(
-                    f"layout-tagged Tensor requires a full tuple key; got int for rank {len(layout)}"
-                )
+                raise TypeError(f"layout-tagged Tensor requires a full tuple key; got int for rank {len(layout)}")
             return (key,)
         key_t = tuple(key)
         if len(key_t) != len(layout):
-            raise TypeError(
-                f"layout-tagged Tensor key has {len(key_t)} entries but rank is {len(layout)}"
-            )
+            raise TypeError(f"layout-tagged Tensor key has {len(key_t)} entries but rank is {len(layout)}")
         return tuple(key_t[layout[p]] for p in range(len(layout)))
 
     def __getitem__(self, key: typing.Any) -> typing.Any:
@@ -303,10 +294,8 @@ class VectorTensor(Tensor):
         elif isinstance(impl, MatrixField) and impl.ndim == 1:
             pass
         else:
-            raise TypeError(
-                f"VectorTensor requires a vector-element impl; got {type(impl).__name__}"
-            )
-        self._impl = impl
+            raise TypeError(f"VectorTensor requires a vector-element impl; got {type(impl).__name__}")
+        self._impl: typing.Any = impl
 
     @property
     def element_shape(self) -> typing.Tuple[int, ...]:
@@ -338,10 +327,8 @@ class MatrixTensor(Tensor):
         elif isinstance(impl, MatrixField) and impl.ndim == 2:
             pass
         else:
-            raise TypeError(
-                f"MatrixTensor requires a matrix-element impl; got {type(impl).__name__}"
-            )
-        self._impl = impl
+            raise TypeError(f"MatrixTensor requires a matrix-element impl; got {type(impl).__name__}")
+        self._impl: typing.Any = impl
 
     @property
     def element_shape(self) -> typing.Tuple[int, ...]:
@@ -397,12 +384,12 @@ def _rebuild_scalar_tensor(
 ) -> "Tensor":
     import quadrants as qd
 
-    backend = qd.Backend(backend_int)
+    backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     kwargs: typing.Dict[str, typing.Any] = {"backend": backend}
     if layout is not None:
         kwargs["layout"] = layout
     # ``qd.tensor()`` already returns a Tensor wrapper post stork-19.
-    t = qd.tensor(dtype, shape, **kwargs)
+    t = qd.tensor(dtype, shape, **kwargs)  # type: ignore[reportOptionalCall]
     t.from_numpy(data)
     return t
 
@@ -416,7 +403,7 @@ def _rebuild_vector_tensor(
 ) -> "VectorTensor":
     import quadrants as qd
 
-    backend = qd.Backend(backend_int)
+    backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     (n,) = element_shape
     t = qd.Vector.tensor(n, dtype, shape, backend=backend)
     t.from_numpy(data)
@@ -432,7 +419,7 @@ def _rebuild_matrix_tensor(
 ) -> "MatrixTensor":
     import quadrants as qd
 
-    backend = qd.Backend(backend_int)
+    backend = qd.Backend(backend_int)  # type: ignore[reportOptionalCall]
     n, m = element_shape
     t = qd.Matrix.tensor(n, m, dtype, shape, backend=backend)
     t.from_numpy(data)

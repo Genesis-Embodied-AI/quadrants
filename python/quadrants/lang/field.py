@@ -95,9 +95,7 @@ def _patch_field_dlpack_canonical(capsule, layout):
     mt = ctypes.cast(raw, ctypes.POINTER(_DLManagedTensor)).contents
     t = mt.dl_tensor
     if t.ndim < ndim:
-        raise RuntimeError(
-            f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch"
-        )
+        raise RuntimeError(f"field_to_dlpack returned ndim={t.ndim} but layout has rank {ndim}; cannot patch")
     # Only the first ``ndim`` axes carry the canonical permutation; any
     # trailing axes (element dims for VectorField / MatrixField) are
     # already in innermost identity position and must not be permuted.
@@ -109,6 +107,7 @@ def _patch_field_dlpack_canonical(capsule, layout):
     for a in range(ndim):
         t.shape[a] = shape_phys[invperm[a]]
         t.strides[a] = strides_phys[invperm[a]]
+
 
 if TYPE_CHECKING:
     from quadrants.lang.expr import Expr
@@ -369,7 +368,17 @@ class ScalarField(Field):
         reading it.
         """
         impl.get_runtime().materialize()
-        capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+        try:
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, 0, 0, 0)
+        except ModuleNotFoundError:
+            # The C++ ``field_to_dlpack`` calls ``torch_supports_byte_offset``
+            # which unconditionally does ``import torch``. Guard here so
+            # callers that don't need torch (e.g. raw DLPack consumers)
+            # get a clear error instead of a worker crash.
+            raise ModuleNotFoundError(
+                "field.to_dlpack() requires torch to be installed "
+                "(the C++ layer checks torch version for DLPack byte_offset support)"
+            ) from None
         # For layout-tagged fields the underlying dense SNode is allocated
         # at the *permuted physical* shape; the C++ ``field_to_dlpack``
         # reports that physical shape because the SNode hierarchy no

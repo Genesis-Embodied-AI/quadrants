@@ -850,11 +850,11 @@ def _field(
             # Identity layout is normalised out earlier by ``_layout_to_order``
             # (``order=`` is not passed when layout is the default permutation).
             _qd_layout = tuple(axis_seq)
-            x._qd_layout = _qd_layout
+            object.__setattr__(x, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_grad is not None:
-                x_grad._qd_layout = _qd_layout
+                object.__setattr__(x_grad, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_dual is not None:
-                x_dual._qd_layout = _qd_layout
+                object.__setattr__(x_dual, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
     return x
 
 

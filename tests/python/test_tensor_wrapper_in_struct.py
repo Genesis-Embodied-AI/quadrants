@@ -42,7 +42,6 @@ import quadrants as qd
 
 from tests import test_utils
 
-
 LAYOUTS = [(0, 1), (1, 0)]
 LAYOUT_IDS = ["identity", "transposed"]
 
@@ -154,12 +153,8 @@ def test_mixed_bare_and_wrapper_struct_fields():
     state = State(wrapped=wrapped, bare=bare)
     fill(state)
 
-    np.testing.assert_array_equal(
-        wrapped.to_numpy(), np.array([10, 11, 12, 13], dtype=np.int32)
-    )
-    np.testing.assert_array_equal(
-        bare.to_numpy(), np.array([20, 21, 22, 23], dtype=np.int32)
-    )
+    np.testing.assert_array_equal(wrapped.to_numpy(), np.array([10, 11, 12, 13], dtype=np.int32))
+    np.testing.assert_array_equal(bare.to_numpy(), np.array([20, 21, 22, 23], dtype=np.int32))
 
 
 # ----------------------------------------------------------------------------
@@ -183,9 +178,7 @@ def test_mixed_bare_and_wrapper_struct_fields():
 
 
 @test_utils.test(arch=qd.cpu)
-@pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="capfd flaky for stderr on Windows"
-)
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="capfd flaky for stderr on Windows")
 def test_struct_wrapper_field_does_not_invalidate_fastcache(capfd):
     @dataclasses.dataclass(frozen=True)
     class State:

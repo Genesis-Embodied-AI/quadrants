@@ -1305,13 +1305,21 @@ class MatrixField(Field):
         reading it.
         """
         impl.get_runtime().materialize()
-        capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        try:
+            capsule = impl.get_runtime().prog.field_to_dlpack(self._snode.ptr, self.ndim, self.n, self.m)
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "MatrixField.to_dlpack() requires torch to be installed "
+                "(the C++ layer checks torch version for DLPack byte_offset support)"
+            ) from None
         # See ``Field.to_dlpack`` for the rationale. Only the outer
         # ``len(layout)`` spatial axes are permuted — the trailing
         # element axes (``n``, ``m``) sit innermost and stay identity.
         layout = getattr(self, "_qd_layout", None)
         if layout is not None:
-            from quadrants.lang.field import _patch_field_dlpack_canonical  # pylint: disable=C0415
+            from quadrants.lang.field import (
+                _patch_field_dlpack_canonical,  # pylint: disable=C0415
+            )
 
             _patch_field_dlpack_canonical(capsule, tuple(layout))
         return capsule

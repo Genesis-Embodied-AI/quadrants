@@ -97,12 +97,13 @@ def test_wrapper_to_torch_roundtrip(backend, layout):
 @pytest.mark.parametrize("layout", _LAYOUTS_RANK2)
 @test_utils.test(arch=qd.cpu)
 def test_wrapper_to_dlpack_canonical_shape(backend, layout):
+    # ``field_to_dlpack`` in C++ unconditionally imports torch to check
+    # its DLPack byte-offset support. Skip early when torch is absent
+    # so the test is marked "skipped" rather than crashing the worker.
+    torch = pytest.importorskip("torch")
     canonical = (3, 4)
     t = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout)
     cap = t.to_dlpack()
-    # Consume via torch so we get actual shape metadata (both backends
-    # produce canonical-shape DLPack after stork-16).
-    torch = pytest.importorskip("torch")
     got = torch.utils.dlpack.from_dlpack(cap)
     assert tuple(got.shape) == canonical
 

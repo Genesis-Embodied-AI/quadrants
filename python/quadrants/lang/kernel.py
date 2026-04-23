@@ -287,7 +287,7 @@ class Kernel(FuncBase):
         )
         self.autodiff_mode = autodiff_mode
         self.grad: "Kernel | None" = None
-        impl.get_runtime().kernels.append(self)
+        impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
         self.kernel_cpp: None | KernelCxx = None
         # A materialized kernel is a KernelCxx object which may or may not have
@@ -339,7 +339,7 @@ class Kernel(FuncBase):
             cached_graph_do_while_arg: str | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(  # type: ignore[reportAssignmentType]
                     self.fast_checksum
                 )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
@@ -513,7 +513,7 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
-                        graph_do_while_arg=self.graph_do_while_arg,
+                        graph_do_while_arg=self.graph_do_while_arg,  # type: ignore[reportCallIssue]
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -608,7 +608,7 @@ class Kernel(FuncBase):
         if self.autodiff_mode != _NONE and impl.current_cfg().opt_level == 0:
             _logging.warn("""opt_level = 1 is enforced to enable gradient computation.""")
             impl.current_cfg().opt_level = 1
-        key = self.ensure_compiled(*py_args)
+        key = self.ensure_compiled(*py_args)  # type: ignore[arg-type]
         self._last_launch_key = key
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)

@@ -7,9 +7,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from quadrants import _logging
-from quadrants.types.annotations import Template
-
 from quadrants._tensor_wrapper import Tensor as _TensorClass
+from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
 from ..field import ScalarField
@@ -90,16 +89,16 @@ def stringify_obj_type(
         obj = obj._unwrap()
     arg_type = type(obj)
     if isinstance(obj, ScalarNdarray):
-        return f"[nd-{obj.dtype}-{len(obj.shape)}]"
+        return f"[nd-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
     if isinstance(obj, VectorNdarray):
-        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        return f"[ndv-{obj.n}-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
     if isinstance(obj, ScalarField):
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
         return None
     if isinstance(obj, MatrixNdarray):
-        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}]"
+        return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}]"  # type: ignore[arg-type]
     if isinstance(obj, torch_type):
         return f"[pt-{obj.dtype}-{obj.ndim}]"  # type: ignore
     if isinstance(obj, np.ndarray):

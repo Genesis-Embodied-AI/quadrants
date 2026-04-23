@@ -183,11 +183,7 @@ class FuncBase:
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if (
-                arg.annotation == template
-                or isinstance(arg.annotation, template)
-                or arg.annotation is _TensorClass
-            ):
+            if arg.annotation == template or isinstance(arg.annotation, template) or arg.annotation is _TensorClass:
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(
@@ -278,11 +274,11 @@ class FuncBase:
         raise_on_templated_floats = impl.current_cfg().raise_on_templated_floats
 
         ctx = ASTTransformerFuncContext(
-            global_context=global_context,
+            global_context=global_context,  # type: ignore[arg-type]
             template_slot_locations=template_slot_locations,
             is_kernel=is_kernel,
             is_pure=is_pure,
-            func=self,
+            func=self,  # type: ignore[arg-type]
             arg_features=arg_features,
             global_vars=global_vars,
             template_vars=template_vars,

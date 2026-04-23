@@ -733,7 +733,10 @@ class ASTTransformer(Builder):
             # unwrapped earlier in ``Kernel.__call__``; this handles the
             # in-struct case. See ``perso_hugh/doc/quadrants-tensor.md``
             # §8.14.
-            from quadrants._tensor_wrapper import Tensor as _TensorClass  # pylint: disable=C0415
+            from quadrants._tensor_wrapper import (
+                Tensor as _TensorClass,  # pylint: disable=C0415
+            )
+
             if isinstance(node.ptr, _TensorClass):
                 node.ptr = node.ptr._unwrap()
             node.violates_pure = node.value.violates_pure

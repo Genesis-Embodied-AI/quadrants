@@ -325,8 +325,7 @@ def test_module_level_qd_tensor_kernel_all_combos_share_decl():
     # really want to forbid is unbounded growth (>4) from wrapper
     # identity leaking into the key.
     assert 2 <= added <= 4, (
-        f"unexpected cache growth: {added} new entries for 4 (backend, "
-        f"layout) combos (want 3, accept 2-4)"
+        f"unexpected cache growth: {added} new entries for 4 (backend, " f"layout) combos (want 3, accept 2-4)"
     )
 
 

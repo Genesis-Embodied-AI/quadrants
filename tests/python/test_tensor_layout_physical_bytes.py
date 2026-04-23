@@ -51,9 +51,6 @@ import pytest
 
 import quadrants as qd
 
-from tests import test_utils
-
-
 BACKENDS = [qd.Backend.FIELD, qd.Backend.NDARRAY]
 BACKEND_IDS = ["field", "ndarray"]
 
@@ -148,8 +145,7 @@ def test_layout_rank2_transpose_full_pattern_byte_identical(backend):
 # ---------------------------------------------------------------------------
 
 
-_RANK3_NON_IDENTITY = [p for p in itertools.permutations(range(3))
-                       if p != (0, 1, 2)]
+_RANK3_NON_IDENTITY = [p for p in itertools.permutations(range(3)) if p != (0, 1, 2)]
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
@@ -162,8 +158,7 @@ def test_layout_rank3_arbitrary_permutation_byte_identical(backend, layout):
     parent = qd.tensor(qd.i32, shape=canonical, backend=backend)
     rotated_shape = _permute(canonical, layout)
     rotated_layout = _invert(layout)
-    rotated = qd.tensor(qd.i32, shape=rotated_shape, backend=backend,
-                        layout=rotated_layout)
+    rotated = qd.tensor(qd.i32, shape=rotated_shape, backend=backend, layout=rotated_layout)
 
     for i, j, k in itertools.product(*(range(d) for d in canonical)):
         v = i * 100 + j * 10 + k
@@ -195,6 +190,7 @@ def test_layout_rank2_kernel_writes_byte_identical(backend):
     rotated = qd.tensor(qd.i32, shape=(B, N), backend=backend, layout=(1, 0))
 
     if backend is qd.Backend.FIELD:
+
         @qd.kernel
         def fill_parent(x: qd.template()):
             for c, b in qd.ndrange(N, B):
@@ -204,7 +200,9 @@ def test_layout_rank2_kernel_writes_byte_identical(backend):
         def fill_rotated(x: qd.template()):
             for b, c in qd.ndrange(B, N):
                 x[b, c] = c * 1000 + b
+
     else:
+
         @qd.kernel
         def fill_parent(x: qd.types.ndarray()):
             for c, b in qd.ndrange(N, B):
@@ -233,8 +231,7 @@ def test_layout_identity_is_byte_identical_to_no_layout(backend):
     N, B = 5, 7
 
     no_layout = qd.tensor(qd.f32, shape=(N, B), backend=backend)
-    identity_layout = qd.tensor(qd.f32, shape=(N, B), backend=backend,
-                                layout=(0, 1))
+    identity_layout = qd.tensor(qd.f32, shape=(N, B), backend=backend, layout=(0, 1))
 
     for c in range(N):
         for b in range(B):
@@ -242,8 +239,7 @@ def test_layout_identity_is_byte_identical_to_no_layout(backend):
             no_layout[c, b] = v
             identity_layout[c, b] = v
 
-    np.testing.assert_array_equal(_raw_view(no_layout),
-                                  _raw_view(identity_layout))
+    np.testing.assert_array_equal(_raw_view(no_layout), _raw_view(identity_layout))
 
 
 # ---------------------------------------------------------------------------
