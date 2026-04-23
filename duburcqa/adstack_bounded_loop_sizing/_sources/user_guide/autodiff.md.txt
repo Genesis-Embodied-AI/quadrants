@@ -218,18 +218,18 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 **Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`. The flag is compile-time, so it must be set before the offending kernel compiles.
 
+Reverse-mode AD walks the forward kernel in reverse and applies the chain rule at every op. The chain-rule factor at each op is that op's derivative with respect to its input. For *non-linear* ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) that derivative depends on the input's primal, so the reverse pass needs the primal value that was there on the forward pass. For *linear* ops (addition, subtraction, multiplication by a constant) the derivative is itself a constant and no primal is needed. In a dynamic loop the forward pass writes a different primal at each iteration, so the reverse pass cannot simply re-read the latest value - it needs one per iteration. adstack provides exactly that: a per-iteration stash of the primal.
+
 ### Examples of dynamic loops that need it
 
-- A loop-carried variable - one whose value is carried forward from each iteration into the next, e.g. `v = v * 0.95 + 0.01`. The rest of this document uses "loop-carried variable" in this sense.
-- A local variable used as an index into a global field.
-- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose input changes from one iteration to the next. Example: `for i in range(n): total += qd.sin(v); v = v * 0.95 + 0.01` - `qd.sin(v)` is evaluated against a different `v` each iteration, and the reverse pass needs every one of those `v` values to compute the derivative at each step.
-- An `if` whose condition depends on a variable that mutates across iterations.
+- A *loop-carried variable* - one whose value is carried forward from each iteration into the next, e.g. `v = v * 0.95 + 0.01`. The rest of this document uses "loop-carried variable" in this sense. A loop-carried variable needs adstack when it feeds into a non-linear op. Example: `for i in range(n): total += qd.sin(v); v = v * 0.95 + 0.01` - `qd.sin(v)` is non-linear, so the reverse pass needs the `v` at every iteration to evaluate `cos(v)`.
+- A loop-carried variable used as an index into a global field, e.g. `a[idx]` where `idx` mutates across iterations. The field load routes the incoming adjoint into `a.grad[idx]`, which requires knowing which `idx` ran each iteration.
+- An `if` whose condition depends on a loop-carried variable. The reverse pass has to walk the same branch that ran on the forward pass, so it needs to know which branch each iteration took.
 
 ### Examples of dynamic loops that do not need it
 
-- A loop that only reads from a field and accumulates into a running total, e.g. `for i in x: total += x[i]`. In each iteration the body adds `x[i]` to `total`. The gradient of that addition with respect to `x[i]` is simply `1` - a constant that does not depend on `x[i]` itself. The reverse pass can therefore compute it without recovering any iteration-specific primal, so the adstack is unnecessary.
-- A linear reduction over a dynamic range, e.g. `for i in range(n): total += a * x[i] + b`. Same reasoning: the gradient of each iteration's contribution is constant (`a` for `x[i]`, `x[i]` for `a`, `1` for `b`), so nothing from the forward pass needs to be replayed.
-- A non-linear op applied to a loop-invariant value, e.g. `for i in range(n): total += qd.sin(a) * x[i]` where `a` does not change across iterations. The primal `a` is the same in every iteration, so the reverse pass only needs one copy of it, not one per iteration - that one copy is what `a` already holds after the loop, no adstack needed.
+- A loop whose body is purely linear - even if it updates a loop-carried variable. Example: `for i in x: total += x[i]`. The chain-rule step at `total += x[i]` has derivative `d(total)/d(x[i]) = 1`, a constant, so computing `dL/dx[i]` from the upstream `dL/dtotal` only requires multiplying by that constant - no primal replay. Same for `for i in range(n): total += a * x[i] + b` (all ops linear) and for a linear recurrence like `v = 0.95 * v + 0.01` read linearly downstream.
+- A non-linear op whose input does not change across iterations, e.g. `for i in range(n): total += qd.sin(a) * x[i]` with `a` fixed. `qd.sin(a)` produces the same primal every iteration, and `a` itself is still in scope after the loop, so the reverse pass needs one copy of `a`, not one per iteration.
 
 `qd.static(range(...))` loops are unrolled at compile time and never need the adstack either.
 
@@ -242,7 +242,7 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 - `default_ad_stack_size=N` (default `256`): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose size was not deducible shares this value. Prefer this knob - it only affects the branch where the compiler had to guess.
 - `ad_stack_size=N` (default `0 = adaptive`): hard override forcing every adstack in the program to exactly `N` slots regardless of what the compiler proved. Use only for targeted experiments, for example stress-testing the runtime heap path.
 
-**One adstack per variable.** A dynamic loop does not have a single adstack. The compiler allocates one for each [loop-carried variable](#examples-of-dynamic-loops-that-need-it) the reverse pass has to replay. It also allocates one for each *integer counter*: a loop-carried integer variable, for example a running `count += 1` or an index `idx += step` used downstream. And one for each *boolean branch flag*: a per-iteration boolean the compiler emits internally whenever an `if` inside the loop body depends on a loop-carried variable - it records which branch ran on each iteration so the reverse pass walks the matching one. A kernel with four f32 loop-carried variables and one integer counter therefore allocates five separate adstacks, each sized independently by the rule below.
+**One adstack per variable.** A dynamic loop does not have a single adstack. The compiler allocates one for each [loop-carried variable](#examples-of-dynamic-loops-that-need-it) the reverse pass has to replay - whether the variable is a floating-point accumulator (`v += qd.sin(u)`), an integer counter (`count += 1`), an integer index used to address a global field (`idx += step; total += a[idx]`), or any other scalar type that carries state across iterations. The compiler also allocates one for each *boolean branch flag*: a per-iteration boolean it emits internally whenever an `if` inside the loop body depends on a loop-carried variable - the flag records which branch ran on each iteration so the reverse pass walks the matching one. A kernel with four `f32` loop-carried variables and one integer loop counter therefore allocates five separate adstacks, each sized independently by the rule below.
 
 **Sizing rule.** A `K`-iteration dynamic loop consumes `K + 2` slots in each of its adstacks: one slot per forward iteration, plus two setup slots (one for the initial adjoint, one for the primal's starting value). `default_ad_stack_size` is a per-stack slot count, so size it at the worst-case trip count of the deepest unprovable dynamic loop in the program plus 2.
 
@@ -254,15 +254,15 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 At `max_n_dofs_per_entity = 16`, a `16 x 16` ndrange hits the default exactly (`256`).
 
-**Memory footprint.** With one scratch buffer per adstack (see above), the total memory cost depends on two further quantities. The first is the number of threads the kernel actually dispatches, which we call `num_threads`. On CPU that is the thread-pool size, typically tens. On GPU it is the full ndrange. The second is `bytes_per_slot`, which scales with the element's storage size and the backend; the two tables below work through its concrete values. Total memory across all buffers is then approximately:
+**Memory footprint.** Each adstack is *typed*: all of its slots hold values of the same scalar type - `f32`, `f64`, `i32`, `i64`, `bool`, and so on - inherited from the loop-carried variable the adstack was allocated for. We denote that type `T`. With one scratch buffer per adstack (see above), the total memory cost depends on two further quantities. The first is the number of threads the kernel actually dispatches, which we call `num_threads`. On CPU that is the thread-pool size, typically tens. On GPU it is the full ndrange. The second is `bytes_per_slot`, which depends on `T` and on the backend; the two tables below work through the concrete values. Total memory across all buffers is then approximately:
 
 ```
 num_threads * default_ad_stack_size * bytes_per_slot * num_buffers
 ```
 
-On all backends, every adstack slot stores a *primal* value - that is what the reverse pass pops to recover the forward-pass value at each chain-rule step.
+On all backends, every adstack slot stores a *primal* value of type `T` - that is what the reverse pass pops to recover the forward-pass value at each chain-rule step.
 
-In addition, LLVM backends (CPU / CUDA / AMDGPU) store an *adjoint* slot of the same type alongside the primal for every element type. The adjoint slot is where the reverse pass accumulates chain-rule contributions; LLVM carries it even for integer and boolean types because the codegen uses a uniform two-element slot layout, which keeps push/pop branch-free at the cost of the unused adjoint slot for non-real types. So `bytes_per_slot = 2 * sizeof(T)` on LLVM for every element type `T`:
+In addition, LLVM backends (CPU / CUDA / AMDGPU) store an *adjoint* of type `T` alongside the primal in each slot, regardless of what `T` is. The adjoint slot is where the reverse pass accumulates chain-rule contributions; LLVM carries it even when `T` is an integer or boolean (where the reverse pass never writes to it) because the codegen uses a uniform two-element slot layout, which keeps push/pop branch-free at the cost of the unused adjoint slot for non-floating-point `T`. So `bytes_per_slot = 2 * sizeof(T)` on LLVM for every choice of `T`:
 
 | T | LLVM bytes/slot |
 | --- | --- |
@@ -272,7 +272,7 @@ In addition, LLVM backends (CPU / CUDA / AMDGPU) store an *adjoint* slot of the 
 | i64 / u64 | 16 |
 | bool | 2 |
 
-On SPIR-V backends (Metal / Vulkan) the slot layout is trimmed: integer adstacks only store the primal because the reverse pass does not accumulate integer adjoints, and per-thread on-chip memory is more constrained than on LLVM. So `bytes_per_slot = sizeof(T)` for integer `T` and `bytes_per_slot = 2 * sizeof(T)` for real `T`. SPIR-V has no defined layout for `OpTypeBool`, so booleans are widened to i32 at storage time:
+On SPIR-V backends (Metal / Vulkan) the slot layout is trimmed: adstacks whose `T` is an integer type (`i32`, `i64`, ...) only store the primal because the reverse pass does not accumulate integer adjoints, and per-thread on-chip memory is more constrained than on LLVM. So `bytes_per_slot = sizeof(T)` for integer `T` and `bytes_per_slot = 2 * sizeof(T)` for floating-point `T`. SPIR-V has no defined layout for `OpTypeBool`, so booleans are widened to i32 at storage time:
 
 | T | SPIR-V bytes/slot |
 | --- | --- |
