@@ -2385,13 +2385,12 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   if (get_environ_config(DUMP_IR_ENV.data())) {
     std::filesystem::create_directories(ir_dump_dir);
 
-    for (const auto &task : offloaded_tasks) {
-      std::filesystem::path filename = ir_dump_dir / (task.name + "_llvm.ll");
-      std::error_code EC;
-      llvm::raw_fd_ostream dest_file(filename.string(), EC);
-      if (!EC) {
-        module->print(dest_file, nullptr);
-      }
+    std::string dump_name = offloaded_tasks.empty() ? kernel->name : offloaded_tasks[0].name;
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_llvm.ll");
+    std::error_code EC;
+    llvm::raw_fd_ostream dest_file(filename.string(), EC);
+    if (!EC) {
+      module->print(dest_file, nullptr);
     }
   }
 

@@ -28,23 +28,6 @@ std::string moduleToDumpName(llvm::Module *const M) {
   return M->getName().str();
 }
 
-std::vector<std::string> moduleDumpNames(llvm::Module *const M) {
-  const auto &function_list = M->getFunctionList();
-  if (function_list.empty() || module_has_runtime_initialize(function_list)) {
-    return {M->getName().str()};
-  }
-  std::vector<std::string> names;
-  for (const auto &func : function_list) {
-    if (!func.isDeclaration()) {
-      names.push_back(func.getName().str());
-    }
-  }
-  if (names.empty()) {
-    return {function_list.front().getName().str()};
-  }
-  return names;
-}
-
 JITModuleCUDA::JITModuleCUDA(void *module) : module_(module) {
 }
 
@@ -101,26 +84,25 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
 
 JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
+  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
 
-  // Collect dump names before compile_module_to_ptx may rename functions.
-  std::vector<std::string> dump_names;
-  if (dump_ir_env != nullptr) {
-    dump_names = moduleDumpNames(M.get());
+  // Capture the dump name before compile_module_to_ptx renames functions via convert().
+  std::string dump_name;
+  if (dump_ir_env != nullptr || load_ptx_env != nullptr) {
+    dump_name = moduleToDumpName(M.get());
   }
 
-  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1") {
+  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1" && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
-    for (const auto &dumpName : dump_names) {
-      std::filesystem::path filename = ir_dump_dir / (dumpName + "_before_ptx.ll");
-      std::error_code EC;
-      llvm::raw_fd_ostream dest_file(filename.string(), EC);
-      if (!EC) {
-        M->print(dest_file, nullptr);
-      } else {
-        std::cout << "problem dumping file " << filename.string() << ": " << EC.message() << std::endl;
-        QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
-      }
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_before_ptx.ll");
+    std::error_code EC;
+    llvm::raw_fd_ostream dest_file(filename.string(), EC);
+    if (!EC) {
+      M->print(dest_file, nullptr);
+    } else {
+      std::cout << "problem dumping file " << filename.string() << ": " << EC.message() << std::endl;
+      QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
     }
   }
 
@@ -130,23 +112,19 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     writer.write(ptx);
   }
 
-  if (dump_ir_env != nullptr) {
+  if (dump_ir_env != nullptr && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
-    for (const auto &dumpName : dump_names) {
-      std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
-      if (std::ofstream out_file(ptx_path); out_file.is_open()) {
-        out_file << ptx << std::endl;
-      }
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
+    if (std::ofstream out_file(ptx_path); out_file.is_open()) {
+      out_file << ptx << std::endl;
       std::cout << "PTX dumped to: " << ptx_path.string() << std::endl;
     }
   }
 
-  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
-  if (load_ptx_env != nullptr) {
+  if (load_ptx_env != nullptr && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
-    std::string dumpName = moduleToDumpName(M.get());
-    std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
     std::ifstream in_file(ptx_path);
     if (in_file.is_open()) {
       QD_INFO("Loading PTX from file: {}", ptx_path.string());
