@@ -403,6 +403,33 @@
 
 
     <span class="nd">@property</span>
+<div class="viewcode-block" id="Field.layout">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.layout">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">layout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Canonical-axis-permutation tuple, or ``None`` for identity.</span>
+
+<span class="sd">        Mirrors :attr:`Ndarray.layout`: returns the same value the</span>
+<span class="sd">        caller passed to ``qd.tensor(..., layout=...)`` (or ``None`` if</span>
+<span class="sd">        that kwarg was omitted / was the identity permutation). Lets</span>
+<span class="sd">        downstream code introspect the physical layout without having</span>
+<span class="sd">        to know which backend produced the tensor.</span>
+
+<span class="sd">        Fields constructed directly via ``qd.field(..., order=...)``</span>
+<span class="sd">        (i.e. bypassing the unified ``qd.tensor`` factory) report</span>
+<span class="sd">        ``None`` here — the field&#39;s actual SNode order is still</span>
+<span class="sd">        encoded in the storage but is not surfaced through this</span>
+<span class="sd">        introspection accessor.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_field_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="o">==</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">))):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">layout</span></div>
+
+
+    <span class="nd">@property</span>
 <div class="viewcode-block" id="Field.dtype">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.Field.dtype">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">dtype</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTypeCxx</span><span class="p">:</span>
