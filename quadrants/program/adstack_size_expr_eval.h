@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
+#include "quadrants/codegen/spirv/kernel_utils.h"
 #include "quadrants/ir/adstack_size_expr.h"
 
 namespace quadrants::lang {
@@ -45,5 +46,20 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
 std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizingInfo &ad_stack,
                                                               Program *prog,
                                                               LaunchContextBuilder *ctx);
+
+// SPIR-V-flavour encoder. Same transforms as the LLVM variant, but sources per-stack metadata from
+// `TaskAttributes::AdStackSizingAttribs::allocas` (each entry has a `HeapKind` — `Float = 0`, `Int = 1` —
+// that routes the stack onto the `AdStackHeapFloat` or `AdStackHeapInt` backing buffer on the host). The
+// `heap_kind` field of each `AdStackSizeExprDeviceStackHeader` carries that selector into the shader; the
+// shader splits the running-offset / stride computation into a float accumulator and an int accumulator so
+// the output metadata buffer matches the layout the main kernel already reads today:
+// `[stride_float, stride_int, (offset_i, max_size_i)*]`. The `entry_size_bytes` field is set to 1 on the
+// SPIR-V path because the backing buffers are element-indexed (f32 / i32) rather than byte-indexed and the
+// shader multiplies by `2` only for the `Float` heap (primal + adjoint interleaved) — see the running-offset
+// arithmetic in `GfxRuntime::launch_kernel` for the convention this matches.
+std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
+    const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
+    Program *prog,
+    LaunchContextBuilder *ctx);
 
 }  // namespace quadrants::lang

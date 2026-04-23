@@ -20,3 +20,7 @@ target_include_directories(gfx_runtime
         ${LLVM_INCLUDE_DIRS}
   )
 target_link_libraries(gfx_runtime PRIVATE quadrants_common)
+# The SPIR-V adstack sizer is compiled from source at launch time via `spirv::build_adstack_sizer_spirv`
+# (called from `GfxRuntime::launch_kernel`'s adstack metadata prep); link `spirv_codegen` here so the
+# shader builder's symbol resolves on Linux where the host linker does not pull it in transitively.
+target_link_libraries(gfx_runtime PRIVATE spirv_codegen)

@@ -86,15 +86,12 @@ TEST_F(DetermineAdStackSizeTest, LoopPushOnlyBoundByTripCount) {
   irpass::type_check(ir_block, CompileConfig());
 
   CompileConfig config;
-  constexpr int kDefaultAdStackSize = 32;
-  config.default_ad_stack_size = kDefaultAdStackSize;
   EXPECT_EQ(stack->max_size, 0);
   // Bellman-Ford classifies this as a positive loop (push-only body, no matching pop), so it
   // leaves the stack adaptive. The structural pre-pass then walks the push site and binds the
-  // max size to the enclosing range-for's static trip count: 100. The `kDefaultAdStackSize`
-  // fallback is deliberately bypassed here because `default_ad_stack_size` is a last-resort
-  // sentinel - a statically-bounded inner loop has a known exact upper bound, and using it
-  // avoids an adstack overflow at runtime for a kernel whose true depth exceeds the default.
+  // max size to the enclosing range-for's static trip count: 100. There is no compile-time
+  // fallback anymore; a statically-bounded inner loop has a known exact upper bound, and the
+  // structural pre-pass is the only resolution path.
   constexpr int kLoopTrips = 100;
   irpass::determine_ad_stack_size(ir_block, config);
   EXPECT_EQ(stack->max_size, kLoopTrips);

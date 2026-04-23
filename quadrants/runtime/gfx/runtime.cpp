@@ -1,8 +1,13 @@
 #include "quadrants/runtime/gfx/runtime.h"
+#include "quadrants/codegen/spirv/adstack_sizer_shader.h"
+#include "quadrants/ir/adstack_size_expr_device.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/ir/type_factory.h"
 #include "quadrants/common/filesystem.hpp"
+
+#include <cstring>
 
 // FIXME: (penguinliong) Special offer for `run_codegen`. Find a new home for it
 // in the future.
@@ -305,7 +310,8 @@ Pipeline *CompiledQuadrantsKernel::get_pipeline(int i) {
   return pipelines_[i].get();
 }
 
-GfxRuntime::GfxRuntime(const Params &params) : device_(params.device), profiler_(params.profiler) {
+GfxRuntime::GfxRuntime(const Params &params)
+    : device_(params.device), profiler_(params.profiler), program_impl_(params.program_impl) {
   current_cmdlist_pending_since_ = high_res_clock::now();
   init_nonroot_buffers();
 
@@ -505,10 +511,212 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     ctx_blitter->host_to_device(any_arrays, ext_array_grads, ext_array_size);
   }
 
-  ensure_current_cmdlist();
-
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
+
+  // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
+  // `offset` metadata resolved by a dedicated compute shader (`quadrants/codegen/spirv/adstack_sizer_shader`).
+  // The shader reads the ndarray data pointer straight out of the kernel arg buffer via Physical Storage
+  // Buffer addressing and dereferences where the memory lives, which is the only way to resolve an
+  // `ExternalTensorRead` against a GPU-private `qd.ndarray` without round-tripping the entire ndarray
+  // through host memory. Host-eval was the old path; it produced garbage for `kNdarray` args because the
+  // host can't dereference GPU-private storage, which is why the on-device interpreter is mandatory rather
+  // than optional on this backend.
+  struct TaskAdStackRuntime {
+    std::vector<uint32_t> metadata;  // [stride_float, stride_int, (offset, max_size)*]
+    uint32_t stride_float{0};
+    uint32_t stride_int{0};
+  };
+  std::vector<TaskAdStackRuntime> per_task_ad_stack(task_attribs.size());
+  for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+    per_task_ad_stack[ti].stride_float = task_attribs[ti].ad_stack.per_thread_stride_float_compile_time;
+    per_task_ad_stack[ti].stride_int = task_attribs[ti].ad_stack.per_thread_stride_int_compile_time;
+  }
+
+  std::vector<size_t> adstack_task_indices;
+  for (size_t ti = 0; ti < task_attribs.size(); ++ti) {
+    if (!task_attribs[ti].ad_stack.allocas.empty())
+      adstack_task_indices.push_back(ti);
+  }
+
+  if (!adstack_task_indices.empty()) {
+    QD_ASSERT_INFO(program_impl_ != nullptr && program_impl_->program != nullptr,
+                   "GfxRuntime::launch_kernel: `ProgramImpl::program` back-reference not set; cannot "
+                   "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
+                   "into `GfxRuntime::Params`.");
+    QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) ||
+                    !device_->get_caps().get(DeviceCapability::spirv_has_int64),
+                "GfxRuntime::launch_kernel: the on-device adstack SizeExpr sizer requires both the Physical Storage "
+                "Buffer and Int64 SPIR-V capabilities, but at least one is missing on this device. There is no "
+                "correct host-eval fallback for `qd.ndarray`-backed reverse-mode state on a GPU-private backend; "
+                "the shader must run on-device or the kernel's adstack sizing is garbage. Use a backend that "
+                "advertises both caps (e.g. Metal on Apple Silicon, Vulkan 1.2+ with "
+                "`VK_KHR_buffer_device_address`), or run the workload on the LLVM runtime (CPU / CUDA / AMDGPU).");
+
+    // Build the sizer pipeline on first use.
+    if (!adstack_sizer_pipeline_) {
+      std::vector<uint32_t> spirv = spirv::build_adstack_sizer_spirv(Arch::vulkan, &device_->get_caps());
+      QD_ASSERT_INFO(!spirv.empty(),
+                     "`build_adstack_sizer_spirv` returned an empty binary despite the PSB+Int64 capability "
+                     "check passing; bug in the shader builder's capability gating.");
+      PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv.data(),
+                                     spirv.size() * sizeof(uint32_t)};
+      auto [pipeline, res] = device_->create_pipeline_unique(source_desc, "adstack_sizer", backend_cache_.get());
+      QD_ERROR_IF(res != RhiResult::success,
+                  "Failed to create pipeline for the adstack SizeExpr sizer shader (err: {})", int(res));
+      adstack_sizer_pipeline_ = std::move(pipeline);
+    }
+
+    // Encode per-task bytecodes and compute per-task metadata sizes.
+    std::vector<std::vector<uint8_t>> per_task_bytecodes(adstack_task_indices.size());
+    std::vector<size_t> per_task_bytecode_offsets(adstack_task_indices.size());
+    std::vector<size_t> per_task_metadata_bytes(adstack_task_indices.size());
+    size_t total_bytecode_bytes = 0;
+    for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+      size_t ti = adstack_task_indices[k];
+      per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(task_attribs[ti].ad_stack,
+                                                                                 program_impl_->program, &host_ctx);
+      per_task_bytecode_offsets[k] = total_bytecode_bytes;
+      total_bytecode_bytes += per_task_bytecodes[k].size();
+      per_task_metadata_bytes[k] = (2u + 2u * task_attribs[ti].ad_stack.allocas.size()) * sizeof(uint32_t);
+    }
+
+    // Grow the shared bytecode scratch buffer if the concatenated blob outgrew it. Amortised doubling so
+    // steady-state launches see no allocation traffic.
+    if (!adstack_sizer_bytecode_buffer_ || adstack_sizer_bytecode_buffer_size_ < total_bytecode_bytes) {
+      size_t new_size = std::max(total_bytecode_bytes, 2 * adstack_sizer_bytecode_buffer_size_);
+      auto [buf, res] = device_->allocate_memory_unique(
+          {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+      QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack sizer bytecode buffer (size={})", new_size);
+      if (adstack_sizer_bytecode_buffer_)
+        ctx_buffers_.push_back(std::move(adstack_sizer_bytecode_buffer_));
+      adstack_sizer_bytecode_buffer_ = std::move(buf);
+      adstack_sizer_bytecode_buffer_size_ = new_size;
+    }
+    {
+      void *mapped = nullptr;
+      RhiResult map_res = device_->map_range(adstack_sizer_bytecode_buffer_->get_ptr(0), total_bytecode_bytes, &mapped);
+      QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack sizer bytecode buffer for upload");
+      for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+        std::memcpy(reinterpret_cast<char *>(mapped) + per_task_bytecode_offsets[k], per_task_bytecodes[k].data(),
+                    per_task_bytecodes[k].size());
+      }
+      device_->unmap(*adstack_sizer_bytecode_buffer_);
+    }
+
+    // Per-task metadata output buffers. Defer-freed via `ctx_buffers_` after readback so any in-flight writes
+    // from the just-synced sizer dispatch can finish draining through the normal cmdlist cleanup path.
+    std::vector<DeviceAllocationUnique> per_task_metadata_allocs(adstack_task_indices.size());
+    for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+      auto [buf, res] =
+          device_->allocate_memory_unique({per_task_metadata_bytes[k], /*host_write=*/false,
+                                           /*host_read=*/true, /*export_sharing=*/false, AllocUsage::Storage});
+      QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack sizer output buffer (size={})",
+                     per_task_metadata_bytes[k]);
+      per_task_metadata_allocs[k] = std::move(buf);
+    }
+
+    // Force visibility of prior device-side writes (accessor-kernel snode writes, user-side ndarray h2d blits,
+    // adstack heap grow-path `buffer_fill`s) to the sizer's `PhysicalStorageBuffer` loads. An intra-cmdlist
+    // `memory_barrier()` is not sufficient on MoltenVK: the Metal command encoder backs PSB loads through the
+    // device-address path, which bypasses the descriptor-bound cache a prior accessor kernel's `submit_synced`
+    // flushed via `vkQueueWaitIdle`. `flush()` drains any pending `current_cmdlist_` the outer launcher may have
+    // left behind (the one the main-kernel dispatch below will reuse), and `vkDeviceWaitIdle` pairs with the
+    // queue-level fence semantics the MoltenVK driver honours for cross-memory-path coherency. Symptom without
+    // this: `FieldLoad(n_iter) -> 0` instead of the live field value, then an adstack overflow at the next
+    // `qd.sync()`.
+    flush();
+    device_->wait_idle();
+    auto [sizer_cmdlist, cmdlist_res] = device_->get_compute_stream()->new_command_list_unique();
+    QD_ASSERT_INFO(cmdlist_res == RhiResult::success, "Failed to create adstack sizer cmdlist");
+
+    for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+      auto bindings = device_->create_resource_set_unique();
+      // All three bindings are declared as `StorageBuffer` in the sizer shader (`buffer_argument` lowers to
+      // a storage SSBO in the SPIR-V IR, not a uniform). Vulkan distinguishes uniform and storage buffers
+      // via distinct `VkDescriptorType` values - binding these slots via `buffer()` (uniform) produces a
+      // descriptor set layout that doesn't match the pipeline's, and `bind_shader_resources` returns
+      // `invalid_usage` with "Layout mismatch". Use `rw_buffer` across the board so the descriptor types
+      // match; the shader is disciplined about not writing slots 0 and 2, so granting write-capable
+      // descriptors there is harmless.
+      bindings->rw_buffer(0, adstack_sizer_bytecode_buffer_->get_ptr(per_task_bytecode_offsets[k]),
+                          per_task_bytecodes[k].size());
+      bindings->rw_buffer(1, *per_task_metadata_allocs[k]);
+      // Buffer(2) holds the outer kernel's arg buffer: the sizer reads ndarray data pointers out of it to
+      // resolve `ExternalTensorRead` nodes. A kernel can legitimately have adstack allocas *without* any
+      // ndarray-backed inputs (e.g. adstacks sized from a field value only, not from an ndarray shape),
+      // in which case `args_buffer` is null and no ExternalTensorRead nodes ever get interpreted - so any
+      // valid allocation is safe to bind here. Fall back to the bytecode buffer rather than plumbing a
+      // conditional null-binding path that every RHI backend would need to support.
+      bindings->rw_buffer(2, args_buffer ? *args_buffer : *adstack_sizer_bytecode_buffer_);
+
+      sizer_cmdlist->bind_pipeline(adstack_sizer_pipeline_.get());
+      RhiResult bind_res = sizer_cmdlist->bind_shader_resources(bindings.get());
+      QD_ERROR_IF(bind_res != RhiResult::success, "Sizer resource binding error: RhiResult({})", int(bind_res));
+      RhiResult dispatch_res = sizer_cmdlist->dispatch(1, 1, 1);
+      QD_ERROR_IF(dispatch_res != RhiResult::success, "Sizer dispatch error: RhiResult({})", int(dispatch_res));
+      sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);
+    }
+    device_->get_compute_stream()->submit_synced(sizer_cmdlist.get());
+
+    for (size_t k = 0; k < adstack_task_indices.size(); ++k) {
+      size_t ti = adstack_task_indices[k];
+      auto &rt = per_task_ad_stack[ti];
+      const size_t n_u32 = per_task_metadata_bytes[k] / sizeof(uint32_t);
+      rt.metadata.resize(n_u32);
+      void *mapped = nullptr;
+      RhiResult map_res = device_->map(*per_task_metadata_allocs[k], &mapped);
+      QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack sizer output buffer for readback");
+      std::memcpy(rt.metadata.data(), mapped, per_task_metadata_bytes[k]);
+      device_->unmap(*per_task_metadata_allocs[k]);
+      rt.stride_float = rt.metadata[0];
+      rt.stride_int = rt.metadata[1];
+      // `QD_DEBUG_ADSTACK=1` opt-in diagnostic. Dumps the encoded bytecode's per-stack header (root_node_idx,
+      // max_size_compile_time, heap_kind, entry_size_bytes) alongside the runtime-evaluated (offset,
+      // max_size) that the sizer shader wrote back. A `root_node_idx < 0` stack means the host encoder
+      // found no symbolic SizeExpr for the alloca (empty `size_expr.nodes`), so the sizer falls back to
+      // `max_size_compile_time` - that's the most common Genesis overflow cause and it's otherwise
+      // invisible. Printed to stderr, one line per stack, unconditional when the env var is set.
+      if (std::getenv("QD_DEBUG_ADSTACK")) {
+        const auto &bc = per_task_bytecodes[k];
+        const auto *hdr = reinterpret_cast<const AdStackSizeExprDeviceHeader *>(bc.data());
+        const auto *stack_headers =
+            reinterpret_cast<const AdStackSizeExprDeviceStackHeader *>(bc.data() + sizeof(AdStackSizeExprDeviceHeader));
+        std::fprintf(stderr,
+                     "[adstack_sizer] kernel='%s' task=%zu allocas=%zu bytecode_bytes=%zu "
+                     "n_stacks=%u total_nodes=%u total_indices=%u stride_f=%u stride_i=%u\n",
+                     ti_kernel->ti_kernel_attribs().name.c_str(), ti, task_attribs[ti].ad_stack.allocas.size(),
+                     bc.size(), hdr->n_stacks, hdr->total_nodes, hdr->total_indices, rt.stride_float, rt.stride_int);
+        for (uint32_t si = 0; si < hdr->n_stacks; ++si) {
+          const auto &sh = stack_headers[si];
+          uint32_t off = rt.metadata[2 + 2 * si];
+          uint32_t mx = rt.metadata[2 + 2 * si + 1];
+          std::fprintf(stderr,
+                       "[adstack_sizer]   stack[%u]: heap=%s entry_bytes=%u root_idx=%d max_size_ct=%u -> offset=%u "
+                       "max_size=%u%s\n",
+                       si, sh.heap_kind == 0 ? "F" : "I", sh.entry_size_bytes, sh.root_node_idx,
+                       sh.max_size_compile_time, off, mx,
+                       sh.root_node_idx < 0 ? " [fallback to compile-time bound - no symbolic tree]" : "");
+        }
+      }
+      // Sanity cap: a per-thread adstack stride larger than this indicates the sizer shader returned garbage
+      // (e.g. an `ExternalTensorRead` dereferenced an uninitialised arg-buffer slot). Without this guard the
+      // downstream heap allocation below multiplies by `dispatched_threads` and asks the RHI for hundreds of
+      // GB, which tears the machine down with OOM before any error surface has a chance to run. 16 Mi u32 words
+      // per thread is already far beyond any realistic reverse-mode workload; pin it and hard-error so the bug
+      // is attributed to the sizer output, not to the heap allocator at the call site that used the result.
+      constexpr uint32_t kMaxSaneStridePerThread = 1u << 24;
+      QD_ERROR_IF(rt.stride_float > kMaxSaneStridePerThread || rt.stride_int > kMaxSaneStridePerThread,
+                  "Adstack sizer shader returned an implausibly large per-thread stride (stride_float={}, "
+                  "stride_int={}, cap={}). This is almost always a bug in `encode_adstack_size_expr_device_"
+                  "bytecode_for_spirv` (wrong `kNodeOffArgBufferOffset` or missing `ExternalTensorRead` "
+                  "pre-substitution) or in the sizer shader's PSB read path, not a legitimate workload.",
+                  rt.stride_float, rt.stride_int, kMaxSaneStridePerThread);
+      ctx_buffers_.push_back(std::move(per_task_metadata_allocs[k]));
+    }
+  }
+
+  ensure_current_cmdlist();
 
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
@@ -541,6 +749,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     }
     const int group_x = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
                         attribs.advisory_num_threads_per_group;
+    // Adstack metadata (runtime-evaluated stride and per-alloca `(offset, max_size)` u32 table) precomputed
+    // before the cmdlist opened - see the `per_task_ad_stack` loop above. Zero-length `metadata` means the
+    // task has no adstacks; `stride_float` / `stride_int` are still populated from the compile-time values
+    // (both zero in the no-adstack case, a non-zero sum from the cache-hit fallback when allocas exist but
+    // none of them captured a symbolic bound).
+    const auto &ad_stack_metadata = per_task_ad_stack[i].metadata;
+    const uint32_t ad_stack_stride_float = per_task_ad_stack[i].stride_float;
+    const uint32_t ad_stack_stride_int = per_task_ad_stack[i].stride_int;
+
     std::unique_ptr<ShaderResourceSet> bindings = device_->create_resource_set_unique();
     for (auto &bind : attribs.buffer_binds) {
       // We might have to bind a invalid buffer (this is fine as long as
@@ -569,18 +786,19 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         // in-bounds even if they ever reach a push/pop. Grown on demand and reused across launches; contents do
         // not need to persist across kernels. On empty fields (`dispatched_threads == 0`) no push/pop can
         // actually execute, so bind a null allocation instead of asking the RHI for a zero-sized buffer (which
-        // trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal).
+        // trips `RHI_ASSERT(params.size > 0)` on Vulkan and fails similarly on Metal). The stride used here is
+        // the per-launch value produced by `evaluate_adstack_size_expr` over every alloca (stored in
+        // `ad_stack_stride_float`), not the compile-time `attribs.ad_stack.per_thread_stride_float_compile_time`.
         size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
         // The shader uses u64 index arithmetic for `invoc_id * stride + offset + count` when the device has
         // Int64; without Int64 the shader falls back to u32 OpIMul, which silently wraps past 2^32 and aliases
         // threads into one another's heap slice. Assert at launch time rather than emit silent corruption.
         QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
-                           size_t(attribs.ad_stack_heap_per_thread_stride_float) * dispatched_threads <=
-                               std::numeric_limits<uint32_t>::max(),
+                           size_t(ad_stack_stride_float) * dispatched_threads <= std::numeric_limits<uint32_t>::max(),
                        "adstack f32 heap offset would overflow u32 on a device without Int64: "
                        "stride={} dispatched_threads={}",
-                       attribs.ad_stack_heap_per_thread_stride_float, dispatched_threads);
-        size_t required = size_t(attribs.ad_stack_heap_per_thread_stride_float) * dispatched_threads * sizeof(float);
+                       ad_stack_stride_float, dispatched_threads);
+        size_t required = size_t(ad_stack_stride_float) * dispatched_threads * sizeof(float);
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
@@ -619,15 +837,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         }
       } else if (bind.buffer.type == BufferType::AdStackHeapInt) {
         // SPIR-V adstack primal/adjoint storage for i32 and u1 adstacks. Same grow-on-demand policy and same
-        // empty-dispatch guard as the float buffer above. Same u32-overflow guard as the float branch too.
+        // empty-dispatch guard as the float buffer above. Same u32-overflow guard as the float branch too. Uses
+        // the per-launch `ad_stack_stride_int` (SizeExpr-evaluated) rather than the compile-time value.
         size_t dispatched_threads = size_t(group_x) * size_t(attribs.advisory_num_threads_per_group);
         QD_ASSERT_INFO(device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
-                           size_t(attribs.ad_stack_heap_per_thread_stride_int) * dispatched_threads <=
-                               std::numeric_limits<uint32_t>::max(),
+                           size_t(ad_stack_stride_int) * dispatched_threads <= std::numeric_limits<uint32_t>::max(),
                        "adstack i32/u1 heap offset would overflow u32 on a device without Int64: "
                        "stride={} dispatched_threads={}",
-                       attribs.ad_stack_heap_per_thread_stride_int, dispatched_threads);
-        size_t required = size_t(attribs.ad_stack_heap_per_thread_stride_int) * dispatched_threads * sizeof(int32_t);
+                       ad_stack_stride_int, dispatched_threads);
+        size_t required = size_t(ad_stack_stride_int) * dispatched_threads * sizeof(int32_t);
         if (required == 0) {
           bindings->rw_buffer(bind.binding, kDeviceNullAllocation);
         } else {
@@ -651,6 +869,42 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           }
           bindings->rw_buffer(bind.binding, *adstack_heap_buffer_int_);
         }
+      } else if (bind.buffer.type == BufferType::AdStackMetadata) {
+        // Per-dispatch u32 buffer carrying `[stride_float, stride_int, (offset_i, max_size_i)*]`. Populated
+        // from `ad_stack_metadata` above (which evaluated each alloca's `SizeExpr`). Empty `allocas` means the
+        // codegen never emitted a `BufferType::AdStackMetadata` bind in the first place, so this branch is
+        // reached only when we have something to upload. Sized and grown with the same amortized-doubling
+        // retire-old-into-`ctx_buffers_` policy as the heap buffers.
+        QD_ASSERT_INFO(!ad_stack_metadata.empty(),
+                       "AdStackMetadata bind requested for a task that recorded no adstack allocas");
+        const size_t required = ad_stack_metadata.size() * sizeof(uint32_t);
+        if (!adstack_metadata_buffer_ || adstack_metadata_buffer_size_ < required) {
+          size_t new_size = std::max(required, 2 * adstack_metadata_buffer_size_);
+          auto [buf, res] = device_->allocate_memory_unique(
+              {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+          if (res != RhiResult::success && new_size > required) {
+            new_size = required;
+            std::tie(buf, res) = device_->allocate_memory_unique(
+                {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+          }
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack metadata buffer (size={})", new_size);
+          if (adstack_metadata_buffer_) {
+            ctx_buffers_.push_back(std::move(adstack_metadata_buffer_));
+          }
+          adstack_metadata_buffer_ = std::move(buf);
+          adstack_metadata_buffer_size_ = new_size;
+        }
+        // Map, memcpy, unmap. Upload happens on the host timeline; the shader dispatch below happens after
+        // the cmdlist is submitted, so a host-side write is visible to the device without an explicit barrier
+        // on Vulkan (host-visible memory has implicit HOST -> DEVICE availability at submit time) and on
+        // Metal (the shared buffer's contents are observable after `commit`).
+        void *mapped = nullptr;
+        RhiResult map_res = device_->map_range(adstack_metadata_buffer_->get_ptr(0), required, &mapped);
+        QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack metadata buffer for host upload (size={})",
+                       required);
+        std::memcpy(mapped, ad_stack_metadata.data(), required);
+        device_->unmap(*adstack_metadata_buffer_);
+        bindings->rw_buffer(bind.binding, *adstack_metadata_buffer_);
       } else if (bind.buffer.type == BufferType::Args) {
         bindings->buffer(bind.binding, args_buffer ? *args_buffer : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::Rets) {
@@ -754,9 +1008,13 @@ void GfxRuntime::synchronize() {
     }
     device_->unmap(*adstack_overflow_buffer_);
     QD_ERROR_IF(flag_val != 0,
-                "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-                "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass a larger "
-                "`default_ad_stack_size=N` to `qd.init()` to raise the capacity. See documentation for details.");
+                "Adstack overflow (offending stack_id={}): a reverse-mode autodiff kernel pushed more elements "
+                "than the adstack capacity allows. Raised at the next qd.sync() rather than at the offending "
+                "kernel launch. The pre-pass resolved this alloca to a bound tighter than the actual runtime "
+                "push count - either the enclosing loop shape is outside the current `SizeExpr` grammar "
+                "(rewrite it, or extend the grammar), or the Bellman-Ford analyzer undercounted the "
+                "forward-pass accumulation on this stack (file a bug with the kernel IR via `QD_DUMP_IR=1`).",
+                flag_val - 1);
   }
   fflush(stdout);
 }

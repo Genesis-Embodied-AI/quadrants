@@ -39,6 +39,9 @@ std::string TaskAttributes::buffers_name(BufferInfo b) {
   if (b.type == BufferType::AdStackHeapInt) {
     return "AdStackHeapInt";
   }
+  if (b.type == BufferType::AdStackMetadata) {
+    return "AdStackMetadata";
+  }
   QD_ERROR("unrecognized buffer type");
 }
 

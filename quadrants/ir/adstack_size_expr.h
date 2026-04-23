@@ -62,7 +62,7 @@ struct SerializedSizeExpr {
 // launch to size the per-thread adstack heap stride. The allowed shapes are intentionally minimal:
 // integer constants, scalar i32/i64 field loads at constant indices, and add / sub / max binary
 // ops. Anything outside this shape triggers a compile error in the pre-pass - there is no silent
-// fallback to `default_ad_stack_size` here anymore.
+// compile-time size fallback here anymore.
 class SizeExpr {
  public:
   enum class Kind {

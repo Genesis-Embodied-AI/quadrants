@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -12,9 +14,11 @@
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/type_factory.h"
+#include "quadrants/ir/type_utils.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/snode_rw_accessors_bank.h"
+#include "quadrants/rhi/device.h"
 
 namespace quadrants::lang {
 
@@ -208,13 +212,20 @@ int64_t evaluate_node(const SerializedSizeExpr &expr,
 // Device-bytecode encoder helpers
 // --------------------------------------------------------------------------------------------------------------
 
-// `contains_etr[i]` is true when subtree rooted at node `i` has at least one `ExternalTensorRead` leaf. Computed
-// bottom-up; `SerializedSizeExpr` is already in post-order so every operand / body index is < i.
-std::vector<bool> compute_contains_etr(const SerializedSizeExpr &expr) {
+// `contains_device_leaf[i]` is true when subtree rooted at node `i` has at least one leaf that MUST stay on the
+// device during encoding (the host fold cannot substitute it with a `Const`). On the LLVM path this is any
+// `ExternalTensorRead` leaf - `FieldLoad` can be host-folded via `SNodeRwAccessorsBank::read_int`, which is safe
+// on CPU / CUDA / AMDGPU. On the SPIR-V path the caller flips `fieldload_stays_on_device` to true because on
+// MoltenVK a nested `read_int` submit crashes inside the descriptor-set bind path; keeping `FieldLoad` on the
+// device side (via PSB loads in the sizer shader) avoids that entirely. Computed bottom-up; `SerializedSizeExpr`
+// is already in post-order so every operand / body index is < i.
+std::vector<bool> compute_contains_device_leaf(const SerializedSizeExpr &expr, bool fieldload_stays_on_device) {
   std::vector<bool> result(expr.nodes.size(), false);
   for (std::size_t i = 0; i < expr.nodes.size(); ++i) {
     const auto &node = expr.nodes[i];
-    bool hit = (static_cast<SizeExpr::Kind>(node.kind) == SizeExpr::Kind::ExternalTensorRead);
+    auto kind = static_cast<SizeExpr::Kind>(node.kind);
+    bool hit = (kind == SizeExpr::Kind::ExternalTensorRead) ||
+               (fieldload_stays_on_device && kind == SizeExpr::Kind::FieldLoad);
     if (!hit && node.operand_a >= 0)
       hit = result[node.operand_a];
     if (!hit && node.operand_b >= 0)
@@ -339,25 +350,44 @@ AdStackSizeExprDeviceNode make_empty_device_node(int32_t kind) {
   return dn;
 }
 
-// Recursive top-down encoder. Each call returns the index of the emitted root in `out_nodes`. When the subtree
-// at `src_idx` is closed (no free bound vars) and free of `ExternalTensorRead` leaves, the whole subtree is
-// evaluated on the host via `evaluate_node` and emitted as a single `Const` device node - this is the only
-// lifting mechanism, and it subsumes every `FieldLoad` / `ExternalTensorShape` leaf that the device interpreter
-// does not implement. Any `FieldLoad` that survives this lifting (because its indices reference a bound var
-// whose `MaxOverRange` has to stay on the device) is rejected with a hard error here, since the device
-// interpreter has no SNode-access codegen.
+// Data needed to encode a `FieldLoad` as a `kFieldLoad` device node. Populated by the SPIR-V encoder entry
+// point via `GfxRuntime` / `Device` queries; the LLVM encoder passes a default-constructed (empty) emitter,
+// which routes every `FieldLoad` through the host-fold path instead (safe on CPU / CUDA / AMDGPU where a
+// nested accessor kernel launch is fine).
+struct FieldLoadDeviceEmitter {
+  // Returns true on success, populating `out_base_psb` with `root_buffer_psb + place_byte_offset_in_root` and
+  // `out_elem_strides` with one positive int32 *element* stride per active axis of `snode` (stride in units of
+  // the leaf's primitive type, not bytes - the sizer shader reuses `psb_load_scalar` which already multiplies
+  // by `sizeof(prim_dt)`). Returns false when the snode layout is not amenable to direct PSB indexing
+  // (bitmasked / pointer / hash chain, bit-level place, not-all-dense path), in which case the encoder raises
+  // a `QD_ERROR`. The dense-only restriction is deliberate - Genesis exercises only dense chains in the adstack
+  // pre-pass's `SizeExpr::FieldLoad` leaves, and extending this to bitmasked / pointer would require threading
+  // the full access codegen through the sizer shader, which is out of scope.
+  std::function<bool(SNode *snode, uint64_t *out_base_psb, std::vector<int32_t> *out_elem_strides)> fetch;
+
+  bool empty() const {
+    return fetch == nullptr;
+  }
+};
+
+// Recursive top-down encoder. Each call returns the index of the emitted root in `out_nodes`. Subtrees whose
+// leaves are all host-resolvable (no `ExternalTensorRead`, and - on the LLVM path - no `FieldLoad` either) and
+// whose bound variables are all locally bound within the subtree get folded to a single `kConst` device node
+// by running `evaluate_node` over them. On the SPIR-V path, `FieldLoad` also survives as a `kFieldLoad` device
+// node alongside `kExternalTensorRead`, so the shader can resolve the snode read in place via PSB.
 int32_t encode_subtree(const SerializedSizeExpr &src,
                        int32_t src_idx,
-                       const std::vector<bool> &contains_etr,
+                       const std::vector<bool> &contains_device_leaf,
                        const std::vector<std::unordered_set<int32_t>> &free_vars,
                        const std::unordered_map<int32_t, int32_t> &var_id_remap,
                        Program *prog,
                        LaunchContextBuilder *ctx,
+                       const FieldLoadDeviceEmitter &fl_emitter,
                        std::vector<AdStackSizeExprDeviceNode> &out_nodes,
                        std::vector<int32_t> &out_indices) {
   QD_ASSERT_INFO(src_idx >= 0 && static_cast<std::size_t>(src_idx) < src.nodes.size(),
                  "encode_subtree: src_idx {} out of bounds (size={})", src_idx, src.nodes.size());
-  const bool subtree_needs_device = contains_etr[src_idx];
+  const bool subtree_needs_device = contains_device_leaf[src_idx];
   const bool subtree_closed = free_vars[src_idx].empty();
 
   if (!subtree_needs_device && subtree_closed) {
@@ -393,10 +423,10 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     case SizeExpr::Kind::Sub:
     case SizeExpr::Kind::Mul:
     case SizeExpr::Kind::Max: {
-      int32_t a =
-          encode_subtree(src, node.operand_a, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
-      int32_t b =
-          encode_subtree(src, node.operand_b, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
+      int32_t a = encode_subtree(src, node.operand_a, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
+                                 fl_emitter, out_nodes, out_indices);
+      int32_t b = encode_subtree(src, node.operand_b, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
+                                 fl_emitter, out_nodes, out_indices);
       AdStackSizeExprDeviceKind dk = AdStackSizeExprDeviceKind::kAdd;
       if (kind == SizeExpr::Kind::Sub)
         dk = AdStackSizeExprDeviceKind::kSub;
@@ -411,12 +441,12 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
       return static_cast<int32_t>(out_nodes.size() - 1);
     }
     case SizeExpr::Kind::MaxOverRange: {
-      int32_t a =
-          encode_subtree(src, node.operand_a, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
-      int32_t b =
-          encode_subtree(src, node.operand_b, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
-      int32_t body = encode_subtree(src, node.body_node_idx, contains_etr, free_vars, var_id_remap, prog, ctx,
-                                    out_nodes, out_indices);
+      int32_t a = encode_subtree(src, node.operand_a, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
+                                 fl_emitter, out_nodes, out_indices);
+      int32_t b = encode_subtree(src, node.operand_b, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
+                                 fl_emitter, out_nodes, out_indices);
+      int32_t body = encode_subtree(src, node.body_node_idx, contains_device_leaf, free_vars, var_id_remap, prog, ctx,
+                                    fl_emitter, out_nodes, out_indices);
       AdStackSizeExprDeviceNode dn =
           make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kMaxOverRange));
       dn.operand_a = a;
@@ -476,19 +506,62 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
       return static_cast<int32_t>(out_nodes.size() - 1);
     }
     case SizeExpr::Kind::FieldLoad: {
-      // If we reach here the subtree is not host-substitutable (has free bound vars or sits alongside
-      // `ExternalTensorRead` in the same closed context). No currently-observed user kernel emits this combination;
-      // implementing on-device SNode access would mean threading `snode_rw_accessors_bank` through the device
-      // interpreter, which is a separate codegen subsystem. Bail loudly so a future regression is caught rather than
-      // silently misreading field memory through a stale DeviceAllocation handle.
-      QD_ERROR(
-          "Adstack SizeExpr FieldLoad at node {} has free bound variables or is inside an `ExternalTensorRead`"
-          " context: on-device SNode access is not yet implemented by the device-side adstack SizeExpr"
-          " evaluator. Rewrite the kernel so the FieldLoad-bounded trip count does not depend on a variable"
-          " bound by a MaxOverRange that also wraps an ndarray read, or extend the device interpreter to walk"
-          " the SNode tree.",
+      // If we reach here the subtree is not host-substitutable (has free bound vars or sits alongside an
+      // `ExternalTensorRead` in the same closed context, or - on the SPIR-V path - `FieldLoad` is deliberately
+      // kept on the device via `fl_emitter`). Without an emitter, the LLVM path would have folded it earlier;
+      // reaching here without one means the shape is outside what the grammar supports, which is a user-facing
+      // bug, not a runtime fallback.
+      QD_ASSERT_INFO(
+          !fl_emitter.empty(),
+          "Adstack SizeExpr FieldLoad at node {} survived the host fold without a FieldLoadDeviceEmitter. The "
+          "LLVM encoder should route closed FieldLoads through `evaluate_node` and reject non-closed ones before "
+          "the structural pre-pass emits them; if this fires, a SerializedSizeExpr with a bound-var-indexed "
+          "FieldLoad leaf reached an LLVM-targeted encoder (which cannot resolve it on-device).",
           src_idx);
-      return -1;
+      QD_ASSERT_INFO(node.snode_id >= 0, "FieldLoad at node {} has no snode_id", src_idx);
+      QD_ASSERT_INFO(prog != nullptr, "encode_subtree: FieldLoad needs a live Program to resolve snode {}",
+                     node.snode_id);
+      SNode *snode = prog->get_snode_by_id(node.snode_id);
+      QD_ASSERT_INFO(snode != nullptr,
+                     "FieldLoad at node {} references snode_id={} which is not in the program's snode tree", src_idx,
+                     node.snode_id);
+      uint64_t base_psb = 0;
+      std::vector<int32_t> elem_strides;
+      bool fetched = fl_emitter.fetch(snode, &base_psb, &elem_strides);
+      QD_ERROR_IF(!fetched,
+                  "Adstack SizeExpr FieldLoad at node {} on snode_id={} could not be resolved for device-side "
+                  "evaluation: the snode layout is not a pure-dense chain ending in a plain place leaf (bitmasked "
+                  "/ pointer / bit-level snodes are not supported by the SPIR-V sizer shader). Rewrite the trip "
+                  "count to use a dense field, or extend the shader to walk the non-dense hierarchy.",
+                  src_idx, node.snode_id);
+      QD_ASSERT_INFO(elem_strides.size() == node.indices.size(),
+                     "FieldLoad at node {}: elem_strides.size()={} must match node.indices.size()={} (one stride "
+                     "per active axis)",
+                     src_idx, elem_strides.size(), node.indices.size());
+      AdStackSizeExprDeviceNode dn =
+          make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kFieldLoad));
+      dn.const_value = static_cast<int64_t>(base_psb);
+      // `PrimitiveTypeID` for the leaf: mirrors ExternalTensorRead's field. The pre-pass emits a `FieldLoad`
+      // `SerializedSizeExprNode` with `snode_id` set and the element type implicit in the snode; we look it up
+      // here so the shader's existing `emit_psb_load_i64` switch (shared with ETR) can dispatch on it.
+      dn.prim_dt = static_cast<int32_t>(snode->dt->cast<PrimitiveType>()->type);
+      dn.indices_offset = static_cast<int32_t>(out_indices.size());
+      dn.indices_count = static_cast<int32_t>(node.indices.size());
+      // Interleaved `[idx_a_raw, elem_stride_a]` pairs per axis. The shader reads 2 i32s per axis and
+      // accumulates `idx_a * stride_a` into the element index, then `psb_load_scalar` multiplies by the
+      // element size to get the final byte offset. Bound-variable refs (negative entries) are dense-remapped
+      // so the device interpreter's fixed-size `scope->values[]` stays in bounds.
+      for (std::size_t a = 0; a < node.indices.size(); ++a) {
+        int32_t raw = static_cast<int32_t>(node.indices[a]);
+        if (raw < 0) {
+          int32_t dense = remap_var_id(var_id_remap, -(raw + 1));
+          raw = -(dense + 1);
+        }
+        out_indices.push_back(raw);
+        out_indices.push_back(elem_strides[a]);
+      }
+      out_nodes.push_back(dn);
+      return static_cast<int32_t>(out_nodes.size() - 1);
     }
     case SizeExpr::Kind::ExternalTensorShape: {
       // Should have been folded to `Const` by the `subtree_needs_device == false && subtree_closed == true`
@@ -515,29 +588,83 @@ int64_t evaluate_adstack_size_expr(const SerializedSizeExpr &expr, Program *prog
   return evaluate_node(expr, static_cast<int32_t>(expr.nodes.size() - 1), empty_bound_vars, prog, ctx);
 }
 
-std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizingInfo &ad_stack,
-                                                              Program *prog,
-                                                              LaunchContextBuilder *ctx) {
-  const std::size_t n_stacks = ad_stack.allocas.size();
+namespace {
 
-  std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
+// Shared back-end for both encoder variants. Takes already-populated stack headers (with
+// `entry_size_bytes` / `max_size_compile_time` / `heap_kind` set per stack, `root_node_idx` defaulted to
+// `-1`) plus the per-stack source trees, runs the tree-to-bytecode substitution-aware flattening, and
+// returns the packed byte buffer ready to upload to a device scratch buffer.
+std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceStackHeader> stack_headers,
+                                            const std::vector<const SerializedSizeExpr *> &exprs,
+                                            Program *prog,
+                                            LaunchContextBuilder *ctx,
+                                            const FieldLoadDeviceEmitter &fl_emitter) {
+  const std::size_t n_stacks = stack_headers.size();
+  QD_ASSERT(exprs.size() == n_stacks);
+
   std::vector<AdStackSizeExprDeviceNode> nodes;
   std::vector<int32_t> indices;
   nodes.reserve(n_stacks);
   indices.reserve(n_stacks);
 
+  const bool fieldload_stays_on_device = !fl_emitter.empty();
   for (std::size_t i = 0; i < n_stacks; ++i) {
     auto &sh = stack_headers[i];
-    sh.entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
-    sh.max_size_compile_time = static_cast<uint32_t>(ad_stack.allocas[i].max_size_compile_time);
-    sh._pad = 0;
-    const SerializedSizeExpr *expr = (i < ad_stack.size_exprs.size()) ? &ad_stack.size_exprs[i] : nullptr;
+    const SerializedSizeExpr *expr = exprs[i];
+    if (std::getenv("QD_DEBUG_ADSTACK")) {
+      fprintf(stderr, "[encode] stack[%zu]: expr=%p nodes=%zu max_size_ct=%u\n", i, (void *)expr,
+              expr ? expr->nodes.size() : 0, sh.max_size_compile_time);
+      if (expr) {
+        for (size_t n = 0; n < expr->nodes.size(); ++n) {
+          const auto &node = expr->nodes[n];
+          fprintf(stderr,
+                  "[encode]   node[%zu]: kind=%d const=%lld snode_id=%d var_id=%d op_a=%d op_b=%d body=%d "
+                  "axis=%d",
+                  n, node.kind, (long long)node.const_value, node.snode_id, node.var_id, node.operand_a, node.operand_b,
+                  node.body_node_idx, node.arg_shape_axis);
+          if (!node.arg_id_path.empty()) {
+            fprintf(stderr, " arg_id=[");
+            for (int32_t v : node.arg_id_path)
+              fprintf(stderr, "%d,", v);
+            fprintf(stderr, "]");
+          }
+          if (!node.indices.empty()) {
+            fprintf(stderr, " idx=[");
+            for (int32_t v : node.indices)
+              fprintf(stderr, "%d,", v);
+            fprintf(stderr, "]");
+          }
+          fprintf(stderr, "\n");
+        }
+        // Host-side ground-truth evaluation: if the shader later writes a different `max_size`, the delta
+        // pinpoints a shader-side bug rather than a pre-pass / SerializedSizeExpr bug. Skip when the caller
+        // passes `ctx == nullptr` (C++-only test harnesses) and when an `ExternalTensorRead` leaf exists but
+        // `ctx->array_ptrs` has not been populated (the CPU launcher populates it via
+        // `set_host_accessible_ndarray_ptrs`; SPIR-V launchers use the device-side PSB path instead, so
+        // `array_ptrs` is empty and the host-eval would crash on the missing key).
+        if (!expr->nodes.empty() && prog != nullptr && ctx != nullptr) {
+          bool has_etr = false;
+          for (const auto &node : expr->nodes) {
+            if (static_cast<SizeExpr::Kind>(node.kind) == SizeExpr::Kind::ExternalTensorRead) {
+              has_etr = true;
+              break;
+            }
+          }
+          if (has_etr && ctx->array_ptrs.empty()) {
+            fprintf(stderr, "[encode] stack[%zu]: host_eval=skipped (ctx->array_ptrs empty)\n", i);
+          } else {
+            int64_t host_val = evaluate_adstack_size_expr(*expr, prog, ctx);
+            fprintf(stderr, "[encode] stack[%zu]: host_eval=%lld\n", i, (long long)host_val);
+          }
+        }
+      }
+    }
     if (expr == nullptr || expr->nodes.empty()) {
       // No symbolic bound captured - the device interpreter will route this slot to `max_size_compile_time`.
       sh.root_node_idx = -1;
       continue;
     }
-    auto contains_etr = compute_contains_etr(*expr);
+    auto contains_device_leaf = compute_contains_device_leaf(*expr, fieldload_stays_on_device);
     auto free_vars = compute_free_vars(*expr);
     const std::size_t root_src_idx = expr->nodes.size() - 1;
     QD_ASSERT_INFO(free_vars[root_src_idx].empty(),
@@ -549,8 +676,8 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
     // exceed the device interpreter's fixed-size scope capacity even with modest nesting. The encoder hard-errors
     // here rather than letting the interpreter silently drop binds and return wrong `max_size` values.
     auto var_id_remap = build_dense_var_id_remap(*expr);
-    sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_etr, free_vars, var_id_remap,
-                                      prog, ctx, nodes, indices);
+    sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_device_leaf, free_vars,
+                                      var_id_remap, prog, ctx, fl_emitter, nodes, indices);
   }
 
   // Pack everything into a flat byte buffer: header | stack_headers | nodes | indices.
@@ -584,6 +711,150 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
   }
   QD_ASSERT(cursor == total_bytes);
   return buffer;
+}
+
+}  // namespace
+
+std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizingInfo &ad_stack,
+                                                              Program *prog,
+                                                              LaunchContextBuilder *ctx) {
+  const std::size_t n_stacks = ad_stack.allocas.size();
+  std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
+  std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
+  for (std::size_t i = 0; i < n_stacks; ++i) {
+    stack_headers[i].entry_size_bytes = static_cast<uint32_t>(ad_stack.allocas[i].entry_size_bytes);
+    stack_headers[i].max_size_compile_time = static_cast<uint32_t>(ad_stack.allocas[i].max_size_compile_time);
+    stack_headers[i].heap_kind = 0;  // LLVM has a single unified heap; the SPIR-V-specific bit is unused here.
+    if (i < ad_stack.size_exprs.size())
+      exprs[i] = &ad_stack.size_exprs[i];
+  }
+  // LLVM path: default-constructed emitter routes every FieldLoad through the host-fold (via `read_int`). That
+  // is safe on CPU / CUDA / AMDGPU where a nested accessor kernel launch does not conflict with the enclosing
+  // kernel prep.
+  FieldLoadDeviceEmitter fl_emitter{};
+  return encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter);
+}
+
+// Dense-only element-stride + place-offset computation for a `place` leaf snode. Returns false when the chain
+// includes a non-dense snode (bitmasked / pointer / hash / bit-level), a shape with any axis <= 0, or a stride
+// that would overflow an `int32`. Success writes `*out_elem_strides` in index order (same order as
+// `SerializedSizeExprNode::indices`, each entry is the stride in element units of the leaf's primitive type,
+// not bytes) and returns the byte offset of the place within its owning tree via `*out_place_byte_offset_in_root`
+// so the caller can fold it into the encoded `base_psb` once and avoid a per-load add.
+bool compute_dense_snode_strides(SNode *leaf, std::vector<int32_t> *out_elem_strides) {
+  if (leaf == nullptr) {
+    return false;
+  }
+  if (leaf->type != SNodeType::place) {
+    return false;
+  }
+  if (!leaf->is_path_all_dense) {
+    // A pointer / bitmasked / hash ancestor requires an on-device activation lookup the sizer shader does not
+    // implement. Pushing that into the shader would mean pulling the full SNode codegen subsystem in; refuse here
+    // and let the caller raise a user-visible "dense only" error.
+    return false;
+  }
+  if (leaf->is_bit_level) {
+    return false;  // quant array / bit-struct leaves need bit-packing logic we do not emit here
+  }
+  const int n = leaf->num_active_indices;
+  if (n < 0) {
+    return false;
+  }
+  // Scalar fields (`qd.field(dt, shape=())`) have `num_active_indices == 0`; the pre-pass emits a `FieldLoad`
+  // with an empty `indices` vector and the shader should just load `*base_psb` without any index computation.
+  // Return an empty strides vector - `compute_field_load_elem_index`'s loop iterates zero times and produces
+  // `elem_idx = 0`, which `psb_load_scalar` resolves to the exact place address.
+  std::vector<int> shape(n, 0);
+  for (int a = 0; a < n; ++a) {
+    int s = leaf->shape_along_axis(a);
+    if (s <= 0) {
+      return false;
+    }
+    shape[a] = s;
+  }
+  out_elem_strides->resize(n);
+  for (int a = 0; a < n; ++a) {
+    int64_t stride = 1;
+    for (int b = a + 1; b < n; ++b) {
+      stride *= shape[b];
+      if (stride > std::numeric_limits<int32_t>::max()) {
+        return false;  // would overflow the i32 slot; refuse rather than encode a truncated stride
+      }
+    }
+    (*out_elem_strides)[a] = static_cast<int32_t>(stride);
+  }
+  return true;
+}
+
+std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
+    const spirv::TaskAttributes::AdStackSizingAttribs &ad_stack,
+    Program *prog,
+    LaunchContextBuilder *ctx) {
+  const std::size_t n_stacks = ad_stack.allocas.size();
+  std::vector<AdStackSizeExprDeviceStackHeader> stack_headers(n_stacks);
+  std::vector<const SerializedSizeExpr *> exprs(n_stacks, nullptr);
+  for (std::size_t i = 0; i < n_stacks; ++i) {
+    const auto &a = ad_stack.allocas[i];
+    // The SPIR-V heaps are element-indexed (f32 / i32), so `entry_size_bytes` in the device header would be
+    // misnamed if we set it to the byte count; the SPIR-V sizer shader interprets this field as element count
+    // and scales by `2` only for the `Float` heap (to cover primal + adjoint interleaved), matching the
+    // `running_offset_float += 2u * max_size` / `running_offset_int += max_size` convention the host path used
+    // to perform and the main-kernel code already bakes into its offset arithmetic. Stamp `1` here so the
+    // sizer's multiplication by `2` for the float heap lands exactly on `2 * max_size` and the int heap on
+    // `1 * max_size`.
+    stack_headers[i].entry_size_bytes = 1;
+    stack_headers[i].max_size_compile_time = a.max_size_compile_time;
+    stack_headers[i].heap_kind = static_cast<uint32_t>(a.heap_kind);  // Float = 0, Int = 1
+    exprs[i] = &a.size_expr;
+  }
+  // SPIR-V path: emit `FieldLoad` as `kFieldLoad` device nodes so the sizer shader can PSB-load the field value
+  // in place. This avoids `SNodeRwAccessorsBank::Accessors::read_int`, whose nested accessor-kernel launch
+  // deadlocks inside MoltenVK's descriptor-set bind path when the outer launch has already opened its command
+  // buffer. The emitter resolves each snode's tree-root PSB via the program's compute device and pre-computes
+  // the per-axis byte strides from the dense snode shape.
+  FieldLoadDeviceEmitter fl_emitter{};
+  fl_emitter.fetch = [prog](SNode *snode, uint64_t *out_base_psb, std::vector<int32_t> *out_elem_strides) -> bool {
+    if (snode == nullptr || prog == nullptr) {
+      return false;
+    }
+    if (!compute_dense_snode_strides(snode, out_elem_strides)) {
+      return false;
+    }
+    const int tree_id = snode->get_snode_tree_id();
+    DevicePtr tree_root_devptr = prog->get_snode_tree_device_ptr(tree_id);
+    Device *dev = prog->get_compute_device();
+    if (dev == nullptr) {
+      return false;
+    }
+    // `get_memory_physical_pointer` returns the Vulkan `bufferDeviceAddress` / Metal equivalent for the buffer
+    // that backs the snode tree's root. The place's byte offset within the tree comes from the compiled snode
+    // descriptor table (`snode_descriptors[id].mem_offset_in_parent_cell` walked up to root), NOT from
+    // `SNode::offset_bytes_in_parent_cell` which is a frontend-only field that stays zero on the SPIR-V path.
+    // Using the wrong offset silently reads a sibling field (typically the first `qd.field` declared in the
+    // program), which looks like a returning-zero bug at runtime.
+    uint64_t root_psb = dev->get_memory_physical_pointer(tree_root_devptr);
+    if (root_psb == 0) {
+      return false;
+    }
+    size_t place_byte_offset = prog->get_field_in_tree_offset(tree_id, snode);
+    if (std::getenv("QD_DEBUG_ADSTACK")) {
+      // Pull the live value via the RwAccessors as a ground-truth check on the `PSB + place_off` pair the
+      // sizer shader will consume: if the shader later reads a different i32 than `live_val`, the byte offset
+      // we encoded is wrong even though `shape_along_axis` lined up and the tree dispatcher emitted a sensible
+      // PSB base. `read_int` launches its own accessor kernel plus a `synchronize()`, which is safe here
+      // because the encoder runs outside any in-flight main-kernel launch.
+      std::vector<int> idx_zero(snode->num_active_indices, 0);
+      int64_t live_val = prog->get_snode_rw_accessors_bank().get(snode).read_int(idx_zero);
+      fprintf(stderr,
+              "[fl.fetch] snode_id=%d type=%d dense=%d n_axes=%d tree_id=%d root_psb=0x%llx place_off=%zu live=%lld\n",
+              snode->id, (int)snode->type, (int)snode->is_path_all_dense, snode->num_active_indices, tree_id,
+              (unsigned long long)root_psb, place_byte_offset, (long long)live_val);
+    }
+    *out_base_psb = root_psb + static_cast<uint64_t>(place_byte_offset);
+    return true;
+  };
+  return encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter);
 }
 
 }  // namespace quadrants::lang

@@ -248,8 +248,11 @@ void LlvmRuntimeExecutor::check_adstack_overflow() {
   if (flag != 0) {
     throw QuadrantsAssertionError(
         "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
-        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass a larger "
-        "`default_ad_stack_size=N` to `qd.init()` to raise the capacity. See documentation for details.");
+        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. The pre-pass "
+        "resolved this alloca to a bound tighter than the actual runtime push count - either the enclosing "
+        "loop shape is outside the current `SizeExpr` grammar (rewrite it, or extend the grammar), or the "
+        "Bellman-Ford analyzer undercounted the forward-pass accumulation on this stack (file a bug with "
+        "the kernel IR via `QD_DUMP_IR=1`).");
   }
 }
 

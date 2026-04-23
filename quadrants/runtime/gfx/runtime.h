@@ -79,6 +79,12 @@ class QD_DLL_EXPORT GfxRuntime {
   struct Params {
     Device *device{nullptr};
     KernelProfilerBase *profiler{nullptr};
+    // Back-reference to the owning `GfxProgramImpl` so `launch_kernel` can reach `ProgramImpl::program` and
+    // evaluate per-task `SerializedSizeExpr` trees captured in `TaskAttributes::ad_stack.allocas[i].size_expr`
+    // against the live field state (via `SNodeRwAccessorsBank`) + the per-launch `LaunchContextBuilder` args.
+    // Null is tolerated for pre-`materialize_runtime` construction paths; only the adstack-metadata publish
+    // path uses it, and kernels without any adstack do not trigger that path.
+    ProgramImpl *program_impl{nullptr};
   };
 
   explicit GfxRuntime(const Params &params);
@@ -175,6 +181,28 @@ class QD_DLL_EXPORT GfxRuntime {
   size_t adstack_heap_buffer_float_size_{0};
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
   size_t adstack_heap_buffer_int_size_{0};
+  // Per-dispatch `AdStackMetadata` buffer holding the runtime-evaluated geometry for every adstack the task
+  // owns (u32 layout: `stride_float, stride_int, (offset_i, max_size_i)*`). Host-populated before each launch
+  // by evaluating `TaskAttributes::ad_stack.allocas[i].size_expr` against the live field state + launch args.
+  // Grown lazily on demand to match the largest task seen; retired via `ctx_buffers_` on grow to avoid freeing
+  // an in-flight allocation. Unbound for tasks with no adstacks.
+  std::unique_ptr<DeviceAllocationGuard> adstack_metadata_buffer_;
+  size_t adstack_metadata_buffer_size_{0};
+
+  // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack
+  // SizeExpr interpreter (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is
+  // built once lazily on the first reverse-mode kernel launch that has adstack allocas and reused across
+  // every such launch afterwards; the bytecode buffer is grown on demand with the same
+  // amortised-doubling policy as the float / int heaps. Both are null on backends that don't advertise
+  // both `spirv_has_physical_storage_buffer` and `spirv_has_int64`, in which case the adstack-allocating
+  // kernel is hard-errored at launch time rather than routed to a broken host-eval fallback.
+  std::unique_ptr<Pipeline> adstack_sizer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_sizer_bytecode_buffer_;
+  size_t adstack_sizer_bytecode_buffer_size_{0};
+
+  // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
+  // `Params::program_impl` for the contract.
+  ProgramImpl *program_impl_{nullptr};
 
   // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
   // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw

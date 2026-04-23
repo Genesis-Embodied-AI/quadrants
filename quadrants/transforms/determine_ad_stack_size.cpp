@@ -1177,6 +1177,26 @@ std::unique_ptr<SizeExpr> build_value_expr(Stmt *stmt, IRNode *root, int32_t *va
         return expr_max(std::move(lhs), std::move(rhs));
       case BinaryOpType::mul:
         return expr_mul(std::move(lhs), std::move(rhs));
+      case BinaryOpType::bit_shl:
+        // `a << k` with a non-negative `a` and a const shift `k >= 0` equals `a * (1 << k)`. `full_simplify` rewrites
+        // `a * 2^k` into this shape for small k, so a trip-count like `range(c[i] * 2)` ends up as
+        // `bit_shl(load(c[i]), 1)` by the time this pre-pass runs; without this branch the shape falls out of the
+        // grammar even though the dynamic `Mul` representation is exactly what we would have emitted for the
+        // pre-folded `c[i] * 2` tree.
+        if (rhs->kind == SizeExpr::Kind::Const && rhs->const_value >= 0 && rhs->const_value < 63) {
+          int64_t factor = int64_t{1} << rhs->const_value;
+          return expr_mul(std::move(lhs), SizeExpr::make_const(factor));
+        }
+        return nullptr;
+      case BinaryOpType::bit_shr:
+      case BinaryOpType::bit_sar:
+        // `a >> k` with a non-negative `a` and `k >= 0` is at most `a`, so it is a safe upper bound inside this
+        // non-negative `SizeExpr` grammar. This covers the `ndrange`-lowered mod pattern `(flat // N) * N` whose
+        // inner `flat // N` shape reaches here after simplification.
+        if (rhs->kind == SizeExpr::Kind::Const && rhs->const_value >= 0) {
+          return lhs;
+        }
+        return nullptr;
       default:
         return nullptr;
     }
@@ -1279,12 +1299,12 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   }
   // Phase 1: Bellman-Ford on the CFG. Precise pass: tracks push/pop dynamics per basic block and takes max across
   // branches, so it resolves the common shapes (balanced push/pop pairs inside a range-for, max-across-if-branches)
-  // exactly. `apply_fallback = false` means stacks that hit a positive loop are left with `max_size = 0` for the
-  // structural pre-pass below to try to bound; there is no size-fallback anymore - any stack still at `max_size = 0`
-  // with a shape outside the `SizeExpr` grammar is a hard compile error (the `QD_ERROR` branch below).
+  // exactly. Stacks that hit a positive loop are left with `max_size = 0` for the structural pre-pass below to try
+  // to bound; there is no size-fallback anymore - any stack still at `max_size = 0` with a shape outside the
+  // `SizeExpr` grammar is a hard compile error (the `QD_ERROR` branch below).
   auto cfg = analysis::build_cfg(root);
   cfg->simplify_graph();
-  cfg->determine_ad_stack_size(config.default_ad_stack_size, /*apply_fallback=*/false);
+  cfg->determine_ad_stack_size();
   // Phase 2: structural / symbolic pre-pass on residual adaptive stacks. Walks up from every push site and builds a
   // `SizeExpr` upper bound from the enclosing loop bounds. Constant shapes collapse to a `Const` leaf and are also
   // written into `max_size` so downstream consumers that still read compile-time values (e.g. heap-stride
@@ -1315,12 +1335,11 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
       alloca->max_size = static_cast<std::size_t>(std::max<int64_t>(bound.expr->const_value, 1));
     } else {
       // Non-const symbolic bound: the LLVM launcher evaluates the tree per-launch via
-      // `publish_adstack_metadata` and the SPIR-V launcher via the `AdStackMetadata` buffer (once that lands).
-      // `stmt->max_size` is still read by (a) the cache-hit path that may not serialise the symbolic tree and
-      // (b) legacy codegen assertions that have not been updated to tolerate zero, so we seed it with
-      // `default_ad_stack_size` as a conservative upper bound. The runtime tightens this at each dispatch; the
-      // seed only surfaces in the rare path where the evaluator returns -1 (empty nodes) on a cache hit.
-      alloca->max_size = static_cast<std::size_t>(std::max<int>(config.default_ad_stack_size, 1));
+      // `publish_adstack_metadata` and the SPIR-V launcher via the `AdStackMetadata` buffer. `stmt->max_size`
+      // is still read by legacy codegen assertions that have not been updated to tolerate zero, so seed it
+      // with `1` as the minimum legal value - the runtime always replaces this with the per-dispatch
+      // evaluated bound before any kernel runs.
+      alloca->max_size = 1;
     }
     alloca->size_expr = std::move(bound.expr);
   }
@@ -1333,14 +1352,12 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
     }
   }
   // Any adstack still unresolved here uses a bound shape neither the Bellman-Ford phase nor the structural
-  // `SizeExpr` grammar could parse. Fall back to `default_ad_stack_size` with a one-line warning that names
-  // the source location so the user can either restructure the reverse-mode loop to match the grammar or
-  // extend the grammar (or bump `default_ad_stack_size` in `qd.init` if they know their real bound). The
-  // runtime adstack-overflow check still fires at `qd.sync()` time if the kernel actually exceeds the
-  // fallback at runtime. Hard-erroring here was tried and rolled back: kernels with `for j in range(field[i])` /
-  // `range(ndarray[i])` where `i` is a loop-carried variable predate the symbolic-tree work and rely on the
-  // Bellman-Ford+default fallback path because the grammar does not (yet) cover those shapes. When `QD_DUMP_IR=1`
-  // is set, the full kernel IR is dumped to `<tmp>/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for inspection.
+  // `SizeExpr` grammar could parse. There is deliberately no compile-time size fallback: silently picking a
+  // default capacity would mask a grammar gap, and a wrong bound only surfaces much later as a runtime
+  // overflow with no indication of which alloca tripped it. Emit a hard compile error naming the source
+  // location so the user can either restructure the reverse-mode loop to match the grammar or extend the
+  // grammar. When `QD_DUMP_IR=1` is set, the full kernel IR is also dumped to
+  // `<tmp>/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for offline inspection.
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
     if (alloca->max_size != 0 || alloca->size_expr) {
@@ -1361,20 +1378,20 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
       std::cout.rdbuf(old);
       dump_hint = fmt::format(" Full kernel IR dumped to {}.", dump_path.string());
     }
-    const int fallback = std::max<int>(config.default_ad_stack_size, 1);
-    const char *cycle_note =
-        alloca_cycle_detected.count(alloca) != 0
-            ? " (pre-pass hit a stash data-flow cycle on this alloca; the idempotency-at-zero probe could not"
-              " discharge it)"
-            : "";
-    QD_WARN(
-        "adstack bound at {} is unresolved after Bellman-Ford + structural pre-pass{}; falling back to"
-        " default_ad_stack_size={}.{} Extending the SizeExpr grammar to cover the enclosing loop shape"
-        " (e.g. `range(field[i])` / `range(ndarray[i])` indexed by a loop-carried var) would let the"
-        " runtime size it precisely per-launch and drop this warning.",
-        alloca->get_last_tb(), cycle_note, fallback, dump_hint);
-    alloca->max_size = static_cast<std::size_t>(fallback);
-    alloca->size_expr = SizeExpr::make_const(static_cast<int64_t>(fallback));
+    if (alloca_cycle_detected.count(alloca) != 0) {
+      QD_ERROR(
+          "adstack bound at {} could not be resolved: the structural pre-pass detected a stash data-flow cycle"
+          " while walking the push / local-load / ad-stack-load-top chain (stack A's push value reads through a"
+          " chain that re-enters stack A, and the idempotency-at-zero probe could not discharge it).{} Either"
+          " restructure the reverse-mode loop to break the cycle, or extend the `SizeExpr` grammar / pre-pass"
+          " with a sound fixed-point solver for this shape.",
+          alloca->get_last_tb(), dump_hint);
+    }
+    QD_ERROR(
+        "adstack bound at {} is unresolved after Bellman-Ford + structural pre-pass.{} Either restructure the"
+        " reverse-mode loop so every enclosing range is bounded by an integer constant, a scalar field load,"
+        " or a shape the pre-pass already recognises, or extend the `SizeExpr` grammar to cover this shape.",
+        alloca->get_last_tb(), dump_hint);
   }
   return true;
 }
