@@ -28,31 +28,39 @@ endif()
 if (QD_WITH_VULKAN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQD_WITH_VULKAN")
     if (APPLE)
-        # MoltenVK comes from the LunarG Vulkan SDK (`./build.py --shell` handles the download and exports
-        # `MOLTENVK_DIR` pointing at `$VULKAN_SDK/lib`, where LunarG drops `libMoltenVK.dylib` flat). There
-        # is no legacy-pin fallback on purpose: the prior third-party dylib predates
-        # `VK_KHR_buffer_device_address` and is unusable for the on-device adstack sizer. A build without a
-        # real SDK hard-fails here rather than shipping a Vulkan runtime that hard-errors every
-        # reverse-mode kernel at launch time.
+        # MoltenVK comes from the LunarG Vulkan SDK. Sources are tried in order: explicit `$MOLTENVK_DIR`
+        # (set by `build.py --shell`), then `$VULKAN_SDK/lib` (LunarG's globally-installed layout, also what
+        # `build.py --shell` exports), then the previously-extracted SDK under the `ti-build-cache` that
+        # `build.py --shell` populated on a prior invocation - this last fallback is what lets a plain
+        # `cmake .` reconfigure without re-entering the build shell every time. No legacy-pin fallback on
+        # purpose: the prior third-party dylib predates `VK_KHR_buffer_device_address` and is unusable for
+        # the on-device adstack sizer.
+        set(_MVK_CANDIDATES "")
         if(DEFINED ENV{MOLTENVK_DIR})
-            set(_MVK_ROOT "$ENV{MOLTENVK_DIR}")
-        elseif(DEFINED ENV{VULKAN_SDK})
-            set(_MVK_ROOT "$ENV{VULKAN_SDK}/lib")
-        else()
-            set(_MVK_ROOT "")
+            list(APPEND _MVK_CANDIDATES "$ENV{MOLTENVK_DIR}")
         endif()
+        if(DEFINED ENV{VULKAN_SDK})
+            list(APPEND _MVK_CANDIDATES "$ENV{VULKAN_SDK}/lib")
+        endif()
+        # `build.py --shell` extracts the SDK to `~/.cache/ti-build-cache/vulkan-macos-<VER>/macOS/lib`.
+        # Glob for any version under that directory so developers don't have to re-enter the build shell.
+        file(GLOB _MVK_CACHE_CANDIDATES "$ENV{HOME}/.cache/ti-build-cache/vulkan-macos-*/macOS/lib")
+        list(APPEND _MVK_CANDIDATES ${_MVK_CACHE_CANDIDATES})
         set(MOLTEN_VK "")
-        if(_MVK_ROOT)
-            find_file(MOLTEN_VK libMoltenVK.dylib NO_DEFAULT_PATH PATHS "${_MVK_ROOT}")
-        endif()
+        foreach(_dir ${_MVK_CANDIDATES})
+            if(EXISTS "${_dir}/libMoltenVK.dylib")
+                set(MOLTEN_VK "${_dir}/libMoltenVK.dylib")
+                break()
+            endif()
+        endforeach()
         if(NOT MOLTEN_VK)
             message(FATAL_ERROR
-                "MoltenVK: neither `$MOLTENVK_DIR` nor `$VULKAN_SDK` is set, or no `libMoltenVK.dylib` is "
-                "present under them. On macOS, run `./build.py --shell` (fetches LunarG's Vulkan SDK and "
-                "exports both vars), or install the LunarG Vulkan SDK globally, before configuring "
-                "Quadrants with `QD_WITH_VULKAN=ON`. The adstack sizer shader requires a MoltenVK with "
-                "`VK_KHR_buffer_device_address` (>= 1.2.1); shipping an older pin would hard-error every "
-                "reverse-mode kernel at launch time.")
+                "MoltenVK: cannot locate `libMoltenVK.dylib`. Searched: `$MOLTENVK_DIR`, `$VULKAN_SDK/lib`, "
+                "and `~/.cache/ti-build-cache/vulkan-macos-*/macOS/lib` (populated by `build.py --shell`). "
+                "Run `./build.py --shell` once to fetch LunarG's Vulkan SDK, or install the LunarG Vulkan "
+                "SDK globally, before configuring Quadrants with `QD_WITH_VULKAN=ON`. The adstack sizer "
+                "shader requires a MoltenVK with `VK_KHR_buffer_device_address` (>= 1.2.1); shipping an "
+                "older pin would hard-error every reverse-mode kernel at launch time.")
         endif()
         message(STATUS "MoltenVK: using LunarG Vulkan SDK copy at ${MOLTEN_VK}")
         configure_file(${MOLTEN_VK} ${CMAKE_BINARY_DIR}/libMoltenVK.dylib COPYONLY)
