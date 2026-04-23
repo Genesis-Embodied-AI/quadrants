@@ -144,8 +144,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   AMDGPUDriver::get_instance().malloc((void **)&context_pointer, sizeof(RuntimeContext));
   AMDGPUDriver::get_instance().memcpy_host_to_device(context_pointer, &ctx.get_context(), sizeof(RuntimeContext));
 
-  AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
-
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
@@ -171,6 +169,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   // Since we always allocating above then we should always free
   AMDGPUDriver::get_instance().mem_free(device_result_buffer);
+  // Free the per-launch `RuntimeContext` device allocation synchronously. `hipFree` synchronizes implicitly
+  // with pending kernels on the device, so this is safe even when the launches above were asynchronous.
+  // Done here rather than through `AMDGPUContext`'s deferred-free list because that list used to be drained
+  // by `LlvmRuntimeExecutor::synchronize`, which any mid-launch host-side query that calls synchronize would
+  // then free out from under an in-flight launch, and HIP would recycle the freed address for a subsequent
+  // allocation, clobbering the `RuntimeContext` the next task still reads from.
+  AMDGPUDriver::get_instance().mem_free(context_pointer);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {

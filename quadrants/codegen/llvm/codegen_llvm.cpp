@@ -1142,7 +1142,11 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   auto arguments = create_entry_block_alloca(argument_buffer_size);
 
   std::vector<llvm::Value *> args;
-  args.emplace_back(get_runtime());
+  // On CPU, use the context-aware variant that returns non-zero on failure
+  // so we can emit an early return and avoid the subsequent out-of-bounds
+  // memory access.  On GPU, asm("exit;") kills the thread directly.
+  bool use_ctx_variant = arch_is_cpu(current_arch());
+  args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
   args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
   args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
@@ -1167,7 +1171,17 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   args.emplace_back(
       builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
 
-  llvm_val[stmt] = call("quadrants_assert_format", std::move(args));
+  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
+
+  if (use_ctx_variant) {
+    auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
+    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
+    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
+    builder->CreateCondBr(failed, assert_abort, assert_cont);
+    builder->SetInsertPoint(assert_abort);
+    builder->CreateRetVoid();
+    builder->SetInsertPoint(assert_cont);
+  }
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
@@ -1727,6 +1741,10 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
+  // Reset the adstack function-scope accumulator for this task. The budget is per-task (per LLVM
+  // function), so the count must not carry over from the previous offloaded stmt.
+  ad_stack_fn_scope_bytes_ = 0;
+
   task_function_type =
       llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context), {llvm::PointerType::get(context_ty, 0)}, false);
 
@@ -2106,6 +2124,38 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
   auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->size_in_bytes());
+
+  // Guard against LLVM worker-thread stack overflow before silent memory corruption ensues.
+  // Gated on CPU arches because only there do LLVM allocas become worker-thread stack frame slots bounded by
+  // the OS thread-stack limit. On CUDA / AMDGPU the same LLVM allocas are lowered to per-thread GPU local
+  // memory (a separate address space sized by the driver, not shared with the CPU call stack), so the 256 KB
+  // CPU-stack budget is not meaningful there and the check would falsely reject valid GPU kernels with
+  // f64 loop-carried variables (4 adstacks at `ad_stack_size=4096` already cross 256 KB).
+  //
+  // Adstacks are allocated at function entry (`create_entry_block_alloca`) so they are live for the entire
+  // task invocation and their sizes sum directly into the LLVM stack frame. A kernel that exceeds the thread
+  // stack does not fault at the push - it simply trashes adjacent stack memory, and downstream reverse-mode
+  // accumulators read zero, producing silently-wrong gradients that look indistinguishable from a broken
+  // backward chain. Fail loudly with a message that tells the user how to unblock: either lower
+  // `ad_stack_size`, shrink the per-kernel adstack count by shifting some dynamic loops back to
+  // `qd.static(range(...))` unrolls, or use a backend that heap-backs adstacks.
+  //
+  // Budget: 256 KB leaves headroom inside the ~512 KB default macOS secondary-thread stack for other locals
+  // and nested call frames. Linux defaults are larger (~8 MB), so the same limit is strictly conservative
+  // there.
+  if (arch_is_cpu(current_arch())) {
+    constexpr std::size_t kFnScopeAdStackBudgetBytes = 256 * 1024;
+    ad_stack_fn_scope_bytes_ += stmt->size_in_bytes();
+    QD_ERROR_IF(ad_stack_fn_scope_bytes_ > kFnScopeAdStackBudgetBytes,
+                "LLVM autodiff-stack budget exceeded: cumulative `AdStackAllocaStmt` size {} bytes in task "
+                "'{}' crosses the {} byte function-scope budget. Every adstack is allocated on the worker "
+                "thread stack, so scaling past this point silently corrupts the stack frame and zeros the "
+                "reverse-mode gradient without raising. Options: lower `ad_stack_size=N` in `qd.init()`, "
+                "reduce the number of loop-carried values in dynamic reverse-mode loops, or keep the "
+                "existing `qd.static(range(...))` unrolls on the reverse-mode path.",
+                ad_stack_fn_scope_bytes_, current_task->name, kFnScopeAdStackBudgetBytes);
+  }
+
   auto alloca = create_entry_block_alloca(type, sizeof(int64));
   llvm_val[stmt] = builder->CreateBitCast(alloca, llvm::PointerType::getUnqual(*llvm_context));
   call("stack_init", llvm_val[stmt]);
@@ -2117,7 +2167,7 @@ void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  call("stack_push", llvm_val[stack], tlctx->get_constant(stack->max_size),
+  call("stack_push", get_runtime(), llvm_val[stack], tlctx->get_constant(stack->max_size),
        tlctx->get_constant(stack->element_size_in_bytes()));
   auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
   primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
@@ -2457,6 +2507,12 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     current_callable = old_callable;
   }
   llvm::Function *llvm_func = func_map[stmt->func];
+  // FIXME: when cpu_assert_failed fires inside a @qd.real_func callee, the
+  // flag is set on new_ctx but never propagated back to the caller's context.
+  // Regular @qd.func is AST-inlined so assertions are handled by the caller's
+  // visit(AssertStmt) directly.  real_func needs: (1) zero-init new_ctx's
+  // cpu_assert_failed before the call, (2) post-call check + propagate to
+  // get_context(), (3) emit ret void on failure.
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
   if (!stmt->func->parameter_list.empty()) {

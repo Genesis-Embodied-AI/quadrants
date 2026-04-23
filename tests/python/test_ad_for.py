@@ -1038,3 +1038,90 @@ def test_for_loop_index():
     for i in range(N):
         for j in range(M):
             assert test_utils.allclose(x.grad[i, j], my_x_grad[i, j])
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_ad_sibling_for_loops_with_dynamic_trip_count_between_them():
+    # Exercises reverse-mode autodiff through an outer loop whose body holds two sibling inner for-loops
+    # with a dynamic trip count (read from a field) computed between them. Every element's gradient must
+    # match the analytical value (grad_y[i] = 2 + 0.1 * trip[i]) with no IR-verify error on any backend.
+    #
+    # Internal details: the outer loop body has the IR shape [for_A, trip_load, for_B(range=trip_load)],
+    # where a non-loop GlobalLoad is sandwiched between two sibling for-loops and consumed by the later
+    # sibling as its dynamic range bound. `ReverseOuterLoops::reverse_for_loop_order_in_place` swaps
+    # sibling for-loops pairwise while keeping non-loop stmts at their original indices; if that pass
+    # ever saw this block it would move `for_B` ahead of `trip_load` and break SSA dominance at the
+    # range operand. Today it does not see this block because `IdentifyIndependentBlocks` classifies it
+    # as a smallest-IB and MakeAdjoint handles the reversal via its own per-IB machinery. This test pins
+    # that property end-to-end: any future IB-classification change that routes this shape through
+    # `reverse_for_loop_order_in_place` will fail here at the IR verifier rather than surface downstream
+    # as a silent wrong gradient.
+    n = 3
+    y = qd.field(qd.f32, shape=n, needs_grad=True)
+    trip = qd.field(qd.i32, shape=n)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in y:
+            for _ in range(2):
+                loss[None] += y[i]
+            t = trip[i]
+            for _ in range(t):
+                loss[None] += y[i] * 0.1
+
+    for i in range(n):
+        y[i] = 1.0
+        trip[i] = 3
+    loss[None] = 0.0
+    loss.grad[None] = 1.0
+    compute()
+    compute.grad()
+
+    # loss_i = 2 * y[i] + trip[i] * 0.1 * y[i] => dy[i] = 2 + 0.3 = 2.3 for trip[i] == 3.
+    for i in range(n):
+        assert y.grad[i] == test_utils.approx(2.3, rel=1e-6)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_ad_sibling_for_loops_with_body_use_of_between_stmt():
+    # Exercises reverse-mode autodiff through an outer loop whose body holds two sibling inner for-loops
+    # separated by a non-loop stmt that the later sibling consumes inside its body (not as its range
+    # bound). Every element's gradient must match the analytical value with no IR-verify error on any
+    # backend.
+    #
+    # Internal details: the outer loop body has the IR shape [for_A, scale_load, for_B(body reads
+    # scale_load)] where the between-stmt is a GlobalLoad referenced as a free variable inside for_B's
+    # body, not through for_B's `begin`/`end` range operands. `ReverseOuterLoops::reverse_for_loop_order_in_place`
+    # seeds its `must_hoist` frontier from each for-loop's body subtree (via `gather_statements` over the
+    # for-loop's contained block), not just from the for-loop's direct SSA operands, because the operand
+    # list of a `RangeForStmt` only exposes `{begin, end}`. Without the body-subtree walk, `scale_load`
+    # would be missing from `must_hoist`, the pairwise swap would place `for_B` ahead of it, and the IR
+    # verifier would reject the resulting SSA violation. Companion to
+    # `test_ad_sibling_for_loops_with_dynamic_trip_count_between_them` which covers the direct-operand
+    # case (the between-stmt feeds `for_B`'s range bound).
+    n = 3
+    y = qd.field(qd.f32, shape=n, needs_grad=True)
+    scale = qd.field(qd.f32, shape=n)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i in y:
+            for _ in range(2):
+                loss[None] += y[i]
+            s = scale[i]
+            for _ in range(3):
+                loss[None] += y[i] * s
+
+    for i in range(n):
+        y[i] = 1.0
+        scale[i] = 0.5
+    loss[None] = 0.0
+    loss.grad[None] = 1.0
+    compute()
+    compute.grad()
+
+    # loss_i = 2 * y[i] + 3 * y[i] * scale[i] = 2 + 3 * 0.5 = 3.5 => dy[i] = 2 + 3 * scale[i] = 3.5.
+    for i in range(n):
+        assert y.grad[i] == test_utils.approx(3.5, rel=1e-6)
