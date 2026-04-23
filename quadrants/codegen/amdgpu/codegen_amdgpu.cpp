@@ -157,6 +157,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
+  // Emit reductions as direct LLVM atomics instead of calling runtime
+  // reduce_* helpers. The runtime helpers expect addrspace(0) pointers,
+  // but SNode destinations arrive in addrspace(1). Calling the helpers
+  // requires an addrspace cast + inlining for correctness, which causes
+  // compilation blowup. Direct atomics preserve the address space and
+  // compile fast.
   llvm::Value *optimized_reduction(AtomicOpStmt *stmt) override {
     if (!stmt->is_reduction) {
       return nullptr;
@@ -164,50 +170,41 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
     PrimitiveTypeID prim_type =
         stmt->val->ret_type->cast<PrimitiveType>()->type;
-
-    std::unordered_map<PrimitiveTypeID,
-                       std::unordered_map<AtomicOpType, std::string>>
-        fast_reductions;
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::min] = "reduce_min_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::min] = "reduce_min_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] =
-        "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] =
-        "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] =
-        "reduce_xor_i32";
-
     AtomicOpType op = stmt->op_type;
-    if (fast_reductions.find(prim_type) == fast_reductions.end()) {
-      return nullptr;
-    }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
-              fast_reductions.at(prim_type).end());
-    // SNode pointer chain propagates addrspace(1) on AMDGPU. The runtime
-    // reduce_* helpers expect addrspace(0) parameters. Cast to flat for
-    // the call (always valid IR), but force-inline the callee so
-    // InferAddressSpaces can promote the flat atomic back to global.
     llvm::Value *dest = llvm_val[stmt->dest];
-    if (dest && dest->getType()->isPointerTy() &&
-        dest->getType()->getPointerAddressSpace() == 1) {
-      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
-      dest = builder->CreateAddrSpaceCast(dest, ptr_as0);
-    }
-    auto *result = call(fast_reductions.at(prim_type).at(op),
-                        {dest, llvm_val[stmt->val]});
-    if (auto *CI = llvm::dyn_cast<llvm::CallInst>(result)) {
-      if (auto *callee = CI->getCalledFunction()) {
-        callee->addFnAttr(llvm::Attribute::AlwaysInline);
-        callee->removeFnAttr(llvm::Attribute::NoInline);
+    llvm::Value *val = llvm_val[stmt->val];
+
+    if (prim_type == PrimitiveTypeID::i32) {
+      std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> i32_ops;
+      i32_ops[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;
+      i32_ops[AtomicOpType::min] = llvm::AtomicRMWInst::BinOp::Min;
+      i32_ops[AtomicOpType::max] = llvm::AtomicRMWInst::BinOp::Max;
+      i32_ops[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
+      i32_ops[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
+      i32_ops[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
+      if (i32_ops.find(op) != i32_ops.end()) {
+        return builder->CreateAtomicRMW(
+            i32_ops.at(op), dest, val, llvm::MaybeAlign(0),
+            llvm::AtomicOrdering::SequentiallyConsistent);
+      }
+    } else if (prim_type == PrimitiveTypeID::f32) {
+      if (op == AtomicOpType::add) {
+        return builder->CreateAtomicRMW(
+            llvm::AtomicRMWInst::FAdd, dest, val, llvm::MaybeAlign(0),
+            llvm::AtomicOrdering::SequentiallyConsistent);
+      } else if (op == AtomicOpType::min) {
+        return atomic_op_using_cas(
+            dest, val,
+            [&](auto v1, auto v2) { return builder->CreateMinNum(v1, v2); },
+            stmt->val->ret_type);
+      } else if (op == AtomicOpType::max) {
+        return atomic_op_using_cas(
+            dest, val,
+            [&](auto v1, auto v2) { return builder->CreateMaxNum(v1, v2); },
+            stmt->val->ret_type);
       }
     }
-    return result;
+    return nullptr;
   }
 
   void visit(RangeForStmt *for_stmt) override {
