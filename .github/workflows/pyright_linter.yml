@@ -40,22 +40,7 @@ jobs:
           pip install -e .
       - name: install torch and pyright
         run: |
-          # FIXME: pyright is pinned to 1.1.408 because 1.1.409 flags torch.* attribute
-          # accesses as reportPrivateImportUsage errors (torch's stubs don't re-export
-          # those names via __all__). Verified against torch 2.11.0:
-          #   1.1.408 -> 0 errors
-          #   1.1.409 -> 40 errors, all reportPrivateImportUsage on torch.*, in:
-          #     - python/quadrants/lang/util.py        (35 errors)
-          #     - python/quadrants/lang/_py_tensor.py  (3 errors:  zeros, from_numpy x2)
-          #     - python/quadrants/lang/_func_base.py  (1 error:   zeros_like)
-          #     - python/quadrants/lang/field.py       (1 error:   zeros)
-          # Symbols flagged: zeros, zeros_like, from_numpy, float16/32/64,
-          # int8/16/32/64, uint8/16/32/64, bool.
-          # To unpin: at each affected site, either rework the import so pyright sees
-          # the symbol as publicly re-exported (e.g. import from the specific torch
-          # submodule that defines it), or add `# type: ignore[attr-defined]`. Then
-          # drop the version pin here.
-          pip install torch 'pyright==1.1.408'
+          pip install torch pyright
       - name: run pyright
         run: |
           pyright
