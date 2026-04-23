@@ -234,37 +234,62 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 ### Adstack overflow
 
-Each adstack has a capacity that is fixed at compile time and cannot be modified at runtime. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default.
+Each adstack has a capacity fixed at compile time. When the compiler can prove the worst-case loop trip count, that value is used; otherwise it falls back to a conservative default. If a kernel exceeds its adstack capacity at runtime, Quadrants raises a Python exception on the next `qd.sync()` — `QuadrantsAssertionError` on LLVM backends, `RuntimeError` on SPIR-V — and the message recommends bumping `default_ad_stack_size`. See [Under the hood: adstack capacity and memory](#under-the-hood-adstack-capacity-and-memory) for the sizing formula and memory-footprint details.
 
-If a kernel overflows its adstack at runtime, Quadrants raises a Python `RuntimeError` naming the overflow at the next `qd.sync()`.
+### Under the hood: adstack capacity and memory
 
-**Tuning the capacity.** Two `qd.init()` knobs control adstack sizing:
+*You do not need to read this section to use reverse-mode AD. Skip to [Backend support](#backend-support) unless you hit an overflow error at runtime or an out-of-memory error on GPU.*
 
-- `default_ad_stack_size=N` (default `256`): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose max_size was not deducible shares this value. Prefer tuning this knob, since it only affects the branch where the compiler needed to guess.
-- `ad_stack_size=N` (default `0 = adaptive`): a hard override that forces every adstack in the program to exactly `N` slots, regardless of what the compiler proved. Prefer this knob only when a targeted experiment needs uniform sizing (e.g. stress-testing the runtime heap path).
+**Tuning.** Two `qd.init()` knobs control adstack sizing, both measured in slots per adstack (not bytes):
 
-**How to pick `default_ad_stack_size`.** The reverse pass of a `K`-iteration dynamic loop emits `K + 2` pushes per adstack (the trip count plus two setup pushes: one for the initial adjoint slot and one for the primal's starting value). Size the default at the flat trip count of the deepest unprovable dynamic loop in the program, plus that headroom. Common shapes:
+- `default_ad_stack_size=N` (default `256`): the fallback capacity for loops whose trip count the compiler cannot prove statically. Every adstack whose size was not deducible shares this value. Prefer this knob — it only affects the branch where the compiler had to guess.
+- `ad_stack_size=N` (default `0 = adaptive`): hard override forcing every adstack in the program to exactly `N` slots regardless of what the compiler proved. Use only for targeted experiments, for example stress-testing the runtime heap path.
 
-- A single `qd.ndrange(n, m)` whose bounds come from a field: worst case is `n_max * m_max` iterations. Pick `N >= n_max * m_max + 2`. At `max_n_dofs_per_entity = 16`, 16 x 16 = 256 hits the default exactly.
-- Nested `for i in range(a[None]): for j in range(b[None]):`: worst case is `a_max * b_max`, same rule.
-- A single dynamic `for i in range(a[None])`: `N >= a_max + 2`.
+**Sizing rule.** The reverse pass of a `K`-iteration dynamic loop pushes `K + 2` entries per adstack: one per forward iteration, plus two setup pushes — one for the initial adjoint slot and one for the primal's starting value. Size `default_ad_stack_size` at the worst-case trip count of the deepest unprovable dynamic loop in the program, plus that `+ 2`.
 
-**Memory cost.** The adstack pipeline allocates one small scratch buffer per loop-carried variable that the reverse pass has to remember. For example, a kernel whose dynamic loop reads and updates one float accumulator needs 1 adstack; a kernel whose loop updates four different floats needs 4. Integer counters and boolean branch flags used by the reverse pass also count (typically one each per dynamic `if` or nested loop). The total memory Quadrants allocates across all those buffers is roughly
+| Loop shape | Required `default_ad_stack_size` |
+| --- | --- |
+| single dynamic `for i in range(a[None])` | `a_max + 2` |
+| nested `for i in range(a[None]): for j in range(b[None])` | `a_max * b_max + 2` |
+| `qd.ndrange(n, m)` with field-derived `n`, `m` | `n_max * m_max + 2` |
+
+At `max_n_dofs_per_entity = 16`, a 16 x 16 ndrange hits the default exactly (`256`).
+
+**Memory footprint.** The pipeline allocates one scratch buffer per piece of reverse-pass state. That count includes every [loop-carried variable](#examples-of-dynamic-loops-that-need-it) the reverse pass has to replay, plus any integer counter and any boolean branch flag it has to read back. Total memory across all buffers is approximately
 
 ```
-num_threads * stack_size * bytes_per_element * num_loop_carried_variables
+num_threads * default_ad_stack_size * bytes_per_slot * num_buffers
 ```
 
-where `bytes_per_element` depends on the element type and the backend. On the LLVM backends (CPU / CUDA / AMDGPU) each adstack slot stores both a primal and an adjoint value, so f32 costs 8, i32 costs 8, and bool costs 2 bytes per slot. On the SPIR-V backends (Metal / Vulkan) integer adstacks only store the primal (the reverse pass does not accumulate integer adjoints), and bool is widened to i32 at storage time because SPIR-V has no defined layout for `OpTypeBool`, so f32 costs 8, i32 costs 4, and bool costs 4 bytes per slot. The buffer lives on the device on GPU and in host RAM on CPU. `num_threads` is the number of threads the kernel actually dispatches, not a worst-case grid: on CPU this is the thread pool size (tens of threads), so the memory footprint stays small; on GPU it is the dispatched ndrange. The buffer grows on demand to match the largest size any launch has needed so far and is then reused across subsequent launches, so you do not need to reserve memory up front.
+where `num_threads` is the number of threads the kernel actually dispatches — tens on CPU (the thread pool size), up to the full ndrange on GPU — and `bytes_per_slot` scales with the element's storage size.
 
-Two shapes blow up the cost:
+On LLVM backends (CPU / CUDA / AMDGPU), each adstack slot stores both a primal and an adjoint value, so `bytes_per_slot = 2 * sizeof(T)` for every element type `T`. Common cases:
 
-- A big `ndrange` on GPU. A kernel over `ndrange(1024, 1024)` with a `default_ad_stack_size` of `256` and four f32 loop-carried variables allocates roughly `1024 * 1024 * 256 * 8 * 4 bytes = 8 GB` - easy to overrun a consumer GPU's memory budget.
-- Doubling `default_ad_stack_size` doubles the backing buffer linearly, so it is the easiest knob to reach for when you hit an out-of-memory error.
+| T | LLVM bytes/slot |
+| --- | --- |
+| f32 | 8 |
+| f64 | 16 |
+| i32 / u32 | 8 |
+| i64 / u64 | 16 |
+| bool | 2 |
 
-If the GPU driver returns an out-of-memory error, the order of remedies is: drop `default_ad_stack_size` toward the real worst-case trip count of your dynamic loops, reduce the number of loop-carried variables the reverse pass has to remember (split a kernel, checkpoint manually, or fold two accumulators into one), then raise `device_memory_fraction` or `device_memory_GB` at `qd.init()` if your GPU has headroom.
+On SPIR-V backends (Metal / Vulkan), integer adstacks only store the primal because the reverse pass does not accumulate integer adjoints, so `bytes_per_slot = sizeof(T)` for integer `T` and `bytes_per_slot = 2 * sizeof(T)` for real `T`. SPIR-V has no defined layout for `OpTypeBool`, so booleans are widened to i32 at storage time:
 
-**When the default is too small.** The runtime surfaces overflow as a `QuadrantsAssertionError` (LLVM backends) or `RuntimeError` (SPIR-V backends) on the next `qd.sync()`, and the message recommends bumping `default_ad_stack_size`. Pick `N` using the rules above and retry.
+| T | SPIR-V bytes/slot |
+| --- | --- |
+| f32 | 8 |
+| f64 | 16 |
+| i32 / u32 | 4 |
+| i64 / u64 | 8 |
+| bool | 4 |
+
+Adstack buffers live on the device on GPU and in host RAM on CPU. The buffer grows on demand to match the largest size any launch has needed so far and is reused across subsequent launches, so you do not need to reserve memory up front.
+
+**Avoiding OOM on GPU.** A big `ndrange` combined with several loop-carried f32 variables adds up fast: `ndrange(1024, 1024)` with `default_ad_stack_size=256` and four f32 buffers allocates roughly `1024 * 1024 * 256 * 8 * 4 bytes ≈ 8 GB`, enough to exhaust a consumer GPU. Doubling `default_ad_stack_size` doubles the backing buffer linearly, so it is the simplest knob to reach for on out-of-memory. Remedies, in order:
+
+1. Drop `default_ad_stack_size` toward the real worst-case trip count of your dynamic loops.
+2. Reduce the number of loop-carried variables the reverse pass has to replay (split the kernel, checkpoint manually, or fold two accumulators into one).
+3. Raise `device_memory_fraction` or `device_memory_GB` in `qd.init()` if the GPU has headroom.
 
 ## Backend support
 
