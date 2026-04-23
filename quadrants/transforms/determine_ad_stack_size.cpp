@@ -270,15 +270,24 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
   // `MaxOverRange(X, B, E, Sub(body_a, body_b[Y->X]))` when the two wrappers iterate over the same domain.
   // The independent-wrap form evaluates to `max_i(body_a) - max_j(body_b)` at runtime, which under-counts
   // `max_i(body_a[i] - body_b[i])` whenever the per-operand maxima are attained at different indices (e.g.
-  // user-IR `joint_end[i] - joint_start[i]` where a link's `joint_end` is the max while a different link's
-  // `joint_start` is the max - then `max(joint_end) - max(joint_start)` can be zero or even hit the Sub's
-  // clamp-to-zero, while `max_i(joint_end[i] - joint_start[i])` is positive and is the correct trip-count
-  // upper bound). Fusing under a shared MaxOverRange preserves the per-iteration pairing that the user-IR
-  // Sub was meant to capture and keeps the dynamic sizing as tight as possible.
+  // user-IR `end_arr[i] - start_arr[i]` over two parallel ndarrays - when a slot's `end_arr` is the max while
+  // a different slot's `start_arr` is the max then `max(end_arr) - max(start_arr)` can be zero or even hit
+  // the Sub's clamp-to-zero, while `max_i(end_arr[i] - start_arr[i])` is positive and is the correct
+  // trip-count upper bound). Fusing under a shared MaxOverRange preserves the per-iteration pairing that the
+  // user-IR Sub was meant to capture and keeps the dynamic sizing as tight as possible. The `end` operands
+  // must be structurally equal OR must both be `ExternalTensorShape` along the same axis - the latter covers
+  // the parallel-ndarray pattern where the two shapes are expected to be equal at launch time but structural
+  // compare rejects them because the `arg_id`s differ. Picking `end_a` in the shape-pair case is safe for
+  // any launch that honours the same-length assumption; if a caller passes mismatched shapes the fused body
+  // reads the shorter ndarray past its end, so this narrows the fusion to the `ExternalTensorShape` pair and
+  // keeps the ordinary wildcard-end case on the strict-equality path.
   if (a->kind == SizeExpr::Kind::MaxOverRange && b->kind == SizeExpr::Kind::MaxOverRange && a->operands.size() == 3 &&
-      b->operands.size() == 3) {
-    if (expr_equal(a->operands[0].get(), b->operands[0].get()) &&
-        expr_equal(a->operands[1].get(), b->operands[1].get())) {
+      b->operands.size() == 3 && expr_equal(a->operands[0].get(), b->operands[0].get())) {
+    bool end_eq = expr_equal(a->operands[1].get(), b->operands[1].get());
+    bool both_shape_same_axis = a->operands[1]->kind == SizeExpr::Kind::ExternalTensorShape &&
+                                b->operands[1]->kind == SizeExpr::Kind::ExternalTensorShape &&
+                                a->operands[1]->arg_shape_axis == b->operands[1]->arg_shape_axis;
+    if (end_eq || both_shape_same_axis) {
       int32_t var_x = a->var_id;
       int32_t var_y = b->var_id;
       auto body_b_renamed = b->operands[2] ? b->operands[2]->clone() : nullptr;
