@@ -2046,3 +2046,131 @@ def test_adstack_triangular_ndrange_self_referential_push_idempotency():
         src_buf,
     )
     qd.sync()
+
+
+@pytest.mark.parametrize("inner_loop_shape", ["begin_end", "sub_then_range"])
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu])
+def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_shape_ends(inner_loop_shape):
+    # Covers the two user-facing surface forms of a reverse-mode kernel whose inner range-for trip count is
+    # the difference between two reads of parallel ndarrays indexed by the SAME outer loop. Both lower to a
+    # Sub-of-two-MaxOverRange where the `end` operands are structurally equal (both come from the single
+    # enclosing outer loop's end, not from each read's own ndarray shape), so the walker's strict-equality
+    # fusion path already fires without the `ExternalTensorShape` same-axis extension. The test pins that
+    # strict path continues to work on both spellings and that the resulting adstack bound matches the actual
+    # reverse-pass push count.
+    #
+    # Internal details: CPU-only because this PR lands only the host-evaluator path; the device mirror of the
+    # runtime evaluator ships in the follow-up. Two surface spellings share a single test body via
+    # `qd.static` because both produce the same `expr_sub` call at walker time, just via different
+    # `build_value_expr` recursion paths:
+    #   - `begin_end`: `for i_j_ in range(start[i_o], end[i_o])` - `compute_bounded_adstack_size` multiplies
+    #     `end_upper - begin_lower`, `resolve_loop_begin_lower_bound` drops non-const begins to `Const(0)`,
+    #     so the fused bound is the `end[i_o]` MaxOverRange alone (no two-operand Sub is built for this
+    #     spelling); the test still passes because the body's push count is bounded by `end[i_o]`, which the
+    #     walker tracks soundly via the single MaxOverRange.
+    #   - `sub_then_range`: user materialises `n_inner = end[i_o] - start[i_o]` and passes `range(n_inner)`;
+    #     this makes the `Sub` explicit in the range-for's `end` stmt, `build_value_expr` recurses into both
+    #     operands, each wraps with the SAME outer-loop end, and strict fusion collapses the pair.
+    # `qd.cast(e - s, qd.f32)` is a multiplicative factor inside the body so `full_simplify` does not inline
+    # the subtraction back into the range-for bounds and collapse the two patterns.
+    IS_BEGIN_END = inner_loop_shape == "begin_end"
+    N_X = 8
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(start_arr: qd.types.ndarray(dtype=qd.i32, ndim=1), end_arr: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_o in range(start_arr.shape[0]):
+            s = start_arr[i_o]
+            e = end_arr[i_o]
+            accum = 0.0
+            for i_j_ in range(s, e) if qd.static(IS_BEGIN_END) else range(e - s):
+                i_j = i_j_ if qd.static(IS_BEGIN_END) else (i_j_ + s)
+                accum = accum + x[i_j] * x[i_j] * qd.cast(e - s, qd.f32)
+            loss[None] += accum
+
+    # `start = [0, 3]`, `end = [3, 4]`: per-slot trips are (3, 1). `e - s` per slot is (3, 1) so the inner
+    # body adds `trip * x[i_j]^2` across 4 inner iterations.
+    for i in range(N_X):
+        x[i] = 0.1
+    start_np = np.array([0, 3], dtype=np.int32)
+    end_np = np.array([3, 4], dtype=np.int32)
+
+    compute(start_np, end_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(start_np, end_np)
+    qd.sync()
+
+    # loss = sum over i_j in [0, 3) of `3 * x[i_j]^2` + sum over i_j in [3, 4) of `1 * x[i_j]^2`
+    #      = 3 * 3 * 0.01 + 1 * 0.01 = 0.10.
+    assert loss[None] == pytest.approx(0.10, rel=1e-5)
+    # d(loss)/dx[j] = 2 * trip * x[j]; j in 0..2 has trip=3, j=3 has trip=1, j>=4 never visited.
+    for j in range(3):
+        assert x.grad[j] == pytest.approx(2 * 3 * 0.1, rel=1e-5)
+    assert x.grad[3] == pytest.approx(2 * 1 * 0.1, rel=1e-5)
+    for j in range(4, N_X):
+        assert x.grad[j] == pytest.approx(0.0, abs=1e-7)
+
+
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu])
+def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched_shape_ends():
+    # Pins the `expr_sub` fusion for the Sub-of-two-MaxOverRange shape that the walker builds when an inner
+    # range-for's trip count is computed as the difference between two ndarray reads whose indices come from
+    # two DIFFERENT enclosing range-fors. Each read wraps into its own `MaxOverRange(outer_i, 0, shape(arr_i),
+    # ExtRead(arr_i, [outer_i]))`; the `end` operands are then `ExternalTensorShape` nodes pointing at
+    # distinct `arg_id`s so `expr_equal` rejects them and the pre-fusion walker falls back to
+    # `max_i arr_a[i] - max_j arr_b[j]`, which under-counts `max_i (arr_a[i] - arr_b[i])` whenever the two
+    # per-index maxima land at different slots. With `arr_a = [1, 5]`, `arr_b = [4, 0]` the unfused bound
+    # collapses to `5 - 4 = 1` per outer pair and the full trip multiplier undershoots the actual push count
+    # of 7 (the (1,1) pair alone pushes 5), so the reverse pass overflows the heap and raises at `qd.sync()`.
+    # The fusion emits the tight `MaxOverRange(v, 0, shape(arr_a), Sub(arr_a[v], arr_b[v]))` which correctly
+    # evaluates to 5, and the adstack gets sized to fit.
+    #
+    # Internal details: CPU-only because this PR lands only the host-evaluator path; the device mirror of the
+    # runtime evaluator ships in the follow-up. The trivial `range(1)` wrapper keeps the kernel AST inside a
+    # top-level for-loop, which the autodiff front-end requires (`reverse_segments` rejects mixed
+    # statement-plus-for kernel bodies).
+    N_X = 16
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(arr_a: qd.types.ndarray(dtype=qd.i32, ndim=1), arr_b: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for _dummy in range(1):
+            accum = 0.0
+            for i_a in range(arr_a.shape[0]):
+                for i_b in range(arr_b.shape[0]):
+                    n = arr_a[i_a] - arr_b[i_b]
+                    if n > 0:
+                        for k in range(n):
+                            accum = accum + x[k] * x[k]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    arr_a_np = np.array([1, 5], dtype=np.int32)
+    arr_b_np = np.array([4, 0], dtype=np.int32)
+
+    compute(arr_a_np, arr_b_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr_a_np, arr_b_np)
+    qd.sync()
+
+    # For (i_a, i_b) in {(0,0), (0,1), (1,0), (1,1)} the inner trip n = max(0, arr_a[i_a] - arr_b[i_b]) is
+    # {0, 1, 1, 5}. Total push count is 7 (the (1,1) pair contributes 5); the pre-fusion adstack bound of 4
+    # overflows. loss = (0 + 1 + 1 + 5) * x[0..4]^2 = 0.07 with every x[i] = 0.1.
+    # x.grad[k] = 2 * (count of inner iterations that visit index k) * 0.1. k = 0 is visited by every
+    # non-empty pair (3 visits), k in [1, 4] is visited only by the (1, 1) pair (1 visit each), k >= 5 is
+    # never visited.
+    assert loss[None] == pytest.approx(0.07, rel=1e-5)
+    assert x.grad[0] == pytest.approx(0.6, rel=1e-5)
+    for k in range(1, 5):
+        assert x.grad[k] == pytest.approx(0.2, rel=1e-5)
+    for k in range(5, N_X):
+        assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
