@@ -244,7 +244,7 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 **One adstack per variable.** A dynamic loop does not have a single adstack. The compiler allocates one for each [loop-carried variable](#examples-of-dynamic-loops-that-need-it) the reverse pass has to replay. It also allocates one for each *integer counter*: a loop-carried integer variable, for example a running `count += 1` or an index `idx += step` used downstream. And one for each *boolean branch flag*: a per-iteration boolean the compiler emits internally whenever an `if` inside the loop body depends on a loop-carried variable - it records which branch ran on each iteration so the reverse pass walks the matching one. A kernel with four f32 loop-carried variables and one integer counter therefore allocates five separate adstacks, each sized independently by the rule below.
 
-**Sizing rule.** A `K`-iteration dynamic loop consumes `K + 2` slots in each of its adstacks: one slot per forward iteration, plus two setup slots (one for the initial adjoint, one for the primal's starting value). `default_ad_stack_size` is a per-stack slot count, so size it at the worst-case trip count of the deepest unprovable dynamic loop in the program, plus that `+ 2`.
+**Sizing rule.** A `K`-iteration dynamic loop consumes `K + 2` slots in each of its adstacks: one slot per forward iteration, plus two setup slots (one for the initial adjoint, one for the primal's starting value). `default_ad_stack_size` is a per-stack slot count, so size it at the worst-case trip count of the deepest unprovable dynamic loop in the program plus 2.
 
 | Loop shape | Required `default_ad_stack_size` |
 | --- | --- |
