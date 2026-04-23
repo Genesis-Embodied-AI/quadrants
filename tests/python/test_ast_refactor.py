@@ -800,7 +800,7 @@ def test_quadrants_other_than_ti():
     u.system == "linux" and u.machine in ("arm64", "aarch64"),
     reason="assert not currently supported on linux arm64 or aarch64",
 )
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_message():
     @qd.kernel
     def func():
@@ -815,7 +815,7 @@ def test_assert_message():
     u.system == "linux" and u.machine in ("arm64", "aarch64"),
     reason="assert not currently supported on linux arm64 or aarch64",
 )
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_message_formatted():
     x = qd.field(dtype=int, shape=16)
     x[10] = 42

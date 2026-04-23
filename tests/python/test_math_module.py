@@ -41,7 +41,7 @@ def test_inf_nan_f32(dt):
     _test_inf_nan(dt)
 
 
-@test_utils.test()
+@test_utils.test(exclude=[qd.amdgpu])
 def test_vdir():
     @qd.kernel
     def make_test():

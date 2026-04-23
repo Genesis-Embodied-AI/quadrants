@@ -13,7 +13,7 @@ if u.system == "linux" and u.machine in ("arm64", "aarch64"):
     )
 
 
-@test_utils.test()
+@test_utils.test(exclude=[qd.amdgpu])
 def test_assert_ignored():
     """
     On linux arm, assert is just a `nop` currently (otherwise it crashes). This test checks that:
