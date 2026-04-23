@@ -31,7 +31,9 @@ def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
 
-Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`
+Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`.
+
+`number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
 ### Global field
 
