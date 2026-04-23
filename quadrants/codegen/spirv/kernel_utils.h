@@ -326,7 +326,20 @@ class KernelContextAttributes {
 
   std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> arr_access;
 
-  QD_IO_DEF(arg_attribs_vec_, ret_attribs_vec_, args_bytes_, rets_bytes_, arr_access, args_type_, rets_type_);
+  // Per-arg access bits restricted to the `.grad` slot (`ExternalPtrStmt::is_grad == true` references). Indexed
+  // by the same `std::vector<int>` arg-id key as `arr_access` and filled in parallel with it. The
+  // `GfxRuntime::launch_kernel` blit path gates the host->device grad mirror on this; a forward kernel that
+  // never reads / writes `.grad` has every entry at `NONE` and skips the map+memcpy+unmap per grad-bearing arg.
+  std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> grad_arr_access;
+
+  QD_IO_DEF(arg_attribs_vec_,
+            ret_attribs_vec_,
+            args_bytes_,
+            rets_bytes_,
+            arr_access,
+            grad_arr_access,
+            args_type_,
+            rets_type_);
 
  private:
   std::vector<std::pair<std::vector<int>, ArgAttributes>> arg_attribs_vec_;

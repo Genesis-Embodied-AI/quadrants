@@ -52,6 +52,11 @@ class TaskCodegen : public IRVisitor {
     std::vector<uint32_t> spirv_code;
     TaskAttributes task_attribs;
     std::unordered_map<std::vector<int>, irpass::ExternalPtrAccess, hashing::Hasher<std::vector<int>>> arr_access;
+    // Access bits restricted to references through the `.grad` slot of each ndarray arg. Used by
+    // `GfxRuntime::launch_kernel` to skip the host->device grad blit when no task in the kernel touches the
+    // grad slot - the typical forward-pass kernel of reverse-mode AD, which reads / writes the primal data
+    // slot only and leaves `.grad` alone until the backward dispatch.
+    std::unordered_map<std::vector<int>, irpass::ExternalPtrAccess, hashing::Hasher<std::vector<int>>> grad_arr_access;
   };
 
   Result run();

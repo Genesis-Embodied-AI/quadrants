@@ -193,6 +193,7 @@ TaskCodegen::Result TaskCodegen::run() {
   res.spirv_code = ir_->finalize();
   res.task_attribs = std::move(task_attribs_);
   res.arr_access = irpass::detect_external_ptr_access_in_task(task_ir_);
+  res.grad_arr_access = irpass::detect_external_ptr_grad_access_in_task(task_ir_);
 
   return res;
 }
@@ -2978,6 +2979,13 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       for (auto &arr_access_element : ctx_attribs_.arr_access) {
         if (arr_access_element.first == id) {
           arr_access_element.second = arr_access_element.second | access;
+        }
+      }
+    }
+    for (auto &[id, access] : task_res.grad_arr_access) {
+      for (auto &grad_access_element : ctx_attribs_.grad_arr_access) {
+        if (grad_access_element.first == id) {
+          grad_access_element.second = grad_access_element.second | access;
         }
       }
     }

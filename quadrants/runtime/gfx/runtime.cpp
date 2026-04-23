@@ -89,16 +89,19 @@ class HostDeviceContextBlitter {
           // Metal/Vulkan can only target device memory; dereferencing the host pointer directly silently writes
           // to unrelated memory and leaves host-side gradients at zero.
           //
-          // DO NOT gate this blit on `access & WRITE`. `access` is derived from the kernel's access analysis
-          // over the *data* slot; it does not track read/write of the *grad* slot. A backward kernel that
-          // reads `loss.grad[None]` as the reverse-mode seed (and writes `a.grad[i]`) has `access(loss) = READ`
-          // only - WRITE is unset. Skipping the grad blit for that case leaves the device `loss.grad` stale
-          // or zeroed, the backward's atomic read-modify-write seeds from zero, and every `a.grad[i]` comes
-          // out zero. The unconditional blit has a measurable but bounded per-dispatch cost (one map+memcpy+unmap
-          // per grad-bearing ndarray); a future correct optimisation would need a grad-specific access flag, not
-          // the data-slot `access` here.
+          // The blit is gated on the grad-slot access bits computed by
+          // `irpass::detect_external_ptr_grad_access_in_task` and published per-arg in
+          // `ctx_attribs_->grad_arr_access`. We mirror only when any task in the kernel reads the grad slot
+          // (`GRAD_READ`, including the read half of atomic read-modify-writes). A kernel whose only grad
+          // access is a pure non-atomic write to the grad slot cannot observe the pre-launch device state and
+          // does not need the mirror; a kernel that never touches `.grad` at all (the typical forward pass of
+          // a reverse-mode kernel) skips the per-dispatch map + memcpy + unmap entirely.
+          auto grad_access_it = std::find_if(ctx_attribs_->grad_arr_access.begin(), ctx_attribs_->grad_arr_access.end(),
+                                             [indices](const auto &pair) -> bool { return pair.first == indices; });
+          uint32_t grad_access =
+              (grad_access_it != ctx_attribs_->grad_arr_access.end()) ? uint32_t(grad_access_it->second) : 0;
           auto grad_it = ext_array_grads.find(arg_id);
-          if (grad_it != ext_array_grads.end()) {
+          if (grad_it != ext_array_grads.end() && (grad_access & uint32_t(irpass::ExternalPtrAccess::READ))) {
             DeviceAllocation grad_buffer = grad_it->second;
             void *device_grad_ptr{nullptr};
             QD_ERROR_IF(device_->map(grad_buffer, &device_grad_ptr) != RhiResult::success,
