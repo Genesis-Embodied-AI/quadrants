@@ -1,3 +1,6 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: torch.zeros_like is public torch API, but pyright 1.1.409+ flags
+# it as private because torch's stubs don't re-export it via __all__.
 import ast
 import inspect
 import math

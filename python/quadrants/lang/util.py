@@ -1,3 +1,8 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: this file accesses public torch API (torch.zeros, torch.float32,
+# torch.bool, ...) which the torch stubs (as of pyright 1.1.409) flag as
+# private because they are not explicitly re-exported via __all__ /
+# `from ... import ... as ...`. The accesses are intended public API.
 import functools
 import os
 import traceback
