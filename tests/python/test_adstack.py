@@ -1460,11 +1460,10 @@ def test_adstack_bounded_inner_loop_not_capped_by_default_ad_stack_size():
     # so without the pre-pass every adstack inside a bounded inner loop would share that overly
     # pessimistic cap. The per-loop product, the CFG-analyzer skip of already-resolved stacks, and
     # the end-to-end "tiny default doesn't overflow a bounded-loop kernel" invariant are what this
-    # test guards against regressing. The test is restricted to SPIR-V backends (Vulkan / Metal)
-    # because the LLVM backend rewrites inner-range bounds through `LoopIndexStmt` in a shape the
-    # structural analyzer does not fold; LLVM's function-scope adstack fallback absorbs the
-    # over-sized capacity cheaply, so the user-visible out-of-memory failure only surfaces on the
-    # heap-backed SPIR-V path.
+    # test guards against regressing. The test is restricted to SPIR-V backends (Vulkan / Metal) because the
+    # LLVM backend rewrites inner-range bounds through `LoopIndexStmt` in a shape the structural analyzer does
+    # not fold, so LLVM legitimately falls back to `default_ad_stack_size=1` and overflows at `compute.grad()`;
+    # the LLVM-side runtime-evaluator that would lift this restriction ships in a follow-up.
     x = qd.field(qd.f32, shape=(1,), needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
@@ -1496,7 +1495,7 @@ def test_adstack_bounded_inner_loop_not_capped_by_default_ad_stack_size():
     assert x.grad[0] == pytest.approx(dv_dx, rel=1e-6)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.vulkan, qd.metal], default_ip=qd.i64)
+@test_utils.test(require=qd.extension.adstack, default_ip=qd.i64)
 def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # Pins that the structural pre-pass in `irpass::determine_ad_stack_size` accepts integer
     # `ConstStmt` loop bounds of any signed or unsigned width (not just i32). A kernel compiled
@@ -1506,11 +1505,11 @@ def test_adstack_bounded_inner_loop_pre_pass_handles_i64_bounds():
     # assert inside `TypedConstant` and abort compilation before the Bellman-Ford fallback could
     # take over.
     #
-    # Internal details: a simple `for _ in range(3)` reverse-mode kernel is enough to exercise
-    # the const-leaf read path; if the evaluator trips the dtype assert the test fails at
-    # `compute.grad()` with an assertion inside quadrants rather than at the numerical
-    # comparison. Kept on SPIR-V backends for the same reason as the sibling test above (LLVM's
-    # `LoopIndexStmt` inner-range rewrite is unrelated to this code path).
+    # Internal details: a simple `for _ in range(3)` reverse-mode kernel is enough to exercise the const-leaf
+    # read path; if the evaluator trips the dtype assert the test fails at `compute.grad()` with an assertion
+    # inside quadrants rather than at the numerical comparison. Runs on every backend: LLVM reads i64 const
+    # leaves through the same `val_int()` / `val_uint()` helpers the SPIR-V pre-pass uses, so a dtype-assert
+    # regression would surface on either path.
     x = qd.field(qd.f32, shape=(1,), needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
