@@ -40,6 +40,13 @@ jobs:
           pip install -e .
       - name: install torch and pyright
         run: |
+          # FIXME: pyright is pinned to 1.1.408 because 1.1.409+ flags pre-existing
+          # torch.* attribute accesses (torch.zeros, torch.float32, torch.bool, ...) as
+          # reportPrivateImportUsage errors -- torch's stubs don't re-export those names
+          # via __all__ / `from ... import ... as ...`. To unpin: rework the offending
+          # torch imports across the codebase (e.g. `from torch import zeros, float32`,
+          # or use `# type: ignore[attr-defined]` on the affected sites) so pyright is
+          # happy on the latest release, then drop the version pin here.
           pip install torch 'pyright==1.1.408'
       - name: run pyright
         run: |
