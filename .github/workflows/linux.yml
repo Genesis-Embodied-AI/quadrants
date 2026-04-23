@@ -113,6 +113,7 @@ jobs:
           python-version: '3.10'
       - name: Download CPU coverage
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: coverage-cpu
           path: coverage-cpu
@@ -125,9 +126,16 @@ jobs:
       - name: Generate coverage report
         continue-on-error: true
         run: |
-          COV_XMLS="coverage-cpu/coverage.xml"
+          COV_XMLS=""
+          if [ -f coverage-cpu/coverage.xml ]; then
+            COV_XMLS="coverage-cpu/coverage.xml"
+          fi
           if [ -f coverage-cuda/coverage.xml ]; then
             COV_XMLS="$COV_XMLS coverage-cuda/coverage.xml"
+          fi
+          if [ -z "$COV_XMLS" ]; then
+            echo "No coverage XML files found, skipping report"
+            exit 0
           fi
 
           python tests/coverage_report.py --report-only \
