@@ -715,6 +715,11 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* index=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupShuffleDown") {
+      llvm_val[stmt] = emit_cuda_shuffle_down(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type,
+          /* offset=*/llvm_val[stmt->args[1]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
     } else {
@@ -733,6 +738,19 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
       return call("cuda_shuffle_i64", index, value);
     QD_ERROR("subgroup shuffle: unsupported type {}", data_type_name(dt));
+    return nullptr;
+  }
+
+  llvm::Value *emit_cuda_shuffle_down(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("cuda_shuffle_down_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("cuda_shuffle_down_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("cuda_shuffle_down_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("cuda_shuffle_down_i64", offset, value);
+    QD_ERROR("subgroup shuffle_down: unsupported type {}", data_type_name(dt));
     return nullptr;
   }
 

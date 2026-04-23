@@ -39,6 +39,7 @@ class HostDeviceContextBlitter {
   }
 
   void host_to_device(const std::unordered_map<int, DeviceAllocation> &ext_arrays,
+                      const std::unordered_map<int, DeviceAllocation> &ext_array_grads,
                       const std::unordered_map<int, size_t> &ext_arr_size) {
     if (!ctx_attribs_->has_args()) {
       return;
@@ -64,11 +65,43 @@ class HostDeviceContextBlitter {
           if (access & uint32_t(irpass::ExternalPtrAccess::READ)) {
             DeviceAllocation buffer = ext_arrays.at(arg_id);
             void *device_arr_ptr{nullptr};
-            QD_ASSERT(device_->map(buffer, &device_arr_ptr) == RhiResult::success);
+            // `QD_ERROR_IF` (not `QD_ASSERT`) so the failure message names what was being mapped; a bare
+            // `QD_ASSERT(... == RhiResult::success)` would throw but only surface the condition string, leaving
+            // the user to guess which map call broke. `QD_ASSERT` is also always-on (not release-gated), so this
+            // is purely a message-quality choice.
+            QD_ERROR_IF(device_->map(buffer, &device_arr_ptr) != RhiResult::success,
+                        "Failed to map ext arr data buffer for host_to_device blit");
             ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
             const void *host_ptr = host_ctx_.array_ptrs[data_ptr_idx];
             std::memcpy(device_arr_ptr, host_ptr, ext_arr_size.at(arg_id));
             device_->unmap(buffer);
+          }
+          // Mirror the host gradient buffer into the per-arg device allocation so the kernel can read/accumulate
+          // into it. Reverse-mode AD issues an atomic-like read-modify-write via the grad_ptr slot, which on
+          // Metal/Vulkan can only target device memory; dereferencing the host pointer directly silently writes
+          // to unrelated memory and leaves host-side gradients at zero.
+          //
+          // DO NOT gate this blit on `access & WRITE`. `access` is derived from the kernel's access analysis
+          // over the *data* slot; it does not track read/write of the *grad* slot. A backward kernel that
+          // reads `loss.grad[None]` as the reverse-mode seed (and writes `a.grad[i]`) has `access(loss) = READ`
+          // only - WRITE is unset. Skipping the grad blit for that case leaves the device `loss.grad` stale
+          // or zeroed, the backward's atomic read-modify-write seeds from zero, and every `a.grad[i]` comes
+          // out zero. The unconditional blit has a measurable but bounded per-dispatch cost (one map+memcpy+unmap
+          // per grad-bearing ndarray); a future correct optimisation would need a grad-specific access flag, not
+          // the data-slot `access` here.
+          auto grad_it = ext_array_grads.find(arg_id);
+          if (grad_it != ext_array_grads.end()) {
+            DeviceAllocation grad_buffer = grad_it->second;
+            void *device_grad_ptr{nullptr};
+            QD_ERROR_IF(device_->map(grad_buffer, &device_grad_ptr) != RhiResult::success,
+                        "Failed to map ext arr grad buffer for host_to_device blit");
+            // `.at` (rather than operator[]) so we never default-insert a nullptr here; a missing grad_ptr_idx at
+            // this point would be a bug (we only reach this branch when ext_array_grads already contains arg_id,
+            // which in turn requires array_ptrs to carry a non-null entry for the same grad key).
+            ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+            const void *host_grad_ptr = host_ctx_.array_ptrs.at(grad_ptr_idx);
+            std::memcpy(device_grad_ptr, host_grad_ptr, ext_arr_size.at(arg_id));
+            device_->unmap(grad_buffer);
           }
         }
         // Substitute in the device address.
@@ -78,7 +111,17 @@ class HostDeviceContextBlitter {
             device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
           ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
           uint64_t addr = device_->get_memory_physical_pointer(ext_arrays.at(arg_id));
-          host_ctx_.set_ndarray_ptrs(arg_id, addr, (uint64)host_ctx_.array_ptrs[grad_ptr_idx]);
+          auto grad_it = ext_array_grads.find(arg_id);
+          uint64_t grad_addr = 0;
+          if (grad_it != ext_array_grads.end()) {
+            grad_addr = device_->get_memory_physical_pointer(grad_it->second);
+          } else {
+            auto host_grad_it = host_ctx_.array_ptrs.find(grad_ptr_idx);
+            if (host_grad_it != host_ctx_.array_ptrs.end()) {
+              grad_addr = (uint64_t)host_grad_it->second;
+            }
+          }
+          host_ctx_.set_ndarray_ptrs(arg_id, addr, grad_addr);
         }
       }
     }
@@ -90,6 +133,7 @@ class HostDeviceContextBlitter {
 
   bool device_to_host(CommandList *cmdlist,
                       const std::unordered_map<int, DeviceAllocation> &ext_arrays,
+                      const std::unordered_map<int, DeviceAllocation> &ext_array_grads,
                       const std::unordered_map<int, size_t> &ext_arr_size) {
     if (ctx_attribs_->empty()) {
       return false;
@@ -117,9 +161,25 @@ class HostDeviceContextBlitter {
             // Only need to blit ext arrs (host array)
             readback_dev_ptrs.push_back(ext_arrays.at(arg_id).get_ptr(0));
             readback_host_ptrs.push_back(host_ctx_.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
-            // TODO: readback grad_ptrs as well once ndarray ad is supported
             readback_sizes.push_back(ext_arr_size.at(arg_id));
             require_sync = true;
+            // Grad readback is gated on the same WRITE bit as the data readback because `arr_access` is
+            // derived from the kernel's static access analysis and covers data+grad together. Forward-only
+            // kernels have WRITE cleared, so skipping grad readback there avoids a GPU sync + DMA on every
+            // forward dispatch once `.grad` buffers exist. Without this guard, a training loop's forward
+            // pass would call `wait_idle()` + readback the (unchanged) grad buffer after the first backward
+            // creates the grad allocations, roughly doubling forward latency on Metal/Vulkan.
+            auto grad_it = ext_array_grads.find(arg_id);
+            if (grad_it != ext_array_grads.end()) {
+              readback_dev_ptrs.push_back(grad_it->second.get_ptr(0));
+              // `.at` (rather than operator[]) so a missing grad_ptr_idx throws immediately instead of
+              // default-inserting a nullptr that the readback below would treat as a destination address.
+              // Matches the host_to_device path above.
+              ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+              readback_host_ptrs.push_back(host_ctx_.array_ptrs.at(grad_ptr_idx));
+              readback_sizes.push_back(ext_arr_size.at(arg_id));
+              require_sync = true;
+            }
           }
         }
       }
@@ -212,6 +272,12 @@ CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
                                    spirv_bins[i].size() * sizeof(uint32_t)};
     auto [vp, res] =
         ti_params.device->create_pipeline_unique(source_desc, task_attribs[i].name, ti_params.backend_cache);
+    QD_ERROR_IF(res != RhiResult::success,
+                "Failed to create pipeline for kernel task '{}' (RhiResult={}). The SPIR-V shader was rejected by the "
+                "backend driver; see the preceding RHI log for the underlying diagnostic. On Metal, a common cause is "
+                "exceeding Apple's MSL per-thread Function-scope footprint in reverse-mode AD kernels that use the "
+                "adstack pipeline.",
+                task_attribs[i].name, int(res));
     pipelines_.push_back(std::move(vp));
   }
 }
@@ -258,6 +324,9 @@ GfxRuntime::GfxRuntime(const Params &params) : device_(params.device), profiler_
 }
 
 GfxRuntime::~GfxRuntime() {
+  // Set `finalizing_` before synchronize() so the adstack-overflow QD_ERROR_IF there short-circuits: a throw
+  // from this implicitly-noexcept destructor would call std::terminate(). See the field's declaration comment.
+  finalizing_ = true;
   synchronize();
 
   // Write pipeline cache back to disk.
@@ -351,6 +420,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   // `any_arrays` contain both external arrays and NDArrays
   std::unordered_map<int, DeviceAllocation> any_arrays;
+  // Side-allocated device buffers that mirror host gradient tensors, keyed by ndarray arg_id. Populated only for
+  // ext arrays whose corresponding torch tensor has requires_grad=True.
+  std::unordered_map<int, DeviceAllocation> ext_array_grads;
   // `ext_array_size` only holds the size of external arrays (host arrays)
   // As buffer size information is only needed when it needs to be allocated
   // and transferred by the host
@@ -378,6 +450,20 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           if (host_ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNdarray) {
             any_arrays[arg_id] = devalloc;
             ndarrays_in_use_.insert(devalloc.alloc_id);
+            // Reverse-mode AD kernels bind the gradient ndarray through a separate StorageBuffer slot on
+            // backends without physical_storage_buffer, so publish the grad device allocation alongside the
+            // data one. Use `find` + non-null check rather than `count` + operator[]: earlier code paths on
+            // the same LaunchContextBuilder may have read `(uint64)array_ptrs[grad_key]` via operator[],
+            // which default-inserts a nullptr-valued entry if the key was missing. A subsequent `count` would
+            // then return 1 and the downstream `*(DeviceAllocation *)` deref would segfault. Observed on
+            // graph_do_while kernels whose LaunchContextBuilder is reused across iterations.
+            const ArgArrayPtrKey grad_key{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+            auto grad_it = host_ctx.array_ptrs.find(grad_key);
+            if (grad_it != host_ctx.array_ptrs.end() && grad_it->second != nullptr) {
+              DeviceAllocation grad_devalloc = *(DeviceAllocation *)(grad_it->second);
+              ext_array_grads[arg_id] = grad_devalloc;
+              ndarrays_in_use_.insert(grad_devalloc.alloc_id);
+            }
           } else {
             QD_NOT_IMPLEMENTED;
           }
@@ -396,11 +482,24 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ext arr buffer");
           any_arrays[arg_id] = *allocated.get();
           ctx_buffers_.push_back(std::move(allocated));
+          // Allocate a parallel device buffer for the gradient slot whenever the caller supplied a grad tensor.
+          // Reverse-mode AD reads and writes into it, so we need both host_write and host_read to round-trip
+          // host torch grads. `find` + non-null (instead of `count`) for the reason documented on the kNdarray
+          // path above.
+          const ArgArrayPtrKey grad_key{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
+          auto grad_it = host_ctx.array_ptrs.find(grad_key);
+          if (grad_it != host_ctx.array_ptrs.end() && grad_it->second != nullptr) {
+            auto [grad_alloc, grad_res] = device_->allocate_memory_unique(
+                {alloc_size, /*host_write=*/true, /*host_read=*/true, /*export_sharing=*/false, AllocUsage::Storage});
+            QD_ASSERT_INFO(grad_res == RhiResult::success, "Failed to allocate ext arr grad buffer");
+            ext_array_grads[arg_id] = *grad_alloc.get();
+            ctx_buffers_.push_back(std::move(grad_alloc));
+          }
         }
       }
     }
 
-    ctx_blitter->host_to_device(any_arrays, ext_array_size);
+    ctx_blitter->host_to_device(any_arrays, ext_array_grads, ext_array_size);
   }
 
   ensure_current_cmdlist();
@@ -418,7 +517,22 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       // We might have to bind a invalid buffer (this is fine as long as
       // shader don't do anything with it)
       if (bind.buffer.type == BufferType::ExtArr) {
-        bindings->rw_buffer(bind.binding, any_arrays.at(bind.buffer.root_id));
+        const auto &src = bind.buffer.is_grad ? ext_array_grads : any_arrays;
+        auto it = src.find(bind.buffer.root_id);
+        bindings->rw_buffer(bind.binding, it != src.end() ? it->second : kDeviceNullAllocation);
+      } else if (bind.buffer.type == BufferType::AdStackOverflow) {
+        // SPIR-V codegen writes a non-zero sentinel into this single-u32 buffer whenever an AdStackPushStmt hits
+        // the overflow branch. Allocate it lazily on first use and reuse across launches; synchronize() reads it,
+        // raises on non-zero, and zeros it for the next window.
+        if (!adstack_overflow_buffer_) {
+          auto [buf, res] = device_->allocate_memory_unique({sizeof(uint32_t), /*host_write=*/true, /*host_read=*/true,
+                                                             /*export_sharing=*/false, AllocUsage::Storage});
+          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack overflow buffer");
+          adstack_overflow_buffer_ = std::move(buf);
+          current_cmdlist_->buffer_fill(adstack_overflow_buffer_->get_ptr(0), kBufferSizeEntireSize, /*data=*/0);
+          current_cmdlist_->buffer_barrier(*adstack_overflow_buffer_);
+        }
+        bindings->rw_buffer(bind.binding, *adstack_overflow_buffer_);
       } else if (bind.buffer.type == BufferType::Args) {
         bindings->buffer(bind.binding, args_buffer ? *args_buffer : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::Rets) {
@@ -448,6 +562,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       for (const auto &[arg_id, alloc] : any_arrays) {
         current_cmdlist_->track_physical_buffer(alloc);
       }
+      for (const auto &[arg_id, alloc] : ext_array_grads) {
+        current_cmdlist_->track_physical_buffer(alloc);
+      }
     }
 
     if (profiler_) {
@@ -474,7 +591,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   // If we need to host sync, sync and remove in-flight references
   if (ctx_blitter) {
-    if (ctx_blitter->device_to_host(current_cmdlist_.get(), any_arrays, ext_array_size)) {
+    if (ctx_blitter->device_to_host(current_cmdlist_.get(), any_arrays, ext_array_grads, ext_array_size)) {
       current_cmdlist_ = nullptr;
       ctx_buffers_.clear();
     }
@@ -503,6 +620,25 @@ void GfxRuntime::synchronize() {
   }
   ctx_buffers_.clear();
   ndarrays_in_use_.clear();
+  // Async adstack-overflow report: every launch in this sync window that overflowed wrote a non-zero sentinel into
+  // the shared flag buffer. Read it now, raise if any kernel overflowed, and zero it so the next sync window starts
+  // clean. This mirrors the CUDA async-error pattern: the error surfaces on the next synchronize() rather than per
+  // launch. The map() here must stay after the `wait_idle()` above; otherwise a future refactor could reorder and
+  // we would race against pending GPU writes.
+  if (adstack_overflow_buffer_ && !finalizing_) {
+    uint32_t flag_val = 0;
+    void *mapped = nullptr;
+    QD_ASSERT(device_->map(*adstack_overflow_buffer_, &mapped) == RhiResult::success);
+    flag_val = *reinterpret_cast<const uint32_t *>(mapped);
+    if (flag_val != 0) {
+      *reinterpret_cast<uint32_t *>(mapped) = 0;
+    }
+    device_->unmap(*adstack_overflow_buffer_);
+    QD_ERROR_IF(flag_val != 0,
+                "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
+                "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass "
+                "ad_stack_size=N to qd.init() to raise the capacity.");
+  }
   fflush(stdout);
 }
 
@@ -511,7 +647,10 @@ StreamSemaphore GfxRuntime::flush() {
   if (current_cmdlist_) {
     sema = device_->get_compute_stream()->submit(current_cmdlist_.get());
     current_cmdlist_ = nullptr;
-    ctx_buffers_.clear();
+    // Do NOT clear ctx_buffers_ here: submit() returns as soon as the cmdlist is queued, not when the GPU has
+    // finished executing. Any deferred-free buffer queued into `ctx_buffers_` may still be referenced by
+    // commands in flight; dropping the unique_ptrs here would be a GPU-side use-after-free. Only
+    // `synchronize()` clears the vector, after `wait_idle()` has drained the stream.
   } else {
     auto [cmdlist, res] = device_->get_compute_stream()->new_command_list_unique();
     QD_ASSERT(res == RhiResult::success);

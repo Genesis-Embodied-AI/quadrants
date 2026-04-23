@@ -5,8 +5,11 @@ namespace quadrants::lang {
 namespace cpu {
 
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const std::vector<TaskFunc> &task_funcs) {
+  ctx.get_context().cpu_assert_failed = 0;
   for (auto task : task_funcs) {
     task(&ctx.get_context());
+    if (ctx.get_context().cpu_assert_failed)
+      break;
   }
 }
 
@@ -14,7 +17,7 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
                                                           const std::vector<TaskFunc> &task_funcs) {
   do {
     launch_offloaded_tasks(ctx, task_funcs);
-  } while (*static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+  } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {

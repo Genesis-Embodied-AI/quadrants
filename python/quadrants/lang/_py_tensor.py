@@ -2,6 +2,11 @@
 Torch tensor wrapper for the python backend.
 """
 
+# pyright: reportPrivateImportUsage=false
+# Reason: torch.zeros / torch.from_numpy are public torch API, but pyright
+# 1.1.409+ flags them as private because torch's stubs don't re-export
+# them via __all__.
+
 from __future__ import annotations
 
 from functools import partial

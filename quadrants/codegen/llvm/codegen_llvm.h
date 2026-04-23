@@ -63,6 +63,16 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // The task_codegen_id represents the id of the offloaded task
   int task_codegen_id{0};
 
+  // Running total of bytes reserved by `AdStackAllocaStmt`s emitted via `create_entry_block_alloca` in
+  // the current task. On CPU arches only, every adstack lives at function scope on the worker-thread
+  // stack, so the sum of their sizes adds directly to the LLVM stack frame; if the sum exceeds the
+  // worker thread's stack (~512 KB on macOS, 8 MB on Linux by default) the frame silently clobbers
+  // adjacent stack pages, which has been observed as zero gradients with no SIGBUS. The raise in
+  // `visit(AdStackAllocaStmt *)` is gated on `arch_is_cpu(current_arch())`, so this counter is only
+  // consulted (and the budget only enforced) on CPU; on CUDA/AMDGPU the alloca lowers to per-thread
+  // GPU local memory, not the CPU call stack, and the budget does not apply.
+  std::size_t ad_stack_fn_scope_bytes_{0};
+
   std::unordered_map<const Stmt *, std::vector<llvm::Value *>> loop_vars_llvm;
 
   std::unordered_map<Function *, llvm::Function *> func_map;

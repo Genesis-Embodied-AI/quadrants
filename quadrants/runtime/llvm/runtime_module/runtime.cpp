@@ -294,6 +294,7 @@ STRUCT_FIELD_ARRAY(PhysicalCoordinates, val);
 
 STRUCT_FIELD(RuntimeContext, runtime);
 STRUCT_FIELD(RuntimeContext, result_buffer)
+STRUCT_FIELD(RuntimeContext, cpu_assert_failed)
 
 #include "quadrants/runtime/llvm/runtime_module/atomic.h"
 
@@ -577,6 +578,10 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
+  // Dedicated flag for adstack-overflow-specific errors. Separate from `error_code` so assertions (which set
+  // error_code=1 and are only surfaced when `compile_config.debug` is on) do not leak through the always-on poll
+  // that Program::synchronize runs.
+  i64 adstack_overflow_flag = 0;
 
   Ptr result_buffer;
   i32 allocator_lock;
@@ -709,6 +714,14 @@ void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
   runtime->error_code = 0;
 }
 
+void runtime_retrieve_and_reset_adstack_overflow(LLVMRuntime *runtime) {
+  // Paired with the relaxed atomic write in `stack_push`. The host calls this only after the thread pool has
+  // joined, so strictly no synchronization is required here, but use `__atomic_exchange_n` anyway to keep the
+  // read/reset symmetric with the write and to avoid annotating the single shared field as half-atomic.
+  i64 flag = __atomic_exchange_n(&runtime->adstack_overflow_flag, (i64)0, __ATOMIC_RELAXED);
+  runtime->set_result(quadrants_result_buffer_error_id, flag);
+}
+
 void runtime_retrieve_error_message(LLVMRuntime *runtime, int i) {
   runtime->set_result(quadrants_result_buffer_error_id, runtime->error_message_template[i]);
 }
@@ -781,6 +794,25 @@ void quadrants_assert_format(LLVMRuntime *runtime, u1 test, const char *format, 
   // runtime, since otherwise the whole program may crash if the kernel
   // continues after assertion failure.
 #endif
+}
+
+// Context-aware variant called by bounds-check assertions in JIT'd code.
+// Returns 1 when the assertion failed (so the codegen can emit an early
+// return), 0 otherwise.  This replaces a previous setjmp/longjmp approach
+// that crashed on Windows because JIT'd frames lack SEH unwind tables.
+i32 quadrants_assert_format_ctx(RuntimeContext *context,
+                                u1 test,
+                                const char *format,
+                                int num_arguments,
+                                uint64 *arguments) {
+  quadrants_assert_format(context->runtime, test, format, num_arguments, arguments);
+#if !ARCH_cuda && !ARCH_amdgpu
+  if (enable_assert && test == 0) {
+    context->cpu_assert_failed = 1;
+    return 1;
+  }
+#endif
+  return 0;
 }
 
 void quadrants_assert_runtime(LLVMRuntime *runtime, u1 test, const char *msg) {
@@ -1095,6 +1127,41 @@ f64 amdgpu_shuffle_f64(i32 index, f64 value) {
   return u.d;
 }
 
+// FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
+// Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
+// reduction-pattern offsets (1, 2, 4, 8, 16).
+i32 amdgpu_shuffle_down_i32(i32 offset, i32 value) {
+  return amdgpu_ds_bpermute((amdgpu_lane_id() + offset) * 4, value);
+}
+
+f32 amdgpu_shuffle_down_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = amdgpu_shuffle_down_i32(offset, u.i);
+  return u.f;
+}
+
+i64 amdgpu_shuffle_down_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = amdgpu_shuffle_down_i32(offset, lo);
+  hi = amdgpu_shuffle_down_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 amdgpu_shuffle_down_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = amdgpu_shuffle_down_i64(offset, u.i);
+  return u.d;
+}
+
 i32 cuda_lane_id() {
   return thread_idx() & 31;
 }
@@ -1128,6 +1195,38 @@ f64 cuda_shuffle_f64(i32 index, f64 value) {
   } u;
   u.d = value;
   u.i = cuda_shuffle_i64(index, u.i);
+  return u.d;
+}
+
+i32 cuda_shuffle_down_i32(i32 offset, i32 value) {
+  return cuda_shfl_down_sync_i32(0xFFFFFFFF, value, offset, 31);
+}
+
+f32 cuda_shuffle_down_f32(i32 offset, f32 value) {
+  union {
+    f32 f;
+    i32 i;
+  } u;
+  u.f = value;
+  u.i = cuda_shuffle_down_i32(offset, u.i);
+  return u.f;
+}
+
+i64 cuda_shuffle_down_i64(i32 offset, i64 value) {
+  i32 lo = (i32)(u64)value;
+  i32 hi = (i32)((u64)value >> 32);
+  lo = cuda_shuffle_down_i32(offset, lo);
+  hi = cuda_shuffle_down_i32(offset, hi);
+  return (i64)(((u64)(u32)hi << 32) | (u64)(u32)lo);
+}
+
+f64 cuda_shuffle_down_f64(i32 offset, f64 value) {
+  union {
+    f64 d;
+    i64 i;
+  } u;
+  u.d = value;
+  u.i = cuda_shuffle_down_i64(offset, u.i);
   return u.d;
 }
 
@@ -1426,9 +1525,13 @@ void cpu_struct_for_block_helper(void *ctx_, int thread_id, int i) {
 
   RuntimeContext this_thread_context = *ctx->context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_assert_failed = 0;
+
   if (lower < upper) {
     (*ctx->task)(&this_thread_context, tls_buffer, &ctx->list->get<Element>(element_id), lower, upper);
   }
+  if (this_thread_context.cpu_assert_failed)
+    ctx->context->cpu_assert_failed = 1;
 }
 
 void parallel_struct_for(RuntimeContext *context,
@@ -1499,26 +1602,41 @@ void cpu_parallel_range_for_task(void *range_context, int thread_id, int task_id
   alignas(8) char tls_buffer[ctx.tls_size];
 #pragma clang diagnostic pop
   auto tls_ptr = &tls_buffer[0];
-  if (ctx.prologue)
-    ctx.prologue(ctx.context, tls_ptr);
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_assert_failed = 0;
+
+  if (ctx.prologue) {
+    ctx.prologue(&this_thread_context, tls_ptr);
+    if (this_thread_context.cpu_assert_failed) {
+      ctx.context->cpu_assert_failed = 1;
+      return;
+    }
+  }
+
   if (ctx.step == 1) {
     int block_start = ctx.begin + task_id * ctx.block_size;
     int block_end = std::min(block_start + ctx.block_size, ctx.end);
     for (int i = block_start; i < block_end; i++) {
       ctx.body(&this_thread_context, tls_ptr, i);
+      if (this_thread_context.cpu_assert_failed)
+        break;
     }
   } else if (ctx.step == -1) {
     int block_start = ctx.end - task_id * ctx.block_size;
-    int block_end = std::max(ctx.begin, block_start * ctx.block_size);
+    int block_end = std::max(ctx.begin, block_start - ctx.block_size);
     for (int i = block_start - 1; i >= block_end; i--) {
       ctx.body(&this_thread_context, tls_ptr, i);
+      if (this_thread_context.cpu_assert_failed)
+        break;
     }
   }
-  if (ctx.epilogue)
-    ctx.epilogue(ctx.context, tls_ptr);
+
+  if (!this_thread_context.cpu_assert_failed && ctx.epilogue)
+    ctx.epilogue(&this_thread_context, tls_ptr);
+  if (this_thread_context.cpu_assert_failed)
+    ctx.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_range_for(RuntimeContext *context,
@@ -1599,17 +1717,28 @@ void cpu_parallel_mesh_for_task(void *range_context, int thread_id, int task_id)
 
   RuntimeContext this_thread_context = *ctx.context;
   this_thread_context.cpu_thread_id = thread_id;
+  this_thread_context.cpu_assert_failed = 0;
 
   int block_start = task_id * ctx.block_size;
   int block_end = std::min(block_start + ctx.block_size, ctx.num_patches);
 
   for (int idx = block_start; idx < block_end; idx++) {
-    if (ctx.prologue)
-      ctx.prologue(ctx.context, tls_ptr, idx);
+    if (ctx.prologue) {
+      ctx.prologue(&this_thread_context, tls_ptr, idx);
+      if (this_thread_context.cpu_assert_failed)
+        break;
+    }
     ctx.body(&this_thread_context, tls_ptr, idx);
-    if (ctx.epilogue)
-      ctx.epilogue(ctx.context, tls_ptr, idx);
+    if (this_thread_context.cpu_assert_failed)
+      break;
+    if (ctx.epilogue) {
+      ctx.epilogue(&this_thread_context, tls_ptr, idx);
+      if (this_thread_context.cpu_assert_failed)
+        break;
+    }
   }
+  if (this_thread_context.cpu_assert_failed)
+    ctx.context->cpu_assert_failed = 1;
 }
 
 void cpu_parallel_mesh_for(RuntimeContext *context,
@@ -1886,9 +2015,17 @@ void quadrants_printf(LLVMRuntime *runtime, const char *format, Args &&...args) 
 
 extern "C" {  // local stack operations
 
+// The stack index `n` is clamped on read so that overflow (push past capacity) does not let subsequent pops and
+// top-accesses underflow it and index far out of bounds. The corresponding stack_push sets
+// `runtime->adstack_overflow_flag` and skips the increment instead of trapping, so the host-side launcher
+// surfaces the failure as a Python exception rather than killing the process via __builtin_trap. When n == 0
+// (pop-after-overflow underflow path) we return a pointer to slot 0 - an uninitialized-but-in-bounds slot. The
+// caller will read garbage from it, but the host raises on `runtime->adstack_overflow_flag` before any such
+// value reaches user code.
 Ptr stack_top_primal(Ptr stack, std::size_t element_size) {
   auto n = *(u64 *)stack;
-  return stack + sizeof(u64) + (n - 1) * 2 * element_size;
+  std::size_t idx = n > 0 ? n - 1 : 0;
+  return stack + sizeof(u64) + idx * 2 * element_size;
 }
 
 Ptr stack_top_adjoint(Ptr stack, std::size_t element_size) {
@@ -1901,13 +2038,28 @@ void stack_init(Ptr stack) {
 
 void stack_pop(Ptr stack) {
   auto &n = *(u64 *)stack;
-  n--;
+  if (n > 0) {
+    n--;
+  }
 }
 
-void stack_push(Ptr stack, size_t max_num_elements, std::size_t element_size) {
+void stack_push(LLVMRuntime *runtime, Ptr stack, size_t max_num_elements, std::size_t element_size) {
   u64 &n = *(u64 *)stack;
+  if (n + 1 > max_num_elements) {
+    // Overflow: the loop has more iterations than the adstack capacity. Skip the push and flip the dedicated
+    // overflow flag so the host launcher throws at sync. Multiple CPU threads can hit this branch concurrently
+    // (thread pool dispatch over a multi-element field), so write the sentinel through `__atomic_store_n` with
+    // relaxed ordering: on x86-64/ARM64 this compiles to a regular naturally-aligned store, but it satisfies the
+    // C++11 memory model (plain non-atomic writes from multiple threads to the same object are a data race, even
+    // when every writer stores the same value). The host only reads the flag from `check_adstack_overflow()`
+    // after the thread pool has joined, so no ordering beyond "happens eventually" is required.
+    // `locked_task` was avoided because the AMDGPU JIT cannot retarget its host-side machinery
+    // (`hipErrorNoBinaryForGpu`). Using a separate field (not `error_code`) keeps this check distinct from
+    // assertion machinery, which is debug-gated.
+    __atomic_store_n(&runtime->adstack_overflow_flag, (i64)1, __ATOMIC_RELAXED);
+    return;
+  }
   n += 1;
-  // TODO: assert n <= max_elements
   std::memset(stack_top_primal(stack, element_size), 0, element_size * 2);
 }
 

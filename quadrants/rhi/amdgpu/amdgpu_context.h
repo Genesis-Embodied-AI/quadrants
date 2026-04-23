@@ -24,7 +24,6 @@ class AMDGPUContext {
   AMDGPUDriver &driver_;
   bool debug_{false};
   bool supports_mem_pool_{false};
-  std::vector<void *> kernel_arg_pointer_;
 
  public:
   AMDGPUContext();
@@ -35,17 +34,6 @@ class AMDGPUContext {
 
   bool detected() const {
     return dev_count_ != 0;
-  }
-
-  void push_back_kernel_arg_pointer(void *ptr) {
-    kernel_arg_pointer_.push_back(ptr);
-  }
-
-  void free_kernel_arg_pointer() {
-    for (auto &i : kernel_arg_pointer_) {
-      AMDGPUDriver::get_instance().mem_free(i);
-    }
-    kernel_arg_pointer_.erase(kernel_arg_pointer_.begin(), kernel_arg_pointer_.end());
   }
 
   void pack_args(std::vector<void *> arg_pointers, std::vector<int> arg_sizes, char *arg_packed);
@@ -92,14 +80,22 @@ class AMDGPUContext {
 
   class ContextGuard {
    private:
+    // Both fields store HIP driver context handles (opaque `hipCtx_t` aliased as `void *`), NOT
+    // the enclosing `AMDGPUContext *` wrapper pointer. Storing the wrapper address made the
+    // `old_ctx_ != new_ctx_` compare at construction and destruction always evaluate true (the
+    // wrapper address and the HIP handle live in disjoint value spaces), so the guard called
+    // `make_current()` unconditionally on entry and `context_set_current(old_ctx_)` unconditionally
+    // on exit even when the target context was already active. Always-equal semantics are
+    // preserved by storing `new_ctx->get_context()` here.
     void *old_ctx_;
     void *new_ctx_;
 
    public:
-    explicit ContextGuard(AMDGPUContext *new_ctx) : old_ctx_(nullptr), new_ctx_(new_ctx) {
+    explicit ContextGuard(AMDGPUContext *new_ctx) : old_ctx_(nullptr), new_ctx_(new_ctx->get_context()) {
       AMDGPUDriver::get_instance().context_get_current(&old_ctx_);
-      if (old_ctx_ != new_ctx)
+      if (old_ctx_ != new_ctx_) {
         new_ctx->make_current();
+      }
     }
 
     ~ContextGuard() {

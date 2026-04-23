@@ -53,8 +53,11 @@ struct CompileConfig {
   int gpu_max_reg;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
-  // The default size when the Quadrants compiler is unable to automatically
-  // determine the autodiff stack size.
+  // Fallback adstack capacity used when the Quadrants compiler cannot statically determine the worst-case loop trip
+  // count. Deliberately conservative because SPIR-V backends allocate the adstack as Function-scope (per-thread
+  // private) memory, which the driver's shader compiler rejects past a few KB. Both shader-compile rejection and
+  // runtime push overflow are surfaced as Python exceptions. Heap-backed SPIR-V adstack, which would lift the
+  // per-thread ceiling, is tracked as follow-up.
   int default_ad_stack_size{32};
 
   int saturating_grid_dim;
