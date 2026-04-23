@@ -49,12 +49,21 @@ namespace lang {
 class JITModuleAMDGPU : public JITModule {
  private:
   void *module_;
+  std::unordered_map<std::string, void *> function_cache_;
+  std::mutex function_cache_mutex_;
 
  public:
   explicit JITModuleAMDGPU(void *module) : module_(module) {
   }
 
   void *lookup_function(const std::string &name) override {
+    {
+      std::lock_guard<std::mutex> lock(function_cache_mutex_);
+      auto it = function_cache_.find(name);
+      if (it != function_cache_.end()) {
+        return it->second;
+      }
+    }
     AMDGPUContext::get_instance().make_current();
     void *func = nullptr;
     auto t = Time::get_time();
@@ -67,6 +76,10 @@ class JITModuleAMDGPU : public JITModule {
     t = Time::get_time() - t;
     QD_TRACE("AMDGPU module_get_function {} costs {} ms", name, t * 1000);
     QD_ASSERT(func != nullptr);
+    {
+      std::lock_guard<std::mutex> lock(function_cache_mutex_);
+      function_cache_.emplace(name, func);
+    }
     return func;
   }
 

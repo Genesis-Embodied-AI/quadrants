@@ -2,8 +2,68 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/program/launch_context_builder.h"
 
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+
 namespace quadrants::lang {
 namespace amdgpu {
+
+namespace exp12_diag {
+static const bool diag_enabled = []() {
+  const char *flag = std::getenv("QD_EXP12_DIAG_ON");
+  return flag != nullptr && flag[0] != '\0' && flag[0] != '0';
+}();
+
+struct KernelBranchCounts {
+  std::atomic<long> launches{0};
+  std::atomic<long> kNone_on_device{0};
+  std::atomic<long> kNone_host_copy{0};
+  std::atomic<long> kNdarray_passthrough{0};
+  std::atomic<long> skip{0};
+};
+static std::mutex stats_mutex;
+static std::unordered_map<std::string, std::unique_ptr<KernelBranchCounts>>
+    stats;
+static std::atomic<bool> atexit_registered{false};
+
+static void flush_to_side_log() {
+  const char *out_path = std::getenv("QD_EXP12_DIAG_OUT");
+  if (!out_path) {
+    out_path = "/tmp/exp12_diag.csv";
+  }
+  std::ofstream out(out_path);
+  if (!out.is_open()) {
+    return;
+  }
+  out << "kernel_name,launches,kNone_on_device,kNone_host_copy,"
+      << "kNdarray_passthrough,skip\n";
+  std::lock_guard<std::mutex> lock(stats_mutex);
+  for (const auto &kv : stats) {
+    const auto &c = *kv.second;
+    out << '"' << kv.first << '"' << ',' << c.launches.load() << ','
+        << c.kNone_on_device.load() << ',' << c.kNone_host_copy.load() << ','
+        << c.kNdarray_passthrough.load() << ',' << c.skip.load() << '\n';
+  }
+}
+
+static KernelBranchCounts &get_or_create(const std::string &name) {
+  std::lock_guard<std::mutex> lock(stats_mutex);
+  if (!atexit_registered.exchange(true)) {
+    std::atexit(flush_to_side_log);
+  }
+  auto it = stats.find(name);
+  if (it == stats.end()) {
+    it = stats.emplace(name, std::make_unique<KernelBranchCounts>()).first;
+  }
+  return *it->second;
+}
+}  // namespace exp12_diag
 
 void KernelLauncher::launch_offloaded_tasks(
     LaunchContextBuilder &ctx,
@@ -54,6 +114,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
   AMDGPUContext::get_instance().make_current();
   ctx.get_context().runtime = executor->get_llvm_runtime();
 
+  exp12_diag::KernelBranchCounts *branch_counts = nullptr;
+  if (exp12_diag::diag_enabled && !offloaded_tasks.empty()) {
+    branch_counts = &exp12_diag::get_or_create(offloaded_tasks.front().name);
+    branch_counts->launches.fetch_add(1, std::memory_order_relaxed);
+  }
+
   // Change from std::vector<int> to ArgArrayPtrKey
   std::unordered_map<ArgArrayPtrKey, std::pair<void *, DeviceAllocation>,
                      ArgArrayPtrKeyHasher>
@@ -71,8 +137,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     const auto &parameter = kv.second;
     if (parameter.is_array) {
       const auto arr_sz = ctx.array_runtime_sizes[arg_id];
-      if (arr_sz == 0)
+      if (arr_sz == 0) {
+        if (branch_counts) {
+          branch_counts->skip.fetch_add(1, std::memory_order_relaxed);
+        }
         continue;
+      }
 
       ArgArrayPtrKey data_ptr_idx{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
       ArgArrayPtrKey grad_ptr_idx{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY};
@@ -81,8 +151,16 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       if (ctx.device_allocation_type[arg_id] ==
           LaunchContextBuilder::DevAllocType::kNone) {
         if (on_amdgpu_device(data_ptr)) {
+          if (branch_counts) {
+            branch_counts->kNone_on_device.fetch_add(
+                1, std::memory_order_relaxed);
+          }
           device_ptrs[data_ptr_idx] = data_ptr;
         } else {
+          if (branch_counts) {
+            branch_counts->kNone_host_copy.fetch_add(
+                1, std::memory_order_relaxed);
+          }
           DeviceAllocation devalloc = executor->allocate_memory_on_device(
               arr_sz, (uint64 *)device_result_buffer);
           device_ptrs[data_ptr_idx] =
@@ -98,6 +176,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
+        if (branch_counts) {
+          branch_counts->kNdarray_passthrough.fetch_add(
+              1, std::memory_order_relaxed);
+        }
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
         // Unwrapped raw ptr on device

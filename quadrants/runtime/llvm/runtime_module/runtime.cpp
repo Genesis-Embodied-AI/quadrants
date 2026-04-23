@@ -1638,6 +1638,9 @@ void cpu_parallel_range_for(RuntimeContext *context,
                         &ctx, cpu_parallel_range_for_task);
 }
 
+#ifdef ARCH_amdgpu
+__attribute__((always_inline))
+#endif
 void gpu_parallel_range_for(RuntimeContext *context,
                             int begin,
                             int end,

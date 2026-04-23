@@ -19,7 +19,17 @@ bool is_extension_supported(Arch arch, Extension ext) {
        {Extension::sparse, Extension::quant, Extension::quant_basic,
         Extension::data64, Extension::adstack, Extension::bls,
         Extension::assertion, Extension::mesh}},
-      {Arch::amdgpu, {Extension::assertion, Extension::bls}},
+      // NOTE(amdgpu): Extension::bls was added speculatively.
+      // The BLS test suite (test_bls.py, test_bls_assume_in_range.py)
+      // uses `qd.root.pointer(...).dense(...)`
+      // which requires Extension::sparse — a feature that has NOT been
+      // ported to AMDGPU. Declaring `bls` without `sparse` makes those
+      // tests RUN and fail with "Pointer SNode is not supported on this
+      // backend" at field-builder time, instead of cleanly skipping at the
+      // `@test_utils.test(require=qd.extension.bls)` decorator.
+      // Reverted to baseline (Extension::assertion only) until sparse
+      // SNode codegen is implemented for AMDGPU.
+      {Arch::amdgpu, {Extension::assertion}},
       {Arch::metal, {}},
       {Arch::vulkan, {}},
   };
