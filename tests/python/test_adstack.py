@@ -599,26 +599,37 @@ def test_adstack_many_non_f32_stacks_heap_backed():
         assert x.grad[i] == test_utils.approx(expected, rel=1e-2, abs=1e-3)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.metal, qd.vulkan])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_rejects_unsupported_type():
+    # Per-backend support matrix for loop-carried i8 in reverse-mode AD:
+    #
+    #   - SPIR-V (Metal / Vulkan) hard-rejects i8 loop-carried variables at codegen time: the adstack heap-backing
+    #     only packs f32 and i32 (with u1 reinterpreted as i32); wider/other types have no home there. A
+    #     Function-scope fallback is not offered because it is unusable for real workloads on Metal/MoltenVK
+    #     (per-thread private-memory budget is exceeded) - silently falling back would paper over a
+    #     correctness/perf cliff. The guard surfaces as a `RuntimeError` whose message names the supported type
+    #     set. The match below pins the message so an accidental Function-scope fallback or a rename of the
+    #     error string is caught.
+    #   - LLVM (CPU / CUDA / AMDGPU) supports loop-carried i8 directly: the adstack heap there is byte-indexed
+    #     and `AdStackAllocaStmt::size_in_bytes()` covers i8 at one byte per slot without any special case. The
+    #     backward pass runs to completion and the forward output is what the test asserts.
+    #
     # Skip on Vulkan drivers without shaderInt8: those reject i8 at the SPIR-V type gate (`spirv_ir_builder`
     # `QD_ERROR("Type i8 not supported")`) well before the adstack codegen guard fires, which would fail this
-    # test with the wrong error message. Metal always reports spirv_has_int8=1 so it never skips here.
-    caps = qd.lang.impl.get_runtime().prog.get_device_caps()
-    if not caps.get(qd._lib.core.DeviceCapability.spirv_has_int8):
-        pytest.skip("device lacks shaderInt8 - i8 is rejected at the SPIR-V type gate, not the adstack guard")
+    # test with the wrong error message. Metal always reports spirv_has_int8=1 so it never skips here. The LLVM
+    # backends do not consult `spirv_has_int8`, so the skip only applies on SPIR-V arches.
+    arch = qd.lang.impl.get_runtime().prog.config().arch
+    is_spirv = arch in (qd.metal, qd.vulkan)
+    if is_spirv:
+        caps = qd.lang.impl.get_runtime().prog.get_device_caps()
+        if not caps.get(qd._lib.core.DeviceCapability.spirv_has_int8):
+            pytest.skip("device lacks shaderInt8 - i8 is rejected at the SPIR-V type gate, not the adstack guard")
 
-    # SPIR-V codegen refuses non-{f32, i32, u1} loop-carried variables in reverse-mode AD: the adstack heap-backing
-    # only packs f32 and i32 (with u1 reinterpreted as i32); wider/other types have no home there. A Function-scope
-    # fallback is not offered because it is unusable for real workloads on Metal/MoltenVK (per-thread private-memory
-    # budget is exceeded) - silently falling back would paper over a correctness/perf cliff. Pins the hard error
-    # with a match on the user-facing message so a future regression (accidental fallback to Function-scope) or a
-    # rename of the error string is caught.
-    #
-    # Internal detail: uses i8 as the probe type rather than f64 because Metal / MoltenVK rejects f64 at the
+    # Internal detail: i8 is the probe type rather than f64 because Metal / MoltenVK rejects f64 at the
     # field-writer stage before the adstack codegen path is reached, whereas i8 is supported on both SPIR-V
-    # backends (`spirv_has_int8`) and reaches the adstack guard. Any other type outside the supported set
-    # (f16, i16, i64, u8, u16, u32, u64, f64) would do; i8 is the widest-supported of the rejected options.
+    # backends (`spirv_has_int8`) and reaches the adstack guard. Any other type outside the SPIR-V supported set
+    # (f16, i16, i64, u8, u16, u32, u64, f64) would do; i8 is the widest-supported of the SPIR-V-rejected
+    # options and is also a plain supported type on every LLVM backend.
     x = qd.field(qd.i8)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
     qd.root.dense(qd.i, 1).place(x)
@@ -637,8 +648,13 @@ def test_adstack_rejects_unsupported_type():
     y[None] = 0.0
     compute()
     y.grad[None] = 1.0
-    with pytest.raises(RuntimeError, match=r"f32, i32, and u1"):
+    if is_spirv:
+        with pytest.raises(RuntimeError, match=r"f32, i32, and u1"):
+            compute.grad()
+    else:
         compute.grad()
+        # Forward: v starts at 0, increments by 1 four times, writes 4 as f32 into y. No overflow expected.
+        assert y[None] == pytest.approx(4.0, rel=1e-6)
 
 
 def _overflowing_compute(n_elements=1, n_iter=64):
@@ -1332,7 +1348,7 @@ def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
     )
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.metal, qd.vulkan], ad_stack_size=4096)
+@test_utils.test(require=qd.extension.adstack, ad_stack_size=4096)
 def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     # Regression test: a grad kernel whose range is derived at launch time from an ndarray shape (e.g.
     # `qd.ndrange(arr.shape[0], arr.shape[1])`) used to inherit `advisory_total_num_threads =
@@ -1351,12 +1367,11 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     #
     # Internal details: `ad_stack_size=4096` + ten loop-carried f32 variables is tuned so that the pre-fix
     # 131072-thread allocation request crosses the smallest plausible Apple Silicon `maxBufferLength` - the
-    # test would otherwise silently pass on hardware with large unified memory. Scoped to Metal and Vulkan
-    # because only the SPIR-V heap-backed adstack path depends on the advisory thread count for sizing; the
-    # LLVM path sizes the adstack slab once per runtime against `num_cpu_threads`, so CPU cannot exhibit the
-    # symptom. The finite-difference cross-check pins correctness so a future regression that silently
-    # returns the wrong gradient (e.g. 0 from a nil binding that still ends up bound for some other reason)
-    # trips the assertion rather than passing on the not-NaN check alone.
+    # test would otherwise silently pass on hardware with large unified memory. The original oversize symptom
+    # only surfaced on the SPIR-V heap-backed adstack path whose per-dispatch sizing depends on the advisory
+    # thread count; the LLVM path sizes the adstack slab once per runtime against `num_cpu_threads` and cannot
+    # exhibit the same nil-buffer regression. The test still runs on every backend so the finite-difference
+    # cross-check catches a future regression in the grad computation regardless of which path it lives in.
     rows, cols = 2, 3
 
     @qd.kernel
