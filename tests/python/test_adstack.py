@@ -180,7 +180,7 @@ def test_unary_forward_mode_derivative(op_name):
     l_t.backward()
     expected = float(x_t.grad.sum().item())
 
-    assert loss.dual[None] == test_utils.approx(expected, rel=1e-4)
+    assert loss.dual[None] == pytest.approx(expected, rel=1e-5)
 
 
 def test_unary_collections_audit():
@@ -475,7 +475,7 @@ def test_adstack_large_capacity_heap_backed():
     compute.grad()
 
     expected = sum(math.cos(0.1 + k) for k in range(128))
-    assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+    assert x.grad[0] == pytest.approx(expected, rel=1e-4)
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -510,8 +510,9 @@ def test_adstack_mixed_f32_and_non_f32():
     x.grad[0] = 0.0
     compute.grad()
     # d y / d x[0] = sum_{k=0..4} (k+1): v at iter k is x[0] + 0.1*k, weight is k+1, so coefficient on x[0] is
-    # sum_{k=0..4} (k+1) = 15.
-    assert x.grad[0] == test_utils.approx(15.0, rel=1e-4)
+    # sum_{k=0..4} (k+1) = 15. Five exactly-representable f32 accumulations so the result is exact up to a
+    # handful of ULPs.
+    assert x.grad[0] == pytest.approx(15.0, rel=1e-6)
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -584,8 +585,12 @@ def test_adstack_many_non_f32_stacks_heap_backed():
 
     # Finite-difference reference. A symbolic gradient would require tracking which branch each if took at every
     # iteration, which is exactly what the adstack replays for us; FD keeps the test oracle independent of the
-    # code under test.
-    h = 1e-3
+    # code under test. `h = 1e-2` sits comfortably inside every branch-flip margin at the chosen `x_vals` (the
+    # `v > cast(b, f32)` thresholds are integers and the local slope is O(1), so perturbation of 1e-2 never
+    # crosses a branch) while keeping f32 cancellation roughly ULP-of-y / (2h) = ~1e-5 relative. Each branch is
+    # affine in `v`, so the composite function is piecewise-affine in `x[i]`; FD central diff has zero
+    # truncation error on that class and the only irreducible contribution is the rounding floor above.
+    h = 1e-2
     for i in range(n):
         x[i] = x_vals[i] + h
         y[None] = 0.0
@@ -597,7 +602,7 @@ def test_adstack_many_non_f32_stacks_heap_backed():
         y_minus = y[None]
         x[i] = x_vals[i]
         expected = (y_plus - y_minus) / (2.0 * h)
-        assert x.grad[i] == test_utils.approx(expected, rel=1e-2, abs=1e-3)
+        assert x.grad[i] == pytest.approx(expected, rel=1e-3, abs=1e-4)
 
 
 @test_utils.test(require=qd.extension.adstack)
@@ -734,7 +739,7 @@ def test_adstack_large_capacity_resolves_overflow():
 
     # y += sin(v) iterated with v = x[0] + k for k = 0..63, so dy/dx[0] = sum_k cos(x[0] + k).
     expected = sum(math.cos(0.1 + k) for k in range(64))
-    assert x.grad[0] == test_utils.approx(expected, rel=1e-3)
+    assert x.grad[0] == pytest.approx(expected, rel=1e-4)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=4096, offline_cache=False)
@@ -797,7 +802,7 @@ def test_adstack_heap_backed_exceeds_old_threadstack_budget():
 
     geom = sum(0.9**j for j in range(n_iter))
     for i in range(n):
-        assert x.grad[i] == test_utils.approx(8.0 * geom, rel=1e-3)
+        assert x.grad[i] == pytest.approx(8.0 * geom, rel=1e-5)
 
 
 @test_utils.test(require=qd.extension.adstack, ad_stack_size=32)
@@ -918,6 +923,8 @@ def test_adstack_near_capacity(n_iter):
     compute.grad()
     qd.sync()
     expected = sum(math.cos(0.1 + k) for k in range(n_iter))
+    # `rel=1e-4` rather than 1e-5: n_iter=100 accumulates a ~1e-5 relative drift on AMD Vulkan (RADV) that the
+    # tighter bound catches but that is within f32 accumulation noise for a 100-term oscillating cosine sum.
     assert x.grad[0] == test_utils.approx(expected, rel=1e-4)
 
 
@@ -1038,7 +1045,7 @@ def test_adstack_runtime_if_wrapping_loop_with_carried_var():
 
     expected = sum(0.95**k for k in range(n_iter))
     for i in range(n_active):
-        assert x.grad[i] == test_utils.approx(expected, rel=1e-4)
+        assert x.grad[i] == pytest.approx(expected, rel=1e-6)
     for i in range(n_active, n_max):
         assert x.grad[i] == 0.0
 
@@ -1268,7 +1275,7 @@ def test_adstack_inner_for_bound_is_enclosing_loop_index(n):
             # w_contribution = cast(j) * x[i]: d/dx[i] += j
             expected[i] += float(j)
     for k in range(n):
-        assert x.grad[k] == test_utils.approx(expected[k], rel=1e-4)
+        assert x.grad[k] == test_utils.approx(expected[k], rel=1e-5)
 
 
 def test_adstack_vector_subscript_selfop_no_warnings(tmp_path):
@@ -1396,30 +1403,19 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     got_grad = arr.grad.to_numpy()
     assert not np.isnan(got_grad).any(), f"ndrange-over-shape grad returned NaN: {got_grad}"
 
-    # Finite-difference oracle. Independent of the backward emission so a wrong-but-non-NaN gradient (the
-    # failure mode when the adstack heap was bound to Metal's nil-fallback and reads came back as zero)
-    # still trips the assertion.
-    h = 1e-3
-    fd = np.zeros_like(arr_np)
-    arr_plus = qd.ndarray(qd.f32, shape=(rows, cols))
-    arr_minus = qd.ndarray(qd.f32, shape=(rows, cols))
-    out_scalar = qd.ndarray(qd.f32, shape=(1,))
-    for i in range(rows):
-        for j in range(cols):
-            tmp = arr_np.copy()
-            tmp[i, j] += h
-            arr_plus.from_numpy(tmp)
-            out_scalar.from_numpy(np.zeros((1,), dtype=np.float32))
-            compute(arr_plus, out_scalar)
-            y_plus = out_scalar.to_numpy()[0]
-            tmp = arr_np.copy()
-            tmp[i, j] -= h
-            arr_minus.from_numpy(tmp)
-            out_scalar.from_numpy(np.zeros((1,), dtype=np.float32))
-            compute(arr_minus, out_scalar)
-            y_minus = out_scalar.to_numpy()[0]
-            fd[i, j] = (y_plus - y_minus) / (2.0 * h)
-    np.testing.assert_allclose(got_grad, fd, rtol=1e-2, atol=1e-3)
+    # Analytic oracle. The kernel is affine in `arr[i, j]` (each `v_k` is `v_k * c_k + d_k` for three
+    # iterations, so `d(v_k_final) / d(arr[i, j]) = c_k^3`), and `out[0]` sums all ten recurrences, so the
+    # closed-form gradient per cell is `sum_k c_k^3`. Independent of the backward emission so a
+    # wrong-but-non-NaN gradient (the failure mode when the adstack heap was bound to Metal's nil-fallback
+    # and reads came back as zero) still trips the assertion; tolerance bounded by f32 accumulation roundoff
+    # only, not finite-difference cancellation.
+    coeffs = np.array([1.01, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.10], dtype=np.float64)
+    expected_per_cell = float((coeffs**3).sum())
+    # `rtol=1e-4` rather than tight-to-backward-roundoff because on AMD Vulkan (RADV) the adjoint accumulation
+    # through ten loop-carried recurrences drifts by a few parts in 1e5 relative to the analytic value; the
+    # tighter bound catches the drift without a corresponding correctness signal. The regression this test
+    # guards against (nil device buffer -> zero read -> NaN adjoint) trips any tolerance at all.
+    np.testing.assert_allclose(got_grad, np.full_like(arr_np, expected_per_cell), rtol=1e-4, atol=0)
 
 
 @test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.metal, qd.vulkan])
