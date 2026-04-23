@@ -281,6 +281,8 @@ def get_diff_lines(compare_branch):
             if current_file and current_file.endswith(".py"):
                 diff_lines.setdefault(current_file, []).append((current_lineno, line[1:]))
             current_lineno += 1
+        elif line.startswith("\\"):
+            continue
         elif not line.startswith("-"):
             current_lineno += 1
     return diff_lines
