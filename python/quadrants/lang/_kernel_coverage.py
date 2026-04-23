@@ -125,21 +125,25 @@ def rewrite_ast(tree: ast.Module, filepath: str, start_lineno: int) -> ast.Modul
 
 
 def _detect_arc_mode() -> bool:
-    """Detect whether pytest-cov wrote branch (arc) data by reading .coverage.
+    """Detect whether pytest-cov is running in branch (arc) mode.
 
-    Defaults to True (arc mode) when .coverage doesn't exist or is empty, since run_tests.py --coverage always
-    enables --cov-branch.
+    Checks _QD_KCOV_ARC env var first (set by the pytest plugin), then falls back to reading .coverage.
+    Defaults to False (line mode) when nothing is known, since ``pytest --cov`` without ``--cov-branch``
+    is the more common invocation.
     """
+    arc_env = os.environ.get("_QD_KCOV_ARC")
+    if arc_env is not None:
+        return arc_env == "1"
     try:
         cov_path = os.path.join(_coverage_dir, ".coverage") if _coverage_dir else ".coverage"
         cd = CoverageData(basename=cov_path)
         cd.read()
         if not cd.measured_files():
-            return True
+            return False
         return cd.has_arcs()
     except Exception:
-        logging.debug("Failed to detect arc mode from .coverage file, defaulting to arc mode", exc_info=True)
-        return True
+        logging.debug("Failed to detect arc mode from .coverage file, defaulting to line mode", exc_info=True)
+        return False
 
 
 def flush() -> None:
