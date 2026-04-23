@@ -15,7 +15,7 @@ QD_KERNEL_COVERAGE=0 python tests/run_tests.py -v -r 1 --arch cuda --coverage --
 # Run kernel coverage tests on CUDA with coverage enabled — these are skipped
 # by the phases above (QD_KERNEL_COVERAGE=0) and include GPU-only tests like
 # test_kernel_coverage_simt_e2e.
-QD_KERNEL_COVERAGE=1 python tests/run_tests.py -v -r 1 --arch cuda --coverage --cov-append tests/python/test_kernel_coverage.py || TEST_EXIT=$?
+QD_KERNEL_COVERAGE=1 python tests/run_tests.py -v -r 1 --arch cuda --coverage --cov-append test_kernel_coverage.py || TEST_EXIT=$?
 
 python tests/coverage_report.py --collect-only
 
