@@ -871,18 +871,13 @@ void quadrants_assert_format(LLVMRuntime *runtime,
   // Kill this CUDA thread.
   asm("exit;");
 #elif ARCH_amdgpu
-  asm("S_ENDPGM");
-  // TODO: properly kill this CPU thread here, considering the containing
-  // ThreadPool structure.
-
-  // std::terminate();
-
-  // Note that std::terminate() will throw an signal 6
-  // (Aborted), which will be caught by Quadrants's signal handler. The assert
-  // failure message will NOT be properly printed since Quadrants exits after
-  // receiving that signal. It is better than nothing when debugging the
-  // runtime, since otherwise the whole program may crash if the kernel
-  // continues after assertion failure.
+  // S_ENDPGM only kills the current wavefront; other wavefronts in the
+  // dispatch keep running and may spin forever waiting for data the
+  // terminated wavefront was supposed to produce.
+  // __builtin_trap() emits s_trap 2 which causes an unrecoverable GPU
+  // fault that halts the entire dispatch and returns
+  // hipErrorLaunchFailure to the host, unblocking hipStreamSynchronize.
+  __builtin_trap();
 #endif
 }
 

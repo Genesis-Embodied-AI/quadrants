@@ -61,7 +61,9 @@ def test_binary_f(lhs_is_mat, rhs_is_mat):
     assert test_utils.allclose(x[3], y / z)
     assert test_utils.allclose(x[4], y // z)
     assert test_utils.allclose(x[5], y % z)
-    assert test_utils.allclose(x[6], y**z)
+    # AMDGPU __ocml_pow_f32 uses log2->mul->exp2 giving ~0.06% relative
+    # error vs x86 pow; loosen tolerance to accommodate this.
+    assert test_utils.allclose(x[6], y**z, rel=1e-3)
     assert test_utils.allclose(x[7].astype(bool), y == z)
     assert test_utils.allclose(x[8].astype(bool), y != z)
     assert test_utils.allclose(x[9].astype(bool), y > z)
