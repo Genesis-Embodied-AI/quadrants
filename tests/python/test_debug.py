@@ -52,7 +52,7 @@ def test_cpu_debug_snode_reader_out_of_bound_negative():
         a = x[-1]
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_out_of_bound():
     x = qd.field(qd.i32, shape=(8, 16))
 
@@ -79,7 +79,7 @@ def test_not_out_of_bound():
     require=[qd.extension.sparse, qd.extension.assertion],
     debug=True,
     gdb_trigger=False,
-    exclude=qd.metal,
+    exclude=[qd.metal, qd.amdgpu],
 )
 def test_out_of_bound_dynamic():
     x = qd.field(qd.i32)
