@@ -4,7 +4,7 @@ Automatic differentiation (autodiff) computes the exact gradient of a kernel's o
 
 Throughout this page, the *primal* is the value a kernel computes in its normal forward pass (the field value, the loss, whatever the kernel writes); the *adjoint* (or *gradient*) is the derivative of the final scalar output (typically a loss) with respect to that primal value, stored in the `.grad` field next to the primal.
 
-Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework.
+Quadrants implements autodiff at compile time: when `.grad()` is requested, the compiler emits a companion kernel that runs on the same backend as the forward one and writes gradients into the primal fields' `.grad` companions. There is no Python-side tape, no per-op dispatch overhead, and no dependency on an external AD framework. Forward mode, reverse mode, and the adstack pipeline for dynamic loops (described further down) are fully supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
 
 Three styles are supported:
 
@@ -69,6 +69,7 @@ Notes:
 - `place(x, x.grad)` allocates the adjoint alongside the primal. Without it, `kernel.grad()` raises at first use. Ndarrays take `needs_grad=True` instead.
 - Adjoints must be cleared before each reverse pass; leftover values accumulate. `qd.ad.Tape` (below) does this automatically.
 - `kernel.grad(...)` takes the same arguments as the forward kernel.
+- Reverse-mode AD through a *dynamic* loop (one whose trip count is not known at compile time) needs an opt-in compiler pipeline called the *adstack*, gated behind `ad_stack_experimental_enabled=True` in `qd.init()`. Support for this path is still experimental and the set of loop shapes it accepts is still growing; see [Autodiff with dynamic loops](#autodiff-with-dynamic-loops) and [Under the hood: adstack capacity and memory](#under-the-hood-adstack-capacity-and-memory) for what works today and what does not.
 
 ### Recording a backward pass with `qd.ad.Tape`
 
@@ -213,22 +214,22 @@ The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] 
 
 **Problem.** Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) needs to recover the primal value at each iteration when walking the loop backwards. Without that, the chain-rule steps read a stale value and the gradients come out silently wrong. Static-unrolled (`qd.static(range(...))`) loops are not affected because every iteration becomes its own inlined block at compile time.
 
-**How Quadrants does it.** An opt-in compiler pipeline called the *autodiff stack* (*adstack*) allocates a per-variable stack alongside each loop-carried primal. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. It is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with adstack enabled when it is not strictly needed is safe. Running without it when it is needed raises a `QuadrantsCompilationError` in most cases (the autodiff pass rejects a non-static range that would otherwise lose its primal); in the narrow cases where the kernel compiles anyway, the reverse pass reads a stale value for every iteration and the gradients come out wrong but non-zero.
+**How Quadrants does it.** Quadrants provides a dedicated compiler pipeline for this, called the *adstack* (short for "(a)uto(d)iff (stack)"). It allocates a per-variable stack alongside each primal that is updated inside the loop. The forward pass pushes an entry each iteration; the reverse pass pops them back off in reverse order to recover the correct primal for every chain-rule step. adstack is opt-in because it costs extra per-thread memory and compile time, and because most kernels do not need it. Running with adstack enabled when it is not strictly needed is safe. Running without it when it is needed raises a `QuadrantsCompilationError` in most cases: the autodiff pass rejects a non-static range that would otherwise lose its primal. A few edge-case loop shapes still slip past that rejection and produce silently-wrong gradients; these are tracked and fixed in the autodiff pass as they surface, so if you see wrong-but-non-zero gradients through a dynamic loop with adstack disabled, turn it on and rerun as a sanity check.
 
 **Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`. The flag is compile-time, so it must be set before the offending kernel compiles.
 
 ### Examples of dynamic loops that need it
 
-- A loop-carried dependency (a variable read, written, and read again across iterations, e.g. `v = v * 0.95 + 0.01`).
+- A loop-carried variable - one whose value is carried forward from each iteration into the next, e.g. `v = v * 0.95 + 0.01`. The rest of this document uses "loop-carried variable" in this sense.
 - A local variable used as an index into a global field.
-- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose derivative depends on the primal value at that iteration.
+- Non-linear ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) whose input changes from one iteration to the next. Example: `for i in range(n): total += qd.sin(v); v = v * 0.95 + 0.01` - `qd.sin(v)` is evaluated against a different `v` each iteration, and the reverse pass needs every one of those `v` values to compute the derivative at each step.
 - An `if` whose condition depends on a variable that mutates across iterations.
 
 ### Examples of dynamic loops that do not need it
 
-- Read-only streaming over a field with a linear accumulator: `for i in x: total += x[i]`. The per-iteration gradient contribution is a constant, no per-iteration primal replay is needed.
-- A linear reduction over a dynamic range: `for i in range(n): total += a * x[i] + b`. Same rationale.
-- A dynamic range whose body does not carry state across iterations and whose only non-linear op uses a loop-invariant value (the primal is the same every iteration, so replay is trivially correct).
+- A loop that only reads from a field and accumulates into a running total, e.g. `for i in x: total += x[i]`. In each iteration the body adds `x[i]` to `total`. The gradient of that addition with respect to `x[i]` is simply `1` - a constant that does not depend on `x[i]` itself. The reverse pass can therefore compute it without recovering any iteration-specific primal, so the adstack is unnecessary.
+- A linear reduction over a dynamic range, e.g. `for i in range(n): total += a * x[i] + b`. Same reasoning: the gradient of each iteration's contribution is constant (`a` for `x[i]`, `x[i]` for `a`, `1` for `b`), so nothing from the forward pass needs to be replayed.
+- A non-linear op applied to a loop-invariant value, e.g. `for i in range(n): total += qd.sin(a) * x[i]` where `a` does not change across iterations. The primal `a` is the same in every iteration, so the reverse pass only needs one copy of it, not one per iteration - that one copy is what `a` already holds after the loop, no adstack needed.
 
 `qd.static(range(...))` loops are unrolled at compile time and never need the adstack either.
 
@@ -292,12 +293,6 @@ Adstack buffers live on the device on GPU and in host RAM on CPU. The buffer gro
 1. Reduce the number of loop-carried variables the reverse pass has to replay (split the kernel, checkpoint manually, or fold two accumulators into one).
 2. Raise `device_memory_fraction` or `device_memory_GB` in `qd.init()` if the GPU has headroom.
 
-## Backend support
-
-Forward-mode AD, reverse-mode AD, and adstack are supported on every backend Quadrants targets: x64 / arm64 CPU, CUDA, AMDGPU, Metal, and Vulkan.
-
-The adstack pipeline is behind `ad_stack_experimental_enabled=True`. Enable it when reverse-mode AD through a dynamic loop is needed.
-
 ## Known limitations
 
 - Adstack overflow does not exist for kernels the pre-pass can bound (every shape in the grammar listed under "Under the hood: adstack capacity and memory"). Shapes outside the grammar raise a compile error pointing at the offending source location; there is no silent-overflow failure mode and no asynchronous runtime-exception path to drain at `qd.sync()`.
@@ -305,3 +300,4 @@ The adstack pipeline is behind `ad_stack_experimental_enabled=True`. Enable it w
 - Reverse-mode AD does not propagate gradients through integer casts or non-real operations. No error is raised; the gradient simply stops at the cast and silently reads as zero upstream. Cast to `qd.f32` / `qd.f64` before the differentiable section.
 - Backward passes on non-trivial kernels run noticeably slower than the corresponding forward pass, sometimes by an order of magnitude on SPIR-V.
 - **Loop bounds that read an ndarray the same kernel writes are unsafe.** If a reverse-mode kernel has a loop whose iteration count comes from `n[j]` and the same kernel also writes to `n[j]` before that loop runs (`for i in range(n[j])` after `n[j] = something`), the computed gradient may silently come out zero or wrong. Quadrants does not currently detect this. Workaround: put iteration counts in a separate ndarray (or scalar field) the kernel only reads, or split the write and the differentiable loop into two `@qd.kernel` calls. The same caveat applies across kernels — a kernel that writes an ndarray read as a loop bound by a later `.grad()` call needs the host-side contents of that ndarray to already hold the value the backward kernel will execute against.
+- **Deeply nested dynamic-range loops can still trip an adstack overflow at runtime even when every loop bound is inside the pre-pass grammar.** The compiler builds a symbolic upper-bound expression for each adstack and evaluates it at dispatch time against the live ndarray contents; on kernels with many levels of nested `for i in range(arr[...])` feeding cumulative-index patterns the expression can be mathematically tighter than the actual push count. Symptom is `Adstack overflow (offending stack_id=N)` on the next `qd.sync()`. Workaround until the pre-pass grammar is extended: shorten the reverse kernel's loop nest, precompute the worst-case inner trip into a scalar field the kernel only reads, or split the inner section into its own `@qd.kernel`.
