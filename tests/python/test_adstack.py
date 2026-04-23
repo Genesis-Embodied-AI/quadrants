@@ -1596,3 +1596,63 @@ def test_adstack_nested_tripcount_gradient(trip_mode):
             assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
         else:
             assert x.grad[k] == pytest.approx(expected_grad[k], rel=1e-5)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Silent-wrong-gradient when a reverse-mode kernel mutates an ndarray element that is then used as a "
+        "trip count inside the same kernel, and the caller resets the host-side ndarray buffer between the "
+        "forward and backward calls. The per-launch upload feeds the sizer stale zero values, the adstack is "
+        "sized for that snapshot, and the reverse pass under-pops - `x.grad` ends up zero rather than "
+        "overflowing. A walker-level static guard on `kernel writes ndarray N, kernel also reads N as a "
+        "trip count` would have to run pre-autodiff (autodiff+DIE elide the offending store from the reverse "
+        "IR whenever the write is not load-bearing for the gradient), false-positives on every legitimate "
+        "read-after-write within a kernel, and still misses the cross-kernel case (kernel A writes, kernel B "
+        "reads as trip count at reverse time). Documented as a known limitation in "
+        "`docs/source/user_guide/autodiff.md`; the test is kept as a regression pin for a future runtime "
+        "re-sizing or IR-integrity fix."
+    ),
+)
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
+    # Pins the silent-wrong-gradient pattern where the sizer's dispatch-entry ndarray snapshot does not
+    # match what the kernel actually runs against. The kernel writes `n[i] = 10` and immediately uses
+    # `n[i_e]` as the inner-loop trip count; the caller resets `n_np` on the host between `compute()` and
+    # `compute.grad()` so the backward dispatch uploads zeros. The sizer picks `max_size = 1`, the reverse
+    # pass under-pops, and `x.grad` reads as zero instead of the analytical `0.8` at `x[i] = 0.1`.
+    #
+    # Note: this is a different class of bug than a runtime overflow that fires when the walker's captured
+    # tree mathematically under-bounds the true push count - that one surfaces as a hard `RuntimeError` even
+    # when the sizer reads the right ndarray values. The two share a common theme (sizer's bound disagrees
+    # with runtime push count) but different root causes and remediations.
+    N_X = 16
+    N = 4
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(n: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(n.shape[0]):
+            n[i] = 10
+        for i_e in range(n.shape[0]):
+            accum = 0.0
+            for j in range(n[i_e]):
+                accum = accum + x[j] * x[j]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    n_np = np.zeros(N, dtype=np.int32)
+    compute(n_np)
+    n_np[:] = 0
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(n_np)
+    qd.sync()
+
+    assert loss[None] == pytest.approx(4 * 10 * 0.1 * 0.1, rel=1e-5)
+    for k in range(10):
+        assert x.grad[k] == pytest.approx(4 * 2.0 * 0.1, rel=1e-5)
