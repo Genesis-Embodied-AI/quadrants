@@ -40,7 +40,7 @@ jobs:
           pip install -e .
       - name: install torch and pyright
         run: |
-          pip install torch pyright
+          pip install torch 'pyright==1.1.408'
       - name: run pyright
         run: |
           pyright
