@@ -181,14 +181,6 @@ class QD_DLL_EXPORT GfxRuntime {
   size_t adstack_heap_buffer_float_size_{0};
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
   size_t adstack_heap_buffer_int_size_{0};
-  // Per-dispatch `AdStackMetadata` buffer holding the runtime-evaluated geometry for every adstack the task
-  // owns (u32 layout: `stride_float, stride_int, (offset_i, max_size_i)*`). Host-populated before each launch
-  // by evaluating `TaskAttributes::ad_stack.allocas[i].size_expr` against the live field state + launch args.
-  // Grown lazily on demand to match the largest task seen; retired via `ctx_buffers_` on grow to avoid freeing
-  // an in-flight allocation. Unbound for tasks with no adstacks.
-  std::unique_ptr<DeviceAllocationGuard> adstack_metadata_buffer_;
-  size_t adstack_metadata_buffer_size_{0};
-
   // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack
   // SizeExpr interpreter (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is
   // built once lazily on the first reverse-mode kernel launch that has adstack allocas and reused across

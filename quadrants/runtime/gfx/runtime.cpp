@@ -871,40 +871,31 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
         }
       } else if (bind.buffer.type == BufferType::AdStackMetadata) {
         // Per-dispatch u32 buffer carrying `[stride_float, stride_int, (offset_i, max_size_i)*]`. Populated
-        // from `ad_stack_metadata` above (which evaluated each alloca's `SizeExpr`). Empty `allocas` means the
-        // codegen never emitted a `BufferType::AdStackMetadata` bind in the first place, so this branch is
-        // reached only when we have something to upload. Sized and grown with the same amortized-doubling
-        // retire-old-into-`ctx_buffers_` policy as the heap buffers.
+        // from `ad_stack_metadata` above (which evaluated each alloca's `SizeExpr`). Empty `allocas` means
+        // the codegen never emitted a `BufferType::AdStackMetadata` bind in the first place, so this branch
+        // is reached only when we have something to upload. A fresh device allocation is used per task
+        // rather than a shared grow-on-demand slot: the bindings descriptor captures the buffer handle at
+        // cmdlist record time, but the shader reads the contents at cmdlist submit+execute time. A shared
+        // slot that is host-memcpy'd in this record-loop iteration would be overwritten by the next
+        // iteration's host memcpy (record is host-synchronous, execute is deferred), so at submit time
+        // every task's dispatch reads the LAST task's metadata - sibling stacks with smaller `max_size`
+        // then appear to shrink earlier stacks' capacities and trip the in-kernel `count < max_size` guard
+        // at unexpectedly low counts. Retire the per-task buffer into `ctx_buffers_` so it stays alive
+        // until the next sync drains the cmdlist.
         QD_ASSERT_INFO(!ad_stack_metadata.empty(),
                        "AdStackMetadata bind requested for a task that recorded no adstack allocas");
         const size_t required = ad_stack_metadata.size() * sizeof(uint32_t);
-        if (!adstack_metadata_buffer_ || adstack_metadata_buffer_size_ < required) {
-          size_t new_size = std::max(required, 2 * adstack_metadata_buffer_size_);
-          auto [buf, res] = device_->allocate_memory_unique(
-              {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
-          if (res != RhiResult::success && new_size > required) {
-            new_size = required;
-            std::tie(buf, res) = device_->allocate_memory_unique(
-                {new_size, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
-          }
-          QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack metadata buffer (size={})", new_size);
-          if (adstack_metadata_buffer_) {
-            ctx_buffers_.push_back(std::move(adstack_metadata_buffer_));
-          }
-          adstack_metadata_buffer_ = std::move(buf);
-          adstack_metadata_buffer_size_ = new_size;
-        }
-        // Map, memcpy, unmap. Upload happens on the host timeline; the shader dispatch below happens after
-        // the cmdlist is submitted, so a host-side write is visible to the device without an explicit barrier
-        // on Vulkan (host-visible memory has implicit HOST -> DEVICE availability at submit time) and on
-        // Metal (the shared buffer's contents are observable after `commit`).
+        auto [metadata_buf, res] = device_->allocate_memory_unique(
+            {required, /*host_write=*/true, /*host_read=*/false, /*export_sharing=*/false, AllocUsage::Storage});
+        QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate adstack metadata buffer (size={})", required);
         void *mapped = nullptr;
-        RhiResult map_res = device_->map_range(adstack_metadata_buffer_->get_ptr(0), required, &mapped);
+        RhiResult map_res = device_->map_range(metadata_buf->get_ptr(0), required, &mapped);
         QD_ASSERT_INFO(map_res == RhiResult::success, "Failed to map adstack metadata buffer for host upload (size={})",
                        required);
         std::memcpy(mapped, ad_stack_metadata.data(), required);
-        device_->unmap(*adstack_metadata_buffer_);
-        bindings->rw_buffer(bind.binding, *adstack_metadata_buffer_);
+        device_->unmap(*metadata_buf);
+        bindings->rw_buffer(bind.binding, *metadata_buf);
+        ctx_buffers_.push_back(std::move(metadata_buf));
       } else if (bind.buffer.type == BufferType::Args) {
         bindings->buffer(bind.binding, args_buffer ? *args_buffer : kDeviceNullAllocation);
       } else if (bind.buffer.type == BufferType::Rets) {

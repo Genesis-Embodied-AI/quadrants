@@ -2167,3 +2167,61 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
         assert x.grad[k] == pytest.approx(0.2, rel=1e-5)
     for k in range(5, N_X):
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+
+
+@test_utils.test(
+    require=qd.extension.adstack, arch=[qd.metal], cfg_optimization=False, ad_stack_experimental_enabled=True
+)
+def test_adstack_spirv_metadata_per_task_buffer():
+    # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every
+    # task in a kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were
+    # host-memcpy'd into that buffer inside the cmdlist record loop, and the `bindings` descriptor for each
+    # task's dispatch captured the same buffer handle. Record is host-synchronous but execute is deferred,
+    # so by submit time the buffer holds only the LAST task's metadata and every dispatch in the cmdlist
+    # reads those bytes. Earlier tasks then see shorter sibling stacks' `max_size` where their own should
+    # be - e.g. a stack whose sizer wrote `max_size=9` observes a runtime `max_size=3`, its first guarded
+    # push trips the `count < max_size` check at `count=3`, the overflow flag flips, and `qd.sync()` raises
+    # even though the kernel's actual per-thread push count fits the per-stack bound the sizer computed.
+    #
+    # Internal details: `cfg_optimization=False` is load-bearing - with it enabled, the CFG pass sinks /
+    # merges the bind-and-dispatch pair in a way that masks the cross-task buffer reuse on this kernel
+    # shape; with it disabled the raw record-then-execute race surfaces. Metal-only because the SPIR-V
+    # launcher is the one with the shared buffer; the LLVM path publishes metadata host-side via
+    # `publish_adstack_metadata` directly into each launch's own `AdStackSizingInfo` with no cross-task
+    # aliasing to worry about. The kernel shape (two sibling `qd.ndrange` offloads, the second one
+    # carrying a triangular i<=j<k nested loop that stashes a multiplicative reduction onto its own
+    # adstack) is the minimum that exhibits the bug: you need at least two tasks in the same kernel so
+    # the second task's record overwrites the first task's metadata before submit. The post-fix runtime
+    # allocates a fresh metadata buffer per task record and retires it into `ctx_buffers_` so it stays
+    # alive until the sync window closes.
+    tri_mat = qd.field(dtype=qd.f32, shape=(2, 7, 7, 1))
+    src_mat = qd.field(dtype=qd.types.matrix(3, 3, qd.f32), shape=(1, 1), needs_grad=True)
+    dst_mat = qd.field(dtype=qd.types.matrix(3, 3, qd.f32), shape=(1, 1), needs_grad=True)
+    state = qd.field(dtype=qd.types.vector(3, qd.f32), shape=(1, 1), needs_grad=True)
+    group_offset = qd.field(dtype=qd.i32, shape=(1,))
+    group_size = qd.field(dtype=qd.i32, shape=(1,))
+    group_size[0] = 7
+
+    @qd.kernel
+    def kernel_two_offloads_with_tri_reduce():
+        for i_0, i_b in qd.ndrange(state.shape[0], state.shape[1]):
+            dst_mat[i_0, i_b] = src_mat[i_0, i_b]
+
+        for i_g, i_b in qd.ndrange(state.shape[0], state.shape[1]):
+            base = group_offset[i_g]
+            for p_i0 in range(group_size[i_g]):
+                for p_j0 in range(p_i0 + 1):
+                    i_pr = base + p_i0
+                    j_pr = base + p_j0
+                    acc = qd.f32(0.0)
+                    for p_k0 in range(p_j0):
+                        k_pr = base + p_k0
+                        acc = acc + (tri_mat[1, i_pr, k_pr, i_b] * tri_mat[1, j_pr, k_pr, i_b])
+                    tri_mat[1, i_pr, j_pr, i_b] = acc
+
+    # Pre-fix: raises `Adstack overflow (offending stack_id=0)` at `qd.sync()` because the first offload's
+    # metadata buffer was overwritten by the second offload's host memcpy before the cmdlist ran, so the
+    # first offload's f32 stack 0 saw `max_size=3` (the second offload's int stack 0 value) instead of its
+    # own sizer-computed 9. Post-fix: finishes cleanly because each task gets its own metadata buffer.
+    kernel_two_offloads_with_tri_reduce.grad()
+    qd.sync()
