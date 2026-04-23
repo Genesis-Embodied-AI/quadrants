@@ -950,7 +950,25 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
   ir_->make_inst(spv::OpBranchConditional, cond, then_label, merge_label);
   // then block
   ir_->start_label(then_label);
-  ir_->call_debugprintf(op + " overflow detected in " + tb, {});
+  // `bin->get_tb()` carries the Python traceback that surfaced the binary op - file path, line number,
+  // and a copy of the source line - and we want it in the runtime diagnostic. But the SPIR-V debug-printf
+  // format string flows verbatim into MoltenVK's SPIRV-Cross -> MSL translator, which embeds it as an MSL
+  // string literal; a `"`, `\n`, or `\r` terminates the literal mid-parse and the downstream MSL compile
+  // fails with `use of undeclared identifier '<path fragment>'`. Escape those characters so the printed
+  // traceback is preserved byte-for-byte on native Vulkan drivers and still round-trips cleanly through
+  // MSL on Apple Silicon.
+  std::string safe_tb;
+  safe_tb.reserve(tb.size());
+  for (char c : tb) {
+    if (c == '"') {
+      safe_tb += "\\\"";
+    } else if (c == '\n' || c == '\r') {
+      safe_tb += ' ';
+    } else {
+      safe_tb += c;
+    }
+  }
+  ir_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
   ir_->make_inst(spv::OpBranch, merge_label);
   // merge label
   ir_->start_label(merge_label);

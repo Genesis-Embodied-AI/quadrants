@@ -601,10 +601,17 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     } else if (name == VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME && params_.enable_validation_layer) {
-      // VK_KHR_shader_non_semantic_info isn't supported on molten-vk.
+#if !defined(__APPLE__)
+      // VK_KHR_shader_non_semantic_info isn't fully supported on MoltenVK: the extension enumerates as
+      // available on the LunarG-SDK-sourced build, the device accepts `OpExtInstImport "NonSemantic.DebugPrintf"`
+      // and the downstream `OpExtInst` call sites at SPIR-V validation time, but the SPIRV-Cross -> MSL
+      // translator inside MoltenVK emits unconditional `debugPrintfEXT(...)` calls that Metal's MSL compiler
+      // rejects with `use of undeclared identifier 'debugPrintfEXT'`. Since the only Vulkan implementation on
+      // Apple platforms is MoltenVK, drop the advertisement here rather than at each SPIR-V codegen site.
       // Tracking issue: https://github.com/KhronosGroup/MoltenVK/issues/1214
       caps.set(DeviceCapability::spirv_has_non_semantic_info, true);
       enabled_extensions.push_back(ext.extensionName);
+#endif
     } else if (name == VK_KHR_8BIT_STORAGE_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_16BIT_STORAGE_EXTENSION_NAME) {

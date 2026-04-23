@@ -161,9 +161,13 @@ std::vector<uint32_t> IRBuilder::finalize() {
 
 void IRBuilder::init_pre_defs() {
   ext_glsl450_ = ext_inst_import("GLSL.std.450");
-  if (caps_->get(cap::spirv_has_non_semantic_info)) {
-    debug_printf_ = ext_inst_import("NonSemantic.DebugPrintf");
-  }
+  // `debug_printf_` is imported lazily in `call_debugprintf` on first use rather than here. A declared-but-unused
+  // `OpExtInstImport "NonSemantic.DebugPrintf"` at the top of a SPIR-V module is accepted by native Vulkan
+  // drivers but rejected by MoltenVK: the SPIRV-Cross -> MSL translator emits an unconditional stub that calls
+  // `debugPrintfEXT` even when no `OpExtInst` targets the import, and the subsequent MSL compile fails with
+  // `use of undeclared identifier 'debugPrintfEXT'`. Skipping the import entirely when no call site needs it
+  // keeps kernels without `print` or debug assert traffic compatible with MoltenVK even while the
+  // `spirv_has_non_semantic_info` capability is advertised by the Vulkan device.
 
   t_bool_ = declare_primitive_type(get_data_type<bool>());
   if (caps_->get(cap::spirv_has_int8)) {
