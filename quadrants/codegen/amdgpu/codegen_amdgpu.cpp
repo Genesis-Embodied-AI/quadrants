@@ -189,20 +189,25 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
     QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
               fast_reductions.at(prim_type).end());
-    // SNode pointer chain (GetRootStmt/SNodeLookupStmt/GetChStmt) propagates
-    // addrspace(1) on AMDGPU. The runtime reduce_*_* helpers in
-    // runtime.cpp:DEFINE_REDUCTION are declared with generic (addrspace 0)
-    // pointer parameters. Cast the destination back to addrspace(0) so
-    // check_func_call_signature accepts the call; InferAddressSpaces in O3
-    // can re-promote downstream loads/stores after inlining.
+    // SNode pointer chain propagates addrspace(1) on AMDGPU. The runtime
+    // reduce_* helpers expect addrspace(0) parameters. Cast to flat for
+    // the call (always valid IR), but force-inline the callee so
+    // InferAddressSpaces can promote the flat atomic back to global.
     llvm::Value *dest = llvm_val[stmt->dest];
     if (dest && dest->getType()->isPointerTy() &&
         dest->getType()->getPointerAddressSpace() == 1) {
       auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
       dest = builder->CreateAddrSpaceCast(dest, ptr_as0);
     }
-    return call(fast_reductions.at(prim_type).at(op),
-                {dest, llvm_val[stmt->val]});
+    auto *result = call(fast_reductions.at(prim_type).at(op),
+                        {dest, llvm_val[stmt->val]});
+    if (auto *CI = llvm::dyn_cast<llvm::CallInst>(result)) {
+      if (auto *callee = CI->getCalledFunction()) {
+        callee->addFnAttr(llvm::Attribute::AlwaysInline);
+        callee->removeFnAttr(llvm::Attribute::NoInline);
+      }
+    }
+    return result;
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -372,15 +377,19 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
           origin_pointee_ty, casted_ptr,
           {tlctx->get_constant(0), llvm_val[stmt->offset]});
     } else {
-      auto *origin_address = builder->CreatePtrToInt(
-          origin_ptr, llvm::Type::getInt64Ty(*llvm_context));
+      // Byte-offset GEP preserves pointer provenance and address space,
+      // avoiding the PtrToInt/IntToPtr round-trip that breaks addrspace
+      // tagging and confuses InferAddressSpaces.
+      auto *byte_ptr = builder->CreateBitCast(
+          origin_ptr, llvm::PointerType::get(
+              llvm::Type::getInt8Ty(*llvm_context), origin_as));
       auto *address_offset = builder->CreateSExt(
           llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));
-      auto *target_address =
-          builder->CreateAdd(origin_address, address_offset);
+      auto *offset_ptr = builder->CreateGEP(
+          llvm::Type::getInt8Ty(*llvm_context), byte_ptr, address_offset);
       auto pointee_ty = tlctx->get_data_type(stmt->ret_type.ptr_removed());
-      llvm_val[stmt] = builder->CreateIntToPtr(
-          target_address, llvm::PointerType::get(pointee_ty, origin_as));
+      llvm_val[stmt] = builder->CreateBitCast(
+          offset_ptr, llvm::PointerType::get(pointee_ty, origin_as));
     }
   }
 
