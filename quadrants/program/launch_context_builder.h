@@ -84,6 +84,11 @@ class LaunchContextBuilder {
   void set_struct_arg(const std::vector<int> &arg_indices, T v);
 
   void set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
+  // Same as `set_ndarray_ptrs`, but also mirrors the resolved host pointer into `array_ptrs` so the adstack
+  // size-expression evaluator can dereference it. Call only from launchers where `data_ptr`/`grad_ptr` is a
+  // real host-accessible address (CPU); device-only launchers (SPIR-V / CUDA / AMDGPU) must use the plain
+  // `set_ndarray_ptrs`.
+  void set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
 
   template <typename T>
   T get_arg(const std::vector<int> &i);

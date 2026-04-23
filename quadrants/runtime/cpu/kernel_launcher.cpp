@@ -7,13 +7,12 @@ namespace cpu {
 
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<std::size_t> &ad_stack_needed_bytes) {
+                                            const std::vector<AdStackSizingInfo> &ad_stacks,
+                                            const std::vector<std::size_t> &num_threads_per_task) {
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
   for (size_t i = 0; i < task_funcs.size(); ++i) {
-    if (ad_stack_needed_bytes[i] > 0) {
-      executor->ensure_adstack_heap(ad_stack_needed_bytes[i]);
-    }
+    executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
     task_funcs[i](&ctx.get_context());
     if (ctx.get_context().cpu_assert_failed)
       break;
@@ -22,9 +21,10 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                                           const std::vector<TaskFunc> &task_funcs,
-                                                          const std::vector<std::size_t> &ad_stack_needed_bytes) {
+                                                          const std::vector<AdStackSizingInfo> &ad_stacks,
+                                                          const std::vector<std::size_t> &num_threads_per_task) {
   do {
-    launch_offloaded_tasks(ctx, task_funcs, ad_stack_needed_bytes);
+    launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
   } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
@@ -46,7 +46,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       void *grad_ptr = ctx.array_ptrs[{arg_id, TypeFactory::GRAD_PTR_POS_IN_NDARRAY}];
 
       if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
-        ctx.set_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
+        ctx.set_host_accessible_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = data_ptr;
         }
@@ -57,7 +57,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
             grad_ptr == nullptr
                 ? 0
                 : (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
-        ctx.set_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
+        ctx.set_host_accessible_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
         }
@@ -66,9 +66,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stack_needed_bytes);
+    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
+                                         launcher_ctx.num_threads_per_task);
   } else {
-    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stack_needed_bytes);
+    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks, launcher_ctx.num_threads_per_task);
   }
 }
 
@@ -87,9 +88,11 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto *jit_module = executor->create_jit_module(std::move(data.module));
 
     std::vector<TaskFunc> task_funcs;
-    std::vector<std::size_t> ad_stack_needed_bytes;
+    std::vector<AdStackSizingInfo> ad_stacks;
+    std::vector<std::size_t> num_threads_per_task;
     task_funcs.reserve(data.tasks.size());
-    ad_stack_needed_bytes.reserve(data.tasks.size());
+    ad_stacks.reserve(data.tasks.size());
+    num_threads_per_task.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
@@ -98,13 +101,15 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       // `static_num_threads` (set by `codegen_cpu.cpp` to `num_cpu_threads` for non-serial tasks and to 1
       // for serial tasks) is the exact bound, and the launcher never has to resolve anything at dispatch
       // time.
-      ad_stack_needed_bytes.push_back(task.ad_stack.per_thread_stride * task.ad_stack.static_num_threads);
+      ad_stacks.push_back(task.ad_stack);
+      num_threads_per_task.push_back(task.ad_stack.static_num_threads);
     }
 
     // Populate ctx
     ctx.parameters = &compiled.get_internal_data().args;
     ctx.task_funcs = std::move(task_funcs);
-    ctx.ad_stack_needed_bytes = std::move(ad_stack_needed_bytes);
+    ctx.ad_stacks = std::move(ad_stacks);
+    ctx.num_threads_per_task = std::move(num_threads_per_task);
 
     compiled.set_handle(handle);
   }

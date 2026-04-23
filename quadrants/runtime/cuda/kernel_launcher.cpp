@@ -48,10 +48,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             const std::vector<OffloadedTask> &offloaded_tasks) {
   auto *executor = get_runtime_executor();
   for (const auto &task : offloaded_tasks) {
-    if (task.ad_stack.per_thread_stride > 0) {
-      std::size_t n = resolve_num_threads(task.ad_stack, executor);
-      executor->ensure_adstack_heap(task.ad_stack.per_thread_stride * n);
-    }
+    std::size_t n = resolve_num_threads(task.ad_stack, executor);
+    executor->publish_adstack_metadata(task.ad_stack, n, &ctx);
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
                         {});
