@@ -857,8 +857,8 @@ def _field(
         if needs_dual:
             _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=phys_offset)
         if order is not None:
-            # Identity layout is normalised out earlier by ``_layout_to_order`` (``order=`` is not passed when layout is
-            # the default permutation).
+            # Identity layout is normalised out earlier by ``_layout_to_order`` (``order=`` is not passed when layout
+            # is the default permutation).
             _qd_layout = tuple(axis_seq)
             object.__setattr__(x, "_qd_layout", _qd_layout)  # type: ignore[attr-defined]
             if x_grad is not None:

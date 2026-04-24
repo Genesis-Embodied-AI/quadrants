@@ -104,8 +104,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     arg_name,
                 )
             )
-        # Fall through to the template path below by retargeting the annotation. Wrap the result with a field marker so
-        # its cache entry is distinct from the ndarray branch above.
+        # Fall through to the template path below by retargeting the annotation. Wrap the result with a field marker
+        # so its cache entry is distinct from the ndarray branch above.
         annotation = template
         annotation_type = type(template)
         return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)

@@ -303,9 +303,9 @@ class ASTTransformer(Builder):
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is already a list of N scalars; permute by axis.
-        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N
-        #    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical
-        #    buffer — silently OOB on permuted layouts.
+        # 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack
+        #    into N scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller
+        #    physical buffer — silently OOB on permuted layouts.
         layout = getattr(node.value.ptr, "_qd_layout", None)
         if layout is not None:
             if len(node.slice.ptr) == 1:
@@ -737,11 +737,10 @@ class ASTTransformer(Builder):
         else:
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
-            # time. The IR layer downstream of this (``build_Subscript`` -> ``impl.subscript``) only knows about
-            # ``Ndarray`` / ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a
-            # kernel body resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped
-            # earlier in ``Kernel.__call__``; this handles the in-struct case. See
-            # ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+            # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
+            # ``Field`` / ``Expr``; the wrapper is host-side. Unwrap here so ``state.a[i, j]`` inside a kernel body
+            # resolves to the bare impl. Top-level wrapper args (``def k(x: qd.Tensor)``) are unwrapped earlier in
+            # ``Kernel.__call__``; this handles the in-struct case. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
             )
@@ -1143,8 +1142,8 @@ class ASTTransformer(Builder):
             else:
                 loop_var = node.iter.ptr
                 # Layout-tagged tensors (both ndarray and field): the runtime fills the loop-target slots with
-                # *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i`` is
-                # canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot
+                # *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``
+                # is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot
                 # whose runtime value is the canonical-axis value the user expects.
                 layout = getattr(loop_var, "_qd_layout", None)
                 if layout is not None and len(layout) == len(targets):

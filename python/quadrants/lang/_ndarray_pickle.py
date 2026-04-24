@@ -24,9 +24,9 @@ def serialize(ndarray: Any) -> dict[str, Any]:
     dtype_name = _DTYPE_TO_NAME.get(ndarray.dtype)
     if dtype_name is None:
         raise TypeError(f"Cannot pickle ndarray with dtype {ndarray.dtype!r}")
-    # Use the canonical shape so it matches the canonical view returned by ``to_numpy()``. Layout tags are intentionally
-    # dropped on pickle (a separate ``_qd_layout`` round-trip is tracked as a follow-up): the restored ndarray is
-    # always layout-free, but its element values at every canonical index match the original.
+    # Use the canonical shape so it matches the canonical view returned by ``to_numpy()``. Layout tags are
+    # intentionally dropped on pickle (a separate ``_qd_layout`` round-trip is tracked as a follow-up): the
+    # restored ndarray is always layout-free, but its element values at every canonical index match the original.
     return {
         "version": _PICKLE_VERSION,
         "shape": tuple(ndarray.shape),
