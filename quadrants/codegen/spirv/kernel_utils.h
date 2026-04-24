@@ -20,7 +20,17 @@ namespace spirv {
  * Per offloaded task attributes.
  */
 struct TaskAttributes {
-  enum class BufferType { Root, GlobalTmps, Args, Rets, ListGen, ExtArr, AdStackOverflow };
+  enum class BufferType {
+    Root,
+    GlobalTmps,
+    Args,
+    Rets,
+    ListGen,
+    ExtArr,
+    AdStackOverflow,
+    AdStackHeapFloat,
+    AdStackHeapInt,
+  };
 
   struct BufferInfo {
     BufferType type;
@@ -111,11 +121,35 @@ struct TaskAttributes {
       return (const_begin && const_end);
     }
 
-    QD_IO_DEF(begin, end, const_begin, const_end);
+    // When the range end is non-const and the IR encodes it as a product of one or more ndarray-shape lookups (a
+    // common `qd.ndrange(arr.shape[...], ...)` pattern), the codegen extracts each `ExternalTensorShapeAlongAxisStmt`
+    // into this list. At launch time, host-side `LaunchContextBuilder` already has every ndarray's shape in
+    // `array_ptrs` / struct args, so the actual iteration bound is `product over refs of arg[arg_id].shape[axis]`.
+    // The runtime uses that as a tight cap on `advisory_total_num_threads` to avoid oversizing the per-thread
+    // adstack heap (otherwise `kMaxNumThreadsGridStrideLoop` defaults to 131072 for a B=1 workload and the heap
+    // allocation requests multi-GB that exceeds Metal's `maxBufferLength`). Empty means the end expression could
+    // not be simplified to a pure product of shape lookups; fall back to the advisory thread count in that case.
+    struct ArgShapeRef {
+      std::vector<int> arg_id;
+      int axis{0};
+      QD_IO_DEF(arg_id, axis);
+    };
+    std::vector<ArgShapeRef> end_shape_product;
+
+    QD_IO_DEF(begin, end, const_begin, const_end, end_shape_product);
   };
   std::vector<BufferBind> buffer_binds;
   // Only valid when |task_type| is range_for.
   std::optional<RangeForAttributes> range_for_attribs;
+
+  // Per-thread stride, in f32 elements, of the f32-typed heap-backed adstack slice used by this task, bound as
+  // BufferType::AdStackHeapFloat. Zero when the task has no f32 adstack. The runtime multiplies this by the
+  // dispatched invocation count to size the shared adstack buffer.
+  uint32_t ad_stack_heap_per_thread_stride_float{0};
+  // Per-thread stride, in i32 elements, of the int-typed heap-backed adstack slice used by this task, bound as
+  // BufferType::AdStackHeapInt. Backs both i32 and u1 adstacks (u1 is stored as i32, matching the existing
+  // Function-scope path). Zero when the task has no non-f32 adstack.
+  uint32_t ad_stack_heap_per_thread_stride_int{0};
 
   static std::string buffers_name(BufferInfo b);
 
@@ -126,7 +160,9 @@ struct TaskAttributes {
             advisory_num_threads_per_group,
             task_type,
             buffer_binds,
-            range_for_attribs);
+            range_for_attribs,
+            ad_stack_heap_per_thread_stride_float,
+            ad_stack_heap_per_thread_stride_int);
 };
 
 /**
