@@ -1,0 +1,116 @@
+quadrants.lang.simt.subgroup
+============================
+
+.. py:module:: quadrants.lang.simt.subgroup
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.simt.subgroup.barrier
+   quadrants.lang.simt.subgroup.memory_barrier
+   quadrants.lang.simt.subgroup.elect
+   quadrants.lang.simt.subgroup.all_true
+   quadrants.lang.simt.subgroup.any_true
+   quadrants.lang.simt.subgroup.all_equal
+   quadrants.lang.simt.subgroup.broadcast_first
+   quadrants.lang.simt.subgroup.reduce_add
+   quadrants.lang.simt.subgroup.reduce_all_add
+   quadrants.lang.simt.subgroup.inclusive_add
+   quadrants.lang.simt.subgroup.inclusive_mul
+   quadrants.lang.simt.subgroup.inclusive_min
+   quadrants.lang.simt.subgroup.inclusive_max
+   quadrants.lang.simt.subgroup.inclusive_and
+   quadrants.lang.simt.subgroup.inclusive_or
+   quadrants.lang.simt.subgroup.inclusive_xor
+   quadrants.lang.simt.subgroup.exclusive_add
+   quadrants.lang.simt.subgroup.exclusive_mul
+   quadrants.lang.simt.subgroup.exclusive_min
+   quadrants.lang.simt.subgroup.exclusive_max
+   quadrants.lang.simt.subgroup.exclusive_and
+   quadrants.lang.simt.subgroup.exclusive_or
+   quadrants.lang.simt.subgroup.exclusive_xor
+   quadrants.lang.simt.subgroup.shuffle
+   quadrants.lang.simt.subgroup.shuffle_xor
+   quadrants.lang.simt.subgroup.shuffle_up
+   quadrants.lang.simt.subgroup.shuffle_down
+
+
+Module Contents
+---------------
+
+.. py:function:: barrier()
+
+.. py:function:: memory_barrier()
+
+.. py:function:: elect()
+
+.. py:function:: all_true(cond)
+
+.. py:function:: any_true(cond)
+
+.. py:function:: all_equal(value)
+
+.. py:function:: broadcast_first(value)
+
+.. py:function:: reduce_add(value, log2_size: template())
+
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a ``shuffle_down`` tree.
+
+   The result is valid in lane 0 of each ``2**log2_size`` group; other lanes hold partial sums.
+   Caller must ensure ``2**log2_size`` does not exceed the active subgroup size on the target
+   (32 on CUDA/Metal, 32 on RDNA, 64 on CDNA).
+
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
+
+
+.. py:function:: reduce_all_add(value, log2_size: template())
+
+   Sum ``value`` across ``2**log2_size`` consecutive lanes via a butterfly XOR.
+
+   The result is broadcast to all ``2**log2_size`` lanes.  Caller must ensure ``2**log2_size``
+   does not exceed the active subgroup size on the target.
+
+   ``log2_size`` is a compile-time template; the body is fully unrolled into ``log2_size``
+   shuffle+add operations in the calling kernel's IR.
+
+
+.. py:function:: inclusive_add(value)
+
+.. py:function:: inclusive_mul(value)
+
+.. py:function:: inclusive_min(value)
+
+.. py:function:: inclusive_max(value)
+
+.. py:function:: inclusive_and(value)
+
+.. py:function:: inclusive_or(value)
+
+.. py:function:: inclusive_xor(value)
+
+.. py:function:: exclusive_add(value)
+
+.. py:function:: exclusive_mul(value)
+
+.. py:function:: exclusive_min(value)
+
+.. py:function:: exclusive_max(value)
+
+.. py:function:: exclusive_and(value)
+
+.. py:function:: exclusive_or(value)
+
+.. py:function:: exclusive_xor(value)
+
+.. py:function:: shuffle(value, index)
+
+.. py:function:: shuffle_xor(value, mask)
+
+.. py:function:: shuffle_up(value, offset)
+
+.. py:function:: shuffle_down(value, offset)
+
