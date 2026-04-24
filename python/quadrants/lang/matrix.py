@@ -1317,8 +1317,8 @@ class MatrixField(Field):
         # element axes (``n``, ``m``) sit innermost and stay identity.
         layout = getattr(self, "_qd_layout", None)
         if layout is not None:
-            from quadrants.lang.field import (
-                _patch_field_dlpack_canonical,  # pylint: disable=C0415
+            from quadrants.lang.field import (  # pylint: disable=C0415
+                _patch_field_dlpack_canonical,
             )
 
             _patch_field_dlpack_canonical(capsule, tuple(layout))

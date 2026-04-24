@@ -36,6 +36,9 @@ Out of scope:
 See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 """
 
+# pylint: disable=import-outside-toplevel
+# (Late imports throughout are intentional, to break circular import cycles
+# between the tensor wrapper and the lang/types subpackages.)
 from __future__ import annotations
 
 import typing

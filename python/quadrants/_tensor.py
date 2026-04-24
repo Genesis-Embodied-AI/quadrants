@@ -60,7 +60,9 @@ def _with_layout(ndarray, layout):
     """
     # Unwrap Tensor wrappers transparently. Imported lazily to dodge the
     # _tensor_wrapper -> _tensor cycle.
-    from quadrants._tensor_wrapper import Tensor as _TensorWrapper
+    from quadrants._tensor_wrapper import (  # pylint: disable=reimported
+        Tensor as _TensorWrapper,
+    )
 
     if isinstance(ndarray, _TensorWrapper):
         ndarray = ndarray._unwrap()
