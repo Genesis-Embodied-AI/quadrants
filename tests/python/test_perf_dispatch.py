@@ -109,7 +109,7 @@ def test_perf_dispatch_kernels() -> None:
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
-@test_utils.test(exclude=[qd.metal, qd.vulkan])
+@test_utils.test(exclude=[qd.vulkan])
 def test_perf_dispatch_python() -> None:
     WARMUP = 3
 
