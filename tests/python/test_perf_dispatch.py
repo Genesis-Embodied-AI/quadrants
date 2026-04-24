@@ -36,13 +36,11 @@ from tests import test_utils
 #      10K  |  6.4ms  |  7.8ms  |   22ms
 #     100K  |   63ms  |   67ms  |   83ms
 #
-#   GPU arches have fixed overhead per call: ~1.4ms (cuda) / ~17ms (vulkan)
-#   from ndarray element access round-trips (20 accesses outside the inner
-#   loop).  The inner loop is pure Python math on a local variable, so
-#   compute scales the same across all arches.
+#   GPU arches have fixed overhead per call: ~1.4ms (cuda) / ~17ms (vulkan) from ndarray element access round-trips
+#   (20 accesses outside the inner loop).  The inner loop is pure Python math on a local variable, so compute scales
+#   the same across all arches.
 #
-# Slow is 100x medium, giving a clear timing gap even under pytest-xdist
-# contention.
+# Slow is 100x medium, giving a clear timing gap even under pytest-xdist contention.
 AMOUNT_WORK_SLOW_KERNEL = 1_000_000
 AMOUNT_WORK_MEDIUM_KERNEL = 10_000
 AMOUNT_WORK_SLOW_PY = 100_000
@@ -388,8 +386,7 @@ def test_perf_dispatch_first_warmup_vs_warmup() -> None:
     first_eval_calls = list(called)
     assert len(first_eval_calls) == 6
 
-    # --- Now fastest is chosen; repeat_after_count=5, so 4 calls use fastest,
-    # then 5th call triggers re-eval ---
+    # --- Now fastest is chosen; repeat_after_count=5, so 4 calls use fastest, then 5th call triggers re-eval ---
     called.clear()
     for _ in range(4):
         my_func(a)
