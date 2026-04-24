@@ -340,20 +340,16 @@
 <span class="c1"># ---------------------------------------------------------------------------</span>
 <span class="c1"># DLPack canonical-view patch for layout-tagged fields.</span>
 <span class="c1">#</span>
-<span class="c1"># The C++ ``field_to_dlpack`` derives the physical-memory axis order from</span>
-<span class="c1"># the SNode chain. For layout-tagged fields built via the new flat-rank-N</span>
-<span class="c1"># allocation path (see ``lang/impl.py::_field``), the SNode chain is in</span>
-<span class="c1"># natural order and C++ reports the *permuted physical* shape with</span>
-<span class="c1"># identity strides. We patch the returned DLManagedTensor in place here</span>
-<span class="c1"># so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the</span>
-<span class="c1"># canonical shape and matching permuted strides — byte-identical to the</span>
-<span class="c1"># view layout-tagged ndarrays produce via the ``ndarray_to_dlpack``</span>
-<span class="c1"># ``layout=`` parameter.</span>
+<span class="c1"># The C++ ``field_to_dlpack`` derives the physical-memory axis order from the SNode chain. For layout-tagged fields</span>
+<span class="c1"># built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order</span>
+<span class="c1"># and C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place</span>
+<span class="c1"># here so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted</span>
+<span class="c1"># strides — byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=``</span>
+<span class="c1"># parameter.</span>
 <span class="c1">#</span>
-<span class="c1"># The struct layouts below match the DLPack v1 ABI exactly. Only the</span>
-<span class="c1"># fields we need to read (``ndim``) and mutate (``shape``, ``strides``)</span>
-<span class="c1"># are referenced, so additions to DLTensor / DLManagedTensor that land</span>
-<span class="c1"># after this writes in newer DLPack versions won&#39;t affect correctness.</span>
+<span class="c1"># The struct layouts below match the DLPack v1 ABI exactly. Only the fields we need to read (``ndim``) and mutate</span>
+<span class="c1"># (``shape``, ``strides``) are referenced, so additions to DLTensor / DLManagedTensor that land after this writes in</span>
+<span class="c1"># newer DLPack versions won&#39;t affect correctness.</span>
 <span class="c1"># ---------------------------------------------------------------------------</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">_DLDevice</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">Structure</span><span class="p">):</span>
     <span class="n">_fields_</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;device_type&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;device_id&quot;</span><span class="p">,</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">)]</span>
@@ -418,9 +414,8 @@
     <span class="n">t</span> <span class="o">=</span> <span class="n">mt</span><span class="o">.</span><span class="n">dl_tensor</span>
     <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">ndim</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;field_to_dlpack returned ndim=</span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> but layout has rank </span><span class="si">{</span><span class="n">ndim</span><span class="si">}</span><span class="s2">; cannot patch&quot;</span><span class="p">)</span>
-    <span class="c1"># Only the first ``ndim`` axes carry the canonical permutation; any</span>
-    <span class="c1"># trailing axes (element dims for VectorField / MatrixField) are</span>
-    <span class="c1"># already in innermost identity position and must not be permuted.</span>
+    <span class="c1"># Only the first ``ndim`` axes carry the canonical permutation; any trailing axes (element dims for VectorField /</span>
+    <span class="c1"># MatrixField) are already in innermost identity position and must not be permuted.</span>
     <span class="n">shape_phys</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">)]</span>
     <span class="n">strides_phys</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">strides</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndim</span><span class="p">)]</span>
     <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">ndim</span>
@@ -498,11 +493,9 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span><span class="p">:</span>
             <span class="n">phys</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-            <span class="c1"># For layout-tagged fields the SNode is allocated at the</span>
-            <span class="c1"># permuted *physical* shape; surface the caller-facing</span>
-            <span class="c1"># *canonical* shape (inverse permutation) to match the</span>
-            <span class="c1"># ``Tensor`` / ``Ndarray`` contract where ``.shape`` is</span>
-            <span class="c1"># always what was passed into the factory.</span>
+            <span class="c1"># For layout-tagged fields the SNode is allocated at the permuted *physical* shape; surface the</span>
+            <span class="c1"># caller-facing *canonical* shape (inverse permutation) to match the ``Tensor`` / ``Ndarray`` contract</span>
+            <span class="c1"># where ``.shape`` is always what was passed into the factory.</span>
             <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
@@ -693,13 +686,11 @@
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Slicing is not supported on qd.field&quot;</span><span class="p">)</span>
 
-        <span class="c1"># For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})``</span>
-        <span class="c1"># canonical-axis permutation), the user writes indices in canonical</span>
-        <span class="c1"># order but the underlying flat rank-N SNode is allocated at the</span>
-        <span class="c1"># permuted physical shape and expects physical-order indices.</span>
-        <span class="c1"># Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses</span>
-        <span class="c1"># the same convention as :func:`build_Subscript`: physical index at</span>
-        <span class="c1"># nesting level ``p`` is ``canonical[layout[p]]``.</span>
+        <span class="c1"># For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user</span>
+        <span class="c1"># writes indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical</span>
+        <span class="c1"># shape and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses</span>
+        <span class="c1"># the same convention as :func:`build_Subscript`: physical index at nesting level ``p`` is</span>
+        <span class="c1"># ``canonical[layout[p]]``.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
@@ -753,14 +744,11 @@
                 <span class="s2">&quot;field.to_dlpack() requires torch to be installed &quot;</span>
                 <span class="s2">&quot;(the C++ layer checks torch version for DLPack byte_offset support)&quot;</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
-        <span class="c1"># For layout-tagged fields the underlying dense SNode is allocated</span>
-        <span class="c1"># at the *permuted physical* shape; the C++ ``field_to_dlpack``</span>
-        <span class="c1"># reports that physical shape because the SNode hierarchy no</span>
-        <span class="c1"># longer encodes the canonical-axis permutation (which now lives</span>
-        <span class="c1"># on the Python-side ``_qd_layout`` attribute instead of nested</span>
-        <span class="c1"># rank-1 SNodes). Patch the DLManagedTensor in place so consumers</span>
-        <span class="c1"># see the canonical shape with permuted strides — the same view</span>
-        <span class="c1"># contract that layout-tagged ndarrays produce.</span>
+        <span class="c1"># For layout-tagged fields the underlying dense SNode is allocated at the *permuted physical* shape; the C++</span>
+        <span class="c1"># ``field_to_dlpack`` reports that physical shape because the SNode hierarchy no longer encodes the</span>
+        <span class="c1"># canonical-axis permutation (which now lives on the Python-side ``_qd_layout`` attribute instead of nested</span>
+        <span class="c1"># rank-1 SNodes). Patch the DLManagedTensor in place so consumers see the canonical shape with permuted</span>
+        <span class="c1"># strides — the same view contract that layout-tagged ndarrays produce.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">_patch_field_dlpack_canonical</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">))</span>
