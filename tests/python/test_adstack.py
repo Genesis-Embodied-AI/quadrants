@@ -1442,7 +1442,7 @@ def test_adstack_bounded_inner_loop_not_capped_by_default_ad_stack_size():
     # test guards against regressing. The test is restricted to SPIR-V backends (Vulkan / Metal) because the
     # LLVM backend rewrites inner-range bounds through `LoopIndexStmt` in a shape the structural analyzer does
     # not fold, so LLVM legitimately falls back to `default_ad_stack_size=1` and overflows at `compute.grad()`;
-    # the LLVM-side runtime-evaluator that would lift this restriction ships in a follow-up.
+    # the LLVM-side runtime-evaluator that would lift this restriction is planned as future work.
     x = qd.field(qd.f32, shape=(1,), needs_grad=True)
     y = qd.field(qd.f32, shape=(), needs_grad=True)
 
@@ -1649,7 +1649,7 @@ def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Internal details: the symbolic bound tree is flattened into the serialisable `SerializedSizeExpr` form and
     # stored inside `AdStackSizingInfo::size_exprs`, so this test exercises the same path whether the kernel is
     # freshly compiled or restored from the offline cache. Scoped to LLVM backends (CPU / CUDA / AMDGPU); the
-    # SPIR-V sizer mirror ships in the follow-up. The CPU leg is load-bearing for the chunk-loop guard: the
+    # SPIR-V sizer mirror is planned as future work. The CPU leg is load-bearing for the chunk-loop guard: the
     # grad-kernel's CPU-multithreaded outer `range_for` wraps the user body with `min(N, (thread_idx << k) +
     # chunk_size)`-style bounds, and the structural pre-pass must stop walking at the `AdStackAllocaStmt`'s own
     # scope (the `stack_init` emitted at alloca time resets per-entry) or the outer chunk loop's unparseable
@@ -1822,7 +1822,7 @@ def test_adstack_ext_tensor_read_indexed_by_stashed_outer_loop_var(outer_bound):
     # recognising the stash pattern (single loop-index push plus const-zero initialiser) and folding
     # through to the backing `LoopIndexStmt`.
     #
-    # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU); the SPIR-V sizer mirror ships in the follow-up.
+    # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU); the SPIR-V sizer mirror is planned as future work.
     # Parametrised over `outer_bound` because const and dynamic outer range-for bounds lower very differently - a
     # constant collapses into the offload's `const_end` at offload time (no prep task), a dynamic bound lowers to a
     # prep serial task that writes the value into the kernel's global-temporary buffer for the main range-for task
@@ -2060,7 +2060,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_matching_s
     # reverse-pass push count.
     #
     # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU) because this PR lands only the host-evaluator
-    # path; the SPIR-V sizer mirror ships in the follow-up and unlocks Metal / Vulkan. Two surface spellings share a
+    # path; the SPIR-V sizer mirror is planned as future work and will unlock Metal / Vulkan. Two surface spellings share a
     # single test body via `qd.static` because both produce the same `expr_sub` call at walker time, just via
     # different `build_value_expr` recursion paths:
     #   - `begin_end`: `for i_j_ in range(start[i_o], end[i_o])` - `compute_bounded_adstack_size` multiplies
@@ -2130,7 +2130,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
     # evaluates to 5, and the adstack gets sized to fit.
     #
     # Internal details: scoped to LLVM backends (CPU / CUDA / AMDGPU) because this PR lands only the host-evaluator
-    # path; the SPIR-V sizer mirror ships in the follow-up and unlocks Metal / Vulkan. The trivial `range(1)`
+    # path; the SPIR-V sizer mirror is planned as future work and will unlock Metal / Vulkan. The trivial `range(1)`
     # wrapper keeps the kernel AST inside a top-level for-loop, which the autodiff front-end requires
     # (`reverse_segments` rejects mixed statement-plus-for kernel bodies).
     N_X = 16
