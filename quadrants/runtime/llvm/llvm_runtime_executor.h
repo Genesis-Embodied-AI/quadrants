@@ -101,9 +101,16 @@ class LlvmRuntimeExecutor {
   // pre-pass) each entry is evaluated against the live field state; otherwise each alloca's compile-time
   // `max_size_compile_time` is used (cache-hit path - symbolic tree is currently not serialized into the offline
   // cache, so the compile-time fallback is all the launcher has).
+  //
+  // `device_runtime_context_ptr` is the device-side pointer the sizer kernel should receive as its `ctx`
+  // argument on backends without unified virtual addressing (AMDGPU): the runtime-eval sizer kernel
+  // dereferences `ctx->arg_buffer` on device, so passing the host `&ctx->get_context()` would fault with
+  // `hipErrorIllegalAddress`. CUDA has UVA and passes `nullptr` (the function falls back to
+  // `&ctx->get_context()`); CPU ignores this argument entirely because the host evaluator runs in-process.
   std::size_t publish_adstack_metadata(const AdStackSizingInfo &ad_stack,
                                        std::size_t num_threads,
-                                       LaunchContextBuilder *ctx);
+                                       LaunchContextBuilder *ctx,
+                                       void *device_runtime_context_ptr = nullptr);
 
   // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
   // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds

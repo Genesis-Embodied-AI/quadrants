@@ -568,7 +568,8 @@ void *LlvmRuntimeExecutor::get_runtime_temporaries_device_ptr() {
 // offline cache does not currently serialize `SizeExpr`, so cache hits fall back to `max_size_compile_time`.
 std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInfo &ad_stack,
                                                           std::size_t num_threads,
-                                                          LaunchContextBuilder *ctx) {
+                                                          LaunchContextBuilder *ctx,
+                                                          void *device_runtime_context_ptr) {
   const auto n_stacks = ad_stack.allocas.size();
   if (n_stacks == 0 || num_threads == 0) {
     return 0;
@@ -723,9 +724,20 @@ std::size_t LlvmRuntimeExecutor::publish_adstack_metadata(const AdStackSizingInf
     // Invoke the device interpreter. On CUDA / AMDGPU `JITModule::call` launches this as a single-thread kernel
     // on the default stream and stream-orders it before the subsequent main-kernel dispatch, so the writes we
     // do here are visible by the time the user's kernel reads `adstack_max_sizes` etc.
+    //
+    // The sizer kernel dereferences `ctx->arg_buffer` on device (that's how it resolves `ExternalTensorRead`
+    // leaves against ndarray pointers the caller packed into the arg buffer). CUDA has unified virtual
+    // addressing, so a host pointer to the `RuntimeContext` resolves transparently on the device. AMDGPU/HIP
+    // does not (non-pinned host allocations are not visible in the device address space), so the AMDGPU
+    // launcher stages a device-side copy of the context and hands it in here via
+    // `device_runtime_context_ptr`; we use that device pointer to avoid an `hipErrorIllegalAddress` fault
+    // that would otherwise surface on the next DtoH sync as
+    // `illegal memory access ... while calling memcpy_device_to_host`.
     auto *const runtime_jit = get_runtime_jit_module();
-    runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_, &ctx->get_context(),
-                                              bytecode_dev_ptr);
+    void *runtime_context_ptr_for_sizer =
+        device_runtime_context_ptr != nullptr ? device_runtime_context_ptr : static_cast<void *>(&ctx->get_context());
+    runtime_jit->call<void *, void *, void *>("runtime_eval_adstack_size_expr", llvm_runtime_,
+                                              runtime_context_ptr_for_sizer, bytecode_dev_ptr);
 
     // Read back the computed per-thread stride so we can size the heap on host. One 8-byte `DtoH` per launch.
     uint64_t stride_u64 = 0;

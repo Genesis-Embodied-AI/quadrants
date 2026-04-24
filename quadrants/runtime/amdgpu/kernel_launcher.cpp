@@ -50,7 +50,11 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             int arg_size) {
   auto *executor = get_runtime_executor();
   for (const auto &task : offloaded_tasks) {
-    executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx);
+    // Pass the device-side `RuntimeContext` pointer through to the adstack sizer kernel. Without this the
+    // sizer launches with a host pointer and the next DtoH sync trips
+    // `hipErrorIllegalAddress ... memcpy_device_to_host` because HIP has no UVA fallback for the host
+    // `RuntimeContext` struct.
+    executor->publish_adstack_metadata(task.ad_stack, resolve_num_threads(task, executor), &ctx, context_pointer);
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                           {(void *)&context_pointer}, {arg_size});
