@@ -52,6 +52,8 @@ def _test_python(args, default_dir="python"):
             pytest_args += [
                 "--durations=15",
                 "-p",
+                "no:timeout",
+                "-p",
                 "pytest_hardtle",
                 f"--timeout={args.timeout}",
             ]
