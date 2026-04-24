@@ -2165,21 +2165,28 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
-def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe():
-    # Pins that the `both_shape_same_axis` widening of `expr_sub`'s MaxOverRange fusion stays safe when the
-    # two ndarrays along the fused axis have DIFFERENT lengths at launch. The fused body evaluates
-    # `arr_a[v] - arr_b[v]` at the same `v`, so the iteration range must be the min of both shapes; iterating
-    # to the larger shape reads the shorter ndarray past its buffer end, which is UB on CPU and surfaces as
-    # `cudaErrorIllegalAddress` / `hipErrorIllegalAddress` at the next DtoH sync on CUDA / AMDGPU.
+@pytest.mark.parametrize(
+    "arr_a_values, arr_b_values",
+    [
+        ([5, 5, 5, 5], [4, 0]),
+        ([0, 0, 0, 7], [1, 1]),
+    ],
+)
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe(arr_a_values, arr_b_values):
+    # Pins that a reverse-mode kernel whose inner trip count is `arr_a[i_a] - arr_b[i_b]` over two
+    # independent outer loops of shape `arr_a.shape[0]` and `arr_b.shape[0]` computes the correct
+    # gradient when the two ndarrays along the fused axis have different lengths - both when the
+    # longer ndarray's peak fits inside the shorter ndarray's shape and when it sits past it.
     #
-    # Internal details: the fix expresses `min(shape_a, shape_b)` as `a + b - max(a, b)` to stay inside the
-    # grammar rather than introducing a new `Min` node (host + device evaluators both have to agree on the
-    # grammar). With `arr_a = [5, 5, 5, 5]` (shape 4) and `arr_b = [4, 0]` (shape 2) the pre-fix walker
-    # iterated `v in [0, 4)` and read `arr_b[2]` / `arr_b[3]` OOB. The fix caps the fused end at 2 so both
-    # reads stay in-bounds; the resulting bound evaluates to `4 * 2 * max_v (arr_a[v] - arr_b[v]) = 8 * 5 =
-    # 40`, which comfortably covers the actual `(4 * 1) + (4 * 5) = 24` pushes.
-    N_X = 8
+    # Internal details: the `expr_sub` MaxOverRange fusion in `determine_ad_stack_size.cpp` must
+    # produce a bound that simultaneously keeps the fused `arr_a[v] - arr_b[v]` body in-bounds for the
+    # shorter ndarray and covers `max_ia arr_a[ia] - max_ib arr_b[ib]` from the unfused form. A too-
+    # tight fused end OOB-reads the shorter ndarray at launch (`cudaErrorIllegalAddress` on CUDA); a
+    # too-permissive clamp silently drops the longer ndarray's peak-past-shape pushes and overflows
+    # the adstack at `qd.sync()`. The two parametrisations exercise the same invariant at both
+    # boundary conditions - touch the cross-ndarray fusion path with care for both.
+    N_X = 16
 
     x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
     loss = qd.field(qd.f32, shape=(), needs_grad=True)
@@ -2198,8 +2205,8 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe():
 
     for i in range(N_X):
         x[i] = 0.1
-    arr_a_np = np.array([5, 5, 5, 5], dtype=np.int32)
-    arr_b_np = np.array([4, 0], dtype=np.int32)
+    arr_a_np = np.array(arr_a_values, dtype=np.int32)
+    arr_b_np = np.array(arr_b_values, dtype=np.int32)
 
     compute(arr_a_np, arr_b_np)
     loss.grad[None] = 1.0
@@ -2208,15 +2215,76 @@ def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe():
     compute.grad(arr_a_np, arr_b_np)
     qd.sync()
 
-    # Push breakdown: for every (i_a in [0, 4), i_b in [0, 2)) the inner trip is arr_a[i_a] - arr_b[i_b].
-    # With arr_b = [4, 0] the per-i_b inner trips are 1 and 5; summed over the four i_a values: 4 * (1 + 5)
-    # = 24 pushes. x[0] is visited by every (i_a, i_b) pair with a non-zero trip (8 visits); x[1..4] are
-    # visited only by the i_b = 1 branch (4 visits each); x[5..] are never visited.
-    assert loss[None] == pytest.approx(24 * 0.01, rel=1e-5)
-    assert x.grad[0] == pytest.approx(2 * 8 * 0.1, rel=1e-5)
-    for k in range(1, 5):
-        assert x.grad[k] == pytest.approx(2 * 4 * 0.1, rel=1e-5)
-    for k in range(5, N_X):
+    expected_pushes = 0
+    expected_visits = [0] * N_X
+    for ia in range(len(arr_a_values)):
+        for ib in range(len(arr_b_values)):
+            n = max(0, int(arr_a_values[ia]) - int(arr_b_values[ib]))
+            expected_pushes += n
+            for k in range(min(n, N_X)):
+                expected_visits[k] += 1
+    assert loss[None] == pytest.approx(expected_pushes * 0.01, rel=1e-5)
+    for k in range(N_X):
+        if expected_visits[k] == 0:
+            assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+        else:
+            assert x.grad[k] == pytest.approx(2 * expected_visits[k] * 0.1, rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_sub_of_max_over_range_fusion_does_not_mix_fieldload_and_extread():
+    # Pins that a reverse-mode kernel whose inner trip count is `fld[i] - arr[i]` - a scalar field
+    # minus an ndarray element, both indexed by the outer loop variable - compiles and produces the
+    # correct gradient on every supported backend.
+    #
+    # Internal details: the walker in `determine_ad_stack_size.cpp` wraps each operand of the inner
+    # `Sub` in its own `MaxOverRange(i, 0, shape, leaf)` (`FieldLoad` on the field side,
+    # `ExternalTensorRead` on the ndarray side); `expr_sub`'s `end_eq` branch then sees structurally-
+    # equal `ExternalTensorShape(arr, 0)` ends and would fuse them into a single `MaxOverRange(v, 0,
+    # shape, Sub(FieldLoad(fld, [v]), ExternalTensorRead(arr, [v])))`. The LLVM encoder's closed-
+    # subtree lift only folds `FieldLoad` leaves with no free bound vars, so the mixed body - whose
+    # `FieldLoad` carries the free `v` - falls through to `encode_subtree`'s `FieldLoad` branch and
+    # hard-errors on the LLVM path (CUDA / AMDGPU have no on-device SNode access). The fusion must
+    # therefore decline whenever its synthesised body would pair a bound-var-indexed `FieldLoad` with
+    # an `ExternalTensorRead`; the unfused `Sub(MaxOverRange(i, 0, shape, FieldLoad), MaxOverRange(i,
+    # 0, shape, ExternalTensorRead))` keeps each operand closed and host-foldable on both encoders.
+    N = 4
+    N_X = 16
+
+    fld = qd.field(qd.i32, shape=(N,))
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(arr: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for _dummy in range(1):
+            accum = 0.0
+            for i in range(arr.shape[0]):
+                n = fld[i] - arr[i]
+                if n > 0:
+                    for k in range(n):
+                        accum = accum + x[k] * x[k]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    for i in range(N):
+        fld[i] = 10
+    arr_np = np.array([2, 2, 2, 2], dtype=np.int32)
+
+    compute(arr_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr_np)
+    qd.sync()
+
+    # Each of the 4 outer iterations runs `fld[i] - arr[i] = 10 - 2 = 8` inner iters. Total pushes = 32.
+    # x[0..7] is visited 4 times (once per outer iter); x[8..] is never visited.
+    assert loss[None] == pytest.approx(4 * 8 * 0.01, rel=1e-5)
+    for k in range(8):
+        assert x.grad[k] == pytest.approx(4 * 2 * 0.1, rel=1e-5)
+    for k in range(8, N_X):
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
