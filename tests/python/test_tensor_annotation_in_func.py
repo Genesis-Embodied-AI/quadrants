@@ -10,6 +10,8 @@ dispatch branch for the ``Tensor`` class.
 Stork-23 adds that branch. These tests pin the invariant.
 """
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -210,3 +212,183 @@ def test_tensor_func_param_2d_with_layout(backend):
     for i in range(M):
         for j in range(N):
             assert arr[i, j] == i * 100 + j, f"mismatch at [{i},{j}]"
+
+
+# ---------------------------------------------------------------------------
+# 8–12. Frozen dataclass with MIXED qd.Tensor + qd.types.ndarray() fields.
+#
+# This is the Genesis ConstraintState pattern: a frozen dataclass has
+# some fields annotated as qd.types.ndarray() and others as qd.Tensor.
+# The struct is passed to @qd.func via its dataclass type annotation
+# (NOT via qd.template()).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_mixed_tensor_and_ndarray_frozen_dataclass_func():
+    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields,
+    passed to @qd.func via dataclass type annotation. NDARRAY backend.
+    This is the exact pattern used by Genesis ConstraintState in ndarray mode."""
+    N = 6
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        regular: qd.types.ndarray()
+        tensor_field: qd.Tensor
+
+    regular_arr = qd.ndarray(qd.i32, shape=(N,))
+    tensor_arr = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    state = State(regular=regular_arr, tensor_field=tensor_arr)
+
+    @qd.func
+    def process(s: State, i: qd.i32):
+        s.tensor_field[i] = s.regular[i] * 3
+
+    @qd.kernel
+    def run(s: State):
+        for i in range(N):
+            s.regular[i] = i + 1
+            process(s, i)
+
+    run(state)
+    np.testing.assert_array_equal(regular_arr.to_numpy(), np.arange(1, N + 1))
+    np.testing.assert_array_equal(tensor_arr.to_numpy(), np.arange(1, N + 1) * 3)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_mixed_tensor_and_ndarray_frozen_dataclass_kernel():
+    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields,
+    passed to @qd.kernel via dataclass type annotation. NDARRAY backend.
+    Both field types are read/written in the same kernel."""
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        alpha: qd.types.ndarray()
+        beta: qd.Tensor
+
+    alpha = qd.ndarray(qd.i32, shape=(N,))
+    beta = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    state = State(alpha=alpha, beta=beta)
+
+    @qd.kernel
+    def run(s: State):
+        for i in range(N):
+            s.alpha[i] = i * 2
+            s.beta[i] = i * 5
+
+    run(state)
+    np.testing.assert_array_equal(alpha.to_numpy(), np.arange(N) * 2)
+    np.testing.assert_array_equal(beta.to_numpy(), np.arange(N) * 5)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_mixed_many_tensor_and_ndarray_fields():
+    """Frozen dataclass with multiple qd.Tensor and multiple qd.types.ndarray()
+    fields interleaved — mirrors Genesis ConstraintState which has ~6 Tensor
+    fields among ~30 ndarray fields."""
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class BigState:
+        a_nd: qd.types.ndarray()
+        b_tensor: qd.Tensor
+        c_nd: qd.types.ndarray()
+        d_tensor: qd.Tensor
+        e_nd: qd.types.ndarray()
+        f_tensor: qd.Tensor
+
+    a = qd.ndarray(qd.i32, shape=(N,))
+    b = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    c = qd.ndarray(qd.i32, shape=(N,))
+    d = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    e = qd.ndarray(qd.i32, shape=(N,))
+    f = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    state = BigState(a_nd=a, b_tensor=b, c_nd=c, d_tensor=d, e_nd=e, f_tensor=f)
+
+    @qd.func
+    def compute(s: BigState, i: qd.i32):
+        s.b_tensor[i] = s.a_nd[i] + 10
+        s.d_tensor[i] = s.c_nd[i] + 20
+        s.f_tensor[i] = s.e_nd[i] + 30
+
+    @qd.kernel
+    def run(s: BigState):
+        for i in range(N):
+            s.a_nd[i] = i
+            s.c_nd[i] = i * 2
+            s.e_nd[i] = i * 3
+            compute(s, i)
+
+    run(state)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(N))
+    np.testing.assert_array_equal(b.to_numpy(), np.arange(N) + 10)
+    np.testing.assert_array_equal(c.to_numpy(), np.arange(N) * 2)
+    np.testing.assert_array_equal(d.to_numpy(), np.arange(N) * 2 + 20)
+    np.testing.assert_array_equal(e.to_numpy(), np.arange(N) * 3)
+    np.testing.assert_array_equal(f.to_numpy(), np.arange(N) * 3 + 30)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_mixed_tensor_and_field_dataoriented_template():
+    """@qd.data_oriented struct with mixed qd.Tensor + qd.field, passed
+    via qd.template(). FIELD backend. This is the genesis field-mode
+    pattern (data_oriented structs are not dataclasses, so they are
+    passed as templates)."""
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, regular, tensor_f):
+            self.regular = regular
+            self.tensor_f = tensor_f
+
+    regular = qd.field(qd.i32, shape=(N,))
+    tensor_f = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.FIELD)
+    state = State(regular=regular, tensor_f=tensor_f)
+
+    @qd.func
+    def process(s: qd.template(), i: qd.i32):
+        s.tensor_f[i] = s.regular[i] * 7
+
+    @qd.kernel
+    def run(s: qd.template()):
+        for i in range(N):
+            s.regular[i] = i + 1
+            process(s, i)
+
+    run(state)
+    np.testing.assert_array_equal(regular.to_numpy(), np.arange(1, N + 1))
+    np.testing.assert_array_equal(tensor_f.to_numpy(), np.arange(1, N + 1) * 7)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_mixed_2d_tensor_and_ndarray_frozen_dataclass():
+    """Frozen dataclass with 2D mixed qd.Tensor + qd.types.ndarray() fields.
+    Mirrors the Genesis ConstraintState shape=(len_constraints, n_envs)."""
+    M, N = 3, 4
+
+    @dataclasses.dataclass(frozen=True)
+    class State2D:
+        nd_arr: qd.types.ndarray()
+        t_arr: qd.Tensor
+
+    nd = qd.ndarray(qd.i32, shape=(M, N))
+    t = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)
+    state = State2D(nd_arr=nd, t_arr=t)
+
+    @qd.func
+    def fill(s: State2D, i: qd.i32, j: qd.i32):
+        s.t_arr[i, j] = s.nd_arr[i, j] + 100
+
+    @qd.kernel
+    def run(s: State2D):
+        for i in range(M):
+            for j in range(N):
+                s.nd_arr[i, j] = i * 10 + j
+                fill(s, i, j)
+
+    run(state)
+    expected_nd = np.array([[i * 10 + j for j in range(N)] for i in range(M)])
+    np.testing.assert_array_equal(nd.to_numpy(), expected_nd)
+    np.testing.assert_array_equal(t.to_numpy(), expected_nd + 100)
