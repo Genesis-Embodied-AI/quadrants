@@ -14,6 +14,16 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
 
+# Work amounts for perf_dispatch timing tests.  GPU backends have significant
+# fixed dispatch overhead per kernel launch, so small work amounts are dominated
+# by that overhead and CPU scheduling noise can flip the slow/fast comparison.
+# Values are chosen so slow is always 10x medium, giving a clear timing gap
+# even under pytest-xdist contention.
+AMOUNT_WORK_SLOW_GPU = 1_000_000
+AMOUNT_WORK_MEDIUM_GPU = 100_000
+AMOUNT_WORK_SLOW_CPU = 100_000
+AMOUNT_WORK_MEDIUM_CPU = 10_000
+
 
 @qd.func
 def do_work(i_b, amount_work: qd.i32, state: qd.types.NDArray[qd.i32, 1]):
@@ -32,7 +42,11 @@ def do_work_py(i_b, amount_work: qd.i32, state: qd.types.NDArray[qd.i32, 1]):
 
 @test_utils.test()
 def test_perf_dispatch_kernels() -> None:
-    WARMUP = 3
+    WARMUP = 1
+    ACTIVE = 1
+    is_gpu = qd.lang.impl.current_cfg().arch in qd.gpu
+    work_slow = AMOUNT_WORK_SLOW_GPU if is_gpu else AMOUNT_WORK_SLOW_CPU
+    work_medium = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
 
     class ImplEnum(IntEnum):
         slow = 0
@@ -44,6 +58,7 @@ def test_perf_dispatch_kernels() -> None:
         first_warmup=WARMUP,
         warmup=WARMUP,
         repeat_after_seconds=0,
+        active=ACTIVE,
     )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
@@ -58,7 +73,7 @@ def test_perf_dispatch_kernels() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_slow, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @qd.kernel
@@ -81,20 +96,20 @@ def test_perf_dispatch_kernels() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=100, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_medium, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -105,13 +120,17 @@ def test_perf_dispatch_kernels() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
 @test_utils.test()
 def test_perf_dispatch_python() -> None:
-    WARMUP = 3
+    WARMUP = 1
+    ACTIVE = 1
+    is_gpu = qd.lang.impl.current_cfg().arch in qd.gpu
+    work_slow = AMOUNT_WORK_SLOW_GPU if is_gpu else AMOUNT_WORK_SLOW_CPU
+    work_medium = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
 
     class ImplEnum(IntEnum):
         slow = 0
@@ -123,6 +142,7 @@ def test_perf_dispatch_python() -> None:
         first_warmup=WARMUP,
         warmup=WARMUP,
         repeat_after_seconds=0,
+        active=ACTIVE,
     )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
@@ -136,7 +156,7 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=work_slow, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     def my_func1_impl_a_shape0_lt_2(
@@ -157,20 +177,20 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=work_medium, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -181,13 +201,17 @@ def test_perf_dispatch_python() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
 @test_utils.test()
 def test_perf_dispatch_kernel_py_mix() -> None:
-    WARMUP = 3
+    WARMUP = 1
+    ACTIVE = 1
+    is_gpu = qd.lang.impl.current_cfg().arch in qd.gpu
+    work_slow = AMOUNT_WORK_SLOW_GPU if is_gpu else AMOUNT_WORK_SLOW_CPU
+    work_medium = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
 
     class ImplEnum(IntEnum):
         slow = 0
@@ -199,6 +223,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         first_warmup=WARMUP,
         warmup=WARMUP,
         repeat_after_seconds=0,
+        active=ACTIVE,
     )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
@@ -212,7 +237,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=work_slow, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @qd.kernel
@@ -235,20 +260,20 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=100, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_medium, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -259,7 +284,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
