@@ -353,6 +353,22 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       current_task->block_dim = stmt->block_dim;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
+      // Host-side adstack sizing, same scheme as codegen_cuda: tight `grid_dim * block_dim` for
+      // non-range_for and const-bound range_for, dynamic resolution via gtmps DtoH memcpy for
+      // dynamic-bound range_for. See llvm_compiled_data.h::AdStackSizingInfo for the resolution
+      // rule the kernel launcher applies.
+      if (current_task->ad_stack.per_thread_stride > 0) {
+        current_task->ad_stack.static_num_threads =
+            static_cast<std::size_t>(current_task->grid_dim) * static_cast<std::size_t>(current_task->block_dim);
+        if (stmt->task_type == Type::range_for && !(stmt->const_begin && stmt->const_end)) {
+          current_task->ad_stack.dynamic_gpu_range_for = true;
+          current_task->ad_stack.begin_const_value = stmt->const_begin ? stmt->begin_value : 0;
+          current_task->ad_stack.end_const_value = stmt->const_end ? stmt->end_value : 0;
+          current_task->ad_stack.begin_offset_bytes =
+              stmt->const_begin ? -1 : static_cast<std::int32_t>(stmt->begin_offset);
+          current_task->ad_stack.end_offset_bytes = stmt->const_end ? -1 : static_cast<std::int32_t>(stmt->end_offset);
+        }
+      }
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }
@@ -376,6 +392,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, index);
+    } else if (stmt->func_name == "subgroupShuffleDown") {
+      auto offset = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
+      llvm_val[stmt] = emit_amdgpu_shuffle_down(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type, offset);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
     } else {
@@ -431,6 +452,24 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
       return call("amdgpu_shuffle_i64", index, value);
     QD_ERROR("subgroup shuffle: unsupported type {} on AMDGPU", data_type_name(dt));
+    return nullptr;
+  }
+
+  // FIXME: Currently emulates shuffle_down via ds_bpermute (~50 cycle latency).
+  // Should be upgraded to use DPP ROW_SHR instructions (~4-12 cycles) for
+  // reduction-pattern offsets (1, 2, 4, 8, 16). This requires compile-time
+  // constant DPP control values and architecture-specific handling for cross-row
+  // shifts (offset >= 16).
+  llvm::Value *emit_amdgpu_shuffle_down(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("amdgpu_shuffle_down_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("amdgpu_shuffle_down_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("amdgpu_shuffle_down_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("amdgpu_shuffle_down_i64", offset, value);
+    QD_ERROR("subgroup shuffle_down: unsupported type {} on AMDGPU", data_type_name(dt));
     return nullptr;
   }
 

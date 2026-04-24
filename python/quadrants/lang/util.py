@@ -1,6 +1,12 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: this file accesses public torch API (torch.zeros, torch.float32,
+# torch.bool, ...) which the torch stubs (as of pyright 1.1.409) flag as
+# private because they are not explicitly re-exported via __all__ /
+# `from ... import ... as ...`. The accesses are intended public API.
 import functools
 import os
 import traceback
+import types
 import warnings
 from typing import Any
 
@@ -372,7 +378,6 @@ def is_from_quadrants_module(obj: object) -> bool:
     This is intentionally restricted to modules and classes so that mutable
     instance attributes are still flagged as purity violations.
     """
-    import types  # pylint: disable=C0415
 
     if isinstance(obj, types.ModuleType):
         name = getattr(obj, "__name__", "")

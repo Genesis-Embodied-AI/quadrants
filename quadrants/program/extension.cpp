@@ -18,8 +18,8 @@ bool is_extension_supported(Arch arch, Extension ext) {
         Extension::bls, Extension::assertion, Extension::mesh}},
       {Arch::amdgpu,
        {Extension::quant, Extension::quant_basic, Extension::data64, Extension::adstack, Extension::assertion}},
-      {Arch::metal, {}},
-      {Arch::vulkan, {}},
+      {Arch::metal, {Extension::adstack}},
+      {Arch::vulkan, {Extension::adstack}},
   };
   const auto &exts = arch2ext[arch];
   return exts.find(ext) != exts.end();
