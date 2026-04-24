@@ -966,14 +966,15 @@ void runtime_eval_adstack_size_expr(LLVMRuntime *runtime, RuntimeContext *ctx, P
       max_size = sh.max_size_compile_time > 0 ? sh.max_size_compile_time : 1;
     } else {
       i64 v = device_eval_node(nodes, indices, sh.root_node_idx, &scope, arg_buffer);
-      // Clamp into `[1, max_size_compile_time]`. The `>= 1` clamp matches the host evaluator's guard; the upper
-      // cap is defensive against a broken tree or a runtime read that somehow exceeded the structural upper
-      // bound the pre-pass proved at compile time.
+      // Floor at 1 to match the host evaluator (`evaluate_adstack_size_expr`); a tree that evaluates to 0 or negative
+      // leaves one slot reserved so the heap base address is still valid and any spurious push surfaces as an overflow
+      // rather than a zero-slice alias. Do NOT clamp upward against `max_size_compile_time`: for non-const symbolic
+      // bounds the pre-pass seeds it from `default_ad_stack_size` as a conservative placeholder (see the "conservative
+      // seed" note in `determine_ad_stack_size.cpp`), not as a proven upper bound, so clamping would silently truncate
+      // correct per-launch values above the seed and trigger an overflow at the next `qd.sync()`. The CPU path in
+      // `LlvmRuntimeExecutor::publish_adstack_metadata` follows the same floor-only rule.
       if (v < 1)
         v = 1;
-      if (sh.max_size_compile_time > 0 && static_cast<u64>(v) > sh.max_size_compile_time) {
-        v = sh.max_size_compile_time;
-      }
       max_size = static_cast<u64>(v);
     }
     out_max_sizes[i] = max_size;

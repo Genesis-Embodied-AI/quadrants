@@ -64,26 +64,39 @@ int64_t evaluate_external_tensor_read(const SerializedSizeExprNode &node,
   ArgArrayPtrKey key{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
   auto it = ctx->array_ptrs.find(key);
   QD_ASSERT_INFO(it != ctx->array_ptrs.end(),
-                 "SerializedSizeExpr ExternalTensorRead: arg {} has no data pointer in launch context; only 1-D "
-                 "ndarray arguments are supported by the pre-pass today",
-                 arg_id);
+                 "SerializedSizeExpr ExternalTensorRead: arg {} has no data pointer in launch context", arg_id);
   void *data_ptr = it->second;
-  // 1-D read: walk the indices, substituting bound variables, compute the linear element index.
-  int64_t linear = 0;
-  int64_t stride = 1;  // Only a single contiguous dim is assumed; multi-dim reads fall back to the outer guard.
+  // Resolve each index (possibly via a bound variable) and compose them into the C-order linear offset
+  // `sum_i(idx_i * prod_{j>i}(shape_j))`. Multi-dim shapes are read from the launch context through the same
+  // `SHAPE_POS_IN_NDARRAY` path `ExternalTensorShape` uses, so an ndarray indexed by two or more loop variables lowers
+  // to the correct element rather than the stride-1 sum `arr_flat[i + j + ...]`. Mirrors the per-axis stride that
+  // `encode_subtree` precomputes on the SPIR-V path; on CPU the host evaluator is called directly from
+  // `publish_adstack_metadata`, so the stride math has to live here too.
+  std::vector<int64_t> resolved(node.indices.size());
   for (std::size_t i = 0; i < node.indices.size(); ++i) {
     int32_t raw = node.indices[i];
-    int64_t v = 0;
     if (raw >= 0) {
-      v = raw;
+      resolved[i] = raw;
     } else {
       int32_t var_id = -(raw + 1);
       auto bv = bound_vars.find(var_id);
       QD_ASSERT_INFO(bv != bound_vars.end(), "SerializedSizeExpr ExternalTensorRead references unbound var_id={}",
                      var_id);
-      v = bv->second;
+      resolved[i] = bv->second;
     }
-    linear += v * stride;
+  }
+  int64_t linear = 0;
+  int64_t stride = 1;
+  for (std::size_t i = node.indices.size(); i > 0; --i) {
+    linear += resolved[i - 1] * stride;
+    if (i - 1 > 0) {
+      std::vector<int> sh_idx(node.arg_id_path.begin(), node.arg_id_path.end());
+      sh_idx.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
+      sh_idx.push_back(static_cast<int>(i - 1));
+      // Ndarray shapes are `int32` in the args struct (same convention `evaluate_external_tensor_shape` relies on);
+      // reading as `int64` would sign-extend the adjacent slot into the shape and produce garbage strides.
+      stride *= static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(sh_idx));
+    }
   }
   auto prim_dt = static_cast<PrimitiveTypeID>(node.const_value);
   switch (prim_dt) {
