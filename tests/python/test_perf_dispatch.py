@@ -14,11 +14,11 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
 
-# Work amounts for perf_dispatch timing tests.  GPU backends have significant
-# fixed dispatch overhead per kernel launch, so small work amounts are dominated
-# by that overhead and CPU scheduling noise can flip the slow/fast comparison.
-# Values are chosen so slow is always 10x medium, giving a clear timing gap
-# even under pytest-xdist contention.
+# Work amounts for perf_dispatch timing tests.  Vulkan has significant fixed
+# dispatch overhead (~0.45ms per kernel launch on a T4), so small work amounts
+# are dominated by that overhead and CPU scheduling noise can flip the slow/fast
+# comparison.  Values are chosen so slow is always 10x
+# medium, giving a clear timing gap even under pytest-xdist contention.
 AMOUNT_WORK_SLOW_GPU = 1_000_000
 AMOUNT_WORK_MEDIUM_GPU = 100_000
 AMOUNT_WORK_SLOW_CPU = 100_000
