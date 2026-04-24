@@ -1142,7 +1142,11 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   auto arguments = create_entry_block_alloca(argument_buffer_size);
 
   std::vector<llvm::Value *> args;
-  args.emplace_back(get_runtime());
+  // On CPU, use the context-aware variant that returns non-zero on failure
+  // so we can emit an early return and avoid the subsequent out-of-bounds
+  // memory access.  On GPU, asm("exit;") kills the thread directly.
+  bool use_ctx_variant = arch_is_cpu(current_arch());
+  args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
   args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
   args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
@@ -1167,7 +1171,17 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   args.emplace_back(
       builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
 
-  llvm_val[stmt] = call("quadrants_assert_format", std::move(args));
+  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
+
+  if (use_ctx_variant) {
+    auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
+    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
+    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
+    builder->CreateCondBr(failed, assert_abort, assert_cont);
+    builder->SetInsertPoint(assert_abort);
+    builder->CreateRetVoid();
+    builder->SetInsertPoint(assert_cont);
+  }
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
@@ -1727,6 +1741,47 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
+  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_` and `ad_stack_offsets_` are (re)populated by
+  // the pre-scan below; `ad_stack_heap_base_llvm_` is emitted lazily when the first AdStack* stmt of this task
+  // fires. Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and
+  // a stale map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value
+  // from a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
+  ad_stack_per_thread_stride_ = 0;
+  ad_stack_offsets_.clear();
+  ad_stack_heap_base_llvm_ = nullptr;
+  // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs, mirroring the SPIR-V pre-pass at
+  // `spirv_codegen.cpp:138-166`. Each alloca claims a fixed slot inside the per-thread slice: offset equals the sum of
+  // earlier siblings' sizes. Growing the stride lazily as `visit(AdStackAllocaStmt)` fires would bake a stale `stride`
+  // into `thread_slot * stride` for earlier allocas (since the host-side `ensure_adstack_heap` sizes the slab at the
+  // cached stride) and a later push/load would then escape the thread's slice and alias the neighbour's. Sizes are
+  // rounded up to 8 bytes so `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally
+  // aligned for every element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is
+  // otherwise unaligned).
+  {
+    auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
+    std::function<void(IRNode *)> scan = [&](IRNode *node) {
+      if (auto *blk = dynamic_cast<Block *>(node)) {
+        for (auto &s : blk->statements)
+          scan(s.get());
+      } else if (auto *alloca = dynamic_cast<AdStackAllocaStmt *>(node)) {
+        ad_stack_offsets_[alloca] = ad_stack_per_thread_stride_;
+        ad_stack_per_thread_stride_ += align_up_8(alloca->size_in_bytes());
+      } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
+        if (if_stmt->true_statements)
+          scan(if_stmt->true_statements.get());
+        if (if_stmt->false_statements)
+          scan(if_stmt->false_statements.get());
+      } else if (auto *range_for = dynamic_cast<RangeForStmt *>(node)) {
+        scan(range_for->body.get());
+      } else if (auto *while_stmt = dynamic_cast<WhileStmt *>(node)) {
+        scan(while_stmt->body.get());
+      }
+    };
+    if (stmt->body) {
+      scan(stmt->body.get());
+    }
+  }
+
   task_function_type =
       llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context), {llvm::PointerType::get(context_ty, 0)}, false);
 
@@ -1762,6 +1817,14 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   }
   builder->SetInsertPoint(final_block);
   builder->CreateRetVoid();
+
+  // Propagate per-thread adstack stride into the OffloadedTask so the host-side kernel launcher can
+  // size `LlvmRuntimeExecutor::adstack_heap_` before dispatch. `static_num_threads` and the
+  // dynamic-offset fields are populated by each backend's codegen after `grid_dim` / `block_dim`
+  // are finalized (see codegen_cpu / codegen_cuda / codegen_amdgpu).
+  if (current_task) {
+    current_task->ad_stack.per_thread_stride = ad_stack_per_thread_stride_;
+  }
 
   // entry_block should jump to the body after all allocas are inserted
   builder->SetInsertPoint(entry_block);
@@ -2103,11 +2166,67 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
   llvm_val[stmt] = call(stmt->func_name, std::move(args));
 }
 
+// Cache the adstack heap base pointer at `entry_block` the first time an AdStack* visit site fires. The buffer is
+// host-owned (`LlvmRuntimeExecutor::adstack_heap_alloc_`) and grown by the kernel launcher via
+// `ensure_adstack_heap(task.ad_stack.per_thread_stride * num_threads)` before each dispatch. The new pointer is
+// published into `runtime->adstack_heap_buffer` from the host via a one-shot `runtime_get_adstack_heap_field_ptrs`
+// query (cached on the first grow) plus `memcpy_host_to_device` on subsequent grows - no device-side setter is
+// involved. The device-side code path has no grow logic - it just reads the field via
+// `LLVMRuntime_get_adstack_heap_buffer`. Emitting the load into `entry_block` (not the first visit site) keeps the base
+// pointer dominating every AdStack* in the task; otherwise two sibling adstacks under different branches of an `if`
+// would trip `verifyFunction` with a non-dominating use.
+void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
+  if (ad_stack_heap_base_llvm_ != nullptr) {
+    return;
+  }
+  QD_ASSERT(ad_stack_per_thread_stride_ > 0);
+
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block);
+
+  // The STRUCT_FIELD-generated `LLVMRuntime_get_adstack_heap_buffer` getter is the right callee here: it survives
+  // `eliminate_unused_functions` (prefix `LLVMRuntime_`) and is NOT marked as a CUDA `.entry` kernel, so the
+  // offloaded task function can call it as a regular device function.
+  ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
+}
+
+// Heap-backed adstack: the per-thread slice lives inside `runtime->adstack_heap_buffer`. The former
+// `create_entry_block_alloca` path put the adstack on the worker-thread stack, which capped CPU reverse-mode
+// kernels at the ~512 KB macOS secondary-thread budget and crashed with silently-zero gradients past that (the
+// frame clobbered adjacent stack pages and downstream accumulators read zero). On CUDA / AMDGPU it put the
+// adstack in per-thread local memory, which was not size-bounded but still duplicated across every kernel launch
+// and burned per-thread register pressure. Heap-backing collapses both paths: one slab per runtime, sized
+// `num_threads * per_thread_stride` by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch.
+//
+// The pre-scan in `init_offloaded_task_function` has already assigned this stmt a fixed `ad_stack_offsets_[stmt]`
+// offset within the per-thread slice. At this visit site we compute `base = heap + thread_slot * stride + offset`
+// and hand that pointer to `stack_init`, which writes the u64 count header exactly like the old stack-backed
+// path. Downstream `stack_push/stack_pop/stack_top_primal/stack_top_adjoint` already take a raw `Ptr` and are
+// unchanged - from their perspective the backing memory is still an opaque u64-prefixed blob.
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
-  auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->size_in_bytes());
-  auto alloca = create_entry_block_alloca(type, sizeof(int64));
-  llvm_val[stmt] = builder->CreateBitCast(alloca, llvm::PointerType::getUnqual(*llvm_context));
+  QD_ASSERT_INFO(ad_stack_offsets_.count(stmt),
+                 "AdStackAllocaStmt reached visit without a pre-scanned heap offset - the scan in "
+                 "init_offloaded_task_function must cover every container statement holding an adstack.");
+  QD_ASSERT(ad_stack_per_thread_stride_ > 0);
+
+  ensure_ad_stack_heap_base_llvm();
+
+  // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
+  // `block_idx() * block_dim() + thread_idx()`. `linear_thread_idx(context)` is the runtime helper that returns
+  // the arch-appropriate value, matching how `rand_states` is indexed and how the SPIR-V heap-backing indexes
+  // with `gl_GlobalInvocationID`. Widen to u64 before the mul because a deep-AD kernel can easily cross
+  // `i32_max / stride` on GPU grids (~65K threads x ~32K stride overflows i32).
+  auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *linear_tid_i32 = call("linear_thread_idx", get_context());
+  llvm::Value *linear_tid_i64 = builder->CreateZExt(linear_tid_i32, i64ty);
+  llvm::Value *stride = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_per_thread_stride_));
+  llvm::Value *offset = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_offsets_.at(stmt)));
+  llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
+  llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
+  llvm::Value *stack_ptr = builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
+  llvm_val[stmt] = stack_ptr;
   call("stack_init", llvm_val[stmt]);
 }
 
@@ -2117,7 +2236,7 @@ void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  call("stack_push", llvm_val[stack], tlctx->get_constant(stack->max_size),
+  call("stack_push", get_runtime(), llvm_val[stack], tlctx->get_constant(stack->max_size),
        tlctx->get_constant(stack->element_size_in_bytes()));
   auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
   primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
@@ -2385,7 +2504,9 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   if (get_environ_config(DUMP_IR_ENV.data())) {
     std::filesystem::create_directories(ir_dump_dir);
 
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
+    QD_ASSERT(!offloaded_tasks.empty());
+    std::string dump_name = offloaded_tasks[0].name;
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_llvm.ll");
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
@@ -2394,7 +2515,8 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   }
 
   if (get_environ_config(LOAD_IR_ENV.data())) {
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
+    QD_ASSERT(!offloaded_tasks.empty());
+    std::filesystem::path filename = ir_dump_dir / (offloaded_tasks[0].name + "_llvm.ll");
     llvm::SMDiagnostic err;
     auto loaded_module = llvm::parseAssemblyFile(filename.string(), err, *llvm_context);
     if (!loaded_module) {
@@ -2457,6 +2579,12 @@ void TaskCodeGenLLVM::visit(FuncCallStmt *stmt) {
     current_callable = old_callable;
   }
   llvm::Function *llvm_func = func_map[stmt->func];
+  // FIXME: when cpu_assert_failed fires inside a @qd.real_func callee, the
+  // flag is set on new_ctx but never propagated back to the caller's context.
+  // Regular @qd.func is AST-inlined so assertions are handled by the caller's
+  // visit(AssertStmt) directly.  real_func needs: (1) zero-init new_ctx's
+  // cpu_assert_failed before the call, (2) post-call check + propagate to
+  // get_context(), (3) emit ret void on failure.
   auto *new_ctx = create_entry_block_alloca(get_runtime_type("RuntimeContext"));
   call("RuntimeContext_set_runtime", new_ctx, get_runtime());
   if (!stmt->func->parameter_list.empty()) {

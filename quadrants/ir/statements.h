@@ -1617,7 +1617,9 @@ class AdStackAllocaStmt : public Stmt {
   }
 
   std::size_t size_in_bytes() const {
-    return sizeof(int32) + entry_size_in_bytes() * max_size;
+    // Header is a `u64` (see `stack_init`/`stack_push`/`stack_top_primal` in runtime.cpp), so use
+    // `sizeof(int64)` - not `sizeof(int32)` - to size the LLVM alloca matching the runtime layout.
+    return sizeof(int64) + entry_size_in_bytes() * max_size;
   }
 
   bool has_global_side_effect() const override {

@@ -4,17 +4,59 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/program/launch_context_builder.h"
+#include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
 namespace quadrants::lang {
 namespace amdgpu {
+
+namespace {
+
+// Resolve the adstack thread count this task needs sizing for.
+//
+// For const-bound range_for and non-range_for tasks, codegen has already made `static_num_threads` tight
+// (`grid_dim * block_dim` with `grid_dim` clamped to `ceil((end-begin)/block_dim)` for const range_for), so
+// we return it directly.
+//
+// For dynamic-bound range_for tasks, resolve `end - begin` by reading the values codegen stashed into
+// `runtime->temporaries` via a host-side DtoH memcpy. Mirrors `runtime/cuda/kernel_launcher.cpp`.
+std::size_t resolve_num_threads(const OffloadedTask &task, LlvmRuntimeExecutor *executor) {
+  if (!task.ad_stack.dynamic_gpu_range_for) {
+    return task.ad_stack.static_num_threads;
+  }
+  const auto &info = task.ad_stack;
+  std::int32_t begin = info.begin_const_value;
+  std::int32_t end = info.end_const_value;
+  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+    if (info.begin_offset_bytes >= 0) {
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                         sizeof(std::int32_t));
+    }
+    if (info.end_offset_bytes >= 0) {
+      AMDGPUDriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                         sizeof(std::int32_t));
+    }
+  }
+  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+  // `linear_thread_idx()`, so only `static_num_threads = grid_dim * block_dim` slices can be touched
+  // concurrently. See the matching comment in `runtime/cuda/kernel_launcher.cpp`.
+  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+  return std::min(iter, task.ad_stack.static_num_threads);
+}
+
+}  // namespace
 
 void KernelLauncher::launch_offloaded_tasks(JITModule *amdgpu_module,
                                             const std::vector<OffloadedTask> &offloaded_tasks,
                                             void *context_pointer,
                                             int arg_size) {
+  auto *executor = get_runtime_executor();
   auto *active_stream = AMDGPUContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
+    if (task.ad_stack.per_thread_stride > 0) {
+      executor->ensure_adstack_heap(task.ad_stack.per_thread_stride * resolve_num_threads(task, executor));
+    }
     if (task.stream_parallel_group_id == 0) {
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
       amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
@@ -26,8 +68,6 @@ void KernelLauncher::launch_offloaded_tasks(JITModule *amdgpu_module,
         i++;
       }
 
-      // Create one stream per unique group ID. Streams are created/destroyed
-      // per launch; a stream pool could reduce overhead for hot loops.
       std::map<int, void *> stream_by_id;
       for (size_t j = group_start; j < i; j++) {
         int sid = offloaded_tasks[j].stream_parallel_group_id;
@@ -38,9 +78,6 @@ void KernelLauncher::launch_offloaded_tasks(JITModule *amdgpu_module,
         }
       }
 
-      // Launch tasks concurrently on their respective streams. The shared
-      // RuntimeContext is safe here: kernels only read from it (args/runtime
-      // pointers); result_buffer writes are to disjoint offsets per task.
       for (size_t j = group_start; j < i; j++) {
         const auto &t = offloaded_tasks[j];
         AMDGPUContext::get_instance().set_stream(stream_by_id[t.stream_parallel_group_id]);
@@ -187,8 +224,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(context_pointer, &ctx.get_context(), sizeof(RuntimeContext),
                                                            active_stream);
 
-  AMDGPUContext::get_instance().push_back_kernel_arg_pointer(context_pointer);
-
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
@@ -214,6 +249,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
+  AMDGPUDriver::get_instance().mem_free_async(context_pointer, active_stream);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::CompiledKernelData &compiled) {
