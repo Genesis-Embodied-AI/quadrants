@@ -2152,9 +2152,24 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
-  auto val_bits = val.stype.dt == ti_buffer_type
-                      ? val
-                      : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+  spirv::Value val_bits;
+  if (val.stype.dt == ti_buffer_type) {
+    val_bits = val;
+  } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+    // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or
+    // pointer). Before this fix, a `u1` field / ndarray store emitted
+    // `OpBitcast %char %bool_val` and validated as
+    // `Expected input to be a pointer or int or float vector or scalar: Bitcast`. Most drivers
+    // ignore that and crash inside the pipeline compiler (observed on Mesa RADV: a hard SIGSEGV
+    // inside `libvulkan_radeon.so::create_compute_pipeline` the moment the offending kernel is
+    // registered). Route through `IRBuilder::cast`, which lowers `bool -> int` to `OpSelect`
+    // picking `1` or `0` of the target type -- that's the canonical spec-compliant way to widen a
+    // bool, matches what `load_buffer` already does on the reverse path, and keeps the
+    // "bool serialises as 0 / 1" behaviour every user of `to_numpy()` / `from_numpy()` depends on.
+    val_bits = ir_->cast(ir_->get_primitive_type(ti_buffer_type), val);
+  } else {
+    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+  }
   ir_->store_variable(buf_ptr, val_bits);
 }
 
