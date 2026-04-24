@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
+#include "quadrants/codegen/spirv/adstack_sizer_shader.h"
 #include "quadrants/common/logging.h"
 #include "quadrants/ir/adstack_size_expr_device.h"
 #include "quadrants/ir/snode.h"
@@ -360,9 +361,9 @@ struct FieldLoadDeviceEmitter {
   // the leaf's primitive type, not bytes - the sizer shader reuses `psb_load_scalar` which already multiplies
   // by `sizeof(prim_dt)`). Returns false when the snode layout is not amenable to direct PSB indexing
   // (bitmasked / pointer / hash chain, bit-level place, not-all-dense path), in which case the encoder raises
-  // a `QD_ERROR`. The dense-only restriction is deliberate - Genesis exercises only dense chains in the adstack
-  // pre-pass's `SizeExpr::FieldLoad` leaves, and extending this to bitmasked / pointer would require threading
-  // the full access codegen through the sizer shader, which is out of scope.
+  // a `QD_ERROR`. The dense-only restriction is deliberate - observed kernels exercise only dense chains in the
+  // adstack pre-pass's `SizeExpr::FieldLoad` leaves, and extending this to bitmasked / pointer would require
+  // threading the full access codegen through the sizer shader, which is out of scope.
   std::function<bool(SNode *snode, uint64_t *out_base_psb, std::vector<int32_t> *out_elem_strides)> fetch;
 
   bool empty() const {
@@ -598,7 +599,8 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
                                             const std::vector<const SerializedSizeExpr *> &exprs,
                                             Program *prog,
                                             LaunchContextBuilder *ctx,
-                                            const FieldLoadDeviceEmitter &fl_emitter) {
+                                            const FieldLoadDeviceEmitter &fl_emitter,
+                                            int max_nodes_per_stack = 0) {
   const std::size_t n_stacks = stack_headers.size();
   QD_ASSERT(exprs.size() == n_stacks);
 
@@ -676,8 +678,18 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
     // exceed the device interpreter's fixed-size scope capacity even with modest nesting. The encoder hard-errors
     // here rather than letting the interpreter silently drop binds and return wrong `max_size` values.
     auto var_id_remap = build_dense_var_id_remap(*expr);
+    const std::size_t nodes_before = nodes.size();
     sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_device_leaf, free_vars,
                                       var_id_remap, prog, ctx, fl_emitter, nodes, indices);
+    if (max_nodes_per_stack > 0) {
+      const std::size_t per_stack = nodes.size() - nodes_before;
+      QD_ERROR_IF(per_stack > static_cast<std::size_t>(max_nodes_per_stack),
+                  "Adstack SizeExpr for stack {} encodes {} device nodes, which exceeds the sizer shader's per-stack "
+                  "`kAdStackSizerMaxNodesPerStack` ({}) scratch capacity. Shrink the reverse-mode loop shape or file a "
+                  "bug - past this cap the on-device interpreter would silently truncate its private `values_arr` and "
+                  "surface later as a mysterious adstack overflow.",
+                  i, per_stack, max_nodes_per_stack);
+    }
   }
 
   // Pack everything into a flat byte buffer: header | stack_headers | nodes | indices.
@@ -756,6 +768,19 @@ bool compute_dense_snode_strides(SNode *leaf, std::vector<int32_t> *out_elem_str
   }
   if (leaf->is_bit_level) {
     return false;  // quant array / bit-struct leaves need bit-packing logic we do not emit here
+  }
+  // Refuse multi-child dense parents. The stride computation below assumes the place leaf is the sole
+  // occupant of its parent dense cell: `prod(shape[k+1..])` is a valid element-unit stride only when the
+  // physical cell size equals `sizeof(leaf_dtype)`. With multiple `.place(...)` siblings under the same
+  // dense ancestor (AoS layout), the real per-axis element stride is `cell_size / sizeof(leaf_dtype)`, so
+  // this function's output would land on a sibling field at `i >= 1`. Extending to cell-size-aware strides
+  // would require walking `SNodeDescriptor` memory-offset metadata the sizer shader does not consume today;
+  // refuse and surface a clear "dense-only, single-place parent" error instead.
+  for (const SNode *anc = leaf; anc != nullptr && anc->parent != nullptr; anc = anc->parent) {
+    const SNode *p = anc->parent;
+    if (p->type == SNodeType::dense && p->ch.size() > 1) {
+      return false;
+    }
   }
   const int n = leaf->num_active_indices;
   if (n < 0) {
@@ -854,7 +879,8 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode_for_spirv(
     *out_base_psb = root_psb + static_cast<uint64_t>(place_byte_offset);
     return true;
   };
-  return encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter);
+  return encode_bytecode_common(std::move(stack_headers), exprs, prog, ctx, fl_emitter,
+                                spirv::kAdStackSizerMaxNodesPerStack);
 }
 
 }  // namespace quadrants::lang

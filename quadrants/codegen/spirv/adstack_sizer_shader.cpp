@@ -13,20 +13,19 @@ namespace quadrants::lang::spirv {
 
 namespace {
 
-// Capacity limits for the iterative stack machine. Sized generously against measured Genesis kernels (max
+// Capacity limits for the iterative stack machine. Sized generously against observed reverse-mode kernels (max
 // tree depth observed ~10, max distinct bound variables ~4) so the shader can cover every realistic case
 // without per-launch specialisation. Hitting any of these caps at runtime would indicate a pre-pass that
-// produces an unusually deep or wide tree - the shader silently truncates in that case, which shows up as
-// an undercount and surfaces at the next `stack_push` overflow check. A compile-time-ish hard error would
-// be preferable but is awkward to emit from device code; the pre-pass invariants keep this well within
-// bounds in practice.
+// produces an unusually deep or wide tree; the host-side encoder hard-errors rather than let the shader
+// silently truncate (see `encode_adstack_size_expr_device_bytecode_for_spirv`), so exceeding a cap surfaces
+// as a clear compile-time diagnostic rather than a mysterious overflow at the next `stack_push`.
 // Per-stack node-count cap for the eval state. Each invocation gets its own private `values_arr` of this
 // size indexed by the *local* offset within the stack's subtree (not the global bytecode-wide node index),
-// so this cap applies only per-stack, not per-kernel. Genesis's MPM kernels have a handful of stacks with
-// ~1k-node symbolic trees (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip
+// so this cap applies only per-stack, not per-kernel. Observed reverse-mode kernels have a handful of stacks
+// with ~1k-node symbolic trees (`MaxOverRange` over ndarray reads with a nested `Max` of per-substep trip
 // counts), so the cap needs to comfortably exceed that. 4096 * 8 B = 32 KiB of i64 private memory per
 // invocation; the sizer runs as a single-thread dispatch so this is not multiplied by workgroup size.
-constexpr int kMaxNodes = 4096;
+constexpr int kMaxNodes = kAdStackSizerMaxNodesPerStack;
 constexpr int kMaxVars = 16;
 constexpr int kMaxPending = 16;
 
@@ -192,7 +191,7 @@ struct ShaderState {
 // `values_arr` is a private, function-local i64 array of size `kMaxNodes` used to memoise the value of every
 // node in the *current stack's* tree as the walker processes it in post-order. Indexing it by the node's
 // global post-order position (i.e. directly by `current_now`) only works when the whole kernel has <=
-// kMaxNodes nodes in total, which fails for Genesis's MPM kernels (upwards of 20k total nodes across 700+
+// kMaxNodes nodes in total, which fails for large reverse-mode kernels (upwards of 20k total nodes across 700+
 // stacks). We index by the per-stack local offset instead: `values_arr[current_now - tree_start]`, where
 // `tree_start` is the global index of this stack's first node. Every node in a single stack's subtree is
 // reachable within the [tree_start, root_idx] range and the kMaxNodes cap therefore applies only per-stack,
@@ -249,7 +248,7 @@ Value compute_field_load_elem_index(IRBuilder &ir,
                                     Value indices_base_word,  // u32
                                     Value indices_offset_i32,
                                     Value indices_count_i32) {
-  // Element-index accumulator. Sized to i32 like the ETR path - snode shapes in Genesis are well below 2^31.
+  // Element-index accumulator. Sized to i32 like the ETR path - observed snode shapes are well below 2^31.
   Value acc_var = ir.alloca_variable(ir.i32_type());
   ir.store_variable(acc_var, ir.int_immediate_number(ir.i32_type(), 0));
 

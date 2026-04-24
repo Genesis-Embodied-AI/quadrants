@@ -2165,6 +2165,61 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal])
+def test_adstack_fuses_sub_of_max_over_range_with_mismatched_lengths_is_safe():
+    # Pins that the `both_shape_same_axis` widening of `expr_sub`'s MaxOverRange fusion stays safe when the
+    # two ndarrays along the fused axis have DIFFERENT lengths at launch. The fused body evaluates
+    # `arr_a[v] - arr_b[v]` at the same `v`, so the iteration range must be the min of both shapes; iterating
+    # to the larger shape reads the shorter ndarray past its buffer end, which is UB on CPU and surfaces as
+    # `cudaErrorIllegalAddress` / `hipErrorIllegalAddress` at the next DtoH sync on CUDA / AMDGPU.
+    #
+    # Internal details: the fix expresses `min(shape_a, shape_b)` as `a + b - max(a, b)` to stay inside the
+    # grammar rather than introducing a new `Min` node (host + device evaluators both have to agree on the
+    # grammar). With `arr_a = [5, 5, 5, 5]` (shape 4) and `arr_b = [4, 0]` (shape 2) the pre-fix walker
+    # iterated `v in [0, 4)` and read `arr_b[2]` / `arr_b[3]` OOB. The fix caps the fused end at 2 so both
+    # reads stay in-bounds; the resulting bound evaluates to `4 * 2 * max_v (arr_a[v] - arr_b[v]) = 8 * 5 =
+    # 40`, which comfortably covers the actual `(4 * 1) + (4 * 5) = 24` pushes.
+    N_X = 8
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def compute(arr_a: qd.types.ndarray(dtype=qd.i32, ndim=1), arr_b: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for _dummy in range(1):
+            accum = 0.0
+            for i_a in range(arr_a.shape[0]):
+                for i_b in range(arr_b.shape[0]):
+                    n = arr_a[i_a] - arr_b[i_b]
+                    if n > 0:
+                        for k in range(n):
+                            accum = accum + x[k] * x[k]
+            loss[None] += accum
+
+    for i in range(N_X):
+        x[i] = 0.1
+    arr_a_np = np.array([5, 5, 5, 5], dtype=np.int32)
+    arr_b_np = np.array([4, 0], dtype=np.int32)
+
+    compute(arr_a_np, arr_b_np)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    compute.grad(arr_a_np, arr_b_np)
+    qd.sync()
+
+    # Push breakdown: for every (i_a in [0, 4), i_b in [0, 2)) the inner trip is arr_a[i_a] - arr_b[i_b].
+    # With arr_b = [4, 0] the per-i_b inner trips are 1 and 5; summed over the four i_a values: 4 * (1 + 5)
+    # = 24 pushes. x[0] is visited by every (i_a, i_b) pair with a non-zero trip (8 visits); x[1..4] are
+    # visited only by the i_b = 1 branch (4 visits each); x[5..] are never visited.
+    assert loss[None] == pytest.approx(24 * 0.01, rel=1e-5)
+    assert x.grad[0] == pytest.approx(2 * 8 * 0.1, rel=1e-5)
+    for k in range(1, 5):
+        assert x.grad[k] == pytest.approx(2 * 4 * 0.1, rel=1e-5)
+    for k in range(5, N_X):
+        assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
+
+
 @test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
     # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every

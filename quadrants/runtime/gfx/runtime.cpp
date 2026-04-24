@@ -174,14 +174,17 @@ class HostDeviceContextBlitter {
             readback_host_ptrs.push_back(host_ctx_.array_ptrs[{arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY}]);
             readback_sizes.push_back(ext_arr_size.at(arg_id));
             require_sync = true;
-            // Grad readback is gated on the same WRITE bit as the data readback because `arr_access` is
-            // derived from the kernel's static access analysis and covers data+grad together. Forward-only
-            // kernels have WRITE cleared, so skipping grad readback there avoids a GPU sync + DMA on every
-            // forward dispatch once `.grad` buffers exist. Without this guard, a training loop's forward
-            // pass would call `wait_idle()` + readback the (unchanged) grad buffer after the first backward
-            // creates the grad allocations, roughly doubling forward latency on Metal/Vulkan.
+            // Grad readback is gated on the grad-slot WRITE bit from `grad_arr_access`, mirroring the
+            // host_to_device path's READ gate. A forward-only kernel with `arr_access.WRITE=1` but no grad
+            // touch would otherwise blit an uninitialised device grad buffer back over the user's host
+            // `.grad`, silently corrupting previously-initialised gradients.
+            auto grad_access_it =
+                std::find_if(ctx_attribs_->grad_arr_access.begin(), ctx_attribs_->grad_arr_access.end(),
+                             [indices](const auto &pair) -> bool { return pair.first == indices; });
+            uint32_t grad_access =
+                (grad_access_it != ctx_attribs_->grad_arr_access.end()) ? uint32_t(grad_access_it->second) : 0;
             auto grad_it = ext_array_grads.find(arg_id);
-            if (grad_it != ext_array_grads.end()) {
+            if (grad_it != ext_array_grads.end() && (grad_access & uint32_t(irpass::ExternalPtrAccess::WRITE))) {
               readback_dev_ptrs.push_back(grad_it->second.get_ptr(0));
               // `.at` (rather than operator[]) so a missing grad_ptr_idx throws immediately instead of
               // default-inserting a nullptr that the readback below would treat as a destination address.
@@ -411,9 +414,14 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   std::unique_ptr<DeviceAllocationGuard> args_buffer{nullptr}, ret_buffer{nullptr};
 
   if (ti_kernel->get_args_buffer_size()) {
-    auto [buf, res] = device_->allocate_memory_unique({ti_kernel->get_args_buffer_size(),
-                                                       /*host_write=*/true, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Uniform});
+    // Needs both Uniform (the main kernel binds args as a uniform buffer) and Storage (the adstack sizer
+    // pipeline binds the same buffer through a `rw_buffer` / storage_buffer descriptor to resolve ndarray
+    // data pointers out of arg slots). Per VUID-VkDescriptorBufferInfo-buffer-02999, a buffer bound through
+    // a storage_buffer descriptor must have been allocated with `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT`.
+    auto [buf, res] =
+        device_->allocate_memory_unique({ti_kernel->get_args_buffer_size(),
+                                         /*host_write=*/true, /*host_read=*/false,
+                                         /*export_sharing=*/false, AllocUsage::Uniform | AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate args buffer");
     args_buffer = std::move(buf);
   }
@@ -644,7 +652,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       // descriptor set layout that doesn't match the pipeline's, and `bind_shader_resources` returns
       // `invalid_usage` with "Layout mismatch". Use `rw_buffer` across the board so the descriptor types
       // match; the shader is disciplined about not writing slots 0 and 2, so granting write-capable
-      // descriptors there is harmless.
+      // descriptors there is harmless. The backing `args_buffer` is allocated with
+      // `Uniform | Storage` at `runtime.cpp::launch_kernel`'s allocation site so the storage-buffer bind on
+      // slot 2 satisfies VUID-VkDescriptorBufferInfo-buffer-02999.
       bindings->rw_buffer(0, adstack_sizer_bytecode_buffer_->get_ptr(per_task_bytecode_offsets[k]),
                           per_task_bytecodes[k].size());
       bindings->rw_buffer(1, *per_task_metadata_allocs[k]);
@@ -681,7 +691,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       // max_size_compile_time, heap_kind, entry_size_bytes) alongside the runtime-evaluated (offset,
       // max_size) that the sizer shader wrote back. A `root_node_idx < 0` stack means the host encoder
       // found no symbolic SizeExpr for the alloca (empty `size_expr.nodes`), so the sizer falls back to
-      // `max_size_compile_time` - that's the most common Genesis overflow cause and it's otherwise
+      // `max_size_compile_time` - that's the most common overflow cause observed in practice and it's otherwise
       // invisible. Printed to stderr, one line per stack, unconditional when the env var is set.
       if (std::getenv("QD_DEBUG_ADSTACK")) {
         const auto &bc = per_task_bytecodes[k];

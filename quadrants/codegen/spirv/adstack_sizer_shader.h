@@ -37,4 +37,10 @@ namespace quadrants::lang::spirv {
 // no correct way to resolve an `ExternalTensorRead` against a GPU-private ndarray.
 std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
+// Maximum number of `SerializedSizeExpr` nodes a single adstack's tree may contribute to the device bytecode.
+// The sizer shader's `values_arr` private i64 scratch is sized to this, indexed by the per-stack local offset.
+// Exceeding it on the shader would silently truncate; the host-side encoder must hard-error before emitting
+// bytecode past this cap so the failure is attributable to a specific alloca at compile time.
+constexpr int kAdStackSizerMaxNodesPerStack = 4096;
+
 }  // namespace quadrants::lang::spirv
