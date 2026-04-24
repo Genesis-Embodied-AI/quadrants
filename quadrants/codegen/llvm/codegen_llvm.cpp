@@ -1741,9 +1741,46 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   current_loop_reentry = nullptr;
   current_while_after_loop = nullptr;
 
-  // Reset the adstack function-scope accumulator for this task. The budget is per-task (per LLVM
-  // function), so the count must not carry over from the previous offloaded stmt.
-  ad_stack_fn_scope_bytes_ = 0;
+  // Reset per-task heap-adstack state. `ad_stack_per_thread_stride_` and `ad_stack_offsets_` are (re)populated by
+  // the pre-scan below; `ad_stack_heap_base_llvm_` is emitted lazily when the first AdStack* stmt of this task
+  // fires. Clearing is important because a kernel with multiple offloaded tasks shares this visitor instance and
+  // a stale map/base from the previous task would either grow stride unboundedly or (worse) reuse an SSA value
+  // from a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
+  ad_stack_per_thread_stride_ = 0;
+  ad_stack_offsets_.clear();
+  ad_stack_heap_base_llvm_ = nullptr;
+  // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs, mirroring the SPIR-V pre-pass at
+  // `spirv_codegen.cpp:138-166`. Each alloca claims a fixed slot inside the per-thread slice: offset equals the sum of
+  // earlier siblings' sizes. Growing the stride lazily as `visit(AdStackAllocaStmt)` fires would bake a stale `stride`
+  // into `thread_slot * stride` for earlier allocas (since the host-side `ensure_adstack_heap` sizes the slab at the
+  // cached stride) and a later push/load would then escape the thread's slice and alias the neighbour's. Sizes are
+  // rounded up to 8 bytes so `stack_top_primal`'s `stack + sizeof(u64) + idx * 2 * element_size` math stays naturally
+  // aligned for every element type the IR may emit (i8 / u1 pack especially, on which the raw `size_in_bytes()` is
+  // otherwise unaligned).
+  {
+    auto align_up_8 = [](std::size_t n) -> std::size_t { return (n + 7u) & ~std::size_t{7u}; };
+    std::function<void(IRNode *)> scan = [&](IRNode *node) {
+      if (auto *blk = dynamic_cast<Block *>(node)) {
+        for (auto &s : blk->statements)
+          scan(s.get());
+      } else if (auto *alloca = dynamic_cast<AdStackAllocaStmt *>(node)) {
+        ad_stack_offsets_[alloca] = ad_stack_per_thread_stride_;
+        ad_stack_per_thread_stride_ += align_up_8(alloca->size_in_bytes());
+      } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
+        if (if_stmt->true_statements)
+          scan(if_stmt->true_statements.get());
+        if (if_stmt->false_statements)
+          scan(if_stmt->false_statements.get());
+      } else if (auto *range_for = dynamic_cast<RangeForStmt *>(node)) {
+        scan(range_for->body.get());
+      } else if (auto *while_stmt = dynamic_cast<WhileStmt *>(node)) {
+        scan(while_stmt->body.get());
+      }
+    };
+    if (stmt->body) {
+      scan(stmt->body.get());
+    }
+  }
 
   task_function_type =
       llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_context), {llvm::PointerType::get(context_ty, 0)}, false);
@@ -1780,6 +1817,14 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   }
   builder->SetInsertPoint(final_block);
   builder->CreateRetVoid();
+
+  // Propagate per-thread adstack stride into the OffloadedTask so the host-side kernel launcher can
+  // size `LlvmRuntimeExecutor::adstack_heap_` before dispatch. `static_num_threads` and the
+  // dynamic-offset fields are populated by each backend's codegen after `grid_dim` / `block_dim`
+  // are finalized (see codegen_cpu / codegen_cuda / codegen_amdgpu).
+  if (current_task) {
+    current_task->ad_stack.per_thread_stride = ad_stack_per_thread_stride_;
+  }
 
   // entry_block should jump to the body after all allocas are inserted
   builder->SetInsertPoint(entry_block);
@@ -2121,43 +2166,67 @@ void TaskCodeGenLLVM::visit(InternalFuncStmt *stmt) {
   llvm_val[stmt] = call(stmt->func_name, std::move(args));
 }
 
+// Cache the adstack heap base pointer at `entry_block` the first time an AdStack* visit site fires. The buffer is
+// host-owned (`LlvmRuntimeExecutor::adstack_heap_alloc_`) and grown by the kernel launcher via
+// `ensure_adstack_heap(task.ad_stack.per_thread_stride * num_threads)` before each dispatch. The new pointer is
+// published into `runtime->adstack_heap_buffer` from the host via a one-shot `runtime_get_adstack_heap_field_ptrs`
+// query (cached on the first grow) plus `memcpy_host_to_device` on subsequent grows - no device-side setter is
+// involved. The device-side code path has no grow logic - it just reads the field via
+// `LLVMRuntime_get_adstack_heap_buffer`. Emitting the load into `entry_block` (not the first visit site) keeps the base
+// pointer dominating every AdStack* in the task; otherwise two sibling adstacks under different branches of an `if`
+// would trip `verifyFunction` with a non-dominating use.
+void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
+  if (ad_stack_heap_base_llvm_ != nullptr) {
+    return;
+  }
+  QD_ASSERT(ad_stack_per_thread_stride_ > 0);
+
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block);
+
+  // The STRUCT_FIELD-generated `LLVMRuntime_get_adstack_heap_buffer` getter is the right callee here: it survives
+  // `eliminate_unused_functions` (prefix `LLVMRuntime_`) and is NOT marked as a CUDA `.entry` kernel, so the
+  // offloaded task function can call it as a regular device function.
+  ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
+}
+
+// Heap-backed adstack: the per-thread slice lives inside `runtime->adstack_heap_buffer`. The former
+// `create_entry_block_alloca` path put the adstack on the worker-thread stack, which capped CPU reverse-mode
+// kernels at the ~512 KB macOS secondary-thread budget and crashed with silently-zero gradients past that (the
+// frame clobbered adjacent stack pages and downstream accumulators read zero). On CUDA / AMDGPU it put the
+// adstack in per-thread local memory, which was not size-bounded but still duplicated across every kernel launch
+// and burned per-thread register pressure. Heap-backing collapses both paths: one slab per runtime, sized
+// `num_threads * per_thread_stride` by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch.
+//
+// The pre-scan in `init_offloaded_task_function` has already assigned this stmt a fixed `ad_stack_offsets_[stmt]`
+// offset within the per-thread slice. At this visit site we compute `base = heap + thread_slot * stride + offset`
+// and hand that pointer to `stack_init`, which writes the u64 count header exactly like the old stack-backed
+// path. Downstream `stack_push/stack_pop/stack_top_primal/stack_top_adjoint` already take a raw `Ptr` and are
+// unchanged - from their perspective the backing memory is still an opaque u64-prefixed blob.
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
   QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
-  auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->size_in_bytes());
+  QD_ASSERT_INFO(ad_stack_offsets_.count(stmt),
+                 "AdStackAllocaStmt reached visit without a pre-scanned heap offset - the scan in "
+                 "init_offloaded_task_function must cover every container statement holding an adstack.");
+  QD_ASSERT(ad_stack_per_thread_stride_ > 0);
 
-  // Guard against LLVM worker-thread stack overflow before silent memory corruption ensues.
-  // Gated on CPU arches because only there do LLVM allocas become worker-thread stack frame slots bounded by
-  // the OS thread-stack limit. On CUDA / AMDGPU the same LLVM allocas are lowered to per-thread GPU local
-  // memory (a separate address space sized by the driver, not shared with the CPU call stack), so the 256 KB
-  // CPU-stack budget is not meaningful there and the check would falsely reject valid GPU kernels with
-  // f64 loop-carried variables (4 adstacks at `ad_stack_size=4096` already cross 256 KB).
-  //
-  // Adstacks are allocated at function entry (`create_entry_block_alloca`) so they are live for the entire
-  // task invocation and their sizes sum directly into the LLVM stack frame. A kernel that exceeds the thread
-  // stack does not fault at the push - it simply trashes adjacent stack memory, and downstream reverse-mode
-  // accumulators read zero, producing silently-wrong gradients that look indistinguishable from a broken
-  // backward chain. Fail loudly with a message that tells the user how to unblock: either lower
-  // `ad_stack_size`, shrink the per-kernel adstack count by shifting some dynamic loops back to
-  // `qd.static(range(...))` unrolls, or use a backend that heap-backs adstacks.
-  //
-  // Budget: 256 KB leaves headroom inside the ~512 KB default macOS secondary-thread stack for other locals
-  // and nested call frames. Linux defaults are larger (~8 MB), so the same limit is strictly conservative
-  // there.
-  if (arch_is_cpu(current_arch())) {
-    constexpr std::size_t kFnScopeAdStackBudgetBytes = 256 * 1024;
-    ad_stack_fn_scope_bytes_ += stmt->size_in_bytes();
-    QD_ERROR_IF(ad_stack_fn_scope_bytes_ > kFnScopeAdStackBudgetBytes,
-                "LLVM autodiff-stack budget exceeded: cumulative `AdStackAllocaStmt` size {} bytes in task "
-                "'{}' crosses the {} byte function-scope budget. Every adstack is allocated on the worker "
-                "thread stack, so scaling past this point silently corrupts the stack frame and zeros the "
-                "reverse-mode gradient without raising. Options: lower `ad_stack_size=N` in `qd.init()`, "
-                "reduce the number of loop-carried values in dynamic reverse-mode loops, or keep the "
-                "existing `qd.static(range(...))` unrolls on the reverse-mode path.",
-                ad_stack_fn_scope_bytes_, current_task->name, kFnScopeAdStackBudgetBytes);
-  }
+  ensure_ad_stack_heap_base_llvm();
 
-  auto alloca = create_entry_block_alloca(type, sizeof(int64));
-  llvm_val[stmt] = builder->CreateBitCast(alloca, llvm::PointerType::getUnqual(*llvm_context));
+  // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
+  // `block_idx() * block_dim() + thread_idx()`. `linear_thread_idx(context)` is the runtime helper that returns
+  // the arch-appropriate value, matching how `rand_states` is indexed and how the SPIR-V heap-backing indexes
+  // with `gl_GlobalInvocationID`. Widen to u64 before the mul because a deep-AD kernel can easily cross
+  // `i32_max / stride` on GPU grids (~65K threads x ~32K stride overflows i32).
+  auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *linear_tid_i32 = call("linear_thread_idx", get_context());
+  llvm::Value *linear_tid_i64 = builder->CreateZExt(linear_tid_i32, i64ty);
+  llvm::Value *stride = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_per_thread_stride_));
+  llvm::Value *offset = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_offsets_.at(stmt)));
+  llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
+  llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
+  llvm::Value *stack_ptr = builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
+  llvm_val[stmt] = stack_ptr;
   call("stack_init", llvm_val[stmt]);
 }
 
@@ -2435,7 +2504,9 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   if (get_environ_config(DUMP_IR_ENV.data())) {
     std::filesystem::create_directories(ir_dump_dir);
 
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
+    QD_ASSERT(!offloaded_tasks.empty());
+    std::string dump_name = offloaded_tasks[0].name;
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_llvm.ll");
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
@@ -2444,7 +2515,8 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   }
 
   if (get_environ_config(LOAD_IR_ENV.data())) {
-    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_llvm.ll");
+    QD_ASSERT(!offloaded_tasks.empty());
+    std::filesystem::path filename = ir_dump_dir / (offloaded_tasks[0].name + "_llvm.ll");
     llvm::SMDiagnostic err;
     auto loaded_module = llvm::parseAssemblyFile(filename.string(), err, *llvm_context);
     if (!loaded_module) {

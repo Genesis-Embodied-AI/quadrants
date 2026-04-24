@@ -83,6 +83,22 @@ class LlvmRuntimeExecutor {
     return use_device_memory_pool_;
   }
 
+  // Host-managed per-runtime adstack heap. Each kernel launcher calls this before dispatching a task whose
+  // `OffloadedTask::ad_stack.per_thread_stride > 0`; `needed_bytes` is `per_thread_stride * num_threads` computed
+  // per the resolution rule in `AdStackSizingInfo`. Growth is amortized via `max(needed, 2 * current)` doubling,
+  // old slabs are returned to the driver memory pool (no leak), and the new pointer/size are published into the
+  // runtime struct at `runtime->{adstack_heap_buffer, adstack_heap_size}` without a per-grow kernel launch: a
+  // one-shot `runtime_get_adstack_heap_field_ptrs` kernel caches the device addresses of the two fields on the
+  // first grow, and subsequent publishes are `memcpy_host_to_device` (CUDA / AMDGPU) or plain pointer stores
+  // (CPU) against those cached addresses.
+  void ensure_adstack_heap(std::size_t needed_bytes);
+
+  // Return (and lazily cache) the device pointer to `runtime->temporaries`, the global temporary buffer backing
+  // `GlobalTemporaryStmt` loads and stores. GPU kernel launchers use this to read back dynamic range_for bounds
+  // (begin / end i32 values at known byte offsets) via a host-side DtoH memcpy when sizing the adstack heap.
+  // Cached because `runtime->temporaries` is assigned once during `runtime_initialize` and never rebound.
+  void *get_runtime_temporaries_device_ptr();
+
  private:
   /* ----------------------- */
   /* ------ Allocation ----- */
@@ -152,6 +168,31 @@ class LlvmRuntimeExecutor {
   DeviceAllocationUnique preallocated_runtime_objects_allocs_ = nullptr;
   DeviceAllocationUnique preallocated_runtime_memory_allocs_ = nullptr;
   std::unordered_map<DeviceAllocationId, DeviceAllocation> allocated_runtime_memory_allocs_;
+
+  // Per-runtime adstack heap slab, owned here. `ensure_adstack_heap` grows via the driver allocator and
+  // publishes the new pointer/size into the LLVMRuntime struct; replacing `adstack_heap_alloc_` releases the
+  // previous allocation via `DeviceAllocationGuard`, which calls `llvm_device()->dealloc_memory`. Safety of
+  // releasing the old slab while a prior-launch kernel may still hold its base pointer depends on the backend:
+  // on CPU the release is a host `std::free` (trivially safe); on CUDA `cuMemFree_v2` synchronizes with
+  // pending device work before returning; on AMDGPU `dealloc_memory` routes through
+  // `DeviceMemoryPool::release(release_raw=false)` -> `CachingAllocator::release`, which pools the allocation
+  // *without* calling `hipFree` and *without* synchronizing - so on AMDGPU the cross-launch invariant instead
+  // comes from `amdgpu::KernelLauncher::launch_llvm_kernel` ending with a synchronous `hipFree(context_pointer)`
+  // before the next launch reaches `ensure_adstack_heap`. See the detailed block comment in
+  // `LlvmRuntimeExecutor::ensure_adstack_heap` for the full derivation; do not remove the launcher-tail
+  // `hipFree(context_pointer)` without simultaneously fixing the AMDGPU release path.
+  DeviceAllocationUnique adstack_heap_alloc_ = nullptr;
+  std::size_t adstack_heap_size_{0};
+
+  // Cached device pointer to `runtime->temporaries`, populated lazily by `get_runtime_temporaries_device_ptr()`.
+  void *runtime_temporaries_cache_{nullptr};
+
+  // Cached device pointers to `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size`, populated by a
+  // single one-shot `runtime_get_adstack_heap_field_ptrs` kernel the first time `ensure_adstack_heap` needs to
+  // publish a new buffer. Subsequent publishes are plain host->device memcpys onto these addresses, so no kernel
+  // launch is required per grow.
+  void *runtime_adstack_heap_buffer_field_ptr_{nullptr};
+  void *runtime_adstack_heap_size_field_ptr_{nullptr};
 
   // good buddy
   friend LlvmProgramImpl;

@@ -1256,7 +1256,7 @@ std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
   return snodes;
 }
 
-void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
+void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size, bool apply_fallback) {
   /**
    * Determine all adaptive AD-stacks' necessary size using the Bellman-Ford
    * algorithm. When there is a positive loop (#pushes > #pops in a loop)
@@ -1285,6 +1285,14 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     for (int j = nodes[i]->begin_location; j < nodes[i]->end_location; j++) {
       Stmt *stmt = nodes[i]->block->statements[j].get();
       if (auto *stack = stmt->cast<AdStackAllocaStmt>()) {
+        // Skip stacks whose size has already been resolved by an earlier pass (e.g. the structural
+        // pre-pass in `irpass::determine_ad_stack_size` that handles bounded inner loops without
+        // running Bellman-Ford). Without this guard the Bellman-Ford pass unconditionally
+        // overwrites `stack->max_size` at the bottom of its per-stack loop - with 0 when the stack
+        // has no push/pop in the CFG - clobbering the upstream result.
+        if (stack->max_size != 0) {
+          continue;
+        }
         all_stacks.insert(stack);
         max_increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
         increased_size.insert(std::make_pair(stack, std::vector<int>(num_nodes, 0)));
@@ -1385,8 +1393,13 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size) {
     }
 
     if (has_positive_loop) {
-      stack->max_size = default_ad_stack_size;
       indeterminable_stacks.insert(stack);
+      if (apply_fallback) {
+        stack->max_size = default_ad_stack_size;
+      }
+      // When `apply_fallback` is false, leave `max_size = 0` so the structural bounded-loop
+      // pre-pass in `irpass::determine_ad_stack_size` gets a chance to derive a tighter bound
+      // (e.g. a statically bounded inner loop whose push-only body defeats Bellman-Ford).
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
       // with maximum capacity indeed equal to 0.
