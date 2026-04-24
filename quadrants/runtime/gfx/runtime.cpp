@@ -548,20 +548,23 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                    "encode AdStack SizeExpr bytecode. Ensure GfxProgramImpl passes `program_impl = this` "
                    "into `GfxRuntime::Params`.");
     QD_ERROR_IF(!device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer) ||
-                    !device_->get_caps().get(DeviceCapability::spirv_has_int64),
-                "GfxRuntime::launch_kernel: the on-device adstack SizeExpr sizer requires both the Physical Storage "
-                "Buffer and Int64 SPIR-V capabilities, but at least one is missing on this device. There is no "
-                "correct host-eval fallback for `qd.ndarray`-backed reverse-mode state on a GPU-private backend; "
-                "the shader must run on-device or the kernel's adstack sizing is garbage. Use a backend that "
-                "advertises both caps (e.g. Metal on Apple Silicon, Vulkan 1.2+ with "
-                "`VK_KHR_buffer_device_address`), or run the workload on the LLVM runtime (CPU / CUDA / AMDGPU).");
+                    !device_->get_caps().get(DeviceCapability::spirv_has_int64) ||
+                    !device_->get_caps().get(DeviceCapability::spirv_has_int8) ||
+                    !device_->get_caps().get(DeviceCapability::spirv_has_int16),
+                "GfxRuntime::launch_kernel: the on-device adstack SizeExpr sizer requires the Physical Storage "
+                "Buffer, Int64, Int8, and Int16 SPIR-V capabilities, but at least one is missing on this device. "
+                "There is no correct host-eval fallback for `qd.ndarray`-backed reverse-mode state on a GPU-private "
+                "backend; the shader must run on-device or the kernel's adstack sizing is garbage. Use a backend "
+                "that advertises all four caps (e.g. Metal on Apple Silicon, Vulkan 1.2+ with "
+                "`VK_KHR_buffer_device_address` and `VK_KHR_shader_float16_int8`), or run the workload on the LLVM "
+                "runtime (CPU / CUDA / AMDGPU).");
 
     // Build the sizer pipeline on first use.
     if (!adstack_sizer_pipeline_) {
       std::vector<uint32_t> spirv = spirv::build_adstack_sizer_spirv(Arch::vulkan, &device_->get_caps());
       QD_ASSERT_INFO(!spirv.empty(),
-                     "`build_adstack_sizer_spirv` returned an empty binary despite the PSB+Int64 capability "
-                     "check passing; bug in the shader builder's capability gating.");
+                     "`build_adstack_sizer_spirv` returned an empty binary despite the PSB+Int64+Int8+Int16 "
+                     "capability check passing; bug in the shader builder's capability gating.");
       PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv.data(),
                                      spirv.size() * sizeof(uint32_t)};
       auto [pipeline, res] = device_->create_pipeline_unique(source_desc, "adstack_sizer", backend_cache_.get());

@@ -768,6 +768,20 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   if (!caps->get(DeviceCapability::spirv_has_int64)) {
     return {};
   }
+  // `emit_psb_load_i64` materialises a per-element-type switch that unconditionally calls
+  // `ir.i8_type()` / `ir.u8_type()` / `ir.i16_type()` / `ir.u16_type()`. On a Vulkan device that
+  // advertises PSB + Int64 but not `shaderInt8` (VK_KHR_shader_float16_int8) or `shaderInt16` (a
+  // core feature that is optional on some profiles), those accessors return a default-constructed
+  // `SType` (id 0), which `spirv-val` rejects and Vulkan drivers refuse at pipeline creation.
+  // Hard-error the launcher through the empty-return path so the caller surfaces the expected
+  // "legacy device missing a required hardware feature" diagnostic rather than silently shipping
+  // invalid SPIR-V.
+  if (!caps->get(DeviceCapability::spirv_has_int8)) {
+    return {};
+  }
+  if (!caps->get(DeviceCapability::spirv_has_int16)) {
+    return {};
+  }
 
   IRBuilder ir(arch, caps);
   // `init_header` already calls `init_pre_defs` at the end; invoking both would duplicate every primitive
