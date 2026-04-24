@@ -954,9 +954,13 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
   // and a copy of the source line - and we want it in the runtime diagnostic. But the SPIR-V debug-printf
   // format string flows verbatim into MoltenVK's SPIRV-Cross -> MSL translator, which embeds it as an MSL
   // string literal; a `"`, `\n`, or `\r` terminates the literal mid-parse and the downstream MSL compile
-  // fails with `use of undeclared identifier '<path fragment>'`. Escape those characters so the printed
-  // traceback is preserved byte-for-byte on native Vulkan drivers and still round-trips cleanly through
-  // MSL on Apple Silicon.
+  // fails with `use of undeclared identifier '<path fragment>'`. A raw `%` is equally hazardous: the
+  // concatenated string is the printf-style format with an empty args vector, so an unescaped `%` in the
+  // source line (e.g. `a % b`, `"%d" % x`, a `%20` URL-escape) surfaces as a format specifier with no
+  // matching argument - undefined behaviour on the validation-layer debug-printf path and on MoltenVK's
+  // MSL translation. Escape all four so the printed traceback is preserved byte-for-byte on native Vulkan
+  // drivers and still round-trips cleanly through MSL on Apple Silicon. The `%` handling mirrors
+  // `sanitize_format_string` above.
   std::string safe_tb;
   safe_tb.reserve(tb.size());
   for (char c : tb) {
@@ -964,6 +968,8 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
       safe_tb += "\\\"";
     } else if (c == '\n' || c == '\r') {
       safe_tb += ' ';
+    } else if (c == '%') {
+      safe_tb += "%%";
     } else {
       safe_tb += c;
     }

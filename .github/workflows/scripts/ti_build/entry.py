@@ -51,8 +51,9 @@ def setup_basic_build_env():
         # macOS: the SDK bundles a current MoltenVK that advertises `VK_KHR_buffer_device_address`, which
         # the adstack sizer shader needs for `ExternalTensorRead` via Physical Storage Buffer addressing.
         # The Vulkan-Taichi-assets pin at `quadrants/rhi/CMakeLists.txt:40` is too old for PSB; wiring
-        # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/MoltenVK/dylib/macOS/libMoltenVK.dylib`
-        # and ship that in the wheel instead.
+        # `setup_vulkan()` here lets the CMake glue pick up `$VULKAN_SDK/lib/libMoltenVK.dylib` (the flat
+        # layout LunarG's macOS SDK uses - see the layout note in `vulkan.py::setup_vulkan`) and ship
+        # that in the wheel instead.
         from .vulkan import setup_vulkan
 
         setup_vulkan()
