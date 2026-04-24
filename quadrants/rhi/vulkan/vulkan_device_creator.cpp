@@ -60,8 +60,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(VkDebugUtilsMessageSeverityFlag
                                                  const VkDebugUtilsMessengerCallbackDataEXT *p_callback_data,
                                                  void *p_user_data) {
   if (message_type == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT &&
-      message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT &&
-      p_callback_data->pMessageIdName != nullptr &&
+      message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT && p_callback_data->pMessageIdName != nullptr &&
       strstr(p_callback_data->pMessageIdName, "DEBUG-PRINTF") != nullptr) {
     std::cout << p_callback_data->pMessage;
   }
