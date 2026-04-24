@@ -51,8 +51,14 @@ def _test_python(args, default_dir="python"):
         if args.timeout > 0:
             pytest_args += [
                 "--durations=15",
+                # Suppress stock pytest-timeout if installed — it conflicts
+                # with pytest_hardtle (both register the same hook specs).
                 "-p",
                 "no:timeout",
+                # pytest_hardtle uses a CFFI-compiled C watchdog that calls
+                # _exit(1) from a native signal handler, so it can kill tests
+                # hung in native GPU calls even when the GIL is held.
+                # Stock pytest-timeout's signal method cannot do this.
                 "-p",
                 "pytest_hardtle",
                 f"--timeout={args.timeout}",
