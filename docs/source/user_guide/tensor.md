@@ -1,16 +1,10 @@
 # Tensors
 
-Quadrants offers two underlying tensor implementations, `qd.field`
-and `qd.ndarray`. They have different runtime/compile-time
-trade-offs, and different physical memory layouts can suit different kernels.
+Quadrants offers two underlying tensor implementations, `qd.field` and `qd.ndarray`. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
 
-The tensor API lets you pick both the **backend** and (in a future
-release) the **physical layout** on a per-tensor basis at allocation time.
-The rest of the system (kernels, fastcache, autograd) stays out of the way.
+The tensor API lets you pick both the **backend** and (in a future release) the **physical layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
-This page documents the user-facing API as it lands. See
-[`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md),
-and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
+This page documents the user-facing API as it lands. See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 
 ## Choosing a backend: `qd.Backend`
 
@@ -25,9 +19,7 @@ The choice is per tensor: a single program can freely mix backends.
 
 ## Allocating a tensor with `qd.tensor()`
 
-`qd.tensor(dtype, shape, backend=...)` is a thin dispatcher over `qd.field` and
-`qd.ndarray`. It selects the underlying allocator based on the `backend=`
-keyword:
+`qd.tensor(dtype, shape, backend=...)` is a thin dispatcher over `qd.field` and `qd.ndarray`. It selects the underlying allocator based on the `backend=` keyword:
 
 ```python
 import quadrants as qd
@@ -41,24 +33,13 @@ assert isinstance(a, qd.Tensor)
 assert isinstance(b, qd.Tensor)
 ```
 
-`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings)
-returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface
-(`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`,
-`from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side
-`__getitem__` / `__setitem__`, pickle) regardless of which backend it
-wraps. Drop down to the bare impl with `t._unwrap()` (returns the
-underlying `qd.Ndarray` or `qd.ScalarField`) only if you need a
-backend-specific knob.
+`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings) returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface (`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`, `from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side `__getitem__` / `__setitem__`, pickle) regardless of which backend it wraps. Drop down to the bare impl with `t._unwrap()` (returns the underlying `qd.Ndarray` or `qd.ScalarField`) only if you need a backend-specific knob.
 
-The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when
-sizes change.
+The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when sizes change.
 
 ## Vector and matrix tensors
 
-For tensors whose elements are vectors or matrices, use `qd.Vector.tensor`
-or `qd.Matrix.tensor`. They dispatch over `qd.Vector.field` /
-`qd.Vector.ndarray` and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively,
-with the same `backend=` keyword:
+For tensors whose elements are vectors or matrices, use `qd.Vector.tensor` or `qd.Matrix.tensor`. They dispatch over `qd.Vector.field` / `qd.Vector.ndarray` and `qd.Matrix.field` / `qd.Matrix.ndarray` respectively, with the same `backend=` keyword:
 
 ```python
 import quadrants as qd
@@ -77,9 +58,7 @@ m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 
 ## Gradients
 
-`needs_grad=True` works on every tensor factory and on every
-backend, by passing the keyword through to the underlying
-`qd.field` / `qd.ndarray` call:
+`needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call:
 
 ```python
 import quadrants as qd
@@ -104,9 +83,7 @@ write_grad(a)
 print(a.grad.to_numpy())   # [0., 100., 200., 300.]
 ```
 
-Gradient buffers always share the canonical shape of the primal, on both
-backends. The `needs_grad` keyword also passes through `qd.Vector.tensor`
-and `qd.Matrix.tensor` for compound element types.
+Gradient buffers always share the canonical shape of the primal, on both backends. The `needs_grad` keyword also passes through `qd.Vector.tensor` and `qd.Matrix.tensor` for compound element types.
 
 ## Controlling physical layout
 
@@ -124,10 +101,7 @@ a = qd.tensor(qd.f32, shape=(N, B))
 b = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
 ```
 
-`layout` is a tuple of `int` listing the **canonical axis index at each
-successive memory-nesting level, outermost first**. It must be a permutation
-of `range(len(shape))`. The canonical (logical) shape that you pass and that
-`tensor.shape` returns is *not* affected by `layout`:
+`layout` is a tuple of `int` listing the **canonical axis index at each successive memory-nesting level, outermost first**. It must be a permutation of `range(len(shape))`. The canonical (logical) shape that you pass and that `tensor.shape` returns is *not* affected by `layout`:
 
 ```python
 b = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
@@ -135,10 +109,7 @@ assert b.shape == (N, B)        # canonical shape, unchanged
 b[i, j] = ...                   # canonical indexing in kernels still works
 ```
 
-Any permutation is supported, up to Quadrants' `quadrants_max_num_indices`
-(currently 12). `layout=None` and the identity permutation
-(`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the
-underlying allocator.
+Any permutation is supported, up to Quadrants' `quadrants_max_num_indices` (currently 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
 
 Quadrants rejects mismatched / invalid layouts up front:
 
@@ -150,17 +121,9 @@ qd.tensor(qd.f32, shape=(4, 5), order="ji")         # TypeError: use layout=
 
 ## Interop with NumPy and PyTorch
 
-Every Python-side accessor — `tensor.shape`, `tensor.layout`,
-`tensor.to_numpy()`, `tensor.to_numpy(dtype=...)`,
-`tensor.from_numpy(...)`, `tensor.to_torch(device=...)`,
-`tensor.from_torch(...)`, `tensor.to_dlpack()` (and therefore anything
-built on top of it like `torch.utils.dlpack.from_dlpack`) — returns the
-**canonical view**: the shape you passed at allocation time, indexed in
-canonical axis order.
+Every Python-side accessor — `tensor.shape`, `tensor.layout`, `tensor.to_numpy()`, `tensor.to_numpy(dtype=...)`, `tensor.from_numpy(...)`, `tensor.to_torch(device=...)`, `tensor.from_torch(...)`, `tensor.to_dlpack()` (and therefore anything built on top of it like `torch.utils.dlpack.from_dlpack`) — returns the **canonical view**: the shape you passed at allocation time, indexed in canonical axis order.
 
-`layout=` is purely an internal performance hint. The data lives in
-permuted physical storage, but Python callers never have to reason
-about that:
+`layout=` is purely an internal performance hint. The data lives in permuted physical storage, but Python callers never have to reason about that:
 
 ```python
 a = qd.tensor(qd.f32, shape=(N, B), layout=(1, 0))
@@ -173,9 +136,7 @@ src = np.zeros((N, B), dtype=np.float32)
 a.from_numpy(src)
 assert (a.to_numpy() == src).all()
 
-# DLPack carries the canonical shape with permuted strides; the
-# resulting torch tensor is a transposed view of the underlying buffer
-# (no data movement until you call ``.contiguous()``).
+# DLPack carries the canonical shape with permuted strides; the resulting torch tensor is a transposed view of the underlying buffer (no data movement until you call ``.contiguous()``).
 import torch
 t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
 assert tuple(t.shape) == (N, B)
@@ -186,18 +147,13 @@ assert tuple(out.shape) == (N, B)
 a.from_torch(out)
 ```
 
-The exact same surface is available on both backends — switching
-`qd.tensor(..., backend=qd.Backend.FIELD/NDARRAY)` does not require
-any other code change at the call site.
+The exact same surface is available on both backends — switching `qd.tensor(..., backend=qd.Backend.FIELD/NDARRAY)` does not require any other code change at the call site.
 
-Gradient buffers behave identically: `a.grad.to_numpy()` returns the
-canonical view of the gradient.
+Gradient buffers behave identically: `a.grad.to_numpy()` returns the canonical view of the gradient.
 
 ## Annotating kernel arguments: `qd.Tensor`
 
-Kernel parameter annotations use `qd.Tensor` regardless of backend.
-The same class doubles as the wrapper class returned by `qd.tensor()`,
-so the annotation and the runtime values agree:
+Kernel parameter annotations use `qd.Tensor` regardless of backend. The same class doubles as the wrapper class returned by `qd.tensor()`, so the annotation and the runtime values agree:
 
 ```python
 import quadrants as qd
@@ -216,15 +172,11 @@ fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
 
-The kernel argument is unwrapped to the bare impl before the
-template-mapper / AST sees it, so kernel bodies still write `x[i, j]`
-and pay no per-call cost for the wrapper.
+The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
 
 ## Pickle
 
-`qd.Tensor` objects are picklable on **both** backends, including under
-non-identity layouts. Round-trip preserves the canonical data, the
-dtype, the shape, and the layout:
+`qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip preserves the canonical data, the dtype, the shape, and the layout:
 
 ```python
 import pickle
@@ -242,18 +194,11 @@ assert restored.layout == (1, 0)
 assert (restored.to_numpy() == a.to_numpy()).all()
 ```
 
-Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips
-through `to_numpy()` plus a `qd.tensor(...)` reallocation on load). The
-bare `qd.field` type does not support pickle directly — `qd.Tensor` is
-the unit of serialization.
+Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips through `to_numpy()` plus a `qd.tensor(...)` reallocation on load). The bare `qd.field` type does not support pickle directly — `qd.Tensor` is the unit of serialization.
 
 ## Wrapping a bare tensor: `qd.wrap`
 
-If you have a bare `qd.field` / `qd.ndarray` / `qd.Vector.field` /
-`qd.Matrix.field` / `qd.Vector.ndarray` / `qd.Matrix.ndarray` impl
-(e.g. from older code or library boundaries) and want the unified
-`qd.Tensor` surface around it, use `qd.wrap(impl)`. It picks the most
-specific subclass (`Tensor`, `VectorTensor`, `MatrixTensor`):
+If you have a bare `qd.field` / `qd.ndarray` / `qd.Vector.field` / `qd.Matrix.field` / `qd.Vector.ndarray` / `qd.Matrix.ndarray` impl (e.g. from older code or library boundaries) and want the unified `qd.Tensor` surface around it, use `qd.wrap(impl)`. It picks the most specific subclass (`Tensor`, `VectorTensor`, `MatrixTensor`):
 
 ```python
 import quadrants as qd
@@ -266,17 +211,11 @@ assert isinstance(t, qd.Tensor)
 assert t._unwrap() is a   # same underlying impl
 ```
 
-`qd.wrap` is the only sanctioned way to construct a wrapper around a
-bare impl after the fact. The `qd.Tensor(impl)` constructor itself
-rejects double-wrapping so you can't accidentally end up with a
-`Tensor` containing a `Tensor`.
+`qd.wrap` is the only sanctioned way to construct a wrapper around a bare impl after the fact. The `qd.Tensor(impl)` constructor itself rejects double-wrapping so you can't accidentally end up with a `Tensor` containing a `Tensor`.
 
 ## Cross-backend `copy_from` is not supported
 
-`tensor.copy_from(other)` requires both tensors to share the same
-backend. Mixed-backend copies are deliberately unsupported because the
-intended deployment model is process-wide, homogeneous backend
-selection (e.g. via a `GS_ENABLE_NDARRAY` env var):
+`tensor.copy_from(other)` requires both tensors to share the same backend. Mixed-backend copies are deliberately unsupported because the intended deployment model is process-wide, homogeneous backend selection (e.g. via a `GS_ENABLE_NDARRAY` env var):
 
 ```python
 a = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
@@ -284,15 +223,11 @@ b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 a.copy_from(b)   # raises: cross-backend copy unsupported
 ```
 
-If you genuinely need to move data across backends, route it through
-NumPy (or DLPack/Torch): `a.from_numpy(b.to_numpy())`.
+If you genuinely need to move data across backends, route it through NumPy (or DLPack/Torch): `a.from_numpy(b.to_numpy())`.
 
 ## Known asymmetry: real-dtype `.grad` stub on the field backend
 
-For tensors of a real (`f32` / `f64`) dtype allocated **without**
-`needs_grad=True`, the field backend currently allocates a zombie
-gradient stub anyway, so `t.grad` returns a wrapper around it. The
-ndarray backend correctly reports `t.grad is None` in the same case:
+For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend currently allocates a zombie gradient stub anyway, so `t.grad` returns a wrapper around it. The ndarray backend correctly reports `t.grad is None` in the same case:
 
 ```python
 t_field = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
@@ -302,7 +237,4 @@ t_field.grad   # currently a Tensor wrapper around a zombie field
 t_nd.grad      # None
 ```
 
-Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are
-symmetric (`grad is None` on both backends regardless of `needs_grad`).
-This asymmetry is tracked as a follow-up; it does not affect kernels
-that opt in to autograd via `needs_grad=True`.
+Use `needs_grad=True` if you intend to read `.grad`. Integer dtypes are symmetric (`grad is None` on both backends regardless of `needs_grad`). This asymmetry is tracked as a follow-up; it does not affect kernels that opt in to autograd via `needs_grad=True`.
