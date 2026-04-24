@@ -1152,40 +1152,12 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
             <span class="n">shape_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-        <span class="c1"># Allocate as a SINGLE rank-``dim`` dense SNode, always.</span>
-        <span class="c1">#</span>
-        <span class="c1"># When ``order`` is set the canonical-axis permutation is encoded as:</span>
-        <span class="c1">#   * the SNode is allocated at the *permuted physical shape*</span>
-        <span class="c1">#     (``shape_seq`` above already reflects ``shape[axis_seq]``), using</span>
-        <span class="c1">#     the natural ``axes(0, 1, ..., dim-1)`` declaration, and</span>
-        <span class="c1">#   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so</span>
-        <span class="c1">#     that ``build_Subscript`` / ``build_struct_for`` permute canonical</span>
-        <span class="c1">#     user indices into physical storage order at the AST level</span>
-        <span class="c1">#     (same rewrite mechanism as layout-tagged ndarrays).</span>
-        <span class="c1">#</span>
-        <span class="c1"># This replaces the legacy scheme of building a nested stack of</span>
-        <span class="c1"># rank-1 dense SNodes (one per axis), which doubled the number of</span>
-        <span class="c1"># ``linearize`` / SNode ``lookup`` operations per subscript for no</span>
-        <span class="c1"># memory-layout benefit (physical byte order is determined by the</span>
-        <span class="c1"># shape-permutation, not by SNode nesting depth). See the CHI IR</span>
-        <span class="c1"># comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md``</span>
-        <span class="c1"># (Experiment N+1) and the byte-identity regression tests in</span>
-        <span class="c1"># ``tests/python/test_tensor_layout_physical_bytes.py``.</span>
-        <span class="n">flat_axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
-        <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">same_level</span> <span class="o">=</span> <span class="n">order</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
-            <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+            <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
-            <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="c1"># Identity layout is normalised out earlier by ``_layout_to_order``</span>
-            <span class="c1"># (``order=`` is not passed when layout is the default permutation).</span>
-            <span class="n">_qd_layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">)</span>
-            <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
-            <span class="k">if</span> <span class="n">x_grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
-            <span class="k">if</span> <span class="n">x_dual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="n">_qd_layout</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="n">_create_snode</span><span class="p">(</span><span class="n">axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">x</span>
 
 
