@@ -996,20 +996,15 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="c1"># Tensor-wrapper unwrap (stork-17). Substitute each</span>
-        <span class="c1"># ``qd.Tensor`` instance (including ``VectorTensor`` /</span>
-        <span class="c1"># ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` /</span>
-        <span class="c1"># ``ScalarField`` impl *before* anything downstream observes the</span>
-        <span class="c1"># arg tuple — including the autograd tape (uses identity), the</span>
-        <span class="c1"># template mapper (cache-keys on ``id(arg)``), ``_extract_arg``,</span>
-        <span class="c1"># and the AST builder. This guarantees JIT cache stability:</span>
-        <span class="c1"># ``id(Tensor(impl))`` differs across constructions, but</span>
-        <span class="c1"># ``id(impl)`` is stable, so wrapper-or-not yields identical</span>
-        <span class="c1"># cache keys.</span>
+        <span class="c1"># Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /</span>
+        <span class="c1"># ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything</span>
+        <span class="c1"># downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper</span>
+        <span class="c1"># (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:</span>
+        <span class="c1"># ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields</span>
+        <span class="c1"># identical cache keys.</span>
         <span class="c1">#</span>
-        <span class="c1"># Fast path: most calls have no wrappers. ``isinstance`` is used</span>
-        <span class="c1"># so VectorTensor/MatrixTensor subclasses are also unwrapped.</span>
-        <span class="c1"># The check short-circuits on the first non-wrapper.</span>
+        <span class="c1"># Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses are</span>
+        <span class="c1"># also unwrapped. The check short-circuits on the first non-wrapper.</span>
         <span class="k">for</span> <span class="n">_a</span> <span class="ow">in</span> <span class="n">py_args</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_Tensor_cls</span><span class="p">):</span>
                 <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">_impl</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">_Tensor_cls</span><span class="p">)</span> <span class="k">else</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">py_args</span><span class="p">)</span>

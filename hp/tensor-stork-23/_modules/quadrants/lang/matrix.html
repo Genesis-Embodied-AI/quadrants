@@ -1347,11 +1347,9 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
                 <span class="n">shape_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-            <span class="c1"># See ``lang/impl.py::_field`` for the layout semantics: a</span>
-            <span class="c1"># single rank-``dim`` dense SNode is allocated at the permuted</span>
-            <span class="c1"># physical shape (``shape_seq``) with natural axes, and the</span>
-            <span class="c1"># canonical-&gt;physical permutation is encoded as ``_qd_layout``</span>
-            <span class="c1"># on the field for AST-level subscript rewriting.</span>
+            <span class="c1"># See ``lang/impl.py::_field`` for the layout semantics: a single rank-``dim`` dense SNode is allocated</span>
+            <span class="c1"># at the permuted physical shape (``shape_seq``) with natural axes, and the canonical-&gt;physical</span>
+            <span class="c1"># permutation is encoded as ``_qd_layout`` on the field for AST-level subscript rewriting.</span>
             <span class="n">flat_axis_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
             <span class="n">phys_offset</span> <span class="o">=</span> <span class="n">offset</span>
             <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1767,9 +1765,8 @@
                 <span class="s2">&quot;MatrixField.to_dlpack() requires torch to be installed &quot;</span>
                 <span class="s2">&quot;(the C++ layer checks torch version for DLPack byte_offset support)&quot;</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
-        <span class="c1"># See ``Field.to_dlpack`` for the rationale. Only the outer</span>
-        <span class="c1"># ``len(layout)`` spatial axes are permuted — the trailing</span>
-        <span class="c1"># element axes (``n``, ``m``) sit innermost and stay identity.</span>
+        <span class="c1"># See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted — the</span>
+        <span class="c1"># trailing element axes (``n``, ``m``) sit innermost and stay identity.</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -1795,10 +1792,9 @@
         <span class="n">i</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">j</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
         <span class="n">sf</span> <span class="o">=</span> <span class="n">ScalarField</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vars</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">+</span> <span class="n">j</span><span class="p">])</span>
-        <span class="c1"># Propagate the canonical-&gt;physical layout from the parent</span>
-        <span class="c1"># MatrixField so that subscripts / ``get_addr`` on the extracted</span>
-        <span class="c1"># ScalarField go through the same rewrite (each member lives in</span>
-        <span class="c1"># the same permuted-physical SNode hierarchy as the parent).</span>
+        <span class="c1"># Propagate the canonical-&gt;physical layout from the parent MatrixField so that subscripts / ``get_addr`` on</span>
+        <span class="c1"># the extracted ScalarField go through the same rewrite (each member lives in the same permuted-physical SNode</span>
+        <span class="c1"># hierarchy as the parent).</span>
         <span class="n">parent_layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">parent_layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">sf</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">parent_layout</span><span class="p">)</span>
