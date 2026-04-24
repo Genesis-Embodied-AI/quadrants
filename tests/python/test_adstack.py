@@ -1418,7 +1418,7 @@ def test_adstack_ndrange_over_ndarray_shape_does_not_oversize_heap():
     np.testing.assert_allclose(got_grad, np.full_like(arr_np, expected_per_cell), rtol=1e-4, atol=0)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.metal, qd.vulkan])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_bounded_inner_loop_sized_by_structural_prepass():
     # Pins that reverse-mode AD on SPIR-V backends through a statically bounded inner `range(N)` sizes the
     # adstack from the product of enclosing `RangeForStmt` trip counts via the structural pre-pass, not
@@ -1626,7 +1626,7 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
         assert x.grad[k] == pytest.approx(4 * 2.0 * 0.1, rel=1e-5)
 
 
-@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal, qd.vulkan])
+@test_utils.test(require=qd.extension.adstack)
 def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar
     # i32 field load must size the per-thread heap slice from the live field value at each launch. The
@@ -1934,11 +1934,7 @@ def test_adstack_field_ptr_indexed_by_stashed_outer_loop_var():
         assert x.grad[i] == pytest.approx(0.45125, rel=1e-5)
 
 
-@test_utils.test(
-    require=qd.extension.adstack,
-    arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal, qd.vulkan],
-    cfg_optimization=False,
-)
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_triangular_ndrange_self_referential_push_idempotency():
     # Pins the phase-2 idempotency-at-zero probe ordering in `build_value_expr` for a reverse-mode push whose
     # value expression is self-referential by construction. The kernel couples a 2D `qd.ndrange` outer parallel
@@ -2169,12 +2165,7 @@ def test_adstack_structural_pre_pass_fuses_sub_of_max_over_range_with_mismatched
         assert x.grad[k] == pytest.approx(0.0, abs=1e-7)
 
 
-@test_utils.test(
-    require=qd.extension.adstack,
-    arch=[qd.cpu, qd.cuda, qd.metal],
-    cfg_optimization=False,
-    ad_stack_experimental_enabled=True,
-)
+@test_utils.test(require=qd.extension.adstack, arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], cfg_optimization=False)
 def test_adstack_spirv_metadata_per_task_buffer():
     # SPIR-V launcher used to share a single grow-on-demand `AdStackMetadata` device buffer across every
     # task in a kernel. Per-task `(stride_float, stride_int, offset_i, max_size_i, ...)` tables were
