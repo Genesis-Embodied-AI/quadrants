@@ -317,7 +317,10 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.field</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">cast</span>
+<span></span><span class="c1"># pyright: reportPrivateImportUsage=false</span>
+<span class="c1"># Reason: torch.zeros is public torch API, but pyright 1.1.409+ flags it as</span>
+<span class="c1"># private because torch&#39;s stubs don&#39;t re-export it via __all__.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">cast</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants.lang</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
