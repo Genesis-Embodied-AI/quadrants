@@ -40,7 +40,7 @@ bool check_validation_layer_support() {
 }
 
 static const std::unordered_set<std::string> ignored_messages = {
-    "UNASSIGNED-DEBUG-PRINTF",
+    "VVL-DEBUG-PRINTF",
     "VUID_Undefined",
     // (penguinliong): Attempting to map a non-host-visible piece of memory.
     // `VulkanDevice::map()` returns `RhiResult::invalid_usage` in this case.
@@ -61,11 +61,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(VkDebugUtilsMessageSeverityFlag
                                                  void *p_user_data) {
   if (message_type == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT &&
       message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT &&
-      strstr(p_callback_data->pMessage, "DEBUG-PRINTF") != nullptr) {
-    // Message format is "BLABLA | MessageID=xxxxx | <DEBUG_PRINT_MSG>"
-    std::string msg(p_callback_data->pMessage);
-    auto const pos = msg.find_last_of("|");
-    std::cout << msg.substr(pos + 2);
+      p_callback_data->pMessageIdName != nullptr &&
+      strstr(p_callback_data->pMessageIdName, "DEBUG-PRINTF") != nullptr) {
+    std::cout << p_callback_data->pMessage;
   }
 
   if (message_severity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
