@@ -102,10 +102,14 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
   return ret_code == HIP_SUCCESS && attr_val[0] == HIP_MEMORYTYPE_DEVICE;
 }
 
+// Hot path. Uses cached per-handle device scratch buffers, async H2D/D2H,
+// and lazy result-buffer materialisation to eliminate per-launch
+// hipMallocAsync / hipFreeAsync overhead. See device_scratch_buffer.h
+// for the full motivation.
 void KernelLauncher::launch_llvm_kernel(Handle handle,
                                         LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
-  auto launcher_ctx = contexts_[handle.get_launch_id()];
+  auto &launcher_ctx = contexts_[handle.get_launch_id()];
   auto *executor = get_runtime_executor();
   auto *amdgpu_module = launcher_ctx.jit_module;
   const auto &parameters = *launcher_ctx.parameters;
@@ -126,10 +130,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       transfers;
   std::unordered_map<ArgArrayPtrKey, void *, ArgArrayPtrKeyHasher> device_ptrs;
 
-  char *device_result_buffer{nullptr};
-  AMDGPUDriver::get_instance().malloc_async(
-      (void **)&device_result_buffer,
-      std::max(ctx.result_buffer_size, sizeof(uint64)), nullptr);
+  char *device_result_buffer = nullptr;
 
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
@@ -161,6 +162,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
             branch_counts->kNone_host_copy.fetch_add(
                 1, std::memory_order_relaxed);
           }
+          device_result_buffer = launcher_ctx.device_result_buffer.ensure(sizeof(uint64));
           DeviceAllocation devalloc = executor->allocate_memory_on_device(
               arr_sz, (uint64 *)device_result_buffer);
           device_ptrs[data_ptr_idx] =
@@ -193,20 +195,19 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       }
     }
   }
-  if (transfers.size() > 0) {
-    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-  }
+  // No pre-kernel sync needed: transfer H2Ds above are synchronous, and
+  // the arg-buffer async H2D below is stream-ordered with the kernel.
   char *host_result_buffer = (char *)ctx.get_context().result_buffer;
   if (ctx.result_buffer_size > 0) {
-    // Malloc_Async and Free_Async are available after ROCm 5.4
+    device_result_buffer = launcher_ctx.device_result_buffer.ensure(std::max(ctx.result_buffer_size, sizeof(uint64)));
     ctx.get_context().result_buffer = (uint64 *)device_result_buffer;
   }
-  char *device_arg_buffer = nullptr;
   if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().malloc_async((void **)&device_arg_buffer,
-                                              ctx.arg_buffer_size, nullptr);
-    AMDGPUDriver::get_instance().memcpy_host_to_device(
-        device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size);
+    char *device_arg_buffer =
+        launcher_ctx.device_arg_buffer.ensure(ctx.arg_buffer_size);
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(
+        device_arg_buffer, ctx.get_context().arg_buffer, ctx.arg_buffer_size,
+        nullptr);
     ctx.get_context().arg_buffer = device_arg_buffer;
   }
 
@@ -217,14 +218,18 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks);
   }
   QD_TRACE("Launching kernel");
-  if (ctx.arg_buffer_size > 0) {
-    AMDGPUDriver::get_instance().mem_free_async(device_arg_buffer, nullptr);
-  }
+  bool needs_sync = false;
   if (ctx.result_buffer_size > 0) {
-    AMDGPUDriver::get_instance().memcpy_device_to_host(
-        host_result_buffer, device_result_buffer, ctx.result_buffer_size);
+    AMDGPUDriver::get_instance().memcpy_device_to_host_async(
+        host_result_buffer, device_result_buffer, ctx.result_buffer_size,
+        nullptr);
+    // Caller reads result_buffer via get_ret() with no further sync;
+    // hipMemcpyDtoHAsync may return before the host sees the copy, so
+    // force a sync below regardless of pageable/pinned destination.
+    needs_sync = true;
   }
-  if (transfers.size()) {
+  if (!transfers.empty() || needs_sync) {
+    AMDGPUDriver::get_instance().stream_synchronize(nullptr);
     for (auto itr = transfers.begin(); itr != transfers.end(); itr++) {
       auto &idx = itr->first;
       auto arg_id = idx.arg_id;
@@ -234,7 +239,6 @@ void KernelLauncher::launch_llvm_kernel(Handle handle,
       executor->deallocate_memory_on_device(itr->second.second);
     }
   }
-  AMDGPUDriver::get_instance().mem_free_async(device_result_buffer, nullptr);
 }
 
 KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
@@ -264,3 +268,4 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(
 
 }  // namespace amdgpu
 }  // namespace quadrants::lang
+
