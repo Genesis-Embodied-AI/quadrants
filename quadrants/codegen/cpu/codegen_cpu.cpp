@@ -175,6 +175,17 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
       call("LLVMRuntime_profiler_stop", get_runtime());
     }
     finalize_offloaded_task_function();
+    // Host-side adstack sizing: on CPU the adstack slot is indexed by `cpu_thread_id` in
+    // [0, num_cpu_threads), so sizing is independent of iteration count. Serial tasks run on the
+    // launcher with `cpu_thread_id == 0`. Dynamic offsets stay -1 because CPU never reads begin/end
+    // from gtmps for sizing - the thread pool bound is always tight.
+    if (current_task->ad_stack.per_thread_stride > 0) {
+      int cpu_threads = 1;
+      if (stmt->task_type != OffloadedStmt::TaskType::serial && stmt->num_cpu_threads > 0) {
+        cpu_threads = stmt->num_cpu_threads;
+      }
+      current_task->ad_stack.static_num_threads = static_cast<std::size_t>(cpu_threads);
+    }
     offloaded_tasks.push_back(*current_task);
     current_task = nullptr;
     current_offload = nullptr;

@@ -1350,6 +1350,16 @@ RhiResult MetalDevice::create_pipeline(Pipeline **out_pipeline,
   } catch (const std::exception &e) {
     return RhiResult::error;
   }
+  // `create_compute_pipeline` returns nullptr on any rejection by Apple's MSL
+  // translator or the Metal pipeline-state factory; the specific reason is
+  // logged via `RHI_LOG_ERROR` inside (examples: translator-internal MSL
+  // errors, `XPC_ERROR_CONNECTION_INTERRUPTED` from the XPC-backed MSL
+  // service). Propagate the failure as an `RhiResult::error` so the caller
+  // surfaces it as a Python-level exception instead of launching with a null
+  // pipeline.
+  if (*out_pipeline == nullptr) {
+    return RhiResult::error;
+  }
   return RhiResult::success;
 }
 

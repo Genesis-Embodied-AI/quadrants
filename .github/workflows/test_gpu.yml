@@ -152,11 +152,11 @@ jobs:
           pip install -r requirements_test_xdist.txt
       - name: run tests (without torch)
         run: |
-          python tests/run_tests.py -r 3 -v --arch vulkan -m "not needs_torch"
+          python tests/run_tests.py -r 1 -v --arch vulkan -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
           pip install torch
-          python tests/run_tests.py -r 3 -v --arch vulkan -m needs_torch
+          python tests/run_tests.py -r 1 -v --arch vulkan -m needs_torch
   test_linux_amdgpu:
     name: Test Linux AMD GPU
     runs-on: amdgpu

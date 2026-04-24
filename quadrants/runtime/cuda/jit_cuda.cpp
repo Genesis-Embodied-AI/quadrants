@@ -84,11 +84,18 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
 
 JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
-  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1") {
+  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
+
+  // Capture the dump name before compile_module_to_ptx renames functions via convert().
+  std::string dump_name;
+  if (dump_ir_env != nullptr || load_ptx_env != nullptr) {
+    dump_name = moduleToDumpName(M.get());
+  }
+
+  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1" && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
-    std::string dumpName = moduleToDumpName(M.get());
-    std::filesystem::path filename = ir_dump_dir / (dumpName + "_before_ptx.ll");
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_before_ptx.ll");
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
@@ -105,22 +112,19 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     writer.write(ptx);
   }
 
-  if (dump_ir_env != nullptr) {
+  if (dump_ir_env != nullptr && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
-    std::string dumpName = moduleToDumpName(M.get());
-    std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
     if (std::ofstream out_file(ptx_path); out_file.is_open()) {
       out_file << ptx << std::endl;
+      std::cout << "PTX dumped to: " << ptx_path.string() << std::endl;
     }
-    std::cout << "PTX dumped to: " << ptx_path.string() << std::endl;
   }
 
-  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
-  if (load_ptx_env != nullptr) {
+  if (load_ptx_env != nullptr && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
-    std::string dumpName = moduleToDumpName(M.get());
-    std::filesystem::path ptx_path = ir_dump_dir / (dumpName + ".ptx");
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
     std::ifstream in_file(ptx_path);
     if (in_file.is_open()) {
       QD_INFO("Loading PTX from file: {}", ptx_path.string());

@@ -2,16 +2,57 @@
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
+#include "quadrants/runtime/llvm/llvm_runtime_executor.h"
 
 #include <vector>
 
 namespace quadrants::lang {
 namespace cuda {
 
+namespace {
+
+// Resolve the tight thread count for a task's adstack sizing. For dynamic-bound range_for the begin / end
+// i32 values live in `runtime->temporaries` on device; the launcher fetches them via a 4-byte DtoH memcpy
+// each (dominated by the kernel-launch overhead that follows and only paid for kernels that actually use an
+// adstack under a dynamic iteration range). Const-bound range_for and non-range_for tasks use the codegen-
+// computed `static_num_threads`.
+std::size_t resolve_num_threads(const AdStackSizingInfo &info, LlvmRuntimeExecutor *executor) {
+  if (!info.dynamic_gpu_range_for) {
+    return info.static_num_threads;
+  }
+  std::int32_t begin = info.begin_const_value;
+  std::int32_t end = info.end_const_value;
+  if (info.begin_offset_bytes >= 0 || info.end_offset_bytes >= 0) {
+    auto *temp_dev_ptr = reinterpret_cast<uint8_t *>(executor->get_runtime_temporaries_device_ptr());
+    if (info.begin_offset_bytes >= 0) {
+      CUDADriver::get_instance().memcpy_device_to_host(&begin, temp_dev_ptr + info.begin_offset_bytes,
+                                                       sizeof(std::int32_t));
+    }
+    if (info.end_offset_bytes >= 0) {
+      CUDADriver::get_instance().memcpy_device_to_host(&end, temp_dev_ptr + info.end_offset_bytes,
+                                                       sizeof(std::int32_t));
+    }
+  }
+  // Clamp the logical iteration count to the launched thread count: adstack slices are indexed by
+  // `linear_thread_idx()` (`block_idx * block_dim + thread_idx`), so only `static_num_threads = grid_dim *
+  // block_dim` slices can ever be touched concurrently. A logical range much larger than the launch size does
+  // not need more heap than `static_num_threads * per_thread_stride`; allocating the logical count would
+  // over-commit memory and trip OOM paths for no gain.
+  std::size_t iter = end > begin ? static_cast<std::size_t>(end - begin) : 0;
+  return std::min(iter, info.static_num_threads);
+}
+
+}  // namespace
+
 void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
                                             JITModule *cuda_module,
                                             const std::vector<OffloadedTask> &offloaded_tasks) {
+  auto *executor = get_runtime_executor();
   for (const auto &task : offloaded_tasks) {
+    if (task.ad_stack.per_thread_stride > 0) {
+      std::size_t n = resolve_num_threads(task.ad_stack, executor);
+      executor->ensure_adstack_heap(task.ad_stack.per_thread_stride * n);
+    }
     QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, task.grid_dim, task.block_dim);
     cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
                         {});
