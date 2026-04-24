@@ -75,7 +75,7 @@ _primitive_types = {int, float, bool}
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
     # Unwrap qd.Tensor wrappers (e.g. from struct fields). Guarded by
     # the module flag to skip the isinstance when no Tensor exists.
-    if _tensor_wrapper._any_tensor_constructed and isinstance(arg, _TensorClass):
+    if _tensor_wrapper._any_tensor_constructed and isinstance(arg, _TensorClass):  # pyright: ignore[reportOptionalMemberAccess]
         arg = arg._unwrap()
     annotation_type = type(annotation)
     if annotation is _TensorClass:

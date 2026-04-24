@@ -608,7 +608,7 @@ class Kernel(FuncBase):
         # (id(Tensor) varies across constructions; id(impl) is stable).
         # Guarded by the module-level flag to avoid any per-arg isinstance
         # overhead when no qd.Tensor has ever been constructed.
-        if _tensor_wrapper._any_tensor_constructed:
+        if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             for _a in py_args:
                 if isinstance(_a, _Tensor_cls):
                     py_args = tuple(a._impl if isinstance(a, _Tensor_cls) else a for a in py_args)

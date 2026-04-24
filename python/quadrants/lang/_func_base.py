@@ -472,7 +472,7 @@ class FuncBase:
 
         # Unwrap qd.Tensor wrappers from struct fields. Guarded by
         # the module flag to avoid per-arg isinstance when no Tensor exists.
-        if _tensor_wrapper._any_tensor_constructed and isinstance(v, _TensorClass):
+        if _tensor_wrapper._any_tensor_constructed and isinstance(v, _TensorClass):  # pyright: ignore[reportOptionalMemberAccess]
             v = v._unwrap()
 
         needed_arg_type_id = id(needed_arg_type)

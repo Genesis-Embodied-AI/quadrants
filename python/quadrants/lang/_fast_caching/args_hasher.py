@@ -75,7 +75,7 @@ def stringify_obj_type(
     """
     # Unwrap qd.Tensor wrapper to bare impl. Guarded by the module-level
     # flag to avoid per-arg isinstance overhead when no Tensor exists.
-    if _tensor_wrapper._any_tensor_constructed and isinstance(obj, _TensorClass):
+    if _tensor_wrapper._any_tensor_constructed and isinstance(obj, _TensorClass):  # pyright: ignore[reportOptionalMemberAccess]
         obj = obj._unwrap()
     arg_type = type(obj)
     _layout = getattr(obj, "_qd_layout", None)
