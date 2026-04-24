@@ -413,6 +413,66 @@
 <li><p>Vulkan-compatible GPUs (e.g. Intel Arc)</p></li>
 </ul>
 </section>
+<section id="backend-os-matrix">
+<h3>Backend / OS matrix<a class="headerlink" href="#backend-os-matrix" title="Link to this heading">#</a></h3>
+<p>Which backends are available on each supported platform. <code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> run on every OS; the other GPU backends are platform-specific because they wrap vendor drivers (CUDA on NVIDIA, ROCm on AMD, Metal on Apple).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>OS \ backend</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cpu</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>macOS (Apple Silicon)</p></td>
+<td><p>yes</p></td>
+<td><p>n/a</p></td>
+<td><p>n/a</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Linux x64</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>n/a</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p>Linux ARM64</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>n/a</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Windows x86</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>n/a</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p>Windows ARM64</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>n/a</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver + CUDA runtime on the host; quadrants links against the CUDA runtime discovered at import time. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS ships a bundled MoltenVK dylib inside the wheel, so no separate MoltenVK install is required.</p></li>
+</ul>
+</section>
 <section id="python-backend">
 <h3>Python backend<a class="headerlink" href="#python-backend" title="Link to this heading">#</a></h3>
 <p>A pure-Python backend (<code class="docutils literal notranslate"><span class="pre">qd.python</span></code>) is available on any system where PyTorch is installed. See <a class="reference internal" href="python_backend.html"><span class="std std-doc">Python backend</span></a>.</p>
@@ -471,6 +531,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Supported systems:</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#operating-systems">Operating systems</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gpus">GPUs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-os-matrix">Backend / OS matrix</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-backend">Python backend</a></li>
 </ul>
 </li>
