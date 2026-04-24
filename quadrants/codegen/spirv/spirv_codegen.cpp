@@ -2604,6 +2604,14 @@ void TaskCodegen::visit(AdStackAllocaStmt *stmt) {
         "cast to qd.f32 or qd.i32 in the differentiable section.",
         stmt->ret_type.to_string());
   }
+  // Load `(offset_val, max_size_val)` from the AdStackMetadata buffer eagerly at the alloca site so the
+  // OpLoads land in the alloca enclosing block. SPIR-V section 2.16 requires every SSA definition to
+  // dominate all its uses, and push/load-top/acc-adjoint sites can live in sibling blocks (forward loop
+  // body vs. backward loop body) that neither dominates the other. Loading lazily at the first push site
+  // would cache SSA ids defined in the forward body and reuse them from the backward body, which
+  // `spirv-val` rejects and strict drivers (MoltenVK, Adreno) refuse at pipeline creation. Eager emission
+  // mirrors the existing discipline for `get_ad_stack_heap_thread_base_{float,int}()` at the same site.
+  ensure_ad_stack_metadata_loaded(info);
   task_attribs_.ad_stack.allocas.push_back(std::move(attribs));
   ad_stacks_[stmt] = info;
 }
