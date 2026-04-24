@@ -366,6 +366,21 @@ SType IRBuilder::get_pointer_type(const SType &value_type, spv::StorageClass sto
   t.element_type_id = value_type.id;
   t.storage_class = storage_class;
   ib_.begin(spv::OpTypePointer).add_seq(t, storage_class, value_type).commit(&global_);
+  // An `OpTypePointer` in the `PhysicalStorageBuffer` storage class that points to a scalar or vector
+  // needs an explicit `ArrayStride` decoration for `OpPtrAccessChain`'s `Element` offset to be scaled
+  // correctly on Vulkan. Without the decoration, drivers that strictly follow SPV_KHR_physical_storage_buffer
+  // treat the stride as undefined and collapse every element index to the base address, which manifests as
+  // `arr[i]` reads returning `arr[0]` for all `i` across the whole kernel (and any indexed ndarray write
+  // landing on slot 0). Sized-pointees (structs, arrays) already carry explicit layout decorations so they
+  // don't need this; the fix is limited to scalars/vectors, where the natural stride is just the pointee
+  // byte size. Uniform / StorageBuffer / Input / Output / Workgroup pointers don't use PSB arithmetic, so
+  // the decoration is a no-op for them and is skipped.
+  if (storage_class == spv::StorageClassPhysicalStorageBuffer && value_type.flag == TypeKind::kPrimitive) {
+    size_t stride = get_primitive_type_size(value_type.dt);
+    if (stride > 0) {
+      this->decorate(spv::OpDecorate, t, spv::DecorationArrayStride, uint32_t(stride));
+    }
+  }
   pointer_type_tbl_[key] = t;
   return t;
 }
