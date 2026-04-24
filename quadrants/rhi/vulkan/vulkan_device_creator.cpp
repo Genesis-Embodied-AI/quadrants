@@ -755,12 +755,24 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       if (shader_atomic_float_feature.shaderBufferFloat64Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float64, true);
       }
+#if !defined(__APPLE__)
+      // Shared (threadgroup) float atomics are not actually usable through MoltenVK: the underlying Metal
+      // Shading Language rejects `atomic_fetch_add_explicit` on `threadgroup atomic_float*` with
+      // `cannot pass pointer to address space 'threadgroup' as a pointer to address space 'device'`, so
+      // MSL translation of any SPIR-V that emits `OpAtomicFAdd` against the Workgroup storage class fails
+      // at pipeline creation. The `shaderSharedFloatN AtomicAdd` feature bit is advertised by MoltenVK
+      // anyway; advertising the cap back up would route `has_native_float_atomic_add(..., is_shared=true)`
+      // to the native path and make every shared-atomic-float kernel unusable on Apple. Dropping the cap
+      // here falls back to the CAS-emulated path in `atomic_operation_widened`, which targets uint
+      // atomics and works on every backend. Companion gate to the `spirv_has_non_semantic_info` drop a
+      // few branches up; see that comment for the overall MoltenVK cap-sanitisation rationale.
       if (shader_atomic_float_feature.shaderSharedFloat32AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float_add, true);
       }
       if (shader_atomic_float_feature.shaderSharedFloat64AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float64_add, true);
       }
+#endif
       *pNextEnd = &shader_atomic_float_feature;
       pNextEnd = &shader_atomic_float_feature.pNext;
     }
@@ -778,9 +790,15 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       if (shader_atomic_float_2_feature.shaderBufferFloat16Atomics) {
         caps.set(DeviceCapability::spirv_has_atomic_float16, true);
       }
+#if !defined(__APPLE__)
+      // Same MoltenVK limitation as `shader_atomic_float_feature.shaderSharedFloat32AtomicAdd` above:
+      // the feature bit is advertised but the MSL translator cannot emit a valid threadgroup
+      // `atomic_fetch_add_explicit` for it. Drop the cap on Apple and let the CAS-emulated fallback
+      // handle f16 shared atomics.
       if (shader_atomic_float_2_feature.shaderSharedFloat16AtomicAdd) {
         caps.set(DeviceCapability::spirv_has_shared_atomic_float16_add, true);
       }
+#endif
       if (shader_atomic_float_2_feature.shaderBufferFloat32AtomicMinMax) {
         caps.set(DeviceCapability::spirv_has_atomic_float_minmax, true);
       }

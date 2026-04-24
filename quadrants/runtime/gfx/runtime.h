@@ -185,6 +185,14 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<CommandList> current_cmdlist_{nullptr};
   high_res_clock::time_point current_cmdlist_pending_since_;
 
+  // Counts kernel launches since the last `synchronize()`. `submit_current_cmdlist_if_timeout` forces a
+  // drain once this crosses a threshold, bounding the growth of `VulkanStream::submitted_cmdbuffers_` (and
+  // the fences, semaphores and descriptor sets those entries keep alive) on tight kernel-launch loops that
+  // never touch a Python-side observable - workloads like MPM88 where every substep is a pure GPU update
+  // and the host only reads state once at the end. See the assignment site for the MoltenVK SIGSEGV this
+  // guards against.
+  size_t pending_launches_since_sync_{0};
+
   std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
 
   std::unordered_map<DeviceAllocation *, size_t> root_buffers_size_map_;
