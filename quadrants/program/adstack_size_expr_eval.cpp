@@ -123,7 +123,7 @@ int64_t evaluate_external_tensor_shape(const SerializedSizeExprNode &node, Launc
   // garbage - often zero when the adjacent field is zero-initialised - and the containing tree collapses to
   // zero. The adstack max_size is clamped to 1 on a zero tree result, which under-bounds real push counts and
   // trips an overflow assertion at the next `qd.sync()`.
-  return static_cast<int64_t>(ctx->get_struct_arg<int32_t>(arg_indices));
+  return static_cast<int64_t>(ctx->get_struct_arg_host<int32_t>(arg_indices));
 }
 
 int64_t evaluate_node(const SerializedSizeExpr &expr,
@@ -384,7 +384,7 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
             std::vector<int> sh_idx(node.arg_id_path.begin(), node.arg_id_path.end());
             sh_idx.push_back(TypeFactory::SHAPE_POS_IN_NDARRAY);
             sh_idx.push_back(static_cast<int>(k + 1));
-            int32_t sh = ctx->get_struct_arg<int32_t>(sh_idx);
+            int32_t sh = ctx->get_struct_arg_host<int32_t>(sh_idx);
             elem_strides[k] = elem_strides[k + 1] * sh;
           }
         }

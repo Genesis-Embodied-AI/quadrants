@@ -246,6 +246,15 @@ T LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices) {
 }
 
 template <typename T>
+T LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices) {
+  // `ctx_->arg_buffer` can be a device pointer after a CUDA / AMDGPU launcher swap; `arg_buffer_.get()` is the
+  // launcher-owned host backing buffer and is always safe to dereference from host code.
+  int offset = args_type->get_element_offset(arg_indices);
+  QD_ASSERT(offset + sizeof(T) <= arg_buffer_size);
+  return *(T *)(arg_buffer_.get() + offset);
+}
+
+template <typename T>
 void LaunchContextBuilder::set_arg(int arg_id, T v) {
   set_struct_arg_impl(std::array{arg_id}, v);
   set_array_device_allocation_type(arg_id, DevAllocType::kNone);
@@ -262,6 +271,7 @@ T LaunchContextBuilder::get_ret(int i) {
   template void LaunchContextBuilder::set_struct_arg_impl(const std::array<int, 3> &arg_indices, ctype v); \
   template ctype LaunchContextBuilder::get_arg(const std::vector<int> &i);                                 \
   template ctype LaunchContextBuilder::get_struct_arg(std::vector<int> arg_indices);                       \
+  template ctype LaunchContextBuilder::get_struct_arg_host(std::vector<int> arg_indices);                  \
   template void LaunchContextBuilder::set_arg(int i, ctype v);                                             \
   template ctype LaunchContextBuilder::get_ret(int i);
 #include "quadrants/inc/data_type_with_c_type.inc.h"
