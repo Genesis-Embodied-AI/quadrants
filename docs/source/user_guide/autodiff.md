@@ -176,7 +176,7 @@ with qd.ad.Tape(loss=total):
 
 **How Quadrants does it.** The compiler imposes a per-launch constraint: within a single kernel launch, a field or ndarray entry that has been read must not be written to afterward. The constraint is strictly per-launch, so different kernels can freely read and write the same entry. Kernel scalar arguments are not subject to this rule: they are function parameters, not globals, and the reverse pass does not need to re-read their original value.
 
-**Workflow.** Keep reads and writes to the same global entry in separate kernel launches; when developing, opt into the [runtime validation checker](#runtime-check) to catch accidental violations.
+**Workflow.** Keep reads and writes to the same global entry in separate kernel launches; when developing, opt into the runtime validation checker described below to catch accidental violations.
 
 Here is a kernel that violates the rule:
 
@@ -207,8 +207,6 @@ update_b()
 ```
 
 The pattern often hides inside in-place time-stepping updates like `x[i] = x[i] + dt * v[i]` when the same loop body reads `x[i]` earlier. The same fix applies (split into two kernels), or equivalently, double-buffer: have the update write into an `x_new` field and swap the references after the kernel returns.
-
-<a name="runtime-check"></a>
 
 **Runtime check.** Violations of the rule do not produce an error on their own - the gradients are just silently wrong. To get Quadrants to validate the rule at runtime, pass `validation=True` to `qd.ad.Tape` (with `qd.init(debug=True)` set). A violation raises `QuadrantsAssertionError` with the offending field name. Kernels wrapped in `qd.ad.grad_replaced` are exempt - their gradient is the user's responsibility.
 
