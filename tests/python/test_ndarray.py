@@ -807,6 +807,7 @@ def test_ndarray_with_fp16():
     debug=True,
     check_out_of_bound=True,
     gdb_trigger=False,
+    exclude=[qd.amdgpu],
 )
 def test_scalar_ndarray_oob():
     @qd.kernel
@@ -832,6 +833,7 @@ def test_scalar_ndarray_oob():
     debug=True,
     check_out_of_bound=True,
     gdb_trigger=False,
+    exclude=[qd.amdgpu],
 )
 # TODO: investigate why this crashes sometimes on Windows
 @pytest.mark.skipif(sys.platform == "win32", reason="Crashes frequently on windows")

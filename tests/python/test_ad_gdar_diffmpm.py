@@ -5,7 +5,7 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True, exclude=[qd.amdgpu])
 def test_gdar_mpm():
     real = qd.f32
 

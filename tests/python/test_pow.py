@@ -66,7 +66,7 @@ def _ipow_negative_exp(dt):
 @test_utils.test(
     debug=True,
     advanced_optimization=False,
-    exclude=[qd.vulkan, qd.metal],
+    exclude=[qd.vulkan, qd.metal, qd.amdgpu],
 )
 def test_ipow_negative_exp_i32():
     _ipow_negative_exp(qd.i32)

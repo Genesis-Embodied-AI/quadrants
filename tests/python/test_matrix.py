@@ -1101,7 +1101,7 @@ def test_vector_transpose():
         foo()
 
 
-@test_utils.test(debug=True)
+@test_utils.test(debug=True, exclude=[qd.amdgpu])
 def test_cross_scope_matrix_binary_ops():
     n = 128
     x = qd.Vector.field(3, dtype=int, shape=(n, n))
@@ -1122,7 +1122,7 @@ def test_cross_scope_matrix_binary_ops():
     assert (x[6, 8] == [1, 10, 100]).all()
 
 
-@test_utils.test(debug=True)
+@test_utils.test(debug=True, exclude=[qd.amdgpu])
 def test_cross_scope_matrix_ternary_ops():
     n = 128
     x = qd.Vector.field(3, dtype=int, shape=(n, n))
@@ -1139,7 +1139,7 @@ def test_cross_scope_matrix_ternary_ops():
     assert (x[1, 1] == [100, 10, 1]).all()
 
 
-@test_utils.test(debug=True)
+@test_utils.test(debug=True, exclude=[qd.amdgpu])
 @pytest.mark.skipif(
     sys.platform == "darwin",
     reason=(
@@ -1166,7 +1166,7 @@ def test_cross_scope_matrix_atomic_ops():
     assert (x[1, 3] == [100, 10, 1]).all()
 
 
-@test_utils.test(debug=True)
+@test_utils.test(debug=True, exclude=[qd.amdgpu])
 def test_global_tmp_overwrite():
     # https://github.com/taichi-dev/quadrants/issues/6663
     @qd.kernel
@@ -1268,6 +1268,7 @@ def test_matrix_arithmatics():
     debug=True,
     check_out_of_bound=True,
     gdb_trigger=False,
+    exclude=[qd.amdgpu],
 )
 def test_matrix_oob():
     @qd.kernel

@@ -12,7 +12,7 @@ if u.system == "linux" and u.machine in ("arm64", "aarch64"):
     pytest.skip("assert not currently supported on linux arm64 or aarch64", allow_module_level=True)
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_minimal():
     @qd.kernel
     def func():
@@ -28,7 +28,7 @@ def test_assert_minimal():
         func2()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_basic():
     @qd.kernel
     def func():
@@ -39,7 +39,7 @@ def test_assert_basic():
         func()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_message():
     @qd.kernel
     def func():
@@ -50,7 +50,7 @@ def test_assert_message():
         func()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_message_formatted():
     x = qd.field(dtype=int, shape=16)
     x[10] = 42
@@ -77,7 +77,7 @@ def test_assert_message_formatted():
     assert_formatted()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_assert_message_formatted_fstring():
     x = qd.field(dtype=int, shape=16)
     x[10] = 42

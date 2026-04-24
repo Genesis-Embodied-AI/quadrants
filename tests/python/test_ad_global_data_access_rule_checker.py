@@ -75,7 +75,7 @@ def test_adjoint_checkbit_needs_grad():
     assert warn_raised
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True, exclude=[qd.amdgpu])
 def test_break_gdar_rule_1():
     N = 16
     x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)
@@ -98,7 +98,7 @@ def test_break_gdar_rule_1():
             func_broke_rule_1()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True)
+@test_utils.test(require=qd.extension.assertion, debug=True, exclude=[qd.amdgpu])
 def test_skip_grad_replaced():
     N = 16
     x = qd.field(dtype=qd.f32, shape=N, needs_grad=True)

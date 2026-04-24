@@ -11,7 +11,7 @@ import pytest
 
 import quadrants as qd
 from quadrants._lib import core as _qd_core
-from quadrants.lang import cpu, cuda, gpu, metal, vulkan
+from quadrants.lang import amdgpu, cpu, cuda, gpu, metal, vulkan
 from quadrants.lang.misc import is_arch_supported
 
 
@@ -139,7 +139,7 @@ def expected_archs():
     """
 
     def get_archs():
-        archs = set([cpu, cuda, metal, vulkan])
+        archs = set([cpu, cuda, metal, vulkan, amdgpu])
         # TODO: now expected_archs is not called per test so we cannot test it
         archs = set(filter(is_arch_supported, archs))
         return archs

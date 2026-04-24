@@ -22,7 +22,7 @@ def test_cpu_debug_snode_reader():
     u.system == "linux" and u.machine in ("arm64", "aarch64"),
     reason="assert not currently supported on linux arm64 or aarch64",
 )
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_cpu_debug_snode_writer_out_of_bound():
     x = qd.field(qd.f32, shape=3)
 
@@ -30,14 +30,14 @@ def test_cpu_debug_snode_writer_out_of_bound():
         x[3] = 10.0
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_cpu_debug_snode_writer_out_of_bound_negative():
     x = qd.field(qd.f32, shape=3)
     with pytest.raises(AssertionError):
         x[-1] = 10.0
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_cpu_debug_snode_reader_out_of_bound():
     x = qd.field(qd.f32, shape=3)
 
@@ -45,14 +45,14 @@ def test_cpu_debug_snode_reader_out_of_bound():
         a = x[3]
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_cpu_debug_snode_reader_out_of_bound_negative():
     x = qd.field(qd.f32, shape=3)
     with pytest.raises(AssertionError):
         a = x[-1]
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_out_of_bound():
     x = qd.field(qd.i32, shape=(8, 16))
 
@@ -79,7 +79,7 @@ def test_not_out_of_bound():
     require=[qd.extension.sparse, qd.extension.assertion],
     debug=True,
     gdb_trigger=False,
-    exclude=qd.metal,
+    exclude=[qd.metal, qd.amdgpu],
 )
 def test_out_of_bound_dynamic():
     x = qd.field(qd.i32)
@@ -112,7 +112,7 @@ def test_not_out_of_bound_dynamic():
     func()
 
 
-@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False, exclude=[qd.amdgpu])
 def test_out_of_bound_with_offset():
     x = qd.field(qd.i32, shape=(8, 16), offset=(-8, -8))
 

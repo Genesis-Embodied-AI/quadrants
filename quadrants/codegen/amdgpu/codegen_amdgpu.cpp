@@ -157,6 +157,12 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
+  // Emit reductions as direct LLVM atomics instead of calling runtime
+  // reduce_* helpers. The runtime helpers expect addrspace(0) pointers,
+  // but SNode destinations arrive in addrspace(1). Calling the helpers
+  // requires an addrspace cast + inlining for correctness, which causes
+  // compilation blowup. Direct atomics preserve the address space and
+  // compile fast.
   llvm::Value *optimized_reduction(AtomicOpStmt *stmt) override {
     if (!stmt->is_reduction) {
       return nullptr;
@@ -164,45 +170,41 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
     PrimitiveTypeID prim_type =
         stmt->val->ret_type->cast<PrimitiveType>()->type;
-
-    std::unordered_map<PrimitiveTypeID,
-                       std::unordered_map<AtomicOpType, std::string>>
-        fast_reductions;
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::min] = "reduce_min_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::min] = "reduce_min_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] =
-        "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] =
-        "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] =
-        "reduce_xor_i32";
-
     AtomicOpType op = stmt->op_type;
-    if (fast_reductions.find(prim_type) == fast_reductions.end()) {
-      return nullptr;
-    }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) !=
-              fast_reductions.at(prim_type).end());
-    // SNode pointer chain (GetRootStmt/SNodeLookupStmt/GetChStmt) propagates
-    // addrspace(1) on AMDGPU. The runtime reduce_*_* helpers in
-    // runtime.cpp:DEFINE_REDUCTION are declared with generic (addrspace 0)
-    // pointer parameters. Cast the destination back to addrspace(0) so
-    // check_func_call_signature accepts the call; InferAddressSpaces in O3
-    // can re-promote downstream loads/stores after inlining.
     llvm::Value *dest = llvm_val[stmt->dest];
-    if (dest && dest->getType()->isPointerTy() &&
-        dest->getType()->getPointerAddressSpace() == 1) {
-      auto *ptr_as0 = llvm::PointerType::getUnqual(*llvm_context);
-      dest = builder->CreateAddrSpaceCast(dest, ptr_as0);
+    llvm::Value *val = llvm_val[stmt->val];
+
+    if (prim_type == PrimitiveTypeID::i32) {
+      std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> i32_ops;
+      i32_ops[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;
+      i32_ops[AtomicOpType::min] = llvm::AtomicRMWInst::BinOp::Min;
+      i32_ops[AtomicOpType::max] = llvm::AtomicRMWInst::BinOp::Max;
+      i32_ops[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
+      i32_ops[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
+      i32_ops[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
+      if (i32_ops.find(op) != i32_ops.end()) {
+        return builder->CreateAtomicRMW(
+            i32_ops.at(op), dest, val, llvm::MaybeAlign(0),
+            llvm::AtomicOrdering::SequentiallyConsistent);
+      }
+    } else if (prim_type == PrimitiveTypeID::f32) {
+      if (op == AtomicOpType::add) {
+        return builder->CreateAtomicRMW(
+            llvm::AtomicRMWInst::FAdd, dest, val, llvm::MaybeAlign(0),
+            llvm::AtomicOrdering::SequentiallyConsistent);
+      } else if (op == AtomicOpType::min) {
+        return atomic_op_using_cas(
+            dest, val,
+            [&](auto v1, auto v2) { return builder->CreateMinNum(v1, v2); },
+            stmt->val->ret_type);
+      } else if (op == AtomicOpType::max) {
+        return atomic_op_using_cas(
+            dest, val,
+            [&](auto v1, auto v2) { return builder->CreateMaxNum(v1, v2); },
+            stmt->val->ret_type);
+      }
     }
-    return call(fast_reductions.at(prim_type).at(op),
-                {dest, llvm_val[stmt->val]});
+    return nullptr;
   }
 
   void visit(RangeForStmt *for_stmt) override {
@@ -372,15 +374,19 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
           origin_pointee_ty, casted_ptr,
           {tlctx->get_constant(0), llvm_val[stmt->offset]});
     } else {
-      auto *origin_address = builder->CreatePtrToInt(
-          origin_ptr, llvm::Type::getInt64Ty(*llvm_context));
+      // Byte-offset GEP preserves pointer provenance and address space,
+      // avoiding the PtrToInt/IntToPtr round-trip that breaks addrspace
+      // tagging and confuses InferAddressSpaces.
+      auto *byte_ptr = builder->CreateBitCast(
+          origin_ptr, llvm::PointerType::get(
+              llvm::Type::getInt8Ty(*llvm_context), origin_as));
       auto *address_offset = builder->CreateSExt(
           llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));
-      auto *target_address =
-          builder->CreateAdd(origin_address, address_offset);
+      auto *offset_ptr = builder->CreateGEP(
+          llvm::Type::getInt8Ty(*llvm_context), byte_ptr, address_offset);
       auto pointee_ty = tlctx->get_data_type(stmt->ret_type.ptr_removed());
-      llvm_val[stmt] = builder->CreateIntToPtr(
-          target_address, llvm::PointerType::get(pointee_ty, origin_as));
+      llvm_val[stmt] = builder->CreateBitCast(
+          offset_ptr, llvm::PointerType::get(pointee_ty, origin_as));
     }
   }
 
