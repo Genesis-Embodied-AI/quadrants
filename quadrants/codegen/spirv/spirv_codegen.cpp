@@ -2185,6 +2185,37 @@ spirv::Value TaskCodegen::get_buffer_value(BufferInfo buffer, DataType dt) {
     ir_->decorate(spv::OpDecorate, buffer_value, spv::DecorationVolatile);
   }
   buffer_value_map_[key] = buffer_value;
+
+  // Type-punned views of the same underlying `VkBuffer` need an explicit `Aliased` decoration. Every
+  // `(BufferInfo, element_type)` pair here gets its own `OpVariable` with a fresh `DescriptorSet` /
+  // `Binding`, so a field read through the `u32` view and a preceding `OpAtomicFAddEXT` through the
+  // `f32` view are separate SPIR-V variables pointing to the same memory. Without `Aliased` the
+  // driver is spec-free to assume they don't alias, and the plain load is not ordered against the
+  // atomic write -- the load reads the stale zero initial value and the reverse-mode adjoint silently
+  // drops to zero (`test_ad_dynamic_index.py::test_matrix_non_constant_index[arch=vulkan]` reproduces
+  // this on every device that exposes `shaderBufferFloat32AtomicAdd`).
+  //
+  // The aliasing hazard applies across every pairing of views on the same buffer, not just
+  // (native-float atomic, plain load): the CAS-emulation atomic path on devices without
+  // `shaderBufferFloat32AtomicAdd` routes float atomics through the `u32` view while other sites may
+  // emit atomics min / max / mul directly against the `u32` view -- each such pairing against a
+  // plain-load-through-any-view needs the same decoration. Decorating here rather than at first
+  // `at_buffer` call keeps the fix independent of which call site happens to introduce the second
+  // view.
+  //
+  // Decorate lazily: a single-view buffer stays un-decorated (no perf cost from disabled
+  // cross-variable scheduling optimizations), and only when a buffer gets its second distinct view do
+  // we retroactively decorate every view -- existing ones through the id-set guard below, and the new
+  // one unconditionally in the same sweep.
+  auto &views = buffer_views_by_buffer_[buffer];
+  views.push_back(buffer_value);
+  if (views.size() >= 2) {
+    for (const auto &v : views) {
+      if (aliased_decorated_buffer_ids_.insert(v.id).second) {
+        ir_->decorate(spv::OpDecorate, v, spv::DecorationAliased);
+      }
+    }
+  }
   QD_TRACE("buffer name = {}, value = {}", buffer_instance_name(buffer), buffer_value.id);
 
   return buffer_value;
