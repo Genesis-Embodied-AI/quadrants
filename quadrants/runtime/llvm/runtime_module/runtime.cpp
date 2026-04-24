@@ -791,13 +791,13 @@ void runtime_get_adstack_metadata_field_ptrs(LLVMRuntime *runtime) {
 // through the kernel's `args_type` struct layout.
 //
 // Recursion bounded by tree depth (typically <10 for observed reverse-mode kernels, <30 worst case). The
-// bound-variable scope is kept in a fixed-size array indexed by `var_id`, so `MaxOverRange` nesting is capped at
-// `kDeviceBoundVarCap` levels; exceeding this would indicate a pre-pass bug since the grammar does not generate
-// that many nested ranges in practice.
+// bound-variable scope is kept in a fixed-size array indexed by `var_id`; the host encoder dense-remaps each
+// tree's `var_id`s into `[0, kDeviceBoundVarCap)` before emitting bytecode and hard-errors above the cap, so
+// `values[var_id]` is always in bounds here.
 
 namespace {
 
-constexpr int kDeviceBoundVarCap = 32;
+constexpr int kDeviceBoundVarCap = quadrants::lang::kAdStackSizeExprDeviceMaxBoundVars;
 
 struct DeviceEvalScope {
   // Bound-var lookup by `var_id`. Unbound slots are sentinelled by the caller before the interpreter enters the

@@ -25,6 +25,14 @@
 
 namespace quadrants::lang {
 
+// Maximum number of distinct `BoundVariable` ids a single adstack's device-side tree may reference. The device
+// interpreter in `runtime.cpp` and the SPIR-V sizer shader both keep per-invocation scope arrays sized by this
+// constant; the host encoder dense-remaps each tree's `var_id`s into `[0, kAdStackSizeExprDeviceMaxBoundVars)`
+// before emitting device nodes, and hard-errors host-side when a tree references more distinct bound vars than
+// this cap. Keeping the constant here (rather than in the interpreter's private .cpp) lets both the encoder and
+// the interpreter agree on the bound without a cross-TU include.
+constexpr int32_t kAdStackSizeExprDeviceMaxBoundVars = 32;
+
 // Only the node kinds that survive the host pre-substitution. `FieldLoad` is replaced with `Const(field_value)` and
 // `ExternalTensorShape` with `Const(shape_value)` before encoding, so the device interpreter never sees them. Keep
 // the numeric ids stable across versions so the interpreter can dispatch via a switch without re-remapping.

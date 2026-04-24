@@ -264,6 +264,50 @@ std::vector<std::unordered_set<int32_t>> compute_free_vars(const SerializedSizeE
   return result;
 }
 
+// Walks `expr` and builds a dense `original_var_id -> [0, N)` map across every `var_id` the tree references
+// (`MaxOverRange` binds, `BoundVariable` leaves, and bound-var entries inside each ETR / FieldLoad index list).
+// The walker preserves encounter order so nested `MaxOverRange` binds keep monotonically increasing dense ids,
+// which also matches the natural `values[]` indexing the device interpreter does at each bind. Hard-errors if
+// the tree references more distinct bound vars than the device interpreter's per-stack scope capacity.
+std::unordered_map<int32_t, int32_t> build_dense_var_id_remap(const SerializedSizeExpr &expr) {
+  std::unordered_map<int32_t, int32_t> remap;
+  auto add = [&](int32_t v) {
+    if (v < 0)
+      return;
+    if (remap.find(v) == remap.end()) {
+      int32_t dense = static_cast<int32_t>(remap.size());
+      remap.emplace(v, dense);
+    }
+  };
+  for (const auto &node : expr.nodes) {
+    const auto kind = static_cast<SizeExpr::Kind>(node.kind);
+    if (kind == SizeExpr::Kind::MaxOverRange || kind == SizeExpr::Kind::BoundVariable)
+      add(node.var_id);
+    for (int32_t raw : node.indices) {
+      if (raw < 0)
+        add(-(raw + 1));
+    }
+  }
+  QD_ERROR_IF(static_cast<int32_t>(remap.size()) > kAdStackSizeExprDeviceMaxBoundVars,
+              "Adstack SizeExpr tree references {} distinct bound variable ids, which exceeds the device "
+              "interpreter's per-stack scope capacity ({}). This almost always indicates a deeply nested "
+              "reverse-mode loop shape that the pre-pass should have folded earlier; shrink the enclosing "
+              "loops or file a bug so the grammar / walker can be tightened.",
+              remap.size(), kAdStackSizeExprDeviceMaxBoundVars);
+  return remap;
+}
+
+// Returns the dense id for `original_var_id`, or fires a hard error if the remap lost track of it (which would
+// indicate a walker divergence between `build_dense_var_id_remap` and `encode_subtree`).
+int32_t remap_var_id(const std::unordered_map<int32_t, int32_t> &remap, int32_t original) {
+  auto it = remap.find(original);
+  QD_ASSERT_INFO(it != remap.end(),
+                 "Adstack SizeExpr encoder saw var_id={} not present in the dense remap; this "
+                 "is a walker bug between `build_dense_var_id_remap` and `encode_subtree`.",
+                 original);
+  return it->second;
+}
+
 // Initialises a fresh device node with every unused slot sentinelled so the interpreter can tell them apart from
 // legitimate zero-valued slots (e.g. `operand_a == 0` is a valid node index; only `-1` signals "unused").
 AdStackSizeExprDeviceNode make_empty_device_node(int32_t kind) {
@@ -293,6 +337,7 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
                        int32_t src_idx,
                        const std::vector<bool> &contains_etr,
                        const std::vector<std::unordered_set<int32_t>> &free_vars,
+                       const std::unordered_map<int32_t, int32_t> &var_id_remap,
                        Program *prog,
                        LaunchContextBuilder *ctx,
                        std::vector<AdStackSizeExprDeviceNode> &out_nodes,
@@ -327,7 +372,7 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     case SizeExpr::Kind::BoundVariable: {
       AdStackSizeExprDeviceNode dn =
           make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kBoundVariable));
-      dn.var_id = node.var_id;
+      dn.var_id = remap_var_id(var_id_remap, node.var_id);
       out_nodes.push_back(dn);
       return static_cast<int32_t>(out_nodes.size() - 1);
     }
@@ -335,8 +380,10 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
     case SizeExpr::Kind::Sub:
     case SizeExpr::Kind::Mul:
     case SizeExpr::Kind::Max: {
-      int32_t a = encode_subtree(src, node.operand_a, contains_etr, free_vars, prog, ctx, out_nodes, out_indices);
-      int32_t b = encode_subtree(src, node.operand_b, contains_etr, free_vars, prog, ctx, out_nodes, out_indices);
+      int32_t a =
+          encode_subtree(src, node.operand_a, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
+      int32_t b =
+          encode_subtree(src, node.operand_b, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
       AdStackSizeExprDeviceKind dk = AdStackSizeExprDeviceKind::kAdd;
       if (kind == SizeExpr::Kind::Sub)
         dk = AdStackSizeExprDeviceKind::kSub;
@@ -351,16 +398,18 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
       return static_cast<int32_t>(out_nodes.size() - 1);
     }
     case SizeExpr::Kind::MaxOverRange: {
-      int32_t a = encode_subtree(src, node.operand_a, contains_etr, free_vars, prog, ctx, out_nodes, out_indices);
-      int32_t b = encode_subtree(src, node.operand_b, contains_etr, free_vars, prog, ctx, out_nodes, out_indices);
-      int32_t body =
-          encode_subtree(src, node.body_node_idx, contains_etr, free_vars, prog, ctx, out_nodes, out_indices);
+      int32_t a =
+          encode_subtree(src, node.operand_a, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
+      int32_t b =
+          encode_subtree(src, node.operand_b, contains_etr, free_vars, var_id_remap, prog, ctx, out_nodes, out_indices);
+      int32_t body = encode_subtree(src, node.body_node_idx, contains_etr, free_vars, var_id_remap, prog, ctx,
+                                    out_nodes, out_indices);
       AdStackSizeExprDeviceNode dn =
           make_empty_device_node(static_cast<int32_t>(AdStackSizeExprDeviceKind::kMaxOverRange));
       dn.operand_a = a;
       dn.operand_b = b;
       dn.body_node_idx = body;
-      dn.var_id = node.var_id;
+      dn.var_id = remap_var_id(var_id_remap, node.var_id);
       out_nodes.push_back(dn);
       return static_cast<int32_t>(out_nodes.size() - 1);
     }
@@ -399,7 +448,15 @@ int32_t encode_subtree(const SerializedSizeExpr &src,
         }
       }
       for (std::size_t k = 0; k < node.indices.size(); ++k) {
-        out_indices.push_back(node.indices[k]);
+        int32_t raw = node.indices[k];
+        if (raw < 0) {
+          // Remap bound-variable refs so the device interpreter's `scope->values[var]` read lands in the
+          // `[0, kAdStackSizeExprDeviceMaxBoundVars)` range regardless of how large the source tree's
+          // `var_id_counter` grew across its push-site walks.
+          int32_t dense = remap_var_id(var_id_remap, -(raw + 1));
+          raw = -(dense + 1);
+        }
+        out_indices.push_back(raw);
         out_indices.push_back(elem_strides[k]);
       }
       out_nodes.push_back(dn);
@@ -474,8 +531,13 @@ std::vector<uint8_t> encode_adstack_size_expr_device_bytecode(const AdStackSizin
                    "Adstack SizeExpr tree root for stack {} has {} free bound variable(s); a well-formed tree"
                    " must be closed at the root because no outer MaxOverRange scope exists at publish time.",
                    i, free_vars[root_src_idx].size());
-    sh.root_node_idx =
-        encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_etr, free_vars, prog, ctx, nodes, indices);
+    // Dense-remap the tree's `var_id`s before emitting device nodes: `var_id_counter` on the host is a monotonic
+    // per-alloca counter bumped at every chased non-const index / stash, so a complex reverse-mode kernel can
+    // exceed the device interpreter's fixed-size scope capacity even with modest nesting. The encoder hard-errors
+    // here rather than letting the interpreter silently drop binds and return wrong `max_size` values.
+    auto var_id_remap = build_dense_var_id_remap(*expr);
+    sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_etr, free_vars, var_id_remap,
+                                      prog, ctx, nodes, indices);
   }
 
   // Pack everything into a flat byte buffer: header | stack_headers | nodes | indices.
