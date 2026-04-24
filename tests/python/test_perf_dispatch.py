@@ -14,15 +14,30 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
 
-# Work amounts for perf_dispatch timing tests.  Vulkan has significant fixed
-# dispatch overhead (~0.45ms per kernel launch on a T4), so small work amounts
-# are dominated by that overhead and CPU scheduling noise can flip the slow/fast
-# comparison.  Values are chosen so slow is always 10x
-# medium, giving a clear timing gap even under pytest-xdist contention.
-AMOUNT_WORK_SLOW_GPU = 1_000_000
+# Work amounts for perf_dispatch timing tests.
+#
+# Wall-clock times for do_work / do_work_py with 10 threads (RTX 5090):
+#
+#   arch    | type   |   100 |    1K |   10K |  100K |    1M |   10M
+#   --------+--------+-------+-------+-------+-------+-------+-------
+#   x64     | kernel | 0.2ms | 0.1ms | 0.4ms | 4.1ms |  48ms | 368ms
+#   x64     | python | 0.2ms | 0.7ms | 6.4ms |  63ms | 631ms |     -
+#   cuda    | kernel | 0.02ms (flat — GPU parallelism makes count irrelevant)
+#   cuda    | python | 3323ms for 100 (GPU round-trip per element)
+#   vulkan  | kernel | 0.01ms (flat — same as cuda)
+#   vulkan  | python | 1256ms for 100 (GPU round-trip per element)
+#
+# GPU kernels are too fast to discriminate by work amount on a fast GPU;
+# the dispatch overhead (~0.45ms on a T4) dominates.  Python loops touching
+# qd.ndarray on a GPU arch are absurdly slow due to per-element round-trips.
+# Values are chosen so slow is always 2x medium, giving a clear timing gap
+# even under pytest-xdist contention.
+AMOUNT_WORK_SLOW_GPU = 200_000
 AMOUNT_WORK_MEDIUM_GPU = 100_000
-AMOUNT_WORK_SLOW_CPU = 100_000
+AMOUNT_WORK_SLOW_CPU = 20_000
 AMOUNT_WORK_MEDIUM_CPU = 10_000
+AMOUNT_WORK_SLOW_PY = 20_000
+AMOUNT_WORK_MEDIUM_PY = 10_000
 
 
 @qd.func
@@ -128,9 +143,6 @@ def test_perf_dispatch_kernels() -> None:
 def test_perf_dispatch_python() -> None:
     WARMUP = 1
     ACTIVE = 1
-    is_gpu = qd.lang.impl.current_cfg().arch in qd.gpu
-    work_slow = AMOUNT_WORK_SLOW_GPU if is_gpu else AMOUNT_WORK_SLOW_CPU
-    work_medium = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
 
     class ImplEnum(IntEnum):
         slow = 0
@@ -156,7 +168,7 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=work_slow, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_SLOW_PY, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     def my_func1_impl_a_shape0_lt_2(
@@ -177,7 +189,7 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work_py(i_b=i_b, amount_work=work_medium, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_MEDIUM_PY, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
@@ -210,8 +222,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
     WARMUP = 1
     ACTIVE = 1
     is_gpu = qd.lang.impl.current_cfg().arch in qd.gpu
-    work_slow = AMOUNT_WORK_SLOW_GPU if is_gpu else AMOUNT_WORK_SLOW_CPU
-    work_medium = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
+    work_medium_kernel = AMOUNT_WORK_MEDIUM_GPU if is_gpu else AMOUNT_WORK_MEDIUM_CPU
 
     class ImplEnum(IntEnum):
         slow = 0
@@ -237,7 +248,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=work_slow, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_SLOW_PY, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @qd.kernel
@@ -260,7 +271,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=work_medium, state=rand_state)
+            do_work(i_b=i_b, amount_work=work_medium_kernel, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
