@@ -304,6 +304,27 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
     }
   }
 
+  // Normalize `params_.enable_validation_layer` against the host's actual layer availability BEFORE
+  // the instance-reuse short-circuit below: downstream code (device-extension enumeration at
+  // `create_logical_device`, the `VK_KHR_SHADER_NON_SEMANTIC_INFO` cap gate, the device layer arrays
+  // at the tail of `create_logical_device`) reads this flag on every cycle, and `create_logical_device`
+  // runs on every re-init. If we let the request pass through unchanged on the reuse path, the cap is
+  // set to `true` every subsequent cycle even when the layer is not actually loaded on the cached
+  // instance (the only cycle where the layer-load flip happens is the very first, which is also the
+  // only cycle where a fresh `vkCreateInstance` runs). Users observed this as `test_overflow.py`
+  // passing on the first parametrization and failing on every subsequent one in the same pytest
+  // session: `DebugPrintf`-ext-imported shaders compile fine, but the validation layer that would
+  // route those messages to stdout was never loaded, so the overflow-detected strings never appear in
+  // `capfd`. Running the check here keeps the flag consistent across re-inits; re-running on every
+  // call is cheap (it enumerates instance layers, ~microseconds).
+  if (params_.enable_validation_layer && !check_validation_layer_support()) {
+    RHI_LOG_ERROR(
+        "Validation layers requested but not available, turning off... "
+        "Please make sure Vulkan SDK from https://vulkan.lunarg.com/sdk/home "
+        "is installed.");
+    params_.enable_validation_layer = false;
+  }
+
   // Reuse the VkInstance from a previous init/reset cycle if available.
   // Repeated vkDestroyInstance/vkCreateInstance triggers an NVIDIA driver bug
   // that corrupts SubgroupLocalInvocationId after ~11 cycles.
@@ -325,15 +346,8 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   create_info.pApplicationInfo = &app_info;
 
-  if (params_.enable_validation_layer) {
-    if (!check_validation_layer_support()) {
-      RHI_LOG_ERROR(
-          "Validation layers requested but not available, turning off... "
-          "Please make sure Vulkan SDK from https://vulkan.lunarg.com/sdk/home "
-          "is installed.");
-      params_.enable_validation_layer = false;
-    }
-  }
+  // `params_.enable_validation_layer` has already been normalized against the host's actual layer
+  // availability above, before the cached-instance short-circuit. No second check needed here.
 
   VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
 
@@ -789,12 +803,25 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       features2.pNext = &shader_8bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
 
+      // Gate the SPIR-V `CapabilityStorageBuffer8BitAccess` emission strictly on the queried
+      // feature bit. `VK_KHR_8bit_storage` promoted into Vulkan 1.2 core doesn't imply the feature
+      // is actually supported -- implementations can still expose `storageBuffer8BitAccess = FALSE`
+      // -- so the SPIR-V cap may only be emitted when this feature is true, otherwise strict
+      // validation rejects shaders that declare the capability.
+      if (shader_8bit_storage_feature.storageBuffer8BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_8bit_access, true);
+      }
+
       *pNextEnd = &shader_8bit_storage_feature;
       pNextEnd = &shader_8bit_storage_feature.pNext;
     }
     if (CHECK_VERSION(1, 1) || CHECK_EXTENSION(VK_KHR_16BIT_STORAGE_EXTENSION_NAME)) {
       features2.pNext = &shader_16bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+
+      if (shader_16bit_storage_feature.storageBuffer16BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_16bit_access, true);
+      }
 
       *pNextEnd = &shader_16bit_storage_feature;
       pNextEnd = &shader_16bit_storage_feature.pNext;
