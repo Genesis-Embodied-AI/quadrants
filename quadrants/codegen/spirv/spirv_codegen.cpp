@@ -950,7 +950,31 @@ void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std
   ir_->make_inst(spv::OpBranchConditional, cond, then_label, merge_label);
   // then block
   ir_->start_label(then_label);
-  ir_->call_debugprintf(op + " overflow detected in " + tb, {});
+  // `bin->get_tb()` carries the Python traceback that surfaced the binary op - file path, line number,
+  // and a copy of the source line - and we want it in the runtime diagnostic. But the SPIR-V debug-printf
+  // format string flows verbatim into MoltenVK's SPIRV-Cross -> MSL translator, which embeds it as an MSL
+  // string literal; a `"`, `\n`, or `\r` terminates the literal mid-parse and the downstream MSL compile
+  // fails with `use of undeclared identifier '<path fragment>'`. A raw `%` is equally hazardous: the
+  // concatenated string is the printf-style format with an empty args vector, so an unescaped `%` in the
+  // source line (e.g. `a % b`, `"%d" % x`, a `%20` URL-escape) surfaces as a format specifier with no
+  // matching argument - undefined behaviour on the validation-layer debug-printf path and on MoltenVK's
+  // MSL translation. Escape all four so the printed traceback is preserved byte-for-byte on native Vulkan
+  // drivers and still round-trips cleanly through MSL on Apple Silicon. The `%` handling mirrors
+  // `sanitize_format_string` above.
+  std::string safe_tb;
+  safe_tb.reserve(tb.size());
+  for (char c : tb) {
+    if (c == '"') {
+      safe_tb += "\\\"";
+    } else if (c == '\n' || c == '\r') {
+      safe_tb += ' ';
+    } else if (c == '%') {
+      safe_tb += "%%";
+    } else {
+      safe_tb += c;
+    }
+  }
+  ir_->call_debugprintf(op + " overflow detected in " + safe_tb, {});
   ir_->make_inst(spv::OpBranch, merge_label);
   // merge label
   ir_->start_label(merge_label);
@@ -2096,16 +2120,44 @@ spirv::Value TaskCodegen::at_buffer(const Stmt *ptr, DataType dt) {
   return ret;
 }
 
+// For primitive float types, access the storage buffer through the native type view instead of
+// the uint-punned view. SPIR-V / Vulkan treats each (descriptor_set, binding) as a distinct
+// variable; `at_buffer` creates a new binding per (buffer, element_type) pair, so the u32 view
+// of a buffer and its f32 view are different variables pointing to the same memory. Without an
+// `Aliased` decoration the driver / SPIRV-Tools is free to assume they do not alias, meaning a
+// plain `OpLoad` through the u32 view is not ordered against a preceding `OpAtomicFAddEXT` on
+// the f32 view at the same address. The reverse-mode pattern `m.grad[i][j,k] += loss.grad;
+// tmp = m.grad[i][j,k]; m.grad[i][j,k] = 0; n.grad += tmp * factor` hits this: the load reads
+// the stale zero initial value, `tmp = 0`, and the adjoint never propagates (`test_ad_dynamic_index.py::
+// test_matrix_non_constant_index[arch=vulkan]` asserts `0.0 == 1.0`). Using the native f32 view
+// for plain load/store keeps them on the same binding as the atomic and removes the aliasing
+// question entirely. Integer types (i32/u32/i16/u16/i8/u8) already route through their own uint
+// view which matches the atomic path, so those stay as-is. `u1` stays on u8 because u1 has no
+// native SPIR-V storage representation.
+static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val, spirv::IRBuilder &ir) {
+  if (dt->is_primitive(PrimitiveTypeID::u1)) {
+    return PrimitiveType::u8;
+  }
+  if (ptr_val.stype.dt == PrimitiveType::u64) {
+    return dt;
+  }
+  // Explicit whitelist of the real primitives we route natively, replacing the prior
+  // open-ended `is_real(dt)` predicate. Any future real-like primitive (e.g. a bfloat16, or an
+  // fp8 variant) would not have an audited SPIR-V storage-capability story yet -- rather than
+  // silently fall into the native-view branch, it must be added here deliberately after the
+  // storage-capability plumbing for its bit width is confirmed (see the
+  // `CapabilityStorageBuffer{8,16}BitAccess` emissions in `spirv_ir_builder.cpp`).
+  if (dt->is_primitive(PrimitiveTypeID::f16) || dt->is_primitive(PrimitiveTypeID::f32) ||
+      dt->is_primitive(PrimitiveTypeID::f64)) {
+    return dt;
+  }
+  return ir.get_quadrants_uint_type(dt);
+}
+
 spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = ir_->get_quadrants_uint_type(dt);
-
-  if (dt->is_primitive(PrimitiveTypeID::u1)) {
-    ti_buffer_type = PrimitiveType::u8;
-  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = dt;
-  }
+  DataType ti_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
   auto val_bits = ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
@@ -2117,18 +2169,31 @@ spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
 void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = ir_->get_quadrants_uint_type(val.stype.dt);
-
+  DataType ti_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
   if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+    // Stores go through i8 (matching the original path) so a signed i1 narrowing is preserved.
     ti_buffer_type = PrimitiveType::i8;
-  } else if (ptr_val.stype.dt == PrimitiveType::u64) {
-    ti_buffer_type = val.stype.dt;
   }
 
   auto buf_ptr = at_buffer(ptr, ti_buffer_type);
-  auto val_bits = val.stype.dt == ti_buffer_type
-                      ? val
-                      : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+  spirv::Value val_bits;
+  if (val.stype.dt == ti_buffer_type) {
+    val_bits = val;
+  } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
+    // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or
+    // pointer). Before this fix, a `u1` field / ndarray store emitted
+    // `OpBitcast %char %bool_val` and validated as
+    // `Expected input to be a pointer or int or float vector or scalar: Bitcast`. Most drivers
+    // ignore that and crash inside the pipeline compiler (observed on Mesa RADV: a hard SIGSEGV
+    // inside `libvulkan_radeon.so::create_compute_pipeline` the moment the offending kernel is
+    // registered). Route through `IRBuilder::cast`, which lowers `bool -> int` to `OpSelect`
+    // picking `1` or `0` of the target type -- that's the canonical spec-compliant way to widen a
+    // bool, matches what `load_buffer` already does on the reverse path, and keeps the
+    // "bool serialises as 0 / 1" behaviour every user of `to_numpy()` / `from_numpy()` depends on.
+    val_bits = ir_->cast(ir_->get_primitive_type(ti_buffer_type), val);
+  } else {
+    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+  }
   ir_->store_variable(buf_ptr, val_bits);
 }
 
@@ -2166,6 +2231,37 @@ spirv::Value TaskCodegen::get_buffer_value(BufferInfo buffer, DataType dt) {
     ir_->decorate(spv::OpDecorate, buffer_value, spv::DecorationVolatile);
   }
   buffer_value_map_[key] = buffer_value;
+
+  // Type-punned views of the same underlying `VkBuffer` need an explicit `Aliased` decoration. Every
+  // `(BufferInfo, element_type)` pair here gets its own `OpVariable` with a fresh `DescriptorSet` /
+  // `Binding`, so a field read through the `u32` view and a preceding `OpAtomicFAddEXT` through the
+  // `f32` view are separate SPIR-V variables pointing to the same memory. Without `Aliased` the
+  // driver is spec-free to assume they don't alias, and the plain load is not ordered against the
+  // atomic write -- the load reads the stale zero initial value and the reverse-mode adjoint silently
+  // drops to zero (`test_ad_dynamic_index.py::test_matrix_non_constant_index[arch=vulkan]` reproduces
+  // this on every device that exposes `shaderBufferFloat32AtomicAdd`).
+  //
+  // The aliasing hazard applies across every pairing of views on the same buffer, not just
+  // (native-float atomic, plain load): the CAS-emulation atomic path on devices without
+  // `shaderBufferFloat32AtomicAdd` routes float atomics through the `u32` view while other sites may
+  // emit atomics min / max / mul directly against the `u32` view -- each such pairing against a
+  // plain-load-through-any-view needs the same decoration. Decorating here rather than at first
+  // `at_buffer` call keeps the fix independent of which call site happens to introduce the second
+  // view.
+  //
+  // Decorate lazily: a single-view buffer stays un-decorated (no perf cost from disabled
+  // cross-variable scheduling optimizations), and only when a buffer gets its second distinct view do
+  // we retroactively decorate every view -- existing ones through the id-set guard below, and the new
+  // one unconditionally in the same sweep.
+  auto &views = buffer_views_by_buffer_[buffer];
+  views.push_back(buffer_value);
+  if (views.size() >= 2) {
+    for (const auto &v : views) {
+      if (aliased_decorated_buffer_ids_.insert(v.id).second) {
+        ir_->decorate(spv::OpDecorate, v, spv::DecorationAliased);
+      }
+    }
+  }
   QD_TRACE("buffer name = {}, value = {}", buffer_instance_name(buffer), buffer_value.id);
 
   return buffer_value;

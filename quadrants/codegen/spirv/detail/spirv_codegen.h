@@ -17,6 +17,8 @@
 #include <spirv-tools/libspirv.hpp>
 #include <spirv-tools/optimizer.hpp>
 
+#include <unordered_set>
+
 namespace quadrants::lang {
 namespace spirv {
 namespace detail {
@@ -154,6 +156,14 @@ class TaskCodegen : public IRVisitor {
   std::shared_ptr<spirv::IRBuilder> ir_;  // spirv binary code builder
   std::unordered_map<std::pair<BufferInfo, int>, spirv::Value, BufferInfoTypeTupleHasher> buffer_value_map_;
   std::unordered_map<std::pair<BufferInfo, int>, uint32_t, BufferInfoTypeTupleHasher> buffer_binding_map_;
+  // All existing type views of each underlying storage buffer, in creation order. When a second or later
+  // view is minted in `get_buffer_value`, we decorate every entry here with `Aliased` so the driver is
+  // forbidden from assuming the views don't alias -- otherwise a plain load through one view is not
+  // ordered against an atomic through another view of the same memory, silently zeroing gradients on the
+  // load-and-clear reverse-mode pattern. See `get_buffer_value` for the decoration site and the commit
+  // message for the full failure matrix.
+  std::unordered_map<BufferInfo, std::vector<spirv::Value>, BufferInfoHasher> buffer_views_by_buffer_;
+  std::unordered_set<uint32_t> aliased_decorated_buffer_ids_;
   std::vector<spirv::Value> shared_array_binds_;
   spirv::Value kernel_function_;
   spirv::Label kernel_return_label_;

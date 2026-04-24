@@ -439,6 +439,12 @@ class IRBuilder {
 
   // Create a debugPrintf call
   void call_debugprintf(std::string formats, const std::vector<Value> &args) {
+    // Lazy import: see the explanatory comment in `IRBuilder::init_pre_defs`. We only emit
+    // `OpExtInstImport "NonSemantic.DebugPrintf"` the first time a printf / debug-assert call site actually
+    // needs it so kernels with no debug traffic stay MoltenVK-compatible.
+    if (!debug_printf_.id) {
+      debug_printf_ = ext_inst_import("NonSemantic.DebugPrintf");
+    }
     Value format_str = debug_string(formats);
     Value val = new_value(t_void_, ValueKind::kNormal);
     ib_.begin(spv::OpExtInst).add_seq(t_void_, val, debug_printf_, 1, format_str);

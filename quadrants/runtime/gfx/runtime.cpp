@@ -738,6 +738,7 @@ void GfxRuntime::synchronize() {
   }
   ctx_buffers_.clear();
   ndarrays_in_use_.clear();
+  pending_launches_since_sync_ = 0;
   // Async adstack-overflow report: every launch in this sync window that overflowed wrote a non-zero sentinel into
   // the shared flag buffer. Read it now, raise if any kernel overflowed, and zero it so the next sync window starts
   // clean. This mirrors the CUDA async-error pattern: the error surfaces on the next synchronize() rather than per
@@ -802,6 +803,27 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
     if (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() > max_pending_time) {
       flush();
     }
+  }
+  // Safety valve against unbounded GPU-side tracking growth on tight kernel-launch loops without any
+  // intervening Python-side observable (host readback, `to_numpy`, field get, ...). Normally every
+  // Quadrants workload touches such an observable between launches and the implicit `synchronize()` those
+  // paths trigger drains the queue. `VulkanStream::submit` pushes every submitted cmdbuffer into
+  // `submitted_cmdbuffers_` with a fence; the vector is only cleared on `command_sync()` (i.e. `wait_idle`
+  // -> `synchronize()`). Workloads that just push kernels and then read the final state at the end
+  // (MPM88, iterative simulations) accumulate one deferred-free batch per flush and can reach hundreds of
+  // live fences and cmdbuffers, at which point MoltenVK's encoder state tracker SIGSEGVs inside
+  // `MVKCommandEncoder::encodeCommands` (the failure mode was a clean SIGSEGV on repeated launches of the
+  // 3-task MPM88 substep kernel). Forcing a drain every `kMaxPendingLaunches` launches keeps the queue
+  // bounded; the threshold is large enough that typical workloads (which already touch a host observable
+  // every iteration) never reach it, so the periodic `wait_idle` does not become a measurable stall. A
+  // non-blocking polling variant that checks individual fences via `vkGetFenceStatus` would retire sets as
+  // they complete without blocking, but that requires an RHI public-surface change (`bool is_signaled()
+  // const` on `StreamSemaphoreObject` and per-backend implementations) and the motivating workload only
+  // needs a coarse-grained drain, not per-fence polling.
+  constexpr size_t kMaxPendingLaunches = 32;
+  pending_launches_since_sync_ += 1;
+  if (pending_launches_since_sync_ > kMaxPendingLaunches) {
+    synchronize();
   }
 }
 
