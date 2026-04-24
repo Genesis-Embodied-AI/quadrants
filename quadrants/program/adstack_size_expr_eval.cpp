@@ -322,6 +322,35 @@ std::unordered_map<int32_t, int32_t> build_dense_var_id_remap(const SerializedSi
   return remap;
 }
 
+// Computes the maximum `MaxOverRange` nesting depth reachable from any root in `expr`, i.e. the deepest
+// chain of `MaxOverRange` nodes whose `body_node_idx` recursively references another `MaxOverRange`. The
+// sizer shader's per-invocation pending-frame stack is sized to `kAdStackSizerMaxPendingFrames`; the encoder
+// hard-errors when a tree's nesting exceeds this so the shader's fixed-size access-chain stays in bounds
+// without a runtime guard. Each node's depth is memoised to keep the walk linear in `expr.nodes.size()`.
+int32_t compute_max_mor_nesting(const SerializedSizeExpr &expr) {
+  std::vector<int32_t> depth(expr.nodes.size(), -1);
+  std::function<int32_t(int32_t)> visit = [&](int32_t i) -> int32_t {
+    if (i < 0 || static_cast<std::size_t>(i) >= expr.nodes.size())
+      return 0;
+    if (depth[i] >= 0)
+      return depth[i];
+    const auto &n = expr.nodes[i];
+    int32_t child_max = 0;
+    for (int32_t c : {n.operand_a, n.operand_b, n.body_node_idx}) {
+      if (c >= 0)
+        child_max = std::max(child_max, visit(c));
+    }
+    int32_t self = static_cast<SizeExpr::Kind>(n.kind) == SizeExpr::Kind::MaxOverRange ? 1 : 0;
+    depth[i] = self + child_max;
+    return depth[i];
+  };
+  int32_t max_depth = 0;
+  for (std::size_t i = 0; i < expr.nodes.size(); ++i) {
+    max_depth = std::max(max_depth, visit(static_cast<int32_t>(i)));
+  }
+  return max_depth;
+}
+
 // Returns the dense id for `original_var_id`, or fires a hard error if the remap lost track of it (which would
 // indicate a walker divergence between `build_dense_var_id_remap` and `encode_subtree`).
 int32_t remap_var_id(const std::unordered_map<int32_t, int32_t> &remap, int32_t original) {
@@ -678,6 +707,13 @@ std::vector<uint8_t> encode_bytecode_common(std::vector<AdStackSizeExprDeviceSta
     // exceed the device interpreter's fixed-size scope capacity even with modest nesting. The encoder hard-errors
     // here rather than letting the interpreter silently drop binds and return wrong `max_size` values.
     auto var_id_remap = build_dense_var_id_remap(*expr);
+    const int32_t mor_depth = compute_max_mor_nesting(*expr);
+    QD_ERROR_IF(mor_depth > spirv::kAdStackSizerMaxPendingFrames,
+                "Adstack SizeExpr for stack {} has MaxOverRange nesting depth {}, which exceeds the sizer shader's "
+                "`kAdStackSizerMaxPendingFrames` ({}) pending-frame capacity. Past this cap the shader's fixed-size "
+                "pending-frame stack would index out of bounds - SPIR-V private-storage OOB is UB. Shrink the "
+                "enclosing reverse-mode loop nesting or file a bug so the cap can be raised.",
+                i, mor_depth, spirv::kAdStackSizerMaxPendingFrames);
     const std::size_t nodes_before = nodes.size();
     sh.root_node_idx = encode_subtree(*expr, static_cast<int32_t>(root_src_idx), contains_device_leaf, free_vars,
                                       var_id_remap, prog, ctx, fl_emitter, nodes, indices);

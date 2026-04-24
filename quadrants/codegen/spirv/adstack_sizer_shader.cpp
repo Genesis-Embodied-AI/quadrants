@@ -26,8 +26,12 @@ namespace {
 // counts), so the cap needs to comfortably exceed that. 4096 * 8 B = 32 KiB of i64 private memory per
 // invocation; the sizer runs as a single-thread dispatch so this is not multiplied by workgroup size.
 constexpr int kMaxNodes = kAdStackSizerMaxNodesPerStack;
-constexpr int kMaxVars = 16;
-constexpr int kMaxPending = 16;
+// `kMaxVars` sizes the per-invocation `scope_arr` indexed by dense bound-var id; must match
+// `kAdStackSizeExprDeviceMaxBoundVars` so every id the host-side dense-remap hands out lands in bounds. `kMaxPending`
+// bounds `MaxOverRange` nesting depth; the host encoder in `encode_bytecode_common` hard-errors when a tree's MOR
+// nesting exceeds this, so the shader's OpAccessChain into `pending_*_arr[sp_val]` is always in range.
+constexpr int kMaxVars = kAdStackSizeExprDeviceMaxBoundVars;
+constexpr int kMaxPending = kAdStackSizerMaxPendingFrames;
 
 // Byte-per-u32 counts derived from the POD layout in `quadrants/ir/adstack_size_expr_device.h`. Every field
 // in the device structs is 4-byte aligned, so we can index into a `uint32_t[]` view of the bytecode buffer
@@ -725,14 +729,24 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     {
       // scope[var_id] = begin
       store_scope_at(ir, st, var_id_i32, begin_i64);
-      // Push pending frame: pending[sp] = {...}; sp += 1
+      // Push pending frame: pending[sp] = {...}; sp += 1.
+      // `pending_end_arr` is clamped to `min(end, begin + kMaxOverRangeIterations)` so the advance loop
+      // silently stops after the cap instead of running on-device until the driver's TDR fires. Matches
+      // the LLVM interpreter's `break` at the same `1 << 24` threshold and the host evaluator's hard
+      // QD_ERROR; on a single-thread `1x1x1` dispatch, unbounded iteration is the only one of the three
+      // paths that could hang the kernel rather than surface as a clean error at `qd.sync()`.
+      constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
+      Value cap_delta = ir.int_immediate_number(ir.i64_type(), kMaxOverRangeIterations);
+      Value cap_end = ir.add(begin_i64, cap_delta);
+      Value end_gt_cap = ir.gt(end_i64, cap_end);
+      Value effective_end = ir.select(end_gt_cap, cap_end, end_i64);
       Value sp_val = ir.load_variable(st.sp_var, ir.i32_type());
       ir.store_variable(array_i32_access_ptr(ir, st.pending_mor_idx_arr, sp_val), current_now);
       Value body_start = ir.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
       ir.store_variable(array_i32_access_ptr(ir, st.pending_body_start_arr, sp_val), body_start);
       ir.store_variable(array_i32_access_ptr(ir, st.pending_body_end_arr, sp_val), body_node_i32);
       ir.store_variable(array_i64_access_ptr(ir, st.pending_cur_i_arr, sp_val), begin_i64);
-      ir.store_variable(array_i64_access_ptr(ir, st.pending_end_arr, sp_val), end_i64);
+      ir.store_variable(array_i64_access_ptr(ir, st.pending_end_arr, sp_val), effective_end);
       ir.store_variable(array_i32_access_ptr(ir, st.pending_var_id_arr, sp_val), var_id_i32);
       ir.store_variable(array_i64_access_ptr(ir, st.pending_max_accum_arr, sp_val),
                         ir.int_immediate_number(ir.i64_type(), 0));

@@ -83,7 +83,14 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     adstack_sizer_pipeline_ = std::move(pipeline);
   }
 
-  // Encode per-task bytecodes and compute per-task metadata sizes.
+  // Encode per-task bytecodes and compute per-task metadata sizes. Each task's starting offset inside the
+  // shared bytecode buffer must satisfy Vulkan's `minStorageBufferOffsetAlignment` because that offset flows
+  // verbatim into `VkDescriptorBufferInfo::offset` through `bindings->rw_buffer(...)` below; raw
+  // `sizeof(AdStackSizeExpr*)` arithmetic is only 4-byte aligned, which trips VUID-02999 on NVIDIA / Intel
+  // desktop / MoltenVK (16 B) and Adreno (64 B). RHI does not expose the queried minimum, so pick 256 B -
+  // the largest cap we expect in the wild (older NVIDIA) - as a safe fixed rounding.
+  constexpr size_t kDescriptorOffsetAlignment = 256;
+  auto align_up = [](size_t v, size_t a) { return (v + a - 1) & ~(a - 1); };
   std::vector<std::vector<uint8_t>> per_task_bytecodes(adstack_task_indices.size());
   std::vector<size_t> per_task_bytecode_offsets(adstack_task_indices.size());
   std::vector<size_t> per_task_metadata_bytes(adstack_task_indices.size());
@@ -92,8 +99,8 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     size_t ti = adstack_task_indices[k];
     per_task_bytecodes[k] = encode_adstack_size_expr_device_bytecode_for_spirv(task_attribs[ti].ad_stack,
                                                                                program_impl_->program, &host_ctx);
-    per_task_bytecode_offsets[k] = total_bytecode_bytes;
-    total_bytecode_bytes += per_task_bytecodes[k].size();
+    per_task_bytecode_offsets[k] = align_up(total_bytecode_bytes, kDescriptorOffsetAlignment);
+    total_bytecode_bytes = per_task_bytecode_offsets[k] + per_task_bytecodes[k].size();
     per_task_metadata_bytes[k] = (2u + 2u * task_attribs[ti].ad_stack.allocas.size()) * sizeof(uint32_t);
   }
 

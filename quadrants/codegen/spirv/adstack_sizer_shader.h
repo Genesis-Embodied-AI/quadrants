@@ -43,4 +43,9 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
 // bytecode past this cap so the failure is attributable to a specific alloca at compile time.
 constexpr int kAdStackSizerMaxNodesPerStack = 4096;
 
+// Maximum `MaxOverRange` nesting depth the sizer shader can hold on its per-invocation pending-frame stack
+// (`pending_*_arr`). The host-side encoder hard-errors when a tree's MOR nesting exceeds this so the shader's
+// fixed-size access-chain stays in bounds without a runtime guard. 16 covers every observed real kernel.
+constexpr int kAdStackSizerMaxPendingFrames = 16;
+
 }  // namespace quadrants::lang::spirv
