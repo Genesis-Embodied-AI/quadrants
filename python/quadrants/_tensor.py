@@ -29,19 +29,17 @@ __all__ = [
     "tensor",
 ]
 
-# Marker tuples prefixed onto cache keys to keep field-resolved and
-# ndarray-resolved instantiations of the same qd.Tensor slot distinct.
+# Marker tuples prefixed onto cache keys to keep field-resolved and ndarray-resolved instantiations of the same
+# qd.Tensor slot distinct.
 _TENSOR_T_FIELD_MARKER = "__qd_tensor_t_field__"
 _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 
 # ----------------------------------------------------------------------------
 # Internal: attach layout metadata to an existing Ndarray.
 #
-# Public API for ndarray + non-identity layout lands in an earlier change (the
-# qd.tensor(..., backend=NDARRAY, layout=...) path is currently gated by
-# NotImplementedError). Until then, this private helper exists so the AST
-# subscript-rewrite plumbing can be exercised end-to-end in tests without
-# changing the user-facing factory signature.
+# Public API for ndarray + non-identity layout lands in an earlier change (the qd.tensor(..., backend=NDARRAY,
+# layout=...) path is currently gated by NotImplementedError). Until then, this private helper exists so the AST
+# subscript-rewrite plumbing can be exercised end-to-end in tests without changing the user-facing factory signature.
 # ----------------------------------------------------------------------------
 
 
@@ -110,18 +108,14 @@ def _coerce_backend(backend):
         raise ValueError(f"backend={backend!r} is not a valid qd.Backend; expected one of {valid}") from e
 
 
-# Kwargs explicitly accepted by the unified tensor factories (in addition
-# to the positional ``dtype`` / ``shape`` / ``n`` / ``m``). The factories
-# hard-validate against these sets so typos and backend-specific options
-# don't silently work on one backend and raise cryptic errors deep in the
-# other. Users who need backend-specific knobs (e.g. ``offset=`` for field
-# offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` /
-# ``qd.ndarray`` directly — they have explicitly opted out of the unified
-# tensor API.
+# Kwargs explicitly accepted by the unified tensor factories (in addition to the positional ``dtype`` / ``shape`` /
+# ``n`` / ``m``). The factories hard-validate against these sets so typos and backend-specific options don't silently
+# work on one backend and raise cryptic errors deep in the other. Users who need backend-specific knobs (e.g.
+# ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray``
+# directly — they have explicitly opted out of the unified tensor API.
 #
-# ``layout=`` is on the scalar ``qd.tensor`` factory only; the
-# Vector/Matrix factories reject it because layout semantics over an
-# extra element axis are out of scope for now.
+# ``layout=`` is on the scalar ``qd.tensor`` factory only; the Vector/Matrix factories reject it because layout
+# semantics over an extra element axis are out of scope for now.
 _SCALAR_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad", "layout"})
 _VEC_MAT_ACCEPTED_KWARGS = frozenset({"backend", "needs_grad"})
 

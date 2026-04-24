@@ -824,22 +824,17 @@ def _field(
         # Allocate as a SINGLE rank-``dim`` dense SNode, always.
         #
         # When ``order`` is set the canonical-axis permutation is encoded as:
-        #   * the SNode is allocated at the *permuted physical shape*
-        #     (``shape_seq`` above already reflects ``shape[axis_seq]``), using
-        #     the natural ``axes(0, 1, ..., dim-1)`` declaration, and
-        #   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so
-        #     that ``build_Subscript`` / ``build_struct_for`` permute canonical
-        #     user indices into physical storage order at the AST level
+        #   * the SNode is allocated at the *permuted physical shape* (``shape_seq`` above already reflects
+        #     ``shape[axis_seq]``), using the natural ``axes(0, 1, ..., dim-1)`` declaration, and
+        #   * the field is tagged with ``_qd_layout = tuple(axis_seq)`` so that ``build_Subscript`` /
+        #     ``build_struct_for`` permute canonical user indices into physical storage order at the AST level
         #     (same rewrite mechanism as layout-tagged ndarrays).
         #
-        # This replaces the legacy scheme of building a nested stack of
-        # rank-1 dense SNodes (one per axis), which doubled the number of
-        # ``linearize`` / SNode ``lookup`` operations per subscript for no
-        # memory-layout benefit (physical byte order is determined by the
-        # shape-permutation, not by SNode nesting depth). See the CHI IR
-        # comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md``
-        # (Experiment N+1) and the byte-identity regression tests in
-        # ``tests/python/test_tensor_layout_physical_bytes.py``.
+        # This replaces the legacy scheme of building a nested stack of rank-1 dense SNodes (one per axis), which
+        # doubled the number of ``linearize`` / SNode ``lookup`` operations per subscript for no memory-layout
+        # benefit (physical byte order is determined by the shape-permutation, not by SNode nesting depth). See
+        # the CHI IR comparison in ``perso_hugh/doc/regression_2026apr23_stork_log.md`` (Experiment N+1) and the
+        # byte-identity regression tests in ``tests/python/test_tensor_layout_physical_bytes.py``.
         flat_axis_seq = list(range(dim))
         phys_offset = offset
         if order is not None and offset is not None:

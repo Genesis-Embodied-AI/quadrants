@@ -59,11 +59,9 @@ class Ndarray:
 
     def __init__(self):
         self.host_accessor = None
-        # `_physical_shape` is the underlying storage shape (matches the C++
-        # ndarray buffer). `shape` is exposed as a property: when a layout
-        # tag (`_qd_layout`) is present it returns the *canonical* shape the
-        # user indexes inside kernels; otherwise it returns the physical
-        # shape (which is the same thing).
+        # `_physical_shape` is the underlying storage shape (matches the C++ ndarray buffer). `shape` is exposed
+        # as a property: when a layout tag (`_qd_layout`) is present it returns the *canonical* shape the user
+        # indexes inside kernels; otherwise it returns the physical shape (which is the same thing).
         self._physical_shape = None
         self.element_type = None
         self.dtype = None

@@ -291,19 +291,15 @@ class ASTTransformer(Builder):
         build_stmt(ctx, node.slice)
         if not ASTTransformer.is_tuple(node.slice):
             node.slice.ptr = [node.slice.ptr]
-        # Tensors layout: a layout-tagged Ndarray or Field with a
-        # non-identity ``_qd_layout`` has its canonical indices permuted
-        # into physical-storage order before forwarding. ``None`` and
-        # identity layouts are handled transparently (no rewrite =>
-        # byte-identical IR for legacy code).
+        # Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical
+        # indices permuted into physical-storage order before forwarding. ``None`` and identity layouts are handled
+        # transparently (no rewrite => byte-identical IR for legacy code).
         #
-        # Both backends use the same attribute name (``_qd_layout``) and
-        # the same storage contract: the underlying buffer is allocated
-        # at the permuted physical shape (``[shape[a] for a in layout]``)
-        # with natural axis order, and the rewrite here translates each
-        # user-supplied canonical index tuple ``(i0, ..., i_{N-1})`` into
-        # ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index
-        # tuple that the flat rank-N SNode / Ndarray expects.
+        # Both backends use the same attribute name (``_qd_layout``) and the same storage contract: the underlying
+        # buffer is allocated at the permuted physical shape (``[shape[a] for a in layout]``) with natural axis
+        # order, and the rewrite here translates each user-supplied canonical index tuple ``(i0, ..., i_{N-1})``
+        # into ``(i_{layout[0]}, ..., i_{layout[N-1]})`` — the physical index tuple that the flat rank-N SNode /
+        # Ndarray expects.
         #
         # Two indexing forms must be permuted:
         # 1. Multi-arg subscript ``x[i, j, ...]``: ``node.slice.ptr`` is
