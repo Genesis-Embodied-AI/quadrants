@@ -36,4 +36,48 @@ TEST(AdStackSizerShader, DumpBinary) {
                binary.size() * sizeof(uint32_t), out_path);
 }
 
+// Pins that every required capability is gated at the top of `build_adstack_sizer_spirv`: dropping any one of
+// the four (PSB, Int64, Int8, Int16) flips the return to empty so the launcher surfaces a "legacy device
+// missing a required hardware feature" diagnostic instead of emitting invalid SPIR-V. Int8 / Int16 are the
+// load-bearing additions - `emit_psb_load_i64`'s per-dtype switch calls `ir.i{8,16}_type()` unconditionally,
+// which return default-constructed `SType(id=0)` on devices without those capabilities and produce
+// `spirv-val`-rejectable bytecode at pipeline creation.
+TEST(AdStackSizerShader, GateReturnsEmptyWhenRequiredCapIsMissing) {
+  auto make_caps = []() {
+    DeviceCapabilityConfig caps;
+    caps.set(DeviceCapability::spirv_version, 0x10400);
+    caps.set(DeviceCapability::spirv_has_int8, 1);
+    caps.set(DeviceCapability::spirv_has_int16, 1);
+    caps.set(DeviceCapability::spirv_has_int64, 1);
+    caps.set(DeviceCapability::spirv_has_physical_storage_buffer, 1);
+    return caps;
+  };
+
+  {
+    auto caps = make_caps();
+    caps.set(DeviceCapability::spirv_has_physical_storage_buffer, 0);
+    EXPECT_TRUE(build_adstack_sizer_spirv(Arch::vulkan, &caps).empty());
+  }
+  {
+    auto caps = make_caps();
+    caps.set(DeviceCapability::spirv_has_int64, 0);
+    EXPECT_TRUE(build_adstack_sizer_spirv(Arch::vulkan, &caps).empty());
+  }
+  {
+    auto caps = make_caps();
+    caps.set(DeviceCapability::spirv_has_int8, 0);
+    EXPECT_TRUE(build_adstack_sizer_spirv(Arch::vulkan, &caps).empty());
+  }
+  {
+    auto caps = make_caps();
+    caps.set(DeviceCapability::spirv_has_int16, 0);
+    EXPECT_TRUE(build_adstack_sizer_spirv(Arch::vulkan, &caps).empty());
+  }
+  // Sanity: all caps present still builds a non-empty binary.
+  {
+    auto caps = make_caps();
+    EXPECT_FALSE(build_adstack_sizer_spirv(Arch::vulkan, &caps).empty());
+  }
+}
+
 }  // namespace quadrants::lang::spirv
