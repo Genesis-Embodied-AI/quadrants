@@ -92,16 +92,14 @@ struct AdStackSizeExprDeviceNode {
   // derefs. Precomputed host-side from the kernel's `args_type` struct via
   // `StructType::get_element_offset({arg_id, DATA_PTR_POS_IN_NDARRAY})`. Unused (-1) for other kinds.
   int32_t arg_buffer_offset{-1};
-  // Offset into the global indices array + `indices_count` = number of axes. Layout inside the global indices
-  // array depends on the node kind:
-  //   * `kExternalTensorRead`: `indices_count` consecutive int32 index values, stride-1 summed (legacy, fine for
-  //     1-D ndarrays). Indices use the same encoding as `SerializedSizeExprNode::indices` - non-negative =
-  //     constant index, `-(var_id + 1)` = currently-bound loop variable.
-  //   * `kFieldLoad`: `2 * indices_count` int32 entries as pairs `(idx_a_raw, elem_stride_a)` per axis. The
-  //     element stride is positive and pre-computed on host from the snode's dense shape chain (in *elements*
-  //     of the leaf's primitive type, matching how `psb_load_scalar` in the sizer shader multiplies the final
-  //     element index by `sizeof(prim_dt)`). `elem_stride_a` sits in the slot immediately after its matching
-  //     `idx_raw` so a single sequential scan of `indices[off .. off + 2N)` computes the element index.
+  // Offset into the global indices array + `indices_count` = number of axes. `kExternalTensorRead` and `kFieldLoad`
+  // share the same layout: `2 * indices_count` int32 entries as pairs `(idx_a_raw, elem_stride_a)` per axis.
+  // `idx_a_raw` uses the same encoding as `SerializedSizeExprNode::indices` - non-negative = constant index,
+  // `-(var_id + 1)` = currently-bound loop variable. `elem_stride_a` is positive and pre-computed on host (from the
+  // launch-context ndarray shape for `kExternalTensorRead`, from the snode's dense chain for `kFieldLoad`) in
+  // *elements* of the leaf's primitive type, so `psb_load_scalar` / the device interpreter's element-load then
+  // multiplies the final element index by `sizeof(prim_dt)`. The pair layout lets a single sequential scan of
+  // `indices[off .. off + 2 * indices_count)` compute the element index on both backends.
   int32_t indices_offset{0};
   int32_t indices_count{0};
   int32_t _pad0{0};

@@ -91,17 +91,21 @@ class HostDeviceContextBlitter {
           //
           // The blit is gated on the grad-slot access bits computed by
           // `irpass::detect_external_ptr_grad_access_in_task` and published per-arg in
-          // `ctx_attribs_->grad_arr_access`. We mirror only when any task in the kernel reads the grad slot
-          // (`GRAD_READ`, including the read half of atomic read-modify-writes). A kernel whose only grad
-          // access is a pure non-atomic write to the grad slot cannot observe the pre-launch device state and
-          // does not need the mirror; a kernel that never touches `.grad` at all (the typical forward pass of
-          // a reverse-mode kernel) skips the per-dispatch map + memcpy + unmap entirely.
+          // `ctx_attribs_->grad_arr_access`. We mirror whenever any task in the kernel either reads or writes
+          // the grad slot: READ covers atomic read-modify-writes (the pre-launch device state must match the
+          // host), WRITE covers plain non-atomic partial stores (`x.grad[i] = val` on a torch/numpy tensor) -
+          // without the mirror, the device buffer would retain allocator garbage at indices the kernel did not
+          // touch and the symmetric d2h readback below would silently overwrite the user's host `.grad` with
+          // that garbage. A kernel that never touches `.grad` (the typical forward pass of a reverse-mode
+          // kernel) has both bits clear and skips the per-dispatch map + memcpy + unmap entirely.
           auto grad_access_it = std::find_if(ctx_attribs_->grad_arr_access.begin(), ctx_attribs_->grad_arr_access.end(),
                                              [indices](const auto &pair) -> bool { return pair.first == indices; });
           uint32_t grad_access =
               (grad_access_it != ctx_attribs_->grad_arr_access.end()) ? uint32_t(grad_access_it->second) : 0;
+          constexpr uint32_t kGradReadWrite =
+              uint32_t(irpass::ExternalPtrAccess::READ) | uint32_t(irpass::ExternalPtrAccess::WRITE);
           auto grad_it = ext_array_grads.find(arg_id);
-          if (grad_it != ext_array_grads.end() && (grad_access & uint32_t(irpass::ExternalPtrAccess::READ))) {
+          if (grad_it != ext_array_grads.end() && (grad_access & kGradReadWrite)) {
             DeviceAllocation grad_buffer = grad_it->second;
             void *device_grad_ptr{nullptr};
             QD_ERROR_IF(device_->map(grad_buffer, &device_grad_ptr) != RhiResult::success,
