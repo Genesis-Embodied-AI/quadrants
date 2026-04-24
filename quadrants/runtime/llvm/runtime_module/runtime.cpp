@@ -583,6 +583,19 @@ struct LLVMRuntime {
   // that Program::synchronize runs.
   i64 adstack_overflow_flag = 0;
 
+  // Per-runtime heap-backed autodiff stack slab. Replaces the function-scope `create_entry_block_alloca` that used
+  // to hold every adstack on the worker-thread stack (capped at ~512 KB on macOS secondary threads).
+  // The buffer is host-owned: `LlvmRuntimeExecutor::ensure_adstack_heap(bytes)` grows it via the device allocator
+  // before each kernel launch based on `OffloadedTask::ad_stack.per_thread_stride * num_threads`. The new pointer
+  // and size are published into these two fields without a per-grow kernel launch: a one-shot
+  // `runtime_get_adstack_heap_field_ptrs` kernel (see below) caches the device addresses of the two fields in the
+  // host-side executor, and subsequent grows write to those cached addresses via `memcpy_host_to_device` on
+  // CUDA / AMDGPU, or via direct pointer stores on CPU. Device kernels only read these fields; they do not grow
+  // the buffer, so there is no device-side lock, no `locked_task` emulation, and no cross-wavefront visibility
+  // concern.
+  Ptr adstack_heap_buffer = nullptr;
+  u64 adstack_heap_size = 0;
+
   Ptr result_buffer;
   i32 allocator_lock;
 
@@ -616,6 +629,8 @@ STRUCT_FIELD(LLVMRuntime, host_vsnprintf);
 STRUCT_FIELD(LLVMRuntime, profiler);
 STRUCT_FIELD(LLVMRuntime, profiler_start);
 STRUCT_FIELD(LLVMRuntime, profiler_stop);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_buffer);
+STRUCT_FIELD(LLVMRuntime, adstack_heap_size);
 
 // NodeManager of node S (hash, pointer) managers the memory allocation of S_ch
 // It makes use of three ListManagers.
@@ -707,6 +722,25 @@ void LLVMRuntime_profiler_stop(LLVMRuntime *runtime) {
 
 Ptr get_temporary_pointer(LLVMRuntime *runtime, u64 offset) {
   return runtime->temporaries + offset;
+}
+
+// Stashes `runtime->temporaries` into the result buffer so the host-side executor can read it back via
+// `fetch_result<void *>(quadrants_result_buffer_ret_value_id, ...)`. Written as a dedicated `runtime_`-prefixed
+// helper because only functions with that prefix are marked as `.entry` kernels by `init_runtime_module` on
+// CUDA and survive the eliminate-unused pass on AMDGPU; the STRUCT_FIELD-generated `LLVMRuntime_get_temporaries`
+// getter is not callable via `runtime_jit->call` on GPU backends.
+void runtime_get_temporaries_ptr(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, runtime->temporaries);
+}
+
+// Writes the addresses of `runtime->adstack_heap_buffer` and `runtime->adstack_heap_size` into the result buffer
+// so the host-side executor can cache them. With those cached device pointers the host grows the heap by issuing
+// two simple `memcpy_host_to_device` writes - no per-grow kernel launch for the setters, which sidesteps any
+// questions about AMDGPU kernel calling convention on the auto-generated STRUCT_FIELD setters vs the
+// hand-written `runtime_*` wrappers.
+void runtime_get_adstack_heap_field_ptrs(LLVMRuntime *runtime) {
+  runtime->set_result(quadrants_result_buffer_ret_value_id, (u64)(void *)&runtime->adstack_heap_buffer);
+  runtime->set_result(quadrants_result_buffer_ret_value_id + 1, (u64)(void *)&runtime->adstack_heap_size);
 }
 
 void runtime_retrieve_and_reset_error_code(LLVMRuntime *runtime) {
