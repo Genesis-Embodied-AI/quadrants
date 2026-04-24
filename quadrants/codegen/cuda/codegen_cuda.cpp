@@ -640,6 +640,24 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
+      // Host-side adstack sizing. For non-range_for and for const-bound range_for the launcher uses
+      // `grid_dim * block_dim` directly, which is tight because codegen above caps grid_dim to
+      // ceil((end-begin)/block_dim) for const range_for and non-range_for tasks fan out over the full
+      // dispatch. For dynamic-bound range_for we record const values and gtmps byte offsets so the
+      // launcher resolves begin/end at launch time (via i32 DtoH memcpy from runtime->temporaries)
+      // and sizes the heap to exactly `(end - begin) * per_thread_stride`.
+      if (current_task->ad_stack.per_thread_stride > 0) {
+        current_task->ad_stack.static_num_threads =
+            static_cast<std::size_t>(current_task->grid_dim) * static_cast<std::size_t>(current_task->block_dim);
+        if (stmt->task_type == Type::range_for && !(stmt->const_begin && stmt->const_end)) {
+          current_task->ad_stack.dynamic_gpu_range_for = true;
+          current_task->ad_stack.begin_const_value = stmt->const_begin ? stmt->begin_value : 0;
+          current_task->ad_stack.end_const_value = stmt->const_end ? stmt->end_value : 0;
+          current_task->ad_stack.begin_offset_bytes =
+              stmt->const_begin ? -1 : static_cast<std::int32_t>(stmt->begin_offset);
+          current_task->ad_stack.end_offset_bytes = stmt->const_end ? -1 : static_cast<std::int32_t>(stmt->end_offset);
+        }
+      }
       offloaded_tasks.push_back(*current_task);
       current_task = nullptr;
     }

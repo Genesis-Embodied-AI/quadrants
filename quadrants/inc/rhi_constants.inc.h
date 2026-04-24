@@ -14,6 +14,17 @@ PER_DEVICE_CAPABILITY(spirv_has_int16)
 PER_DEVICE_CAPABILITY(spirv_has_int64)
 PER_DEVICE_CAPABILITY(spirv_has_float16)
 PER_DEVICE_CAPABILITY(spirv_has_float64)
+// Vulkan `VkPhysicalDevice8BitStorageFeatures::storageBuffer8BitAccess` /
+// `VkPhysicalDevice16BitStorageFeatures::storageBuffer16BitAccess` queried flags, enabling
+// `CapabilityStorageBuffer{8,16}BitAccess` emission in the SPIR-V header. Needed independently of
+// `spirv_has_int{8,16}` / `spirv_has_float16`: `Int8` / `Int16` / `Float16` capabilities gate
+// whether the type can be declared, whereas these gate whether it can be loaded / stored through
+// a descriptor-bound `StorageBuffer` pointer. Emitting the storage caps without the underlying
+// device feature makes the driver reject the shader at pipeline creation on strict
+// implementations; skipping them when the device does support them is silent-corruption-UB on
+// drivers that enforce them.
+PER_DEVICE_CAPABILITY(spirv_has_storage_buffer_8bit_access)
+PER_DEVICE_CAPABILITY(spirv_has_storage_buffer_16bit_access)
 PER_DEVICE_CAPABILITY(spirv_has_atomic_int64)
 PER_DEVICE_CAPABILITY(spirv_has_atomic_float16)  // load, store, exchange
 PER_DEVICE_CAPABILITY(spirv_has_atomic_float16_add)

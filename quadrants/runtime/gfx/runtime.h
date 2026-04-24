@@ -164,6 +164,18 @@ class QD_DLL_EXPORT GfxRuntime {
   // zeros it for the next window.
   std::unique_ptr<DeviceAllocationGuard> adstack_overflow_buffer_;
 
+  // Per-dispatch heaps for SPIR-V adstack primal/adjoint storage. The float heap backs f32-valued adstacks; the
+  // int heap backs i32 and u1 adstacks (u1 stored as i32 to match the historical Function-scope path's bool->int
+  // remap). Other primitive types (f64, i64, ...) are hard-errored in the shader codegen (no fallback). Each heap
+  // is sized at `stride * (group_x * block_dim) * sizeof(element)` and grown lazily; reused across launches
+  // whenever the current allocation is already big enough. On grow, the previous buffer is moved into
+  // `ctx_buffers_` rather than freed synchronously, so any in-flight cmdlist still referencing it stays valid
+  // until the stream drains.
+  std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_float_;
+  size_t adstack_heap_buffer_float_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
+  size_t adstack_heap_buffer_int_size_{0};
+
   // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
   // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw
   // there would call `std::terminate()` and crash the process; the user-visible raise should happen at the
@@ -172,6 +184,14 @@ class QD_DLL_EXPORT GfxRuntime {
 
   std::unique_ptr<CommandList> current_cmdlist_{nullptr};
   high_res_clock::time_point current_cmdlist_pending_since_;
+
+  // Counts kernel launches since the last `synchronize()`. `submit_current_cmdlist_if_timeout` forces a
+  // drain once this crosses a threshold, bounding the growth of `VulkanStream::submitted_cmdbuffers_` (and
+  // the fences, semaphores and descriptor sets those entries keep alive) on tight kernel-launch loops that
+  // never touch a Python-side observable - workloads like MPM88 where every substep is a pure GPU update
+  // and the host only reads state once at the end. See the assignment site for the MoltenVK SIGSEGV this
+  // guards against.
+  size_t pending_launches_since_sync_{0};
 
   std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
 

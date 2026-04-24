@@ -70,7 +70,7 @@ TEST_F(DetermineAdStackSizeTest, Loop) {
   EXPECT_EQ(stack->max_size, 1);
 }
 
-TEST_F(DetermineAdStackSizeTest, LoopInfeasible) {
+TEST_F(DetermineAdStackSizeTest, LoopPushOnlyBoundByTripCount) {
   IRBuilder builder;
   auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   auto *loop = builder.create_range_for(/*begin=*/builder.get_int32(0),
@@ -89,10 +89,15 @@ TEST_F(DetermineAdStackSizeTest, LoopInfeasible) {
   constexpr int kDefaultAdStackSize = 32;
   config.default_ad_stack_size = kDefaultAdStackSize;
   EXPECT_EQ(stack->max_size, 0);
-  // Should have a debug message here (unable to determine the necessary size
-  // for autodiff stacks).
+  // Bellman-Ford classifies this as a positive loop (push-only body, no matching pop) and defers. The
+  // structural pre-pass then walks the push site and binds the max size to the enclosing range-for's static
+  // trip count: 100. Before the reorder, Bellman-Ford ran second and unconditionally applied the
+  // `default_ad_stack_size` fallback, which silently over-allocated when the true bound was much smaller (or,
+  // for this test, under-allocated when the trip count is larger than the fallback). A statically-bounded
+  // inner loop has a known exact upper bound and the structural pre-pass is the natural place to derive it.
+  constexpr int kLoopTrips = 100;
   irpass::determine_ad_stack_size(ir_block, config);
-  EXPECT_EQ(stack->max_size, kDefaultAdStackSize);
+  EXPECT_EQ(stack->max_size, kLoopTrips);
 }
 
 TEST_P(DetermineAdStackSizeTest, If) {

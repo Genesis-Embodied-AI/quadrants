@@ -1234,6 +1234,23 @@ RhiResult MetalDevice::allocate_memory(const AllocParams &params,
   MTLBuffer_id buffer = [mtl_device_ newBufferWithLength:params.size
                                                  options:resource_options];
 
+  // `newBufferWithLength:` returns nil on allocation failure (most commonly
+  // when `params.size` exceeds `mtl_device_.maxBufferLength`, which on Apple
+  // Silicon is ~75% of unified memory). Without this check we would wrap nil in
+  // `MetalMemory` and return `RhiResult::success`, and every subsequent
+  // `bindings->rw_buffer(...)` call would `setBuffer:nil` on the Metal encoder
+  // - shader writes drop silently and reads come back as zero, producing NaNs
+  // through divide-by-zero in reverse-mode AD kernels (e.g. `.normalized()`'s
+  // sqrt adjoint reloading a primal that was never actually written).
+  if (buffer == nil) {
+    std::string msg =
+        "Metal newBufferWithLength:" + std::to_string(params.size) +
+        " returned nil (maxBufferLength=" +
+        std::to_string(uint64_t([mtl_device_ maxBufferLength])) + ")";
+    RHI_LOG_ERROR(msg);
+    return RhiResult::out_of_memory;
+  }
+
   MetalMemory &alloc = memory_allocs_.acquire(buffer, can_map);
 
   *out_devalloc = DeviceAllocation{};
