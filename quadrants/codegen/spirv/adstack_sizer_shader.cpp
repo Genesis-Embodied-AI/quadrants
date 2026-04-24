@@ -366,7 +366,7 @@ Value emit_psb_load_i64(IRBuilder &ir, Value data_ptr_u64, Value linear_i32, Val
   auto [v_i8, lbl_i8] = emit_case(case_i8, ir.i8_type(), 1, true);
   auto [v_i16, lbl_i16] = emit_case(case_i16, ir.i16_type(), 2, true);
   auto [v_i32, lbl_i32] = emit_case(case_i32, ir.i32_type(), 4, true);
-  // i64 is the widest - OpSConvert i64→i64 is invalid, so just rebind.
+  // i64 is the widest - OpSConvert i64->i64 is invalid, so just rebind.
   ir.start_label(case_i64);
   Value v_i64_direct = psb_load_scalar(ir, data_ptr_u64, linear_i32, ir.i64_type(), 8);
   Label lbl_i64 = ir.current_label();
@@ -432,8 +432,8 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   ir.start_label(past_lbl);
   Value sp_is_zero = ir.eq(sp_now, ir.int_immediate_number(ir.i32_type(), 0));
 
-  Label stop_lbl = ir.new_label();  // sp == 0 → exit loop
-  Label pop_lbl = ir.new_label();   // sp > 0 → update pending frame
+  Label stop_lbl = ir.new_label();  // sp == 0 -> exit loop
+  Label pop_lbl = ir.new_label();   // sp > 0 -> update pending frame
   Label past_merge = ir.new_label();
   ir.make_inst(spv::OpSelectionMerge, past_merge, spv::SelectionControlMaskNone);
   ir.make_inst(spv::OpBranchConditional, sp_is_zero, stop_lbl, pop_lbl);
