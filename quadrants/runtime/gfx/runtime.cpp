@@ -804,30 +804,22 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
       flush();
     }
   }
-  // Safety valve against unbounded `ctx_buffers_` growth on workloads that launch kernels in a tight loop
-  // without any intervening Python-side observable (host readback, `to_numpy`, field get, ...). Normally
-  // every Quadrants workload touches such an observable between launches and the implicit `synchronize()`
-  // those paths trigger drains the queue; MPM88-style simulations that only push kernels and then read the
-  // final state at the end accumulate one deferred-free batch per flush, and MoltenVK starts to fall over
-  // somewhere around a few hundred pending cmd buffers / descriptor sets (the failure mode was a clean
-  // SIGSEGV inside `MVKCommandEncoder` on repeated launches of the 3-task MPM88 substep kernel). Drain
-  // here when we have more than a conservative threshold of deferred buffers alive. The threshold is high
-  // enough that typical workloads never hit it and the periodic `wait_idle` does not become a measurable
-  // stall; smaller workloads that already touch a host observable will have cleared `ctx_buffers_` long
-  // before we get here via the `synchronize()` path.
   // Safety valve against unbounded GPU-side tracking growth on tight kernel-launch loops without any
-  // intervening Python-side observable (host readback, `to_numpy`, field get, ...). `VulkanStream::submit`
-  // pushes every submitted cmdbuffer into `submitted_cmdbuffers_` with a fence; the vector is only cleared
-  // on `command_sync()` (i.e. `wait_idle` -> `synchronize()`). Workloads that just push kernels and then
-  // read the final state at the end (MPM88, iterative simulations) can accumulate hundreds of live fences
-  // and cmdbuffers, at which point MoltenVK's encoder state tracker SIGSEGVs inside
-  // `MVKCommandEncoder::encodeCommands`. Forcing a drain every `kMaxPendingLaunches` launches keeps the
-  // queue bounded; the threshold is large enough that typical workloads (which already touch a host
-  // observable every iteration) never reach it, so the periodic `wait_idle` does not become a measurable
-  // stall. A non-blocking polling variant that checks individual fences via `vkGetFenceStatus` would
-  // retire sets as they complete without blocking, but that requires an RHI public-surface change
-  // (`bool is_signaled() const` on `StreamSemaphoreObject` and per-backend implementations) and the
-  // motivating workload only needs a coarse-grained drain, not per-fence polling.
+  // intervening Python-side observable (host readback, `to_numpy`, field get, ...). Normally every
+  // Quadrants workload touches such an observable between launches and the implicit `synchronize()` those
+  // paths trigger drains the queue. `VulkanStream::submit` pushes every submitted cmdbuffer into
+  // `submitted_cmdbuffers_` with a fence; the vector is only cleared on `command_sync()` (i.e. `wait_idle`
+  // -> `synchronize()`). Workloads that just push kernels and then read the final state at the end
+  // (MPM88, iterative simulations) accumulate one deferred-free batch per flush and can reach hundreds of
+  // live fences and cmdbuffers, at which point MoltenVK's encoder state tracker SIGSEGVs inside
+  // `MVKCommandEncoder::encodeCommands` (the failure mode was a clean SIGSEGV on repeated launches of the
+  // 3-task MPM88 substep kernel). Forcing a drain every `kMaxPendingLaunches` launches keeps the queue
+  // bounded; the threshold is large enough that typical workloads (which already touch a host observable
+  // every iteration) never reach it, so the periodic `wait_idle` does not become a measurable stall. A
+  // non-blocking polling variant that checks individual fences via `vkGetFenceStatus` would retire sets as
+  // they complete without blocking, but that requires an RHI public-surface change (`bool is_signaled()
+  // const` on `StreamSemaphoreObject` and per-backend implementations) and the motivating workload only
+  // needs a coarse-grained drain, not per-fence polling.
   constexpr size_t kMaxPendingLaunches = 32;
   pending_launches_since_sync_ += 1;
   if (pending_launches_since_sync_ > kMaxPendingLaunches) {
