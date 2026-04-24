@@ -920,6 +920,13 @@ i64 device_eval_node(const quadrants::lang::AdStackSizeExprDeviceNode *nodes,
       }
       return device_load_element(data_ptr_raw, linear, node.prim_dt);
     }
+    case K::kFieldLoad:
+      // The LLVM encoder always host-folds `FieldLoad` leaves (via `SNodeRwAccessorsBank`) before emitting
+      // device bytecode, so the interpreter never sees `kFieldLoad`. It is reserved for the SPIR-V sizer
+      // shader's PSB read path. Return zero rather than asserting (this runtime-module compiles to LLVM
+      // bitcode with no host-assert facility) so a mis-emitted tree surfaces downstream as a wrong-`max_size`
+      // adstack overflow at `qd.sync()` rather than silently UB here.
+      return 0;
   }
   return 0;
 }
