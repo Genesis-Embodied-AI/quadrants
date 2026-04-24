@@ -84,7 +84,7 @@ test = [
     "pytest-cov",
     "pytest-retry",
     "pytest-xdist>=3.7.0",
-    "pytest-timeout",
+
     "numpy>=2.0.0",  # otherwise, on windows, tries to install 1.26.4, which has no wheel for python 3.13
     "psutil",
     "autograd",
