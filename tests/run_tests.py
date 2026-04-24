@@ -48,6 +48,8 @@ def _test_python(args, default_dir="python"):
             pytest_args += ["--failed-first"]
         if args.fail_fast:
             pytest_args += ["--exitfirst"]
+        elif args.maxfail > 0:
+            pytest_args += [f"--maxfail={args.maxfail}"]
         if args.timeout > 0:
             pytest_args += [
                 "--durations=15",
@@ -157,6 +159,14 @@ def test():
         dest="fail_fast",
         action="store_true",
         help="Exit instantly on the first failed test",
+    )
+    parser.add_argument(
+        "--maxfail",
+        required=False,
+        default=20,
+        type=int,
+        dest="maxfail",
+        help="Stop after this many test failures (default: 20, 0 = no limit)",
     )
     parser.add_argument(
         "-C",
