@@ -482,6 +482,20 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
   ir.make_inst(spv::OpBranch, past_step_merge);
 
   ir.start_label(done_lbl);
+  // Clear `scope[pending_var_id]` to zero before popping the frame. The outer `scope_arr` zero-init runs
+  // once at `main()` entry, but `var_id_counter` in `compute_bounded_adstack_size` resets per alloca, so
+  // different stacks in the same task reuse `scope[0]` / `scope[1]` / ... After this MOR completes the
+  // slot holds the last bound value (e.g. `N - 1` for a `[0, N)` range); the NEXT stack's outer linear
+  // pre-order walk - which crosses the body subtree of every MaxOverRange once BEFORE the MOR binds the
+  // variable - would read that stale value as an index into a potentially-smaller ndarray, triggering an
+  // OOB PSB load (Metal: hung command buffer; Vulkan with robustBufferAccess: silent zero feeding a later
+  // `Adstack overflow`). Zeroing here preserves the "scope[var_id] == 0 is a safe spurious-read target
+  // because index 0 is always valid for any non-empty ndarray" invariant the outer walk relies on.
+  Value pop_var_id_ptr = array_i32_access_ptr(ir, st.pending_var_id_arr, top_idx);
+  Value pop_var_id = ir.load_variable(pop_var_id_ptr, ir.i32_type());
+  Value pop_scope_ptr = array_i64_access_ptr(ir, st.scope_arr, pop_var_id);
+  ir.store_variable(pop_scope_ptr, ir.int_immediate_number(ir.i64_type(), 0));
+
   // values[pending_mor_idx[top_idx]] = new_max_accum
   Value mor_idx_ptr = array_i32_access_ptr(ir, st.pending_mor_idx_arr, top_idx);
   Value mor_idx = ir.load_variable(mor_idx_ptr, ir.i32_type());
