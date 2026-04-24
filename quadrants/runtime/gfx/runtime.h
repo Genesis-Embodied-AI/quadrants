@@ -158,6 +158,7 @@ class QD_DLL_EXPORT GfxRuntime {
   std::vector<PerTaskAdStackRuntime> publish_adstack_metadata_spirv(
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
       const std::string &kernel_name);
 

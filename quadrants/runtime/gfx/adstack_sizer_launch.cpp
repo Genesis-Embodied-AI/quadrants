@@ -35,6 +35,7 @@ namespace gfx {
 std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     LaunchContextBuilder &host_ctx,
     DeviceAllocationGuard *args_buffer,
+    const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
     const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
     const std::string &kernel_name) {
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack(task_attribs.size());
@@ -178,6 +179,19 @@ std::vector<PerTaskAdStackRuntime> GfxRuntime::publish_adstack_metadata_spirv(
     sizer_cmdlist->bind_pipeline(adstack_sizer_pipeline_.get());
     RhiResult bind_res = sizer_cmdlist->bind_shader_resources(bindings.get());
     QD_ERROR_IF(bind_res != RhiResult::success, "Sizer resource binding error: RhiResult({})", int(bind_res));
+    // Mark every ndarray data buffer resident for this dispatch. The sizer reads each `ExternalTensorRead`
+    // via a `buffer_reference` / PSB load against a u64 pointer stored in the kernel arg buffer, which
+    // bypasses Metal's descriptor-based resource tracking - without an explicit `useResource:` hint the
+    // Apple7 GPU family (M1) returns zero for those loads and the shader sizes every MOR-over-ETR to zero,
+    // tripping an `Adstack overflow` at the next `qd.sync()`. The main kernel dispatch already calls
+    // `track_physical_buffer` on the same set at `runtime.cpp`'s pre-dispatch block; this mirrors it for
+    // the sizer. Backends that do not need residency hints (Vulkan/MoltenVK, LLVM-native) no-op the base
+    // `track_physical_buffer` and pay nothing.
+    if (device_->get_caps().get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+      for (const auto &[arg_id, alloc] : ndarray_allocs) {
+        sizer_cmdlist->track_physical_buffer(alloc);
+      }
+    }
     RhiResult dispatch_res = sizer_cmdlist->dispatch(1, 1, 1);
     QD_ERROR_IF(dispatch_res != RhiResult::success, "Sizer dispatch error: RhiResult({})", int(dispatch_res));
     sizer_cmdlist->buffer_barrier(*per_task_metadata_allocs[k]);

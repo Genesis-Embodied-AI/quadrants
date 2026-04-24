@@ -535,8 +535,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Physical Storage Buffer addressing and dereferences where the memory lives, which is the only way to resolve
   // an `ExternalTensorRead` against a GPU-private `qd.ndarray` without round-tripping the entire ndarray through
   // host memory.
-  std::vector<PerTaskAdStackRuntime> per_task_ad_stack =
-      publish_adstack_metadata_spirv(host_ctx, args_buffer.get(), task_attribs, ti_kernel->ti_kernel_attribs().name);
+  std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
+      host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name);
 
   ensure_current_cmdlist();
 
