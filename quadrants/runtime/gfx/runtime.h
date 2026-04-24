@@ -74,6 +74,18 @@ class CompiledQuadrantsKernel {
   std::vector<std::unique_ptr<Pipeline>> pipelines_;
 };
 
+// Per-task runtime metadata populated by the on-device adstack SizeExpr sizer shader. `metadata` is the
+// readback of the sizer buffer laid out as `[stride_float, stride_int, (offset, max_size)*]`; `stride_*`
+// are cached copies of the first two words for the downstream heap-sizing math in `launch_kernel`. One
+// entry per task in the kernel's `tasks_attribs` vector (tasks without any adstack allocas keep the
+// compile-time strides from `AdStackSizingAttribs::per_thread_stride_*_compile_time` and leave `metadata`
+// empty).
+struct PerTaskAdStackRuntime {
+  std::vector<uint32_t> metadata;
+  uint32_t stride_float{0};
+  uint32_t stride_int{0};
+};
+
 class QD_DLL_EXPORT GfxRuntime {
  public:
   struct Params {
@@ -136,6 +148,18 @@ class QD_DLL_EXPORT GfxRuntime {
 
   void ensure_current_cmdlist();
   void submit_current_cmdlist_if_timeout();
+
+  // Walks each task's `SerializedSizeExpr` trees, encodes them into device bytecode, dispatches the on-device
+  // sizer compute shader once per adstack-bearing task, and reads back per-task `[stride_float, stride_int,
+  // (offset, max_size)*]` metadata. See `quadrants/runtime/gfx/adstack_sizer_launch.cpp` for the full
+  // mechanism. Returns one entry per task in `task_attribs`; tasks without adstack allocas get the
+  // compile-time fallback strides and an empty `metadata`. Called from `launch_kernel` before the main
+  // cmdlist opens, so the sizer dispatch is fully serialised against any in-flight reader kernels.
+  std::vector<PerTaskAdStackRuntime> publish_adstack_metadata_spirv(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::string &kernel_name);
 
   void init_nonroot_buffers();
 
