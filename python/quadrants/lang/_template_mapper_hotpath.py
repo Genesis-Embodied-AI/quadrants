@@ -72,10 +72,16 @@ _primitive_types = {int, float, bool}
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
-    # PERF-CRITICAL: Unwrap qd.Tensor wrappers (e.g. from struct fields). The _any_tensor_constructed guard makes
-    # the isinstance zero-cost when no qd.Tensor has been created. This function runs on *every* argument of *every*
-    # kernel invocation; without the guard the cumulative isinstance overhead causes a ~4% CPU regression. Do not
-    # remove the guard or move the isinstance outside of it.
+    # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers
+    # direct args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
+    # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
+    # ``qd.types.NDArray[qd.f32, 2]``). Without this unwrap the function falls through to the "external arrays"
+    # path (line ~149) which technically reads ``.shape`` off the wrapper but produces a meaningless cache key. See
+    # ``perso_hugh/doc/quadrants-tensor.md`` §8.14. Idempotent for top-level args.
+    #
+    # PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance zero-cost when no qd.Tensor has been
+    # created. This function runs on *every* argument of *every* kernel invocation; without the guard the cumulative
+    # isinstance overhead causes a ~4% CPU regression. Do not remove the guard or move the isinstance outside of it.
     if _tensor_wrapper._any_tensor_constructed and isinstance(
         arg, _TensorClass
     ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -140,6 +146,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # Convert singleton primitive dtype to int. This will dramatically speed up hashing later on.
             type_id = id(arg.element_type)
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
+            # Optional tensor layout (None for legacy / identity).
+            #
             # PERF-CRITICAL: arg._qd_layout uses direct attribute access (not getattr) because Ndarray has a
             # class-level _qd_layout=None default. This avoids getattr(..., default) overhead on every kernel arg.
             # Do not replace with getattr().
