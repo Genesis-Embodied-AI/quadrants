@@ -253,6 +253,23 @@ void substitute_var_in_place(SizeExpr *e, int32_t from, int32_t to) {
   }
 }
 
+// True if `e` or any descendant node has `kind`. Used by `expr_sub` to refuse the `MaxOverRange` fusion
+// when the synthesised body would pair a `FieldLoad` with an `ExternalTensorRead`.
+bool contains_kind(const SizeExpr *e, SizeExpr::Kind kind) {
+  if (e == nullptr) {
+    return false;
+  }
+  if (e->kind == kind) {
+    return true;
+  }
+  for (const auto &child : e->operands) {
+    if (contains_kind(child.get(), kind)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<SizeExpr> b) {
   if (a->kind == SizeExpr::Kind::Const && b->kind == SizeExpr::Kind::Const) {
     return SizeExpr::make_const(a->const_value - b->const_value);
@@ -269,28 +286,34 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
     return SizeExpr::make_const(0);
   }
   // Fuse `Sub(MaxOverRange(X, B, E, body_a), MaxOverRange(Y, B, E, body_b))` into
-  // `MaxOverRange(X, B, E, Sub(body_a, body_b[Y->X]))` when the two wrappers iterate over the same domain.
-  // The independent-wrap form evaluates to `max_i(body_a) - max_j(body_b)` at runtime, which under-counts
-  // `max_i(body_a[i] - body_b[i])` whenever the per-operand maxima are attained at different indices (e.g.
-  // user-IR `end_arr[i] - start_arr[i]` over two parallel ndarrays - when a slot's `end_arr` is the max while
-  // a different slot's `start_arr` is the max then `max(end_arr) - max(start_arr)` can be zero or even hit
-  // the Sub's clamp-to-zero, while `max_i(end_arr[i] - start_arr[i])` is positive and is the correct
-  // trip-count upper bound). Fusing under a shared MaxOverRange preserves the per-iteration pairing that the
-  // user-IR Sub was meant to capture and keeps the dynamic sizing as tight as possible. The `end` operands
-  // must be structurally equal OR must both be `ExternalTensorShape` along the same axis - the latter covers
-  // the parallel-ndarray pattern where the two shapes come from distinct ndarrays. In the cross-ndarray
-  // case, the fused body reads `arr_a[v]` and `arr_b[v]` at the same `v`, so the iteration range must be
-  // the min of both shapes or the shorter ndarray is read past its buffer end (UB on CPU, illegal-address
-  // on CUDA / AMDGPU). `min(a, b) = a + b - max(a, b)` stays inside the existing grammar, and the
-  // constant-folding inside `expr_{add,sub,max}` collapses it back to `a` when `a == b`, so the matching-
-  // shape case stays byte-for-byte identical to the strict-equality path.
+  // `MaxOverRange(X, B, E, Sub(body_a, body_b[Y->X]))` when the two wrappers are over the SAME user loop.
+  // `expr_equal` on the ends gates this via alpha-equivalence (see `expr_equal_alpha`'s comment): it only
+  // returns true when the two independently-built range wrappers bottom out at the same source IR loop, so
+  // fusing is semantically identical to the user's per-iteration paired subtraction. Without fusion the
+  // unfused form evaluates to `max_i body_a(i) - max_j body_b(j)` at runtime, which under-counts
+  // `max_i (body_a(i) - body_b(i))` whenever the per-operand maxima are attained at different indices.
+  // Cross-user-loop fusion (two MaxOverRange wrappers from two independent enclosing loops that happen to
+  // iterate over same-axis ndarray shapes) is NOT safe: the user's two loops use independent indices, and
+  // fusing under a single `v` fabricates an index pairing that does not exist in the source - the bound
+  // collapses to `max_v (arr_a[v] - arr_b[v])` over `min(shape_a, shape_b)`, which silently misses any peak
+  // in `arr_a` past `shape_b` and drives the adstack toward overflow at `qd.sync()`. Those cases fall to
+  // the `MaxOverRange_a` over-approximation below.
   if (a->kind == SizeExpr::Kind::MaxOverRange && b->kind == SizeExpr::Kind::MaxOverRange && a->operands.size() == 3 &&
-      b->operands.size() == 3 && expr_equal(a->operands[0].get(), b->operands[0].get())) {
-    bool end_eq = expr_equal(a->operands[1].get(), b->operands[1].get());
-    bool both_shape_same_axis = a->operands[1]->kind == SizeExpr::Kind::ExternalTensorShape &&
-                                b->operands[1]->kind == SizeExpr::Kind::ExternalTensorShape &&
-                                a->operands[1]->arg_shape_axis == b->operands[1]->arg_shape_axis;
-    if (end_eq || both_shape_same_axis) {
+      b->operands.size() == 3 && expr_equal(a->operands[0].get(), b->operands[0].get()) &&
+      expr_equal(a->operands[1].get(), b->operands[1].get())) {
+    // Decline the fusion when the resulting body would mix a `FieldLoad` and an `ExternalTensorRead`. Each
+    // side is independently host-foldable (its MaxOverRange wraps a closed subtree), but the fused body
+    // would carry a `FieldLoad` indexed by the bound variable `v` alongside an `ExternalTensorRead[v]` - a
+    // combination that `encode_adstack_size_expr_device_bytecode` rejects on CUDA / AMDGPU because the LLVM
+    // device interpreter has no on-device SNode access. Falling through to the `MaxOverRange_a` branch
+    // below keeps the adstack-size bound sound (`max(0, a - b) <= a` when b is a non-negative `SizeExpr`)
+    // and avoids synthesising the mixed body for the encoder to choke on.
+    const bool a_has_fieldload = contains_kind(a->operands[2].get(), SizeExpr::Kind::FieldLoad);
+    const bool b_has_fieldload = contains_kind(b->operands[2].get(), SizeExpr::Kind::FieldLoad);
+    const bool a_has_extread = contains_kind(a->operands[2].get(), SizeExpr::Kind::ExternalTensorRead);
+    const bool b_has_extread = contains_kind(b->operands[2].get(), SizeExpr::Kind::ExternalTensorRead);
+    const bool would_mix = (a_has_fieldload && b_has_extread) || (a_has_extread && b_has_fieldload);
+    if (!would_mix) {
       int32_t var_x = a->var_id;
       int32_t var_y = b->var_id;
       auto body_b_renamed = b->operands[2] ? b->operands[2]->clone() : nullptr;
@@ -298,13 +321,18 @@ std::unique_ptr<SizeExpr> expr_sub(std::unique_ptr<SizeExpr> a, std::unique_ptr<
         substitute_var_in_place(body_b_renamed.get(), var_y, var_x);
       }
       auto new_body = expr_sub(std::move(a->operands[2]), std::move(body_b_renamed));
-      auto end_a = std::move(a->operands[1]);
-      auto end_b = std::move(b->operands[1]);
-      auto end_sum = expr_add(end_a->clone(), end_b->clone());
-      auto end_max = expr_max(std::move(end_a), std::move(end_b));
-      auto fused_end = expr_sub(std::move(end_sum), std::move(end_max));
-      return SizeExpr::make_max_over_range(var_x, std::move(a->operands[0]), std::move(fused_end), std::move(new_body));
+      return SizeExpr::make_max_over_range(var_x, std::move(a->operands[0]), std::move(a->operands[1]),
+                                           std::move(new_body));
     }
+  }
+  // Sound upper bound on `Sub(a, b)` when both operands are `MaxOverRange` and we could not fuse them (cross-
+  // user-loop, or same loop but mixed FieldLoad / ExternalTensorRead body). `SizeExpr` trees always evaluate
+  // to non-negative integers (counts / indices / shapes), so `max(0, eval(a) - eval(b)) <= eval(a)` - taking
+  // `a` alone is a sound over-approximation. The host evaluator's grammar cannot express the tight
+  // `max_i a(i) - min_j b(j)` form without a `Min` operator; dropping back to `a` trades a small amount of
+  // adstack memory for correctness and keeps the encoder free of mixed-leaf bodies.
+  if (a->kind == SizeExpr::Kind::MaxOverRange && b->kind == SizeExpr::Kind::MaxOverRange) {
+    return a;
   }
   return SizeExpr::make_binary(SizeExpr::Kind::Sub, std::move(a), std::move(b));
 }
