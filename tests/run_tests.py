@@ -51,8 +51,8 @@ def _test_python(args, default_dir="python"):
         if args.timeout > 0:
             pytest_args += [
                 "--durations=15",
-                "-p",
-                "pytest_hardtle",
+                "-p", "no:timeout",
+                "-p", "pytest_hardtle",
                 f"--timeout={args.timeout}",
             ]
     except AttributeError:
