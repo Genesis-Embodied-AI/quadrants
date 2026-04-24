@@ -789,12 +789,25 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       features2.pNext = &shader_8bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
 
+      // Gate the SPIR-V `CapabilityStorageBuffer8BitAccess` emission strictly on the queried
+      // feature bit. `VK_KHR_8bit_storage` promoted into Vulkan 1.2 core doesn't imply the feature
+      // is actually supported -- implementations can still expose `storageBuffer8BitAccess = FALSE`
+      // -- so the SPIR-V cap may only be emitted when this feature is true, otherwise strict
+      // validation rejects shaders that declare the capability.
+      if (shader_8bit_storage_feature.storageBuffer8BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_8bit_access, true);
+      }
+
       *pNextEnd = &shader_8bit_storage_feature;
       pNextEnd = &shader_8bit_storage_feature.pNext;
     }
     if (CHECK_VERSION(1, 1) || CHECK_EXTENSION(VK_KHR_16BIT_STORAGE_EXTENSION_NAME)) {
       features2.pNext = &shader_16bit_storage_feature;
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+
+      if (shader_16bit_storage_feature.storageBuffer16BitAccess) {
+        caps.set(DeviceCapability::spirv_has_storage_buffer_16bit_access, true);
+      }
 
       *pNextEnd = &shader_16bit_storage_feature;
       pNextEnd = &shader_16bit_storage_feature.pNext;

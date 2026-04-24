@@ -2117,7 +2117,14 @@ static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val
   if (ptr_val.stype.dt == PrimitiveType::u64) {
     return dt;
   }
-  if (is_real(dt)) {
+  // Explicit whitelist of the real primitives we route natively, replacing the prior
+  // open-ended `is_real(dt)` predicate. Any future real-like primitive (e.g. a bfloat16, or an
+  // fp8 variant) would not have an audited SPIR-V storage-capability story yet -- rather than
+  // silently fall into the native-view branch, it must be added here deliberately after the
+  // storage-capability plumbing for its bit width is confirmed (see the
+  // `CapabilityStorageBuffer{8,16}BitAccess` emissions in `spirv_ir_builder.cpp`).
+  if (dt->is_primitive(PrimitiveTypeID::f16) || dt->is_primitive(PrimitiveTypeID::f32) ||
+      dt->is_primitive(PrimitiveTypeID::f64)) {
     return dt;
   }
   return ir.get_quadrants_uint_type(dt);

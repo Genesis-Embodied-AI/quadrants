@@ -54,6 +54,22 @@ void IRBuilder::init_header() {
   if (caps_->get(cap::spirv_has_int16)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityInt16).commit(&header_);
   }
+  // `CapabilityStorageBuffer{8,16}BitAccess` gate narrow-typed loads / stores through a
+  // descriptor-bound `StorageBuffer` pointer (e.g. `OpLoad %_ptr_StorageBuffer_ushort`). The
+  // existing codegen has been emitting these narrow-typed accesses via the uint-punning path in
+  // `load_buffer` / `store_buffer` for a while (`get_quadrants_uint_type(i16) = u16`,
+  // `get_quadrants_uint_type(i8) = u8`), which strict Vulkan validation requires these capabilities
+  // for -- so we emit them unconditionally whenever the queried feature is set, independent of
+  // whether the current kernel actually uses a narrow type. The cost is a single extra
+  // `OpCapability` word in the shader header; the upside is that every 16-bit / 8-bit field or
+  // ndarray access is spec-compliant on drivers that enforce the letter of
+  // `SPV_KHR_{8,16}bit_storage`.
+  if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer8BitAccess).commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
+    ib_.begin(spv::OpCapability).add(spv::CapabilityStorageBuffer16BitAccess).commit(&header_);
+  }
   if (caps_->get(cap::spirv_has_int64)) {
     ib_.begin(spv::OpCapability).add(spv::CapabilityInt64).commit(&header_);
   }
@@ -76,6 +92,17 @@ void IRBuilder::init_header() {
   }
 
   ib_.begin(spv::OpExtension).add("SPV_KHR_storage_buffer_storage_class").commit(&header_);
+
+  // `SPV_KHR_{8,16}bit_storage` is paired with `CapabilityStorageBuffer{8,16}BitAccess` above.
+  // Both the capability and the extension are needed for narrow-typed `StorageBuffer` loads /
+  // stores to validate on Vulkan; declaring only the capability without the extension is
+  // ill-formed SPIR-V.
+  if (caps_->get(cap::spirv_has_storage_buffer_8bit_access)) {
+    ib_.begin(spv::OpExtension).add("SPV_KHR_8bit_storage").commit(&header_);
+  }
+  if (caps_->get(cap::spirv_has_storage_buffer_16bit_access)) {
+    ib_.begin(spv::OpExtension).add("SPV_KHR_16bit_storage").commit(&header_);
+  }
 
   if (caps_->get(cap::spirv_has_no_integer_wrap_decoration)) {
     ib_.begin(spv::OpExtension).add("SPV_KHR_no_integer_wrap_decoration").commit(&header_);
