@@ -17,14 +17,14 @@ on:
     secrets:
       amdgpu_runner_region:
         description: 'The region of the AMD GPU runner to start'
-        required: true
+        required: false
       amdgpu_runner_instance_id:
         description: 'The instance ID of the AMD GPU runner to start'
-        required: true
+        required: false
       aws_github_runner_access_key_id:
-        required: true
+        required: false
       aws_github_runner_secret_access_key:
-        required: true
+        required: false
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -33,18 +33,23 @@ jobs:
   start_amdgpu_runner:
     name: Start AMD GPU Runner
     runs-on: ubuntu-24.04
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.aws_github_runner_access_key_id }}
     steps:
       - name: Python check
+        if: env.AWS_ACCESS_KEY_ID != ''
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       - name: Configure AWS credentials
+        if: env.AWS_ACCESS_KEY_ID != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws_github_runner_access_key_id }}
           aws-secret-access-key: ${{ secrets.aws_github_runner_secret_access_key }}
           aws-region: ${{ secrets.amdgpu_runner_region }}
       - name: start amd gpu runner
+        if: env.AWS_ACCESS_KEY_ID != ''
         run: |
           pip install awscli
           # we try a few times, in case the instance was shutting down, or starts to shut down
