@@ -1626,6 +1626,72 @@ def test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read():
         assert x.grad[k] == pytest.approx(4 * 2.0 * 0.1, rel=1e-5)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Cross-kernel sibling of `test_adstack_sizer_trip_count_ndarray_mutated_after_launch_read`. When a "
+        "reverse-mode kernel uses `a[i_e]` as a loop trip count on a `qd.ndarray` and a separate kernel "
+        "mutates `a` on device between the forward and `.grad()` calls, the backward sizer re-dispatches "
+        "and reads the post-mutation value, so the reverse pass walks more inner iterations than the "
+        "forward pushed and accumulates gradient at indices the forward never visited. Documented as a "
+        "known limitation in `docs/source/user_guide/autodiff.md`."
+    ),
+)
+@test_utils.test(require=qd.extension.adstack)
+def test_adstack_sizer_trip_count_qd_ndarray_mutated_by_separate_kernel():
+    # Pins the cross-kernel silent-wrong-gradient pattern: a reverse-mode kernel reads `a[i_e]` as an
+    # inner-loop trip count on a device-resident `qd.ndarray`, and a separate kernel mutates `a` between
+    # the forward and `.grad()` calls. The reverse pass walks with the post-mutation trip count, so
+    # `x.grad` ends up non-zero at indices the forward never visited.
+    #
+    # Internal details: the forward sizer reads `a = 5` and the main kernel pushes 5 entries per outer
+    # iter; the sibling kernel then writes `a = 10` on device; the backward sizer re-dispatches, reads
+    # `a = 10`, and the reverse pass walks 10 inner iterations. The result is `x.grad[5..9] = 0.8` at
+    # `x[k] = 0.1` instead of the analytical `0.0`. `qd.ndarray` (rather than numpy) is required so the
+    # sibling kernel's device write persists across launches; the same construction with a numpy ndarray
+    # may not reproduce because per-launch h2d uploads can erase the sibling kernel's device write.
+    N_X = 16
+    N = 4
+
+    x = qd.field(qd.f32, shape=(N_X,), needs_grad=True)
+    loss = qd.field(qd.f32, shape=(), needs_grad=True)
+
+    @qd.kernel
+    def init_to_5(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            a[i] = 5
+
+    @qd.kernel
+    def overwrite_to_10(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i in range(a.shape[0]):
+            a[i] = 10
+
+    @qd.kernel
+    def use_bound(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for i_e in range(a.shape[0]):
+            for j in range(a[i_e]):
+                loss[None] += x[j] * x[j]
+
+    for i in range(N_X):
+        x[i] = 0.1
+    a = qd.ndarray(qd.i32, shape=(N,))
+    init_to_5(a)
+    use_bound(a)
+    overwrite_to_10(a)
+    loss.grad[None] = 1.0
+    for i in range(N_X):
+        x.grad[i] = 0.0
+    use_bound.grad(a)
+    qd.sync()
+
+    assert loss[None] == pytest.approx(4 * 5 * 0.1 * 0.1, rel=1e-5)
+    for k in range(N_X):
+        if k < 5:
+            assert x.grad[k] == pytest.approx(2 * 4 * 0.1, rel=1e-5)
+        else:
+            assert x.grad[k] == pytest.approx(0.0, abs=1e-5)
+
+
 @test_utils.test(require=qd.extension.adstack)
 def test_adstack_field_load_bounded_loop_evaluated_per_launch():
     # Pins the host-evaluated SizeExpr path end-to-end: a reverse-mode adstack whose inner-loop bound is a scalar

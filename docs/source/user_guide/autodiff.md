@@ -71,6 +71,12 @@ Notes:
 - `kernel.grad(...)` takes the same arguments as the forward kernel.
 - Reverse-mode AD through a *dynamic* loop (one whose trip count is not known at compile time) needs an opt-in compiler pipeline called the *adstack*, gated behind `ad_stack_experimental_enabled=True` in `qd.init()`. This path will be enabled by default in a future release, once thoroughly tested in production; see [Autodiff with dynamic loops](#autodiff-with-dynamic-loops) and [Under the hood (advanced)](#under-the-hood-advanced) for the current status.
 
+**Integer casts stop gradients.** Integers have no meaningful derivative, so the chain rule reads as zero upstream of any cast to integer - no error, just silently-zero gradients. This is a property of differentiation through quantization, not of Quadrants. Rules of thumb:
+
+- keep differentiable variables in `qd.f32` / `qd.f64` through the full forward chain;
+- casting *to* a float is safe - the downstream float section remains differentiable, and the cast itself contributes a unit factor to the chain rule;
+- casting *back to* an integer stops the gradient at that point, so only do it at integer-indexing sites, after any arithmetic whose gradient you need.
+
 ### Recording a backward pass with `qd.ad.Tape`
 
 Training loops typically chain several kernels - physics step, feature extraction, loss. Differentiating such a pipeline by hand means calling each `.grad()` in the correct reverse order, seeding the loss, and clearing adjoints on every iteration.
@@ -219,11 +225,11 @@ with qd.ad.Tape(loss=loss, validation=True):
 
 **Problem.** Reverse-mode AD through a dynamic loop (one whose trip count is not known at compile time) needs to recover the primal value at each iteration when walking the loop backwards. Without that, the chain-rule steps read a stale value and the gradients come out silently wrong. Static-unrolled (`qd.static(range(...))`) loops are not affected because every iteration becomes its own inlined block at compile time.
 
-**How Quadrants does it.** Quadrants provides a dedicated compiler pipeline for this, called the *adstack* (short for "(a)uto(d)iff (stack)"). It allocates a per-variable stack alongside each primal that is updated inside the loop. The forward pass pushes one entry per iteration. The reverse pass walks the stack from top down: at each reverse iteration it reads the current top entry as many times as that iteration's chain-rule contributions need (one `read` per downstream use of the primal), then pops the entry once and steps to the iteration underneath. Peeking-and-reusing rather than popping per use matters because the same primal often feeds several chain-rule terms in one iteration - e.g. a `v` that appears in both a `sin(v)` and a subsequent `v * w` needs to be visible to both adjoint terms before it is discarded. Enabling adstack costs extra per-thread memory and compile time, but some kernels need it.
+**How Quadrants does it.** Quadrants provides a dedicated compiler pipeline for this, called the *adstack* (short for "(a)uto(d)iff (stack)"). It allocates a per-variable stack alongside each primal that is updated inside the loop. The forward pass pushes one entry per iteration. The reverse pass walks the stack from top down. At each reverse iteration it reads the current top entry, applies the chain-rule contributions of that iteration, then pops the entry once and steps to the iteration underneath. Enabling adstack costs extra per-thread memory and compile time, but some kernels need it.
 
-**Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`. The flag is compile-time, so it must be set before the offending kernel compiles. Any mainstream modern GPU works on the SPIR-V side (Apple Silicon for Metal, any recent discrete GPU for Vulkan); on the odd legacy device that is missing the hardware features the sizer relies on, the launch errors out with a clear message and you can fall back to the LLVM runtime (CPU / CUDA / AMDGPU).
+**Workflow.** Enable the pipeline at init time and keep using the normal reverse-mode workflow: `qd.init(..., ad_stack_experimental_enabled=True)`.
 
-**Note.** Running with adstack enabled when it is not strictly needed is safe, but not the other way around. Running without it when it is needed raises a `QuadrantsCompilationError` in most cases: the autodiff pass rejects a non-static range that would otherwise lose its primal. A few edge-case loop shapes still slip past that rejection and produce silently-wrong gradients; these are tracked and fixed in the autodiff pass as they surface, so if you see wrong-but-non-zero gradients through a dynamic loop with adstack disabled, turn it on and rerun as a sanity check.
+**Note.** Running with adstack enabled when it is not strictly needed is safe, but not the other way around. Running without it when it is needed raises a `QuadrantsCompilationError` in most cases: the autodiff pass rejects a non-static range that would otherwise lose its primal. A few edge-case loop shapes still slip past that rejection and produce silently-wrong gradients; these are tracked and fixed in the autodiff pass as they surface. There is no automated detector for this case. If you suspect a kernel may be affected, a reasonable check is to enable adstack and re-run: if the gradients are unchanged, adstack was not needed.
 
 Reverse-mode AD walks the forward kernel in reverse and applies the chain rule at every op. The chain-rule factor at each op is that op's derivative with respect to its input. For *non-linear* ops (`sin`, `cos`, `exp`, `sqrt`, `tanh`, `pow`, ...) that derivative depends on the input's primal, so the reverse pass needs the primal value that was there on the forward pass. For *linear* ops (addition, subtraction, multiplication by a constant) the derivative is itself a constant and no primal is needed. In a dynamic loop the forward pass writes a different primal at each iteration, so the reverse pass cannot simply re-read the latest value - it needs one per iteration. adstack provides exactly that: a per-iteration stash of the primal.
 
@@ -242,23 +248,17 @@ Reverse-mode AD walks the forward kernel in reverse and applies the chain rule a
 
 ### Supported loop shapes
 
-The compiler recognises a set of bound shapes:
+Quadrants supports many common loop constructs, but not every loop shape that compiles in the absence of adstack is currently handled. Loop shapes outside the supported set are rejected at compile time, with the error naming the offending source line. Typical fixes are to restructure the loop into one of the supported shapes, or to file a bug. Setting `QD_DUMP_IR=1` before compiling dumps the kernel IR for the first unresolved adstack into `/tmp/ir_adstack_unresolved/` so you can attach it to the report.
 
-| Bound shape | Example |
-| --- | --- |
-| Integer constant | `for i in range(42):` |
-| Scalar integer field (`i32` / `i64`) at a constant or loop index | `for i in range(n[None]):`, `for i in range(n[j]):` |
-| Ndarray argument shape along any axis | `for i in range(arr.shape[1]):` |
-| Scalar ndarray read at a constant or loop index, including multi-axis reads | `for i in range(arr[j]):`<br>`for i in range(arr[j, k]):` |
-| Two-argument `range(start, stop)` whose `start` and `stop` are any of the bound shapes above | `for k in range(start[j], stop[j]):` |
-| An enclosing `for i in range(...)`, struct-for, or ndrange index (also multi-index ndrange over ndarray shapes) | `for i in range(N): ... for j in range(i):`<br>`for i, j in qd.ndrange(arr.shape[0], arr.shape[1]):` |
-| A cast of a loop index stashed earlier in the same body, used to index a field or ndarray | `i_l = qd.cast(outer_i, qd.i32)` then later `arr[i_l]` or `field[i_l]` |
-
-Any loop shape outside this set is rejected at compile time. The error names the offending source line; typical fixes are to restructure the loop into one of the shapes above, or to file a bug. Setting `QD_DUMP_IR=1` before compiling dumps the kernel IR for the first unresolved adstack into `/tmp/ir_adstack_unresolved/` so you can attach it to the report.
+See [Appendix A: types of dynamic loops supported by reverse-mode AD](#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad) for the authoritative list.
 
 ### Under the hood (advanced)
 
-*This section is a glimpse of how the adstack is sized and laid out in memory. You never need to read it to use reverse-mode AD - skip it unless you are curious, debugging an overflow or OOM, or planning to extend the list of supported loop shapes.*
+*You do not need to read this section to use reverse-mode AD. Skip past it unless you hit an overflow error on SPIR-V, an out-of-memory error on GPU, or a compile error from the autodiff pass naming a loop in your kernel.*
+
+#### Why peek-and-pop, not pop-per-use
+
+The reverse pass reads the current top of stack as many times as that iteration's chain-rule contributions need, then pops the entry once. The number of reads per entry equals the number of downstream uses of the primal in that iteration. Popping after each read would not work: the same primal often feeds several chain-rule terms in one iteration - e.g. a `v` that appears in both a `sin(v)` and a subsequent `v * w` is needed for both adjoint terms - so popping after the first read would discard the value before the remaining terms could use it.
 
 #### One adstack per variable
 
@@ -287,7 +287,7 @@ The evaluation happens in different places depending on the backend, but the res
 
 Either way, the per-thread stride and each adstack's offset / max-size land in a small buffer the main kernel reads on every push. The backing heap grows on demand to match the largest size any launch has needed so far, and is reused across subsequent launches - you do not need to reserve memory up front.
 
-The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream modern GPU supports both, but if you hit a rare legacy device that does not, the launch errors out with a clear message and you can fall back to a CPU / CUDA / AMDGPU run.
+The on-device sizer relies on two common hardware features (64-bit integer arithmetic and raw-pointer storage-buffer access). Every mainstream GPU from late 2018 onward supports both.
 
 #### Manual override
 
@@ -316,7 +316,14 @@ where each quantity means:
 | `bytes_per_slot` | Depends on `T` and on the backend (see table below). |
 | `num_buffers` | Number of adstacks the kernel allocates - one per loop-carried variable plus one per dependent branch flag (see [One adstack per variable](#one-adstack-per-variable)). |
 
-Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot, but LLVM backends still carry one for codegen uniformity. SPIR-V backends trim it. SPIR-V also widens `bool` to `i32` at storage time, because SPIR-V has no defined layout for `OpTypeBool`.
+Every adstack slot always stores a *primal* value - the forward-pass value the reverse pass pops to recover the chain-rule step. Floating-point adstacks additionally store an *adjoint* slot where the reverse pass accumulates chain-rule contributions. Integer / boolean adstacks do not need an adjoint slot.
+
+Platform-specific notes:
+
+- Even though integer / boolean adstacks do not need an adjoint slot, LLVM backends still carry one for codegen uniformity. SPIR-V backends trim it.
+- SPIR-V stores `bool` slots using 4 bytes (32 bits), because SPIR-V does not specify a portable in-memory layout for booleans.
+
+The resulting per-slot cost on each platform is:
 
 | T | LLVM bytes/slot | SPIR-V bytes/slot |
 | --- | --- | --- |
@@ -335,19 +342,53 @@ A large `ndrange` combined with several loop-carried variables multiplies quickl
 1. Reduce `num_buffers` - split the kernel, checkpoint manually, or fold two accumulators into one so the reverse pass has fewer loop-carried variables to replay.
 2. Raise `device_memory_fraction` or `device_memory_GB` in `qd.init()` if the GPU has headroom.
 
-## Known limitations
+## What can go wrong
 
-- **When a dynamic-loop reverse kernel fails.** In normal use, enabling the adstack pipeline and running a reverse-mode kernel through a dynamic loop should just work. Two rare situations can make it fail, and it is worth knowing which one you are in:
-  - *The sizer under-estimated the bound* - surfaces asynchronously at the next `qd.sync()` as `QuadrantsAssertionError: Adstack overflow ...` (on Metal / Vulkan the message also names which adstack tripped the assertion). On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. This is a bug; the error message itself asks you to file it with `QD_DUMP_IR=1` set so the kernel IR ships with the report. Workarounds, in order of convenience:
-    - shorten the innermost dynamic loop;
-    - precompute its worst-case trip into a scalar field the kernel only reads;
-    - split the inner section into its own `@qd.kernel`;
-    - pass `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
-  - *The kernel is legitimately too deep for the hardware* - surfaces as an out-of-memory error from the allocator, before the kernel even starts running. A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
-- **Compile time scales with loop nesting.** The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes, and on SPIR-V backends sometimes into the territory where the driver's shader compiler gives up. Budget compile time accordingly when migrating existing reverse-mode AD workloads.
-- **Backward passes are slower than forward passes.** In particular, SPIR-V backward passes can be an order of magnitude slower than the forward pass.
-- **Integer casts stop gradients.** Reverse-mode AD does not propagate gradients through integer casts or non-real operations: integers have no meaningful derivative, so the gradient reads as zero upstream of the cast - no error, just silently-zero gradients. Rules of thumb:
-  - keep differentiable variables in `qd.f32` / `qd.f64` through the full forward chain;
-  - casting *to* a float is safe - the downstream float section remains differentiable, and the cast itself contributes a unit factor to the chain rule;
-  - casting *back to* an integer stops the gradient at that point, so only do it at integer-indexing sites, after any arithmetic whose gradient you need.
-- **Loop bounds that read an ndarray written to by the same kernel are unsafe.** If a reverse-mode kernel has a loop whose iteration count comes from `n[j]` and the same kernel also writes to `n[j]` before that loop runs (`for i in range(n[j])` after `n[j] = something`), the computed gradient may silently come out zero or wrong. Quadrants does not currently detect this. Workaround: put iteration counts in a separate ndarray (or scalar field) the kernel only reads, or split the write and the differentiable loop into two `@qd.kernel` calls. The same caveat applies across kernels - a kernel that writes an ndarray read as a loop bound by a later `.grad()` call needs the host-side contents of that ndarray to already hold the value the backward kernel will execute against.
+- **Adstack overflow at `qd.sync()` (sizer under-estimated the bound).** Surfaces asynchronously at the next `qd.sync()` as `QuadrantsAssertionError: Adstack overflow ...`. On unusually intricate nested loops - typically deeply nested `for i in range(arr[...])` with cumulative-index arithmetic - the sizer can compute a bound that is mathematically tighter than the actual push count. This is a bug; please file it with `QD_DUMP_IR=1` set so the kernel IR ships with the report. Workarounds, in order of convenience:
+  - shorten the innermost dynamic loop;
+  - precompute its worst-case trip into a scalar field the kernel only reads;
+  - split the inner section into its own `@qd.kernel`;
+  - pass `ad_stack_size=N` to `qd.init()` with `N` large enough to cover the real push count (bypasses the sizer).
+- **Out-of-memory before the kernel even runs.** A reverse pass through many loop-carried variables at a large ndrange can ask the runtime for more adstack memory than the device can physically back, even when the sizer's number is correct. Surfaces as an allocator OOM at launch time. Remedies are the ones listed under *Avoiding OOM on GPU* above: fewer loop-carried variables, a smaller ndrange, manual checkpointing, or more device-memory headroom.
+- **Loop bounds backed by a mutated ndarray.** A reverse-mode kernel with `for i in range(n[j])` requires `n[j]` to hold the same value at the forward call and at `.grad()`. If anything writes to `n[j]` between those two points - the differentiable kernel itself, or any other kernel call - the computed gradient may come out wrong, sometimes as an `Adstack overflow` exception at `qd.sync()`, sometimes silently. The safe rule: populate loop-bound ndarrays before the forward call and leave them untouched until `.grad()` returns. The reason for that is Quadrants' adstack sizer design: it reads the loop bound separately at each dispatch, which includes forward and backward calls. Tape-based eager AD like [PyTorch's autograd](https://pytorch.org/docs/stable/notes/autograd.html) is not affected, since the trip count is recorded as the forward runs and reused at backward time.
+
+## Performance characteristics
+
+- **Compile time scales with loop nesting.** The adstack pipeline trades compile time for generality. Kernels with many loop-carried variables, nested dynamic loops, or large inner-loop bodies produce visibly slow compile times - seconds stretching into minutes. Budget compile time accordingly when migrating existing reverse-mode AD workloads.
+- **SPIR-V backward passes can be an order of magnitude slower than the forward pass.** Reverse-mode AD reruns every forward op and additionally accumulates a gradient contribution per op, usually via atomic writes.
+
+## Appendix A: types of dynamic loops supported by reverse-mode AD
+
+The compiler recognises the following bound shapes for adstack-aware loops:
+
+| Bound shape | Example |
+| --- | --- |
+| Integer constant | `for i in range(42):` |
+| Scalar integer field (`i32` / `i64`) at a constant or loop index | `for i in range(n[None]):`, `for i in range(n[j]):` |
+| Ndarray argument shape along any axis | `for i in range(arr.shape[1]):` |
+| Scalar ndarray read at a constant or loop index, including multi-axis reads | `for i in range(arr[j]):`<br>`for i in range(arr[j, k]):` |
+| Two-argument `range(start, stop)` whose `start` and `stop` are any of the bound shapes above | `for k in range(start[j], stop[j]):` |
+| An enclosing `for i in range(...)`, struct-for, or ndrange index (also multi-index ndrange over ndarray shapes) | `for i in range(N): ... for j in range(i):`<br>`for i, j in qd.ndrange(arr.shape[0], arr.shape[1]):` |
+| A cast of a loop index stashed earlier in the same body, used to index a field or ndarray | `i_l = qd.cast(outer_i, qd.i32)` then later `arr[i_l]` or `field[i_l]` |
+
+Examples of constructs that are *not* currently handled:
+
+```python
+@qd.kernel
+def k_nonlinear_bound(a):
+    for i in range(qd.sqrt(a)):   # non-linear transform of a bound shape
+        ...
+
+@qd.kernel
+def k_mixed_index(a, b):
+    for i in range(a):
+        for j in range(b):
+            for k in range(a[i], b[j]):   # cross-axis indices into independent ndarrays
+                ...
+
+@qd.kernel
+def k_data_dependent(a):
+    for i in range(a.shape[0]):
+        while a[i] < 10:              # bound that can only be known by running the loop body
+            a[i] = a[i] + 1
+```
