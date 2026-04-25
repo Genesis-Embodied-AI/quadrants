@@ -851,7 +851,7 @@ Structure (AOS) or Structure Of Array (SOA).</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.ndarray">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.ndarray" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.ndarray" title="Link to this definition">#</a></dt>
 <dd><p>Defines a Quadrants ndarray with matrix elements.
 This function must be called in Python scope, and after <cite>qd.init</cite> is called.</p>
 <dl class="field-list simple">
@@ -861,6 +861,11 @@ This function must be called in Python scope, and after <cite>qd.init</cite> is 
 <li><p><strong>m</strong> (<em>int</em>) – Number of columns of the matrix.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
+<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, allocate a companion grad
+ndarray of the same shape and dtype, accessible via
+<code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point)
+type. Defaults to False. Silently ignored on the python
+backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
 </ul>
 </dd>
 </dl>
@@ -868,6 +873,35 @@ This function must be called in Python scope, and after <cite>qd.init</cite> is 
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">The</span> <span class="n">code</span> <span class="n">below</span> <span class="n">shows</span> <span class="n">how</span> <span class="n">a</span> <span class="n">Quadrants</span> <span class="n">ndarray</span> <span class="k">with</span> <span class="n">matrix</span> <span class="n">elements</span>             <span class="n">can</span> <span class="n">be</span> <span class="n">declared</span> <span class="ow">and</span> <span class="n">defined</span><span class="p">::</span>
 
     <span class="o">&gt;&gt;&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.tensor">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.tensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.tensor" title="Link to this definition">#</a></dt>
+<dd><p>Allocate a tensor whose elements are <code class="docutils literal notranslate"><span class="pre">n</span></code>-by-<code class="docutils literal notranslate"><span class="pre">m</span></code> matrices.</p>
+<p>Per-tensor backend dispatcher, equivalent to scalar <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code>
+for matrix-valued elements. Selects between <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> and
+<code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> based on the <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<em>int</em>) – Number of rows of each matrix element.</p></li>
+<li><p><strong>m</strong> (<em>int</em>) – Number of columns of each matrix element.</p></li>
+<li><p><strong>dtype</strong> – Element data type (e.g. <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>).</p></li>
+<li><p><strong>shape</strong> – Shape of the tensor (excluding the matrix dimensions) as
+an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
+<li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><em>optional</em>) – Storage backend. Defaults to
+<code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code>.</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying
+<code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> call.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1057,7 +1091,7 @@ you can even initialize a matrix with an empty list:
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Vector.ndarray">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.ndarray" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">needs_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.ndarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.ndarray" title="Link to this definition">#</a></dt>
 <dd><p>Defines a Quadrants ndarray with vector elements.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1065,12 +1099,45 @@ you can even initialize a matrix with an empty list:
 <li><p><strong>n</strong> (<em>int</em>) – Size of the vector.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em>) – Data type of each value.</p></li>
 <li><p><strong>shape</strong> (<em>Union</em><em>[</em><em>int</em><em>, </em><em>tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the ndarray.</p></li>
+<li><p><strong>needs_grad</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, allocate a companion grad
+ndarray of the same shape and dtype, accessible via
+<code class="docutils literal notranslate"><span class="pre">arr.grad</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">dtype</span></code> to be a real (floating-point)
+type. Defaults to False. Silently ignored on the python
+backend (matches the scalar <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> behaviour).</p></li>
 </ul>
 </dd>
 </dl>
 <p class="rubric">Example</p>
 <p>The code below shows how a Quadrants ndarray with vector elements can be declared and defined:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.Vector.tensor">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.tensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.tensor" title="Link to this definition">#</a></dt>
+<dd><p>Allocate a tensor whose elements are length-<code class="docutils literal notranslate"><span class="pre">n</span></code> vectors.</p>
+<p>Per-tensor backend dispatcher, equivalent to scalar <code class="docutils literal notranslate"><span class="pre">qd.tensor()</span></code>
+for vector-valued elements. Selects between <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> and
+<code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> based on the <code class="docutils literal notranslate"><span class="pre">backend=</span></code> keyword.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<em>int</em>) – Length of each vector element.</p></li>
+<li><p><strong>dtype</strong> – Element data type (e.g. <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>).</p></li>
+<li><p><strong>shape</strong> – Shape of the tensor (excluding the vector dimension) as
+an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
+<li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><em>optional</em>) – Storage backend. Defaults to
+<code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code>.</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying
+<code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> call.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">u</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1241,16 +1308,6 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.layout">
-<span class="sig-name descname"><span class="pre">layout</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.layout" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.shape">
-<span class="sig-name descname"><span class="pre">shape</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.shape" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.element_type">
 <span class="sig-name descname"><span class="pre">element_type</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.element_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.element_type" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -1300,6 +1357,20 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 </div>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.to_torch">
+<span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.to_torch" title="Link to this definition">#</a></dt>
+<dd><p>Convert this matrix ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape
+<code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,</span> <span class="pre">m)</span></code>. Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.from_torch">
+<span class="sig-name descname"><span class="pre">from_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.from_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.from_torch" title="Link to this definition">#</a></dt>
+<dd><p>Load all entries from a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape
+<code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,</span> <span class="pre">m)</span></code>. Mirrors <code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.from_torch()</span></code>.</p>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
@@ -1328,16 +1399,6 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.dtype">
 <span class="sig-name descname"><span class="pre">dtype</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.dtype" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.layout">
-<span class="sig-name descname"><span class="pre">layout</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.layout" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.shape">
-<span class="sig-name descname"><span class="pre">shape</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.shape" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1390,6 +1451,21 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.to_torch">
+<span class="sig-name descname"><span class="pre">to_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.to_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.to_torch" title="Link to this definition">#</a></dt>
+<dd><p>Convert this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape
+<code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,)</span></code>. Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a> on
+the vector code path.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.from_torch">
+<span class="sig-name descname"><span class="pre">from_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.from_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.from_torch" title="Link to this definition">#</a></dt>
+<dd><p>Load all entries from a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape
+<code class="docutils literal notranslate"><span class="pre">self.shape</span> <span class="pre">+</span> <span class="pre">(n,)</span></code>.</p>
 </dd></dl>
 
 </dd></dl>
@@ -1472,6 +1548,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.identity"><code class="docutils literal notranslate"><span class="pre">Matrix.identity()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.field"><code class="docutils literal notranslate"><span class="pre">Matrix.field()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.ndarray"><code class="docutils literal notranslate"><span class="pre">Matrix.ndarray()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.tensor"><code class="docutils literal notranslate"><span class="pre">Matrix.tensor()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.rows"><code class="docutils literal notranslate"><span class="pre">Matrix.rows()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.cols"><code class="docutils literal notranslate"><span class="pre">Matrix.cols()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.dot"><code class="docutils literal notranslate"><span class="pre">Matrix.dot()</span></code></a></li>
@@ -1483,6 +1560,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Vector.get_shape"><code class="docutils literal notranslate"><span class="pre">Vector.get_shape()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Vector.field"><code class="docutils literal notranslate"><span class="pre">Vector.field()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Vector.ndarray"><code class="docutils literal notranslate"><span class="pre">Vector.ndarray()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Vector.tensor"><code class="docutils literal notranslate"><span class="pre">Vector.tensor()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixField"><code class="docutils literal notranslate"><span class="pre">MatrixField</span></code></a><ul class="nav section-nav flex-column">
@@ -1502,25 +1580,25 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.n"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.n</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.m"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.m</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.dtype"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.dtype</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.layout"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.layout</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.shape"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.shape</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.element_type"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.element_type</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.arr"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.arr</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.element_shape"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.element_shape</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.to_numpy"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.to_numpy()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.from_numpy"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.from_numpy()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.to_torch"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.to_torch()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.MatrixNdarray.from_torch"><code class="docutils literal notranslate"><span class="pre">MatrixNdarray.from_torch()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray"><code class="docutils literal notranslate"><span class="pre">VectorNdarray</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.n"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.n</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.dtype"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.dtype</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.layout"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.layout</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.shape"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.shape</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.element_type"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.element_type</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.arr"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.arr</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.element_shape"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.element_shape</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.to_numpy"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.to_numpy()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.from_numpy"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.from_numpy()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.to_torch"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.to_torch()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.VectorNdarray.from_torch"><code class="docutils literal notranslate"><span class="pre">VectorNdarray.from_torch()</span></code></a></li>
 </ul>
 </li>
 </ul>
