@@ -11,6 +11,12 @@
 
 It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, `pre-commit` is configured with a pinned Python `3.10` to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.
 
+After cloning, make sure to initialize submodules:
+
+```
+git submodule update --init --recursive
+```
+
 `uv` could be handy when initializing such an environment:
 
 ```
