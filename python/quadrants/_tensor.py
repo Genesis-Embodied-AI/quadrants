@@ -1,16 +1,14 @@
 """Tensors: per-tensor backend and layout.
 
-This module is the user-facing entry point for selecting a tensor backend
-(``qd.field`` vs ``qd.ndarray``) and an optional physical memory layout
-on a per-tensor basis.
+This module is the user-facing entry point for selecting a tensor backend (``qd.field`` vs ``qd.ndarray``) and an
+optional physical memory layout on a per-tensor basis.
 
 See ``docs/source/user_guide/tensor.md`` for the user guide.
 
-``qd.Tensor`` is the wrapper *class* defined in ``_tensor_wrapper.py``;
-it doubles as the polymorphic kernel-argument annotation. The dispatch
-sites that previously keyed off the ``_TensorAnnotation`` singleton type
-now check ``annotation is Tensor`` (the class). See ``_func_base.py``,
-``_template_mapper_hotpath.py`` and ``function_def_transformer.py``.
+``qd.Tensor`` is the wrapper *class* defined in ``_tensor_wrapper.py``; it doubles as the polymorphic kernel-argument
+annotation. The dispatch sites that previously keyed off the ``_TensorAnnotation`` singleton type now check
+``annotation is Tensor`` (the class). See ``_func_base.py``, ``_template_mapper_hotpath.py`` and
+``function_def_transformer.py``.
 """
 
 # pylint: disable=import-outside-toplevel

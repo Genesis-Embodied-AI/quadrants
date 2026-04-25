@@ -1,37 +1,30 @@
 """``qd.Tensor``: backend-agnostic tensor wrapper.
 
-A thin Python wrapper around an underlying ``Ndarray`` or ``ScalarField``
-impl. Makes backend symmetry a *type* property rather than something we
-police test by test: the wrapper exposes a fixed whitelisted surface
-uniformly, regardless of which impl it contains.
+A thin Python wrapper around an underlying ``Ndarray`` or ``ScalarField`` impl. Makes backend symmetry a *type*
+property rather than something we police test by test: the wrapper exposes a fixed whitelisted surface uniformly,
+regardless of which impl it contains.
 
-Promoted to ``qd.Tensor`` in ``hp/tensor-stork-19``: the class is now
-the public name, doubles as the polymorphic kernel-arg annotation
-(``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()``,
-``qd.Vector.tensor()``, ``qd.Matrix.tensor()`` return. Bare impls are
-still reachable via ``qd.field``, ``qd.ndarray``, ``qd.Vector.field`` etc.
+Promoted to ``qd.Tensor`` in ``hp/tensor-stork-19``: the class is now the public name, doubles as the polymorphic
+kernel-arg annotation (``def f(x: qd.Tensor): ...``), and is what ``qd.tensor()``, ``qd.Vector.tensor()``,
+``qd.Matrix.tensor()`` return. Bare impls are still reachable via ``qd.field``, ``qd.ndarray``,
+``qd.Vector.field`` etc.
 
 Surface:
 
 - Introspection: ``shape``, ``dtype``, ``layout``, ``_unwrap()``.
-- Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the
-  canonical user key to the physical slot on layout-tagged ndarrays.
-  Fixes gotcha B from the design doc (§8.11).
-- Symmetric pickle via ``__reduce__`` — round-trips through
-  ``to_numpy()`` so it works uniformly on both backends (Field, which
-  never supported pickle upstream, is picklable through the wrapper).
-- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` /
-  ``from_torch`` / ``to_dlpack`` / ``fill`` / ``copy_from`` — already
-  layout-aware on both backends after stork-15/16, the wrapper delegates.
-- Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad``
-  (identity-stable via ``functools.cached_property``).
-- ``VectorTensor`` / ``MatrixTensor`` subclasses carrying
-  ``element_shape``.
+- Layout-aware host-side ``__getitem__`` / ``__setitem__`` — permutes the canonical user key to the physical slot on
+  layout-tagged ndarrays. Fixes gotcha B from the design doc (§8.11).
+- Symmetric pickle via ``__reduce__`` — round-trips through ``to_numpy()`` so it works uniformly on both backends
+  (Field, which never supported pickle upstream, is picklable through the wrapper).
+- Forwards for ``to_numpy`` / ``from_numpy`` / ``to_torch`` / ``from_torch`` / ``to_dlpack`` / ``fill`` /
+  ``copy_from`` — already layout-aware on both backends after stork-15/16, the wrapper delegates.
+- Lazy-wrapped ``.grad`` — returns a ``Tensor`` wrapping ``impl.grad`` (identity-stable via
+  ``functools.cached_property``).
+- ``VectorTensor`` / ``MatrixTensor`` subclasses carrying ``element_shape``.
 
 Out of scope:
-- Genesis migration (stork-20): rewrite Genesis ``isinstance`` sites
-  from ``(qd.Field, qd.Ndarray)`` to ``qd.Tensor``, switch its tensor
-  allocations to ``qd.tensor()``.
+- Genesis migration (stork-20): rewrite Genesis ``isinstance`` sites from ``(qd.Field, qd.Ndarray)`` to
+  ``qd.Tensor``, switch its tensor allocations to ``qd.tensor()``.
 
 See ``perso_hugh/doc/quadrants-tensor.md`` §8.11 / §8.12.
 """
