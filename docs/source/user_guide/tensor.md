@@ -4,7 +4,7 @@ Quadrants offers two underlying tensor implementations, `qd.field` and `qd.ndarr
 
 The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
-This page documents the user-facing API as it lands. See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
+See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 
 ## Choosing a backend: `qd.Backend`
 
