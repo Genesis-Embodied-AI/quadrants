@@ -380,24 +380,20 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_patch_field_dlpack_canonical</span><span class="p">(</span><span class="n">capsule</span><span class="p">,</span> <span class="n">layout</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mutate the DLManagedTensor inside *capsule* so its shape/strides</span>
-<span class="sd">    expose a canonical view of the permuted-physical field buffer.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mutate the DLManagedTensor inside *capsule* so its shape/strides expose a canonical view of the</span>
+<span class="sd">    permuted-physical field buffer.</span>
 
 <span class="sd">    Invariants (input):</span>
-<span class="sd">      * ``shape[i]`` = physical shape along axis ``i`` of the SNode</span>
-<span class="sd">        (which is the *permuted* shape the field was allocated at).</span>
-<span class="sd">      * ``strides[i]`` = physical stride along axis ``i`` (row-major</span>
-<span class="sd">        over the permuted shape).</span>
+<span class="sd">      * ``shape[i]`` = physical shape along axis ``i`` of the SNode (which is the *permuted* shape the field was</span>
+<span class="sd">        allocated at).</span>
+<span class="sd">      * ``strides[i]`` = physical stride along axis ``i`` (row-major over the permuted shape).</span>
 
 <span class="sd">    Invariants (output):</span>
-<span class="sd">      * ``shape[a]`` = canonical-axis-``a`` extent = input</span>
-<span class="sd">        ``shape[invperm[a]]``.</span>
-<span class="sd">      * ``strides[a]`` = canonical-axis-``a`` stride = input</span>
-<span class="sd">        ``strides[invperm[a]]``.</span>
+<span class="sd">      * ``shape[a]`` = canonical-axis-``a`` extent = input ``shape[invperm[a]]``.</span>
+<span class="sd">      * ``strides[a]`` = canonical-axis-``a`` stride = input ``strides[invperm[a]]``.</span>
 
-<span class="sd">    ``invperm`` inverts the ``_qd_layout`` permutation by the convention</span>
-<span class="sd">    that ``layout[p]`` is the canonical axis at physical nesting</span>
-<span class="sd">    position ``p``, so ``invperm[canonical_axis] = physical_axis``.</span>
+<span class="sd">    ``invperm`` inverts the ``_qd_layout`` permutation by the convention that ``layout[p]`` is the canonical axis at</span>
+<span class="sd">    physical nesting position ``p``, so ``invperm[canonical_axis] = physical_axis``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
@@ -515,16 +511,13 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">layout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Canonical-axis-permutation tuple, or ``None`` for identity.</span>
 
-<span class="sd">        Mirrors :attr:`Ndarray.layout`: returns the same value the</span>
-<span class="sd">        caller passed to ``qd.tensor(..., layout=...)`` (or ``None`` if</span>
-<span class="sd">        that kwarg was omitted / was the identity permutation). Lets</span>
-<span class="sd">        downstream code introspect the physical layout without having</span>
-<span class="sd">        to know which backend produced the tensor.</span>
+<span class="sd">        Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``</span>
+<span class="sd">        (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the</span>
+<span class="sd">        physical layout without having to know which backend produced the tensor.</span>
 
-<span class="sd">        Fields constructed directly via ``qd.field(..., order=...)``</span>
-<span class="sd">        also report their layout here — the ``order=`` axis-string is</span>
-<span class="sd">        translated into an integer permutation and stashed on the same</span>
-<span class="sd">        ``_qd_layout`` attribute that layout-tagged ndarrays use.</span>
+<span class="sd">        Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``</span>
+<span class="sd">        axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that</span>
+<span class="sd">        layout-tagged ndarrays use.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -728,8 +721,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/field/index.html#quadrants.lang.field.ScalarField.to_dlpack">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field, and</span>
-<span class="sd">        reading it.</span>
+<span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>

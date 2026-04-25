@@ -422,15 +422,12 @@ A field member is a Python Expr wrapping a C++ FieldExpression.</p>
 <dt class="sig sig-object py" id="quadrants.lang.field.Field.layout">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">layout</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#Field.layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.Field.layout" title="Link to this definition">#</a></dt>
 <dd><p>Canonical-axis-permutation tuple, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for identity.</p>
-<p>Mirrors <code class="xref py py-attr docutils literal notranslate"><span class="pre">Ndarray.layout</span></code>: returns the same value the
-caller passed to <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">layout=...)</span></code> (or <code class="docutils literal notranslate"><span class="pre">None</span></code> if
-that kwarg was omitted / was the identity permutation). Lets
-downstream code introspect the physical layout without having
-to know which backend produced the tensor.</p>
-<p>Fields constructed directly via <code class="docutils literal notranslate"><span class="pre">qd.field(...,</span> <span class="pre">order=...)</span></code>
-also report their layout here — the <code class="docutils literal notranslate"><span class="pre">order=</span></code> axis-string is
-translated into an integer permutation and stashed on the same
-<code class="docutils literal notranslate"><span class="pre">_qd_layout</span></code> attribute that layout-tagged ndarrays use.</p>
+<p>Mirrors <code class="xref py py-attr docutils literal notranslate"><span class="pre">Ndarray.layout</span></code>: returns the same value the caller passed to <code class="docutils literal notranslate"><span class="pre">qd.tensor(...,</span> <span class="pre">layout=...)</span></code>
+(or <code class="docutils literal notranslate"><span class="pre">None</span></code> if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+physical layout without having to know which backend produced the tensor.</p>
+<p>Fields constructed directly via <code class="docutils literal notranslate"><span class="pre">qd.field(...,</span> <span class="pre">order=...)</span></code> also report their layout here — the <code class="docutils literal notranslate"><span class="pre">order=</span></code>
+axis-string is translated into an integer permutation and stashed on the same <code class="docutils literal notranslate"><span class="pre">_qd_layout</span></code> attribute that
+layout-tagged ndarrays use.</p>
 </dd></dl>
 
 <dl class="py property">
@@ -526,8 +523,7 @@ translated into an integer permutation and stashed on the same
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.field.ScalarField.to_dlpack">
 <span class="sig-name descname"><span class="pre">to_dlpack</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/field.html#ScalarField.to_dlpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.field.ScalarField.to_dlpack" title="Link to this definition">#</a></dt>
-<dd><p>Note: caller is responsible for calling qd.sync() between modifying the field, and
-reading it.</p>
+<dd><p>Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.</p>
 </dd></dl>
 
 <dl class="py method">

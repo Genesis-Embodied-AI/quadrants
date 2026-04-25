@@ -1201,10 +1201,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants field.</span>
 
-<span class="sd">    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away</span>
-<span class="sd">    the complexity of how its underlying :class:`~quadrants.lang.snode.SNode` are</span>
-<span class="sd">    actually defined. The data in a Quadrants field can be directly accessed by</span>
-<span class="sd">    a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.</span>
+<span class="sd">    A Quadrants field can be viewed as an abstract N-dimensional array, hiding away the complexity of how its</span>
+<span class="sd">    underlying :class:`~quadrants.lang.snode.SNode` are actually defined. The data in a Quadrants field can be</span>
+<span class="sd">    directly accessed by a Quadrants :func:`~quadrants.lang.kernel_impl.kernel`.</span>
 
 <span class="sd">    See also https://docs.taichi-lang.org/docs/field</span>
 
@@ -1214,10 +1213,10 @@
 <span class="sd">        order (str, optional): order of the shape laid out in memory.</span>
 <span class="sd">        name (str, optional): name of the field.</span>
 <span class="sd">        offset (Union[int, tuple[int]], optional): offset of the field domain.</span>
-<span class="sd">        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode)</span>
-<span class="sd">            and thus needs an adjoint field to store the gradients.</span>
-<span class="sd">        needs_dual (bool, optional): whether this field participates in autodiff (forward mode)</span>
-<span class="sd">            and thus needs an dual field to store the gradients.</span>
+<span class="sd">        needs_grad (bool, optional): whether this field participates in autodiff (reverse mode) and thus needs an</span>
+<span class="sd">            adjoint field to store the gradients.</span>
+<span class="sd">        needs_dual (bool, optional): whether this field participates in autodiff (forward mode) and thus needs a dual</span>
+<span class="sd">            field to store the gradients.</span>
 
 <span class="sd">    Example::</span>
 
@@ -1552,9 +1551,8 @@
 <span class="sd">            &gt;&gt;&gt;     else:</span>
 <span class="sd">            &gt;&gt;&gt;         do_b()</span>
 
-<span class="sd">        Depending on the value of ``cond``, ``run()`` will be directly compiled</span>
-<span class="sd">        into either ``do_a()`` or ``do_b()``. Thus there won&#39;t be a runtime</span>
-<span class="sd">        condition check.</span>
+<span class="sd">        Depending on the value of ``cond``, ``run()`` will be directly compiled into either ``do_a()`` or ``do_b()``.</span>
+<span class="sd">        Thus there won&#39;t be a runtime condition check.</span>
 
 <span class="sd">        Another common usage is for compile-time loop unrolling::</span>
 
@@ -1686,9 +1684,8 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum shared memory per block in bytes.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        is_lowerbound_ok: If True, return a conservative lower bound based on</span>
-<span class="sd">            hardware specifications. If False, raise RuntimeError for backends</span>
-<span class="sd">            where the exact value cannot be queried.</span>
+<span class="sd">        is_lowerbound_ok: If True, return a conservative lower bound based on hardware specifications. If False,</span>
+<span class="sd">            raise RuntimeError for backends where the exact value cannot be queried.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">arch</span> <span class="o">=</span> <span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
     <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>

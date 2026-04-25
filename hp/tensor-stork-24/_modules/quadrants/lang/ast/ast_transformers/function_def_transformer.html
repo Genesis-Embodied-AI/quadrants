@@ -510,15 +510,13 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_predeclare_struct_ndarrays</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Walk template args that are structs and pre-declare any</span>
-<span class="sd">        ``Ndarray`` attributes as kernel args (via ``decl_ndarray_arg``)</span>
-<span class="sd">        so they are registered before ``finalize_params``.  The resulting</span>
-<span class="sd">        ``AnyArray`` objects are cached on the global context for later</span>
-<span class="sd">        lookup by ``build_Attribute``.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Walk template args that are structs and pre-declare any ``Ndarray`` attributes as kernel args (via</span>
+<span class="sd">        ``decl_ndarray_arg``) so they are registered before ``finalize_params``. The resulting ``AnyArray`` objects are</span>
+<span class="sd">        cached on the global context for later lookup by ``build_Attribute``.</span>
 
 <span class="sd">        Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in</span>
-<span class="sd">        ``ctx.global_context.struct_ndarray_launch_info`` so the launch</span>
-<span class="sd">        path can populate the corresponding slots in the launch context.</span>
+<span class="sd">        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in</span>
+<span class="sd">        the launch context.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
 

@@ -400,10 +400,10 @@
 <div class="viewcode-block" id="LaunchContextBufferCache">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.LaunchContextBufferCache">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LaunchContextBufferCache</span><span class="p">:</span>
-    <span class="c1"># Here, we are tracking whether a launch context buffer can be cached.</span>
-    <span class="c1"># The point of caching the launch context buffer is allowing skipping recursive processing of all the input</span>
-    <span class="c1"># arguments one-by-one, which is adding a significant overhead, without changing anything in regards of the</span>
-    <span class="c1"># function calls to the launch context that must be made for a given kernel.</span>
+    <span class="c1"># Here, we are tracking whether a launch context buffer can be cached. The point of caching the launch context</span>
+    <span class="c1"># buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a</span>
+    <span class="c1"># significant overhead, without changing anything in regards of the function calls to the launch context that</span>
+    <span class="c1"># must be made for a given kernel.</span>
     <span class="c1"># You can understand this as resolving the static part of the entire control flow of &#39;_recursive_set_args&#39;</span>
     <span class="c1"># for a given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all</span>
     <span class="c1"># the instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at</span>
@@ -577,8 +577,8 @@
                 <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">extract_struct_locals_from_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">struct_locals</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">]</span>
-            <span class="c1"># struct locals are the expanded py dataclass fields that we will write to</span>
-            <span class="c1"># local variables, and will then be available to use in build_Call, later.</span>
+            <span class="c1"># struct locals are the expanded py dataclass fields that we will write to local variables, and will then</span>
+            <span class="c1"># be available to use in build_Call, later.</span>
             <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
             <span class="n">transform_tree</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>

@@ -64,16 +64,13 @@ Module Contents
 
       Canonical-axis-permutation tuple, or ``None`` for identity.
 
-      Mirrors :attr:`Ndarray.layout`: returns the same value the
-      caller passed to ``qd.tensor(..., layout=...)`` (or ``None`` if
-      that kwarg was omitted / was the identity permutation). Lets
-      downstream code introspect the physical layout without having
-      to know which backend produced the tensor.
+      Mirrors :attr:`Ndarray.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)``
+      (or ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+      physical layout without having to know which backend produced the tensor.
 
-      Fields constructed directly via ``qd.field(..., order=...)``
-      also report their layout here — the ``order=`` axis-string is
-      translated into an integer permutation and stashed on the same
-      ``_qd_layout`` attribute that layout-tagged ndarrays use.
+      Fields constructed directly via ``qd.field(..., order=...)`` also report their layout here — the ``order=``
+      axis-string is translated into an integer permutation and stashed on the same ``_qd_layout`` attribute that
+      layout-tagged ndarrays use.
 
 
    .. py:property:: dtype
@@ -162,8 +159,7 @@ Module Contents
 
    .. py:method:: to_dlpack()
 
-      Note: caller is responsible for calling qd.sync() between modifying the field, and
-      reading it.
+      Note: caller is responsible for calling qd.sync() between modifying the field, and reading it.
 
 
 
