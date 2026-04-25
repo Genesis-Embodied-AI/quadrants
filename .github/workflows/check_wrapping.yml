@@ -1,0 +1,65 @@
+name: Check line wrapping
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-wrapping:
+    name: Check line wrapping
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD \
+            -- '*.md' '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' \
+            | head -200)
+          if [ -z "$FILES" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No relevant files changed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "$FILES" > /tmp/changed_files.txt
+            echo "Changed files:"
+            cat /tmp/changed_files.txt
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check wrapping with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          Check the files listed in /tmp/changed_files.txt for wrapping issues:
+          - In .md files, lines should not be wrapped at all
+          - In code comments and docstrings, lines should be wrapped at 120 characters, NOT at 80
+
+          Only check files listed in /tmp/changed_files.txt. Do NOT modify any files.
+          Be precise: only flag clear violations, not borderline cases.
+          Stop after finding 3 violations.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a list of violations (up to 3) in the format: <filepath>:<line_number>: <brief description>
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "^FAIL"; then
+            exit 1
+          fi
