@@ -445,8 +445,7 @@ DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(std::size_t allo
               "allocate_memory_on_device(alloc_size=0x{:x})",
               alloc_size);
 
-  QD_ASSERT(allocated_runtime_memory_allocs_.find(devalloc.alloc_id) ==
-            allocated_runtime_memory_allocs_.end());
+  QD_ASSERT(allocated_runtime_memory_allocs_.find(devalloc.alloc_id) == allocated_runtime_memory_allocs_.end());
   allocated_runtime_memory_allocs_[devalloc.alloc_id] = devalloc;
   return devalloc;
 }

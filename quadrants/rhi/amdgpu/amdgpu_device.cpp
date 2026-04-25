@@ -60,9 +60,8 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
     // device_memory_GB preallocation is skipped entirely upstream when the device supports pools.
     AMDGPUDriver::get_instance().malloc_async((void **)&info.ptr, info.size, nullptr);
   } else {
-    info.ptr = DeviceMemoryPool::get_instance(Arch::amdgpu,
-                                              false /*merge_upon_release*/)
-                   .allocate_with_cache(this, params);
+    info.ptr =
+        DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/).allocate_with_cache(this, params);
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
