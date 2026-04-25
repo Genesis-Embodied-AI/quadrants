@@ -2,8 +2,7 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up
-  the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
+* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 
@@ -73,8 +72,7 @@ You can modify the cmake options to your liking in order to enable or disable so
 ccmake _skbuild/linux-x86_64-3.10/cmake-build
 ```
 
-You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build.
-For instance, to disable the CUDA and AMDGPU backends:
+You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build. For instance, to disable the CUDA and AMDGPU backends:
 
 ```
 export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
@@ -101,7 +99,6 @@ Quadrants comprises at least three important parts:
 
 ### Building LLVM for debugging it
 
-Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails).
-To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
+Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
 
 You can then use `LLVM_DIR` to point to the `LLVM` build directory.
