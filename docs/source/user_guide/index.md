@@ -70,6 +70,14 @@ troubleshooting
 ```
 
 ```{toctree}
+:caption: Contributing
+:maxdepth: 1
+:titlesonly:
+
+contributing
+```
+
+```{toctree}
 :caption: Internal
 :maxdepth: 1
 :titlesonly:
