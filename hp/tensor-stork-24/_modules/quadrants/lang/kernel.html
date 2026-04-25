@@ -344,7 +344,7 @@
     <span class="n">KernelCxx</span><span class="p">,</span>
     <span class="n">KernelLaunchContext</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_Tensor_cls</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
@@ -998,7 +998,7 @@
             <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">_Tensor_cls</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
             <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Expected Ndarray at </span><span class="si">{</span><span class="n">attr_chain</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="n">v_primal</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">arr</span>
@@ -1037,16 +1037,16 @@
         <span class="c1"># ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields</span>
         <span class="c1"># identical cache keys.</span>
         <span class="c1">#</span>
-        <span class="c1"># Fast path: most calls have no wrappers. ``isinstance`` is used so VectorTensor/MatrixTensor subclasses are</span>
-        <span class="c1"># also unwrapped. The check short-circuits on the first non-wrapper.</span>
+        <span class="c1"># Fast path: most calls have no wrappers. VectorTensor/MatrixTensor subclasses are also unwrapped. The</span>
+        <span class="c1"># check short-circuits on the first non-wrapper.</span>
         <span class="c1">#</span>
-        <span class="c1"># PERF-CRITICAL: The _any_tensor_constructed guard makes the isinstance loop zero-cost when no qd.Tensor</span>
-        <span class="c1"># has been created. Without this guard, the per-arg isinstance check causes a ~4% CPU regression on Genesis</span>
-        <span class="c1"># benchmarks. Do not remove the guard or move the isinstance outside of it.</span>
+        <span class="c1"># PERF-CRITICAL: The _any_tensor_constructed guard makes this loop zero-cost when no qd.Tensor has been</span>
+        <span class="c1"># created. ``type(a) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer</span>
+        <span class="c1"># comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.</span>
         <span class="k">if</span> <span class="n">_tensor_wrapper</span><span class="o">.</span><span class="n">_any_tensor_constructed</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportOptionalMemberAccess]</span>
             <span class="k">for</span> <span class="n">_a</span> <span class="ow">in</span> <span class="n">py_args</span><span class="p">:</span>
-                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_Tensor_cls</span><span class="p">):</span>
-                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">_impl</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">_Tensor_cls</span><span class="p">)</span> <span class="k">else</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">py_args</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">_a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
+                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">_impl</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span> <span class="k">else</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">py_args</span><span class="p">)</span>
                     <span class="k">break</span>
 
         <span class="c1"># Transform the primal kernel to forward mode grad kernel</span>
