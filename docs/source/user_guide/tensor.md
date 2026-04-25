@@ -2,7 +2,7 @@
 
 Quadrants offers two underlying tensor implementations, `qd.field` and `qd.ndarray`. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
 
-The tensor API lets you pick both the **backend** and (in a future release) the **physical layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
+The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
 
 This page documents the user-facing API as it lands. See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 
