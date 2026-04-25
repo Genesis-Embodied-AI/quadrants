@@ -12,5 +12,14 @@ def test_huge_allocation_fail_at_allocate_time():
         RuntimeError,
         match="Failed to allocate memory",
     ):
-        N = 0x7F_FF_FF_FF
-        x0 = qd.ndarray(qd.u8, (N))
+        allocations = []
+        while True:
+            allocations.append(qd.ndarray(qd.u8, 1024 * 1024 * 1024))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_zero_size_ndarray_does_not_crash():
+    """Zero-size ndarrays should allocate successfully, not raise OOM."""
+    x = qd.ndarray(qd.f32, (0,))
+    y = qd.ndarray(qd.f32, (0, 4))
+    z = qd.ndarray(qd.u8, (0,))
