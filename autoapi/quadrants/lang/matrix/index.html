@@ -893,7 +893,7 @@ for matrix-valued elements. Selects between <code class="docutils literal notran
 <li><p><strong>shape</strong> – Shape of the tensor (excluding the matrix dimensions) as
 an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
 <li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><em>optional</em>) – Storage backend. Defaults to
-<code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code>.</p></li>
 <li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying
 <code class="docutils literal notranslate"><span class="pre">qd.Matrix.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Matrix.ndarray</span></code> call.</p></li>
 </ul>
@@ -1129,7 +1129,7 @@ for vector-valued elements. Selects between <code class="docutils literal notran
 <li><p><strong>shape</strong> – Shape of the tensor (excluding the vector dimension) as
 an <code class="docutils literal notranslate"><span class="pre">int</span></code> or tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p></li>
 <li><p><strong>backend</strong> (<em>qd.Backend</em><em>, </em><em>optional</em>) – Storage backend. Defaults to
-<code class="docutils literal notranslate"><span class="pre">qd.Backend.FIELD</span></code>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code>.</p></li>
 <li><p><strong>**kwargs</strong> – Forwarded verbatim to the underlying
 <code class="docutils literal notranslate"><span class="pre">qd.Vector.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Vector.ndarray</span></code> call.</p></li>
 </ul>
@@ -1331,7 +1331,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.MatrixNdarray.to_numpy">
-<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.to_numpy" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#MatrixNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.MatrixNdarray.to_numpy" title="Link to this definition">#</a></dt>
 <dd><p>Converts this ndarray to a <cite>numpy.ndarray</cite>.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">arr</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">MatrixNdarray</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
@@ -1425,7 +1425,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.VectorNdarray.to_numpy">
-<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.to_numpy" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#VectorNdarray.to_numpy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.VectorNdarray.to_numpy" title="Link to this definition">#</a></dt>
 <dd><p>Converts this vector ndarray to a <cite>numpy.ndarray</cite>.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">VectorNdarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>

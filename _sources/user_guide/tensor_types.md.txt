@@ -4,8 +4,7 @@ There are two core tensor types:
 - ndarray (`qd.ndarray`)
 - field (`qd.field`)
 
-See also [`tensor`](tensor.md) for a unified
-`qd.tensor(...)` factory that picks between the two via a `backend=` keyword.
+See also [`tensor`](tensor.md) for a unified `qd.tensor(...)` factory that picks between the two via a `backend=` keyword.
 
 In addition, when used from a qd kernel, fields can be:
 - referenced as a global variable
@@ -34,7 +33,9 @@ def f1(p1: qd.types.NDArray[qd.i32, 1]) -> None:
     p1[0] += 1
 ```
 
-Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`
+Note that the typing for NDArray is `qd.types.NDArray[data_type, number_dimensions]`.
+
+`number_dimensions` is optional: `qd.types.NDArray[qd.i32]` is also valid, and leaves `ndim` unspecified.
 
 ### Global field
 

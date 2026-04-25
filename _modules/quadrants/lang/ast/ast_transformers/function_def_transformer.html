@@ -368,9 +368,8 @@
         <span class="n">full_name</span> <span class="o">=</span> <span class="n">prefix_name</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> <span class="o">+</span> <span class="n">name</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">RefType</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-        <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_features</span>
-        <span class="c1"># is a string marker placed by _template_mapper_hotpath. The</span>
-        <span class="c1"># annotation is the wrapper class itself (``qd.Tensor``).</span>
+        <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by</span>
+        <span class="c1"># _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
             <span class="k">assert</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="n">marker</span> <span class="o">=</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -549,7 +548,7 @@
                 <span class="k">return</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
 
-            <span class="n">element_type</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">nd</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">nd</span><span class="o">.</span><span class="n">element_type</span><span class="p">)</span>
             <span class="n">ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">nd</span><span class="o">.</span><span class="n">_physical_shape</span><span class="p">)</span>
             <span class="n">needs_grad</span> <span class="o">=</span> <span class="n">nd</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -558,9 +557,7 @@
                 <span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span>
             <span class="p">)</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">(</span>
-                <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span>
-                    <span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id_vec</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span>
-                <span class="p">),</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_external_tensor_expr</span><span class="p">(</span><span class="n">element_type</span><span class="p">,</span> <span class="n">ndim</span><span class="p">,</span> <span class="n">arg_id_vec</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span><span class="p">),</span>
                 <span class="n">_qd_layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">arr</span>
@@ -602,11 +599,9 @@
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="c1"># qd.Tensor in @qd.func context: polymorphic pass-by-reference.</span>
-        <span class="c1"># No template-mapper features are available (those only exist for</span>
-        <span class="c1"># top-level @qd.kernel args). Unwrap any Tensor wrapper, then</span>
-        <span class="c1"># create the variable directly — ndarray and field impls are both</span>
-        <span class="c1"># valid pass-by-reference arguments.</span>
+        <span class="c1"># qd.Tensor in @qd.func context: polymorphic pass-by-reference. No template-mapper features are available</span>
+        <span class="c1"># (those only exist for top-level @qd.kernel args). Unwrap any Tensor wrapper, then create the variable</span>
+        <span class="c1"># directly — ndarray and field impls are both valid pass-by-reference arguments.</span>
         <span class="k">if</span> <span class="n">argument_type</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
             <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -627,8 +622,8 @@
                         <span class="n">any_array</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">,</span>
                     <span class="p">),</span>
                 <span class="p">):</span>
-                    <span class="c1"># qd.Tensor struct fields skip check_matched (the</span>
-                    <span class="c1"># Tensor class has no such method — it is polymorphic).</span>
+                    <span class="c1"># qd.Tensor struct fields skip check_matched (the Tensor class has no such method — it is</span>
+                    <span class="c1"># polymorphic).</span>
                     <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_TensorClass</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">&quot;check_matched&quot;</span><span class="p">):</span>
                         <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">check_matched</span><span class="p">(</span><span class="n">data_child</span><span class="o">.</span><span class="n">get_type</span><span class="p">(),</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                     <span class="n">_cache</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;global_context&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot;ndarray_to_any_array&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>

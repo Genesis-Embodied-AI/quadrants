@@ -478,7 +478,7 @@ Module Contents
       :param shape: Shape of the tensor (excluding the matrix dimensions) as
                     an ``int`` or tuple of ``int``.
       :param backend: Storage backend. Defaults to
-                      ``qd.Backend.FIELD``.
+                      ``qd.Backend.NDARRAY``.
       :type backend: qd.Backend, optional
       :param \*\*kwargs: Forwarded verbatim to the underlying
                          ``qd.Matrix.field`` / ``qd.Matrix.ndarray`` call.
@@ -701,7 +701,7 @@ Module Contents
       :param shape: Shape of the tensor (excluding the vector dimension) as
                     an ``int`` or tuple of ``int``.
       :param backend: Storage backend. Defaults to
-                      ``qd.Backend.FIELD``.
+                      ``qd.Backend.NDARRAY``.
       :type backend: qd.Backend, optional
       :param \*\*kwargs: Forwarded verbatim to the underlying
                          ``qd.Vector.field`` / ``qd.Vector.ndarray`` call.
@@ -864,7 +864,7 @@ Module Contents
           (2, 2)
 
 
-   .. py:method:: to_numpy()
+   .. py:method:: to_numpy(dtype=None)
 
       Converts this ndarray to a `numpy.ndarray`.
 
@@ -948,7 +948,7 @@ Module Contents
           (3,)
 
 
-   .. py:method:: to_numpy()
+   .. py:method:: to_numpy(dtype=None)
 
       Converts this vector ndarray to a `numpy.ndarray`.
 
