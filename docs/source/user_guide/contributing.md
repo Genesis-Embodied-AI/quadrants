@@ -9,8 +9,7 @@
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env. When developing, you also have to use the right python version (currently `3.10` for pre-commit and linting tools) as `pre-commit`
-is configured with this pinned Python version. If you only need to build the package, a recent enough Python version should suffice.
+It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, `pre-commit` is configured with a pinned Python `3.10` to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.
 
 `uv` could be handy when initializing such an environment:
 
