@@ -83,6 +83,7 @@ struct DevicePtr;
 // TODO: Figure out how to support images. Temporary solutions is to have all
 // opque types such as images work as an allocation
 using DeviceAllocationId = uint64_t;
+constexpr DeviceAllocationId kDeviceAllocationFailed = static_cast<DeviceAllocationId>(-1);
 
 struct RHI_DLL_EXPORT DeviceAllocation {
   Device *device{nullptr};
@@ -90,6 +91,8 @@ struct RHI_DLL_EXPORT DeviceAllocation {
   // TODO: Shall we include size here?
 
   DevicePtr get_ptr(uint64_t offset = 0) const;
+
+  bool is_valid() const { return alloc_id != kDeviceAllocationFailed; }
 
   bool operator==(const DeviceAllocation &other) const {
     return other.device == device && other.alloc_id == alloc_id;

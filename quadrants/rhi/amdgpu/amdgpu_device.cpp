@@ -66,7 +66,7 @@ DeviceAllocation AmdgpuDevice::allocate_memory_runtime(const LlvmRuntimeAllocPar
 
     if (!info.ptr) {
       DeviceAllocation fail_alloc;
-      fail_alloc.alloc_id = -1;
+      fail_alloc.alloc_id = kDeviceAllocationFailed;
       fail_alloc.device = this;
 
       return fail_alloc;

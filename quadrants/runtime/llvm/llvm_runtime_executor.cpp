@@ -440,7 +440,7 @@ DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(std::size_t allo
                                                           result_buffer,
                                                           use_device_memory_pool()});
 
-  QD_ERROR_IF(devalloc.alloc_id == -1,
+  QD_ERROR_IF(!devalloc.is_valid(),
               "Failed to allocate memory for "
               "allocate_memory_on_device(alloc_size=0x{:x})",
               alloc_size);
