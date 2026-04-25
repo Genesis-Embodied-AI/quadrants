@@ -102,3 +102,36 @@ Quadrants comprises at least three important parts:
 Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
 
 You can then use `LLVM_DIR` to point to the `LLVM` build directory.
+
+## CI checks
+
+Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.
+
+### Pre-commit / linters (`linters.yml`)
+
+Runs `pre-commit run -a` which enforces:
+
+- **black** — Python formatting with a 120-character line limit
+- **clang-format** — C/C++ formatting
+- **trailing-whitespace** and **end-of-file-fixer** — whitespace hygiene
+- **ruff** — Python linting
+- **pylint** — additional Python linting (scoped to `python/quadrants/`)
+
+You can run these locally with `pre-commit run -a` after `pip install pre-commit`.
+
+### Other CI jobs
+
+- **pyright** (`pyright_linter.yml`) — Python type checking
+- **clang-tidy** (`clang_tidy.yml`) — C++ static analysis
+- **check-markup-links** (`check_markup_links.yml`) — validates links in documentation
+- **linux / macosx / win** — build and test on each platform
+- **test-gpu** — GPU-specific tests
+
+### Line wrapping check (`check_wrapping.yml`)
+
+Uses an AI agent to check that lines in changed files follow wrapping conventions:
+
+- **Markdown files (`.md`)**: lines should not be hard-wrapped. Each paragraph should be a single long line.
+- **Code comments and docstrings**: lines should be wrapped at 120 characters, not at 80.
+
+The check runs only on files changed in the PR and reports up to 3 violations.
