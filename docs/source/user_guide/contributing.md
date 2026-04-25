@@ -74,7 +74,7 @@ ccmake _skbuild/linux-x86_64-3.10/cmake-build
 ```
 
 You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build.
-For instance, if you don't need to have any GPU support, you could use:
+For instance, to disable the CUDA and AMDGPU backends:
 
 ```
 export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
