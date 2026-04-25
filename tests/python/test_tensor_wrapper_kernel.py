@@ -67,8 +67,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
             x[i] = x[i] + 0
 
     a = _alloc_bare(backend, qd.i32, (2,))
-    # ``noop`` is a ``QuadrantsCallable``; the actual ``Kernel`` (which
-    # owns the JIT cache) lives at ``._primal``.
+    # ``noop`` is a ``QuadrantsCallable``; the actual ``Kernel`` (which owns the JIT cache) lives at ``._primal``.
     cache = noop._primal.materialized_kernels
 
     noop(a)

@@ -1,7 +1,6 @@
 """Layout-aware interop with NumPy / PyTorch / DLPack.
 
-Pins the canonical-view contract end-to-end on layout-tagged tensors,
-across both backends. The contract under test:
+Pins the canonical-view contract end-to-end on layout-tagged tensors, across both backends. The contract under test:
 
 - ``a.shape``, ``a.to_numpy().shape``, ``a.to_torch().shape``, and the
   shape carried by ``a.to_dlpack()`` all report the **canonical** shape
@@ -63,8 +62,7 @@ def _make_fill_kernel(shape, backend):
     values as :func:`_expected_canonical`, using explicit per-axis
     ``x[i, j, ...]`` indexing (one kernel per rank).
 
-    The complementary single-Vector form ``x[I]`` (with ``I`` from
-    ``qd.grouped(...)``) is exercised separately in
+    The complementary single-Vector form ``x[I]`` (with ``I`` from ``qd.grouped(...)``) is exercised separately in
     :func:`test_grouped_vector_subscript_canonical_view_*` below; both
     forms must agree on canonical-view semantics for layout-tagged
     ndarrays.
@@ -103,8 +101,7 @@ def _make_fill_kernel(shape, backend):
 
 
 # Representative layouts: identity, full reverse, an inner-axis swap, and
-# a non-trivial cyclic shift. Keeping the set small so the cross-product
-# (backend × layout × accessor) stays cheap.
+# a non-trivial cyclic shift. Keeping the set small so the cross-product (backend × layout × accessor) stays cheap.
 _LAYOUTS_RANK2 = [(0, 1), (1, 0)]
 _LAYOUTS_RANK3 = [(0, 1, 2), (2, 1, 0), (2, 0, 1), (1, 2, 0)]
 
@@ -238,8 +235,7 @@ def test_to_dlpack_layout_shows_up_as_strides_not_shape():
     t = torch.utils.dlpack.from_dlpack(a.to_dlpack())
     assert tuple(t.shape) == canonical
     # On a non-identity layout the dlpack view is by construction not
-    # contiguous in the canonical sense — calling ``.contiguous()`` is
-    # how the canonical layout would be materialised.
+    # contiguous in the canonical sense — calling ``.contiguous()`` is how the canonical layout would be materialised.
     assert not t.is_contiguous()
     np.testing.assert_array_equal(t.contiguous().cpu().numpy(), _expected_canonical(canonical))
 
@@ -290,8 +286,7 @@ def test_grad_to_numpy_canonical_view_rank2(backend, layout):
 @test_utils.test(arch=qd.cpu)
 def test_grad_to_numpy_canonical_view_rank3(backend, layout):
     """Rank-3 coverage for ``.grad`` under the canonical-view contract.
-    Guards against rank-2 symmetries hiding a permutation bug in the
-    grad-tag propagation from :func:`_with_layout`."""
+    Guards against rank-2 symmetries hiding a permutation bug in the grad-tag propagation from :func:`_with_layout`."""
     canonical = (2, 3, 4)
     a = qd.tensor(qd.f32, shape=canonical, backend=backend, layout=layout, needs_grad=True)
     assert a.grad is not None
@@ -355,15 +350,13 @@ def test_identity_layout_to_numpy_unchanged():
 
 # ----------------------------------------------------------------------------
 # Single-Vector subscript ``x[I]`` (from ``qd.grouped(...)``) must obey
-# the same canonical-view contract as multi-arg ``x[i, j, ...]`` on
-# layout-tagged ndarrays.
+# the same canonical-view contract as multi-arg ``x[i, j, ...]`` on layout-tagged ndarrays.
 #
 # Regression for the AST rewrite in :func:`build_Subscript`: prior to
 # the fix, ``x[I]`` skipped the canonical→physical permutation because
 # the subscript arity (1) didn't match ``len(_qd_layout)`` (N). On a
 # permuted layout this silently wrote at canonical indices into a
-# differently-shaped physical buffer — out-of-bounds for any non-square
-# canonical shape.
+# differently-shaped physical buffer — out-of-bounds for any non-square canonical shape.
 # ----------------------------------------------------------------------------
 
 
@@ -497,8 +490,7 @@ def test_grouped_struct_for_vector_subscript_rank3_all_permutations(backend, lay
 # user names to canonical positions via the inverse permutation, so the
 # user's ``i`` is always canonical-axis-0 regardless of layout. Mirrors
 # the canonical->physical translation in :func:`build_Subscript`.
-# Verified on both backends so ``GS_ENABLE_NDARRAY``-style switching is
-# transparent.
+# Verified on both backends so ``GS_ENABLE_NDARRAY``-style switching is transparent.
 # ----------------------------------------------------------------------------
 
 
@@ -630,8 +622,7 @@ def test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout(layout):
 # C++ bulk-fill on x64/cuda so it's layout-agnostic by construction, but
 # pin the observable behaviour so a future switch to the kernel path
 # doesn't regress silently. copy_from expects the physical shapes to
-# match (enforced in ``Ndarray.copy_from``), so we test the natural
-# use case: two ndarrays with the same layout.
+# match (enforced in ``Ndarray.copy_from``), so we test the natural use case: two ndarrays with the same layout.
 # ----------------------------------------------------------------------------
 
 
@@ -663,8 +654,7 @@ def test_copy_from_matching_layout(layout):
 # ----------------------------------------------------------------------------
 # .grad.to_dlpack() on a layout-tagged ndarray must carry the canonical
 # shape too (grad-tag propagation + dlpack layout path working together).
-# Hardening: ensures the permuted-strides code path is exercised on the
-# grad buffer, not only the primal.
+# Hardening: ensures the permuted-strides code path is exercised on the grad buffer, not only the primal.
 # ----------------------------------------------------------------------------
 
 

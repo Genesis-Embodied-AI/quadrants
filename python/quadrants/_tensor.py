@@ -45,15 +45,11 @@ _TENSOR_T_NDARRAY_MARKER = "__qd_tensor_t_ndarray__"
 def _with_layout(ndarray, layout):
     """Tag ``ndarray`` with a canonical-axis permutation. Internal.
 
-    Accepts either a bare ``Ndarray`` or a ``Tensor`` wrapper around one;
-    in the wrapper case the tag goes on the underlying impl so the
-    kernel-arg unwrap hook (and the AST rewrite that gates on
-    ``_qd_layout``) sees it.
+    Accepts either a bare ``Ndarray`` or a ``Tensor`` wrapper around one; in the wrapper case the tag goes on the
+    underlying impl so the kernel-arg unwrap hook (and the AST rewrite that gates on ``_qd_layout``) sees it.
 
-    If a companion ``grad`` ndarray exists (allocated by
-    ``needs_grad=True``), the tag is propagated to it so kernel code
-    reading ``x.grad[...]`` goes through the same canonical->physical
-    AST rewrite as ``x[...]``.
+    If a companion ``grad`` ndarray exists (allocated by ``needs_grad=True``), the tag is propagated to it so kernel
+    code reading ``x.grad[...]`` goes through the same canonical->physical AST rewrite as ``x[...]``.
     """
     # Unwrap Tensor wrappers transparently. Imported lazily to dodge the _tensor_wrapper -> _tensor cycle.
     from quadrants._tensor_wrapper import (  # pylint: disable=reimported
@@ -81,15 +77,12 @@ class Backend(IntEnum):
 
     Each value selects one of Quadrants' two underlying tensor implementations:
 
-    - :attr:`FIELD` (``qd.field``): faster at runtime; recompiles kernels
-      whenever any dimension size changes. Best for tensors whose shape is
-      effectively static across a run.
-    - :attr:`NDARRAY` (``qd.ndarray``): slightly slower at runtime but avoids
-      kernel recompilation when sizes change. Best for tensors whose shape
-      varies frequently (e.g. dynamic batch sizes, growing buffers).
+    - :attr:`FIELD` (``qd.field``): faster at runtime; recompiles kernels whenever any dimension size changes. Best for
+      tensors whose shape is effectively static across a run.
+    - :attr:`NDARRAY` (``qd.ndarray``): slightly slower at runtime but avoids kernel recompilation when sizes change.
+      Best for tensors whose shape varies frequently (e.g. dynamic batch sizes, growing buffers).
 
-    The choice is made per tensor at allocation time. A single program can
-    freely mix both backends.
+    The choice is made per tensor at allocation time. A single program can freely mix both backends.
     """
 
     FIELD = 0
@@ -135,14 +128,11 @@ def _validate_kwargs(kwargs, *, factory_name, accepted):
 
 
 def _layout_to_order(layout, ndim):
-    """Validate ``layout`` and translate it to the ``order=`` string accepted
-    by :func:`quadrants.field`.
+    """Validate ``layout`` and translate it to the ``order=`` string accepted by :func:`quadrants.field`.
 
-    ``layout`` is a tuple of ``ndim`` ints — a permutation of ``range(ndim)``
-    — listing the *canonical* axis index at each successive memory-nesting
-    level, outermost first. ``layout=(1, 0)`` for a 2-D tensor means axis 1
-    is the outer SNode, axis 0 is the inner one (i.e. transposed storage),
-    which translates to ``order='ji'``.
+    ``layout`` is a tuple of ``ndim`` ints — a permutation of ``range(ndim)`` — listing the *canonical* axis index at
+    each successive memory-nesting level, outermost first. ``layout=(1, 0)`` for a 2-D tensor means axis 1 is the
+    outer SNode, axis 0 is the inner one (i.e. transposed storage), which translates to ``order='ji'``.
 
     Returns ``None`` for the identity permutation, so the caller can omit
     ``order=`` entirely (matches the unsuffixed default).
@@ -159,36 +149,27 @@ def _layout_to_order(layout, ndim):
 
 
 def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
-    """Allocate a tensor on the chosen backend, optionally with a custom
-    physical layout.
+    """Allocate a tensor on the chosen backend, optionally with a custom physical layout.
 
-    Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray`
-    that selects between the two via the :class:`Backend` enum.
+    Thin dispatcher over :func:`quadrants.field` and :func:`quadrants.ndarray` that selects between the two via the
+    :class:`Backend` enum.
 
     Args:
-        dtype: Element data type (e.g. ``qd.f32``, ``qd.i32``, or a compound
-            type from ``qd.types``).
+        dtype: Element data type (e.g. ``qd.f32``, ``qd.i32``, or a compound type from ``qd.types``).
         shape: Shape of the tensor as an ``int`` or tuple of ``int``.
-        backend (Backend, optional): Storage backend. Defaults to
-            :attr:`Backend.NDARRAY`.
-        layout (tuple of int, optional): Permutation of canonical axes
-            describing the physical memory nesting order, outermost first.
-            For a rank-N tensor, must be a permutation of ``range(N)``.
-            ``None`` (default) and the identity permutation both mean
-            "natural row-major-like layout" (no permutation is applied).
+        backend (Backend, optional): Storage backend. Defaults to :attr:`Backend.NDARRAY`.
+        layout (tuple of int, optional): Permutation of canonical axes describing the physical memory nesting order,
+            outermost first. For a rank-N tensor, must be a permutation of ``range(N)``. ``None`` (default) and the
+            identity permutation both mean "natural row-major-like layout" (no permutation is applied).
 
-            ``shape`` is always interpreted as the **canonical** shape
-            (the shape you index inside kernels). The underlying
-            allocation is automatically sized to the permuted *physical*
-            shape, and kernel subscripts ``x[i, j, ...]`` are rewritten
-            to hit the right physical slot. Supported on both
-            ``Backend.FIELD`` and ``Backend.NDARRAY``.
+            ``shape`` is always interpreted as the **canonical** shape (the shape you index inside kernels). The
+            underlying allocation is automatically sized to the permuted *physical* shape, and kernel subscripts
+            ``x[i, j, ...]`` are rewritten to hit the right physical slot. Supported on both ``Backend.FIELD`` and
+            ``Backend.NDARRAY``.
 
     Returns:
-        A ``ScalarField`` when ``backend == Backend.FIELD``, or an
-        ``Ndarray`` when ``backend == Backend.NDARRAY``. In both cases
-        ``.shape`` reports the canonical shape; the physical layout is
-        managed transparently.
+        A ``ScalarField`` when ``backend == Backend.FIELD``, or an ``Ndarray`` when ``backend == Backend.NDARRAY``. In
+        both cases ``.shape`` reports the canonical shape; the physical layout is managed transparently.
 
     Example::
 
@@ -201,10 +182,9 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
         ...               layout=(1, 0))                              # transposed ndarray
 
     Raises:
-        ValueError: If ``backend`` is not a valid :class:`Backend` member,
-            or if ``layout`` is not a permutation of ``range(len(shape))``.
-        TypeError: If any keyword argument outside the accepted set is
-            passed (see ``_SCALAR_ACCEPTED_KWARGS``).
+        ValueError: If ``backend`` is not a valid :class:`Backend` member, or if ``layout`` is not a permutation of
+            ``range(len(shape))``.
+        TypeError: If any keyword argument outside the accepted set is passed (see ``_SCALAR_ACCEPTED_KWARGS``).
     """
     _validate_kwargs(kwargs, factory_name="qd.tensor", accepted=_SCALAR_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
@@ -244,11 +224,9 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
 def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Vector.tensor``.
 
-    Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected
-    by the ``backend=`` keyword. Not part of the public API — call
-    ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against
-    ``_VEC_MAT_ACCEPTED_KWARGS`` (no ``layout=`` — layout semantics over
-    an extra element axis are out of scope for now).
+    Dispatcher over ``qd.Vector.field`` and ``qd.Vector.ndarray`` selected by the ``backend=`` keyword. Not part of
+    the public API — call ``qd.Vector.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
+    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
     """
     _validate_kwargs(kwargs, factory_name="qd.Vector.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)
@@ -267,11 +245,9 @@ def _tensor_vec(n, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
 def _tensor_mat(n, m, dtype, shape, *, backend=Backend.NDARRAY, **kwargs):
     """Private impl backing ``qd.Matrix.tensor``.
 
-    Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected
-    by the ``backend=`` keyword. Not part of the public API — call
-    ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against
-    ``_VEC_MAT_ACCEPTED_KWARGS`` (no ``layout=`` — layout semantics over
-    an extra element axis are out of scope for now).
+    Dispatcher over ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` selected by the ``backend=`` keyword. Not part of
+    the public API — call ``qd.Matrix.tensor(...)`` instead. Hard-validates kwargs against ``_VEC_MAT_ACCEPTED_KWARGS``
+    (no ``layout=`` — layout semantics over an extra element axis are out of scope for now).
     """
     _validate_kwargs(kwargs, factory_name="qd.Matrix.tensor", accepted=_VEC_MAT_ACCEPTED_KWARGS)
     backend = _coerce_backend(backend)

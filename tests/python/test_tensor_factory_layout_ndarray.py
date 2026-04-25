@@ -163,8 +163,7 @@ def test_factory_layout_rank3_all_permutations(layout):
 
     fill(a)
     arr = a.to_numpy()
-    # to_numpy() returns the canonical view, so canonical indices work
-    # directly regardless of layout.
+    # to_numpy() returns the canonical view, so canonical indices work directly regardless of layout.
     assert arr.shape == canonical
     canonical_idx = (1, 2, 3)
     expected = canonical_idx[0] * 100 + canonical_idx[1] * 10 + canonical_idx[2]
@@ -224,14 +223,12 @@ def test_factory_layout_needs_grad_inherits_layout():
             x[i, j] = float(i * 10 + j)
             x.grad[i, j] = float(i * 100 + j * 10)
 
-    # Canonical shape is (M, N) on both primal and grad; grad inherits
-    # the same _qd_layout tag.
+    # Canonical shape is (M, N) on both primal and grad; grad inherits the same _qd_layout tag.
     assert tuple(a.shape) == tuple(a.grad.shape) == (M, N)
     fill(a)
     primal = a.to_numpy()
     grad = a.grad.to_numpy()
-    # to_numpy() returns the canonical view; both primal and grad
-    # report canonical shape and canonical-indexed values.
+    # to_numpy() returns the canonical view; both primal and grad report canonical shape and canonical-indexed values.
     assert primal.shape == grad.shape == (M, N)
     assert primal[1, 2] == 12.0
     assert grad[1, 2] == 120.0

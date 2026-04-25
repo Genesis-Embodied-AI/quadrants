@@ -98,8 +98,7 @@ def test_layout_rank4_all_permutations(layout, backend):
 # enumerate exhaustively; the cases below random-sample the higher-rank
 # space to back the user-guide claim that "any permutation up to
 # quadrants_max_num_indices (12) is supported". A fixed seed per (rank,
-# trial) keeps the suite deterministic so a regression on a particular
-# permutation always reproduces.
+# trial) keeps the suite deterministic so a regression on a particular permutation always reproduces.
 def _sampled_layouts(rank, num_samples, seed_base=0):
     import random  # pylint: disable=import-outside-toplevel
 
@@ -162,8 +161,7 @@ def test_order_kwarg_rejected():
 # ----------------------------------------------------------------------------
 # Ndarray non-identity layout: enabled in an earlier change.
 # These cases are exercised in depth in test_tensor_factory_layout_ndarray.py;
-# this file just pins the smoke "factory does not raise" contract that
-# replaces the PR-6-era NotImplementedError gating.
+# this file just pins the smoke "factory does not raise" contract that replaces the PR-6-era NotImplementedError gating.
 # ----------------------------------------------------------------------------
 
 

@@ -169,8 +169,7 @@ def test_layout_isolated_between_args():
     k(untagged, tagged)
     # Both ndarrays were filled by the same kernel writing canonical
     # values; both ``to_numpy()`` calls return canonical views, so the
-    # numpy arrays compare equal element-for-element regardless of the
-    # tagged ndarray's physical layout.
+    # numpy arrays compare equal element-for-element regardless of the tagged ndarray's physical layout.
     np.testing.assert_array_equal(untagged.to_numpy(), tagged.to_numpy())
 
 

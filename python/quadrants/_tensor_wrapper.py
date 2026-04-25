@@ -62,19 +62,15 @@ def _is_identity(layout: typing.Optional[typing.Tuple[int, ...]]) -> bool:
 class Tensor:
     """Backend-agnostic tensor wrapper. The public ``qd.Tensor`` class.
 
-    Holds a reference to an underlying impl (``Ndarray`` or ``Field``)
-    and forwards a whitelisted surface. Layout-aware host-side indexing
-    lives here: the AST-level canonical->physical rewrite only fires
-    inside ``@qd.kernel`` bodies, so ``t[i, j]`` at host scope on a
-    layout-tagged ndarray would otherwise hit the physical slot.
+    Holds a reference to an underlying impl (``Ndarray`` or ``Field``) and forwards a whitelisted surface. Layout-aware
+    host-side indexing lives here: the AST-level canonical->physical rewrite only fires inside ``@qd.kernel`` bodies,
+    so ``t[i, j]`` at host scope on a layout-tagged ndarray would otherwise hit the physical slot.
 
-    Construct via ``qd.tensor(...)`` (or its ``qd.Vector.tensor`` /
-    ``qd.Matrix.tensor`` siblings). The wrapper rejects double-wrapping:
-    the impl must be a bare ``Ndarray`` or ``Field``.
+    Construct via ``qd.tensor(...)`` (or its ``qd.Vector.tensor`` / ``qd.Matrix.tensor`` siblings). The wrapper rejects
+    double-wrapping: the impl must be a bare ``Ndarray`` or ``Field``.
 
-    Doubles as a kernel parameter annotation: ``def k(x: qd.Tensor)``
-    accepts either a Field or an Ndarray; dispatch happens at extract
-    time. See ``_template_mapper_hotpath._extract_arg``.
+    Doubles as a kernel parameter annotation: ``def k(x: qd.Tensor)`` accepts either a Field or an Ndarray; dispatch
+    happens at extract time. See ``_template_mapper_hotpath._extract_arg``.
     """
 
     # ``cached_property`` requires ``__dict__``, so no ``__slots__``.
@@ -131,8 +127,8 @@ class Tensor:
     # ------------------------------------------------------------------
 
     def _unwrap(self) -> typing.Any:
-        """Return the underlying impl. Used by the kernel-arg unwrap hook
-        in ``Kernel.__call__`` so the JIT cache keys off impl identity.
+        """Return the underlying impl. Used by the kernel-arg unwrap hook in ``Kernel.__call__`` so the JIT cache keys
+        off impl identity.
         """
         return self._impl
 
@@ -143,13 +139,11 @@ class Tensor:
     def _host_physical_layout(self) -> typing.Optional[typing.Tuple[int, ...]]:
         """Return the permutation to apply to canonical host keys.
 
-        Only ``Ndarray`` needs it: its Python-scope ``__getitem__`` /
-        ``__setitem__`` pass the key directly to the host accessor, and
-        the canonical->physical rewrite only fires inside ``@qd.kernel``.
+        Only ``Ndarray`` needs it: its Python-scope ``__getitem__`` / ``__setitem__`` pass the key directly to the
+        host accessor, and the canonical->physical rewrite only fires inside ``@qd.kernel``.
 
-        ``Field`` already translates canonical indices via the SNode
-        hierarchy (``order=``) on every host access, so we return ``None``
-        and fall through to a plain delegation.
+        ``Field`` already translates canonical indices via the SNode hierarchy (``order=``) on every host access, so we
+        return ``None`` and fall through to a plain delegation.
         """
         from quadrants.lang._ndarray import Ndarray
 
@@ -165,11 +159,9 @@ class Tensor:
     def _permute_key(key: typing.Any, layout: typing.Tuple[int, ...]) -> typing.Tuple[int, ...]:
         """Translate a user-supplied canonical key to physical coords.
 
-        ``physical[p] = canonical[layout[p]]`` by the convention that
-        ``layout[p]`` is the canonical axis at physical nesting level
-        ``p`` (outermost first). Only full-rank keys are supported at
-        host scope; partial / slice indexing is out of scope for the
-        wrapper and would fall out of ``Ndarray``'s own API anyway.
+        ``physical[p] = canonical[layout[p]]`` by the convention that ``layout[p]`` is the canonical axis at physical
+        nesting level ``p`` (outermost first). Only full-rank keys are supported at host scope; partial / slice
+        indexing is out of scope for the wrapper and would fall out of ``Ndarray``'s own API anyway.
         """
         if isinstance(key, int):
             # Rank-1 only; for rank>1 we require a tuple/list.
@@ -245,14 +237,13 @@ class Tensor:
     def __reduce__(self) -> typing.Tuple[typing.Any, typing.Tuple[typing.Any, ...]]:
         """Serialize via canonical-view numpy + backend metadata.
 
-        Works uniformly on both backends: the upstream ``Field`` never
-        supported pickle because it needs runtime-allocated SNodes, but
-        the wrapper bypasses that by reconstructing via ``qd.tensor(...)``
-        + ``from_numpy(...)`` on the other side — ``qd.tensor`` handles
-        the SNode allocation through the usual factory path.
+        Works uniformly on both backends: the upstream ``Field`` never supported pickle because it needs
+        runtime-allocated SNodes, but the wrapper bypasses that by reconstructing via ``qd.tensor(...)`` +
+        ``from_numpy(...)`` on the other side — ``qd.tensor`` handles the SNode allocation through the usual factory
+        path.
 
-        Only *scalar* tensors are supported here. Vector/matrix wrappers
-        override this (they need to encode element shape too).
+        Only *scalar* tensors are supported here. Vector/matrix wrappers override this (they need to encode element
+        shape too).
         """
         backend_int = int(self._backend_enum())
         shape = tuple(self._impl.shape)
@@ -267,10 +258,9 @@ class Tensor:
 def _element_shape_of(impl: typing.Any) -> typing.Tuple[int, ...]:
     """Return the per-element shape of a vector/matrix impl.
 
-    ``VectorNdarray`` / ``MatrixNdarray`` expose ``element_shape``
-    directly. ``MatrixField`` (which backs ``qd.Vector.field`` via
-    ``m == 1, ndim == 1`` and ``qd.Matrix.field`` via ``ndim == 2``)
-    doesn't, so we derive it from its ``n``/``m``/``ndim`` attributes.
+    ``VectorNdarray`` / ``MatrixNdarray`` expose ``element_shape`` directly. ``MatrixField`` (which backs
+    ``qd.Vector.field`` via ``m == 1, ndim == 1`` and ``qd.Matrix.field`` via ``ndim == 2``) doesn't, so we derive it
+    from its ``n``/``m``/``ndim`` attributes.
     """
     from quadrants.lang.matrix import MatrixField
 
@@ -286,9 +276,8 @@ def _element_shape_of(impl: typing.Any) -> typing.Tuple[int, ...]:
 class VectorTensor(Tensor):
     """Wrapper for vector-element tensors (``qd.Vector.tensor(...)`` output).
 
-    Accepts either a ``VectorNdarray`` or a ``MatrixField`` allocated via
-    ``qd.Vector.field(...)`` (``m == 1, ndim == 1``). ``element_shape``
-    is ``(n,)``.
+    Accepts either a ``VectorNdarray`` or a ``MatrixField`` allocated via ``qd.Vector.field(...)`` (``m == 1,
+    ndim == 1``). ``element_shape`` is ``(n,)``.
     """
 
     def __init__(self, impl: typing.Any) -> None:
@@ -322,8 +311,7 @@ class VectorTensor(Tensor):
 class MatrixTensor(Tensor):
     """Wrapper for matrix-element tensors (``qd.Matrix.tensor(...)`` output).
 
-    Accepts either a ``MatrixNdarray`` or a ``MatrixField`` with
-    ``ndim == 2``. ``element_shape`` is ``(n, m)``.
+    Accepts either a ``MatrixNdarray`` or a ``MatrixField`` with ``ndim == 2``. ``element_shape`` is ``(n, m)``.
     """
 
     def __init__(self, impl: typing.Any) -> None:

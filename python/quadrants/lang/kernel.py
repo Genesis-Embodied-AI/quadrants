@@ -297,9 +297,8 @@ class Kernel(FuncBase):
         impl.get_runtime().kernels.append(self)  # type: ignore[arg-type]
         self.reset()
         self.kernel_cpp: None | KernelCxx = None
-        # A materialized kernel is a KernelCxx object which may or may not have
-        # been compiled. It generally has been converted at least as far as AST
-        # and front-end IR, but not necessarily any further.
+        # A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been
+        # converted at least as far as AST and front-end IR, but not necessarily any further.
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
@@ -370,9 +369,8 @@ class Kernel(FuncBase):
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
             # freetext can be freely modified.
-            # As for why we are using `print` rather than eg logger.info, it is because
-            # this is only printed when qd.init(print_non_pure=..) is True. And it is
-            # confusing to set that to True, and see nothing printed.
+            # As for why we are using `print` rather than eg logger.info, it is because this is only printed when
+            # qd.init(print_non_pure=..) is True. And it is confusing to set that to True, and see nothing printed.
             print(f"[NOT_PURE] Debug information: not pure: {self.func.__name__}")
         return None
 
@@ -642,9 +640,8 @@ class Kernel(FuncBase):
             # `mode_original == AutodiffMode.REVERSE` only, to avoid duplicate computation for 1st-order derivatives.
             self.runtime.fwd_mode_manager.insert(self)
 
-        # Both the class kernels and the plain-function kernels are unified now.
-        # In both cases, |self.grad| is another Kernel instance that computes the
-        # gradient. For class kernels, args[0] is always the kernel owner.
+        # Both the class kernels and the plain-function kernels are unified now. In both cases, |self.grad| is another
+        # Kernel instance that computes the gradient. For class kernels, args[0] is always the kernel owner.
 
         # No need to capture grad kernels because they are already bound with their primal kernels
         if self.autodiff_mode in (_NONE, _VALIDATION) and self.runtime.target_tape and not self.runtime.grad_replaced:

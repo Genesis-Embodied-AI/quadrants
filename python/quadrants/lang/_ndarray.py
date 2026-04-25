@@ -31,11 +31,9 @@ if TYPE_CHECKING:
 def _invert_layout(layout):
     """Return the inverse permutation of ``layout`` as a tuple.
 
-    ``layout`` lists the *canonical* axis index at each successive
-    physical-memory axis (outermost first). The inverse maps each
-    canonical axis back to the physical-memory axis it lives on, which
-    is exactly what numpy's ``transpose(axes=)`` and DLPack's
-    ``shape`` / ``strides`` arrays consume.
+    ``layout`` lists the *canonical* axis index at each successive physical-memory axis (outermost first). The inverse
+    maps each canonical axis back to the physical-memory axis it lives on, which is exactly what numpy's
+    ``transpose(axes=)`` and DLPack's ``shape`` / ``strides`` arrays consume.
     """
     n = len(layout)
     inv = [0] * n
@@ -76,8 +74,8 @@ class Ndarray:
         impl.get_runtime().ndarrays.add(self)
 
     def __reduce__(self):
-        """Pickle support. Gradients (``.grad``) are not preserved because
-        they are considered transient computation state."""
+        """Pickle support. Gradients (``.grad``) are not preserved because they are considered transient computation
+        state."""
         return _ndarray_pickle.unpickle, (_ndarray_pickle.serialize(self),)
 
     def __del__(self):
@@ -91,17 +89,13 @@ class Ndarray:
     def to_dlpack(self):
         """Export this ndarray as a DLPack capsule.
 
-        The returned capsule carries the *canonical* shape and a
-        permuted strides array on layout-tagged ndarrays, so consumers
-        (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view
-        of the physical buffer with no data movement. On untagged
-        ndarrays this is byte-identical to the legacy export.
+        The returned capsule carries the *canonical* shape and a permuted strides array on layout-tagged ndarrays, so
+        consumers (`torch.utils.dlpack.from_dlpack`, etc.) see a transposed view of the physical buffer with no data
+        movement. On untagged ndarrays this is byte-identical to the legacy export.
 
-        Mirrors the field-backend behaviour: ``to_dlpack()`` on a field
-        allocated via ``qd.tensor(..., backend=qd.Backend.FIELD,
-        layout=...)`` (translated to ``order=...``) likewise returns a
-        canonical view via permuted strides — see the C++
-        ``field_to_dlpack`` SNode-walk path.
+        Mirrors the field-backend behaviour: ``to_dlpack()`` on a field allocated via ``qd.tensor(...,
+        backend=qd.Backend.FIELD, layout=...)`` (translated to ``order=...``) likewise returns a canonical view via
+        permuted strides — see the C++ ``field_to_dlpack`` SNode-walk path.
         """
         if impl.current_cfg().arch == _arch_metal:
             impl.get_runtime().sync()
@@ -125,11 +119,9 @@ class Ndarray:
     def layout(self):
         """Canonical-axis-permutation tuple, or ``None`` for identity.
 
-        Mirrors :attr:`Field.layout`: returns the same value the caller
-        passed to ``qd.tensor(..., layout=...)`` (or ``None`` if that
-        kwarg was omitted / was the identity permutation). Lets
-        downstream code introspect the physical layout without having
-        to know which backend produced the tensor.
+        Mirrors :attr:`Field.layout`: returns the same value the caller passed to ``qd.tensor(..., layout=...)`` (or
+        ``None`` if that kwarg was omitted / was the identity permutation). Lets downstream code introspect the
+        physical layout without having to know which backend produced the tensor.
         """
         layout = getattr(self, "_qd_layout", None)
         if _is_identity_layout(layout):
@@ -140,18 +132,15 @@ class Ndarray:
     def shape(self):
         """Canonical shape the user sees and indexes inside kernels.
 
-        On a layout-tagged ndarray (``_qd_layout`` set), the underlying
-        buffer is allocated at the *physical* (permuted) shape; this
-        property inverts the layout permutation so callers see the
-        canonical shape they passed to ``qd.tensor(..., shape=)``.
+        On a layout-tagged ndarray (``_qd_layout`` set), the underlying buffer is allocated at the *physical* (permuted)
+        shape; this property inverts the layout permutation so callers see the canonical shape they passed to
+        ``qd.tensor(..., shape=)``.
 
-        On an untagged ndarray (no layout, or identity layout) physical
-        and canonical coincide and this returns the physical shape.
+        On an untagged ndarray (no layout, or identity layout) physical and canonical coincide and this returns the
+        physical shape.
 
-        ``to_numpy()`` / ``to_torch()`` / ``to_dlpack()`` also return
-        canonical views (with ``_qd_layout`` reflected as a non-identity
-        stride pattern on the DLPack side); the layout is purely an
-        internal performance hint.
+        ``to_numpy()`` / ``to_torch()`` / ``to_dlpack()`` also return canonical views (with ``_qd_layout`` reflected
+        as a non-identity stride pattern on the DLPack side); the layout is purely an internal performance hint.
         """
         phys = self._physical_shape
         layout = getattr(self, "_qd_layout", None)
@@ -218,12 +207,10 @@ class Ndarray:
     def _ndarray_to_numpy(self):
         """Converts ndarray to a numpy array.
 
-        Returns the *canonical* view: the output array has
-        ``self.shape`` (the user-facing shape passed to
-        ``qd.tensor(..., shape=)``) and is filled by a kernel whose
-        canonical iteration is mapped to the underlying physical
-        buffer through the AST layout-permutation. Untagged ndarrays
-        see canonical == physical and pay no extra cost.
+        Returns the *canonical* view: the output array has ``self.shape`` (the user-facing shape passed to
+        ``qd.tensor(..., shape=)``) and is filled by a kernel whose canonical iteration is mapped to the underlying
+        physical buffer through the AST layout-permutation. Untagged ndarrays see canonical == physical and pay no
+        extra cost.
 
         Returns:
             numpy.ndarray: The result numpy array, in canonical axis order.
@@ -256,11 +243,9 @@ class Ndarray:
     def _ndarray_from_numpy(self, arr):
         """Loads all values from a numpy array.
 
-        ``arr.shape`` is validated against the *canonical* shape (what
-        ``self.shape`` reports). The ``ext_arr_to_ndarray`` kernel
-        iterates ``arr`` canonically and writes through ``ndarray[I]``,
-        so on layout-tagged destinations the AST permutation routes
-        canonical positions into the underlying physical buffer
+        ``arr.shape`` is validated against the *canonical* shape (what ``self.shape`` reports). The
+        ``ext_arr_to_ndarray`` kernel iterates ``arr`` canonically and writes through ``ndarray[I]``, so on
+        layout-tagged destinations the AST permutation routes canonical positions into the underlying physical buffer
         without any python-side transpose.
 
         Args:
@@ -282,14 +267,11 @@ class Ndarray:
 
     @python_scope
     def _ndarray_matrix_to_torch(self, as_vector, device=None):
-        """Mirror of ``_ndarray_matrix_to_numpy`` that fills a torch
-        tensor instead of a numpy array.
+        """Mirror of ``_ndarray_matrix_to_numpy`` that fills a torch tensor instead of a numpy array.
 
-        Allocates a ``torch.zeros`` of ``self.arr.total_shape()`` (the
-        canonical-major shape including the trailing element-axis
-        extents) and dispatches the same ``ndarray_matrix_to_ext_arr``
-        bridge kernel — torch tensors expose the same external-array
-        interface to the kernel as numpy arrays do.
+        Allocates a ``torch.zeros`` of ``self.arr.total_shape()`` (the canonical-major shape including the trailing
+        element-axis extents) and dispatches the same ``ndarray_matrix_to_ext_arr`` bridge kernel — torch tensors
+        expose the same external-array interface to the kernel as numpy arrays do.
         """
         import torch  # pylint: disable=C0415
 
@@ -307,9 +289,8 @@ class Ndarray:
 
     @python_scope
     def _ndarray_matrix_from_torch(self, arr, as_vector):
-        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch
-        tensor. ``.contiguous()`` is forced so the bridge kernel sees a
-        tightly-packed external array."""
+        """Mirror of ``_ndarray_matrix_from_numpy`` that ingests a torch tensor. ``.contiguous()`` is forced so the
+        bridge kernel sees a tightly-packed external array."""
         contig = arr.contiguous()
         if tuple(self.arr.total_shape()) != tuple(contig.shape):
             raise ValueError(
@@ -467,9 +448,8 @@ class ScalarNdarray(Ndarray):
     def to_numpy(self, dtype=None):
         """Return a canonical-view NumPy array.
 
-        ``dtype``: optional numpy dtype to cast the result to (matches
-        :meth:`Field.to_numpy`'s signature). ``None`` keeps the native
-        ndarray dtype.
+        ``dtype``: optional numpy dtype to cast the result to (matches :meth:`Field.to_numpy`'s signature). ``None``
+        keeps the native ndarray dtype.
         """
         arr = self._ndarray_to_numpy()
         if dtype is not None and arr.dtype != dtype:
@@ -484,11 +464,9 @@ class ScalarNdarray(Ndarray):
     def to_torch(self, device=None):
         """Return a canonical-view torch tensor.
 
-        Mirrors :meth:`Field.to_torch`. The destination is a
-        ``torch.zeros(self.shape, ...)`` allocation that the bridge
-        kernel writes into via the canonical iteration path, so
-        layout-tagged ndarrays produce a canonical view just like
-        ``to_numpy()`` does.
+        Mirrors :meth:`Field.to_torch`. The destination is a ``torch.zeros(self.shape, ...)`` allocation that the
+        bridge kernel writes into via the canonical iteration path, so layout-tagged ndarrays produce a canonical
+        view just like ``to_numpy()`` does.
         """
         import torch  # pylint: disable=C0415
 
@@ -506,9 +484,8 @@ class ScalarNdarray(Ndarray):
     def from_torch(self, arr):
         """Load all values from a torch tensor.
 
-        The torch tensor must have the same canonical shape as ``self``;
-        a non-contiguous source is materialised via ``.contiguous()`` so
-        the bridge kernel sees a tightly packed external array.
+        The torch tensor must have the same canonical shape as ``self``; a non-contiguous source is materialised via
+        ``.contiguous()`` so the bridge kernel sees a tightly packed external array.
         """
         contig = arr.contiguous()
         canonical_shape = tuple(self.shape)

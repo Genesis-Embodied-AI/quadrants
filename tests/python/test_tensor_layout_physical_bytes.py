@@ -58,8 +58,7 @@ BACKEND_IDS = ["field", "ndarray"]
 def _raw_view(tensor):
     """Return a 1-D numpy view of the underlying physical allocation.
 
-    Goes through DLPack to bypass the canonical-view permutation that
-    ``to_torch()`` materialises (see
+    Goes through DLPack to bypass the canonical-view permutation that ``to_torch()`` materialises (see
     ``test_to_dlpack_layout_shows_up_as_strides_not_shape``); the
     untyped storage of the resulting torch tensor *is* the underlying
     physical buffer.
@@ -140,8 +139,7 @@ def test_layout_rank2_transpose_full_pattern_byte_identical(backend):
 # ---------------------------------------------------------------------------
 # Rank-3: parameterise over every non-identity permutation. The contract
 # generalises: for any ``layout`` permutation, allocating with
-# ``shape=permute(canonical, layout)`` and ``layout=invert(layout)`` must
-# match the natural-canonical default.
+# ``shape=permute(canonical, layout)`` and ``layout=invert(layout)`` must match the natural-canonical default.
 # ---------------------------------------------------------------------------
 
 
@@ -163,8 +161,7 @@ def test_layout_rank3_arbitrary_permutation_byte_identical(backend, layout):
     for i, j, k in itertools.product(*(range(d) for d in canonical)):
         v = i * 100 + j * 10 + k
         parent[i, j, k] = v
-        # Convert canonical (i, j, k) into rotated tensor's canonical key
-        # by applying the layout permutation in reverse.
+        # Convert canonical (i, j, k) into rotated tensor's canonical key by applying the layout permutation in reverse.
         rotated_key = tuple((i, j, k)[axis] for axis in layout)
         rotated[rotated_key] = v
 
@@ -173,8 +170,7 @@ def test_layout_rank3_arbitrary_permutation_byte_identical(backend, layout):
 
 # ---------------------------------------------------------------------------
 # Kernel-write equivalence: the physical-byte-identical guarantee must hold
-# for kernel-driven writes too, not just host setitem (since Genesis fills
-# state from kernels).
+# for kernel-driven writes too, not just host setitem (since Genesis fills state from kernels).
 # ---------------------------------------------------------------------------
 
 

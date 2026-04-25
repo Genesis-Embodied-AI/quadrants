@@ -57,8 +57,7 @@ def test_untagged_vs_identity_tagged_are_different_cache_entries():
 
     They produce byte-identical IR (the AST hook short-circuits on
     identity), but they're keyed differently because ``None != (0, 1)``.
-    Documenting this so a future "normalise identity to None" refactor
-    is a deliberate decision rather than an accident.
+    Documenting this so a future "normalise identity to None" refactor is a deliberate decision rather than an accident.
     """
 
     @qd.kernel

@@ -181,8 +181,7 @@ def test_layout_grad_all_rank3_permutations(layout, backend):
 # NDARRAY-only: the _qd_layout tag is the NDARRAY-side mechanism for
 # carrying the layout to kernels and to the companion grad. FIELD uses a
 # different storage mechanism (axis_seq inside the SNode tree); see the
-# rank-2/3 kernel-roundtrip tests above for the FIELD-side equivalent of
-# this contract.
+# rank-2/3 kernel-roundtrip tests above for the FIELD-side equivalent of this contract.
 # ----------------------------------------------------------------------------
 
 

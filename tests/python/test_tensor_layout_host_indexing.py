@@ -119,8 +119,7 @@ def test_host_setitem_canonical_rank2(backend, layout):
 # Bare-impl path: same canonical-view contract must hold when the user
 # constructs the wrapper explicitly from a bare impl (i.e. allocates via
 # ``qd.field`` / ``qd.ndarray`` and wraps with ``qd.Tensor(impl)``).
-# Sanity check that the wrapper's host-side fix isn't tied to the
-# factory codepath.
+# Sanity check that the wrapper's host-side fix isn't tied to the factory codepath.
 # ----------------------------------------------------------------------
 
 
@@ -133,8 +132,7 @@ def _alloc_bare(backend, dtype, canonical, layout):
         # qd.field expects ``order=`` as an axis-char string ("ji", "kij", ...)
         order = "".join(chr(ord("i") + ax) for ax in layout)
         f = qd.field(dtype, canonical, order=order)
-        # ``_field`` now tags ``_qd_layout`` automatically; no extra
-        # attribute needed on the returned object.
+        # ``_field`` now tags ``_qd_layout`` automatically; no extra attribute needed on the returned object.
         return f
     # NDARRAY
     if _is_identity(layout):

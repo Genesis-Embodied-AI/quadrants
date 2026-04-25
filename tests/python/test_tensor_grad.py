@@ -182,8 +182,7 @@ def test_tensor_mat_grad_kernel_roundtrip(backend):
 # Negative path: int dtype + needs_grad on the NDARRAY backend.
 # Kept NDARRAY-only because the FIELD path raises through the legacy
 # create_field machinery with a different error class / message; the
-# Vector.ndarray / Matrix.ndarray rejection added in this branch is the
-# focused contract.
+# Vector.ndarray / Matrix.ndarray rejection added in this branch is the focused contract.
 # ----------------------------------------------------------------------------
 
 

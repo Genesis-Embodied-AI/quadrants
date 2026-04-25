@@ -57,8 +57,8 @@ def test_tensor_annotated_func_param(backend):
 @pytest.mark.parametrize("backend", BACKENDS, ids=BACKEND_IDS)
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_field_kernel_data_oriented(backend):
-    """A struct with a qd.Tensor field passed to a kernel via template().
-    FIELD uses @qd.data_oriented; NDARRAY uses @dataclasses.dataclass(frozen=True)."""
+    """A struct with a qd.Tensor field passed to a kernel via template(). FIELD uses @qd.data_oriented; NDARRAY uses
+    @dataclasses.dataclass(frozen=True)."""
     N = 6
     t = qd.tensor(qd.i32, shape=(N,), backend=backend)
 
@@ -124,8 +124,7 @@ def test_tensor_struct_field_func_via_template(backend):
 
 # ---------------------------------------------------------------------------
 # 4. Tensor wrapper in struct field (unwrap path via build_Attribute).
-#    qd.tensor() returns a Tensor wrapper (post stork-19), so this
-#    exercises the Tensor-unwrap in build_Attribute.
+#    qd.tensor() returns a Tensor wrapper (post stork-19), so this exercises the Tensor-unwrap in build_Attribute.
 # ---------------------------------------------------------------------------
 
 
@@ -330,8 +329,8 @@ def test_tensor_struct_field_typed_kernel_arg_field():
 
 @test_utils.test(arch=qd.cpu)
 def test_tensor_struct_multiple_fields_typed_kernel_arg():
-    """Struct with two qd.Tensor fields passed as typed kernel arg.
-    Both fields must be correctly pre-declared and subscriptable."""
+    """Struct with two qd.Tensor fields passed as typed kernel arg. Both fields must be correctly pre-declared and
+    subscriptable."""
     N = 4
 
     @dataclasses.dataclass(frozen=True)
@@ -357,18 +356,15 @@ def test_tensor_struct_multiple_fields_typed_kernel_arg():
 # ---------------------------------------------------------------------------
 # 11–15. Frozen dataclass with MIXED qd.Tensor + qd.types.ndarray() fields.
 #
-# This is the Genesis ConstraintState pattern: a frozen dataclass has
-# some fields annotated as qd.types.ndarray() and others as qd.Tensor.
-# The struct is passed to @qd.func via its dataclass type annotation
-# (NOT via qd.template()).
+# This is the Genesis ConstraintState pattern: a frozen dataclass has some fields annotated as qd.types.ndarray() and
+# others as qd.Tensor. The struct is passed to @qd.func via its dataclass type annotation (NOT via qd.template()).
 # ---------------------------------------------------------------------------
 
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_tensor_and_ndarray_frozen_dataclass_func():
-    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields,
-    passed to @qd.func via dataclass type annotation. NDARRAY backend.
-    This is the exact pattern used by Genesis ConstraintState in ndarray mode."""
+    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields, passed to @qd.func via dataclass type
+    annotation. NDARRAY backend. This is the exact pattern used by Genesis ConstraintState in ndarray mode."""
     N = 6
 
     @dataclasses.dataclass(frozen=True)
@@ -397,9 +393,8 @@ def test_mixed_tensor_and_ndarray_frozen_dataclass_func():
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_tensor_and_ndarray_frozen_dataclass_kernel():
-    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields,
-    passed to @qd.kernel via dataclass type annotation. NDARRAY backend.
-    Both field types are read/written in the same kernel."""
+    """Frozen dataclass with mixed qd.Tensor + qd.types.ndarray() fields, passed to @qd.kernel via dataclass type
+    annotation. NDARRAY backend. Both field types are read/written in the same kernel."""
     N = 4
 
     @dataclasses.dataclass(frozen=True)
@@ -504,8 +499,8 @@ def test_mixed_tensor_and_field_dataoriented_template():
 
 @test_utils.test(arch=qd.cpu)
 def test_mixed_2d_tensor_and_ndarray_frozen_dataclass():
-    """Frozen dataclass with 2D mixed qd.Tensor + qd.types.ndarray() fields.
-    Mirrors the Genesis ConstraintState shape=(len_constraints, n_envs)."""
+    """Frozen dataclass with 2D mixed qd.Tensor + qd.types.ndarray() fields. Mirrors the Genesis ConstraintState
+    shape=(len_constraints, n_envs)."""
     M, N = 3, 4
 
     @dataclasses.dataclass(frozen=True)

@@ -215,8 +215,7 @@ def test_wrapper_grad_none_when_no_grad_int_dtype(backend):
     # regardless of ``needs_grad=``, while an ``Ndarray`` correctly reports
     # ``grad = None``. Int dtypes skip the stub path on both backends, so
     # this test uses ``qd.i32`` to get symmetric ``grad is None`` behaviour.
-    # Cleaning up the real-dtype asymmetry is tracked in the design doc
-    # and deferred to a follow-up branch.
+    # Cleaning up the real-dtype asymmetry is tracked in the design doc and deferred to a follow-up branch.
     t = qd.tensor(qd.i32, shape=(4,), backend=backend)
     assert t.grad is None
 

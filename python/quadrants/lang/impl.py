@@ -459,10 +459,9 @@ class PyQuadrants:
         if root.finalized:
             return
         if not is_first_call and root.empty:
-            # We have to forcefully finalize when `is_first_call` is True (even
-            # if the root itself is empty), so that there is a valid struct
-            # llvm::Module, if no field has been declared before the first kernel
-            # invocation. Example case:
+            # We have to forcefully finalize when `is_first_call` is True (even if the root itself is empty), so that
+            # there is a valid struct llvm::Module, if no field has been declared before the first kernel invocation.
+            # Example case:
             # https://github.com/taichi-dev/taichi/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266
             return
 
@@ -637,16 +636,13 @@ class _UninitializedRootFieldsBuilder:
         raise QuadrantsRuntimeError("Please call init() first")
 
 
-# `root` initialization must be delayed until after the program is
-# created. Unfortunately, `root` exists in both quadrants.lang.impl module and
-# the top-level quadrants module at this point; so if `root` itself is written, we
-# would have to make sure that `root` in all the modules get updated to the same
-# instance. This is an error-prone process.
+# `root` initialization must be delayed until after the program is created. Unfortunately, `root` exists in both
+# quadrants.lang.impl module and the top-level quadrants module at this point; so if `root` itself is written, we would
+# have to make sure that `root` in all the modules get updated to the same instance. This is an error-prone process.
 #
-# To avoid this situation, we create `root` once during the import time, and
-# never write to it. The core part, `_root_fb`, is the one whose initialization
-# gets delayed. `_root_fb` will only exist in the quadrants.lang.impl module, so
-# writing to it is would result in less for maintenance cost.
+# To avoid this situation, we create `root` once during the import time, and never write to it. The core part,
+# `_root_fb`, is the one whose initialization gets delayed. `_root_fb` will only exist in the quadrants.lang.impl
+# module, so writing to it is would result in less for maintenance cost.
 #
 # `_root_fb` will be overridden inside :func:`quadrants.lang.init`.
 _root_fb = _UninitializedRootFieldsBuilder()
@@ -1096,8 +1092,7 @@ def qd_format(*args):
 
 @quadrants_scope
 def qd_assert(cond, msg, extra_args, dbg_info):
-    # Mostly a wrapper to help us convert from Expr (defined in Python) to
-    # _qd_core.Expr (defined in C++)
+    # Mostly a wrapper to help us convert from Expr (defined in Python) to _qd_core.Expr (defined in C++)
     ast_builder = get_runtime().compiling_callable.ast_builder()
     ast_builder.create_assert_stmt(Expr(cond).ptr, msg, extra_args, dbg_info)
 
@@ -1352,8 +1347,7 @@ def get_max_shared_memory_bytes(*, is_lowerbound_ok):
             # https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
             return 32 * 1024
         if arch == _qd_core.amdgpu:
-            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2
-            # (Nov 2020).
+            # AMD GPUs have 64KB LDS per workgroup since at least RDNA 2 (Nov 2020).
             # https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html
             return 64 * 1024
         if arch == _qd_core.vulkan:

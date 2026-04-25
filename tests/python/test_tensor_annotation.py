@@ -225,22 +225,16 @@ def test_tensor_is_in_qd_namespace():
 # ----------------------------------------------------------------------------
 # Module-scope kernel decl with qd.Tensor annotation.
 #
-# This is the *Genesis* pattern: every Genesis kernel is a module-level
-# global, decorated with ``@qd.kernel`` at import time — long before
-# ``qd.init()`` runs and long before any tensor is allocated. The tests
-# above all decorate inside the test body (after ``@test_utils.test``
-# has called ``qd.init()``), so they don't exercise this code path.
+# This is the *Genesis* pattern: every Genesis kernel is a module-level global, decorated with ``@qd.kernel`` at import
+# time — long before ``qd.init()`` runs and long before any tensor is allocated. The tests above all decorate inside
+# the test body (after ``@test_utils.test`` has called ``qd.init()``), so they don't exercise this code path.
 #
 # Pinning here that:
-# - The decorator is happy with ``qd.Tensor`` evaluated at module load
-#   time (i.e. before any qd.init).
-# - First call lazily compiles for whatever backend / layout the arg
-#   actually has.
-# - The four (backend × layout) combinations called against the *same*
-#   module-level kernel object produce four distinct cache entries with
-#   no fragmentation, and each writes the right canonical values.
-# Runs on whatever archs the test runner targets (no ``arch=`` filter)
-# so cpu and gpu codegen are both covered.
+# - The decorator is happy with ``qd.Tensor`` evaluated at module load time (i.e. before any qd.init).
+# - First call lazily compiles for whatever backend / layout the arg actually has.
+# - The four (backend × layout) combinations called against the *same* module-level kernel object produce four distinct
+#   cache entries with no fragmentation, and each writes the right canonical values.
+# Runs on whatever archs the test runner targets (no ``arch=`` filter) so cpu and gpu codegen are both covered.
 # ----------------------------------------------------------------------------
 
 
@@ -251,9 +245,8 @@ _MOD_LAYOUT_IDS = ["identity", "transposed"]
 
 @qd.kernel
 def _module_level_fill_2d(x: qd.Tensor):
-    # Canonical indexing on both axes; the AST rewrite (ndarray) /
-    # SNode order (field) handles non-identity layouts so this same
-    # kernel body is correct under any permutation.
+    # Canonical indexing on both axes; the AST rewrite (ndarray) / SNode order (field) handles non-identity layouts so
+    # this same kernel body is correct under any permutation.
     for i, j in qd.ndrange(_MOD_M, _MOD_N):
         x[i, j] = i * 100 + j
 
@@ -319,11 +312,9 @@ def test_module_level_qd_tensor_kernel_all_combos_share_decl():
 
     n_after = len(_module_level_fill_2d._primal.mapper.mapping)
     added = n_after - n_before
-    # 2 (ndarray, one per layout) + 1 (field, layout-agnostic at the
-    # cache-key layer) = 3. We allow [2, 3] because a future field
-    # change that splits per-layout would still be acceptable; what we
-    # really want to forbid is unbounded growth (>4) from wrapper
-    # identity leaking into the key.
+    # 2 (ndarray, one per layout) + 1 (field, layout-agnostic at the cache-key layer) = 3. We allow [2, 3] because a
+    # future field change that splits per-layout would still be acceptable; what we really want to forbid is unbounded
+    # growth (>4) from wrapper identity leaking into the key.
     assert 2 <= added <= 4, (
         f"unexpected cache growth: {added} new entries for 4 (backend, " f"layout) combos (want 3, accept 2-4)"
     )
@@ -332,14 +323,12 @@ def test_module_level_qd_tensor_kernel_all_combos_share_decl():
 # ----------------------------------------------------------------------------
 # qd.Tensor across a qd.reset() / qd.init() cycle.
 #
-# Pattern: define a kernel, init quadrants, allocate a Field-backed tensor,
-# run the kernel, then *destroy* the runtime via ``qd.reset()`` and
-# *re-init* it before allocating an Ndarray-backed tensor and re-running
-# the same kernel. Both halves write the right canonical values.
+# Pattern: define a kernel, init quadrants, allocate a Field-backed tensor, run the kernel, then *destroy* the runtime
+# via ``qd.reset()`` and *re-init* it before allocating an Ndarray-backed tensor and re-running the same kernel. Both
+# halves write the right canonical values.
 #
-# This exercises the path where a single kernel-decl object survives a
-# runtime teardown (its compiled cache is invalidated by reset) and is
-# then re-driven against a different backend on the fresh runtime.
+# This exercises the path where a single kernel-decl object survives a runtime teardown (its compiled cache is
+# invalidated by reset) and is then re-driven against a different backend on the fresh runtime.
 # ----------------------------------------------------------------------------
 
 
@@ -362,14 +351,12 @@ def test_qd_tensor_across_reset_and_reinit(req_arch, req_options):
     fill_2d(a_field)
     np.testing.assert_array_equal(a_field.to_numpy(), expected)
 
-    # Tear the runtime down. After this any tensor allocated against the
-    # old runtime is dead; the kernel decl object survives but its
-    # compiled cache is cleared.
+    # Tear the runtime down. After this any tensor allocated against the old runtime is dead; the kernel decl object
+    # survives but its compiled cache is cleared.
     qd.reset()
 
-    # Bring it back on the same arch the fixture chose. Mirror the
-    # fixture's option handling so cuda/x64 both behave like the rest of
-    # the suite.
+    # Bring it back on the same arch the fixture chose. Mirror the fixture's option handling so cuda/x64 both behave
+    # like the rest of the suite.
     init_options = dict(req_options or {})
     init_options.setdefault("print_full_traceback", True)
     qd.init(arch=req_arch, enable_fallback=False, **init_options)

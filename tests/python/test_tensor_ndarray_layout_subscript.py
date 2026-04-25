@@ -64,8 +64,7 @@ def test_subscript_identity_layout_is_byte_identical():
 
 
 # ----------------------------------------------------------------------------
-# Non-identity layout: AST rewrite turns canonical indexing into permuted
-# physical indexing.
+# Non-identity layout: AST rewrite turns canonical indexing into permuted physical indexing.
 # ----------------------------------------------------------------------------
 
 
@@ -76,10 +75,8 @@ def test_subscript_rank2_transpose_layout_matches_transposed_storage():
     Allocate two ndarrays:
     - direct: canonical (3, 4); kernel writes x[i, j] in canonical order.
     - tagged: physical (4, 3); tagged with layout=(1, 0) so canonical shape is (3, 4).
-      Kernel iterates the canonical (3, 4) range and writes x[i, j].
-      Rewrite turns this into physical[j, i].
-    Both ``to_numpy()`` calls return the canonical view, so the two arrays
-    must compare equal element-for-element.
+      Kernel iterates the canonical (3, 4) range and writes x[i, j]. Rewrite turns this into physical[j, i].
+    Both ``to_numpy()`` calls return the canonical view, so the two arrays must compare equal element-for-element.
     """
     M, N = 3, 4
     direct = qd.tensor(qd.i32, shape=(M, N), backend=qd.Backend.NDARRAY)

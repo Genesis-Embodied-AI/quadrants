@@ -6,12 +6,10 @@ layout (identity or non-identity). Downstream code (Genesis-style
 ``GS_ENABLE_NDARRAY`` switching, ``layout=`` perf tuning) should never
 have to special-case the backend or the layout.
 
-Each test parametrises over both backends and at least one non-identity
-layout. If a future change re-introduces an asymmetry (e.g. one backend
-gains a kwarg the other doesn't), one of these tests will fail.
+Each test parametrises over both backends and at least one non-identity layout. If a future change re-introduces an
+asymmetry (e.g. one backend gains a kwarg the other doesn't), one of these tests will fail.
 
-See ``perso_hugh/doc/quadrants-tensor.md`` §8.9 for the design rationale
-and the per-asymmetry decision matrix.
+See ``perso_hugh/doc/quadrants-tensor.md`` §8.9 for the design rationale and the per-asymmetry decision matrix.
 """
 
 import itertools
@@ -29,8 +27,7 @@ _LAYOUTS_RANK2 = list(itertools.permutations(range(2)))
 
 
 # ----------------------------------------------------------------------------
-# tensor.layout: must report the user-supplied permutation (or None for
-# identity / no layout) on both backends.
+# tensor.layout: must report the user-supplied permutation (or None for identity / no layout) on both backends.
 # ----------------------------------------------------------------------------
 
 
@@ -120,14 +117,12 @@ def test_to_numpy_accepts_dtype_kwarg(backend, layout):
 
 
 # ----------------------------------------------------------------------------
-# Pickle: symmetric across backends as of stork-19. The wrapper's
-# ``__reduce__`` round-trips via ``to_numpy()``, so Field — whose bare
-# impl never supported pickle upstream — is now picklable through the
-# wrapper that ``qd.tensor()`` returns. The reducer also forwards
-# ``layout=`` to the rebuild path, so non-identity layout tags survive
-# the round-trip on both backends (see
-# ``test_tensor_layout_interop.test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout``
-# for the explicit layout-preservation assertion).
+# Pickle: symmetric across backends as of stork-19. The wrapper's ``__reduce__`` round-trips via ``to_numpy()``,
+# so Field — whose bare impl never supported pickle upstream — is now picklable through the wrapper that
+# ``qd.tensor()`` returns. The reducer also forwards ``layout=`` to the rebuild path, so non-identity layout tags
+# survive the round-trip on both backends (see
+# ``test_tensor_layout_interop.test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout`` for the explicit
+# layout-preservation assertion).
 # ----------------------------------------------------------------------------
 
 
@@ -146,10 +141,8 @@ def test_pickle_roundtrips_symmetrically(backend, layout):
 
 
 # ----------------------------------------------------------------------------
-# qd.tensor() kwarg validation is symmetric: every accepted-kwarg works
-# on both backends, and every rejected-kwarg raises on both backends.
-# Locks the contract so a stray ``order=`` typo (etc.) doesn't silently
-# work on one path.
+# qd.tensor() kwarg validation is symmetric: every accepted-kwarg works on both backends, and every rejected-kwarg
+# raises on both backends. Locks the contract so a stray ``order=`` typo (etc.) doesn't silently work on one path.
 # ----------------------------------------------------------------------------
 
 
