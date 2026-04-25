@@ -31,11 +31,8 @@ class IRBuilder {
 
   // Insert to a specific insertion point.
   template <typename XStmt>
-  static XStmt *insert(std::unique_ptr<XStmt> &&stmt,
-                       InsertPoint *insert_point) {
-    return insert_point->block
-        ->insert(std::move(stmt), insert_point->position++)
-        ->template as<XStmt>();
+  static XStmt *insert(std::unique_ptr<XStmt> &&stmt, InsertPoint *insert_point) {
+    return insert_point->block->insert(std::move(stmt), insert_point->position++)->template as<XStmt>();
   }
 
   void set_insertion_point(InsertPoint new_insert_point);
@@ -49,10 +46,8 @@ class IRBuilder {
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
       QD_ERROR("The argument is not a statement.");
     }
-    if constexpr (std::is_same_v<DecayedType, RangeForStmt> ||
-                  std::is_same_v<DecayedType, StructForStmt> ||
-                  std::is_same_v<DecayedType, MeshForStmt> ||
-                  std::is_same_v<DecayedType, WhileStmt>) {
+    if constexpr (std::is_same_v<DecayedType, RangeForStmt> || std::is_same_v<DecayedType, StructForStmt> ||
+                  std::is_same_v<DecayedType, MeshForStmt> || std::is_same_v<DecayedType, WhileStmt>) {
       set_insertion_point({loop->body.get(), 0});
     } else {
       QD_ERROR("Statement {} is not a loop.", loop->name());
@@ -64,8 +59,7 @@ class IRBuilder {
    public:
     // Set the insertion point to the beginning of the loop body.
     template <typename XStmt>
-    explicit LoopGuard(IRBuilder &builder, XStmt *loop)
-        : builder_(builder), loop_(loop) {
+    explicit LoopGuard(IRBuilder &builder, XStmt *loop) : builder_(builder), loop_(loop) {
       location_ = (int)loop->parent->size() - 1;
       builder_.set_insertion_point_to_loop_begin(loop);
     }
@@ -123,8 +117,7 @@ class IRBuilder {
   ContinueStmt *create_continue();
 
   // Function.
-  FuncCallStmt *create_func_call(Function *func,
-                                 const std::vector<Stmt *> &args);
+  FuncCallStmt *create_func_call(Function *func, const std::vector<Stmt *> &args);
 
   // Loop index.
   LoopIndexStmt *get_loop_index(Stmt *loop, int index = 0);
@@ -145,13 +138,9 @@ class IRBuilder {
   RandStmt *create_rand(DataType value_type);
 
   // Load kernel arguments.
-  ArgLoadStmt *create_arg_load(const std::vector<int> &arg_id,
-                               DataType dt,
-                               bool is_ptr);
+  ArgLoadStmt *create_arg_load(const std::vector<int> &arg_id, DataType dt, bool is_ptr);
   // Load kernel arguments.
-  ArgLoadStmt *create_ndarray_arg_load(const std::vector<int> &arg_id,
-                                       DataType dt,
-                                       int total_dim);
+  ArgLoadStmt *create_ndarray_arg_load(const std::vector<int> &arg_id, DataType dt, int total_dim);
 
   // The return value of the kernel.
   ReturnStmt *create_return(Stmt *value);
@@ -225,9 +214,7 @@ class IRBuilder {
   AtomicOpStmt *create_atomic_mul(Stmt *dest, Stmt *val);
 
   // Ternary operations. Returns the result.
-  TernaryOpStmt *create_select(Stmt *cond,
-                               Stmt *true_result,
-                               Stmt *false_result);
+  TernaryOpStmt *create_select(Stmt *cond, Stmt *true_result, Stmt *false_result);
 
   // Matrix Initialization
   MatrixInitStmt *create_matrix_init(std::vector<Stmt *> elements);
@@ -244,19 +231,15 @@ class IRBuilder {
   void create_local_store(AllocaStmt *ptr, Stmt *data);
 
   // Global variables.
-  GlobalPtrStmt *create_global_ptr(SNode *snode,
-                                   const std::vector<Stmt *> &indices);
-  ExternalPtrStmt *create_external_ptr(ArgLoadStmt *ptr,
-                                       const std::vector<Stmt *> &indices,
-                                       bool is_grad = false);
+  GlobalPtrStmt *create_global_ptr(SNode *snode, const std::vector<Stmt *> &indices);
+  ExternalPtrStmt *create_external_ptr(ArgLoadStmt *ptr, const std::vector<Stmt *> &indices, bool is_grad = false);
   template <typename XStmt>
   GlobalLoadStmt *create_global_load(XStmt *ptr) {
     using DecayedType = typename std::decay_t<XStmt>;
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
       QD_ERROR("The argument is not a statement.");
     }
-    if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> ||
-                  std::is_same_v<DecayedType, ExternalPtrStmt>) {
+    if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> || std::is_same_v<DecayedType, ExternalPtrStmt>) {
       return insert(Stmt::make_typed<GlobalLoadStmt>(ptr));
     } else {
       QD_ERROR("Statement {} is not a global pointer.", ptr->name());
@@ -268,8 +251,7 @@ class IRBuilder {
     if constexpr (!std::is_base_of_v<Stmt, DecayedType>) {
       QD_ERROR("The argument is not a statement.");
     }
-    if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> ||
-                  std::is_same_v<DecayedType, ExternalPtrStmt>) {
+    if constexpr (std::is_same_v<DecayedType, GlobalPtrStmt> || std::is_same_v<DecayedType, ExternalPtrStmt>) {
       insert(Stmt::make_typed<GlobalStoreStmt>(ptr, data));
     } else {
       QD_ERROR("Statement {} is not a global pointer.", ptr->name());
@@ -285,9 +267,7 @@ class IRBuilder {
   void ad_stack_accumulate_adjoint(AdStackAllocaStmt *stack, Stmt *val);
 
   // Mesh related.
-  MeshRelationAccessStmt *get_relation_size(mesh::Mesh *mesh,
-                                            Stmt *mesh_idx,
-                                            mesh::MeshElementType to_type);
+  MeshRelationAccessStmt *get_relation_size(mesh::Mesh *mesh, Stmt *mesh_idx, mesh::MeshElementType to_type);
   MeshRelationAccessStmt *get_relation_access(mesh::Mesh *mesh,
                                               Stmt *mesh_idx,
                                               mesh::MeshElementType to_type,

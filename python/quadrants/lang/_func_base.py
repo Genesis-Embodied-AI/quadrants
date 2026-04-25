@@ -1,3 +1,6 @@
+# pyright: reportPrivateImportUsage=false
+# Reason: torch.zeros_like is public torch API, but pyright 1.1.409+ flags
+# it as private because torch's stubs don't re-export it via __all__.
 import ast
 import inspect
 import math
@@ -23,6 +26,7 @@ from quadrants._lib.core.quadrants_python import KernelLaunchContext
 from quadrants.lang import _kernel_impl_dataclass, impl
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._signature import get_func_signature
 from quadrants.lang._wrap_inspect import get_source_info_and_src
 from quadrants.lang.ast import ASTTransformerFuncContext
 from quadrants.lang.exception import (
@@ -97,7 +101,7 @@ class FuncBase:
 
         Note: NOT in the hot path. Just run once, on function registration
         """
-        sig = inspect.signature(self.func)
+        sig = get_func_signature(self.func)
         if hasattr(self.func, "__wrapped__"):
             raise_exception(
                 QuadrantsSyntaxError,
@@ -189,7 +193,7 @@ class FuncBase:
         for i in template_slot_locations:
             template_var_name = argument_metas[i].name
             global_vars[template_var_name] = py_args[i]
-        parameters = inspect.signature(fn).parameters
+        parameters = get_func_signature(fn).parameters
         for i, (parameter_name, parameter) in enumerate(parameters.items()):
             if is_dataclass(parameter.annotation):
                 _kernel_impl_dataclass.populate_global_vars_from_dataclass(
@@ -387,7 +391,7 @@ class FuncBase:
         return tuple(fused_py_args)
 
     def _get_global_vars(self, _func: Callable) -> dict[str, Any]:
-        # Discussions: https://github.com/taichi-dev/quadrants/issues/282
+        # Discussions: https://github.com/taichi-dev/taichi/issues/282
         global_vars = _func.__globals__.copy()
         freevar_names = _func.__code__.co_freevars
         closure = _func.__closure__

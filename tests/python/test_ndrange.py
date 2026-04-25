@@ -127,7 +127,7 @@ def test_static_grouped_static():
 
 @test_utils.test()
 def test_field_init_eye():
-    # https://github.com/taichi-dev/quadrants/issues/1824
+    # https://github.com/taichi-dev/taichi/issues/1824
 
     n = 32
 
@@ -145,7 +145,7 @@ def test_field_init_eye():
 
 @test_utils.test()
 def test_ndrange_index_floordiv():
-    # https://github.com/taichi-dev/quadrants/issues/1829
+    # https://github.com/taichi-dev/taichi/issues/1829
 
     n = 10
 
@@ -168,7 +168,7 @@ def test_ndrange_index_floordiv():
 
 @test_utils.test()
 def test_nested_ndrange():
-    # https://github.com/taichi-dev/quadrants/issues/1829
+    # https://github.com/taichi-dev/taichi/issues/1829
 
     n = 2
 

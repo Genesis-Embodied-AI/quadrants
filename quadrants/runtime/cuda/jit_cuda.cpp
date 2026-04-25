@@ -11,8 +11,7 @@ namespace quadrants::lang {
 
 #if defined(QD_WITH_CUDA)
 
-bool module_has_runtime_initialize(
-    const llvm::Module::FunctionListType &function_list) {
+bool module_has_runtime_initialize(const llvm::Module::FunctionListType &function_list) {
   for (auto &func : function_list) {
     if (func.getName() == "runtime_initialize") {
       return true;
@@ -38,8 +37,7 @@ void *JITModuleCUDA::lookup_function(const std::string &name) {
   CUDAContext::get_instance().make_current();
   void *func = nullptr;
   auto t = Time::get_time();
-  auto err = CUDADriver::get_instance().module_get_function.call_with_warning(
-      &func, module_, name.c_str());
+  auto err = CUDADriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
   if (err) {
     QD_ERROR("Cannot look up function {}", name);
   }
@@ -62,8 +60,7 @@ void JITModuleCUDA::launch(const std::string &name,
                            const std::vector<void *> &arg_pointers,
                            const std::vector<int> &arg_sizes) {
   auto func = lookup_function(name);
-  CUDAContext::get_instance().launch(func, name, arg_pointers, arg_sizes,
-                                     grid_dim, block_dim,
+  CUDAContext::get_instance().launch(func, name, arg_pointers, arg_sizes, grid_dim, block_dim,
                                      dynamic_shared_mem_bytes);
 }
 
@@ -75,68 +72,62 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
                                const CompileConfig &config,
                                llvm::DataLayout data_layout,
                                ProgramImpl *program_impl)
-    : JITSession(tlctx, config),
-      data_layout(data_layout),
-      program_impl_(program_impl),
-      config_(config) {
+    : JITSession(tlctx, config), data_layout(data_layout), program_impl_(program_impl), config_(config) {
   PtxCache::Config ptx_cache_config;
   ptx_cache_config.offline_cache_path = config.offline_cache_file_path;
   int compute_capability = CUDAContext::get_instance().get_compute_capability();
-  ptx_cache_ =
-      std::make_unique<PtxCache>(ptx_cache_config, config, compute_capability);
+  ptx_cache_ = std::make_unique<PtxCache>(ptx_cache_config, config, compute_capability);
 
   finalizer_ = std::make_unique<Finalizer>(ptx_cache_.get());
   program_impl_->register_needs_finalizing(finalizer_.get());
 }
 
-JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
-                                      int max_reg) {
+JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
-  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1") {
+  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
+
+  // Capture the dump name before compile_module_to_ptx renames functions via convert().
+  std::string dump_name;
+  if (dump_ir_env != nullptr || load_ptx_env != nullptr) {
+    dump_name = moduleToDumpName(M.get());
+  }
+
+  if (dump_ir_env != nullptr && std::string(dump_ir_env) == "1" && !dump_name.empty()) {
     std::filesystem::path ir_dump_dir = config_.debug_dump_path;
     std::filesystem::create_directories(ir_dump_dir);
-    std::string dumpName = moduleToDumpName(M.get());
-    std::filesystem::path filename =
-        ir_dump_dir / (dumpName + "_before_ptx.ll");
+    std::filesystem::path filename = ir_dump_dir / (dump_name + "_before_ptx.ll");
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
       M->print(dest_file, nullptr);
     } else {
-      std::cout << "problem dumping file " << filename.string() << ": "
-                << EC.message() << std::endl;
+      std::cout << "problem dumping file " << filename.string() << ": " << EC.message() << std::endl;
       QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
     }
   }
 
   auto ptx = compile_module_to_ptx(M);
   if (this->config_.print_kernel_asm) {
-    static FileSequenceWriter writer("quadrants_kernel_nvptx_{:04d}.ptx",
-                                     "module NVPTX");
+    static FileSequenceWriter writer("quadrants_kernel_nvptx_{:04d}.ptx", "module NVPTX");
     writer.write(ptx);
   }
 
-  if (dump_ir_env != nullptr) {
-    const std::string dumpOutDir = "/tmp/ptx/";
-    std::filesystem::create_directories(dumpOutDir);
-    std::string dumpName = moduleToDumpName(M.get());
-    std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
-    std::ofstream out_file(filename);
-    if (out_file.is_open()) {
+  if (dump_ir_env != nullptr && !dump_name.empty()) {
+    std::filesystem::path ir_dump_dir = config_.debug_dump_path;
+    std::filesystem::create_directories(ir_dump_dir);
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
+    if (std::ofstream out_file(ptx_path); out_file.is_open()) {
       out_file << ptx << std::endl;
-      out_file.close();
+      std::cout << "PTX dumped to: " << ptx_path.string() << std::endl;
     }
-    std::cout << "PTX dumped to: " << filename << std::endl;
   }
 
-  const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
-  if (load_ptx_env != nullptr) {
-    const std::string dumpOutDir = "/tmp/ptx/";
-    std::string dumpName = moduleToDumpName(M.get());
-    std::string filename = dumpOutDir + "/" + dumpName + ".ptx";
-    std::ifstream in_file(filename);
+  if (load_ptx_env != nullptr && !dump_name.empty()) {
+    std::filesystem::path ir_dump_dir = config_.debug_dump_path;
+    std::filesystem::path ptx_path = ir_dump_dir / (dump_name + ".ptx");
+    std::ifstream in_file(ptx_path);
     if (in_file.is_open()) {
-      QD_INFO("Loading PTX from file: {}", filename);
+      QD_INFO("Loading PTX from file: {}", ptx_path.string());
       std::ostringstream ptx_stream;
       std::string line;
       while (std::getline(in_file, line)) {
@@ -147,7 +138,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
       ptx = ptx_stream.str();
       in_file.close();
     } else {
-      QD_WARN("Failed to open PTX file for loading: {}", filename);
+      QD_WARN("Failed to open PTX file for loading: {}", ptx_path.string());
     }
   }
 
@@ -175,8 +166,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M,
 
   QD_ASSERT(num_options <= max_num_options);
 
-  CUDADriver::get_instance().module_load_data_ex(
-      &cuda_module, ptx.c_str(), num_options, options, option_values);
+  CUDADriver::get_instance().module_load_data_ex(&cuda_module, ptx.c_str(), num_options, options, option_values);
   QD_TRACE("CUDA module load time : {}ms", (Time::get_time() - t) * 1000);
   // cudaModules.push_back(cudaModule);
   modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));
@@ -201,8 +191,7 @@ std::string convert(std::string new_name) {
       new_name.replace(i, 1, "_lb_");
     } else if (new_name[i] == '>') {
       new_name.replace(i, 1, "_rb_");
-    } else if (!std::isalpha(new_name[i]) && !std::isdigit(new_name[i]) &&
-               new_name[i] != '_' && new_name[i] != '.') {
+    } else if (!std::isalpha(new_name[i]) && !std::isdigit(new_name[i]) && new_name[i] != '_' && new_name[i] != '.') {
       new_name.replace(i, 1, "_xx_");
     }
   }
@@ -211,8 +200,7 @@ std::string convert(std::string new_name) {
   return new_name;
 }
 
-std::string JITSessionCUDA::compile_module_to_ptx(
-    std::unique_ptr<llvm::Module> &module) {
+std::string JITSessionCUDA::compile_module_to_ptx(std::unique_ptr<llvm::Module> &module) {
   QD_AUTO_PROF
   // Part of this function is borrowed from Halide::CodeGen_PTX_Dev.cpp
   if (llvm::verifyModule(*module, &llvm::errs())) {
@@ -223,8 +211,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   using namespace llvm;
 
   if (this->config_.print_kernel_llvm_ir) {
-    static FileSequenceWriter writer("quadrants_kernel_cuda_llvm_ir_{:04d}.ll",
-                                     "unoptimized LLVM IR (CUDA)");
+    static FileSequenceWriter writer("quadrants_kernel_cuda_llvm_ir_{:04d}.ll", "unoptimized LLVM IR (CUDA)");
     writer.write(module.get());
   }
 
@@ -232,8 +219,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   llvm::raw_string_ostream llvm_ir_stream(llvm_ir_str);
   module->print(llvm_ir_stream, nullptr);
   llvm_ir_stream.flush();
-  std::string ptx_cache_key =
-      ptx_cache_->make_cache_key(llvm_ir_str, this->config_.fast_math);
+  std::string ptx_cache_key = ptx_cache_->make_cache_key(llvm_ir_str, this->config_.fast_math);
   std::optional<std::string> maybe_ptx = ptx_cache_->load_ptx(ptx_cache_key);
   if (maybe_ptx.has_value()) {
     QD_TRACE("Loaded PTX from cache for module {}", module->getName().str());
@@ -250,8 +236,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   // Allocate target machine
 
   std::string err_str;
-  const llvm::Target *target =
-      TargetRegistry::lookupTarget(triple.str(), err_str);
+  const llvm::Target *target = TargetRegistry::lookupTarget(triple.str(), err_str);
   QD_ERROR_UNLESS(target, err_str);
 
   TargetOptions options;
@@ -273,9 +258,9 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   options.NoZerosInBSS = 0;
   options.GuaranteedTailCallOpt = 0;
 
-  std::unique_ptr<TargetMachine> target_machine(target->createTargetMachine(
-      triple, CUDAContext::get_instance().get_mcpu(), "", options,
-      llvm::Reloc::PIC_, llvm::CodeModel::Small, CodeGenOptLevel::Aggressive));
+  std::unique_ptr<TargetMachine> target_machine(
+      target->createTargetMachine(triple, CUDAContext::get_instance().get_mcpu(), "", options, llvm::Reloc::PIC_,
+                                  llvm::CodeModel::Small, CodeGenOptLevel::Aggressive));
 
   QD_ERROR_UNLESS(target_machine.get(), "Could not allocate target machine!");
 
@@ -300,8 +285,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   pb.registerLoopAnalyses(lam);
   pb.crossRegisterProxies(lam, fam, cgam, mam);
 
-  llvm::ModulePassManager mpm =
-      pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
+  llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
 
   // NVidia's libdevice library uses a __nvvm_reflect to choose
   // how to handle denormalized numbers. (The pass replaces calls
@@ -320,8 +304,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   const auto kFTZDenorms = 1;
 
   // Insert a module flag for the FTZ handling.
-  module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz",
-                        kFTZDenorms);
+  module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", kFTZDenorms);
 
   if (kFTZDenorms) {
     for (llvm::Function &fn : *module) {
@@ -339,8 +322,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   mpm.run(*module, mam);
 
   llvm::legacy::PassManager legacy_pm;
-  legacy_pm.add(createTargetTransformInfoWrapperPass(
-      target_machine->getTargetIRAnalysis()));
+  legacy_pm.add(createTargetTransformInfoWrapperPass(target_machine->getTargetIRAnalysis()));
 
   // Override default to generate verbose assembly.
   target_machine->Options.MCOptions.AsmVerbose = true;
@@ -350,8 +332,8 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   legacy_pm.add(llvm::createEarlyCSEPass(true));
 
   // Ask the target to add backend passes as necessary.
-  bool fail = target_machine->addPassesToEmitFile(
-      legacy_pm, ostream, nullptr, llvm::CodeGenFileType::AssemblyFile, true);
+  bool fail =
+      target_machine->addPassesToEmitFile(legacy_pm, ostream, nullptr, llvm::CodeGenFileType::AssemblyFile, true);
 
   QD_ERROR_IF(fail, "Failed to set up passes to emit PTX source\n");
 
@@ -361,9 +343,7 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   }
 
   if (this->config_.print_kernel_llvm_ir_optimized) {
-    static FileSequenceWriter writer(
-        "quadrants_kernel_cuda_llvm_ir_optimized_{:04d}.ll",
-        "optimized LLVM IR (CUDA)");
+    static FileSequenceWriter writer("quadrants_kernel_cuda_llvm_ir_optimized_{:04d}.ll", "optimized LLVM IR (CUDA)");
     writer.write(module.get());
   }
 
@@ -375,22 +355,19 @@ std::string JITSessionCUDA::compile_module_to_ptx(
   return buffer;
 }
 
-std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch,
-    ProgramImpl *program_impl) {
+std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,
+                                                         const CompileConfig &config,
+                                                         Arch arch,
+                                                         ProgramImpl *program_impl) {
   QD_ASSERT(arch == Arch::cuda);
   // https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#data-layout
   auto data_layout = QuadrantsLLVMContext::get_data_layout(arch);
-  return std::make_unique<JITSessionCUDA>(tlctx, config, data_layout,
-                                          program_impl);
+  return std::make_unique<JITSessionCUDA>(tlctx, config, data_layout, program_impl);
 }
 #else
-std::unique_ptr<JITSession> create_llvm_jit_session_cuda(
-    QuadrantsLLVMContext *tlctx,
-    const CompileConfig &config,
-    Arch arch const ProgramImpl *program_impl) {
+std::unique_ptr<JITSession> create_llvm_jit_session_cuda(QuadrantsLLVMContext *tlctx,
+                                                         const CompileConfig &config,
+                                                         Arch arch const ProgramImpl *program_impl) {
   QD_NOT_IMPLEMENTED
 }
 #endif

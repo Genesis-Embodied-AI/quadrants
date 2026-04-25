@@ -19,8 +19,7 @@ __global__ void laplace(float *a, float *b) {
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   unsigned int j = blockIdx.y * blockDim.y + threadIdx.y;
   if (bs <= i && i < N - bs && bs <= j && j < N - bs) {
-    auto ret = -4 * a[i * N + j] + a[i * N + j - 1] + a[i * N + j + 1] +
-               a[i * N + j - N] + a[i * N + j + N];
+    auto ret = -4 * a[i * N + j] + a[i * N + j - 1] + a[i * N + j + 1] + a[i * N + j - N] + a[i * N + j + N];
     b[i * N + j] = ret;
   }
 }
@@ -48,10 +47,8 @@ __global__ void laplace_shared(float *a, float *b) {
   __syncthreads();
 
   if (bs <= i && i < N - bs && bs <= j && j < N - bs) {
-    auto ret = -4 * pad[threadIdx.x + 1][threadIdx.y + 1] +
-               pad[threadIdx.x + 2][threadIdx.y + 1] +
-               pad[threadIdx.x][threadIdx.y + 1] +
-               pad[threadIdx.x + 1][threadIdx.y + 2] +
+    auto ret = -4 * pad[threadIdx.x + 1][threadIdx.y + 1] + pad[threadIdx.x + 2][threadIdx.y + 1] +
+               pad[threadIdx.x][threadIdx.y + 1] + pad[threadIdx.x + 1][threadIdx.y + 2] +
                pad[threadIdx.x + 1][threadIdx.y];
     b[i * N + j] = ret;
   }

@@ -14,24 +14,19 @@ void GfxProgramImpl::compile_snode_tree_types(SNodeTree *tree) {
   if (runtime_) {
     snode_tree_mgr_->materialize_snode_tree(tree);
   } else {
-    gfx::CompiledSNodeStructs compiled_structs =
-        gfx::compile_snode_structs(*tree->root());
+    gfx::CompiledSNodeStructs compiled_structs = gfx::compile_snode_structs(*tree->root());
   }
 }
 
-void GfxProgramImpl::materialize_snode_tree(SNodeTree *tree,
-                                            uint64 *result_buffer) {
+void GfxProgramImpl::materialize_snode_tree(SNodeTree *tree, uint64 *result_buffer) {
   snode_tree_mgr_->materialize_snode_tree(tree);
 }
 
-DeviceAllocation GfxProgramImpl::allocate_memory_on_device(
-    std::size_t alloc_size,
-    uint64 *result_buffer) {
+DeviceAllocation GfxProgramImpl::allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) {
   DeviceAllocation alloc;
-  RhiResult res = get_compute_device()->allocate_memory(
-      {alloc_size, /*host_write=*/false, /*host_read=*/false,
-       /*export_sharing=*/false},
-      &alloc);
+  RhiResult res = get_compute_device()->allocate_memory({alloc_size, /*host_write=*/false, /*host_read=*/false,
+                                                         /*export_sharing=*/false},
+                                                        &alloc);
   QD_ASSERT(res == RhiResult::success);
   return alloc;
 }

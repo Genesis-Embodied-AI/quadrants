@@ -40,7 +40,7 @@ The scripts checks a file and modifies it if necessary.
         As an exception, if there is a sharp-bang (#!) line at the first line,
         the new notice is inserted after it.
     (2) If a copyright notice is present, but is in a specific wrong format, it
-        modifies the notice: https://github.com/taichi-dev/quadrants/issues/1024
+        modifies the notice.
 
 Examples:
 

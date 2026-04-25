@@ -12,12 +12,10 @@ class FakeCompiledKernelData : public CompiledKernelData {
  public:
   FakeCompiledKernelData() = default;
 
-  FakeCompiledKernelData(std::vector<std::string> func_names,
-                         std::string so_bin)
+  FakeCompiledKernelData(std::vector<std::string> func_names, std::string so_bin)
       : compiled_data_{{std::move(func_names)}, std::move(so_bin)} {
   }
-  FakeCompiledKernelData(const FakeCompiledKernelData &o)
-      : compiled_data_(o.compiled_data_) {
+  FakeCompiledKernelData(const FakeCompiledKernelData &o) : compiled_data_(o.compiled_data_) {
   }
 
   Arch arch() const override {
@@ -38,8 +36,7 @@ class FakeCompiledKernelData : public CompiledKernelData {
       return CompiledKernelData::Err::kArchNotMatched;
     }
     try {
-      liong::json::deserialize(liong::json::parse(file.metadata()),
-                               compiled_data_.metadata);
+      liong::json::deserialize(liong::json::parse(file.metadata()), compiled_data_.metadata);
     } catch (const liong::json::JsonException &) {
       return CompiledKernelData::Err::kParseMetadataFailed;
     }
@@ -50,8 +47,7 @@ class FakeCompiledKernelData : public CompiledKernelData {
   Err dump_impl(CompiledKernelDataFile &file) const override {
     file.set_arch(kFakeArch);
     try {
-      file.set_metadata(
-          liong::json::print(liong::json::serialize(compiled_data_.metadata)));
+      file.set_metadata(liong::json::print(liong::json::serialize(compiled_data_.metadata)));
     } catch (const liong::json::JsonException &) {
       return CompiledKernelData::Err::kSerMetadataFailed;
     }
@@ -74,8 +70,7 @@ TEST(CompiledKernelDataTest, Correct) {
   using Err = CompiledKernelData::Err;
   using FErr = CompiledKernelDataFile::Err;
 
-  std::vector<std::string> func_names = {"offloaded_1", "offloaded_2",
-                                         "offloaded_3"};
+  std::vector<std::string> func_names = {"offloaded_1", "offloaded_2", "offloaded_3"};
   std::string so_bin = "I am a so...";
 
   auto fckd = std::make_unique<FakeCompiledKernelData>(func_names, so_bin);
@@ -90,8 +85,7 @@ TEST(CompiledKernelDataTest, Correct) {
     EXPECT_EQ(file.load(iss), FErr::kNoError);
     EXPECT_EQ(file.arch(), kFakeArch);
     EXPECT_EQ(file.metadata(),
-              liong::json::print(liong::json::serialize(
-                  FakeCompiledKernelData::InternalData::Metadata{func_names})));
+              liong::json::print(liong::json::serialize(FakeCompiledKernelData::InternalData::Metadata{func_names})));
     EXPECT_EQ(file.src_code(), so_bin);
   }
 
@@ -144,8 +138,7 @@ TEST(CompiledKernelDataTest, Error) {
     std::ostringstream oss;
     EXPECT_EQ(file.dump(oss), FErr::kNoError);
     auto ser_data = oss.str();
-    auto pos =
-        ser_data.size() - (CompiledKernelDataFile::kHashSize + so_bin.size());
+    auto pos = ser_data.size() - (CompiledKernelDataFile::kHashSize + so_bin.size());
     ser_data[pos] = 'B';      // 'I' -> 'B'
     ser_data[pos + 1] = '*';  // ' ' -> '*'
     ser_data[pos + 2] = 'A';  // 'a' -> 'A'

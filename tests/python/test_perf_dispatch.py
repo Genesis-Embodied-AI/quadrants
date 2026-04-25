@@ -6,13 +6,45 @@ import pytest
 import quadrants as qd
 from quadrants.lang import _perf_dispatch
 from quadrants.lang._perf_dispatch import (
-    NUM_WARMUP,
+    NUM_FIRST_WARMUP,
     PerformanceDispatcher,
     _parse_force_map,
 )
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 from tests import test_utils
+
+# Work amounts for perf_dispatch timing tests.
+#
+# Wall-clock times (synced, warmed) with 10 threads on an RTX 5090:
+#
+#   Kernel (do_work, compiled via @qd.func):
+#     count |   x64   |  cuda   | vulkan
+#     ------+---------+---------+---------
+#        1  |  0.2ms  |  0.03ms |   2.2ms
+#       1K  |  0.07ms |  0.05ms |   2.4ms
+#      10K  |  0.4ms  |  0.3ms  |   2.7ms
+#     100K  |  3.8ms  |  2.0ms  |   9.4ms
+#       1M  |   45ms  |   21ms  |    53ms
+#      10M  |  367ms  |  212ms  |   494ms
+#
+#   Python (do_work_py, interpreted):
+#     count |   x64   |  cuda   | vulkan
+#     ------+---------+---------+---------
+#        1  |  0.09ms |  1.4ms  |   17ms
+#       1K  |  0.75ms |  2.3ms  |   17ms
+#      10K  |  6.4ms  |  7.8ms  |   22ms
+#     100K  |   63ms  |   67ms  |   83ms
+#
+#   GPU arches have fixed overhead per call: ~1.4ms (cuda) / ~17ms (vulkan) from ndarray element access round-trips
+#   (20 accesses outside the inner loop).  The inner loop is pure Python math on a local variable, so compute scales
+#   the same across all arches.
+#
+# Slow is 100x medium, giving a clear timing gap even under pytest-xdist contention.
+AMOUNT_WORK_SLOW_KERNEL = 1_000_000
+AMOUNT_WORK_MEDIUM_KERNEL = 10_000
+AMOUNT_WORK_SLOW_PY = 100_000
+AMOUNT_WORK_MEDIUM_PY = 1_000
 
 
 @qd.func
@@ -32,12 +64,21 @@ def do_work_py(i_b, amount_work: qd.i32, state: qd.types.NDArray[qd.i32, 1]):
 
 @test_utils.test()
 def test_perf_dispatch_kernels() -> None:
+    WARMUP = 1
+    ACTIVE = 1
+
     class ImplEnum(IntEnum):
         slow = 0
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+        active=ACTIVE,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
@@ -51,7 +92,7 @@ def test_perf_dispatch_kernels() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work(i_b=i_b, amount_work=AMOUNT_WORK_SLOW_KERNEL, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @qd.kernel
@@ -74,20 +115,20 @@ def test_perf_dispatch_kernels() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=100, state=rand_state)
+            do_work(i_b=i_b, amount_work=AMOUNT_WORK_MEDIUM_KERNEL, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((NUM_WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= NUM_WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -98,18 +139,27 @@ def test_perf_dispatch_kernels() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == NUM_WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
 @test_utils.test()
 def test_perf_dispatch_python() -> None:
+    WARMUP = 1
+    ACTIVE = 1
+
     class ImplEnum(IntEnum):
         slow = 0
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+        active=ACTIVE,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
@@ -122,7 +172,7 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_SLOW_PY, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     def my_func1_impl_a_shape0_lt_2(
@@ -143,20 +193,20 @@ def test_perf_dispatch_python() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work_py(i_b=i_b, amount_work=100, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_MEDIUM_PY, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((NUM_WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= NUM_WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -167,18 +217,27 @@ def test_perf_dispatch_python() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == NUM_WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
 @test_utils.test()
 def test_perf_dispatch_kernel_py_mix() -> None:
+    WARMUP = 1
+    ACTIVE = 1
+
     class ImplEnum(IntEnum):
         slow = 0
         fastest_a_shape0_lt2 = 1
         a_shape0_ge2 = 2
 
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape), repeat_after_seconds=0)
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a, c, rand_state: hash(a.shape + c.shape),
+        first_warmup=WARMUP,
+        warmup=WARMUP,
+        repeat_after_seconds=0,
+        active=ACTIVE,
+    )
     def my_func1(
         a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1], rand_state: qd.types.NDArray[qd.i32, 1]
     ): ...
@@ -191,7 +250,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.slow] = 1
-            do_work_py(i_b=i_b, amount_work=10000, state=rand_state)
+            do_work_py(i_b=i_b, amount_work=AMOUNT_WORK_SLOW_PY, state=rand_state)
 
     @my_func1.register(is_compatible=lambda a, c, rand_state: a.shape[0] < 2)
     @qd.kernel
@@ -214,20 +273,20 @@ def test_perf_dispatch_kernel_py_mix() -> None:
         for i_b in range(B):
             a[i_b] = a[i_b] * i_b
             c[ImplEnum.a_shape0_ge2] = 1
-            do_work(i_b=i_b, amount_work=100, state=rand_state)
+            do_work(i_b=i_b, amount_work=AMOUNT_WORK_MEDIUM_KERNEL, state=rand_state)
 
     num_threads = 10  # should be at least more than 2
     a = qd.ndarray(qd.i32, (num_threads,))
     c = qd.ndarray(qd.i32, (len(ImplEnum),))
     rand_state = qd.ndarray(qd.i32, (num_threads,))
 
-    for it in range((NUM_WARMUP + 5)):
+    for it in range((WARMUP + ACTIVE + 2)):
         c.fill(0)
         for _inner_it in range(2):  # 2 compatible kernels
             a.fill(5)
             my_func1(a, c, rand_state=rand_state)
             assert (a.to_numpy()[:5] == [0, 5, 10, 15, 20]).all()
-        if it <= NUM_WARMUP:
+        if it <= WARMUP + ACTIVE - 1:
             assert c[ImplEnum.slow] == 1
             assert c[ImplEnum.fastest_a_shape0_lt2] == 0
             assert c[ImplEnum.a_shape0_ge2] == 1
@@ -238,7 +297,7 @@ def test_perf_dispatch_kernel_py_mix() -> None:
     speed_checker = cast(PerformanceDispatcher, my_func1)
     geometry = list(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash.keys())[0]
     for _dispatch_impl, trials in speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry].items():
-        assert trials == NUM_WARMUP + 1
+        assert trials == WARMUP + ACTIVE
     assert len(speed_checker._trial_count_by_dispatch_impl_by_geometry_hash[geometry]) == 2
 
 
@@ -291,8 +350,105 @@ def test_perf_dispatch_annotation_mismatch() -> None:
 
 
 @test_utils.test()
+def test_perf_dispatch_first_warmup_vs_warmup() -> None:
+    """first_warmup is used for the initial evaluation, warmup for re-evaluations."""
+    called = []
+
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a: hash(a.shape),
+        first_warmup=2,
+        warmup=0,
+        repeat_after_count=5,
+        repeat_after_seconds=0,
+    )
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("a")
+
+    @my_func.register
+    def impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("b")
+
+    a = qd.ndarray(qd.i32, (4,))
+    speed_checker = cast(PerformanceDispatcher, my_func)
+
+    # --- First evaluation cycle: first_warmup=2, active=1 ---
+    # 2 impls × (2 warmup + 1 active) = 6 calls to complete first eval
+    for _ in range(6):
+        my_func(a)
+
+    assert speed_checker._fastest_dispatch_impl_by_geometry_hash, "first eval should have completed"
+    geometry = list(speed_checker._fastest_dispatch_impl_by_geometry_hash.keys())[0]
+    assert geometry in speed_checker._first_eval_completed
+
+    first_eval_calls = list(called)
+    assert len(first_eval_calls) == 6
+
+    # --- Now fastest is chosen; repeat_after_count=5, so 4 calls use fastest, then 5th call triggers re-eval ---
+    called.clear()
+    for _ in range(4):
+        my_func(a)
+    assert len(called) == 4
+    assert len(set(called)) == 1  # all fastest
+
+    # --- 5th call triggers re-eval; warmup=0, active=1 ---
+    # Re-eval needs 2 impls × (0 warmup + 1 active) = 2 calls.
+    # The 5th call from above starts re-eval, so we need 2 more calls total.
+    called.clear()
+    for _ in range(2):
+        my_func(a)
+    assert len(called) == 2
+    assert set(called) == {"a", "b"}
+
+
+@test_utils.test()
+def test_perf_dispatch_default_warmup_values() -> None:
+    """With defaults (first_warmup=1, warmup=0), first eval uses 1 warmup, re-evals use 0."""
+    called = []
+
+    @qd.perf_dispatch(
+        get_geometry_hash=lambda a: hash(a.shape),
+        repeat_after_count=4,
+        repeat_after_seconds=0,
+    )
+    def my_func(a: qd.types.NDArray[qd.i32, 1]): ...
+
+    @my_func.register
+    def impl_a(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("a")
+
+    @my_func.register
+    def impl_b(a: qd.types.NDArray[qd.i32, 1]) -> None:
+        called.append("b")
+
+    a = qd.ndarray(qd.i32, (4,))
+    speed_checker = cast(PerformanceDispatcher, my_func)
+
+    # First eval: 2 impls × (1 first_warmup + 1 active) = 4 calls
+    for _ in range(4):
+        my_func(a)
+    assert speed_checker._fastest_dispatch_impl_by_geometry_hash
+
+    # 3 calls using fastest (calls before repeat_after_count=4 triggers on the 4th)
+    called.clear()
+    for _ in range(3):
+        my_func(a)
+    assert len(called) == 3
+    assert len(set(called)) == 1  # all same (fastest)
+
+    # 4th call triggers re-eval; with warmup=0, active=1, needs 2 calls total
+    called.clear()
+    for _ in range(2):
+        my_func(a)
+    assert len(called) == 2
+    assert set(called) == {"a", "b"}
+
+
+@test_utils.test()
 def test_perf_dispatch_sanity_check_register_args() -> None:
-    @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), warmup=25, active=25)
+    @qd.perf_dispatch(get_geometry_hash=lambda a, c: hash(a.shape + c.shape), first_warmup=25, warmup=25, active=25)
     def my_func1(a: qd.types.NDArray[qd.i32, 1], c: qd.types.NDArray[qd.i32, 1]): ...
 
 
@@ -337,10 +493,10 @@ def test_perf_dispatch_force_by_name(monkeypatch) -> None:
         called.append("b")
 
     a = qd.ndarray(qd.i32, (4,))
-    for _ in range(NUM_WARMUP * 2 + 3):
+    for _ in range(NUM_FIRST_WARMUP * 2 + 3):
         my_func(a)
 
-    assert len(called) == NUM_WARMUP * 2 + 3
+    assert len(called) == NUM_FIRST_WARMUP * 2 + 3
     assert all(c == "b" for c in called)
 
 
@@ -364,9 +520,9 @@ def test_perf_dispatch_force_unmatched_falls_back(monkeypatch) -> None:
         called.append("b")
 
     a = qd.ndarray(qd.i32, (4,))
-    for _ in range(NUM_WARMUP * 2 + 3):
+    for _ in range(NUM_FIRST_WARMUP * 2 + 3):
         my_func(a)
-    assert len(called) == NUM_WARMUP * 2 + 3
+    assert len(called) == NUM_FIRST_WARMUP * 2 + 3
 
 
 @test_utils.test()
@@ -401,11 +557,11 @@ def test_perf_dispatch_force_multiple_dispatchers(monkeypatch) -> None:
         called_b.append("v2")
 
     a = qd.ndarray(qd.i32, (4,))
-    for _ in range(NUM_WARMUP * 2 + 3):
+    for _ in range(NUM_FIRST_WARMUP * 2 + 3):
         op_a(a)
         op_b(a)
 
-    assert len(called_a) == NUM_WARMUP * 2 + 3
-    assert len(called_b) == NUM_WARMUP * 2 + 3
+    assert len(called_a) == NUM_FIRST_WARMUP * 2 + 3
+    assert len(called_b) == NUM_FIRST_WARMUP * 2 + 3
     assert all(c == "v2" for c in called_a)
     assert all(c == "v1" for c in called_b)

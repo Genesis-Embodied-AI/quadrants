@@ -6,17 +6,14 @@
 namespace quadrants::lang {
 
 class FrontendTypeCheck : public IRVisitor {
-  void check_cond_type(const Expr &cond,
-                       const Stmt *stmt,
-                       const std::string &stmt_name) {
+  void check_cond_type(const Expr &cond, const Stmt *stmt, const std::string &stmt_name) {
     DataType cond_type = cond.get_rvalue_type();
     if (!cond_type->is<PrimitiveType>() || !is_integral(cond_type)) {
-      ErrorEmitter(
-          QuadrantsTypeError(), stmt,
-          fmt::format("`{0}` conditions must be an integer; found {1}. "
-                      "Consider using "
-                      "`{0} x != 0` instead of `{0} x` for float values.",
-                      stmt_name, cond_type->to_string()));
+      ErrorEmitter(QuadrantsTypeError(), stmt,
+                   fmt::format("`{0}` conditions must be an integer; found {1}. "
+                               "Consider using "
+                               "`{0} x != 0` instead of `{0} x` for float values.",
+                               stmt_name, cond_type->to_string()));
     }
   }
 
@@ -47,33 +44,25 @@ class FrontendTypeCheck : public IRVisitor {
   }
 
   void visit(FrontendSNodeOpStmt *stmt) override {
-    if (!stmt->ret_type.ptr_removed().get_element_type()->is_primitive(
-            PrimitiveTypeID::unknown)) {
+    if (!stmt->ret_type.ptr_removed().get_element_type()->is_primitive(PrimitiveTypeID::unknown)) {
       // pass
     } else if (stmt->snode) {
-      stmt->ret_type =
-          TypeFactory::get_instance().get_pointer_type(stmt->snode->dt);
+      stmt->ret_type = TypeFactory::get_instance().get_pointer_type(stmt->snode->dt);
     } else
-      ErrorEmitter(QuadrantsTypeWarning(), stmt,
-                   "Type inference failed: snode is nullptr.");
+      ErrorEmitter(QuadrantsTypeWarning(), stmt, "Type inference failed: snode is nullptr.");
     auto check_indices = [&](SNode *snode) {
       if (snode->num_active_indices != stmt->indices.size()) {
-        ErrorEmitter(
-            QuadrantsRuntimeError(), stmt,
-            fmt::format("{} has {} indices. Indexed with {}.",
-                        snode->node_type_name, snode->num_active_indices,
-                        stmt->indices.size()));
+        ErrorEmitter(QuadrantsRuntimeError(), stmt,
+                     fmt::format("{} has {} indices. Indexed with {}.", snode->node_type_name,
+                                 snode->num_active_indices, stmt->indices.size()));
       }
     };
-    auto is_cell_access = SNodeOpStmt::activation_related(stmt->op_type) &&
-                          stmt->snode->type != SNodeType::dynamic;
+    auto is_cell_access = SNodeOpStmt::activation_related(stmt->op_type) && stmt->snode->type != SNodeType::dynamic;
     check_indices(is_cell_access ? stmt->snode : stmt->snode->parent);
     for (int i = 0; i < stmt->indices.size(); i++) {
       if (!stmt->indices[i]->ret_type->is_primitive(PrimitiveTypeID::i32)) {
-        ErrorEmitter(
-            QuadrantsCastWarning(), stmt,
-            fmt::format(
-                "Field index {} not int32, casting into int32 implicitly", i));
+        ErrorEmitter(QuadrantsCastWarning(), stmt,
+                     fmt::format("Field index {} not int32, casting into int32 implicitly", i));
       }
     }
   }
@@ -87,11 +76,9 @@ class FrontendTypeCheck : public IRVisitor {
     auto const &rhs_type = stmt->rhs->ret_type.ptr_removed();
 
     // No implicit cast at frontend for now
-    if (is_tensor(lhs_type) && is_tensor(rhs_type) &&
-        lhs_type.get_shape() != rhs_type.get_shape()) {
+    if (is_tensor(lhs_type) && is_tensor(rhs_type) && lhs_type.get_shape() != rhs_type.get_shape()) {
       ErrorEmitter(QuadrantsTypeError(), stmt,
-                   fmt::format("cannot assign '{}' to '{}'",
-                               rhs_type->to_string(), lhs_type->to_string()));
+                   fmt::format("cannot assign '{}' to '{}'", rhs_type->to_string(), lhs_type->to_string()));
     }
 
     auto const &lhs_element_type = lhs_type.get_element_type();
@@ -101,8 +88,7 @@ class FrontendTypeCheck : public IRVisitor {
       auto promoted = promoted_type(lhs_element_type, rhs_element_type);
       if (lhs_element_type != promoted) {
         ErrorEmitter(QuadrantsCastWarning(), stmt,
-                     fmt::format("Assign may lose precision: {} <- {}",
-                                 lhs_element_type->to_string(),
+                     fmt::format("Assign may lose precision: {} <- {}", lhs_element_type->to_string(),
                                  rhs_element_type->to_string()));
       }
     }
@@ -150,20 +136,15 @@ class FrontendTypeCheck : public IRVisitor {
       constexpr std::string_view real_group = "fFeEaAgG";
 
       if (unsupported_group.find(conversion) != std::string::npos) {
-        ErrorEmitter(
-            QuadrantsTypeError(), stmt,
-            fmt::format("conversion '{}' is not supported.", conversion));
+        ErrorEmitter(QuadrantsTypeError(), stmt, fmt::format("conversion '{}' is not supported.", conversion));
       }
 
-      if ((real_group.find(conversion) != std::string::npos &&
-           !is_real(data_type)) ||
-          (signed_group.find(conversion) != std::string::npos &&
-           !(is_integral(data_type) && is_signed(data_type))) ||
+      if ((real_group.find(conversion) != std::string::npos && !is_real(data_type)) ||
+          (signed_group.find(conversion) != std::string::npos && !(is_integral(data_type) && is_signed(data_type))) ||
           (unsigned_group.find(conversion) != std::string::npos &&
            !(is_integral(data_type) && is_unsigned(data_type)))) {
         ErrorEmitter(QuadrantsTypeError(), stmt,
-                     fmt::format("'{}' doesn't match '{}'.", format_spec,
-                                 data_type->to_string()));
+                     fmt::format("'{}' doesn't match '{}'.", format_spec, data_type->to_string()));
       }
     }
   }

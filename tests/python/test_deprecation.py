@@ -16,7 +16,7 @@ def test_remove_is_is_not():
         func()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_deprecate_experimental_real_func():
     with pytest.warns(
         DeprecationWarning,

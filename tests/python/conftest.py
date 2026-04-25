@@ -1,5 +1,7 @@
 import gc
+import os
 import sys
+import time
 
 import pytest
 
@@ -86,15 +88,12 @@ def pytest_generate_tests(metafunc):
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_logreport(report):
     """
-    Intentionally crash test workers when a test fails.
-    This is to avoid the failing test leaving a corrupted GPU state for the
-    following tests.
+    Retire test workers when a test fails, to avoid the failing test
+    leaving a corrupted GPU state for the following tests.
     """
 
     interactor = getattr(sys, "xdist_interactor", None)
     if not interactor:
-        # not running under xdist, or xdist is not active,
-        # or using stock xdist (we need a customized version)
         return
 
     if report.outcome not in ("rerun", "error", "failed"):
@@ -102,12 +101,21 @@ def pytest_runtest_logreport(report):
 
     layoff = False
 
-    for _, loc, _ in report.longrepr.chain:
-        if "CUDA_ERROR_OUT_OF_MEMORY" in loc.message:
-            layoff = True
-            break
+    chain = getattr(getattr(report, "longrepr", None), "chain", None)
+    if chain:
+        for _, loc, _ in chain:
+            msg = getattr(loc, "message", "") if loc else ""
+            if "CUDA_ERROR_OUT_OF_MEMORY" in msg:
+                layoff = True
+                break
 
-    interactor.retire(layoff=layoff)
+    # Don't call interactor.retire() — it uses os._exit(0) which kills
+    # the process before execnet's IO thread can flush the channel buffer.
+    # The test failure report (queued by xdist's own hook, which ran before
+    # this trylast hook) would be lost, hiding all error messages.
+    interactor.sendevent("workerretire", layoff=layoff)
+    time.sleep(0.2)
+    os._exit(0)
 
 
 import importlib

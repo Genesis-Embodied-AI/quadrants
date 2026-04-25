@@ -18,8 +18,7 @@ struct for_each_dispatcher {
   template <typename T, typename... Args>
   static void run(const F &f, T &&value, Args &&...args) {  // NOLINT(*)
     f(I, std::forward<T>(value));
-    for_each_dispatcher<sizeof...(Args) == 0, (I + 1), F>::run(
-        f, std::forward<Args>(args)...);
+    for_each_dispatcher<sizeof...(Args) == 0, (I + 1), F>::run(f, std::forward<Args>(args)...);
   }
 };
 
@@ -31,8 +30,7 @@ struct for_each_dispatcher<true, I, F> {
 
 template <typename F, typename... Args>
 inline void for_each(const F &f, Args &&...args) {  // NOLINT(*)
-  for_each_dispatcher<sizeof...(Args) == 0, 0, F>::run(
-      f, std::forward<Args>(args)...);
+  for_each_dispatcher<sizeof...(Args) == 0, 0, F>::run(f, std::forward<Args>(args)...);
 }
 
 enum class TypeKind {
@@ -172,8 +170,7 @@ class InstrBuilder {
 
   InstrBuilder &add(const std::string &v) {
     const uint32_t word_size = sizeof(uint32_t);
-    const auto nwords =
-        (static_cast<uint32_t>(v.length()) + word_size) / word_size;
+    const auto nwords = (static_cast<uint32_t>(v.length()) + word_size) / word_size;
     size_t begin = data_.size();
     data_.resize(begin + nwords, 0U);
     std::copy(v.begin(), v.end(), reinterpret_cast<char *>(&data_[begin]));
@@ -219,8 +216,7 @@ class InstrBuilder {
 // Builder to build up a single SPIR-V module
 class IRBuilder {
  public:
-  IRBuilder(Arch arch, const DeviceCapabilityConfig *caps)
-      : arch_(arch), caps_(caps) {
+  IRBuilder(Arch arch, const DeviceCapabilityConfig *caps) : arch_(arch), caps_(caps) {
   }
 
   template <typename... Args>
@@ -232,9 +228,7 @@ class IRBuilder {
 
   template <typename... Args>
   void execution_mode(Value func, Args &&...args) {
-    ib_.begin(spv::OpExecutionMode)
-        .add_seq(func, std::forward<Args>(args)...)
-        .commit(&exec_mode_);
+    ib_.begin(spv::OpExecutionMode).add_seq(func, std::forward<Args>(args)...).commit(&exec_mode_);
   }
 
   template <typename... Args>
@@ -249,9 +243,7 @@ class IRBuilder {
 
   template <typename... Args>
   Instr make_inst(spv::Op op, Args &&...args) {
-    return ib_.begin(op)
-        .add_seq(std::forward<Args>(args)...)
-        .commit(&function_);
+    return ib_.begin(op).add_seq(std::forward<Args>(args)...).commit(&function_);
   }
 
   // Initialize header
@@ -296,9 +288,7 @@ class IRBuilder {
   }
 
   // Make an AccessChain
-  Value make_access_chain(const SType &out_type,
-                          Value base,
-                          const std::vector<int> &indices);
+  Value make_access_chain(const SType &out_type, Value base, const std::vector<int> &indices);
 
   // Make a phi value
   PhiValue make_phi(const SType &out_type, uint32_t num_incoming);
@@ -306,15 +296,9 @@ class IRBuilder {
   // Create Constant Primitive Value
   // cache: if a variable is named, it should not be cached, or the name may
   // have conflict.
-  Value int_immediate_number(const SType &dtype,
-                             int64_t value,
-                             bool cache = true);
-  Value uint_immediate_number(const SType &dtype,
-                              uint64_t value,
-                              bool cache = true);
-  Value float_immediate_number(const SType &dtype,
-                               double value,
-                               bool cache = true);
+  Value int_immediate_number(const SType &dtype, int64_t value, bool cache = true);
+  Value uint_immediate_number(const SType &dtype, uint64_t value, bool cache = true);
+  Value float_immediate_number(const SType &dtype, double value, bool cache = true);
 
   // Match zero type
   Value get_zero(const SType &stype) {
@@ -349,14 +333,12 @@ class IRBuilder {
   // Get the pointer type that points to value_type
   SType get_storage_pointer_type(const SType &value_type);
   // Get the pointer type that points to value_type
-  SType get_pointer_type(const SType &value_type,
-                         spv::StorageClass storage_class);
+  SType get_pointer_type(const SType &value_type, spv::StorageClass storage_class);
   SType get_array_type(const SType &value_type, uint32_t num_elems);
   // Get a struct{ value_type[num_elems] } type
   SType get_struct_array_type(const SType &value_type, uint32_t num_elems);
   // Construct a struct type
-  SType create_struct_type(
-      std::vector<std::tuple<SType, std::string, size_t>> &components);
+  SType create_struct_type(std::vector<std::tuple<SType, std::string, size_t>> &components);
 
   // Declare buffer argument of function
   Value buffer_struct_argument(const SType &struct_type,
@@ -367,10 +349,7 @@ class IRBuilder {
                                 uint32_t descriptor_set,
                                 uint32_t binding,
                                 const std::string &name);
-  Value buffer_argument(const SType &value_type,
-                        uint32_t descriptor_set,
-                        uint32_t binding,
-                        const std::string &name);
+  Value buffer_argument(const SType &value_type, uint32_t descriptor_set, uint32_t binding, const std::string &name);
   Value struct_array_access(const SType &res_type, Value buffer, Value index);
 
   // Declare a new function
@@ -386,8 +365,7 @@ class IRBuilder {
                               const std::string &name,
                               std::vector<Value> args,
                               std::array<int, 3> local_size) {
-    ib_.begin(spv::OpEntryPoint)
-        .add_seq(spv::ExecutionModelGLCompute, func, name);
+    ib_.begin(spv::OpEntryPoint).add_seq(spv::ExecutionModelGLCompute, func, name);
     for (const auto &arg : args) {
       ib_.add(arg);
     }
@@ -404,17 +382,14 @@ class IRBuilder {
     }
     ib_.commit(&entry_);
     ib_.begin(spv::OpExecutionMode)
-        .add_seq(func, spv::ExecutionModeLocalSize, local_size[0],
-                 local_size[1], local_size[2])
+        .add_seq(func, spv::ExecutionModeLocalSize, local_size[0], local_size[1], local_size[2])
         .commit(&entry_);
   }
 
   // Start function scope
   void start_function(const Value &func) {
     // add function declaration to the header
-    ib_.begin(spv::OpFunction)
-        .add_seq(t_void_, func, 0, t_void_func_)
-        .commit(&func_header_);
+    ib_.begin(spv::OpFunction).add_seq(t_void_, func, 0, t_void_func_).commit(&func_header_);
 
     spirv::Label start_label = this->new_label();
     ib_.begin(spv::OpLabel).add_seq(start_label).commit(&func_header_);
@@ -464,10 +439,15 @@ class IRBuilder {
 
   // Create a debugPrintf call
   void call_debugprintf(std::string formats, const std::vector<Value> &args) {
+    // Lazy import: see the explanatory comment in `IRBuilder::init_pre_defs`. We only emit
+    // `OpExtInstImport "NonSemantic.DebugPrintf"` the first time a printf / debug-assert call site actually
+    // needs it so kernels with no debug traffic stay MoltenVK-compatible.
+    if (!debug_printf_.id) {
+      debug_printf_ = ext_inst_import("NonSemantic.DebugPrintf");
+    }
     Value format_str = debug_string(formats);
     Value val = new_value(t_void_, ValueKind::kNormal);
-    ib_.begin(spv::OpExtInst)
-        .add_seq(t_void_, val, debug_printf_, 1, format_str);
+    ib_.begin(spv::OpExtInst).add_seq(t_void_, val, debug_printf_, 1, format_str);
     for (const auto &arg : args) {
       ib_.add(arg);
     }
@@ -542,18 +522,9 @@ class IRBuilder {
   Value const_i32_one_;
 
   // Use force-inline float atomic helper function
-  Value float_atomic(AtomicOpType op_type,
-                     Value addr_ptr,
-                     Value data,
-                     const DataType &dt);
-  Value integer_atomic(AtomicOpType op_type,
-                       Value addr_ptr,
-                       Value data,
-                       const DataType &dt);
-  Value atomic_operation(Value addr_ptr,
-                         Value data,
-                         std::function<Value(Value, Value)> op,
-                         const DataType &dt);
+  Value float_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
+  Value integer_atomic(AtomicOpType op_type, Value addr_ptr, Value data, const DataType &dt);
+  Value atomic_operation(Value addr_ptr, Value data, std::function<Value(Value, Value)> op, const DataType &dt);
   Value rand_u32(Value global_tmp_);
   Value rand_f32(Value global_tmp_);
   Value rand_i32(Value global_tmp_);

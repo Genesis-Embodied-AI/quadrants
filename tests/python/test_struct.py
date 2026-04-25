@@ -170,7 +170,7 @@ def test_nested_data_class_func():
         print(foo)
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
+@test_utils.test()
 def test_struct_field_with_bool():
     @qd.dataclass
     class S:

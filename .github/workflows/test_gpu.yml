@@ -119,7 +119,9 @@ jobs:
           python tests/run_tests.py -r 1 -v --arch cuda -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
-          pip install torch
+          # pin to torch 12.8 for now, until we update the driver on the
+          # github runner gpu nodes
+          pip install torch --index-url https://download.pytorch.org/whl/cu128
           python tests/run_tests.py -r 1 -v --arch cuda -m needs_torch
   test_linux_vulkan:
     name: Test Linux Vulkan
@@ -135,9 +137,18 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: install vulkan validation layer
+      - name: install vulkan SDK
         run: |
-          sudo apt-get install -y vulkan-validationlayers
+          VULKAN_VERSION=1.4.321.1
+          PREFIX=$HOME/.cache/vulkan-sdk
+          mkdir -p $PREFIX
+          curl -fsSL "https://sdk.lunarg.com/sdk/download/$VULKAN_VERSION/linux/vulkansdk-linux-x86_64-$VULKAN_VERSION.tar.xz" \
+            | tar -xJ -C $PREFIX --strip-components=1
+          SDK_DIR=$PREFIX/x86_64
+          echo "VULKAN_SDK=$SDK_DIR" >> $GITHUB_ENV
+          echo "VK_LAYER_PATH=$SDK_DIR/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$SDK_DIR/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "$SDK_DIR/bin" >> $GITHUB_PATH
       - name: install quadrants
         run: |
           set -x
@@ -150,11 +161,11 @@ jobs:
           pip install -r requirements_test_xdist.txt
       - name: run tests (without torch)
         run: |
-          python tests/run_tests.py -r 3 -v --arch vulkan -m "not needs_torch"
+          python tests/run_tests.py -r 1 -v --arch vulkan -m "not needs_torch"
       - name: install torch and run torch tests
         run: |
           pip install torch
-          python tests/run_tests.py -r 3 -v --arch vulkan -m needs_torch
+          python tests/run_tests.py -r 1 -v --arch vulkan -m needs_torch
   test_linux_amdgpu:
     name: Test Linux AMD GPU
     runs-on: amdgpu

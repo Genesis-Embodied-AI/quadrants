@@ -24,9 +24,7 @@ struct DeviceObjVkSemaphore : public DeviceObj {
   ~DeviceObjVkSemaphore() override;
 };
 using IVkSemaphore = std::shared_ptr<DeviceObjVkSemaphore>;
-IVkSemaphore create_semaphore(VkDevice device,
-                              VkSemaphoreCreateFlags flags,
-                              void *pnext = nullptr);
+IVkSemaphore create_semaphore(VkDevice device, VkSemaphoreCreateFlags flags, void *pnext = nullptr);
 
 // VkFence
 struct DeviceObjVkFence : public DeviceObj {
@@ -34,9 +32,7 @@ struct DeviceObjVkFence : public DeviceObj {
   ~DeviceObjVkFence() override;
 };
 using IVkFence = std::shared_ptr<DeviceObjVkFence>;
-IVkFence create_fence(VkDevice device,
-                      VkFenceCreateFlags flags,
-                      void *pnext = nullptr);
+IVkFence create_fence(VkDevice device, VkFenceCreateFlags flags, void *pnext = nullptr);
 
 // VkDescriptorSetLayout
 struct DeviceObjVkDescriptorSetLayout : public DeviceObj {
@@ -44,9 +40,7 @@ struct DeviceObjVkDescriptorSetLayout : public DeviceObj {
   ~DeviceObjVkDescriptorSetLayout() override;
 };
 using IVkDescriptorSetLayout = std::shared_ptr<DeviceObjVkDescriptorSetLayout>;
-IVkDescriptorSetLayout create_descriptor_set_layout(
-    VkDevice device,
-    VkDescriptorSetLayoutCreateInfo *create_info);
+IVkDescriptorSetLayout create_descriptor_set_layout(VkDevice device, VkDescriptorSetLayoutCreateInfo *create_info);
 
 // VkDescriptorPool
 struct DeviceObjVkDescriptorPool : public DeviceObj {
@@ -56,9 +50,7 @@ struct DeviceObjVkDescriptorPool : public DeviceObj {
   ~DeviceObjVkDescriptorPool() override;
 };
 using IVkDescriptorPool = std::shared_ptr<DeviceObjVkDescriptorPool>;
-IVkDescriptorPool create_descriptor_pool(
-    VkDevice device,
-    VkDescriptorPoolCreateInfo *create_info);
+IVkDescriptorPool create_descriptor_pool(VkDevice device, VkDescriptorPoolCreateInfo *create_info);
 
 // VkDescriptorSet
 struct DeviceObjVkDescriptorSet : public DeviceObj {
@@ -70,9 +62,7 @@ struct DeviceObjVkDescriptorSet : public DeviceObj {
 };
 using IVkDescriptorSet = std::shared_ptr<DeviceObjVkDescriptorSet>;
 // Returns nullptr is pool is full
-IVkDescriptorSet allocate_descriptor_sets(IVkDescriptorPool pool,
-                                          IVkDescriptorSetLayout layout,
-                                          void *pnext = nullptr);
+IVkDescriptorSet allocate_descriptor_sets(IVkDescriptorPool pool, IVkDescriptorSetLayout layout, void *pnext = nullptr);
 
 // VkCommandPool
 struct DeviceObjVkCommandPool : public DeviceObj {
@@ -83,9 +73,7 @@ struct DeviceObjVkCommandPool : public DeviceObj {
   ~DeviceObjVkCommandPool() override;
 };
 using IVkCommandPool = std::shared_ptr<DeviceObjVkCommandPool>;
-IVkCommandPool create_command_pool(VkDevice device,
-                                   VkCommandPoolCreateFlags flags,
-                                   uint32_t queue_family_index);
+IVkCommandPool create_command_pool(VkDevice device, VkCommandPoolCreateFlags flags, uint32_t queue_family_index);
 
 // VkCommandBuffer
 // Should keep track of used objects in the ref_pool
@@ -97,9 +85,8 @@ struct DeviceObjVkCommandBuffer : public DeviceObj {
   ~DeviceObjVkCommandBuffer() override;
 };
 using IVkCommandBuffer = std::shared_ptr<DeviceObjVkCommandBuffer>;
-IVkCommandBuffer allocate_command_buffer(
-    IVkCommandPool pool,
-    VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+IVkCommandBuffer allocate_command_buffer(IVkCommandPool pool,
+                                         VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 // VkRenderPass
 struct DeviceObjVkRenderPass : public DeviceObj {
@@ -107,8 +94,7 @@ struct DeviceObjVkRenderPass : public DeviceObj {
   ~DeviceObjVkRenderPass() override;
 };
 using IVkRenderPass = std::shared_ptr<DeviceObjVkRenderPass>;
-IVkRenderPass create_render_pass(VkDevice device,
-                                 VkRenderPassCreateInfo *create_info);
+IVkRenderPass create_render_pass(VkDevice device, VkRenderPassCreateInfo *create_info);
 
 // VkPipelineLayout
 struct DeviceObjVkPipelineLayout : public DeviceObj {
@@ -117,11 +103,10 @@ struct DeviceObjVkPipelineLayout : public DeviceObj {
   ~DeviceObjVkPipelineLayout() override;
 };
 using IVkPipelineLayout = std::shared_ptr<DeviceObjVkPipelineLayout>;
-IVkPipelineLayout create_pipeline_layout(
-    VkDevice device,
-    std::vector<IVkDescriptorSetLayout> &set_layouts,
-    uint32_t push_constant_range_count = 0,
-    VkPushConstantRange *push_constant_ranges = nullptr);
+IVkPipelineLayout create_pipeline_layout(VkDevice device,
+                                         std::vector<IVkDescriptorSetLayout> &set_layouts,
+                                         uint32_t push_constant_range_count = 0,
+                                         VkPushConstantRange *push_constant_ranges = nullptr);
 
 // VkPipelineCache
 struct DeviceObjVkPipelineCache : public DeviceObj {
@@ -156,21 +141,19 @@ IVkPipeline create_graphics_pipeline(VkDevice device,
                                      IVkPipelineLayout layout,
                                      IVkPipelineCache cache = nullptr,
                                      IVkPipeline base_pipeline = nullptr);
-IVkPipeline create_graphics_pipeline_dynamic(
-    VkDevice device,
-    VkGraphicsPipelineCreateInfo *create_info,
-    VkPipelineRenderingCreateInfoKHR *rendering_info,
-    IVkPipelineLayout layout,
-    IVkPipelineCache cache = nullptr,
-    IVkPipeline base_pipeline = nullptr);
-IVkPipeline create_raytracing_pipeline(
-    VkDevice device,
-    VkRayTracingPipelineCreateInfoKHR *create_info,
-    IVkPipelineLayout layout,
-    std::vector<IVkPipeline> &pipeline_libraries,
-    VkDeferredOperationKHR deferredOperation = VK_NULL_HANDLE,
-    IVkPipelineCache cache = nullptr,
-    IVkPipeline base_pipeline = nullptr);
+IVkPipeline create_graphics_pipeline_dynamic(VkDevice device,
+                                             VkGraphicsPipelineCreateInfo *create_info,
+                                             VkPipelineRenderingCreateInfoKHR *rendering_info,
+                                             IVkPipelineLayout layout,
+                                             IVkPipelineCache cache = nullptr,
+                                             IVkPipeline base_pipeline = nullptr);
+IVkPipeline create_raytracing_pipeline(VkDevice device,
+                                       VkRayTracingPipelineCreateInfoKHR *create_info,
+                                       IVkPipelineLayout layout,
+                                       std::vector<IVkPipeline> &pipeline_libraries,
+                                       VkDeferredOperationKHR deferredOperation = VK_NULL_HANDLE,
+                                       IVkPipelineCache cache = nullptr,
+                                       IVkPipeline base_pipeline = nullptr);
 
 // VkSampler
 struct DeviceObjVkSampler : public DeviceObj {
@@ -215,15 +198,12 @@ IVkImage create_image(VkDevice device,
 struct DeviceObjVkImageView : public DeviceObj {
   VkImageView view{VK_NULL_HANDLE};
   VkImageViewType type{VK_IMAGE_VIEW_TYPE_2D};
-  VkImageSubresourceRange subresource_range{
-      VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+  VkImageSubresourceRange subresource_range{VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
   IVkImage ref_image{nullptr};
   ~DeviceObjVkImageView() override;
 };
 using IVkImageView = std::shared_ptr<DeviceObjVkImageView>;
-IVkImageView create_image_view(VkDevice device,
-                               IVkImage image,
-                               VkImageViewCreateInfo *create_info);
+IVkImageView create_image_view(VkDevice device, IVkImage image, VkImageViewCreateInfo *create_info);
 
 // VkFramebuffer
 struct DeviceObjVkFramebuffer : public DeviceObj {
@@ -259,9 +239,7 @@ IVkBuffer create_buffer(VkDevice device,
                         VkBufferCreateInfo *buffer_info,
                         VmaAllocationCreateInfo *alloc_info);
 // Importing external buffer
-IVkBuffer create_buffer(VkDevice device,
-                        VkBuffer buffer,
-                        VkBufferUsageFlags usage);
+IVkBuffer create_buffer(VkDevice device, VkBuffer buffer, VkBufferUsageFlags usage);
 
 // VkBufferView
 struct DeviceObjVkBufferView : public DeviceObj {
@@ -282,21 +260,18 @@ IVkBufferView create_buffer_view(IVkBuffer buffer,
 // VkAccelerationStructureKHR
 struct DeviceObjVkAccelerationStructureKHR : public DeviceObj {
   VkAccelerationStructureKHR accel{VK_NULL_HANDLE};
-  VkAccelerationStructureTypeKHR type{
-      VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR};
+  VkAccelerationStructureTypeKHR type{VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR};
   VkDeviceSize offset{0};
   VkDeviceSize size{0};
   IVkBuffer ref_buffer{nullptr};
   ~DeviceObjVkAccelerationStructureKHR() override;
 };
-using IVkAccelerationStructureKHR =
-    std::shared_ptr<DeviceObjVkAccelerationStructureKHR>;
-IVkAccelerationStructureKHR create_acceleration_structure(
-    VkAccelerationStructureCreateFlagsKHR flags,
-    IVkBuffer buffer,
-    VkDeviceSize offset,
-    VkDeviceSize size,
-    VkAccelerationStructureTypeKHR type);
+using IVkAccelerationStructureKHR = std::shared_ptr<DeviceObjVkAccelerationStructureKHR>;
+IVkAccelerationStructureKHR create_acceleration_structure(VkAccelerationStructureCreateFlagsKHR flags,
+                                                          IVkBuffer buffer,
+                                                          VkDeviceSize offset,
+                                                          VkDeviceSize size,
+                                                          VkAccelerationStructureTypeKHR type);
 
 // VkQueryPool
 struct DeviceObjVkQueryPool : public DeviceObj {

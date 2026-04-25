@@ -18,9 +18,7 @@ class MakeMeshBlockLocal : public Pass {
 
   MakeMeshBlockLocal(OffloadedStmt *offload, const CompileConfig &config);
 
-  static void run(OffloadedStmt *offload,
-                  const CompileConfig &config,
-                  const std::string &kernel_name);
+  static void run(OffloadedStmt *offload, const CompileConfig &config, const std::string &kernel_name);
 
  private:
   void simplify_nested_conversion();
@@ -31,25 +29,17 @@ class MakeMeshBlockLocal : public Pass {
   void fetch_attr_to_bls(Block *body, Stmt *idx_val, Stmt *mapping_val);
   void push_attr_to_global(Block *body, Stmt *idx_val, Stmt *mapping_val);
 
-  Stmt *create_xlogue(
-      Stmt *start_val,
-      Stmt *end_val,
-      std::function<void(Block * /*block*/, Stmt * /*idx_val*/)> body);
-  Stmt *create_cache_mapping(
-      Stmt *start_val,
-      Stmt *end_val,
-      std::function<Stmt *(Block * /*block*/, Stmt * /*idx_val*/)> global_val);
+  Stmt *create_xlogue(Stmt *start_val, Stmt *end_val, std::function<void(Block * /*block*/, Stmt * /*idx_val*/)> body);
+  Stmt *create_cache_mapping(Stmt *start_val,
+                             Stmt *end_val,
+                             std::function<Stmt *(Block * /*block*/, Stmt * /*idx_val*/)> global_val);
 
   void fetch_mapping(
-      std::function<
-          Stmt *(Stmt * /*start_val*/,
-                 Stmt * /*end_val*/,
-                 std::function<Stmt *(Block * /*block*/,
-                                      Stmt * /*idx_val*/)>)/*global_val*/>
+      std::function<Stmt *(Stmt * /*start_val*/,
+                           Stmt * /*end_val*/,
+                           std::function<Stmt *(Block * /*block*/, Stmt * /*idx_val*/)>)/*global_val*/>
           mapping_callback_handler,
-      std::function<void(Block * /*body*/,
-                         Stmt * /*idx_val*/,
-                         Stmt * /*mapping_val*/)> attr_callback_handler);
+      std::function<void(Block * /*body*/, Stmt * /*idx_val*/, Stmt * /*mapping_val*/)> attr_callback_handler);
 
   const CompileConfig &config_;
   OffloadedStmt *offload_{nullptr};
