@@ -666,9 +666,8 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.kernel_cpp">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_cpp</span><span class="p">:</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">KernelCxx</span> <span class="o">=</span> <span class="kc">None</span></div>
 
-        <span class="c1"># A materialized kernel is a KernelCxx object which may or may not have</span>
-        <span class="c1"># been compiled. It generally has been converted at least as far as AST</span>
-        <span class="c1"># and front-end IR, but not necessarily any further.</span>
+        <span class="c1"># A materialized kernel is a KernelCxx object which may or may not have been compiled. It generally has been</span>
+        <span class="c1"># converted at least as far as AST and front-end IR, but not necessarily any further.</span>
 <div class="viewcode-block" id="Kernel.materialized_kernels">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.materialized_kernels">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="n">KernelCxx</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
@@ -784,9 +783,8 @@
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
             <span class="c1"># The bit in caps should not be modified without updating corresponding test</span>
             <span class="c1"># freetext can be freely modified.</span>
-            <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because</span>
-            <span class="c1"># this is only printed when qd.init(print_non_pure=..) is True. And it is</span>
-            <span class="c1"># confusing to set that to True, and see nothing printed.</span>
+            <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because this is only printed when</span>
+            <span class="c1"># qd.init(print_non_pure=..) is True. And it is confusing to set that to True, and see nothing printed.</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[NOT_PURE] Debug information: not pure: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
@@ -1068,9 +1066,8 @@
             <span class="c1"># `mode_original == AutodiffMode.REVERSE` only, to avoid duplicate computation for 1st-order derivatives.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">fwd_mode_manager</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
-        <span class="c1"># Both the class kernels and the plain-function kernels are unified now.</span>
-        <span class="c1"># In both cases, |self.grad| is another Kernel instance that computes the</span>
-        <span class="c1"># gradient. For class kernels, args[0] is always the kernel owner.</span>
+        <span class="c1"># Both the class kernels and the plain-function kernels are unified now. In both cases, |self.grad| is another</span>
+        <span class="c1"># Kernel instance that computes the gradient. For class kernels, args[0] is always the kernel owner.</span>
 
         <span class="c1"># No need to capture grad kernels because they are already bound with their primal kernels</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="ow">in</span> <span class="p">(</span><span class="n">_NONE</span><span class="p">,</span> <span class="n">_VALIDATION</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">grad_replaced</span><span class="p">:</span>

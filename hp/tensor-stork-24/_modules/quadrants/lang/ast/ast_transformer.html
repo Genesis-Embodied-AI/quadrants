@@ -493,9 +493,8 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="n">is_static_assign</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">is</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span>
 
-        <span class="c1"># Keep all generated assign statements and compose single one at last.</span>
-        <span class="c1"># The variable is introduced to support chained assignments.</span>
-        <span class="c1"># Ref https://github.com/taichi-dev/taichi/issues/2659.</span>
+        <span class="c1"># Keep all generated assign statements and compose single one at last. The variable is introduced to support</span>
+        <span class="c1"># chained assignments. Ref https://github.com/taichi-dev/taichi/issues/2659.</span>
         <span class="n">values</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span> <span class="k">if</span> <span class="n">is_static_assign</span> <span class="k">else</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">node_target</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">targets</span><span class="p">:</span>

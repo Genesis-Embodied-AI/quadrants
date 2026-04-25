@@ -778,10 +778,9 @@
         <span class="k">if</span> <span class="n">root</span><span class="o">.</span><span class="n">finalized</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">is_first_call</span> <span class="ow">and</span> <span class="n">root</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-            <span class="c1"># We have to forcefully finalize when `is_first_call` is True (even</span>
-            <span class="c1"># if the root itself is empty), so that there is a valid struct</span>
-            <span class="c1"># llvm::Module, if no field has been declared before the first kernel</span>
-            <span class="c1"># invocation. Example case:</span>
+            <span class="c1"># We have to forcefully finalize when `is_first_call` is True (even if the root itself is empty), so that</span>
+            <span class="c1"># there is a valid struct llvm::Module, if no field has been declared before the first kernel invocation.</span>
+            <span class="c1"># Example case:</span>
             <span class="c1"># https://github.com/taichi-dev/taichi/blob/27bb1dc3227d9273a79fcb318fdb06fd053068f5/tests/python/test_ad_basics.py#L260-L266</span>
             <span class="k">return</span>
 
@@ -962,16 +961,13 @@
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;Please call init() first&quot;</span><span class="p">)</span>
 
 
-<span class="c1"># `root` initialization must be delayed until after the program is</span>
-<span class="c1"># created. Unfortunately, `root` exists in both quadrants.lang.impl module and</span>
-<span class="c1"># the top-level quadrants module at this point; so if `root` itself is written, we</span>
-<span class="c1"># would have to make sure that `root` in all the modules get updated to the same</span>
-<span class="c1"># instance. This is an error-prone process.</span>
+<span class="c1"># `root` initialization must be delayed until after the program is created. Unfortunately, `root` exists in both</span>
+<span class="c1"># quadrants.lang.impl module and the top-level quadrants module at this point; so if `root` itself is written, we would</span>
+<span class="c1"># have to make sure that `root` in all the modules get updated to the same instance. This is an error-prone process.</span>
 <span class="c1">#</span>
-<span class="c1"># To avoid this situation, we create `root` once during the import time, and</span>
-<span class="c1"># never write to it. The core part, `_root_fb`, is the one whose initialization</span>
-<span class="c1"># gets delayed. `_root_fb` will only exist in the quadrants.lang.impl module, so</span>
-<span class="c1"># writing to it is would result in less for maintenance cost.</span>
+<span class="c1"># To avoid this situation, we create `root` once during the import time, and never write to it. The core part,</span>
+<span class="c1"># `_root_fb`, is the one whose initialization gets delayed. `_root_fb` will only exist in the quadrants.lang.impl</span>
+<span class="c1"># module, so writing to it is would result in less for maintenance cost.</span>
 <span class="c1">#</span>
 <span class="c1"># `_root_fb` will be overridden inside :func:`quadrants.lang.init`.</span>
 <span class="n">_root_fb</span> <span class="o">=</span> <span class="n">_UninitializedRootFieldsBuilder</span><span class="p">()</span>
@@ -1433,8 +1429,7 @@
 
 <span class="nd">@quadrants_scope</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">qd_assert</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">):</span>
-    <span class="c1"># Mostly a wrapper to help us convert from Expr (defined in Python) to</span>
-    <span class="c1"># _qd_core.Expr (defined in C++)</span>
+    <span class="c1"># Mostly a wrapper to help us convert from Expr (defined in Python) to _qd_core.Expr (defined in C++)</span>
     <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
     <span class="n">ast_builder</span><span class="o">.</span><span class="n">create_assert_stmt</span><span class="p">(</span><span class="n">Expr</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
 
@@ -1707,8 +1702,7 @@
             <span class="c1"># https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf</span>
             <span class="k">return</span> <span class="mi">32</span> <span class="o">*</span> <span class="mi">1024</span>
         <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
-            <span class="c1"># AMD GPUs have 64KB LDS per workgroup since at least RDNA 2</span>
-            <span class="c1"># (Nov 2020).</span>
+            <span class="c1"># AMD GPUs have 64KB LDS per workgroup since at least RDNA 2 (Nov 2020).</span>
             <span class="c1"># https://rocm.docs.amd.com/en/docs-6.0.2/reference/gpu-arch/gpu-arch-spec-overview.html</span>
             <span class="k">return</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span>
         <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
