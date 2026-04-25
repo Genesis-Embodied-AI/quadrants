@@ -2,15 +2,15 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `./tests/run_tests.py` which set up
+* *testing*: Any new features or modified code should be tested. You have to run the test suite using `./tests/run_tests.py` which sets up
   the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 
 ## Creating your build/dev environment
 
-It is recommended to use a virtual env. When developing, you also have to use the right python version (currently `3.10`) as `pre-commit`
-for instance is configured with this pinned Python version. If it only is to build the package, a recent enough Python version should suffice.
+It is recommended to use a virtual env. When developing, you also have to use the right python version (currently `3.10` for pre-commit and linting tools) as `pre-commit`
+is configured with this pinned Python version. If you only need to build the package, a recent enough Python version should suffice.
 
 `uv` could be handy when initializing such an environment:
 
@@ -22,14 +22,14 @@ uv venv --python 3.10
 source .venv/bin/activate
 
 # install deps groups from pyproject.toml
-uv pip install --group dev test
+uv pip install --group dev --group test
 ```
 
 ## `build.py`
 
 `build.py` is a python script to automatically set up the build environment for you before invoking the build commands:
 
-* `LLVM libraries`: downloads an archive for `LLVM` libraires, decompress it and set `LLVM_DIR`.
+* `LLVM libraries`: downloads an archive for `LLVM` libraries, decompresses it and sets `LLVM_DIR`.
 * `clang`: depending on the platform, download `clang` or just check if available with the right version.
 
 `build.py` can be used at least two ways:
@@ -75,7 +75,7 @@ For instance, if you don't need to have any GPU support, you could use:
 export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
-To direct `cmake` where to look at for some dependencies, for example `LLVM, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
+To direct `cmake` where to look at for some dependencies, for example `LLVM`, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
 
 ```
 # using an env var
