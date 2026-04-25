@@ -99,6 +99,9 @@ test = [
     "pyright",
 ]
 
+[project.entry-points.pytest11]
+quadrants = "quadrants.pytest_plugin"
+
 [project.urls]
 Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 
@@ -119,6 +122,14 @@ requires = [
 # This will be used when doing `pip install -e .`, for fast installation of python
 # things, without doing full c++ build
 build-backend = "setuptools.build_meta"
+
+[tool.coverage.paths]
+source = [
+    "python/quadrants",
+    "*/site-packages/quadrants",
+]
+
+[tool.coverage.report]
 
 [tool.pytest.ini_options]
 filterwarnings = [

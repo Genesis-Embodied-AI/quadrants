@@ -1,8 +1,16 @@
+import os
+
+import pytest
+
 import quadrants as qd
 
 from tests import test_utils
 
 
+@pytest.mark.skipif(
+    os.environ.get("QD_KERNEL_COVERAGE") == "1",
+    reason="Kernel coverage field on root shifts offset assertions",
+)
 @test_utils.test(arch=qd.cpu)
 def test_primitives():
     x = qd.field(dtype=qd.i16)

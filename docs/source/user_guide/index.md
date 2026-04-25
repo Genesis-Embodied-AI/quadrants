@@ -58,6 +58,14 @@ perf_dispatch
 ```
 
 ```{toctree}
+:caption: Testing
+:maxdepth: 1
+:titlesonly:
+
+kernel_coverage
+```
+
+```{toctree}
 :caption: Reference
 :maxdepth: 1
 :titlesonly:
