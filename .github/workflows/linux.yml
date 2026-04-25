@@ -103,6 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      checks: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,7 +124,7 @@ jobs:
         with:
           name: coverage-cuda
           path: coverage-cuda
-      - name: Generate coverage report
+      - name: Generate coverage reports
         continue-on-error: true
         run: |
           COV_XMLS=""
@@ -141,9 +142,50 @@ jobs:
           python tests/coverage_report.py --report-only \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
-            --format markdown > coverage-comment.md
+            --format markdown > coverage-check.md
+
+          python tests/coverage_report.py --report-only \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --coverage-xml $COV_XMLS \
+            --format markdown-summary > coverage-comment.md
+      - name: Publish coverage check
+        if: always() && hashFiles('coverage-check.md') != ''
+        id: publish_check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('coverage-check.md', 'utf8');
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: context.payload.pull_request.head.sha,
+              name: 'Coverage Report',
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Diff Coverage Report',
+                summary: 'See details below for per-line coverage annotations.',
+                text: body
+              }
+            });
+            core.setOutput('check-url', check.data.html_url);
       - name: Post coverage comment
         if: always() && hashFiles('coverage-comment.md') != ''
-        run: gh pr comment ${{ github.event.pull_request.number }} --body-file coverage-comment.md
+        uses: actions/github-script@v8
         env:
-          GH_TOKEN: ${{ github.token }}
+          REPORT_URL: ${{ steps.publish_check.outputs.check-url }}
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('coverage-comment.md', 'utf8');
+            const url = process.env.REPORT_URL;
+            if (url) {
+              body += `\n\n[Full annotated report](${url})`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body
+            });
