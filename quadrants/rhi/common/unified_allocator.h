@@ -26,9 +26,7 @@ class UnifiedAllocator {
 
   UnifiedAllocator();
 
-  void *allocate(std::size_t size,
-                 std::size_t alignment,
-                 bool exclusive = false);
+  void *allocate(std::size_t size, std::size_t alignment, bool exclusive = false);
 
   bool release(size_t sz, void *ptr);
 

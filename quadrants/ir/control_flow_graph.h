@@ -72,21 +72,13 @@ class CFGNode {
   // Methods for modifying the underlying CHI IR.
   void erase(int location);
   void insert(std::unique_ptr<Stmt> &&new_stmt, int location);
-  void replace_with(int location,
-                    std::unique_ptr<Stmt> &&new_stmt,
-                    bool replace_usages = true) const;
+  void replace_with(int location, std::unique_ptr<Stmt> &&new_stmt, bool replace_usages = true) const;
 
   // Utility methods.
-  static bool contain_variable(const std::unordered_set<Stmt *> &var_set,
-                               Stmt *var);
-  static bool contain_variable(
-      const std::unordered_map<Stmt *, UseDefineStatus> &var_set,
-      Stmt *var);
-  static bool may_contain_variable(const std::unordered_set<Stmt *> &var_set,
-                                   Stmt *var);
-  static bool may_contain_variable(
-      const std::unordered_map<Stmt *, UseDefineStatus> &var_set,
-      Stmt *var);
+  static bool contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *var);
+  static bool contain_variable(const std::unordered_map<Stmt *, UseDefineStatus> &var_set, Stmt *var);
+  static bool may_contain_variable(const std::unordered_set<Stmt *> &var_set, Stmt *var);
+  static bool may_contain_variable(const std::unordered_map<Stmt *, UseDefineStatus> &var_set, Stmt *var);
   bool reach_kill_variable(Stmt *var) const;
   Stmt *get_store_forwarding_data(Stmt *var, int position) const;
 
@@ -149,9 +141,7 @@ class ControlFlowGraph {
    * @param config_opt
    *   The set of SNodes which is never loaded after this task.
    */
-  void live_variable_analysis(
-      bool after_lower_access,
-      const std::optional<LiveVarAnalysisConfig> &config_opt);
+  void live_variable_analysis(bool after_lower_access, const std::optional<LiveVarAnalysisConfig> &config_opt);
 
   /**
    * Simplify the graph structure to accelerate other analyses and
@@ -170,9 +160,7 @@ class ControlFlowGraph {
   /**
    * Perform dead store elimination and identical load elimination.
    */
-  bool dead_store_elimination(
-      bool after_lower_access,
-      const std::optional<LiveVarAnalysisConfig> &lva_config_opt);
+  bool dead_store_elimination(bool after_lower_access, const std::optional<LiveVarAnalysisConfig> &lva_config_opt);
 
   /**
    * Gather the SNodes which is read or partially written in this offloaded
@@ -184,8 +172,12 @@ class ControlFlowGraph {
    * Determine all adaptive AD-stacks' necessary size.
    * @param default_ad_stack_size The default AD-stack's size when we are
    * unable to determine some AD-stack's size.
+   * @param apply_fallback When true (default), stacks that hit a positive loop get
+   * |default_ad_stack_size|. When false, such stacks are left at `max_size = 0`, so a
+   * downstream pass (the structural bounded-loop pre-pass in `irpass::determine_ad_stack_size`)
+   * can try to compute a tighter bound before the final fallback is applied by its caller.
    */
-  void determine_ad_stack_size(int default_ad_stack_size);
+  void determine_ad_stack_size(int default_ad_stack_size, bool apply_fallback = true);
 };
 
 }  // namespace quadrants::lang

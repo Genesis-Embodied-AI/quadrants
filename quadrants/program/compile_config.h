@@ -53,9 +53,14 @@ struct CompileConfig {
   int gpu_max_reg;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive
-  // The default size when the Quadrants compiler is unable to automatically
-  // determine the autodiff stack size.
-  int default_ad_stack_size{32};
+  // Fallback adstack capacity used when the Quadrants compiler cannot statically determine the worst-case loop
+  // trip count. Both backends now heap-back the primal / adjoint slots: SPIR-V via per-dispatch StorageBuffers
+  // (`BufferType::AdStackHeapFloat` + `AdStackHeapInt`, sliced by invocation), LLVM via a per-runtime slab sized
+  // `num_threads * per_thread_stride` by `LlvmRuntimeExecutor::ensure_adstack_heap` before each dispatch. The
+  // per-thread on-chip / worker-stack budget that bounded the previous Function-scope implementation no longer
+  // applies, so the default is raised from 32 to 256 to cover the flat trip count of a typical `qd.ndrange` over
+  // two 16-wide dimensions. Runtime push overflow is surfaced as a Python exception.
+  int default_ad_stack_size{256};
 
   int saturating_grid_dim;
   int max_block_dim;
@@ -91,11 +96,9 @@ struct CompileConfig {
   // Offline cache options
   bool offline_cache{false};
   std::string offline_cache_file_path{get_repo_dir() + "qdcache"};
-  std::string offline_cache_cleaning_policy{
-      "lru"};  // "never"|"version"|"lru"|"fifo"
-  int offline_cache_max_size_of_files{100 * 1024 *
-                                      1024};   // bytes, default: 100MB
-  double offline_cache_cleaning_factor{0.25};  // [0.f, 1.f]
+  std::string offline_cache_cleaning_policy{"lru"};        // "never"|"version"|"lru"|"fifo"
+  int offline_cache_max_size_of_files{100 * 1024 * 1024};  // bytes, default: 100MB
+  double offline_cache_cleaning_factor{0.25};              // [0.f, 1.f]
 
   int num_compile_threads{4};
   std::string vk_api_version;

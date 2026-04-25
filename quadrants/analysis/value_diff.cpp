@@ -8,32 +8,23 @@
 namespace quadrants::lang {
 
 DiffRange operator+(const DiffRange &a, const DiffRange &b) {
-  return DiffRange(a.related() && b.related(), a.coeff + b.coeff, a.low + b.low,
-                   a.high + b.high - 1);
+  return DiffRange(a.related() && b.related(), a.coeff + b.coeff, a.low + b.low, a.high + b.high - 1);
 }
 
 DiffRange operator-(const DiffRange &a, const DiffRange &b) {
-  return DiffRange(a.related() && b.related(), a.coeff - b.coeff,
-                   a.low - b.high + 1, a.high - b.low);
+  return DiffRange(a.related() && b.related(), a.coeff - b.coeff, a.low - b.high + 1, a.high - b.low);
 }
 
 DiffRange operator*(const DiffRange &a, const DiffRange &b) {
   return DiffRange(
-      a.related() && b.related() && a.coeff * b.coeff == 0,
-      fmax(a.low * b.coeff, a.coeff * b.low),
-      fmin(a.low * b.low,
-           fmin(a.low * (b.high - 1),
-                fmin(b.low * (a.high - 1), (a.high - 1) * (b.high - 1)))),
-      fmax(a.low * b.low,
-           fmax(a.low * (b.high - 1),
-                fmax(b.low * (a.high - 1), (a.high - 1) * (b.high - 1)))) +
-          1);
+      a.related() && b.related() && a.coeff * b.coeff == 0, fmax(a.low * b.coeff, a.coeff * b.low),
+      fmin(a.low * b.low, fmin(a.low * (b.high - 1), fmin(b.low * (a.high - 1), (a.high - 1) * (b.high - 1)))),
+      fmax(a.low * b.low, fmax(a.low * (b.high - 1), fmax(b.low * (a.high - 1), (a.high - 1) * (b.high - 1)))) + 1);
 }
 
 DiffRange operator<<(const DiffRange &a, const DiffRange &b) {
-  return DiffRange(
-      a.related() && b.related() && b.coeff == 0 && b.high - b.low == 1,
-      a.coeff << b.low, a.low << b.low, ((a.high - 1) << b.low) + 1);
+  return DiffRange(a.related() && b.related() && b.coeff == 0 && b.high - b.low == 1, a.coeff << b.low, a.low << b.low,
+                   ((a.high - 1) << b.low) + 1);
 }
 
 namespace {
@@ -46,8 +37,7 @@ class ValueDiffLoopIndex : public IRVisitor {
   int loop_index;
   std::map<int, ret_type> results;
 
-  ValueDiffLoopIndex(Stmt *stmt, Stmt *loop, int loop_index)
-      : input_stmt(stmt), loop(loop), loop_index(loop_index) {
+  ValueDiffLoopIndex(Stmt *stmt, Stmt *loop, int loop_index) : input_stmt(stmt), loop(loop), loop_index(loop_index) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -63,11 +53,9 @@ class ValueDiffLoopIndex : public IRVisitor {
   void visit(LoopIndexStmt *stmt) override {
     results[stmt->instance_id] = DiffRange();
     if (stmt->loop == loop && stmt->index == loop_index) {
-      results[stmt->instance_id] =
-          DiffRange(/*related=*/true, /*coeff=*/1, /*low=*/0);
+      results[stmt->instance_id] = DiffRange(/*related=*/true, /*coeff=*/1, /*low=*/0);
     } else if (auto range_for = stmt->loop->cast<RangeForStmt>()) {
-      if (range_for->begin->is<ConstStmt>() &&
-          range_for->end->is<ConstStmt>()) {
+      if (range_for->begin->is<ConstStmt>() && range_for->end->is<ConstStmt>()) {
         auto begin_val = range_for->begin->as<ConstStmt>()->val.val_int();
         auto end_val = range_for->end->as<ConstStmt>()->val.val_int();
         // We have begin_val <= end_val even when range_for->reversed is true:
@@ -88,15 +76,12 @@ class ValueDiffLoopIndex : public IRVisitor {
 
   void visit(RangeAssumptionStmt *stmt) override {
     stmt->base->accept(this);
-    results[stmt->instance_id] = results[stmt->base->instance_id] +
-                                 DiffRange(true, 0, stmt->low, stmt->high);
+    results[stmt->instance_id] = results[stmt->base->instance_id] + DiffRange(true, 0, stmt->low, stmt->high);
   }
 
   void visit(BinaryOpStmt *stmt) override {
-    if (stmt->op_type == BinaryOpType::add ||
-        stmt->op_type == BinaryOpType::sub ||
-        stmt->op_type == BinaryOpType::mul ||
-        stmt->op_type == BinaryOpType::bit_shl) {
+    if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
+        stmt->op_type == BinaryOpType::mul || stmt->op_type == BinaryOpType::bit_shl) {
       stmt->lhs->accept(this);
       stmt->rhs->accept(this);
       auto ret1 = results[stmt->lhs->instance_id];
@@ -149,8 +134,7 @@ class FindDirectValueBaseAndOffset : public IRVisitor {
     if (stmt->rhs->is<ConstStmt>())
       stmt->rhs->accept(this);
     if (!std::get<0>(result) || std::get<1>(result) != nullptr ||
-        (stmt->op_type != BinaryOpType::add &&
-         stmt->op_type != BinaryOpType::sub)) {
+        (stmt->op_type != BinaryOpType::add && stmt->op_type != BinaryOpType::sub)) {
       result = std::make_tuple(false, nullptr, 0);
       return;
     }
@@ -174,8 +158,7 @@ namespace analysis {
 DiffRange value_diff_loop_index(Stmt *stmt, Stmt *loop, int index_id) {
   QD_ASSERT(loop->is<StructForStmt>() || loop->is<OffloadedStmt>());
   if (loop->is<OffloadedStmt>()) {
-    QD_ASSERT(loop->as<OffloadedStmt>()->task_type ==
-              OffloadedStmt::TaskType::struct_for);
+    QD_ASSERT(loop->as<OffloadedStmt>()->task_type == OffloadedStmt::TaskType::struct_for);
   }
   if (auto loop_index = stmt->cast<LoopIndexStmt>(); loop_index) {
     if (loop_index->loop == loop && loop_index->index == index_id) {
@@ -192,8 +175,7 @@ DiffPtrResult value_diff_ptr_index(Stmt *val1, Stmt *val2) {
   }
   auto v1 = FindDirectValueBaseAndOffset::run(val1);
   auto v2 = FindDirectValueBaseAndOffset::run(val2);
-  if (!std::get<0>(v1) || !std::get<0>(v2) ||
-      std::get<1>(v1) != std::get<1>(v2)) {
+  if (!std::get<0>(v1) || !std::get<0>(v2) || std::get<1>(v1) != std::get<1>(v2)) {
     return DiffPtrResult::make_uncertain();
   }
   return DiffPtrResult::make_certain(std::get<2>(v1) - std::get<2>(v2));

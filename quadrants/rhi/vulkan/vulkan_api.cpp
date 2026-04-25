@@ -16,6 +16,18 @@ DeviceObjVkDescriptorPool::~DeviceObjVkDescriptorPool() {
 }
 
 DeviceObjVkDescriptorSet::~DeviceObjVkDescriptorSet() {
+  // Return the set to its source pool so the underlying `VkDescriptorSet` handle is reusable on the next
+  // allocation. Without this, the pool keeps accumulating consumed-but-never-reclaimed slots and
+  // `VulkanDevice::alloc_desc_set` spins up a fresh pool at the 64-set boundary (`maxSets` in
+  // `new_descriptor_pool`). On MoltenVK the resulting pool churn surfaces as a null-pool deref inside
+  // `MVKResourcesCommandEncoderState::bindDescriptorSet` after ~32 launches of any two-set kernel (e.g. the
+  // SNode read/write accessors) because `MVKDescriptorSet::_pool` still points at a pool the driver has
+  // started tearing down. The pool is created with `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT`, so the
+  // free call is legal, and the `ref_pool` shared_ptr guarantees the pool (and its `VkDevice`) outlive this
+  // destructor.
+  if (ref_pool != nullptr && set != VK_NULL_HANDLE) {
+    vkFreeDescriptorSets(device, ref_pool->pool, 1, &set);
+  }
 }
 
 DeviceObjVkCommandPool::~DeviceObjVkCommandPool() {
@@ -85,8 +97,7 @@ DeviceObjVkBufferView::~DeviceObjVkBufferView() {
 DeviceObjVkAccelerationStructureKHR::~DeviceObjVkAccelerationStructureKHR() {
   PFN_vkDestroyAccelerationStructureKHR destroy_raytracing_pipeline_khr =
       PFN_vkDestroyAccelerationStructureKHR(vkGetInstanceProcAddr(
-          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(),
-          "vkDestroyAccelerationStructureKHR"));
+          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(), "vkDestroyAccelerationStructureKHR"));
 
   destroy_raytracing_pipeline_khr(device, accel, nullptr);
 }
@@ -100,9 +111,7 @@ IDeviceObj create_device_obj(VkDevice device) {
   return obj;
 }
 
-IVkSemaphore create_semaphore(VkDevice device,
-                              VkSemaphoreCreateFlags flags,
-                              void *pnext) {
+IVkSemaphore create_semaphore(VkDevice device, VkSemaphoreCreateFlags flags, void *pnext) {
   IVkSemaphore obj = std::make_shared<DeviceObjVkSemaphore>();
   obj->device = device;
 
@@ -130,26 +139,18 @@ IVkFence create_fence(VkDevice device, VkFenceCreateFlags flags, void *pnext) {
   return obj;
 }
 
-IVkDescriptorSetLayout create_descriptor_set_layout(
-    VkDevice device,
-    VkDescriptorSetLayoutCreateInfo *create_info) {
-  IVkDescriptorSetLayout obj =
-      std::make_shared<DeviceObjVkDescriptorSetLayout>();
+IVkDescriptorSetLayout create_descriptor_set_layout(VkDevice device, VkDescriptorSetLayoutCreateInfo *create_info) {
+  IVkDescriptorSetLayout obj = std::make_shared<DeviceObjVkDescriptorSetLayout>();
   obj->device = device;
-  VkResult res =
-      vkCreateDescriptorSetLayout(device, create_info, nullptr, &obj->layout);
-  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res,
-                                  "failed to create descriptor set layout");
+  VkResult res = vkCreateDescriptorSetLayout(device, create_info, nullptr, &obj->layout);
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create descriptor set layout");
   return obj;
 }
 
-IVkDescriptorPool create_descriptor_pool(
-    VkDevice device,
-    VkDescriptorPoolCreateInfo *create_info) {
+IVkDescriptorPool create_descriptor_pool(VkDevice device, VkDescriptorPoolCreateInfo *create_info) {
   IVkDescriptorPool obj = std::make_shared<DeviceObjVkDescriptorPool>();
   obj->device = device;
-  VkResult res =
-      vkCreateDescriptorPool(device, create_info, nullptr, &obj->pool);
+  VkResult res = vkCreateDescriptorPool(device, create_info, nullptr, &obj->pool);
   if (res != VK_SUCCESS) {
     // All failure condition listed in spec are OOM
     return nullptr;
@@ -157,9 +158,7 @@ IVkDescriptorPool create_descriptor_pool(
   return obj;
 }
 
-IVkDescriptorSet allocate_descriptor_sets(IVkDescriptorPool pool,
-                                          IVkDescriptorSetLayout layout,
-                                          void *pnext) {
+IVkDescriptorSet allocate_descriptor_sets(IVkDescriptorPool pool, IVkDescriptorSetLayout layout, void *pnext) {
   IVkDescriptorSet obj = std::make_shared<DeviceObjVkDescriptorSet>();
   obj->device = pool->device;
   obj->ref_layout = layout;
@@ -172,17 +171,14 @@ IVkDescriptorSet allocate_descriptor_sets(IVkDescriptorPool pool,
   info.descriptorSetCount = 1;
   info.pSetLayouts = &layout->layout;
 
-  if (vkAllocateDescriptorSets(pool->device, &info, &obj->set) ==
-      VK_ERROR_OUT_OF_POOL_MEMORY) {
+  if (vkAllocateDescriptorSets(pool->device, &info, &obj->set) == VK_ERROR_OUT_OF_POOL_MEMORY) {
     return nullptr;
   }
 
   return obj;
 }
 
-IVkCommandPool create_command_pool(VkDevice device,
-                                   VkCommandPoolCreateFlags flags,
-                                   uint32_t queue_family_index) {
+IVkCommandPool create_command_pool(VkDevice device, VkCommandPoolCreateFlags flags, uint32_t queue_family_index) {
   IVkCommandPool obj = std::make_shared<DeviceObjVkCommandPool>();
   obj->device = device;
   obj->queue_family_index = queue_family_index;
@@ -199,15 +195,13 @@ IVkCommandPool create_command_pool(VkDevice device,
   return obj;
 }
 
-IVkCommandBuffer allocate_command_buffer(IVkCommandPool pool,
-                                         VkCommandBufferLevel level) {
+IVkCommandBuffer allocate_command_buffer(IVkCommandPool pool, VkCommandBufferLevel level) {
   VkCommandBuffer cmdbuf{VK_NULL_HANDLE};
 
   if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY && pool->free_primary.size()) {
     cmdbuf = pool->free_primary.top();
     pool->free_primary.pop();
-  } else if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY &&
-             pool->free_secondary.size()) {
+  } else if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY && pool->free_secondary.size()) {
     cmdbuf = pool->free_secondary.top();
     pool->free_secondary.pop();
   } else {
@@ -233,21 +227,18 @@ IVkCommandBuffer allocate_command_buffer(IVkCommandPool pool,
   return obj;
 }
 
-IVkRenderPass create_render_pass(VkDevice device,
-                                 VkRenderPassCreateInfo *create_info) {
+IVkRenderPass create_render_pass(VkDevice device, VkRenderPassCreateInfo *create_info) {
   IVkRenderPass obj = std::make_shared<DeviceObjVkRenderPass>();
   obj->device = device;
-  VkResult res =
-      vkCreateRenderPass(device, create_info, nullptr, &obj->renderpass);
+  VkResult res = vkCreateRenderPass(device, create_info, nullptr, &obj->renderpass);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create render pass");
   return obj;
 }
 
-IVkPipelineLayout create_pipeline_layout(
-    VkDevice device,
-    std::vector<IVkDescriptorSetLayout> &set_layouts,
-    uint32_t push_constant_range_count,
-    VkPushConstantRange *push_constant_ranges) {
+IVkPipelineLayout create_pipeline_layout(VkDevice device,
+                                         std::vector<IVkDescriptorSetLayout> &set_layouts,
+                                         uint32_t push_constant_range_count,
+                                         VkPushConstantRange *push_constant_ranges) {
   IVkPipelineLayout obj = std::make_shared<DeviceObjVkPipelineLayout>();
   obj->device = device;
   obj->ref_desc_layouts = set_layouts;
@@ -318,10 +309,8 @@ IVkPipeline create_compute_pipeline(VkDevice device,
   }
 
   VkResult res =
-      vkCreateComputePipelines(device, cache ? cache->cache : VK_NULL_HANDLE, 1,
-                               &info, nullptr, &obj->pipeline);
-  RHI_THROW_UNLESS(res == VK_SUCCESS,
-                   std::runtime_error("vkCreateComputePipelines failed"));
+      vkCreateComputePipelines(device, cache ? cache->cache : VK_NULL_HANDLE, 1, &info, nullptr, &obj->pipeline);
+  RHI_THROW_UNLESS(res == VK_SUCCESS, std::runtime_error("vkCreateComputePipelines failed"));
 
   return obj;
 }
@@ -350,20 +339,18 @@ IVkPipeline create_graphics_pipeline(VkDevice device,
   }
 
   VkResult res =
-      vkCreateGraphicsPipelines(device, cache ? cache->cache : VK_NULL_HANDLE,
-                                1, create_info, nullptr, &obj->pipeline);
+      vkCreateGraphicsPipelines(device, cache ? cache->cache : VK_NULL_HANDLE, 1, create_info, nullptr, &obj->pipeline);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create graphics pipeline");
 
   return obj;
 }
 
-IVkPipeline create_graphics_pipeline_dynamic(
-    VkDevice device,
-    VkGraphicsPipelineCreateInfo *create_info,
-    VkPipelineRenderingCreateInfoKHR *rendering_info,
-    IVkPipelineLayout layout,
-    IVkPipelineCache cache,
-    IVkPipeline base_pipeline) {
+IVkPipeline create_graphics_pipeline_dynamic(VkDevice device,
+                                             VkGraphicsPipelineCreateInfo *create_info,
+                                             VkPipelineRenderingCreateInfoKHR *rendering_info,
+                                             IVkPipelineLayout layout,
+                                             IVkPipelineCache cache,
+                                             IVkPipeline base_pipeline) {
   IVkPipeline obj = std::make_shared<DeviceObjVkPipeline>();
   obj->device = device;
   obj->ref_layout = layout;
@@ -382,21 +369,19 @@ IVkPipeline create_graphics_pipeline_dynamic(
   }
 
   VkResult res =
-      vkCreateGraphicsPipelines(device, cache ? cache->cache : VK_NULL_HANDLE,
-                                1, create_info, nullptr, &obj->pipeline);
+      vkCreateGraphicsPipelines(device, cache ? cache->cache : VK_NULL_HANDLE, 1, create_info, nullptr, &obj->pipeline);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create graphics pipeline");
 
   return obj;
 }
 
-IVkPipeline create_raytracing_pipeline(
-    VkDevice device,
-    VkRayTracingPipelineCreateInfoKHR *create_info,
-    IVkPipelineLayout layout,
-    std::vector<IVkPipeline> &pipeline_libraries,
-    VkDeferredOperationKHR deferredOperation,
-    IVkPipelineCache cache,
-    IVkPipeline base_pipeline) {
+IVkPipeline create_raytracing_pipeline(VkDevice device,
+                                       VkRayTracingPipelineCreateInfoKHR *create_info,
+                                       IVkPipelineLayout layout,
+                                       std::vector<IVkPipeline> &pipeline_libraries,
+                                       VkDeferredOperationKHR deferredOperation,
+                                       IVkPipelineCache cache,
+                                       IVkPipeline base_pipeline) {
   IVkPipeline obj = std::make_shared<DeviceObjVkPipeline>();
   obj->device = device;
   obj->ref_layout = layout;
@@ -415,12 +400,10 @@ IVkPipeline create_raytracing_pipeline(
 
   PFN_vkCreateRayTracingPipelinesKHR create_raytracing_pipeline_khr =
       PFN_vkCreateRayTracingPipelinesKHR(vkGetInstanceProcAddr(
-          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(),
-          "vkCreateRayTracingPipelinesKHR"));
+          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(), "vkCreateRayTracingPipelinesKHR"));
 
-  VkResult res = create_raytracing_pipeline_khr(
-      device, deferredOperation, cache ? cache->cache : VK_NULL_HANDLE, 1,
-      create_info, nullptr, &obj->pipeline);
+  VkResult res = create_raytracing_pipeline_khr(device, deferredOperation, cache ? cache->cache : VK_NULL_HANDLE, 1,
+                                                create_info, nullptr, &obj->pipeline);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create raytracing pipeline");
 
   return obj;
@@ -430,9 +413,8 @@ IVkSampler create_sampler(VkDevice device, const VkSamplerCreateInfo &info) {
   IVkSampler sampler = std::make_shared<DeviceObjVkSampler>();
   sampler->device = device;
 
-  BAIL_ON_VK_BAD_RESULT_NO_RETURN(
-      vkCreateSampler(device, &info, nullptr, &sampler->sampler),
-      "failed to create texture sampler!");
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(vkCreateSampler(device, &info, nullptr, &sampler->sampler),
+                                  "failed to create texture sampler!");
 
   return sampler;
 }
@@ -453,8 +435,7 @@ IVkImage create_image(VkDevice device,
   image->array_layers = image_info->arrayLayers;
   image->usage = image_info->usage;
 
-  VkResult res = vmaCreateImage(allocator, image_info, alloc_info,
-                                &image->image, &image->allocation, nullptr);
+  VkResult res = vmaCreateImage(allocator, image_info, alloc_info, &image->image, &image->allocation, nullptr);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create image");
 
   return image;
@@ -483,9 +464,7 @@ IVkImage create_image(VkDevice device,
   return obj;
 }
 
-IVkImageView create_image_view(VkDevice device,
-                               IVkImage image,
-                               VkImageViewCreateInfo *create_info) {
+IVkImageView create_image_view(VkDevice device, IVkImage image, VkImageViewCreateInfo *create_info) {
   IVkImageView view = std::make_shared<DeviceObjVkImageView>();
   view->device = device;
   view->ref_image = image;
@@ -528,8 +507,7 @@ IVkFramebuffer create_framebuffer(VkFramebufferCreateFlags flags,
   info.height = height;
   info.layers = layers;
 
-  VkResult res = vkCreateFramebuffer(renderpass->device, &info, nullptr,
-                                     &obj->framebuffer);
+  VkResult res = vkCreateFramebuffer(renderpass->device, &info, nullptr, &obj->framebuffer);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create framebuffer");
 
   return obj;
@@ -544,10 +522,8 @@ IVkBuffer create_buffer(VkDevice device,
   buffer->allocator = allocator;
   buffer->usage = buffer_info->usage;
 
-  VkResult res = vmaCreateBuffer(allocator, buffer_info, alloc_info,
-                                 &buffer->buffer, &buffer->allocation, nullptr);
-  if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY ||
-      res == VK_ERROR_OUT_OF_HOST_MEMORY) {
+  VkResult res = vmaCreateBuffer(allocator, buffer_info, alloc_info, &buffer->buffer, &buffer->allocation, nullptr);
+  if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY || res == VK_ERROR_OUT_OF_HOST_MEMORY) {
     return nullptr;
   }
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create buffer");
@@ -555,9 +531,7 @@ IVkBuffer create_buffer(VkDevice device,
   return buffer;
 }
 
-IVkBuffer create_buffer(VkDevice device,
-                        VkBuffer buffer,
-                        VkBufferUsageFlags usage) {
+IVkBuffer create_buffer(VkDevice device, VkBuffer buffer, VkBufferUsageFlags usage) {
   IVkBuffer obj = std::make_shared<DeviceObjVkBuffer>();
   obj->device = device;
   obj->buffer = buffer;
@@ -587,21 +561,18 @@ IVkBufferView create_buffer_view(IVkBuffer buffer,
   info.offset = offset;
   info.range = range;
 
-  VkResult res =
-      vkCreateBufferView(buffer->device, &info, nullptr, &view->view);
+  VkResult res = vkCreateBufferView(buffer->device, &info, nullptr, &view->view);
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create buffer view");
 
   return view;
 }
 
-IVkAccelerationStructureKHR create_acceleration_structure(
-    VkAccelerationStructureCreateFlagsKHR flags,
-    IVkBuffer buffer,
-    VkDeviceSize offset,
-    VkDeviceSize size,
-    VkAccelerationStructureTypeKHR type) {
-  IVkAccelerationStructureKHR obj =
-      std::make_shared<DeviceObjVkAccelerationStructureKHR>();
+IVkAccelerationStructureKHR create_acceleration_structure(VkAccelerationStructureCreateFlagsKHR flags,
+                                                          IVkBuffer buffer,
+                                                          VkDeviceSize offset,
+                                                          VkDeviceSize size,
+                                                          VkAccelerationStructureTypeKHR type) {
+  IVkAccelerationStructureKHR obj = std::make_shared<DeviceObjVkAccelerationStructureKHR>();
   obj->device = buffer->device;
   obj->ref_buffer = buffer;
   obj->offset = offset;
@@ -620,13 +591,10 @@ IVkAccelerationStructureKHR create_acceleration_structure(
 
   PFN_vkCreateAccelerationStructureKHR create_acceleration_structure_khr =
       PFN_vkCreateAccelerationStructureKHR(vkGetInstanceProcAddr(
-          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(),
-          "vkCreateAccelerationStructureKHR"));
+          quadrants::lang::vulkan::VulkanLoader::instance().get_instance(), "vkCreateAccelerationStructureKHR"));
 
-  VkResult res = create_acceleration_structure_khr(buffer->device, &info,
-                                                   nullptr, &obj->accel);
-  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res,
-                                  "failed to create acceleration structure");
+  VkResult res = create_acceleration_structure_khr(buffer->device, &info, nullptr, &obj->accel);
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create acceleration structure");
 
   return obj;
 }

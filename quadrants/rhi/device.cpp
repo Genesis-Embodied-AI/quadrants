@@ -43,33 +43,27 @@ DevicePtr DeviceAllocation::get_ptr(uint64_t offset) const {
   return DevicePtr{{device, alloc_id}, offset};
 }
 
-Device::MemcpyCapability Device::check_memcpy_capability(DevicePtr dst,
-                                                         DevicePtr src,
-                                                         uint64_t size) {
+Device::MemcpyCapability Device::check_memcpy_capability(DevicePtr dst, DevicePtr src, uint64_t size) {
   if (dst.device == src.device) {
     return Device::MemcpyCapability::Direct;
   }
 
 #if QD_WITH_VULKAN
 #if QD_WITH_LLVM
-  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) &&
-      dynamic_cast<cpu::CpuDevice *>(src.device)) {
+  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) && dynamic_cast<cpu::CpuDevice *>(src.device)) {
     // TODO: support direct copy if dst itself supports host write.
     return Device::MemcpyCapability::RequiresStagingBuffer;
-  } else if (dynamic_cast<cpu::CpuDevice *>(dst.device) &&
-             dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
+  } else if (dynamic_cast<cpu::CpuDevice *>(dst.device) && dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
     return Device::MemcpyCapability::RequiresStagingBuffer;
   }
 #endif
 #if QD_WITH_CUDA
-  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) &&
-      dynamic_cast<cuda::CudaDevice *>(src.device)) {
+  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) && dynamic_cast<cuda::CudaDevice *>(src.device)) {
     // FIXME: direct copy isn't always possible.
     // The vulkan buffer needs export_sharing turned on.
     // Otherwise, needs staging buffer
     return Device::MemcpyCapability::Direct;
-  } else if (dynamic_cast<cuda::CudaDevice *>(dst.device) &&
-             dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
+  } else if (dynamic_cast<cuda::CudaDevice *>(dst.device) && dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
     return Device::MemcpyCapability::Direct;
   }
 #endif  // QD_WITH_CUDA
@@ -85,19 +79,16 @@ void Device::memcpy_direct(DevicePtr dst, DevicePtr src, uint64_t size) {
   }
 #if QD_WITH_VULKAN && QD_WITH_LLVM
   // cross-device copy directly
-  else if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) &&
-           dynamic_cast<cpu::CpuDevice *>(src.device)) {
+  else if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) && dynamic_cast<cpu::CpuDevice *>(src.device)) {
     memcpy_cpu_to_vulkan(dst, src, size);
     return;
   }
 #endif
 #if QD_WITH_VULKAN && QD_WITH_CUDA
-  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) &&
-      dynamic_cast<cuda::CudaDevice *>(src.device)) {
+  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) && dynamic_cast<cuda::CudaDevice *>(src.device)) {
     memcpy_cuda_to_vulkan(dst, src, size);
     return;
-  } else if (dynamic_cast<cuda::CudaDevice *>(dst.device) &&
-             dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
+  } else if (dynamic_cast<cuda::CudaDevice *>(dst.device) && dynamic_cast<vulkan::VulkanDevice *>(src.device)) {
     memcpy_vulkan_to_cuda(dst, src, size);
     return;
   }
@@ -105,14 +96,10 @@ void Device::memcpy_direct(DevicePtr dst, DevicePtr src, uint64_t size) {
   QD_NOT_IMPLEMENTED;
 }
 
-void Device::memcpy_via_staging(DevicePtr dst,
-                                DevicePtr staging,
-                                DevicePtr src,
-                                uint64_t size) {
+void Device::memcpy_via_staging(DevicePtr dst, DevicePtr staging, DevicePtr src, uint64_t size) {
   // Inter-device copy
 #if defined(QD_WITH_VULKAN) && defined(QD_WITH_LLVM)
-  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) &&
-      dynamic_cast<cpu::CpuDevice *>(src.device)) {
+  if (dynamic_cast<vulkan::VulkanDevice *>(dst.device) && dynamic_cast<cpu::CpuDevice *>(src.device)) {
     memcpy_cpu_to_vulkan_via_staging(dst, staging, src, size);
     return;
   }
@@ -121,16 +108,11 @@ void Device::memcpy_via_staging(DevicePtr dst,
   QD_NOT_IMPLEMENTED;
 }
 
-void Device::memcpy_via_host(DevicePtr dst,
-                             void *host_buffer,
-                             DevicePtr src,
-                             uint64_t size) {
+void Device::memcpy_via_host(DevicePtr dst, void *host_buffer, DevicePtr src, uint64_t size) {
   QD_NOT_IMPLEMENTED;
 }
 
-void GraphicsDevice::image_transition(DeviceAllocation img,
-                                      ImageLayout old_layout,
-                                      ImageLayout new_layout) {
+void GraphicsDevice::image_transition(DeviceAllocation img, ImageLayout old_layout, ImageLayout new_layout) {
   Stream *stream = get_graphics_stream();
   auto [cmd_list, res] = stream->new_command_list_unique();
   QD_ASSERT(res == RhiResult::success);
@@ -158,10 +140,7 @@ void GraphicsDevice::image_to_buffer(DevicePtr dst_buf,
   stream->submit_synced(cmd_list.get());
 }
 
-RhiResult Device::upload_data(DevicePtr *device_ptr,
-                              const void **data,
-                              size_t *size,
-                              int num_alloc) noexcept {
+RhiResult Device::upload_data(DevicePtr *device_ptr, const void **data, size_t *size, int num_alloc) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -171,9 +150,8 @@ RhiResult Device::upload_data(DevicePtr *device_ptr,
     if (device_ptr[i].device != this || !data[i]) {
       return RhiResult::invalid_usage;
     }
-    auto [staging, res] = this->allocate_memory_unique(
-        {size[i], /*host_write=*/true, /*host_read=*/false,
-         /*export_sharing=*/false, AllocUsage::Upload});
+    auto [staging, res] = this->allocate_memory_unique({size[i], /*host_write=*/true, /*host_read=*/false,
+                                                        /*export_sharing=*/false, AllocUsage::Upload});
     if (res != RhiResult::success) {
       return res;
     }
@@ -202,12 +180,11 @@ RhiResult Device::upload_data(DevicePtr *device_ptr,
   return RhiResult::success;
 }
 
-RhiResult Device::readback_data(
-    DevicePtr *device_ptr,
-    void **data,
-    size_t *size,
-    int num_alloc,
-    const std::vector<StreamSemaphore> &wait_sema) noexcept {
+RhiResult Device::readback_data(DevicePtr *device_ptr,
+                                void **data,
+                                size_t *size,
+                                int num_alloc,
+                                const std::vector<StreamSemaphore> &wait_sema) noexcept {
   if (!device_ptr || !data || !size) {
     return RhiResult::invalid_usage;
   }
@@ -223,9 +200,8 @@ RhiResult Device::readback_data(
     if (device_ptr[i].device != this || !data[i]) {
       return RhiResult::invalid_usage;
     }
-    auto [staging, res] = this->allocate_memory_unique(
-        {size[i], /*host_write=*/false, /*host_read=*/true,
-         /*export_sharing=*/false, AllocUsage::None});
+    auto [staging, res] = this->allocate_memory_unique({size[i], /*host_write=*/false, /*host_read=*/true,
+                                                        /*export_sharing=*/false, AllocUsage::None});
     if (res != RhiResult::success) {
       return res;
     }

@@ -43,13 +43,11 @@ void DeviceCapabilityConfig::set(DeviceCapability cap, uint32_t level) {
 
 void DeviceCapabilityConfig::dbg_print_all() const {
   for (auto &pair : devcaps) {
-    QD_TRACE("DeviceCapability::{} ({}) = {}", to_string(pair.first),
-             int(pair.first), pair.second);
+    QD_TRACE("DeviceCapability::{} ({}) = {}", to_string(pair.first), int(pair.first), pair.second);
   }
 }
 
-const std::map<DeviceCapability, uint32_t> &DeviceCapabilityConfig::to_inner()
-    const {
+const std::map<DeviceCapability, uint32_t> &DeviceCapabilityConfig::to_inner() const {
   return devcaps;
 }
 

@@ -24,17 +24,13 @@ DeviceMemoryPool::DeviceMemoryPool(Arch arch, bool merge_upon_release)
   allocator_ = std::make_unique<CachingAllocator>(merge_upon_release);
 }
 
-void *DeviceMemoryPool::allocate_with_cache(
-    LlvmDevice *device,
-    const LlvmDevice::LlvmRuntimeAllocParams &params) {
+void *DeviceMemoryPool::allocate_with_cache(LlvmDevice *device, const LlvmDevice::LlvmRuntimeAllocParams &params) {
   std::lock_guard<std::mutex> _(mut_allocation_);
 
   return allocator_->allocate(device, params);
 }
 
-void *DeviceMemoryPool::allocate(std::size_t size,
-                                 std::size_t alignment,
-                                 bool managed) {
+void *DeviceMemoryPool::allocate(std::size_t size, std::size_t alignment, bool managed) {
   std::lock_guard<std::mutex> _(mut_allocation_);
 
   return allocate_raw_memory(size, managed);
@@ -67,8 +63,7 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
     if (!managed) {
       CUDADriver::get_instance().malloc(&ptr, size);
     } else {
-      CUDADriver::get_instance().malloc_managed(&ptr, size,
-                                                CU_MEM_ATTACH_GLOBAL);
+      CUDADriver::get_instance().malloc_managed(&ptr, size, CU_MEM_ATTACH_GLOBAL);
     }
 #else
     QD_NOT_IMPLEMENTED;
@@ -78,8 +73,7 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
     if (!managed) {
       AMDGPUDriver::get_instance().malloc(&ptr, size);
     } else {
-      AMDGPUDriver::get_instance().malloc_managed(&ptr, size,
-                                                  HIP_MEM_ATTACH_GLOBAL);
+      AMDGPUDriver::get_instance().malloc_managed(&ptr, size, HIP_MEM_ATTACH_GLOBAL);
     }
 #else
     QD_NOT_IMPLEMENTED;
@@ -149,10 +143,8 @@ DeviceMemoryPool::~DeviceMemoryPool() {
 
 const size_t DeviceMemoryPool::page_size{1 << 12};  // 4 KB page size by default
 
-DeviceMemoryPool &DeviceMemoryPool::get_instance(Arch arch,
-                                                 bool merge_upon_release) {
-  static DeviceMemoryPool *cuda_memory_pool =
-      new DeviceMemoryPool(arch, merge_upon_release);
+DeviceMemoryPool &DeviceMemoryPool::get_instance(Arch arch, bool merge_upon_release) {
+  static DeviceMemoryPool *cuda_memory_pool = new DeviceMemoryPool(arch, merge_upon_release);
   assert(cuda_memory_pool->arch_ == arch);
   return *cuda_memory_pool;
 }

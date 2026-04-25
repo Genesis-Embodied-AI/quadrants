@@ -48,8 +48,7 @@ using TaskType = OffloadedStmt::TaskType;
 
 class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
  public:
-  explicit MakeCPUMultithreadedRangeFor(const CompileConfig &config)
-      : config_(config) {
+  explicit MakeCPUMultithreadedRangeFor(const CompileConfig &config) : config_(config) {
   }
 
   void visit(Block *block) override {
@@ -64,71 +63,60 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
     }
 
     auto offloaded_body = std::make_unique<Block>();
-    auto one = offloaded_body->insert(
-        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
-    auto minimal_block_range = offloaded_body->insert(
-        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 512)));
-    auto num_threads = offloaded_body->insert(Stmt::make_typed<ConstStmt>(
-        TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
-    auto thread_index =
-        offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
+    auto one = offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 1)));
+    auto minimal_block_range =
+        offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, 512)));
+    auto num_threads = offloaded_body->insert(
+        Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, config_.cpu_max_num_threads)));
+    auto thread_index = offloaded_body->insert(Stmt::make_typed<LoopIndexStmt>(offloaded, 0));
 
     // Retrieve range-for bounds.
     Stmt *begin_stmt;
     Stmt *end_stmt;
     if (offloaded->const_begin) {
-      begin_stmt = offloaded_body->insert(Stmt::make_typed<ConstStmt>(
-          TypedConstant(PrimitiveType::i32, offloaded->begin_value)));
+      begin_stmt = offloaded_body->insert(
+          Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->begin_value)));
     } else {
-      begin_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(
-          offloaded->begin_offset, PrimitiveType::i32));
-      begin_stmt =
-          offloaded_body->insert(Stmt::make<GlobalLoadStmt>(begin_stmt));
+      begin_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->begin_offset, PrimitiveType::i32));
+      begin_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(begin_stmt));
     }
     if (offloaded->const_end) {
-      end_stmt = offloaded_body->insert(Stmt::make_typed<ConstStmt>(
-          TypedConstant(PrimitiveType::i32, offloaded->end_value)));
+      end_stmt =
+          offloaded_body->insert(Stmt::make_typed<ConstStmt>(TypedConstant(PrimitiveType::i32, offloaded->end_value)));
     } else {
-      end_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(
-          offloaded->end_offset, PrimitiveType::i32));
+      end_stmt = offloaded_body->insert(Stmt::make<GlobalTemporaryStmt>(offloaded->end_offset, PrimitiveType::i32));
       end_stmt = offloaded_body->insert(Stmt::make<GlobalLoadStmt>(end_stmt));
     }
 
     // Inner serial block range is
     // max(((end - begin) + (num_threads - 1)) / num_threads,
     // minimal_block_range)
-    auto total_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::sub, end_stmt, begin_stmt));
-    auto saturated_total_range =
-        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-            BinaryOpType::sub,
-            offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-                BinaryOpType::add, total_range, num_threads)),
-            one));
-    auto block_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::floordiv, saturated_total_range, num_threads));
-    block_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::max, block_range, minimal_block_range));
+    auto total_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::sub, end_stmt, begin_stmt));
+    auto saturated_total_range = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
+        BinaryOpType::sub,
+        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, total_range, num_threads)), one));
+    auto block_range = offloaded_body->insert(
+        Stmt::make_typed<BinaryOpStmt>(BinaryOpType::floordiv, saturated_total_range, num_threads));
+    block_range =
+        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::max, block_range, minimal_block_range));
 
     // Inner loop begins at
     // begin + block_range * thread_id
-    auto block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::mul, block_range, thread_index));
-    block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::add, begin_stmt, block_begin));
+    auto block_begin =
+        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, block_range, thread_index));
+    block_begin = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, begin_stmt, block_begin));
 
     // Inner loop ends at
     // min(block_begin + block_range), end))
-    auto block_end = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(
-        BinaryOpType::add, block_begin, block_range));
-    block_end = offloaded_body->insert(
-        Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_end));
+    auto block_end =
+        offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, block_begin, block_range));
+    block_end = offloaded_body->insert(Stmt::make_typed<BinaryOpStmt>(BinaryOpType::min, end_stmt, block_end));
 
     // Create the serial inner loop.
-    auto inner_loop = offloaded_body->insert(Stmt::make_typed<RangeForStmt>(
-        block_begin, block_end, std::move(offloaded->body),
-        /*is_bit_vectorized*/ false, /*num_cpu_threads*/ 1, /*block_dim*/ 1,
-        /*strictly_serialized*/ true, offloaded->range_hint));
+    auto inner_loop = offloaded_body->insert(
+        Stmt::make_typed<RangeForStmt>(block_begin, block_end, std::move(offloaded->body),
+                                       /*is_bit_vectorized*/ false, /*num_cpu_threads*/ 1, /*block_dim*/ 1,
+                                       /*strictly_serialized*/ true, offloaded->range_hint));
 
     irpass::replace_all_usages_with(inner_loop, offloaded, inner_loop);
 
@@ -159,8 +147,7 @@ class MakeCPUMultithreadedRangeFor : public BasicStmtVisitor {
 
 namespace irpass {
 
-void make_cpu_multithreaded_range_for(IRNode *root,
-                                      const CompileConfig &config) {
+void make_cpu_multithreaded_range_for(IRNode *root, const CompileConfig &config) {
   MakeCPUMultithreadedRangeFor::run(root, config);
 }
 

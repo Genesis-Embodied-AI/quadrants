@@ -8,8 +8,7 @@
 
 namespace quadrants::lang {
 
-class DetermineAdStackSizeTest
-    : public ::testing::TestWithParam<std::tuple<int, int>> {
+class DetermineAdStackSizeTest : public ::testing::TestWithParam<std::tuple<int, int>> {
  protected:
   void SetUp() override {
     prog_ = std::make_unique<Program>();
@@ -21,8 +20,7 @@ class DetermineAdStackSizeTest
 
 TEST_F(DetermineAdStackSizeTest, Basic) {
   IRBuilder builder;
-  auto *stack =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   builder.ad_stack_push(stack, builder.get_int32(1));
   builder.ad_stack_push(stack, builder.get_int32(2));
   builder.ad_stack_push(stack, builder.get_int32(3));
@@ -36,8 +34,7 @@ TEST_F(DetermineAdStackSizeTest, Basic) {
   builder.ad_stack_pop(stack);
   builder.ad_stack_push(stack, builder.get_int32(7));
 
-  auto *stack2 =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack2 = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   builder.ad_stack_push(stack2, builder.get_int32(8));
 
   auto ir = builder.extract_ir();
@@ -54,8 +51,7 @@ TEST_F(DetermineAdStackSizeTest, Basic) {
 
 TEST_F(DetermineAdStackSizeTest, Loop) {
   IRBuilder builder;
-  auto *stack =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   auto *loop = builder.create_range_for(/*begin=*/builder.get_int32(0),
                                         /*end=*/builder.get_int32(10));
   {
@@ -74,10 +70,9 @@ TEST_F(DetermineAdStackSizeTest, Loop) {
   EXPECT_EQ(stack->max_size, 1);
 }
 
-TEST_F(DetermineAdStackSizeTest, LoopInfeasible) {
+TEST_F(DetermineAdStackSizeTest, LoopPushOnlyBoundByTripCount) {
   IRBuilder builder;
-  auto *stack =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   auto *loop = builder.create_range_for(/*begin=*/builder.get_int32(0),
                                         /*end=*/builder.get_int32(100));
   {
@@ -94,10 +89,15 @@ TEST_F(DetermineAdStackSizeTest, LoopInfeasible) {
   constexpr int kDefaultAdStackSize = 32;
   config.default_ad_stack_size = kDefaultAdStackSize;
   EXPECT_EQ(stack->max_size, 0);
-  // Should have a debug message here (unable to determine the necessary size
-  // for autodiff stacks).
+  // Bellman-Ford classifies this as a positive loop (push-only body, no matching pop) and defers. The
+  // structural pre-pass then walks the push site and binds the max size to the enclosing range-for's static
+  // trip count: 100. Before the reorder, Bellman-Ford ran second and unconditionally applied the
+  // `default_ad_stack_size` fallback, which silently over-allocated when the true bound was much smaller (or,
+  // for this test, under-allocated when the trip count is larger than the fallback). A statically-bounded
+  // inner loop has a known exact upper bound and the structural pre-pass is the natural place to derive it.
+  constexpr int kLoopTrips = 100;
   irpass::determine_ad_stack_size(ir_block, config);
-  EXPECT_EQ(stack->max_size, kDefaultAdStackSize);
+  EXPECT_EQ(stack->max_size, kLoopTrips);
 }
 
 TEST_P(DetermineAdStackSizeTest, If) {
@@ -109,8 +109,7 @@ TEST_P(DetermineAdStackSizeTest, If) {
 
   IRBuilder builder;
   auto *arg = builder.create_arg_load({0}, get_data_type<int>(), false);
-  auto *stack =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   auto *if_stmt = builder.create_if(arg);
   auto *one = builder.get_int32(1);
   for (int i = 1; i <= kCommonPushes; i++) {
@@ -133,33 +132,27 @@ TEST_P(DetermineAdStackSizeTest, If) {
   ASSERT_TRUE(ir->is<Block>());
   auto *ir_block = ir->as<Block>();
   irpass::type_check(ir_block, CompileConfig());
-  EXPECT_EQ(irpass::analysis::count_statements(ir_block),
-            4 /*arg_load, stack, if, one*/ + kCommonPushes +
-                has_true_branch * kTrueBranchPushes +
-                has_false_branch * kFalseBranchPushes);
+  EXPECT_EQ(irpass::analysis::count_statements(ir_block), 4 /*arg_load, stack, if, one*/ + kCommonPushes +
+                                                              has_true_branch * kTrueBranchPushes +
+                                                              has_false_branch * kFalseBranchPushes);
 
   EXPECT_EQ(stack->max_size, 0);
   irpass::determine_ad_stack_size(ir_block, CompileConfig());
   EXPECT_EQ(stack->max_size,
-            kCommonPushes + std::max(has_true_branch * kTrueBranchPushes,
-                                     has_false_branch * kFalseBranchPushes));
+            kCommonPushes + std::max(has_true_branch * kTrueBranchPushes, has_false_branch * kFalseBranchPushes));
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Parameterized,
-    DetermineAdStackSizeTest,
-    testing::Combine(testing::Values(0, 3), testing::Values(0, 4)),
-    [](const testing::TestParamInfo<DetermineAdStackSizeTest::ParamType>
-           &info) {
-      return fmt::format("True{}_False{}", std::get<0>(info.param),
-                         std::get<1>(info.param));
-    });
+INSTANTIATE_TEST_SUITE_P(Parameterized,
+                         DetermineAdStackSizeTest,
+                         testing::Combine(testing::Values(0, 3), testing::Values(0, 4)),
+                         [](const testing::TestParamInfo<DetermineAdStackSizeTest::ParamType> &info) {
+                           return fmt::format("True{}_False{}", std::get<0>(info.param), std::get<1>(info.param));
+                         });
 
 TEST_F(DetermineAdStackSizeTest, EmptyNodes) {
   IRBuilder builder;
   auto *arg = builder.create_arg_load({0}, get_data_type<int>(), false);
-  auto *stack =
-      builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
+  auto *stack = builder.create_ad_stack(get_data_type<int>(), 0 /*adaptive size*/);
   auto *one = builder.get_int32(1);
   builder.ad_stack_push(stack, one);  // stack contains [1] now
   auto *if_stmt = builder.create_if(arg);

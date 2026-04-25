@@ -6,20 +6,14 @@ namespace quadrants::lang {
 
 class Stmt;
 
-enum AccessFlag : unsigned int {
-  read = 1 << 1,
-  write = 1 << 2,
-  accumulate = 1 << 3
-};
+enum AccessFlag : unsigned int { read = 1 << 1, write = 1 << 2, accumulate = 1 << 3 };
 
 inline AccessFlag operator|(AccessFlag a, AccessFlag b) {
-  return static_cast<AccessFlag>(static_cast<unsigned>(a) |
-                                 static_cast<unsigned>(b));
+  return static_cast<AccessFlag>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
 }
 
 inline AccessFlag operator&(AccessFlag a, AccessFlag b) {
-  return static_cast<AccessFlag>(static_cast<unsigned>(a) &
-                                 static_cast<unsigned>(b));
+  return static_cast<AccessFlag>(static_cast<unsigned>(a) & static_cast<unsigned>(b));
 }
 
 inline AccessFlag operator|=(AccessFlag &a, AccessFlag &b) {
@@ -78,9 +72,7 @@ class ScratchPad {
     empty = false;
   }
 
-  void access(const std::vector<int> &coeffs,
-              const std::vector<int> &indices,
-              AccessFlag flags) {
+  void access(const std::vector<int> &coeffs, const std::vector<int> &indices, AccessFlag flags) {
     QD_ASSERT(!finalized);
     empty = true;
     QD_ASSERT((int)indices.size() == dim);
@@ -102,8 +94,7 @@ class ScratchPad {
 
     block_size.resize(dim);
     for (int i = 0; i < dim; i++) {
-      block_size[i] =
-          snode->parent->extractors[snode->physical_index_position[i]].shape;
+      block_size[i] = snode->parent->extractors[snode->physical_index_position[i]].shape;
       QD_ASSERT(bounds[i].low != std::numeric_limits<int>::max());
       QD_ASSERT(bounds[i].high != std::numeric_limits<int>::min());
     }
@@ -161,8 +152,7 @@ class ScratchPad {
     for (int i = d + 1; i < dim; i++) {
       div *= pad_size[i];
     }
-    return fmt::format("({} / {} % {} + {})", var, div, pad_size[d],
-                       bounds[d].low);
+    return fmt::format("({} / {} % {} + {})", var, div, pad_size[d], bounds[d].low);
   }
 
   /*
@@ -175,8 +165,7 @@ class ScratchPad {
   }
    */
 
-  std::string global_to_linearized_local(const std::vector<Stmt *> &loop_vars,
-                                         const std::vector<Stmt *> &indices);
+  std::string global_to_linearized_local(const std::vector<Stmt *> &loop_vars, const std::vector<Stmt *> &indices);
 };
 
 inline int div_floor(int a, int b) {
@@ -191,17 +180,13 @@ class ScratchPads {
 
   void insert(SNode *snode) {
     if (pads.find(snode) == pads.end()) {
-      pads.emplace(std::piecewise_construct, std::forward_as_tuple(snode),
-                   std::forward_as_tuple(snode));
+      pads.emplace(std::piecewise_construct, std::forward_as_tuple(snode), std::forward_as_tuple(snode));
     } else {
       QD_ERROR("ScratchPad for {} already exists.", snode->node_type_name);
     }
   }
 
-  void access(SNode *snode,
-              const std::vector<int> &coeffs,
-              const std::vector<int> &indices,
-              AccessFlag flags) {
+  void access(SNode *snode, const std::vector<int> &coeffs, const std::vector<int> &indices, AccessFlag flags) {
     QD_ASSERT(snode != nullptr);
     if (pads.find(snode) == pads.end())
       return;

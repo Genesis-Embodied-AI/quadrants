@@ -32,6 +32,23 @@ interop
 ```
 
 ```{toctree}
+:caption: Autodiff
+:maxdepth: 1
+:titlesonly:
+
+autodiff
+```
+
+```{toctree}
+:caption: SIMT primitives
+:maxdepth: 1
+:titlesonly:
+
+subgroup
+tile16
+```
+
+```{toctree}
 :caption: Performance
 :maxdepth: 1
 :titlesonly:
@@ -50,4 +67,12 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Internal
+:maxdepth: 1
+:titlesonly:
+
+building_cudagraph_conditional_fatbin
 ```

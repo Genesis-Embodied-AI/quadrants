@@ -24,8 +24,7 @@ void compile_to_offloads(IRNode *ir,
                          bool start_from_ast) {
   QD_AUTO_PROF;
 
-  auto print = make_pass_printer(verbose, config.print_ir_dbg_info,
-                                 kernel->get_name(), ir);
+  auto print = make_pass_printer(verbose, config.print_ir_dbg_info, kernel->get_name(), ir);
   print("Initial IR");
 
   if (!verbose && config.print_preprocessed_ir && start_from_ast) {
@@ -43,15 +42,13 @@ void compile_to_offloads(IRNode *ir,
 
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
   std::filesystem::path ir_dump_dir = config.debug_dump_path;
-  bool should_dump =
-      (dump_ir_env != nullptr && std::string(dump_ir_env) == "1");
+  bool should_dump = (dump_ir_env != nullptr && std::string(dump_ir_env) == "1");
 
   auto dump_ir = [&](const std::string &stage_name) {
     if (!should_dump)
       return;
     std::filesystem::create_directories(ir_dump_dir);
-    std::filesystem::path filename =
-        ir_dump_dir / (kernel->name + "_" + stage_name + ".ll");
+    std::filesystem::path filename = ir_dump_dir / (kernel->name + "_" + stage_name + ".ll");
     std::string ir_str;
     irpass::print(ir, &ir_str);
     std::ofstream ofs(filename.string());
@@ -68,11 +65,9 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("quadrants1");
-  irpass::compile_quadrants_functions(ir, config,
-                                      Function::IRStage::BeforeLowerAccess);
+  irpass::compile_quadrants_functions(ir, config, Function::IRStage::BeforeLowerAccess);
   irpass::analysis::gather_func_store_dests(ir);
-  irpass::compile_quadrants_functions(ir, config,
-                                      Function::IRStage::OptimizedIR);
+  irpass::compile_quadrants_functions(ir, config, Function::IRStage::OptimizedIR);
   irpass::analysis::gather_func_store_dests(ir);
 
   irpass::eliminate_immutable_local_vars(ir);
@@ -82,8 +77,7 @@ void compile_to_offloads(IRNode *ir,
 
   // TODO: strictly enforce bit vectorization for x86 cpu and CUDA now
   //       create a separate CompileConfig flag for the new pass
-  if (arch_is_cpu(config.arch) || config.arch == Arch::cuda ||
-      config.arch == Arch::amdgpu) {
+  if (arch_is_cpu(config.arch) || config.arch == Arch::cuda || config.arch == Arch::amdgpu) {
     irpass::bit_loop_vectorize(ir);
     irpass::type_check(ir, config);
     irpass::analysis::verify(ir);
@@ -100,8 +94,7 @@ void compile_to_offloads(IRNode *ir,
   dump_ir("before_simplify_I");
   irpass::full_simplify(
       ir, config,
-      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone,
-       kernel->get_name(), verbose, "simplify_I"});
+      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
   irpass::analysis::verify(ir);
   dump_ir("after_simplify_I");
 
@@ -121,19 +114,15 @@ void compile_to_offloads(IRNode *ir,
     irpass::analysis::verify(ir);
   }
 
-  if (autodiff_mode == AutodiffMode::kReverse ||
-      autodiff_mode == AutodiffMode::kForward) {
+  if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward) {
     // Remove local atomics here so that we don't have to handle their gradients
     irpass::demote_atomics(ir, config);
 
-    irpass::full_simplify(ir, config,
-                          {false, /*autodiff_enabled*/ true, kernel->get_name(),
-                           verbose, "pre_autodiff"});
+    irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ true, kernel->get_name(), verbose, "pre_autodiff"});
     irpass::auto_diff(ir, config, autodiff_mode, ad_use_stack);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,
-                          {false, /*autodiff_enabled*/ false,
-                           kernel->get_name(), verbose, "post_autodiff"});
+                          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});
     irpass::analysis::verify(ir);
   }
 
@@ -145,9 +134,7 @@ void compile_to_offloads(IRNode *ir,
   irpass::flag_access(ir);
   irpass::analysis::verify(ir);
 
-  irpass::full_simplify(ir, config,
-                        {false, /*autodiff_enabled*/ false, kernel->get_name(),
-                         verbose, "simplify_II"});
+  irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_II"});
   irpass::analysis::verify(ir);
 
   irpass::offload(ir, config);
@@ -158,9 +145,7 @@ void compile_to_offloads(IRNode *ir,
   // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
 
-  irpass::full_simplify(ir, config,
-                        {false, /*autodiff_enabled*/ false, kernel->get_name(),
-                         verbose, "simplify_III"});
+  irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_III"});
   irpass::analysis::verify(ir);
 
   dump_ir("after_simplify_III");
@@ -176,8 +161,7 @@ void offload_to_executable(IRNode *ir,
                            bool make_block_local) {
   QD_AUTO_PROF;
 
-  auto print = make_pass_printer(verbose, config.print_ir_dbg_info,
-                                 kernel->get_name(), ir);
+  auto print = make_pass_printer(verbose, config.print_ir_dbg_info, kernel->get_name(), ir);
 
   // TODO: This is just a proof that we can demote struct-fors after offloading.
   // Eventually we might want the order to be TLS/BLS -> demote struct-for.
@@ -217,8 +201,7 @@ void offload_to_executable(IRNode *ir,
     irpass::analysis::verify(ir);
   }
 
-  if (is_extension_supported(config.arch, Extension::mesh) &&
-      config.demote_no_access_mesh_fors) {
+  if (is_extension_supported(config.arch, Extension::mesh) && config.demote_no_access_mesh_fors) {
     irpass::demote_no_access_mesh_fors(ir);
     irpass::type_check(ir, config);
     print("No-access mesh-for demoted");
@@ -236,9 +219,7 @@ void offload_to_executable(IRNode *ir,
     if (config.make_mesh_block_local && config.arch == Arch::cuda) {
       irpass::make_mesh_block_local(ir, config, {kernel->get_name()});
       print("Make mesh block local");
-      irpass::full_simplify(ir, config,
-                            {false, /*autodiff_enabled*/ false,
-                             kernel->get_name(), verbose, "simplify_X"});
+      irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_X"});
       print("Simplified X");
     }
   }
@@ -257,8 +238,7 @@ void offload_to_executable(IRNode *ir,
   print("Atomics demoted II");
   irpass::analysis::verify(ir);
 
-  if (is_extension_supported(config.arch, Extension::quant) &&
-      config.quant_opt_atomic_demotion) {
+  if (is_extension_supported(config.arch, Extension::quant) && config.quant_opt_atomic_demotion) {
     irpass::analysis::gather_uniquely_accessed_bit_structs(ir, amgr.get());
   }
 
@@ -271,8 +251,7 @@ void offload_to_executable(IRNode *ir,
 
   if (lower_global_access) {
     irpass::full_simplify(ir, config,
-                          {false, /*autodiff_enabled*/ false,
-                           kernel->get_name(), verbose, "before_lower_access"});
+                          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "before_lower_access"});
     print("Simplified before lower access");
     irpass::lower_access(ir, config, {kernel->no_activate, true});
     print("Access lowered");
@@ -291,8 +270,7 @@ void offload_to_executable(IRNode *ir,
   print("Operations demoted");
 
   irpass::full_simplify(ir, config,
-                        {lower_global_access, /*autodiff_enabled*/ false,
-                         kernel->get_name(), verbose, "simplify_IV"});
+                        {lower_global_access, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_IV"});
   print("Simplified IV");
 
   if (determine_ad_stack_size) {
@@ -306,17 +284,14 @@ void offload_to_executable(IRNode *ir,
   }
 
   bool half2_optimization_enabled =
-      (config.arch == Arch::cuda && config.half2_vectorization &&
-       !get_custom_cuda_library_path().empty());
+      (config.arch == Arch::cuda && config.half2_vectorization && !get_custom_cuda_library_path().empty());
   if (config.real_matrix_scalarize) {
     if (irpass::scalarize(ir, half2_optimization_enabled)) {
       irpass::die(ir);
       print("DIE");
 
       // Remove redundant MatrixInitStmt inserted during scalarization
-      irpass::full_simplify(ir, config,
-                            {false, /*autodiff_enabled*/ false,
-                             kernel->get_name(), verbose, "scalarize"});
+      irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "scalarize"});
       print("Scalarized");
     }
   }
@@ -338,14 +313,11 @@ void compile_to_executable(IRNode *ir,
                            bool start_from_ast) {
   QD_AUTO_PROF;
 
-  compile_to_offloads(ir, config, kernel, verbose, autodiff_mode, ad_use_stack,
-                      start_from_ast);
+  compile_to_offloads(ir, config, kernel, verbose, autodiff_mode, ad_use_stack, start_from_ast);
 
-  offload_to_executable(
-      ir, config, kernel, verbose,
-      /*determine_ad_stack_size=*/autodiff_mode == AutodiffMode::kReverse &&
-          ad_use_stack,
-      lower_global_access, make_thread_local, make_block_local);
+  offload_to_executable(ir, config, kernel, verbose,
+                        /*determine_ad_stack_size=*/autodiff_mode == AutodiffMode::kReverse && ad_use_stack,
+                        lower_global_access, make_thread_local, make_block_local);
 }
 
 void compile_function(IRNode *ir,
@@ -357,12 +329,10 @@ void compile_function(IRNode *ir,
   QD_AUTO_PROF;
 
   auto current_stage = func->ir_stage();
-  auto print = make_pass_printer(verbose, config.print_ir_dbg_info,
-                                 func->get_name(), ir);
+  auto print = make_pass_printer(verbose, config.print_ir_dbg_info, func->get_name(), ir);
   print("Initial IR");
 
-  if (target_stage >= Function::IRStage::BeforeLowerAccess &&
-      current_stage < Function::IRStage::BeforeLowerAccess) {
+  if (target_stage >= Function::IRStage::BeforeLowerAccess && current_stage < Function::IRStage::BeforeLowerAccess) {
     if (autodiff_mode == AutodiffMode::kReverse) {
       irpass::reverse_segments(ir);
       print("Segment reversed (for autodiff)");
@@ -389,8 +359,7 @@ void compile_function(IRNode *ir,
     irpass::scalarize(ir, false /*half2_optimization_enabled*/);
   }
 
-  if (target_stage >= Function::IRStage::OptimizedIR &&
-      current_stage < Function::IRStage::OptimizedIR) {
+  if (target_stage >= Function::IRStage::OptimizedIR && current_stage < Function::IRStage::OptimizedIR) {
     irpass::lower_access(ir, config, {{}, true});
     print("Access lowered");
     irpass::analysis::verify(ir);
@@ -417,9 +386,7 @@ void compile_function(IRNode *ir,
       }
     }
 
-    irpass::full_simplify(ir, config,
-                          {true, autodiff_mode != AutodiffMode::kNone,
-                           func->get_name(), verbose, "final"});
+    irpass::full_simplify(ir, config, {true, autodiff_mode != AutodiffMode::kNone, func->get_name(), verbose, "final"});
     print("Simplified");
     irpass::analysis::verify(ir);
     func->set_ir_stage(Function::IRStage::OptimizedIR);

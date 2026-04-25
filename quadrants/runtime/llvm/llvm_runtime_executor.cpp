@@ -26,17 +26,13 @@ void assert_failed_host(const char *msg) {
   QD_ERROR("Assertion failure: {}", msg);
 }
 
-void *host_allocate_aligned(HostMemoryPool *memory_pool,
-                            std::size_t size,
-                            std::size_t alignment) {
+void *host_allocate_aligned(HostMemoryPool *memory_pool, std::size_t size, std::size_t alignment) {
   return memory_pool->allocate(size, alignment);
 }
 
 }  // namespace
 
-LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
-                                         KernelProfilerBase *profiler,
-                                         ProgramImpl *program_impl)
+LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config, KernelProfilerBase *profiler, ProgramImpl *program_impl)
     : config_(config), program_impl_(program_impl) {
   if (config.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
@@ -68,6 +64,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
       config.arch = host_arch();
     } else {
       // AMDGPU runtime created successfully
+      use_device_memory_pool_ = AMDGPUContext::get_instance().supports_mem_pool();
     }
 #else
     QD_WARN("Quadrants is not compiled with AMDGPU.");
@@ -92,19 +89,16 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
 #if defined(QD_WITH_CUDA)
   else if (config.arch == Arch::cuda) {
     int num_SMs{1};
-    CUDADriver::get_instance().device_get_attribute(
-        &num_SMs, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, nullptr);
+    CUDADriver::get_instance().device_get_attribute(&num_SMs, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, nullptr);
     int query_max_block_dim{1024};
-    CUDADriver::get_instance().device_get_attribute(
-        &query_max_block_dim, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, nullptr);
+    CUDADriver::get_instance().device_get_attribute(&query_max_block_dim, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, nullptr);
     int version{0};
     CUDADriver::get_instance().driver_get_version(&version);
     int query_max_block_per_sm{16};
     if (version >= 11000) {
       // query this attribute only when CUDA version is above 11.0
-      CUDADriver::get_instance().device_get_attribute(
-          &query_max_block_per_sm,
-          CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
+      CUDADriver::get_instance().device_get_attribute(&query_max_block_per_sm,
+                                                      CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR, nullptr);
     }
 
     if (config.max_block_dim == 0) {
@@ -124,8 +118,7 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
     }
     CUDAContext::get_instance().set_debug(config.debug);
     if (config.cuda_stack_limit != 0) {
-      CUDADriver::get_instance().context_set_limit(CU_LIMIT_STACK_SIZE,
-                                                   config.cuda_stack_limit);
+      CUDADriver::get_instance().context_set_limit(CU_LIMIT_STACK_SIZE, config.cuda_stack_limit);
     }
     device_ = std::make_shared<cuda::CudaDevice>();
   }
@@ -133,11 +126,9 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
 #if defined(QD_WITH_AMDGPU)
   else if (config.arch == Arch::amdgpu) {
     int num_workgroups{1};
-    AMDGPUDriver::get_instance().device_get_attribute(
-        &num_workgroups, HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
+    AMDGPUDriver::get_instance().device_get_attribute(&num_workgroups, HIP_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, 0);
     int query_max_block_dim{1024};
-    AMDGPUDriver::get_instance().device_get_attribute(
-        &query_max_block_dim, HIP_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, 0);
+    AMDGPUDriver::get_instance().device_get_attribute(&query_max_block_dim, HIP_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, 0);
     // magic number 32
     // I didn't find the relevant parameter to limit the max block num per CU
     // So ....
@@ -160,10 +151,8 @@ LlvmRuntimeExecutor::LlvmRuntimeExecutor(CompileConfig &config,
   else {
     QD_NOT_IMPLEMENTED
   }
-  llvm_context_ = std::make_unique<QuadrantsLLVMContext>(
-      config_, arch_is_cpu(config.arch) ? host_arch() : config.arch);
-  jit_session_ = JITSession::create(llvm_context_.get(), config, config.arch,
-                                    program_impl_);
+  llvm_context_ = std::make_unique<QuadrantsLLVMContext>(config_, arch_is_cpu(config.arch) ? host_arch() : config.arch);
+  jit_session_ = JITSession::create(llvm_context_.get(), config, config.arch, program_impl_);
   init_runtime_jit_module(llvm_context_->clone_runtime_module());
 }
 
@@ -171,8 +160,7 @@ QuadrantsLLVMContext *LlvmRuntimeExecutor::get_llvm_context() {
   return llvm_context_.get();
 }
 
-JITModule *LlvmRuntimeExecutor::create_jit_module(
-    std::unique_ptr<llvm::Module> module) {
+JITModule *LlvmRuntimeExecutor::create_jit_module(std::unique_ptr<llvm::Module> module) {
   return jit_session_->add_module(std::move(module));
 }
 
@@ -180,27 +168,20 @@ JITModule *LlvmRuntimeExecutor::get_runtime_jit_module() {
   return runtime_jit_module_;
 }
 
-void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager,
-                                                  uint64 *result_buffer) {
-  auto list_manager_len = runtime_query<int32>("ListManager_get_num_elements",
-                                               result_buffer, list_manager);
+void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *result_buffer) {
+  auto list_manager_len = runtime_query<int32>("ListManager_get_num_elements", result_buffer, list_manager);
 
-  auto element_size = runtime_query<int32>("ListManager_get_element_size",
-                                           result_buffer, list_manager);
+  auto element_size = runtime_query<int32>("ListManager_get_element_size", result_buffer, list_manager);
 
   auto elements_per_chunk =
-      runtime_query<int32>("ListManager_get_max_num_elements_per_chunk",
-                           result_buffer, list_manager);
+      runtime_query<int32>("ListManager_get_max_num_elements_per_chunk", result_buffer, list_manager);
 
-  auto num_active_chunks = runtime_query<int32>(
-      "ListManager_get_num_active_chunks", result_buffer, list_manager);
+  auto num_active_chunks = runtime_query<int32>("ListManager_get_num_active_chunks", result_buffer, list_manager);
 
   auto size_MB = 1e-6f * num_active_chunks * elements_per_chunk * element_size;
 
-  fmt::print(
-      " length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n",
-      list_manager_len, num_active_chunks, elements_per_chunk, element_size,
-      size_MB);
+  fmt::print(" length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
+             elements_per_chunk, element_size, size_MB);
 }
 
 void LlvmRuntimeExecutor::synchronize() {
@@ -213,10 +194,6 @@ void LlvmRuntimeExecutor::synchronize() {
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
     AMDGPUDriver::get_instance().stream_synchronize(nullptr);
-    // A better way
-    // use `hipFreeAsync` to free the device kernel arg mem
-    // notice: rocm version
-    AMDGPUContext::get_instance().free_kernel_arg_pointer();
 #else
     QD_ERROR("No AMDGPU support");
 #endif
@@ -231,15 +208,13 @@ uint64 LlvmRuntimeExecutor::fetch_result_uint64(int i, uint64 *result_buffer) {
   uint64 ret;
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
-    CUDADriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i,
-                                                     sizeof(uint64));
+    CUDADriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i, sizeof(uint64));
 #else
     QD_NOT_IMPLEMENTED;
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i,
-                                                       sizeof(uint64));
+    AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, result_buffer + i, sizeof(uint64));
 #else
     QD_NOT_IMPLEMENTED;
 #endif
@@ -249,28 +224,39 @@ uint64 LlvmRuntimeExecutor::fetch_result_uint64(int i, uint64 *result_buffer) {
   return ret;
 }
 
-std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(
-    SNode *snode,
-    uint64 *result_buffer) {
+std::size_t LlvmRuntimeExecutor::get_snode_num_dynamically_allocated(SNode *snode, uint64 *result_buffer) {
   QD_ASSERT(arch_uses_llvm(config_.arch));
 
   auto node_allocator =
-      runtime_query<void *>("LLVMRuntime_get_node_allocators", result_buffer,
-                            llvm_runtime_, snode->id);
-  auto data_list = runtime_query<void *>("NodeManager_get_data_list",
-                                         result_buffer, node_allocator);
+      runtime_query<void *>("LLVMRuntime_get_node_allocators", result_buffer, llvm_runtime_, snode->id);
+  auto data_list = runtime_query<void *>("NodeManager_get_data_list", result_buffer, node_allocator);
 
-  return (std::size_t)runtime_query<int32>("ListManager_get_num_elements",
-                                           result_buffer, data_list);
+  return (std::size_t)runtime_query<int32>("ListManager_get_num_elements", result_buffer, data_list);
+}
+
+void LlvmRuntimeExecutor::check_adstack_overflow() {
+  // Called from `synchronize()` on every sync so adstack overflow surfaces as a Python exception regardless of
+  // `compile_config.debug`. The runtime / result buffer may not exist yet (e.g. a C++ test that constructs Program
+  // without materializing the runtime and then triggers Program::finalize -> synchronize), so no-op in that case.
+  if (llvm_runtime_ == nullptr || result_buffer_cache_ == nullptr) {
+    return;
+  }
+  auto *runtime_jit_module = get_runtime_jit_module();
+  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_adstack_overflow", llvm_runtime_);
+  auto flag = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer_cache_);
+  if (flag != 0) {
+    throw QuadrantsAssertionError(
+        "Adstack overflow: a reverse-mode autodiff kernel pushed more elements than the adstack capacity "
+        "allows. Raised at the next qd.sync() rather than at the offending kernel launch. Pass a larger "
+        "`default_ad_stack_size=N` to `qd.init()` to raise the capacity. See documentation for details.");
+  }
 }
 
 void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
   synchronize();
   auto *runtime_jit_module = get_runtime_jit_module();
-  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_error_code",
-                                   llvm_runtime_);
-  auto error_code =
-      fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer);
+  runtime_jit_module->call<void *>("runtime_retrieve_and_reset_error_code", llvm_runtime_);
+  auto error_code = fetch_result<int64>(quadrants_result_buffer_error_id, result_buffer);
 
   if (error_code) {
     std::string error_message_template;
@@ -280,10 +266,8 @@ void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
     // assertion fails. Note that we may not have unified memory here, so using
     // "fetch_result" that works across device/host memory is necessary.
     for (int i = 0;; i++) {
-      runtime_jit_module->call<void *>("runtime_retrieve_error_message",
-                                       llvm_runtime_, i);
-      auto c =
-          fetch_result<char>(quadrants_result_buffer_error_id, result_buffer);
+      runtime_jit_module->call<void *>("runtime_retrieve_error_message", llvm_runtime_, i);
+      auto c = fetch_result<char>(quadrants_result_buffer_error_id, result_buffer);
       error_message_template += c;
       if (c == '\0') {
         break;
@@ -291,14 +275,10 @@ void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
     }
 
     if (error_code == 1) {
-      const auto error_message_formatted = format_error_message(
-          error_message_template,
-          [runtime_jit_module, result_buffer, this](int argument_id) {
-            runtime_jit_module->call<void *>(
-                "runtime_retrieve_error_message_argument", llvm_runtime_,
-                argument_id);
-            return fetch_result<uint64>(quadrants_result_buffer_error_id,
-                                        result_buffer);
+      const auto error_message_formatted =
+          format_error_message(error_message_template, [runtime_jit_module, result_buffer, this](int argument_id) {
+            runtime_jit_module->call<void *>("runtime_retrieve_error_message_argument", llvm_runtime_, argument_id);
+            return fetch_result<uint64>(quadrants_result_buffer_error_id, result_buffer);
           });
       throw QuadrantsAssertionError(error_message_formatted);
     } else {
@@ -307,9 +287,8 @@ void LlvmRuntimeExecutor::check_runtime_error(uint64 *result_buffer) {
   }
 }
 
-void LlvmRuntimeExecutor::print_memory_profiler_info(
-    std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
-    uint64 *result_buffer) {
+void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr<SNodeTree>> &snode_trees_,
+                                                     uint64 *result_buffer) {
   QD_ASSERT(arch_uses_llvm(config_.arch));
 
   fmt::print("\n[Memory Profiler]\n");
@@ -320,9 +299,7 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(
   // TODO: is there a way to set locale only locally in this function?
 
   std::function<void(SNode *, int)> visit = [&](SNode *snode, int depth) {
-    auto element_list =
-        runtime_query<void *>("LLVMRuntime_get_element_lists", result_buffer,
-                              llvm_runtime_, snode->id);
+    auto element_list = runtime_query<void *>("LLVMRuntime_get_element_lists", result_buffer, llvm_runtime_, snode->id);
 
     if (snode->type != SNodeType::place) {
       fmt::print("SNode {:10}\n", snode->get_node_type_name_hinted());
@@ -332,26 +309,19 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(
         print_list_manager_info(element_list, result_buffer);
 
         auto node_allocator =
-            runtime_query<void *>("LLVMRuntime_get_node_allocators",
-                                  result_buffer, llvm_runtime_, snode->id);
+            runtime_query<void *>("LLVMRuntime_get_node_allocators", result_buffer, llvm_runtime_, snode->id);
 
         if (node_allocator) {
-          auto free_list = runtime_query<void *>("NodeManager_get_free_list",
-                                                 result_buffer, node_allocator);
-          auto recycled_list = runtime_query<void *>(
-              "NodeManager_get_recycled_list", result_buffer, node_allocator);
+          auto free_list = runtime_query<void *>("NodeManager_get_free_list", result_buffer, node_allocator);
+          auto recycled_list = runtime_query<void *>("NodeManager_get_recycled_list", result_buffer, node_allocator);
 
-          auto free_list_len = runtime_query<int32>(
-              "ListManager_get_num_elements", result_buffer, free_list);
+          auto free_list_len = runtime_query<int32>("ListManager_get_num_elements", result_buffer, free_list);
 
-          auto recycled_list_len = runtime_query<int32>(
-              "ListManager_get_num_elements", result_buffer, recycled_list);
+          auto recycled_list_len = runtime_query<int32>("ListManager_get_num_elements", result_buffer, recycled_list);
 
-          auto free_list_used = runtime_query<int32>(
-              "NodeManager_get_free_list_used", result_buffer, node_allocator);
+          auto free_list_used = runtime_query<int32>("NodeManager_get_free_list_used", result_buffer, node_allocator);
 
-          auto data_list = runtime_query<void *>("NodeManager_get_data_list",
-                                                 result_buffer, node_allocator);
+          auto data_list = runtime_query<void *>("NodeManager_get_data_list", result_buffer, node_allocator);
           fmt::print("  data list:          ");
           print_list_manager_info(data_list, result_buffer);
 
@@ -371,12 +341,10 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(
     visit(a->root(), /*depth=*/0);
   }
 
-  auto total_requested_memory = runtime_query<std::size_t>(
-      "LLVMRuntime_get_total_requested_memory", result_buffer, llvm_runtime_);
+  auto total_requested_memory =
+      runtime_query<std::size_t>("LLVMRuntime_get_total_requested_memory", result_buffer, llvm_runtime_);
 
-  fmt::print(
-      "Total requested dynamic memory (excluding alignment padding): {:n} B\n",
-      total_requested_memory);
+  fmt::print("Total requested dynamic memory (excluding alignment padding): {:n} B\n", total_requested_memory);
 }
 
 DevicePtr LlvmRuntimeExecutor::get_snode_tree_device_ptr(int tree_id) {
@@ -384,9 +352,8 @@ DevicePtr LlvmRuntimeExecutor::get_snode_tree_device_ptr(int tree_id) {
   return tree_alloc.get_ptr();
 }
 
-void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
-    const LlvmOfflineCache::FieldCacheData &field_cache_data,
-    uint64 *result_buffer) {
+void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(const LlvmOfflineCache::FieldCacheData &field_cache_data,
+                                                         uint64 *result_buffer) {
   auto *const runtime_jit = get_runtime_jit_module();
   // By the time this creator is called, "this" is already destroyed.
   // Therefore it is necessary to capture members by values.
@@ -397,24 +364,24 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
 
   bool all_dense = config_.demote_dense_struct_fors;
   for (size_t i = 0; i < snode_metas.size(); i++) {
-    if (snode_metas[i].type != SNodeType::dense &&
-        snode_metas[i].type != SNodeType::place &&
+    if (snode_metas[i].type != SNodeType::dense && snode_metas[i].type != SNodeType::place &&
         snode_metas[i].type != SNodeType::root) {
       all_dense = false;
       break;
     }
   }
 
-  if (config_.arch == Arch::cuda && use_device_memory_pool() && !all_dense) {
+  if ((config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) && use_device_memory_pool() && !all_dense) {
+    // Sparse SNode trees allocate runtime state via runtime_memory_allocate_aligned during snode_initialize.
+    // When the device memory pool is active, the eager preallocate_runtime_memory() in materialize_runtime is
+    // skipped, so the bump allocator is only wired up lazily here when a sparse tree actually needs it.
     preallocate_runtime_memory();
   }
 
   QD_TRACE("Allocating data structure of size {} bytes", root_size);
-  std::size_t rounded_size =
-      quadrants::iroundup(root_size, quadrants_page_size);
+  std::size_t rounded_size = quadrants::iroundup(root_size, quadrants_page_size);
 
-  Ptr root_buffer = snode_tree_buffer_manager_->allocate(rounded_size, tree_id,
-                                                         result_buffer);
+  Ptr root_buffer = snode_tree_buffer_manager_->allocate(rounded_size, tree_id, result_buffer);
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
     CUDADriver::get_instance().memset(root_buffer, 0, rounded_size);
@@ -431,14 +398,13 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
     std::memset(root_buffer, 0, rounded_size);
   }
 
-  DeviceAllocation alloc =
-      llvm_device()->import_memory(root_buffer, rounded_size);
+  DeviceAllocation alloc = llvm_device()->import_memory(root_buffer, rounded_size);
 
   snode_tree_allocs_[tree_id] = alloc;
 
   runtime_jit->call<void *, std::size_t, int, int, int, std::size_t, Ptr>(
-      "runtime_initialize_snodes", llvm_runtime_, root_size, root_id,
-      (int)snode_metas.size(), tree_id, rounded_size, root_buffer, all_dense);
+      "runtime_initialize_snodes", llvm_runtime_, root_size, root_id, (int)snode_metas.size(), tree_id, rounded_size,
+      root_buffer, all_dense);
 
   for (size_t i = 0; i < snode_metas.size(); i++) {
     if (is_gc_able(snode_metas[i].type)) {
@@ -452,15 +418,11 @@ void LlvmRuntimeExecutor::initialize_llvm_runtime_snodes(
         // dynamic. Allocators are for the chunks
         node_size = sizeof(void *) + element_size * snode_metas[i].chunk_size;
       }
-      QD_TRACE("Initializing allocator for snode {} (node size {})", snode_id,
-               node_size);
-      runtime_jit->call<void *, int, std::size_t>(
-          "runtime_NodeAllocator_initialize", llvm_runtime_, snode_id,
-          node_size);
-      QD_TRACE("Allocating ambient element for snode {} (node size {})",
-               snode_id, node_size);
-      runtime_jit->call<void *, int>("runtime_allocate_ambient", llvm_runtime_,
-                                     snode_id, node_size);
+      QD_TRACE("Initializing allocator for snode {} (node size {})", snode_id, node_size);
+      runtime_jit->call<void *, int, std::size_t>("runtime_NodeAllocator_initialize", llvm_runtime_, snode_id,
+                                                  node_size);
+      QD_TRACE("Allocating ambient element for snode {} (node size {})", snode_id, node_size);
+      runtime_jit->call<void *, int>("runtime_allocate_ambient", llvm_runtime_, snode_id, node_size);
     }
   }
 }
@@ -470,16 +432,13 @@ LlvmDevice *LlvmRuntimeExecutor::llvm_device() {
   return static_cast<LlvmDevice *>(device_.get());
 }
 
-DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(
-    std::size_t alloc_size,
-    uint64 *result_buffer) {
-  auto devalloc = llvm_device()->allocate_memory_runtime(
-      {{alloc_size, /*host_write=*/false, /*host_read=*/false,
-        /*export_sharing=*/false, AllocUsage::Storage},
-       get_runtime_jit_module(),
-       get_llvm_runtime(),
-       result_buffer,
-       use_device_memory_pool()});
+DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(std::size_t alloc_size, uint64 *result_buffer) {
+  auto devalloc = llvm_device()->allocate_memory_runtime({{alloc_size, /*host_write=*/false, /*host_read=*/false,
+                                                           /*export_sharing=*/false, AllocUsage::Storage},
+                                                          get_runtime_jit_module(),
+                                                          get_llvm_runtime(),
+                                                          result_buffer,
+                                                          use_device_memory_pool()});
 
   QD_ERROR_IF(devalloc.alloc_id == -1,
               "Failed to allocate memory for "
@@ -493,15 +452,12 @@ DeviceAllocation LlvmRuntimeExecutor::allocate_memory_on_device(
 }
 
 void LlvmRuntimeExecutor::deallocate_memory_on_device(DeviceAllocation handle) {
-  QD_ASSERT(allocated_runtime_memory_allocs_.find(handle.alloc_id) !=
-            allocated_runtime_memory_allocs_.end());
+  QD_ASSERT(allocated_runtime_memory_allocs_.find(handle.alloc_id) != allocated_runtime_memory_allocs_.end());
   llvm_device()->dealloc_memory(handle);
   allocated_runtime_memory_allocs_.erase(handle.alloc_id);
 }
 
-void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc,
-                                       std::size_t size,
-                                       uint32_t data) {
+void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc, std::size_t size, uint32_t data) {
   auto ptr = get_device_alloc_info_ptr(alloc);
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
@@ -520,43 +476,40 @@ void LlvmRuntimeExecutor::fill_ndarray(const DeviceAllocation &alloc,
   }
 }
 
-uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(
-    const DeviceAllocation &alloc) {
+uint64_t *LlvmRuntimeExecutor::get_device_alloc_info_ptr(const DeviceAllocation &alloc) {
   if (config_.arch == Arch::cuda) {
 #if defined(QD_WITH_CUDA)
-    return (uint64_t *)llvm_device()
-        ->as<cuda::CudaDevice>()
-        ->get_alloc_info(alloc)
-        .ptr;
+    return (uint64_t *)llvm_device()->as<cuda::CudaDevice>()->get_alloc_info(alloc).ptr;
 #else
     QD_NOT_IMPLEMENTED
 #endif
   } else if (config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_AMDGPU)
-    return (uint64_t *)llvm_device()
-        ->as<amdgpu::AmdgpuDevice>()
-        ->get_alloc_info(alloc)
-        .ptr;
+    return (uint64_t *)llvm_device()->as<amdgpu::AmdgpuDevice>()->get_alloc_info(alloc).ptr;
 #else
     QD_NOT_IMPLEMENTED;
 #endif
   }
 
-  return (uint64_t *)llvm_device()
-      ->as<cpu::CpuDevice>()
-      ->get_alloc_info(alloc)
-      .ptr;
+  return (uint64_t *)llvm_device()->as<cpu::CpuDevice>()->get_alloc_info(alloc).ptr;
 }
 
 void LlvmRuntimeExecutor::finalize() {
   profiler_ = nullptr;
+  // Release the host-owned adstack heap before the device teardown below so its `DeviceAllocationGuard` destructor
+  // runs while the RHI device is still valid. The destructor drops the allocation back to the driver memory pool
+  // (or to the host allocator on CPU); deferring past `llvm_device()->clear()` would leak it.
+  adstack_heap_alloc_.reset();
+  adstack_heap_size_ = 0;
+  runtime_temporaries_cache_ = nullptr;
+  runtime_adstack_heap_buffer_field_ptr_ = nullptr;
+  runtime_adstack_heap_size_field_ptr_ = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
     preallocated_runtime_objects_allocs_.reset();
     preallocated_runtime_memory_allocs_.reset();
 
     // Reset runtime memory
-    auto allocated_runtime_memory_allocs_copy =
-        allocated_runtime_memory_allocs_;
+    auto allocated_runtime_memory_allocs_copy = allocated_runtime_memory_allocs_;
     for (auto &iter : allocated_runtime_memory_allocs_copy) {
       // The runtime allocation may have already been freed upon explicit
       // Ndarray/Field destruction Check if the allocation still alive
@@ -586,24 +539,111 @@ LlvmRuntimeExecutor::~LlvmRuntimeExecutor() {
   }
 }
 
-void *LlvmRuntimeExecutor::preallocate_memory(
-    std::size_t prealloc_size,
-    DeviceAllocationUnique &devalloc) {
+void *LlvmRuntimeExecutor::preallocate_memory(std::size_t prealloc_size, DeviceAllocationUnique &devalloc) {
   DeviceAllocation preallocated_device_buffer_alloc;
 
   Device::AllocParams preallocated_device_buffer_alloc_params;
   preallocated_device_buffer_alloc_params.size = prealloc_size;
   RhiResult res =
-      llvm_device()->allocate_memory(preallocated_device_buffer_alloc_params,
-                                     &preallocated_device_buffer_alloc);
-  QD_ERROR_IF(res != RhiResult::success,
-              "Failed to pre-allocate device memory (err: {})", int(res));
+      llvm_device()->allocate_memory(preallocated_device_buffer_alloc_params, &preallocated_device_buffer_alloc);
+  QD_ERROR_IF(res != RhiResult::success, "Failed to pre-allocate device memory (err: {})", int(res));
 
-  void *preallocated_device_buffer =
-      llvm_device()->get_memory_addr(preallocated_device_buffer_alloc);
-  devalloc = std::make_unique<DeviceAllocationGuard>(
-      std::move(preallocated_device_buffer_alloc));
+  void *preallocated_device_buffer = llvm_device()->get_memory_addr(preallocated_device_buffer_alloc);
+  devalloc = std::make_unique<DeviceAllocationGuard>(std::move(preallocated_device_buffer_alloc));
   return preallocated_device_buffer;
+}
+
+void *LlvmRuntimeExecutor::get_runtime_temporaries_device_ptr() {
+  if (runtime_temporaries_cache_ != nullptr) {
+    return runtime_temporaries_cache_;
+  }
+  QD_ASSERT(llvm_runtime_ != nullptr);
+  QD_ASSERT(result_buffer_cache_ != nullptr);
+  auto *const runtime_jit = get_runtime_jit_module();
+  runtime_jit->call<void *>("runtime_get_temporaries_ptr", llvm_runtime_);
+  runtime_temporaries_cache_ = quadrants_union_cast_with_different_sizes<void *>(
+      fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+  return runtime_temporaries_cache_;
+}
+
+void LlvmRuntimeExecutor::ensure_adstack_heap(std::size_t needed_bytes) {
+  if (needed_bytes == 0 || needed_bytes <= adstack_heap_size_) {
+    return;
+  }
+  // Amortized doubling keeps the number of re-allocations across a run bounded by log(peak_size).
+  std::size_t new_size = std::max(needed_bytes, std::size_t(2) * adstack_heap_size_);
+
+  Device::AllocParams params{};
+  params.size = new_size;
+  params.host_read = false;
+  params.host_write = false;
+  params.export_sharing = false;
+  params.usage = AllocUsage::Storage;
+  DeviceAllocation new_alloc;
+  RhiResult res = llvm_device()->allocate_memory(params, &new_alloc);
+  QD_ERROR_IF(res != RhiResult::success,
+              "Failed to allocate {} bytes for the adstack heap (err: {}). Consider lowering `ad_stack_size` or the "
+              "per-kernel reverse-mode adstack count.",
+              new_size, int(res));
+  // `get_device_alloc_info_ptr` is the RHI-agnostic accessor that returns the raw host-visible
+  // pointer on CPU and the device-visible pointer on CUDA / AMDGPU (`get_memory_addr` is only
+  // implemented on the GPU devices, so we route through this helper instead).
+  void *new_ptr = get_device_alloc_info_ptr(new_alloc);
+
+  auto new_guard = std::make_unique<DeviceAllocationGuard>(std::move(new_alloc));
+
+  // Publish the new buffer pointer and size into the runtime struct. On CPU the runtime lives in host memory,
+  // so plain stores through the cached field pointers are correct. On CUDA / AMDGPU the runtime lives in device
+  // memory, so the host writes via the driver's host->device memcpy. The field-address query runs exactly once,
+  // on the first grow, and caches the two device pointers; every subsequent grow is just two 8-byte memcpys.
+  if (runtime_adstack_heap_buffer_field_ptr_ == nullptr) {
+    auto *const runtime_jit = get_runtime_jit_module();
+    runtime_jit->call<void *>("runtime_get_adstack_heap_field_ptrs", llvm_runtime_);
+    runtime_adstack_heap_buffer_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id, result_buffer_cache_));
+    runtime_adstack_heap_size_field_ptr_ = quadrants_union_cast_with_different_sizes<void *>(
+        fetch_result_uint64(quadrants_result_buffer_ret_value_id + 1, result_buffer_cache_));
+  }
+  uint64 size_u64 = static_cast<uint64>(new_size);
+  if (config_.arch == Arch::cuda) {
+#if defined(QD_WITH_CUDA)
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_field_ptr_, &new_ptr, sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_field_ptr_, &size_u64, sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (config_.arch == Arch::amdgpu) {
+#if defined(QD_WITH_AMDGPU)
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_buffer_field_ptr_, &new_ptr,
+                                                       sizeof(void *));
+    AMDGPUDriver::get_instance().memcpy_host_to_device(runtime_adstack_heap_size_field_ptr_, &size_u64, sizeof(uint64));
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    *reinterpret_cast<void **>(runtime_adstack_heap_buffer_field_ptr_) = new_ptr;
+    *reinterpret_cast<uint64 *>(runtime_adstack_heap_size_field_ptr_) = size_u64;
+  }
+
+  // Replace and release the old allocation. `DeviceAllocationGuard`'s destructor calls
+  // `llvm_device()->dealloc_memory`. The new slab has already been handed to `new_guard` above, so the move-assignment
+  // here is what destroys the *previous* guard - the new allocation is not the one being freed. Safety of the release
+  // depends on the backend:
+  //   - CPU: host `std::free`. No GPU involved, always safe.
+  //   - CUDA: `CudaDevice::dealloc_memory` routes through `DeviceMemoryPool::release(release_raw=true)` ->
+  //     `cuMemFree_v2`, which synchronizes with pending device work before returning.
+  //   - AMDGPU: `AmdgpuDevice::dealloc_memory` routes through `DeviceMemoryPool::release(release_raw=false)` ->
+  //     `CachingAllocator::release`, which pools the allocation *without* calling `hipFree` and *without*
+  //     synchronizing. The physical memory stays mapped, so an in-flight kernel still holding the old base pointer
+  //     keeps reading/writing valid storage. The cross-launch safety invariant for AMDGPU comes from
+  //     `amdgpu::KernelLauncher::launch_llvm_kernel` ending with `hipFree(context_pointer)`, which synchronizes
+  //     with all in-flight kernels launched during that call. By the time the *next* `launch_llvm_kernel` reaches
+  //     `ensure_adstack_heap` and can destroy the previous guard, no GPU kernel from the prior call is still
+  //     referencing the old slab. CUDA does not need this extra hop -- the `cuMemFree_v2` in the bullet above
+  //     already syncs -- and the CUDA launcher correspondingly does not allocate a device-side `context_pointer`
+  //     (it passes the `RuntimeContext` by host reference).
+  adstack_heap_alloc_ = std::move(new_guard);
+  adstack_heap_size_ = new_size;
 }
 
 void LlvmRuntimeExecutor::preallocate_runtime_memory() {
@@ -616,25 +656,20 @@ void LlvmRuntimeExecutor::preallocate_runtime_memory() {
     QD_ASSERT(config_.device_memory_GB > 0);
     total_prealloc_size = std::size_t(config_.device_memory_GB * (1UL << 30));
   } else {
-    total_prealloc_size =
-        std::size_t(config_.device_memory_fraction * total_mem);
+    total_prealloc_size = std::size_t(config_.device_memory_fraction * total_mem);
   }
   QD_ASSERT(total_prealloc_size <= total_mem);
 
-  void *runtime_memory_prealloc_buffer = preallocate_memory(
-      total_prealloc_size, preallocated_runtime_memory_allocs_);
+  void *runtime_memory_prealloc_buffer = preallocate_memory(total_prealloc_size, preallocated_runtime_memory_allocs_);
 
-  QD_TRACE("Allocating device memory {:.2f} MB",
-           1.0 * total_prealloc_size / (1UL << 20));
+  QD_TRACE("Allocating device memory {:.2f} MB", 1.0 * total_prealloc_size / (1UL << 20));
 
   auto *const runtime_jit = get_runtime_jit_module();
-  runtime_jit->call<void *, std::size_t, void *>(
-      "runtime_initialize_memory", llvm_runtime_, total_prealloc_size,
-      runtime_memory_prealloc_buffer);
+  runtime_jit->call<void *, std::size_t, void *>("runtime_initialize_memory", llvm_runtime_, total_prealloc_size,
+                                                 runtime_memory_prealloc_buffer);
 }
 
-void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
-                                              uint64 **result_buffer_ptr) {
+void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler, uint64 **result_buffer_ptr) {
   // Starting random state for the program calculated using the random seed.
   // The seed is multiplied by 1048391 so that two programs with different seeds
   // will not have overlapping random states in any thread.
@@ -667,55 +702,43 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
   void *runtime_objects_prealloc_buffer = nullptr;
   if (config_.arch == Arch::cuda || config_.arch == Arch::amdgpu) {
 #if defined(QD_WITH_CUDA) || defined(QD_WITH_AMDGPU)
-    auto [temp_result_alloc, res] =
-        llvm_device()->allocate_memory_unique({sizeof(uint64_t)});
-    QD_ERROR_IF(
-        res != RhiResult::success,
-        "Failed to allocate memory for `runtime_get_memory_requirements`");
+    auto [temp_result_alloc, res] = llvm_device()->allocate_memory_unique({sizeof(uint64_t)});
+    QD_ERROR_IF(res != RhiResult::success, "Failed to allocate memory for `runtime_get_memory_requirements`");
     void *temp_result_ptr = llvm_device()->get_memory_addr(*temp_result_alloc);
 
-    runtime_jit->call<void *, int32_t, int32_t>(
-        "runtime_get_memory_requirements", temp_result_ptr, num_rand_states,
-        /*use_preallocated_buffer=*/1);
-    runtime_objects_prealloc_size =
-        size_t(fetch_result<uint64_t>(0, (uint64_t *)temp_result_ptr));
+    runtime_jit->call<void *, int32_t, int32_t>("runtime_get_memory_requirements", temp_result_ptr, num_rand_states,
+                                                /*use_preallocated_buffer=*/1);
+    runtime_objects_prealloc_size = size_t(fetch_result<uint64_t>(0, (uint64_t *)temp_result_ptr));
     temp_result_alloc.reset();
-    size_t result_buffer_size =
-        sizeof(uint64) * quadrants_result_buffer_entries;
+    size_t result_buffer_size = sizeof(uint64) * quadrants_result_buffer_entries;
 
     QD_TRACE("Allocating device memory {:.2f} MB",
-             1.0 * (runtime_objects_prealloc_size + result_buffer_size) /
-                 (1UL << 20));
+             1.0 * (runtime_objects_prealloc_size + result_buffer_size) / (1UL << 20));
 
-    runtime_objects_prealloc_buffer = preallocate_memory(
-        iroundup(runtime_objects_prealloc_size + result_buffer_size,
-                 quadrants_page_size),
-        preallocated_runtime_objects_allocs_);
+    runtime_objects_prealloc_buffer =
+        preallocate_memory(iroundup(runtime_objects_prealloc_size + result_buffer_size, quadrants_page_size),
+                           preallocated_runtime_objects_allocs_);
 
-    *result_buffer_ptr =
-        (uint64_t *)((uint8_t *)runtime_objects_prealloc_buffer +
-                     runtime_objects_prealloc_size);
+    *result_buffer_ptr = (uint64_t *)((uint8_t *)runtime_objects_prealloc_buffer + runtime_objects_prealloc_size);
 #else
     QD_NOT_IMPLEMENTED
 #endif
   } else {
-    *result_buffer_ptr = (uint64 *)HostMemoryPool::get_instance().allocate(
-        sizeof(uint64) * quadrants_result_buffer_entries, 8);
+    *result_buffer_ptr =
+        (uint64 *)HostMemoryPool::get_instance().allocate(sizeof(uint64) * quadrants_result_buffer_entries, 8);
   }
 
   QD_TRACE("Launching runtime_initialize");
 
   auto *host_memory_pool = &HostMemoryPool::get_instance();
-  runtime_jit
-      ->call<void *, void *, std::size_t, void *, int, void *, void *, void *>(
-          "runtime_initialize", *result_buffer_ptr, host_memory_pool,
-          runtime_objects_prealloc_size, runtime_objects_prealloc_buffer,
-          num_rand_states, (void *)&host_allocate_aligned, (void *)std::printf,
-          (void *)std::vsnprintf);
+  runtime_jit->call<void *, void *, std::size_t, void *, int, void *, void *, void *>(
+      "runtime_initialize", *result_buffer_ptr, host_memory_pool, runtime_objects_prealloc_size,
+      runtime_objects_prealloc_buffer, num_rand_states, (void *)&host_allocate_aligned, (void *)std::printf,
+      (void *)std::vsnprintf);
 
   QD_TRACE("LLVMRuntime initialized (excluding `root`)");
-  llvm_runtime_ = fetch_result<void *>(quadrants_result_buffer_ret_value_id,
-                                       *result_buffer_ptr);
+  llvm_runtime_ = fetch_result<void *>(quadrants_result_buffer_ret_value_id, *result_buffer_ptr);
+  result_buffer_cache_ = *result_buffer_ptr;
   QD_TRACE("LLVMRuntime pointer fetched");
 
   // Preallocate for runtime memory and update to LLVMRuntime
@@ -727,34 +750,26 @@ void LlvmRuntimeExecutor::materialize_runtime(KernelProfilerBase *profiler,
 
   if (config_.arch == Arch::cuda) {
     QD_TRACE("Initializing {} random states using CUDA", num_rand_states);
-    runtime_jit->launch<void *, int>(
-        "runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
-        config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);
+    runtime_jit->launch<void *, int>("runtime_initialize_rand_states_cuda", config_.saturating_grid_dim,
+                                     config_.max_block_dim, 0, llvm_runtime_, starting_rand_state);
   } else {
     QD_TRACE("Initializing {} random states (serially)", num_rand_states);
-    runtime_jit->call<void *, int>("runtime_initialize_rand_states_serial",
-                                   llvm_runtime_, starting_rand_state);
+    runtime_jit->call<void *, int>("runtime_initialize_rand_states_serial", llvm_runtime_, starting_rand_state);
   }
 
   if (arch_use_host_memory(config_.arch)) {
-    runtime_jit->call<void *, void *, void *>(
-        "LLVMRuntime_initialize_thread_pool", llvm_runtime_, thread_pool_.get(),
-        (void *)ThreadPool::static_run);
+    runtime_jit->call<void *, void *, void *>("LLVMRuntime_initialize_thread_pool", llvm_runtime_, thread_pool_.get(),
+                                              (void *)ThreadPool::static_run);
 
-    runtime_jit->call<void *, void *>("LLVMRuntime_set_assert_failed",
-                                      llvm_runtime_,
-                                      (void *)assert_failed_host);
+    runtime_jit->call<void *, void *>("LLVMRuntime_set_assert_failed", llvm_runtime_, (void *)assert_failed_host);
   }
   if (arch_is_cpu(config_.arch) && (profiler != nullptr)) {
     // Profiler functions can only be called on CPU kernels
-    runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler", llvm_runtime_,
-                                      profiler);
-    runtime_jit->call<void *, void *>(
-        "LLVMRuntime_set_profiler_start", llvm_runtime_,
-        (void *)&KernelProfilerBase::profiler_start);
-    runtime_jit->call<void *, void *>(
-        "LLVMRuntime_set_profiler_stop", llvm_runtime_,
-        (void *)&KernelProfilerBase::profiler_stop);
+    runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler", llvm_runtime_, profiler);
+    runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler_start", llvm_runtime_,
+                                      (void *)&KernelProfilerBase::profiler_start);
+    runtime_jit->call<void *, void *>("LLVMRuntime_set_profiler_stop", llvm_runtime_,
+                                      (void *)&KernelProfilerBase::profiler_stop);
   }
 }
 
@@ -771,8 +786,7 @@ LLVMRuntime *LlvmRuntimeExecutor::get_llvm_runtime() {
   return static_cast<LLVMRuntime *>(llvm_runtime_);
 }
 
-void LlvmRuntimeExecutor::init_runtime_jit_module(
-    std::unique_ptr<llvm::Module> module) {
+void LlvmRuntimeExecutor::init_runtime_jit_module(std::unique_ptr<llvm::Module> module) {
   llvm_context_->init_runtime_module(module.get());
   runtime_jit_module_ = create_jit_module(std::move(module));
 }

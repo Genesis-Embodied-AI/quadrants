@@ -13,8 +13,7 @@ namespace quadrants::lang {
 
 namespace {
 
-size_t flatten_index(const std::vector<int> &shapes,
-                     const std::vector<int> &indices) {
+size_t flatten_index(const std::vector<int> &shapes, const std::vector<int> &indices) {
   size_t ind = 0;
   for (int i = 0; i < indices.size(); i++) {
     ind = ind * shapes[i] + indices[i];
@@ -32,10 +31,7 @@ Ndarray::Ndarray(Program *prog,
       shape(shape_),
       layout(layout_),
       dbg_info(dbg_info_),
-      nelement_(std::accumulate(std::begin(shape_),
-                                std::end(shape_),
-                                1,
-                                std::multiplies<>())),
+      nelement_(std::accumulate(std::begin(shape_), std::end(shape_), 1, std::multiplies<>())),
       element_size_(data_type_size(dtype)),
       prog_(prog) {
   // Now that we have two shapes which may be concatenated differently
@@ -43,23 +39,17 @@ Ndarray::Ndarray(Program *prog,
   total_shape_ = shape;
   auto element_shape = data_type_shape(dtype);
   if (layout == ExternalArrayLayout::kAOS) {
-    total_shape_.insert(total_shape_.end(), element_shape.begin(),
-                        element_shape.end());
+    total_shape_.insert(total_shape_.end(), element_shape.begin(), element_shape.end());
   } else if (layout == ExternalArrayLayout::kSOA) {
-    total_shape_.insert(total_shape_.begin(), element_shape.begin(),
-                        element_shape.end());
+    total_shape_.insert(total_shape_.begin(), element_shape.begin(), element_shape.end());
   }
-  auto total_num_scalar =
-      std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL,
-                      std::multiplies<>());
+  auto total_num_scalar = std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL, std::multiplies<>());
   if (total_num_scalar > std::numeric_limits<int>::max()) {
-    ErrorEmitter(
-        QuadrantsIndexWarning(), &dbg_info,
-        "Ndarray index might be out of int32 boundary but int64 indexing is "
-        "not supported yet.");
+    ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
+                 "Ndarray index might be out of int32 boundary but int64 indexing is "
+                 "not supported yet.");
   }
-  ndarray_alloc_ = prog->allocate_memory_on_device(nelement_ * element_size_,
-                                                   prog->result_buffer);
+  ndarray_alloc_ = prog->allocate_memory_on_device(nelement_ * element_size_, prog->result_buffer);
 }
 
 Ndarray::Ndarray(DeviceAllocation &devalloc,
@@ -72,10 +62,7 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
       shape(shape),
       layout(layout),
       dbg_info(dbg_info),
-      nelement_(std::accumulate(std::begin(shape),
-                                std::end(shape),
-                                1,
-                                std::multiplies<>())),
+      nelement_(std::accumulate(std::begin(shape), std::end(shape), 1, std::multiplies<>())),
       element_size_(data_type_size(dtype)) {
   // When element_shape is specified but layout is not, default layout is AOS.
   auto element_shape = data_type_shape(dtype);
@@ -86,20 +73,15 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
   // depending on layout, total_shape_ comes handy.
   total_shape_ = shape;
   if (layout == ExternalArrayLayout::kAOS) {
-    total_shape_.insert(total_shape_.end(), element_shape.begin(),
-                        element_shape.end());
+    total_shape_.insert(total_shape_.end(), element_shape.begin(), element_shape.end());
   } else if (layout == ExternalArrayLayout::kSOA) {
-    total_shape_.insert(total_shape_.begin(), element_shape.begin(),
-                        element_shape.end());
+    total_shape_.insert(total_shape_.begin(), element_shape.begin(), element_shape.end());
   }
-  auto total_num_scalar =
-      std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL,
-                      std::multiplies<>());
+  auto total_num_scalar = std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL, std::multiplies<>());
   if (total_num_scalar > std::numeric_limits<int>::max()) {
-    ErrorEmitter(
-        QuadrantsIndexWarning(), &dbg_info,
-        "Ndarray index might be out of int32 boundary but int64 indexing is "
-        "not supported yet.");
+    ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
+                 "Ndarray index might be out of int32 boundary but int64 indexing is "
+                 "not supported yet.");
   }
 }
 
@@ -109,11 +91,7 @@ Ndarray::Ndarray(DeviceAllocation &devalloc,
                  const std::vector<int> &element_shape,
                  ExternalArrayLayout layout,
                  const DebugInfo &dbg_info)
-    : Ndarray(devalloc,
-              TypeFactory::create_tensor_type(element_shape, type),
-              shape,
-              layout,
-              dbg_info) {
+    : Ndarray(devalloc, TypeFactory::create_tensor_type(element_shape, type), shape, layout, dbg_info) {
   QD_ASSERT(type->is<PrimitiveType>());
 }
 
@@ -162,16 +140,13 @@ TypedConstant Ndarray::read(const std::vector<int> &I) const {
   alloc_params.host_read = true;
   alloc_params.size = size;
   alloc_params.usage = AllocUsage::Storage;
-  auto [staging_buf_, res] =
-      this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
+  auto [staging_buf_, res] = this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
   QD_ASSERT(res == RhiResult::success);
-  staging_buf_->device->memcpy_internal(
-      staging_buf_->get_ptr(),
-      this->ndarray_alloc_.get_ptr(/*offset=*/index * size), size);
+  staging_buf_->device->memcpy_internal(staging_buf_->get_ptr(), this->ndarray_alloc_.get_ptr(/*offset=*/index * size),
+                                        size);
 
   char *device_arr_ptr{nullptr};
-  QD_ASSERT(staging_buf_->device->map(
-                *staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
+  QD_ASSERT(staging_buf_->device->map(*staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
 
   TypedConstant data(get_element_data_type());
   std::memcpy(&data.value_bits, device_arr_ptr, size);
@@ -197,21 +172,17 @@ void Ndarray::write(const std::vector<int> &I, TypedConstant val) const {
   alloc_params.host_read = false;
   alloc_params.size = size_;
   alloc_params.usage = AllocUsage::Storage;
-  auto [staging_buf_, res] =
-      this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
+  auto [staging_buf_, res] = this->ndarray_alloc_.device->allocate_memory_unique(alloc_params);
   QD_ASSERT(res == RhiResult::success);
 
   char *device_arr_ptr{nullptr};
-  QD_ASSERT(staging_buf_->device->map(
-                *staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
+  QD_ASSERT(staging_buf_->device->map(*staging_buf_, (void **)&device_arr_ptr) == RhiResult::success);
 
   QD_ASSERT(device_arr_ptr);
   std::memcpy(device_arr_ptr, &val.value_bits, size_);
 
   staging_buf_->device->unmap(*staging_buf_);
-  staging_buf_->device->memcpy_internal(
-      this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(),
-      size_);
+  staging_buf_->device->memcpy_internal(this->ndarray_alloc_.get_ptr(index * size_), staging_buf_->get_ptr(), size_);
 
   prog_->synchronize();
 }

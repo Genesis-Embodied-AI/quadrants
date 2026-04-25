@@ -268,7 +268,7 @@ def test_struct_arg_with_matrix():
     assert ret == ret_std
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda])
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu])
 def test_struct_arg_with_matrix_real_func():
     mat = qd.types.matrix(3, 2, qd.f32)
     s0 = qd.types.struct(a=mat, b=qd.f32)

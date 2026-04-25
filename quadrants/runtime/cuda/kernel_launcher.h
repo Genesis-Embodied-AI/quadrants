@@ -23,8 +23,7 @@ class KernelLauncher : public LLVM::KernelLauncher {
   using Base::Base;
 
   void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) override;
-  Handle register_llvm_kernel(
-      const LLVM::CompiledKernelData &compiled) override;
+  Handle register_llvm_kernel(const LLVM::CompiledKernelData &compiled) override;
   std::size_t get_graph_cache_size() const override {
     return graph_manager_.cache_size();
   }
@@ -39,14 +38,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
-  void launch_offloaded_tasks(
-      LaunchContextBuilder &ctx,
-      JITModule *cuda_module,
-      const std::vector<OffloadedTask> &offloaded_tasks);
-  void launch_offloaded_tasks_with_do_while(
-      LaunchContextBuilder &ctx,
-      JITModule *cuda_module,
-      const std::vector<OffloadedTask> &offloaded_tasks);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                              JITModule *cuda_module,
+                              const std::vector<OffloadedTask> &offloaded_tasks);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
+                                            JITModule *cuda_module,
+                                            const std::vector<OffloadedTask> &offloaded_tasks);
 
   std::vector<Context> contexts_;
   GraphManager graph_manager_;

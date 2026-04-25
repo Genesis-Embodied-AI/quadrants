@@ -7,8 +7,7 @@ namespace io {
 struct FilesystemVirtualDir : public VirtualDir {
   std::string base_dir_;
 
-  explicit FilesystemVirtualDir(const std::string &base_dir)
-      : base_dir_(base_dir) {
+  explicit FilesystemVirtualDir(const std::string &base_dir) : base_dir_(base_dir) {
   }
 
   static std::unique_ptr<VirtualDir> create(const std::string &base_dir) {
@@ -25,17 +24,14 @@ struct FilesystemVirtualDir : public VirtualDir {
   }
 
   bool get_file_size(const std::string &path, size_t &size) const override {
-    std::fstream f(base_dir_ + path,
-                   std::ios::in | std::ios::binary | std::ios::ate);
+    std::fstream f(base_dir_ + path, std::ios::in | std::ios::binary | std::ios::ate);
     if (!f.is_open()) {
       return false;
     }
     size = f.tellg();
     return true;
   }
-  size_t load_file(const std::string &path,
-                   void *data,
-                   size_t size) const override {
+  size_t load_file(const std::string &path, void *data, size_t size) const override {
     std::fstream f(base_dir_ + path, std::ios::in | std::ios::binary);
     if (!f.is_open()) {
       return false;
@@ -49,13 +45,11 @@ struct FilesystemVirtualDir : public VirtualDir {
 struct ZipArchiveVirtualDir : public VirtualDir {
   zip::ZipArchive archive_;
 
-  explicit ZipArchiveVirtualDir(zip::ZipArchive &&archive)
-      : archive_(std::move(archive)) {
+  explicit ZipArchiveVirtualDir(zip::ZipArchive &&archive) : archive_(std::move(archive)) {
   }
 
   static std::unique_ptr<VirtualDir> create(const std::string &archive_path) {
-    std::fstream f(archive_path,
-                   std::ios::in | std::ios::binary | std::ios::ate);
+    std::fstream f(archive_path, std::ios::in | std::ios::binary | std::ios::ate);
     std::vector<uint8_t> archive_data(f.tellg());
     f.seekg(std::ios::beg);
     f.read((char *)archive_data.data(), archive_data.size());
@@ -69,8 +63,7 @@ struct ZipArchiveVirtualDir : public VirtualDir {
       return nullptr;
     }
 
-    return std::unique_ptr<VirtualDir>(
-        new ZipArchiveVirtualDir(std::move(archive)));
+    return std::unique_ptr<VirtualDir>(new ZipArchiveVirtualDir(std::move(archive)));
   }
 
   bool get_file_size(const std::string &path, size_t &size) const override {
@@ -82,9 +75,7 @@ struct ZipArchiveVirtualDir : public VirtualDir {
     size = it->second.size();
     return true;
   }
-  size_t load_file(const std::string &path,
-                   void *data,
-                   size_t size) const override {
+  size_t load_file(const std::string &path, void *data, size_t size) const override {
     auto it = archive_.file_dict.find(path);
     if (it == archive_.file_dict.end()) {
       return 0;
@@ -123,12 +114,10 @@ std::unique_ptr<VirtualDir> VirtualDir::open(const std::string &path) {
   }
 }
 
-std::unique_ptr<VirtualDir> VirtualDir::from_zip(const void *data,
-                                                 size_t size) {
+std::unique_ptr<VirtualDir> VirtualDir::from_zip(const void *data, size_t size) {
   return ZipArchiveVirtualDir::from_zip(data, size);
 }
-std::unique_ptr<VirtualDir> VirtualDir::from_fs_dir(
-    const std::string &base_dir) {
+std::unique_ptr<VirtualDir> VirtualDir::from_fs_dir(const std::string &base_dir) {
   return FilesystemVirtualDir::create(base_dir);
 }
 
