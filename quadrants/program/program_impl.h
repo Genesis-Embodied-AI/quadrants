@@ -23,11 +23,18 @@ struct ComputeOpImageRef {
 
 struct RuntimeContext;
 
+class Program;
+
 class ProgramImpl {
  public:
   // TODO: Make it safer, we exposed it for now as it's directly accessed
   // outside.
   CompileConfig *config;
+
+  // Back-reference to the owning `Program`, plumbed in from `Program`'s constructor so host-side per-launch paths
+  // (e.g. the adstack `SizeExpr` evaluator) can reach `SNodeRwAccessorsBank` without threading `Program *` through
+  // every kernel-launcher signature. Null until the owning Program sets it.
+  Program *program{nullptr};
 
  public:
   explicit ProgramImpl(CompileConfig &config);

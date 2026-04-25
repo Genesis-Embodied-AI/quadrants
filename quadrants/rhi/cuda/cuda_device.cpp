@@ -54,6 +54,14 @@ DeviceAllocation CudaDevice::allocate_memory_runtime(const LlvmRuntimeAllocParam
   } else {
     info.ptr =
         DeviceMemoryPool::get_instance(Arch::cuda, true /*merge_upon_release*/).allocate_with_cache(this, params);
+
+    if (!info.ptr) {
+      DeviceAllocation fail_alloc;
+      fail_alloc.alloc_id = kDeviceAllocationFailed;
+      fail_alloc.device = this;
+
+      return fail_alloc;
+    }
   }
 
   if (info.ptr)

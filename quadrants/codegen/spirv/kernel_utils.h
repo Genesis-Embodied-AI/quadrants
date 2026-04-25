@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/ir/offloaded_task_type.h"
 #include "quadrants/ir/type.h"
 #include "quadrants/ir/transforms.h"
@@ -30,6 +31,14 @@ struct TaskAttributes {
     AdStackOverflow,
     AdStackHeapFloat,
     AdStackHeapInt,
+    // Per-dispatch StorageBuffer holding the runtime-evaluated adstack geometry (`stride_float`,
+    // `stride_int`, then `(offset, max_size)` pairs per alloca in pre-scan order). Populated by the
+    // host launcher before each dispatch from the symbolic `SizeExpr` trees captured in
+    // `TaskAttributes::ad_stack`; the shader reads these u32 entries at every
+    // `AdStackAllocaStmt` / `AdStackPushStmt` / `AdStackLoadTopStmt` site so the per-thread slice
+    // layout tightens to the actual field state at each launch. Zero-sized and unbound when a
+    // task declares no adstacks.
+    AdStackMetadata,
   };
 
   struct BufferInfo {
@@ -142,14 +151,36 @@ struct TaskAttributes {
   // Only valid when |task_type| is range_for.
   std::optional<RangeForAttributes> range_for_attribs;
 
-  // Per-thread stride, in f32 elements, of the f32-typed heap-backed adstack slice used by this task, bound as
-  // BufferType::AdStackHeapFloat. Zero when the task has no f32 adstack. The runtime multiplies this by the
-  // dispatched invocation count to size the shared adstack buffer.
-  uint32_t ad_stack_heap_per_thread_stride_float{0};
-  // Per-thread stride, in i32 elements, of the int-typed heap-backed adstack slice used by this task, bound as
-  // BufferType::AdStackHeapInt. Backs both i32 and u1 adstacks (u1 is stored as i32, matching the existing
-  // Function-scope path). Zero when the task has no non-f32 adstack.
-  uint32_t ad_stack_heap_per_thread_stride_int{0};
+  // Per-adstack compile-time metadata for this task, one entry per `AdStackAllocaStmt` indexed by its
+  // pre-scan order (the same ordering the shader uses as `stack_id`). `heap_kind` selects which of the
+  // `AdStackHeapFloat` / `AdStackHeapInt` buffers backs the alloca; `offset_in_elems_compile_time` is
+  // the prefix-sum offset produced from `max_size_compile_time` (used when `size_expr` is empty, i.e.
+  // after an offline-cache load where the symbolic tree was not serialised); `size_expr` is the flat
+  // post-order symbolic upper-bound tree captured by the `determine_ad_stack_size` pre-pass, evaluated
+  // at each launch to publish the runtime-tight `offset` and `max_size` into the `AdStackMetadata`
+  // buffer. An empty `size_expr::nodes` means "no symbolic bound captured, use
+  // `max_size_compile_time`"; the runtime falls back to that value on the cache-hit path.
+  struct AdStackAllocaAttribs {
+    enum class HeapKind : int32_t { Float = 0, Int = 1 };
+    HeapKind heap_kind{HeapKind::Float};
+    uint32_t offset_in_elems_compile_time{0};
+    uint32_t max_size_compile_time{0};
+    SerializedSizeExpr size_expr{};
+    QD_IO_DEF(heap_kind, offset_in_elems_compile_time, max_size_compile_time, size_expr);
+  };
+  struct AdStackSizingAttribs {
+    // Compile-time-derived per-thread strides in elements of each heap's element type. The runtime
+    // recomputes these when any alloca's `size_expr` evaluates dynamically; the compile-time values
+    // serve both as the offline-cache-serialised fallback (empty `size_expr` on every alloca) and as
+    // the upper bound for heap-buffer growth when no adstacks are declared (kept at zero). Writing
+    // the final per-launch strides into the metadata buffer slots (0 and 1) is done by the host
+    // launcher regardless of whether any alloca's bound was dynamic.
+    uint32_t per_thread_stride_float_compile_time{0};
+    uint32_t per_thread_stride_int_compile_time{0};
+    std::vector<AdStackAllocaAttribs> allocas;
+    QD_IO_DEF(per_thread_stride_float_compile_time, per_thread_stride_int_compile_time, allocas);
+  };
+  AdStackSizingAttribs ad_stack;
 
   static std::string buffers_name(BufferInfo b);
 
@@ -161,8 +192,7 @@ struct TaskAttributes {
             task_type,
             buffer_binds,
             range_for_attribs,
-            ad_stack_heap_per_thread_stride_float,
-            ad_stack_heap_per_thread_stride_int);
+            ad_stack);
 };
 
 /**
@@ -296,7 +326,20 @@ class KernelContextAttributes {
 
   std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> arr_access;
 
-  QD_IO_DEF(arg_attribs_vec_, ret_attribs_vec_, args_bytes_, rets_bytes_, arr_access, args_type_, rets_type_);
+  // Per-arg access bits restricted to the `.grad` slot (`ExternalPtrStmt::is_grad == true` references). Indexed
+  // by the same `std::vector<int>` arg-id key as `arr_access` and filled in parallel with it. The
+  // `GfxRuntime::launch_kernel` blit path gates the host->device grad mirror on this; a forward kernel that
+  // never reads / writes `.grad` has every entry at `NONE` and skips the map+memcpy+unmap per grad-bearing arg.
+  std::vector<std::pair<std::vector<int>, irpass::ExternalPtrAccess>> grad_arr_access;
+
+  QD_IO_DEF(arg_attribs_vec_,
+            ret_attribs_vec_,
+            args_bytes_,
+            rets_bytes_,
+            arr_access,
+            grad_arr_access,
+            args_type_,
+            rets_type_);
 
  private:
   std::vector<std::pair<std::vector<int>, ArgAttributes>> arg_attribs_vec_;

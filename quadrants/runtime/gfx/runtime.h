@@ -74,11 +74,29 @@ class CompiledQuadrantsKernel {
   std::vector<std::unique_ptr<Pipeline>> pipelines_;
 };
 
+// Per-task runtime metadata populated by the on-device adstack SizeExpr sizer shader. `metadata` is the
+// readback of the sizer buffer laid out as `[stride_float, stride_int, (offset, max_size)*]`; `stride_*`
+// are cached copies of the first two words for the downstream heap-sizing math in `launch_kernel`. One
+// entry per task in the kernel's `tasks_attribs` vector (tasks without any adstack allocas keep the
+// compile-time strides from `AdStackSizingAttribs::per_thread_stride_*_compile_time` and leave `metadata`
+// empty).
+struct PerTaskAdStackRuntime {
+  std::vector<uint32_t> metadata;
+  uint32_t stride_float{0};
+  uint32_t stride_int{0};
+};
+
 class QD_DLL_EXPORT GfxRuntime {
  public:
   struct Params {
     Device *device{nullptr};
     KernelProfilerBase *profiler{nullptr};
+    // Back-reference to the owning `GfxProgramImpl` so `launch_kernel` can reach `ProgramImpl::program` and
+    // evaluate per-task `SerializedSizeExpr` trees captured in `TaskAttributes::ad_stack.allocas[i].size_expr`
+    // against the live field state (via `SNodeRwAccessorsBank`) + the per-launch `LaunchContextBuilder` args.
+    // Null is tolerated for pre-`materialize_runtime` construction paths; only the adstack-metadata publish
+    // path uses it, and kernels without any adstack do not trigger that path.
+    ProgramImpl *program_impl{nullptr};
   };
 
   explicit GfxRuntime(const Params &params);
@@ -131,6 +149,19 @@ class QD_DLL_EXPORT GfxRuntime {
   void ensure_current_cmdlist();
   void submit_current_cmdlist_if_timeout();
 
+  // Walks each task's `SerializedSizeExpr` trees, encodes them into device bytecode, dispatches the on-device
+  // sizer compute shader once per adstack-bearing task, and reads back per-task `[stride_float, stride_int,
+  // (offset, max_size)*]` metadata. See `quadrants/runtime/gfx/adstack_sizer_launch.cpp` for the full
+  // mechanism. Returns one entry per task in `task_attribs`; tasks without adstack allocas get the
+  // compile-time fallback strides and an empty `metadata`. Called from `launch_kernel` before the main
+  // cmdlist opens, so the sizer dispatch is fully serialised against any in-flight reader kernels.
+  std::vector<PerTaskAdStackRuntime> publish_adstack_metadata_spirv(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::string &kernel_name);
+
   void init_nonroot_buffers();
 
   Device *device_{nullptr};
@@ -175,6 +206,20 @@ class QD_DLL_EXPORT GfxRuntime {
   size_t adstack_heap_buffer_float_size_{0};
   std::unique_ptr<DeviceAllocationGuard> adstack_heap_buffer_int_;
   size_t adstack_heap_buffer_int_size_{0};
+  // Per-`GfxRuntime` compiled sizer pipeline and bytecode scratch buffer for the on-device adstack
+  // SizeExpr interpreter (see `quadrants/codegen/spirv/adstack_sizer_shader.{h,cpp}`). The pipeline is
+  // built once lazily on the first reverse-mode kernel launch that has adstack allocas and reused across
+  // every such launch afterwards; the bytecode buffer is grown on demand with the same
+  // amortised-doubling policy as the float / int heaps. Both are null on backends that don't advertise
+  // both `spirv_has_physical_storage_buffer` and `spirv_has_int64`, in which case the adstack-allocating
+  // kernel is hard-errored at launch time rather than routed to a broken host-eval fallback.
+  std::unique_ptr<Pipeline> adstack_sizer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_sizer_bytecode_buffer_;
+  size_t adstack_sizer_bytecode_buffer_size_{0};
+
+  // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
+  // `Params::program_impl` for the contract.
+  ProgramImpl *program_impl_{nullptr};
 
   // Set by the destructor before its own `synchronize()` call so the adstack-overflow poll in `synchronize()`
   // short-circuits instead of raising from an implicitly-noexcept `~GfxRuntime()` unwinding path (a throw

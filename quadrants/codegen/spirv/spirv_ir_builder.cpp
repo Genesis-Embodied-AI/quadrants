@@ -892,13 +892,23 @@ Value IRBuilder::cast(const SType &dst_type, Value value) {
           return PrimitiveType::unknown;
       };
 
+      DataType intermediate_dt;
       if (is_signed(from)) {
-        ret = make_value(spv::OpSConvert, get_primitive_type(get_signed_type(to)), ret);
+        intermediate_dt = get_signed_type(to);
+        ret = make_value(spv::OpSConvert, get_primitive_type(intermediate_dt), ret);
       } else {
-        ret = make_value(spv::OpUConvert, get_primitive_type(get_unsigned_type(to)), ret);
+        intermediate_dt = get_unsigned_type(to);
+        ret = make_value(spv::OpUConvert, get_primitive_type(intermediate_dt), ret);
       }
 
-      ret = make_value(spv::OpBitcast, dst_type, ret);
+      // OpBitcast(T, T) is invalid per SPIR-V spec ("Result Type must not equal Operand Type"). When the
+      // intermediate dtype (same signedness as the source but width-matched to the destination) already
+      // matches the caller's destination type, skip the trailing bitcast so the widening / narrowing SConvert
+      // / UConvert above is the final instruction. The trailing bitcast still runs in the mixed-signedness
+      // case, which is the scenario it was written for.
+      if (intermediate_dt != to) {
+        ret = make_value(spv::OpBitcast, dst_type, ret);
+      }
     }
 
     return ret;

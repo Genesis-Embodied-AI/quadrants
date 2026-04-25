@@ -1256,12 +1256,13 @@ std::unordered_set<SNode *> ControlFlowGraph::gather_loaded_snodes() {
   return snodes;
 }
 
-void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size, bool apply_fallback) {
+void ControlFlowGraph::determine_ad_stack_size() {
   /**
    * Determine all adaptive AD-stacks' necessary size using the Bellman-Ford
-   * algorithm. When there is a positive loop (#pushes > #pops in a loop)
-   * for an AD-stack, we cannot determine the size of the AD-stack, and
-   * |default_ad_stack_size| is used. The time complexity is
+   * algorithm. Stacks whose forward kernel contains a positive cycle (pushes > pops around a
+   * loop) are left at `max_size = 0`; the caller routes them through the structural bounded-loop
+   * pre-pass for a symbolic `SizeExpr`, and hard-errors if the grammar cannot resolve them. There
+   * is no compile-time size fallback. The time complexity is
    * O(num_statements + num_stacks * num_edges * num_nodes).
    */
   const int num_nodes = size();
@@ -1276,7 +1277,6 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size, bool a
 
   std::unordered_map<CFGNode *, int> node_ids;
   std::unordered_set<AdStackAllocaStmt *> all_stacks;
-  std::unordered_set<AdStackAllocaStmt *> indeterminable_stacks;
 
   for (int i = 0; i < num_nodes; i++)
     node_ids[nodes[i].get()] = i;
@@ -1393,33 +1393,17 @@ void ControlFlowGraph::determine_ad_stack_size(int default_ad_stack_size, bool a
     }
 
     if (has_positive_loop) {
-      indeterminable_stacks.insert(stack);
-      if (apply_fallback) {
-        stack->max_size = default_ad_stack_size;
-      }
-      // When `apply_fallback` is false, leave `max_size = 0` so the structural bounded-loop
-      // pre-pass in `irpass::determine_ad_stack_size` gets a chance to derive a tighter bound
-      // (e.g. a statically bounded inner loop whose push-only body defeats Bellman-Ford).
+      // Leave `max_size = 0` so the structural bounded-loop pre-pass in
+      // `irpass::determine_ad_stack_size` gets a chance to derive a symbolic bound (a
+      // statically-bounded inner loop whose push-only body defeats Bellman-Ford, resolved from
+      // the outer ranges). If it also cannot, the caller emits a hard compile error - there is
+      // no compile-time `default_ad_stack_size` fallback.
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks
       // with maximum capacity indeed equal to 0.
       QD_WARN_IF(max_size == 0, "Unused autodiff stack {} should have been eliminated.", stack->name());
       stack->max_size = max_size;
     }
-  }
-
-  // Print a debug message if we have indeterminable AD-stacks' sizes.
-  if (!indeterminable_stacks.empty()) {
-    std::vector<std::string> indeterminable_stacks_name;
-    indeterminable_stacks_name.reserve(indeterminable_stacks.size());
-    for (auto &stack : indeterminable_stacks) {
-      indeterminable_stacks_name.push_back(stack->name());
-    }
-    QD_DEBUG(
-        "Unable to determine the necessary size for autodiff stacks [{}]. "
-        "Use "
-        "configured size (CompileConfig::default_ad_stack_size) {} instead.",
-        fmt::join(indeterminable_stacks_name, ", "), default_ad_stack_size);
   }
 }
 

@@ -52,6 +52,11 @@ class TaskCodegen : public IRVisitor {
     std::vector<uint32_t> spirv_code;
     TaskAttributes task_attribs;
     std::unordered_map<std::vector<int>, irpass::ExternalPtrAccess, hashing::Hasher<std::vector<int>>> arr_access;
+    // Access bits restricted to references through the `.grad` slot of each ndarray arg. Used by
+    // `GfxRuntime::launch_kernel` to skip the host->device grad blit when no task in the kernel touches the
+    // grad slot - the typical forward-pass kernel of reverse-mode AD, which reads / writes the primal data
+    // slot only and leaves `.grad` alone until the backward dispatch.
+    std::unordered_map<std::vector<int>, irpass::ExternalPtrAccess, hashing::Hasher<std::vector<int>>> grad_arr_access;
   };
 
   Result run();
@@ -213,20 +218,37 @@ class TaskCodegen : public IRVisitor {
   struct AdStackSpirv {
     spirv::Value count_var;  // u32, Function scope - current number of entries
     AdStackHeapKind heap_kind;
-    // Offsets are in elements of the heap's element type (f32 or i32).
-    uint32_t heap_primal_offset{0};
-    uint32_t heap_adjoint_offset{0};
-    uint32_t max_size{0};
+    // Index of this alloca in the task's pre-scan order; also the shader-side slot index into the
+    // `AdStackMetadata` buffer (entries are `stride_float, stride_int, (offset_i, max_size_i)*`).
+    uint32_t stack_id{0};
+    // Compile-time bound carried alongside the runtime-metadata index so the host launcher can
+    // populate the metadata buffer from `max_size_compile_time` when the per-alloca `size_expr` is
+    // empty (offline-cache load). Never read by the shader itself.
+    uint32_t max_size_compile_time{0};
+    // Compile-time prefix-sum offset (in elements of the heap's element type). Mirrored into
+    // `TaskAttributes::AdStackSizingAttribs::allocas[stack_id].offset_in_elems_compile_time` so the
+    // host launcher's no-size_expr path publishes the same layout the codegen assumed.
+    uint32_t offset_in_elems_compile_time{0};
     spirv::SType elem_type;
+    // Per-alloca cached loads from the AdStackMetadata buffer (offset, max_size, and the derived
+    // `adjoint_offset = offset + max_size`). Lazily emitted on the first push/load_top/load_top_adj
+    // visitor for this alloca, reused for every subsequent site.
+    spirv::Value offset_val;
+    spirv::Value max_size_val;
+    spirv::Value adjoint_offset_val;
   };
   std::unordered_map<const Stmt *, AdStackSpirv> ad_stacks_;
-  // Total per-thread heap strides, pre-computed from the IR before any visitor runs so that
-  // `invoc_id * stride` captures the final value. Exposed via `task_attribs.ad_stack_heap_per_thread_stride_*` so
-  // the runtime can size the heaps. The float stride is counted in f32 elements, the int stride in i32 elements.
+  // Total per-thread heap strides, pre-computed from the IR before any visitor runs from the
+  // compile-time `max_size` on each alloca. The runtime recomputes these from the evaluated
+  // `size_expr` trees and publishes them into the `AdStackMetadata` buffer; the shader reads the
+  // per-dispatch values from the metadata buffer rather than using these immediates directly. The
+  // compile-time values are still mirrored into `task_attribs.ad_stack.*` so the offline-cache-hit
+  // path with no symbolic bound captured reproduces the pre-PR shader layout.
   uint32_t ad_stack_heap_per_thread_stride_float_{0};
   uint32_t ad_stack_heap_per_thread_stride_int_{0};
   // Running offsets into the per-thread slice assigned to the next AdStackAllocaStmt visitor. Each ends equal to
-  // the corresponding stride once every alloca has been visited.
+  // the corresponding stride once every alloca has been visited; these feed the
+  // `offset_in_elems_compile_time` of each alloca's `AdStackSizingAttribs::allocas` entry.
   uint32_t ad_stack_heap_next_offset_float_{0};
   uint32_t ad_stack_heap_next_offset_int_{0};
   // Buffers are cached for reuse across push/pop/load-top visitors and (re)computed lazily on first use inside a
@@ -241,15 +263,26 @@ class TaskCodegen : public IRVisitor {
   // Do NOT move these to a lazy path; the corresponding getters enforce eager emission.
   spirv::Value ad_stack_heap_thread_base_float_;
   spirv::Value ad_stack_heap_thread_base_int_;
+  // Cached handle to the AdStackMetadata StorageBuffer and the per-task stride values loaded from
+  // its header slots. Same dominance rule as the heap thread bases - eager emission at the first
+  // alloca site of its heap kind, reused at every downstream push/load-top/load-top-adj.
+  spirv::Value ad_stack_metadata_buffer_;
+  spirv::Value ad_stack_metadata_stride_float_;
+  spirv::Value ad_stack_metadata_stride_int_;
   // Return (lazily) the StorageBuffer of `Array<f32>` that backs f32 adstacks for this dispatch, and the
   // per-thread base index inside it.
   spirv::Value get_ad_stack_heap_buffer_float();
   spirv::Value get_ad_stack_heap_thread_base_float();
-  spirv::Value ad_stack_heap_float_ptr(uint32_t offset, spirv::Value count);
+  spirv::Value ad_stack_heap_float_ptr(spirv::Value slot_offset, spirv::Value count);
   // Same accessors for the int-typed heap buffer (backs i32 and u1 adstacks).
   spirv::Value get_ad_stack_heap_buffer_int();
   spirv::Value get_ad_stack_heap_thread_base_int();
-  spirv::Value ad_stack_heap_int_ptr(uint32_t offset, spirv::Value count);
+  spirv::Value ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv::Value count);
+  // Metadata buffer accessors. Each emits one OpLoad on first use and caches the SSA id.
+  spirv::Value get_ad_stack_metadata_buffer();
+  spirv::Value get_ad_stack_metadata_stride_float();
+  spirv::Value get_ad_stack_metadata_stride_int();
+  void ensure_ad_stack_metadata_loaded(AdStackSpirv &info);
   // Routes to the correct backing-typed pointer (`*f32` for `heap_float`, `*i32` for `heap_int`) based on
   // `info.heap_kind`. See comment on the implementation for the bool<->i32 conversion contract.
   spirv::Value ad_stack_slot_ptr(AdStackSpirv &info, spirv::Value idx, bool primal);

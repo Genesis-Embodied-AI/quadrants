@@ -169,15 +169,13 @@ class ControlFlowGraph {
   std::unordered_set<SNode *> gather_loaded_snodes();
 
   /**
-   * Determine all adaptive AD-stacks' necessary size.
-   * @param default_ad_stack_size The default AD-stack's size when we are
-   * unable to determine some AD-stack's size.
-   * @param apply_fallback When true (default), stacks that hit a positive loop get
-   * |default_ad_stack_size|. When false, such stacks are left at `max_size = 0`, so a
-   * downstream pass (the structural bounded-loop pre-pass in `irpass::determine_ad_stack_size`)
-   * can try to compute a tighter bound before the final fallback is applied by its caller.
+   * Determine all adaptive AD-stacks' necessary size. Stacks whose forward kernel contains a
+   * positive cycle (pushes - pops > 0 around a loop) are left at `max_size = 0` so the caller can
+   * route them to a symbolic `SizeExpr` via the structural bounded-loop pre-pass in
+   * `irpass::determine_ad_stack_size`. There is no compile-time size fallback: any alloca the
+   * grammar cannot resolve is a hard compile error, surfaced from the caller.
    */
-  void determine_ad_stack_size(int default_ad_stack_size, bool apply_fallback = true);
+  void determine_ad_stack_size();
 };
 
 }  // namespace quadrants::lang

@@ -1748,7 +1748,12 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   // from a different function, tripping `verifyFunction` inside `finalize_offloaded_task_function`.
   ad_stack_per_thread_stride_ = 0;
   ad_stack_offsets_.clear();
+  ad_stack_allocas_info_.clear();
+  ad_stack_size_exprs_.clear();
   ad_stack_heap_base_llvm_ = nullptr;
+  ad_stack_stride_llvm_ = nullptr;
+  ad_stack_offsets_ptr_llvm_ = nullptr;
+  ad_stack_max_sizes_ptr_llvm_ = nullptr;
   // Pre-scan the task body for every `AdStackAllocaStmt` before any codegen runs, mirroring the SPIR-V pre-pass at
   // `spirv_codegen.cpp:138-166`. Each alloca claims a fixed slot inside the per-thread slice: offset equals the sum of
   // earlier siblings' sizes. Growing the stride lazily as `visit(AdStackAllocaStmt)` fires would bake a stale `stride`
@@ -1764,8 +1769,18 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
         for (auto &s : blk->statements)
           scan(s.get());
       } else if (auto *alloca = dynamic_cast<AdStackAllocaStmt *>(node)) {
-        ad_stack_offsets_[alloca] = ad_stack_per_thread_stride_;
+        alloca->stack_id = static_cast<int>(ad_stack_offsets_.size());
+        ad_stack_offsets_.push_back(ad_stack_per_thread_stride_);
         ad_stack_per_thread_stride_ += align_up_8(alloca->size_in_bytes());
+        // Mirror the compile-time sizing into the per-task metadata: the launcher uses
+        // `allocas[stack_id]` to publish stride / offset / max_size values into the per-launch runtime buffers
+        // regardless of whether the symbolic `size_expr` survived the offline-cache round-trip.
+        AdStackAllocaInfo info;
+        info.offset = ad_stack_offsets_.back();
+        info.max_size_compile_time = alloca->max_size;
+        info.entry_size_bytes = alloca->entry_size_in_bytes();
+        ad_stack_allocas_info_.push_back(info);
+        ad_stack_size_exprs_.push_back(alloca->size_expr ? alloca->size_expr->serialize() : SerializedSizeExpr{});
       } else if (auto *if_stmt = dynamic_cast<IfStmt *>(node)) {
         if (if_stmt->true_statements)
           scan(if_stmt->true_statements.get());
@@ -1824,6 +1839,8 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   // are finalized (see codegen_cpu / codegen_cuda / codegen_amdgpu).
   if (current_task) {
     current_task->ad_stack.per_thread_stride = ad_stack_per_thread_stride_;
+    current_task->ad_stack.allocas = ad_stack_allocas_info_;
+    current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
   }
 
   // entry_block should jump to the body after all allocas are inserted
@@ -2190,6 +2207,20 @@ void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
   ad_stack_heap_base_llvm_ = call("LLVMRuntime_get_adstack_heap_buffer", get_runtime());
 }
 
+// Cache the per-launch adstack metadata SSA values at `entry_block` on first need. Mirrors
+// `ensure_ad_stack_heap_base_llvm`: one getter call per task, hoisted to the entry block so every downstream
+// `AdStack*` visit (which may live in nested blocks) reuses a dominating SSA value and `verifyFunction` stays happy.
+void TaskCodeGenLLVM::ensure_ad_stack_metadata_llvm() {
+  if (ad_stack_stride_llvm_ != nullptr) {
+    return;
+  }
+  llvm::IRBuilderBase::InsertPointGuard guard(*builder);
+  builder->SetInsertPoint(entry_block);
+  ad_stack_stride_llvm_ = call("LLVMRuntime_get_adstack_per_thread_stride", get_runtime());
+  ad_stack_offsets_ptr_llvm_ = call("LLVMRuntime_get_adstack_offsets", get_runtime());
+  ad_stack_max_sizes_ptr_llvm_ = call("LLVMRuntime_get_adstack_max_sizes", get_runtime());
+}
+
 // Heap-backed adstack: the per-thread slice lives inside `runtime->adstack_heap_buffer`. The former
 // `create_entry_block_alloca` path put the adstack on the worker-thread stack, which capped CPU reverse-mode
 // kernels at the ~512 KB macOS secondary-thread budget and crashed with silently-zero gradients past that (the
@@ -2204,25 +2235,32 @@ void TaskCodeGenLLVM::ensure_ad_stack_heap_base_llvm() {
 // path. Downstream `stack_push/stack_pop/stack_top_primal/stack_top_adjoint` already take a raw `Ptr` and are
 // unchanged - from their perspective the backing memory is still an opaque u64-prefixed blob.
 void TaskCodeGenLLVM::visit(AdStackAllocaStmt *stmt) {
-  QD_ASSERT_INFO(stmt->max_size > 0, "Adaptive autodiff stack's size should have been determined.");
-  QD_ASSERT_INFO(ad_stack_offsets_.count(stmt),
-                 "AdStackAllocaStmt reached visit without a pre-scanned heap offset - the scan in "
+  QD_ASSERT_INFO(stmt->stack_id >= 0 && static_cast<std::size_t>(stmt->stack_id) < ad_stack_offsets_.size(),
+                 "AdStackAllocaStmt reached visit without a pre-scanned stack_id - the scan in "
                  "init_offloaded_task_function must cover every container statement holding an adstack.");
   QD_ASSERT(ad_stack_per_thread_stride_ > 0);
 
   ensure_ad_stack_heap_base_llvm();
+  ensure_ad_stack_metadata_llvm();
 
   // Thread slot: on CPU it's `RuntimeContext::cpu_thread_id` (range [0, num_cpu_threads)); on CUDA / AMDGPU it's
   // `block_idx() * block_dim() + thread_idx()`. `linear_thread_idx(context)` is the runtime helper that returns
   // the arch-appropriate value, matching how `rand_states` is indexed and how the SPIR-V heap-backing indexes
   // with `gl_GlobalInvocationID`. Widen to u64 before the mul because a deep-AD kernel can easily cross
   // `i32_max / stride` on GPU grids (~65K threads x ~32K stride overflows i32).
+  //
+  // `stride` and `offset` come from the per-launch metadata the host publishes via
+  // `runtime_get_adstack_metadata_field_ptrs` rather than from codegen-time immediates. The old immediate path
+  // baked the sum of compile-time `max_size` values into the kernel, which could not scale when a `SizeExpr` leaf
+  // resolved to a different value at launch.
   auto *i8ty = llvm::Type::getInt8Ty(*llvm_context);
   auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
   llvm::Value *linear_tid_i32 = call("linear_thread_idx", get_context());
   llvm::Value *linear_tid_i64 = builder->CreateZExt(linear_tid_i32, i64ty);
-  llvm::Value *stride = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_per_thread_stride_));
-  llvm::Value *offset = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(ad_stack_offsets_.at(stmt)));
+  llvm::Value *stride = ad_stack_stride_llvm_;
+  llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stmt->stack_id));
+  llvm::Value *offset_addr = builder->CreateGEP(i64ty, ad_stack_offsets_ptr_llvm_, stack_id_i64);
+  llvm::Value *offset = builder->CreateLoad(i64ty, offset_addr);
   llvm::Value *slice_offset = builder->CreateMul(linear_tid_i64, stride);
   llvm::Value *total_offset = builder->CreateAdd(slice_offset, offset);
   llvm::Value *stack_ptr = builder->CreateGEP(i8ty, ad_stack_heap_base_llvm_, total_offset);
@@ -2236,8 +2274,12 @@ void TaskCodeGenLLVM::visit(AdStackPopStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
   auto stack = stmt->stack->as<AdStackAllocaStmt>();
-  call("stack_push", get_runtime(), llvm_val[stack], tlctx->get_constant(stack->max_size),
-       tlctx->get_constant(stack->element_size_in_bytes()));
+  ensure_ad_stack_metadata_llvm();
+  auto *i64ty = llvm::Type::getInt64Ty(*llvm_context);
+  llvm::Value *stack_id_i64 = llvm::ConstantInt::get(i64ty, static_cast<uint64_t>(stack->stack_id));
+  llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
+  llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
+  call("stack_push", get_runtime(), llvm_val[stack], max_size, tlctx->get_constant(stack->element_size_in_bytes()));
   auto primal_ptr = call("stack_top_primal", llvm_val[stack], tlctx->get_constant(stack->element_size_in_bytes()));
   primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
   builder->CreateStore(llvm_val[stmt->v], primal_ptr);
