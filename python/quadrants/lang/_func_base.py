@@ -81,6 +81,65 @@ _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
 _is_cpython = sys.implementation.name == "cpython"
 
+# PERF: Frozen-dataclass dispatch caching.
+#
+# When a frozen dataclass (e.g. Genesis's StructConstraintState with ~43 fields) is passed to a kernel, the per-launch
+# field iteration in ``_recursive_set_args`` is expensive: it loops over all fields, filters by
+# ``used_py_dataclass_parameters``, calls ``getattr`` + ``_unwrap`` for each, and makes two recursive calls per field.
+# On the old ``@qd.data_oriented`` + ``qd.template()`` path this cost was zero (template args skip the launch loop).
+#
+# Two caches eliminate this overhead:
+#
+# 1. **Field plan cache** (module-level): for a given (struct class, used_parameters set, basename) triple, pre-compute
+#    which fields are active and their (name, full_name, type) tuples. Reduces the 43-iteration filter loop to ~10-15
+#    direct entries.
+#
+# 2. **Unwrapped-value cache** (per-instance, stored as ``_qd_dc_unwrapped``): for a frozen dataclass, field values
+#    never change. Cache the unwrapped (post-``_unwrap()``) value for each field on the instance. Eliminates
+#    ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch.
+
+_frozen_dc_plans: dict[tuple[int, type, str], tuple[tuple[str, str, Any], ...]] = {}
+
+
+def _get_frozen_dc_plan(
+    used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
+) -> tuple[tuple[str, str, Any], ...]:
+    key = (id(used_params), struct_cls, basename)
+    plan = _frozen_dc_plans.get(key)
+    if plan is not None:
+        return plan
+    entries: list[tuple[str, str, Any]] = []
+    for field in fields_dict.values():
+        if field._field_type is not _FIELD:
+            continue
+        full_name = create_flat_name(basename, field.name)
+        if full_name not in used_params:
+            continue
+        entries.append((field.name, full_name, field.type))
+    plan = tuple(entries)
+    _frozen_dc_plans[key] = plan
+    return plan
+
+
+def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
+    """Return a dict mapping field_name -> unwrapped value for a frozen dataclass, caching on the instance."""
+    cached = getattr(v, "_qd_dc_unwrapped", None)
+    if cached is not None:
+        return cached
+    unwrapped: dict[str, Any] = {}
+    for field in fields_dict.values():
+        if field._field_type is not _FIELD:
+            continue
+        val = getattr(v, field.name)
+        if _tensor_wrapper._any_tensor_constructed and type(val) in _TENSOR_WRAPPER_TYPES:
+            val = val._unwrap()
+        unwrapped[field.name] = val
+    try:
+        object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
+    except AttributeError:
+        pass
+    return unwrapped
+
 
 class FuncBase:
     """
@@ -545,9 +604,34 @@ class FuncBase:
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
                 raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
-            # A dataclass must be frozen to be compatible with caching
-            is_launch_ctx_cacheable = needed_arg_type.__hash__ is not None
+            is_frozen = needed_arg_type.__hash__ is not None
             idx = 0
+            if is_frozen:
+                # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
+                # kernel) and the per-instance unwrapped-value cache (which eliminates getattr + _unwrap per field).
+                # Together these reduce per-launch cost from O(all_fields) with getattr/unwrap to O(active_fields) with
+                # direct dict lookups. See module-level comment on ``_frozen_dc_plans``.
+                plan = _get_frozen_dc_plan(
+                    used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields)
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_fields)
+                for field_name, field_full_name, field_type in plan:
+                    field_value = unwrapped[field_name]
+                    num_args_, _ = FuncBase._recursive_set_args(
+                        used_py_dataclass_parameters,
+                        field_full_name,
+                        launch_ctx,
+                        launch_ctx_buffer,
+                        field_type,
+                        field_type,
+                        field_value,
+                        index + idx,
+                        actual_argument_slot,
+                        callbacks,
+                    )
+                    idx += num_args_
+                return idx, True
+            # Non-frozen dataclass: original path with full iteration and filtering.
+            is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:
                     continue
@@ -555,7 +639,6 @@ class FuncBase:
                 field_full_name = create_flat_name(py_dataclass_basename, field_name)
                 if field_full_name not in used_py_dataclass_parameters:
                     continue
-                # Storing attribute in a temporary to avoid repeated attribute lookup (~20ns penalty)
                 field_type = field.type
                 assert not isinstance(field_type, str)
                 field_value = getattr(v, field_name)

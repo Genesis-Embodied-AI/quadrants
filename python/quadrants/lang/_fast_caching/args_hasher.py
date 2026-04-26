@@ -36,6 +36,14 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
 
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str:
+    # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
+    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
+    # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards.
+    is_frozen = type(arg).__hash__ is not None
+    if is_frozen:
+        cached = getattr(arg, "_qd_dc_repr", None)
+        if cached is not None:
+            return cached
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
@@ -44,7 +52,13 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
-    return "[" + ",".join(repr_l) + "]"
+    result = "[" + ",".join(repr_l) + "]"
+    if is_frozen:
+        try:
+            object.__setattr__(arg, "_qd_dc_repr", result)
+        except AttributeError:
+            pass
+    return result
 
 
 def _is_template(arg_meta: ArgMetadata | None) -> bool:
