@@ -138,6 +138,4 @@ The check runs only on lines changed in the PR and reports up to 3 violations.
 
 ### Deleted comments check (`check_deleted_comments.yml`)
 
-Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted.
-
-The check reports up to 10 violations.
+Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations.
