@@ -7,7 +7,9 @@ import quadrants as qd
 from tests import test_utils
 
 
-@pytest.mark.skipif(sys.platform == "darwin", reason="macOS unified memory swaps to disk instead of OOMing, causing this test to hang")
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="macOS unified memory swaps to disk instead of OOMing, causing this test to hang"
+)
 @test_utils.test(arch=qd.gpu)
 def test_huge_allocation_fail_at_allocate_time():
     """Ensure huge allocation fails at allocate time and not at memset to 0"""
