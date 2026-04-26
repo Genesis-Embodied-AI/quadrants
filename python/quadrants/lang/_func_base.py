@@ -612,7 +612,8 @@ class FuncBase:
                 # Together these reduce per-launch cost from O(all_fields) with getattr/unwrap to O(active_fields) with
                 # direct dict lookups. See module-level comment on ``_frozen_dc_plans``.
                 plan = _get_frozen_dc_plan(
-                    used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields)
+                    used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
+                )
                 unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_fields)
                 for field_name, field_full_name, field_type in plan:
                     field_value = unwrapped[field_name]

@@ -40,9 +40,7 @@ def test_frozen_dc_cache_basic_ndarray():
     state = State(a=a)
 
     fill(state)
-    expected = np.array(
-        [[i * 100 + j for j in range(_N)] for i in range(_M)], dtype=np.int32
-    )
+    expected = np.array([[i * 100 + j for j in range(_N)] for i in range(_M)], dtype=np.int32)
     np.testing.assert_array_equal(a.to_numpy(), expected)
 
     fill(state)
