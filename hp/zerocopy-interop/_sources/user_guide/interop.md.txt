@@ -91,7 +91,8 @@ Zero-copy uses [DLPack](https://github.com/dmlc/dlpack) and requires:
 - a backend with DLPack support: `cpu` (`x64`/`arm64`), `cuda`, `amdgpu`, or `metal` (Vulkan is not supported);
 - a DLPack-supported dtype: `i32`, `i64`, `f32`, `f64`, `u1` (other dtypes such as `f16`, `u8`, `u16` fall back to the kernel-copy path);
 - on Apple Metal, `torch >= 2.9.2` for fields (required for DLPack `bytes_offset` on MPS; see [pytorch/pytorch#168193](https://github.com/pytorch/pytorch/pull/168193));
-- 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation).
+- 0-dim `ScalarField` instances are not zero-copyable on any backend (PyTorch DLPack `bytes_offset` limitation);
+- `StructField` members are not zero-copyable yet (see [Struct fields](#struct-fields) below); `copy=False` raises on `StructField`.
 
 Zero-copy `to_numpy()` additionally requires a CPU backend, because numpy arrays cannot reference GPU memory.
 
@@ -179,17 +180,17 @@ If you need a tensor that outlives the runtime, use `copy=True` (or the default 
 
 ### Struct fields
 
-`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to a zero-copy view of that member's storage. Each member is a separate SNode leaf and is zero-copyable independently:
+`StructField.to_torch()` and `StructField.to_numpy()` return a dictionary mapping each member name to an **independent copy** of that member's data. Struct fields use AOS (array-of-structures) cell layout: a `Struct.field({"a": i32, "b": f32}, shape=(N,))` stores `[a0, b0, a1, b1, ...]` in memory, with stride `sizeof(cell)` between consecutive `a`'s. Quadrants' C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members' bytes), so member views are forced to be copies until that is fixed.
 
 ```python
 S = qd.types.struct(pos=qd.f32, vel=qd.f32)
 sf = S.field(shape=(16,))
 
-views = sf.to_torch(copy=False)
-views["pos"][0] = 1.0          # writes through to sf.pos
+dicts = sf.to_torch()           # dict of independent copies (always)
+dicts["pos"][0] = 1.0           # does NOT write through to sf.pos
 ```
 
-`copy=` is forwarded uniformly to every member.
+`copy=False` is rejected with `ValueError`; `copy=None` and `copy=True` are accepted and both produce copies.
 
 ## Direct torch tensor pass-through
 

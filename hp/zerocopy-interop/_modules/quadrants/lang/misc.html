@@ -895,6 +895,12 @@
 
     <span class="c1"># Recover the current working directory (https://github.com/taichi-dev/taichi/issues/4811)</span>
     <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">current_dir</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_coverage</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
+
+        <span class="n">_kernel_coverage</span><span class="o">.</span><span class="n">ensure_field_allocated</span><span class="p">()</span>
+
     <span class="k">return</span> <span class="kc">None</span></div>
 
 

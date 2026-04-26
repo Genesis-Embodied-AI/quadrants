@@ -714,10 +714,11 @@ Module Contents
       :type keep_dims: bool, optional
       :param dtype: The desired data type of returned numpy array.
       :type dtype: DataType, optional
-      :param copy: ``None`` (default) and ``True`` return an independent copy. ``False`` requires zero-copy via DLPack
-                   (CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field's underlying
-                   C++ runtime memory and become invalid after ``qd.reset()`` -- callers opting into ``copy=False`` are
-                   responsible for the buffer lifetime.
+      :param copy: ``None`` (default) and ``True`` return an independent copy. ``False`` returns a
+                   zero-copy DLPack view (requires CPU backend and a supported dtype) or raises
+                   ``ValueError``. Note: zero-copy numpy arrays alias the field's underlying C++
+                   runtime memory; callers opting into ``copy=False`` are responsible for the buffer
+                   lifetime.
 
       :returns: The result NumPy array.
       :rtype: numpy.ndarray
@@ -733,7 +734,8 @@ Module Contents
       :param keep_dims: Whether to keep the dimension after conversion.
                         See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
       :type keep_dims: bool, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces an independent copy,
+                   ``False`` requires zero-copy or raises.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor

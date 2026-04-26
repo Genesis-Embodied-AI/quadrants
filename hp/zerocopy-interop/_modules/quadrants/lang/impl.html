@@ -693,6 +693,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_replaced</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Kernel</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernels</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ndarrays</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakSet</span><span class="p">[</span><span class="n">Ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakSet</span><span class="p">()</span>
+        <span class="c1"># Holders of zero-copy DLPack caches (Ndarray, ScalarField, MatrixField, ...).</span>
+        <span class="c1"># On reset, each holder&#39;s `_invalidate_zerocopy_cache()` is called BEFORE the C++ program</span>
+        <span class="c1"># is torn down, so that DLPack deleters run while the underlying memory is still valid.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_holders</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakSet</span> <span class="o">=</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakSet</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_signal_handler_registry</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">unfinalized_fields_builder</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
@@ -883,6 +887,12 @@
     <span class="k">global</span> <span class="n">pyquadrants</span>
     <span class="n">old_ndarrays</span> <span class="o">=</span> <span class="n">pyquadrants</span><span class="o">.</span><span class="n">ndarrays</span>
     <span class="n">old_kernels</span> <span class="o">=</span> <span class="n">pyquadrants</span><span class="o">.</span><span class="n">kernels</span>
+    <span class="n">old_cache_holders</span> <span class="o">=</span> <span class="n">pyquadrants</span><span class="o">.</span><span class="n">cache_holders</span>
+    <span class="c1"># Drop zero-copy caches BEFORE the C++ program is torn down. The cached torch tensors / numpy</span>
+    <span class="c1"># arrays alias C++ memory via DLPack; their deleters must run while the program is still alive,</span>
+    <span class="c1"># otherwise we get use-after-free at GC time (segfault on AMD GPU, Metal, etc.).</span>
+    <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">old_cache_holders</span><span class="p">:</span>
+        <span class="n">h</span><span class="o">.</span><span class="n">_invalidate_zerocopy_cache</span><span class="p">()</span>
     <span class="n">pyquadrants</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
     <span class="n">pyquadrants</span> <span class="o">=</span> <span class="n">PyQuadrants</span><span class="p">(</span><span class="n">old_kernels</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">nd</span> <span class="ow">in</span> <span class="n">old_ndarrays</span><span class="p">:</span>

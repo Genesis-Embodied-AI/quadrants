@@ -545,10 +545,15 @@ reading it.</p>
 <dd><p>Converts this field to a <cite>numpy.ndarray</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) and <code class="docutils literal notranslate"><span class="pre">True</span></code> return an independent copy. <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy via DLPack
-(CPU backend + torch installed) or raises.  Note: zero-copy numpy arrays alias the field’s underlying
-C++ runtime memory and become invalid after <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> – callers opting into <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> are
-responsible for the buffer lifetime.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dtype</strong> – Optional target numpy dtype. Incompatible with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> if it differs
+from the field’s native dtype.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) and <code class="docutils literal notranslate"><span class="pre">True</span></code> return an independent copy. <code class="docutils literal notranslate"><span class="pre">False</span></code> returns a
+zero-copy DLPack view (requires CPU backend and a supported dtype) or raises
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. Note: zero-copy numpy arrays alias the field’s underlying C++
+runtime memory; callers opting into <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> are responsible for the buffer
+lifetime.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -559,7 +564,12 @@ responsible for the buffer lifetime.</p>
 <dd><p>Converts this field to a <cite>torch.tensor</cite>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces a copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> – Optional torch device. Incompatible with <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> if it differs from
+the field’s native device.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) prefers zero-copy, <code class="docutils literal notranslate"><span class="pre">True</span></code> forces an independent copy,
+<code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>

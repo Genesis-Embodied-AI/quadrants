@@ -252,9 +252,15 @@ Module Contents
 
       Converts the Struct field instance to a dictionary of NumPy arrays.
 
+      Struct fields use AOS cell layout, but Quadrants' C++ ``field_to_dlpack`` does not currently
+      emit cell-stride-aware DLPack views for individual members (it computes contiguous strides
+      at the member dtype size, which would interleave neighboring members' bytes). Until the C++
+      export is taught about AOS strides, ``StructField`` always returns independent copies; the
+      ``copy`` argument is accepted for API symmetry but ``copy=False`` is rejected.
+
       The dictionary may be nested when converting nested structs.
 
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: must be ``None`` or ``True``; ``copy=False`` raises ``ValueError``.
 
       :returns: The result NumPy array.
       :rtype: Dict[str, Union[numpy.ndarray, Dict]]
@@ -265,17 +271,16 @@ Module Contents
 
       Converts the Struct field instance to a dictionary of PyTorch tensors.
 
+      See :meth:`to_numpy` for why members are always returned as independent copies. ``copy=False``
+      is rejected.
+
       The dictionary may be nested when converting nested structs.
 
-      :param device: The
-                     desired device of returned tensor.
+      :param device: The desired device of returned tensors.
       :type device: torch.device, optional
-      :param copy: ``None`` (default) prefers zero-copy, ``True`` forces a copy, ``False`` requires zero-copy or raises.
+      :param copy: must be ``None`` or ``True``; ``copy=False`` raises ``ValueError``.
 
-      :returns:
-
-                The result
-                    PyTorch tensor.
+      :returns: The result PyTorch tensor.
       :rtype: Dict[str, Union[torch.Tensor, Dict]]
 
 

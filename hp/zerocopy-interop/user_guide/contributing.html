@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Debug mode &#8212; Quadrants 0.7.1 documentation</title>
+    <title>Contributing to quadrants &#8212; Quadrants 0.7.1 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/debug';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/contributing';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Quirks" href="quirks.html" />
-    <link rel="prev" title="Python backend" href="python_backend.html" />
+    <link rel="next" title="Building the CUDA graph conditional fatbin" href="building_cudagraph_conditional_fatbin.html" />
+    <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.1" />
@@ -316,16 +316,16 @@
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
 <li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
-<ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -373,7 +373,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Debug mode</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Contributing to quadrants</span></li>
   </ul>
 </nav>
 </div>
@@ -390,95 +390,132 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="debug-mode">
-<h1>Debug mode<a class="headerlink" href="#debug-mode" title="Link to this heading">#</a></h1>
-<p>Quadrants provides a debug mode that enables additional runtime checks inside kernels. These checks are disabled by default for performance.</p>
-<section id="enabling-debug-mode">
-<h2>Enabling debug mode<a class="headerlink" href="#enabling-debug-mode" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+  <section class="tex2jax_ignore mathjax_ignore" id="contributing-to-quadrants">
+<h1>Contributing to quadrants<a class="headerlink" href="#contributing-to-quadrants" title="Link to this heading">#</a></h1>
+<section id="good-practice-reminder">
+<h2>Good practice reminder<a class="headerlink" href="#good-practice-reminder" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><em>testing</em>: Any new features or modified code should be tested. You have to run the test suite using <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code> which sets up the right test environment for <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. CLI arguments are forwarded to <code class="docutils literal notranslate"><span class="pre">pytest</span></code>. Do not use <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly as it behaves differently.</p></li>
+<li><p><em>format/linter</em>: Before pushing any commits, ensure you set up <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> and run it using <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code></p></li>
+<li><p>No need to force push to keep a clean history as the merging is eventually done by squashing commits.</p></li>
+</ul>
+</section>
+<section id="creating-your-build-dev-environment">
+<h2>Creating your build/dev environment<a class="headerlink" href="#creating-your-build-dev-environment" title="Link to this heading">#</a></h2>
+<p>It is recommended to use a virtual env. Quadrants supports Python 3.10–3.13 for building and testing. However, <code class="docutils literal notranslate"><span class="pre">pre-commit</span></code> is configured with a pinned Python <code class="docutils literal notranslate"><span class="pre">3.10</span></code> to ensure consistent formatting, so you will need Python 3.10 available for running pre-commit hooks.</p>
+<p>After cloning, make sure to initialize submodules:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">submodule</span> <span class="n">update</span> <span class="o">--</span><span class="n">init</span> <span class="o">--</span><span class="n">recursive</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">uv</span></code> could be handy when initializing such an environment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the venv for development</span>
+<span class="n">uv</span> <span class="n">venv</span> <span class="o">--</span><span class="n">python</span> <span class="mf">3.10</span>
+
+<span class="c1"># activate it</span>
+<span class="n">source</span> <span class="o">.</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+
+<span class="c1"># install deps groups from pyproject.toml</span>
+<span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">group</span> <span class="n">dev</span> <span class="o">--</span><span class="n">group</span> <span class="n">test</span>
 </pre></div>
 </div>
 </section>
-<section id="what-debug-mode-enables">
-<h2>What debug mode enables<a class="headerlink" href="#what-debug-mode-enables" title="Link to this heading">#</a></h2>
-<section id="bounds-checking">
-<h3>Bounds checking<a class="headerlink" href="#bounds-checking" title="Link to this heading">#</a></h3>
-<p>With <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>, out-of-bounds accesses on fields raise a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> at runtime instead of silently reading/writing garbage memory:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># RuntimeError: index 16 out of bounds for axis 1 with size 16</span>
-
-<span class="n">func</span><span class="p">()</span>
+<section id="build-py">
+<h2><code class="docutils literal notranslate"><span class="pre">build.py</span></code><a class="headerlink" href="#build-py" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> is a python script to automatically set up the build environment for you before invoking the build commands:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries, decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clang</span></code>: depending on the platform, download <code class="docutils literal notranslate"><span class="pre">clang</span></code> or just check if available with the right version.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel currently using <code class="docutils literal notranslate"><span class="pre">setup.py</span> <span class="pre">bdist_wheel</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">setup.py</span> <span class="pre">develop</span></code> provides incremental builds:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span> <span class="c1"># run a new shell with environment variables</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
 </pre></div>
 </div>
-<p>Without debug mode, this would silently corrupt memory or produce incorrect results.</p>
-<p>Bounds checking also works for Python-scope field access:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mf">10.0</span>   <span class="c1"># AssertionError in debug mode, silent corruption otherwise</span>
-<span class="n">a</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>     <span class="c1"># AssertionError in debug mode</span>
+<p>To write the environment variables to a file, use <code class="docutils literal notranslate"><span class="pre">./build.py</span> <span class="pre">-w</span> <span class="pre">[filename]</span></code>. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">w</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
+<span class="n">source</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
 </pre></div>
 </div>
 </section>
-<section id="assertions-in-kernels">
-<h3>Assertions in kernels<a class="headerlink" href="#assertions-in-kernels" title="Link to this heading">#</a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">assert</span></code> statement works inside kernels when debug mode is enabled:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;negative value at index </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+<section id="building-the-package-for-release-purposes">
+<h2>Building the package for release purposes<a class="headerlink" href="#building-the-package-for-release-purposes" title="Link to this heading">#</a></h2>
+<p>To build the release package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="n">wheel</span>
 </pre></div>
 </div>
-<p>Assertions support constant strings and f-strings for the error message.</p>
-<p>Note: <code class="docutils literal notranslate"><span class="pre">assert</span></code> is compiled into the kernel but only checked at runtime when <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>. On Linux ARM64, assertions are not currently supported.</p>
+<p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. The build directory depends on the host architecture and the python version. For example: <code class="docutils literal notranslate"><span class="pre">_skbuild/linux-x86_64-3.10/cmake-build</span></code>.</p>
+<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <code class="docutils literal notranslate"><span class="pre">ccmake</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">_skbuild</span><span class="o">/</span><span class="n">linux</span><span class="o">-</span><span class="n">x86_64</span><span class="o">-</span><span class="mf">3.10</span><span class="o">/</span><span class="n">cmake</span><span class="o">-</span><span class="n">build</span>
+</pre></div>
+</div>
+<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> that will be appended to the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> command used to configure the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> build. For instance, to disable the CUDA and AMDGPU backends:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
+</pre></div>
+</div>
+<p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
+<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/llvm/&quot;</span>
+<span class="c1"># or with a cmake option</span>
+<span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
+</pre></div>
+</div>
 </section>
-</section>
-<section id="performance-impact">
-<h2>Performance impact<a class="headerlink" href="#performance-impact" title="Link to this heading">#</a></h2>
-<p>Debug mode adds runtime checks to every field access and assertion, which can significantly slow down kernel execution. It is intended for development and debugging, not production use.</p>
-<p>A typical workflow:</p>
+<section id="advanced-usage">
+<h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
+<section id="ci-convention-about-compilers-llvm">
+<h3>CI Convention about compilers/LLVM<a class="headerlink" href="#ci-convention-about-compilers-llvm" title="Link to this heading">#</a></h3>
+<p>Quadrants comprises at least three important parts:</p>
 <ol class="arabic simple">
-<li><p>Develop with <code class="docutils literal notranslate"><span class="pre">debug=True</span></code> to catch bounds errors and logic bugs</p></li>
-<li><p>Switch to <code class="docutils literal notranslate"><span class="pre">debug=False</span></code> (the default) for benchmarking and production runs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> device runtime (bitcode): C++ code compiled using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> from the distribution/OS. Using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> is required as it has to support the same targets as <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries used by host runtime: statically or dynamically linked, used to lower the kernel’s final IR to machine code on the host. The CI uses an LLVM version compiled from source.</p></li>
 </ol>
 </section>
-<section id="other-debugging-tools">
-<h2>Other debugging tools<a class="headerlink" href="#other-debugging-tools" title="Link to this heading">#</a></h2>
-<section id="disabling-the-cache">
-<h3>Disabling the cache<a class="headerlink" href="#disabling-the-cache" title="Link to this heading">#</a></h3>
-<p>If you encounter crashes or unexpected behavior, try disabling the offline cache to rule out stale compiled kernels:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">offline_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Or clear the cache entirely:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>rm<span class="w"> </span>-Rf<span class="w"> </span>~/.cache/quadrants
-</pre></div>
-</div>
-<p>See also <a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting</span></a>.</p>
+<section id="building-llvm-for-debugging-it">
+<h3>Building LLVM for debugging it<a class="headerlink" href="#building-llvm-for-debugging-it" title="Link to this heading">#</a></h3>
+<p>Sometimes, it could be useful to have a <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml">CI pipeline to build LLVM</a> to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).</p>
+<p>You can then use <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> to point to the <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> build directory.</p>
 </section>
-<section id="printing-from-kernels">
-<h3>Printing from kernels<a class="headerlink" href="#printing-from-kernels" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">print()</span></code> works inside kernels for scalar values, which can be useful for debugging:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">debug_kernel</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;i =&quot;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="s2">&quot;val =&quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-</pre></div>
-</div>
-<p>Note that print output from GPU kernels may appear out of order due to parallel execution.</p>
 </section>
-<section id="dumping-compiled-ir">
-<h3>Dumping compiled IR<a class="headerlink" href="#dumping-compiled-ir" title="Link to this heading">#</a></h3>
-<p>To inspect the compiled intermediate representation, use the <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR</span></code> environment variable:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_DUMP_IR</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">QD_OFFLINE_CACHE</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>python<span class="w"> </span>my_script.py
-</pre></div>
-</div>
-<p>Compiled kernels will be written to <code class="docutils literal notranslate"><span class="pre">/tmp/ir</span></code> by default. Use <code class="docutils literal notranslate"><span class="pre">QD_DEBUG_DUMP_PATH=</span></code> to redirect to a custom directory.</p>
+<section id="ci-checks">
+<h2>CI checks<a class="headerlink" href="#ci-checks" title="Link to this heading">#</a></h2>
+<p>Pull requests are validated by several CI jobs. Most run automatically; a failing check blocks merge.</p>
+<section id="pre-commit-linters-linters-yml">
+<h3>Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)<a class="headerlink" href="#pre-commit-linters-linters-yml" title="Link to this heading">#</a></h3>
+<p>Runs <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> which enforces:</p>
+<ul class="simple">
+<li><p><strong>black</strong> — Python formatting with a 120-character line limit</p></li>
+<li><p><strong>clang-format</strong> — C/C++ formatting</p></li>
+<li><p><strong>trailing-whitespace</strong> and <strong>end-of-file-fixer</strong> — whitespace hygiene</p></li>
+<li><p><strong>ruff</strong> — Python linting</p></li>
+<li><p><strong>pylint</strong> — additional Python linting (scoped to <code class="docutils literal notranslate"><span class="pre">python/quadrants/</span></code>)</p></li>
+</ul>
+<p>You can run these locally with <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> after <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">pre-commit</span></code>.</p>
+</section>
+<section id="other-ci-jobs">
+<h3>Other CI jobs<a class="headerlink" href="#other-ci-jobs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>pyright</strong> (<code class="docutils literal notranslate"><span class="pre">pyright_linter.yml</span></code>) — Python type checking</p></li>
+<li><p><strong>clang-tidy</strong> (<code class="docutils literal notranslate"><span class="pre">clang_tidy.yml</span></code>) — C++ static analysis</p></li>
+<li><p><strong>check-markup-links</strong> (<code class="docutils literal notranslate"><span class="pre">check_markup_links.yml</span></code>) — validates links in documentation</p></li>
+<li><p><strong>linux / macosx / win</strong> — build and test on each platform</p></li>
+<li><p><strong>test-gpu</strong> — GPU-specific tests</p></li>
+</ul>
+</section>
+<section id="line-wrapping-check-check-wrapping-yml">
+<h3>Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)<a class="headerlink" href="#line-wrapping-check-check-wrapping-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that lines in changed files follow wrapping conventions:</p>
+<ul class="simple">
+<li><p><strong>Markdown files (<code class="docutils literal notranslate"><span class="pre">.md</span></code>)</strong>: lines should not be hard-wrapped. Each paragraph should be a single long line.</p></li>
+<li><p><strong>Code comments and docstrings</strong>: lines should be wrapped at 120 characters, not at 80.</p></li>
+</ul>
+<p>The check runs only on files changed in the PR and reports up to 3 violations.</p>
 </section>
 </section>
 </section>
@@ -494,20 +531,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="python_backend.html"
+       href="troubleshooting.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Python backend</p>
+        <p class="prev-next-title">Troubleshooting</p>
       </div>
     </a>
     <a class="right-next"
-       href="quirks.html"
+       href="building_cudagraph_conditional_fatbin.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Quirks</p>
+        <p class="prev-next-title">Building the CUDA graph conditional fatbin</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -530,17 +567,19 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-debug-mode">Enabling debug mode</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-debug-mode-enables">What debug mode enables</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bounds-checking">Bounds checking</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#assertions-in-kernels">Assertions in kernels</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#good-practice-reminder">Good practice reminder</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-impact">Performance impact</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-debugging-tools">Other debugging tools</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#disabling-the-cache">Disabling the cache</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#printing-from-kernels">Printing from kernels</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dumping-compiled-ir">Dumping compiled IR</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>
@@ -549,7 +588,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/debug.md.txt">
+    <a href="../_sources/user_guide/contributing.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.sparse &#8212; Quadrants 0.7.1 documentation</title>
+    <title>quadrants.pytest_plugin &#8212; Quadrants 0.7.1 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/sparse/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/pytest_plugin/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="quadrants.tools" href="../tools/index.html" />
-    <link rel="prev" title="quadrants.pytest_plugin" href="../pytest_plugin/index.html" />
+    <link rel="next" title="quadrants.sparse" href="../sparse/index.html" />
+    <link rel="prev" title="quadrants.profiler.scoped_profiler" href="../profiler/scoped_profiler/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="0.7.1" />
@@ -326,7 +326,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.sparse</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.pytest_plugin</span></li>
   </ul>
 </nav>
 </div>
@@ -343,8 +343,30 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.sparse">
-<span id="quadrants-sparse"></span><h1>quadrants.sparse<a class="headerlink" href="#module-quadrants.sparse" title="Link to this heading">#</a></h1>
+  <section id="module-quadrants.pytest_plugin">
+<span id="quadrants-pytest-plugin"></span><h1>quadrants.pytest_plugin<a class="headerlink" href="#module-quadrants.pytest_plugin" title="Link to this heading">#</a></h1>
+<p>Pytest plugin that auto-enables kernel coverage when pytest-cov is active.</p>
+<p>Registered via the <code class="docutils literal notranslate"><span class="pre">pytest11</span></code> entry point so it loads automatically when quadrants is installed.
+Opt out by setting <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=0</span></code> explicitly.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.pytest_plugin.pytest_configure" title="quadrants.pytest_plugin.pytest_configure"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pytest_configure</span></code></a>(config)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.pytest_plugin.pytest_configure">
+<span class="sig-prename descclassname"><span class="pre">quadrants.pytest_plugin.</span></span><span class="sig-name descname"><span class="pre">pytest_configure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/quadrants/pytest_plugin.html#pytest_configure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.pytest_plugin.pytest_configure" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</section>
 </section>
 
 
@@ -358,20 +380,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../pytest_plugin/index.html"
+       href="../profiler/scoped_profiler/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.pytest_plugin</p>
+        <p class="prev-next-title">quadrants.profiler.scoped_profiler</p>
       </div>
     </a>
     <a class="right-next"
-       href="../tools/index.html"
+       href="../sparse/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.tools</p>
+        <p class="prev-next-title">quadrants.sparse</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -387,9 +409,25 @@
 
 
   <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.pytest_plugin.pytest_configure"><code class="docutils literal notranslate"><span class="pre">pytest_configure()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../_sources/autoapi/quadrants/sparse/index.rst.txt">
+    <a href="../../../_sources/autoapi/quadrants/pytest_plugin/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

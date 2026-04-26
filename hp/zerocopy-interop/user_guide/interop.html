@@ -311,6 +311,10 @@
 <li class="toctree-l1"><a class="reference internal" href="graph.html">CUDA Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
@@ -318,6 +322,10 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -469,7 +477,8 @@
 <li><p>a backend with DLPack support: <code class="docutils literal notranslate"><span class="pre">cpu</span></code> (<code class="docutils literal notranslate"><span class="pre">x64</span></code>/<code class="docutils literal notranslate"><span class="pre">arm64</span></code>), <code class="docutils literal notranslate"><span class="pre">cuda</span></code>, <code class="docutils literal notranslate"><span class="pre">amdgpu</span></code>, or <code class="docutils literal notranslate"><span class="pre">metal</span></code> (Vulkan is not supported);</p></li>
 <li><p>a DLPack-supported dtype: <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">u1</span></code> (other dtypes such as <code class="docutils literal notranslate"><span class="pre">f16</span></code>, <code class="docutils literal notranslate"><span class="pre">u8</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code> fall back to the kernel-copy path);</p></li>
 <li><p>on Apple Metal, <code class="docutils literal notranslate"><span class="pre">torch</span> <span class="pre">&gt;=</span> <span class="pre">2.9.2</span></code> for fields (required for DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> on MPS; see <a class="reference external" href="https://github.com/pytorch/pytorch/pull/168193">pytorch/pytorch#168193</a>);</p></li>
-<li><p>0-dim <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> instances are not zero-copyable on any backend (PyTorch DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> limitation).</p></li>
+<li><p>0-dim <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> instances are not zero-copyable on any backend (PyTorch DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> limitation);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">StructField</span></code> members are not zero-copyable yet (see <a class="reference internal" href="#struct-fields">Struct fields</a> below); <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises on <code class="docutils literal notranslate"><span class="pre">StructField</span></code>.</p></li>
 </ul>
 <p>Zero-copy <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> additionally requires a CPU backend, because numpy arrays cannot reference GPU memory.</p>
 </section>
@@ -563,15 +572,15 @@
 </section>
 <section id="struct-fields">
 <h3>Struct fields<a class="headerlink" href="#struct-fields" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">StructField.to_numpy()</span></code> return a dictionary mapping each member name to a zero-copy view of that member’s storage. Each member is a separate SNode leaf and is zero-copyable independently:</p>
+<p><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">StructField.to_numpy()</span></code> return a dictionary mapping each member name to an <strong>independent copy</strong> of that member’s data. Struct fields use AOS (array-of-structures) cell layout: a <code class="docutils literal notranslate"><span class="pre">Struct.field({&quot;a&quot;:</span> <span class="pre">i32,</span> <span class="pre">&quot;b&quot;:</span> <span class="pre">f32},</span> <span class="pre">shape=(N,))</span></code> stores <code class="docutils literal notranslate"><span class="pre">[a0,</span> <span class="pre">b0,</span> <span class="pre">a1,</span> <span class="pre">b1,</span> <span class="pre">...]</span></code> in memory, with stride <code class="docutils literal notranslate"><span class="pre">sizeof(cell)</span></code> between consecutive <code class="docutils literal notranslate"><span class="pre">a</span></code>’s. Quadrants’ C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members’ bytes), so member views are forced to be copies until that is fixed.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">S</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">sf</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,))</span>
 
-<span class="n">views</span> <span class="o">=</span> <span class="n">sf</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="n">views</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>          <span class="c1"># writes through to sf.pos</span>
+<span class="n">dicts</span> <span class="o">=</span> <span class="n">sf</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>           <span class="c1"># dict of independent copies (always)</span>
+<span class="n">dicts</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>           <span class="c1"># does NOT write through to sf.pos</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">copy=</span></code> is forwarded uniformly to every member.</p>
+<p><code class="docutils literal notranslate"><span class="pre">copy=False</span></code> is rejected with <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>; <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> and <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> are accepted and both produce copies.</p>
 </section>
 </section>
 <section id="direct-torch-tensor-pass-through">
