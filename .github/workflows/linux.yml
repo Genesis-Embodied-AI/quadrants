@@ -142,6 +142,20 @@ jobs:
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
             --format markdown > coverage-comment.md
+      - name: Truncate coverage comment if too large
+        if: always() && hashFiles('coverage-comment.md') != ''
+        run: |
+          python3 -c "
+          data = open('coverage-comment.md').read()
+          if len(data) > 64000:
+              cut = data[:63000].rfind('</details>')
+              if cut > 0:
+                  data = data[:cut + len('</details>')]
+              else:
+                  data = data[:63000]
+              data += '\n\n---\n*Coverage report truncated to fit GitHub comment size limit.*\n'
+              open('coverage-comment.md', 'w').write(data)
+          "
       - name: Post coverage comment
         if: always() && hashFiles('coverage-comment.md') != ''
         run: gh pr comment ${{ github.event.pull_request.number }} --body-file coverage-comment.md
