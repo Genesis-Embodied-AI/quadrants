@@ -134,4 +134,10 @@ Uses an AI agent to check that lines in changed files follow wrapping convention
 - **Markdown files (`.md`)**: lines should not be hard-wrapped. Each paragraph should be a single long line.
 - **Code comments and docstrings**: lines should be wrapped at 120 characters, not at 80.
 
-The check runs only on files changed in the PR and reports up to 3 violations.
+The check runs only on lines changed in the PR and reports up to 3 violations.
+
+### Deleted comments check (`check_deleted_comments.yml`)
+
+Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. A deletion is flagged if a comment explaining non-obvious logic, a trade-off, or a constraint was removed while the code it described is still present. Deletions are fine if the code the comment described was also deleted, or if the comment is no longer correct.
+
+The check runs only on the PR diff and reports up to 10 violations.
