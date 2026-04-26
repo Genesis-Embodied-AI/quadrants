@@ -57,9 +57,8 @@ def run_gc_after_test():
 def _vulkan_debug_warmup():
     """Prime the Vulkan debugPrintf callback pipeline once per worker process.
 
-    The validation layer's debugPrintf callback delivery has a race condition on
-    the first kernel dispatch in a new process: vkQueueWaitIdle() can return
-    before the callback fires. A full init/dispatch/sync/reset cycle here warms
+    The validation layer's debugPrintf callback delivery has a race condition on the first kernel dispatch in a new
+    process: vkQueueWaitIdle() can return before the callback fires. A full init/dispatch/sync/reset cycle here warms
     the driver-level debug infrastructure so subsequent inits work reliably.
     """
     from tests import test_utils
