@@ -22,11 +22,10 @@ from quadrants.lang.util import (
 # DLPack canonical-view patch for layout-tagged fields.
 #
 # The C++ ``field_to_dlpack`` derives the physical-memory axis order from the SNode chain. For layout-tagged fields
-# built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order
-# and C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place
-# here so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted
-# strides — byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=``
-# parameter.
+# built via the new flat-rank-N allocation path (see ``lang/impl.py::_field``), the SNode chain is in natural order and
+# C++ reports the *permuted physical* shape with identity strides. We patch the returned DLManagedTensor in place here
+# so consumers (``torch.utils.dlpack.from_dlpack`` et al.) observe the canonical shape and matching permuted strides —
+# byte-identical to the view layout-tagged ndarrays produce via the ``ndarray_to_dlpack`` ``layout=`` parameter.
 #
 # The struct layouts below match the DLPack v1 ABI exactly. Only the fields we need to read (``ndim``) and mutate
 # (``shape``, ``strides``) are referenced, so additions to DLTensor / DLManagedTensor that land after this writes in
@@ -312,11 +311,10 @@ class Field:
         if len(key) != len(self.shape):
             raise AssertionError("Slicing is not supported on qd.field")
 
-        # For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user
-        # writes indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical
-        # shape and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses
-        # the same convention as :func:`build_Subscript`: physical index at nesting level ``p`` is
-        # ``canonical[layout[p]]``.
+        # For layout-tagged fields (``_qd_layout = (a0, a1, ..., a_{N-1})`` canonical-axis permutation), the user writes
+        # indices in canonical order but the underlying flat rank-N SNode is allocated at the permuted physical shape
+        # and expects physical-order indices. Mirrors ``Tensor._permute_key`` in ``_tensor_wrapper.py``. Uses the same
+        # convention as :func:`build_Subscript`: physical index at nesting level ``p`` is ``canonical[layout[p]]``.
         layout = getattr(self, "_qd_layout", None)
         if layout is not None:
             layout_t = tuple(layout)

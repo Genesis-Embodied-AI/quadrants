@@ -81,22 +81,22 @@ _ARCH_PYTHON = Arch.python
 class LaunchContextBufferCache:
     # Here, we are tracking whether a launch context buffer can be cached. The point of caching the launch context
     # buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a
-    # significant overhead, without changing anything in regards of the function calls to the launch context that
-    # must be made for a given kernel.
-    # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args'
-    # for a given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all
-    # the instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at
-    # this point. This buffer is then cached once and for all and evaluated every time the exact same set of input
-    # argument is passed. This means that, ultimately, it will result in the exact same function calls with or
-    # without caching. In this particular case, the function calls corresponds to adding arguments to the current
-    # context for this kernel call.
-    # A launch context buffer is considered cache-friendly if and only if no direct call to the launch context
-    # where made preemptively during the recursive processing of the arguments, all of parameters of the arguments are
+    # significant overhead, without changing anything in regards of the function calls to the launch context that must
+    # be made for a given kernel.
+    # You can understand this as resolving the static part of the entire control flow of '_recursive_set_args' for a
+    # given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all the
+    # instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at this
+    # point. This buffer is then cached once and for all and evaluated every time the exact same set of input argument
+    # is passed. This means that, ultimately, it will result in the exact same function calls with or without caching.
+    # In this particular case, the function calls corresponds to adding arguments to the current context for this kernel
+    # call.
+    # A launch context buffer is considered cache-friendly if and only if no direct call to the launch context where
+    # made preemptively during the recursive processing of the arguments, all of parameters of the arguments are
     # pointers, the address of these pointers cannot change, and the set of parameters is fixed.
     # The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage
-    # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of
-    # the taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that
-    # the cache stores wear references to pointers, so it does not hold alife any allocated memory.
+    # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the
+    # taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
+    # stores wear references to pointers, so it does not hold alife any allocated memory.
     def __init__(self) -> None:
         # Keep track of taichi runtime to automatically clear cache if destroyed
         self._prog_weakref: ReferenceType[Program] | None = None
@@ -619,12 +619,12 @@ class Kernel(FuncBase):
         # ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields
         # identical cache keys.
         #
-        # Fast path: most calls have no wrappers. VectorTensor/MatrixTensor subclasses are also unwrapped. The
-        # check short-circuits on the first non-wrapper.
+        # Fast path: most calls have no wrappers. VectorTensor/MatrixTensor subclasses are also unwrapped. The check
+        # short-circuits on the first non-wrapper.
         #
-        # PERF-CRITICAL: The _any_tensor_constructed guard makes this loop zero-cost when no qd.Tensor has been
-        # created. ``type(a) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
-        # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+        # PERF-CRITICAL: The _any_tensor_constructed guard makes this loop zero-cost when no qd.Tensor has been created.
+        # ``type(a) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer comparison (~10
+        # ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             for _a in py_args:
                 if type(_a) in _TENSOR_WRAPPER_TYPES:

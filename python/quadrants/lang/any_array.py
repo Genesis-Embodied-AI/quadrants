@@ -58,8 +58,8 @@ class AnyArray:
     def shape(self):
         """A list containing sizes for each dimension. Note that element shape will be excluded.
 
-        When ``_qd_layout`` is set the underlying buffer is allocated at the *physical* (permuted) shape; this property
-        inverts the layout so callers always see the *canonical* shape — matching ``Ndarray.shape`` and
+        When ``_qd_layout`` is set the underlying buffer is allocated at the *physical* (permuted) shape; this
+        property inverts the layout so callers always see the *canonical* shape — matching ``Ndarray.shape`` and
         ``Field.shape``.
 
         Returns:

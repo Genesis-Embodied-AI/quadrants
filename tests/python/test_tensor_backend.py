@@ -1,8 +1,7 @@
 """Tests for ``qd.Backend``.
 
-Scope: this PR only ships the enum. No factory, no layout, no kernel
-integration. Tests cover symbol export, value, name, ordering, and IntEnum
-semantics so that downstream PRs can rely on stable behaviour.
+Scope: this PR only ships the enum. No factory, no layout, no kernel integration. Tests cover symbol export, value,
+name, ordering, and IntEnum semantics so that downstream PRs can rely on stable behaviour.
 """
 
 from enum import IntEnum

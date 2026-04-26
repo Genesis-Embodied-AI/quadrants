@@ -102,8 +102,8 @@ def _coerce_backend(backend):
 # Kwargs explicitly accepted by the unified tensor factories (in addition to the positional ``dtype`` / ``shape`` /
 # ``n`` / ``m``). The factories hard-validate against these sets so typos and backend-specific options don't silently
 # work on one backend and raise cryptic errors deep in the other. Users who need backend-specific knobs (e.g.
-# ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray``
-# directly — they have explicitly opted out of the unified tensor API.
+# ``offset=`` for field offset indexing, ``order=`` for SoA layouts) should call ``qd.field`` / ``qd.ndarray`` directly
+# — they have explicitly opted out of the unified tensor API.
 #
 # ``layout=`` is on the scalar ``qd.tensor`` factory only; the Vector/Matrix factories reject it because layout
 # semantics over an extra element axis are out of scope for now.

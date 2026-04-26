@@ -55,10 +55,10 @@ class Ndarray:
         shape (Tuple[int]): Shape of the Ndarray.
     """
 
-    # PERF-CRITICAL: This class attribute lets hotpath code access ``arg._qd_layout`` directly instead of
-    # ``getattr(arg, "_qd_layout", None)``. Direct attribute access is measurably faster on the per-kernel-arg
-    # path in _template_mapper_hotpath._extract_arg. Instance-level _qd_layout (set during layout-tagged
-    # allocation) shadows this default.
+    # PERF-CRITICAL: This class attribute lets hotpath code access ``arg._qd_layout`` directly instead of ``getattr(arg,
+    # "_qd_layout", None)``. Direct attribute access is measurably faster on the per-kernel-arg path in
+    # _template_mapper_hotpath._extract_arg. Instance-level _qd_layout (set during layout-tagged allocation) shadows
+    # this default.
     _qd_layout: tuple[int, ...] | None = None
 
     def __init__(self):
@@ -209,8 +209,8 @@ class Ndarray:
 
         Returns the *canonical* view: the output array has ``self.shape`` (the user-facing shape passed to
         ``qd.tensor(..., shape=)``) and is filled by a kernel whose canonical iteration is mapped to the underlying
-        physical buffer through the AST layout-permutation. Untagged ndarrays see canonical == physical and pay no
-        extra cost.
+        physical buffer through the AST layout-permutation. Untagged ndarrays see canonical == physical and pay no extra
+        cost.
 
         Returns:
             numpy.ndarray: The result numpy array, in canonical axis order.

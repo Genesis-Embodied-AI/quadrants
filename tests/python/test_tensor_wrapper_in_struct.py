@@ -144,9 +144,9 @@ def test_mixed_bare_and_wrapper_struct_fields():
 #
 # Pins the soft-failure side of the §8.14 bug: even when the kernel eventually runs (via the slow path), the
 # wrapper-as-struct-field would have tripped the fastcache's per-parameter validator
-# (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance for
-# the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes the
-# warning observable end-to-end.
+# (``args_hasher.stringify_obj_type``) and emitted ``[FASTCACHE][PARAM_INVALID]``, killing the recompile-avoidance
+# for the whole call. Following the harness used by ``test_src_ll_cache_arg_warnings``: capfd + ``@qd.pure`` makes
+# the warning observable end-to-end.
 #
 # Ndarray-only — fastcache exercises the dataclass walker (``dataclass_to_repr``) for this struct shape; the
 # data_oriented walker has its own per-field code path which is exercised transitively by the dataclass test via the

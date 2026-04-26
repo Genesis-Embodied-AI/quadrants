@@ -3,8 +3,7 @@
 Pins the canonical-view contract end-to-end on layout-tagged tensors, across both backends. The contract under test:
 
 - ``a.shape``, ``a.to_numpy().shape``, ``a.to_torch().shape``, and the shape carried by ``a.to_dlpack()`` all report
-  the **canonical** shape (the same shape the user passed to ``qd.tensor(..., shape=)``), regardless of
-  ``_qd_layout``.
+  the **canonical** shape (the same shape the user passed to ``qd.tensor(..., shape=)``), regardless of ``_qd_layout``.
 - Element values match canonical indexing in every accessor.
 - ``from_numpy(canonical_arr)`` round-trips: ``to_numpy()`` of the loaded ndarray equals the input.
 - ``a.grad`` accessors mirror the primal: same canonical view, same element values written by the kernel.
@@ -595,11 +594,10 @@ def test_pickle_layout_tagged_ndarray_roundtrip_preserves_layout(layout):
 
 
 # ----------------------------------------------------------------------------
-# .fill(val) and copy_from(other): the two non-kernel Python entry points that mutate an ndarray via
-# quadrants-internal kernels. fill(val) uses a C++ bulk-fill on x64/cuda so it's layout-agnostic by construction,
-# but pin the observable behaviour so a future switch to the kernel path doesn't regress silently. copy_from expects
-# the physical shapes to match (enforced in ``Ndarray.copy_from``), so we test the natural use case: two ndarrays
-# with the same layout.
+# .fill(val) and copy_from(other): the two non-kernel Python entry points that mutate an ndarray via quadrants-internal
+# kernels. fill(val) uses a C++ bulk-fill on x64/cuda so it's layout-agnostic by construction, but pin the observable
+# behaviour so a future switch to the kernel path doesn't regress silently. copy_from expects the physical shapes to
+# match (enforced in ``Ndarray.copy_from``), so we test the natural use case: two ndarrays with the same layout.
 # ----------------------------------------------------------------------------
 
 
@@ -660,10 +658,9 @@ def test_grad_to_dlpack_canonical_view_rank2(layout):
 
 
 # ----------------------------------------------------------------------------
-# Mixed kernel arguments: a layout-tagged ndarray and an untagged ndarray of the same canonical shape, written in
-# the same kernel. This is the Genesis-migration pattern ("this one solver tensor is layout=..., the rest stay
-# default") and must Just Work: canonical indices on either side produce canonical-view results through
-# ``to_numpy()``.
+# Mixed kernel arguments: a layout-tagged ndarray and an untagged ndarray of the same canonical shape, written in the
+# same kernel. This is the Genesis-migration pattern ("this one solver tensor is layout=..., the rest stay default")
+# and must Just Work: canonical indices on either side produce canonical-view results through ``to_numpy()``.
 # ----------------------------------------------------------------------------
 
 

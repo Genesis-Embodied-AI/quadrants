@@ -194,8 +194,8 @@ class FunctionDefTransformer:
         cached on the global context for later lookup by ``build_Attribute``.
 
         Also stores ``(arg_id, template_arg_idx, attr_chain)`` tuples in
-        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in
-        the launch context.
+        ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
+        launch context.
         """
         from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
 

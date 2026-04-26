@@ -151,9 +151,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             element_type = type_id if type_id in primitive_types.type_ids else arg.element_type
             # Optional tensor layout (None for legacy / identity).
             #
-            # PERF-CRITICAL: arg._qd_layout uses direct attribute access (not getattr) because Ndarray has a
-            # class-level _qd_layout=None default. This avoids getattr(..., default) overhead on every kernel arg.
-            # Do not replace with getattr().
+            # PERF-CRITICAL: arg._qd_layout uses direct attribute access (not getattr) because Ndarray has a class-level
+            # _qd_layout=None default. This avoids getattr(..., default) overhead on every kernel arg. Do not replace
+            # with getattr().
             return element_type, len(arg.shape), needs_grad, annotation.boundary, arg._qd_layout
         if isinstance(arg, AnyArray):
             ty = arg.get_type()
