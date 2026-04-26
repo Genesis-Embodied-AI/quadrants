@@ -53,6 +53,39 @@ def run_gc_after_test():
     gc.collect()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _vulkan_debug_warmup():
+    """Prime the Vulkan debugPrintf callback pipeline once per worker process.
+
+    The validation layer's debugPrintf callback delivery has a race condition on
+    the first kernel dispatch in a new process: vkQueueWaitIdle() can return
+    before the callback fires. A full init/dispatch/sync/reset cycle here warms
+    the driver-level debug infrastructure so subsequent inits work reliably.
+    """
+    from tests import test_utils
+
+    if qd.vulkan not in test_utils.expected_archs():
+        return
+
+    try:
+        qd.init(arch=qd.vulkan, debug=True, enable_fallback=False, print_full_traceback=True)
+
+        @qd.kernel
+        def _warmup() -> qd.i8:
+            return qd.i8(64) + qd.i8(64)
+
+        _warmup()
+        qd.sync()
+        sys.stdout.flush()
+    except Exception:
+        pass
+    finally:
+        try:
+            qd.reset()
+        except Exception:
+            pass
+
+
 @pytest.fixture(autouse=True)
 def wanted_arch(request, req_arch, req_options):
     if req_arch is not None:
