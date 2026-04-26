@@ -23,8 +23,10 @@ jobs:
 
       - name: Get diff of changed files
         id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git diff origin/${{ github.base_ref }}...HEAD \
+          git diff "origin/$BASE_REF...HEAD" \
             -- '*.py' '*.cpp' '*.h' '*.hpp' '*.c' '*.cc' \
             > /tmp/pr_diff.patch
 
@@ -69,6 +71,6 @@ jobs:
           )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
 
           echo "$RESULT"
-          if echo "$RESULT" | grep -q "^FAIL"; then
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
             exit 1
           fi
