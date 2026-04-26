@@ -140,4 +140,4 @@ The check runs only on lines changed in the PR and reports up to 3 violations.
 
 Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted.
 
-The check runs only on the PR diff and reports up to 10 violations.
+The check reports up to 10 violations.
