@@ -132,7 +132,12 @@ class _AnnotatedRenderer(_TerminalRenderer):
                 print(f"{color} {marker} {lineno:4d}{RESET} {color}{text}{RESET}")
 
 
+_COMMIT_HASH_OVERRIDE = None
+
+
 def _get_commit_hash():
+    if _COMMIT_HASH_OVERRIDE:
+        return _COMMIT_HASH_OVERRIDE
     return subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
         capture_output=True,
@@ -494,8 +499,16 @@ def main():
         default=None,
         help="Output file path for HTML format (default: coverage-report.html in repo root)",
     )
+    parser.add_argument(
+        "--commit-hash",
+        default=None,
+        help="Override the commit hash shown in the report heading (default: git rev-parse HEAD)",
+    )
 
     args = parser.parse_args()
+
+    global _COMMIT_HASH_OVERRIDE
+    _COMMIT_HASH_OVERRIDE = args.commit_hash
 
     if not args.report_only:
         combine_coverage()

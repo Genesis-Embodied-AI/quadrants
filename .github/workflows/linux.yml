@@ -107,7 +107,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Python check
         uses: actions/setup-python@v4
@@ -140,14 +139,18 @@ jobs:
             exit 0
           fi
 
+          HEAD_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-9)
+
           python tests/coverage_report.py --report-only \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
+            --commit-hash "$HEAD_SHA" \
             --format markdown > coverage-check.md || true
 
           python tests/coverage_report.py --report-only \
             --compare-branch=origin/${{ github.base_ref }} \
             --coverage-xml $COV_XMLS \
+            --commit-hash "$HEAD_SHA" \
             --format markdown-summary > coverage-comment.md || true
       - name: Upload full coverage report
         if: always() && hashFiles('coverage-check.md') != ''
