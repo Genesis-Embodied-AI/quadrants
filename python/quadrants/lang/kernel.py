@@ -623,6 +623,13 @@ class Kernel(FuncBase):
         # PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely
         # (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1
         # Tensor, this reduces per-call type checks from 30 to 1.
+        #
+        # Safety of caching: kernel parameter annotations are fixed per position (they come from the function
+        # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
+        # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
+        # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
+        # ``qd.template()``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
+        # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             _indices = self._tensor_unwrap_indices
             if _indices is None:
