@@ -196,7 +196,9 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             f"qd.tensor() allocates a new tensor; to wrap an existing {type(dtype).__name__}, use qd.wrap(impl) instead"
         )
     if layout is not None:
-        from quadrants.lang.matrix import MatrixType  # pylint: disable=import-outside-toplevel
+        from quadrants.lang.matrix import (
+            MatrixType,  # pylint: disable=import-outside-toplevel
+        )
 
         if isinstance(dtype, MatrixType):
             raise TypeError(
