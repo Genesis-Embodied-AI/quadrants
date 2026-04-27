@@ -30,8 +30,9 @@ SUBPROCESS_ARGS = [
 
 
 @pytest.fixture
-def xdist_project(pytester):
+def xdist_project(pytester, monkeypatch):
     """Write a minimal conftest that reproduces our worker-retirement hooks."""
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
     pytester.makeconftest(
         """
         import os
