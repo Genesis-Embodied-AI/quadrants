@@ -112,9 +112,7 @@ class BufferView:
         return BufferViewType(dtype)
 
     def __init__(self, arr, offset, size):
-        # Host-side (offset/size are numeric): coerce to int and validate bounds.
-        # Kernel-compilation (offset/size are Expr nodes): store as-is.
-        if isinstance(offset, (int, float, np.integer)):
+        if not isinstance(offset, Expr):
             offset, size = int(offset), int(size)
             arr_shape = getattr(arr, "shape", None)
             if arr_shape is not None:
