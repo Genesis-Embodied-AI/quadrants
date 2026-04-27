@@ -6,6 +6,7 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import impl
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.util import quadrants_scope
+from quadrants.types.buffer_view_type import BufferViewType
 
 _LOC_RE = re.compile(r'File "(.+?)", line (\d+), in (\w+)')
 
@@ -73,31 +74,40 @@ class BufferView:
     ``view[i]`` into ``arr[offset + i]`` with optional bounds checking,
     without any IR-level changes.
 
-    Can be used in two ways:
+    Create a view using ndarray slice syntax (preferred)::
 
-    1. Constructed manually inside a kernel from separate parameters::
+        data = qd.ndarray(qd.f32, shape=(N,))
+        view = data[:16]           # offset=0, count=16
+        view = data[8:24]          # offset=8, count=16
 
-        @qd.kernel
-        def k(buf: qd.types.ndarray(qd.f32, ndim=1),
-              offset: qd.i32, count: qd.i32):
-            view = qd.BufferView(buf, offset, count)
-            for i in range(count):
-                view[i] *= 2.0
+    Or construct directly for programmatic offsets::
 
-    2. Passed directly as a kernel argument (auto-decomposed)::
-
-        buf = qd.ndarray(qd.f32, shape=(N,))
         view = qd.BufferView(buf, offset=16, count=32)
 
+    Use ``BufferView[dtype]`` as the kernel type annotation::
+
         @qd.kernel
-        def k(v: qd.types.buffer_view(qd.f32)):
+        def k(v: BufferView[qd.f32]):
             for i in range(v.count):
                 v[i] *= 2.0
 
-        k(view)
+        k(data[:16])
+
+    The same annotation works on ``@qd.func``::
+
+        @qd.func
+        def process(v: BufferView[qd.f32], idx: qd.i32):
+            v[idx] = v[idx] * 2.0
     """
 
     _is_quadrants_class = True
+
+    @classmethod
+    def __class_getitem__(cls, dtype):
+        """Enable ``BufferView[qd.f32]`` as a kernel/func type annotation."""
+        if isinstance(dtype, tuple):
+            return BufferViewType(*dtype)
+        return BufferViewType(dtype)
 
     def __init__(self, arr, offset, count):
         self.arr = arr

@@ -1,0 +1,329 @@
+"""Tests for BufferView: slice syntax, kernel annotation, @qd.func support,
+and debug-mode out-of-bounds detection with complete callstack diagnostics."""
+
+import platform
+
+import numpy as np
+import pytest
+
+import quadrants as qd
+from quadrants import BufferView
+from quadrants.lang.exception import QuadrantsAssertionError, QuadrantsRuntimeTypeError
+from quadrants.lang.misc import get_host_arch_list
+
+from tests import test_utils
+
+# Skip debug-mode assertion tests on ARM64 Linux where assertions are unsupported.
+_u = platform.uname()
+_no_assert = _u.system == "linux" and _u.machine in ("arm64", "aarch64")
+
+N = 32
+
+
+# ---------------------------------------------------------------------------
+# Group A — Slice syntax (host-level)
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_basic():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[:16]
+    assert isinstance(view, BufferView)
+    assert view.offset == 0
+    assert view.count == 16
+    assert view.get_ndarray() is data
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_with_start():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[8:24]
+    assert view.offset == 8
+    assert view.count == 16
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_full():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[:]
+    assert view.offset == 0
+    assert view.count == N
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_to_end():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[8:]
+    assert view.offset == 8
+    assert view.count == N - 8
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_negative_start():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = data[-8:]
+    assert view.offset == N - 8
+    assert view.count == 8
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_step_error():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    with pytest.raises(ValueError, match="step=1"):
+        _ = data[::2]
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_slice_2d_error():
+    data = qd.ndarray(qd.f32, shape=(4, 4))
+    with pytest.raises(TypeError, match="1D"):
+        _ = data[:2]
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_explicit_constructor():
+    data = qd.ndarray(qd.f32, shape=(N,))
+    view = BufferView(data, 4, 8)
+    assert view.offset == 4
+    assert view.count == 8
+    assert view.get_ndarray() is data
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_vector_ndarray_slice():
+    v_arr = qd.Vector.ndarray(3, qd.f32, (N,))
+    view = v_arr[:16]
+    assert isinstance(view, BufferView)
+    assert view.offset == 0
+    assert view.count == 16
+    assert view.get_ndarray() is v_arr
+
+
+# ---------------------------------------------------------------------------
+# Group B — Kernel functional tests
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_bracket_annotation():
+    """BufferView[qd.f32] annotation auto-decomposes and recomposes correctly."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def fill(v: BufferView[qd.f32]):
+        for i in range(v.count):
+            v[i] = 1.0
+
+    fill(data[:16])
+    result = data.to_numpy()
+    assert np.all(result[:16] == 1.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_write_via_view():
+    """Kernel write through an offset view only touches the view's range."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def fill_view(v: BufferView[qd.f32]):
+        for i in range(v.count):
+            v[i] = 7.0
+
+    fill_view(data[8:16])  # offset=8, count=8
+    result = data.to_numpy()
+    assert np.all(result[:8] == 0.0)
+    assert np.all(result[8:16] == 7.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_count_in_kernel():
+    """v.count inside a kernel gives the correct iteration count."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+    counter = qd.ndarray(qd.i32, shape=(1,))
+    counter.from_numpy(np.zeros(1, dtype=np.int32))
+
+    @qd.kernel
+    def count_iters(v: BufferView[qd.f32], c: qd.types.ndarray(qd.i32)):
+        s = 0
+        for i in range(v.count):
+            s += 1
+        c[0] = s
+
+    count_iters(data[4:20], counter)
+    assert counter.to_numpy()[0] == 16
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_multiple_views():
+    """Two BufferView arguments with different offsets are independent."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.kernel
+    def fill_two(a: BufferView[qd.f32], b: BufferView[qd.f32]):
+        for i in range(a.count):
+            a[i] = 1.0
+        for i in range(b.count):
+            b[i] = 2.0
+
+    fill_two(data[:8], data[16:24])
+    result = data.to_numpy()
+    assert np.all(result[:8] == 1.0)
+    assert np.all(result[8:16] == 0.0)
+    assert np.all(result[16:24] == 2.0)
+    assert np.all(result[24:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_func_annotation():
+    """@qd.func with BufferView[dtype] annotation works when called from a kernel."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+    data.from_numpy(np.zeros(N, dtype=np.float32))
+
+    @qd.func
+    def set_val(v: BufferView[qd.f32], idx: qd.i32, val: qd.f32):
+        v[idx] = val
+
+    @qd.kernel
+    def run(v: BufferView[qd.f32]):
+        for i in range(v.count):
+            set_val(v, i, 5.0)
+
+    run(data[8:16])
+    result = data.to_numpy()
+    assert np.all(result[:8] == 0.0)
+    assert np.all(result[8:16] == 5.0)
+    assert np.all(result[16:] == 0.0)
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_wrong_type_error():
+    """Passing a plain ndarray where BufferView[dtype] is expected raises an error."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(v.count):
+            v[i] = 0.0
+
+    with pytest.raises(QuadrantsRuntimeTypeError):
+        k(data)  # plain ndarray, not a BufferView
+
+
+# ---------------------------------------------------------------------------
+# Group C — Debug mode: auto-error + complete callstack
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_oob_upper():
+    """Debug mode: index == count raises QuadrantsAssertionError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(1):
+            v[v.count + i] = 1.0  # v.count + 0 == count → OOB
+
+    with pytest.raises(QuadrantsAssertionError, match=r"BufferView Out Of Range"):
+        k(data[:16])
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_oob_lower():
+    """Debug mode: negative index (passed as qd.i32) raises QuadrantsAssertionError."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32], bad_idx: qd.i32):
+        for i in range(1):
+            v[bad_idx + i] = 1.0  # bad_idx = -1 → OOB (< 0)
+
+    with pytest.raises(QuadrantsAssertionError, match=r"BufferView Out Of Range"):
+        k(data[:16], -1)  # pass -1 as qd.i32 to avoid constant-negative-index restriction
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_oob_offset_reported():
+    """Debug mode error message reports the VIEW's offset and count, not the ndarray's."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(1):
+            v[v.count + i] = 1.0  # OOB: count=16, index=16
+
+    with pytest.raises(QuadrantsAssertionError) as exc_info:
+        k(data[8:24])  # offset=8, count=16
+
+    msg = str(exc_info.value)
+    assert "BufferView Out Of Range" in msg
+    assert "tid=" in msg
+    assert "offset=" in msg
+    assert "count=" in msg
+    assert "Callstack:" in msg
+    # Offset and count must reflect the VIEW, not the backing ndarray.
+    assert "offset=8" in msg
+    assert "count=16" in msg
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_callstack_nested():
+    """Debug mode: OOB via @qd.func shows both kernel and func frames in callstack."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.func
+    def writer(v: BufferView[qd.f32], idx: qd.i32):
+        v[idx] = 99.0  # OOB happens here when idx >= count
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(1):
+            writer(v, v.count + i)  # passes count+0 = out-of-range index
+
+    with pytest.raises(QuadrantsAssertionError) as exc_info:
+        k(data[:16])
+
+    msg = str(exc_info.value)
+    assert "Callstack:" in msg
+    # Both frames must appear: kernel frame and func frame.
+    assert "k" in msg
+    assert "writer" in msg
+
+
+@pytest.mark.skipif(_no_assert, reason="assert not supported on linux arm64/aarch64")
+@test_utils.test(require=qd.extension.assertion, debug=True, gdb_trigger=False)
+def test_debug_no_false_positive():
+    """Debug mode: accessing the last valid index (count-1) must NOT raise."""
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        for i in range(1):
+            v[v.count - 1 + i] = 1.0  # last valid index — should succeed
+
+    k(data[:16])  # must complete without exception
+
+
+@test_utils.test(arch=get_host_arch_list())
+def test_no_debug_no_assertion():
+    """Without debug mode, an out-of-range index does NOT raise QuadrantsAssertionError."""
+    # The view is data[:16]; accessing index 16 writes to data[16], which is
+    # within the backing ndarray (N=32) so there is no IR-level OOB either.
+    data = qd.ndarray(qd.f32, shape=(N,))
+
+    @qd.kernel
+    def k(v: BufferView[qd.f32]):
+        v[v.count] = 1.0  # OOB relative to view, but no assertions in non-debug mode
+
+    k(data[:16])  # must complete without QuadrantsAssertionError

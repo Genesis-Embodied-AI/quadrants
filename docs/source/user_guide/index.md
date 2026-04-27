@@ -18,6 +18,7 @@ tensor_types
 scalar_tensors
 matrix_vector
 compound_types
+buffer_view
 static
 sub_functions
 parallelization

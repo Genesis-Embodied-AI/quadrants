@@ -12,10 +12,12 @@ class BufferViewType:
         dtype: Element data type (e.g. qd.f32).
         boundary: Boundary mode for the underlying ndarray ("unsafe", "clamp").
 
-    Example::
+    Prefer using the ``BufferView[dtype]`` square-bracket syntax::
+
+        from quadrants import BufferView
 
         @qd.kernel
-        def k(v: qd.types.buffer_view(qd.f32)):
+        def k(v: BufferView[qd.f32]):
             for i in range(v.count):
                 v[i] *= 2.0
     """
@@ -35,6 +37,4 @@ class BufferViewType:
         return f"BufferViewType(dtype={self.dtype}, boundary={self.boundary})"
 
 
-buffer_view = BufferViewType
-
-__all__ = ["buffer_view", "BufferViewType"]
+__all__ = ["BufferViewType"]

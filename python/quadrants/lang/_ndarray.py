@@ -263,6 +263,22 @@ class Ndarray:
         """
         raise NotImplementedError()
 
+    def _slice_to_buffer_view(self, key: slice):
+        """Convert a slice key into a BufferView over this 1D ndarray.
+
+        Called from ``__getitem__`` when the key is a ``slice``.
+        Supports start/stop with negative indices; step must be 1.
+        """
+        from quadrants.lang.buffer_view import BufferView  # local import avoids circular dep at module level
+        if len(self.shape) != 1:
+            raise TypeError(
+                f"ndarray slice to BufferView requires a 1D array, got shape {self.shape}"
+            )
+        start, stop, step = key.indices(self.shape[0])
+        if step != 1:
+            raise ValueError(f"BufferView slice requires step=1, got step={step}")
+        return BufferView(self, start, stop - start)
+
     @python_scope
     def _pad_key(self, key):
         if key is None:
@@ -318,6 +334,8 @@ class ScalarNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._slice_to_buffer_view(key)
         self._initialize_host_accessor()
         return self.host_accessor.getter(*self._pad_key(key))
 

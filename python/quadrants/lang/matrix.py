@@ -1387,6 +1387,8 @@ class MatrixField(Field):
 
     @python_scope
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._slice_to_buffer_view(key)
         self._initialize_host_accessors()
         key = self._pad_key(key)
         _host_access = self._host_access(key)
@@ -1713,6 +1715,8 @@ class MatrixNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._slice_to_buffer_view(key)
         key = () if key is None else (key,) if isinstance(key, numbers.Number) else tuple(key)
         return Matrix([[NdarrayHostAccess(self, key, (i, j)) for j in range(self.m)] for i in range(self.n)])
 
@@ -1824,6 +1828,8 @@ class VectorNdarray(Ndarray):
 
     @python_scope
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self._slice_to_buffer_view(key)
         key = () if key is None else (key,) if isinstance(key, numbers.Number) else tuple(key)
         return Vector([NdarrayHostAccess(self, key, (i,)) for i in range(self.n)])
 
