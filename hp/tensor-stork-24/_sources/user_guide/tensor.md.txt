@@ -223,7 +223,7 @@ b = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)
 a.copy_from(b)   # raises: cross-backend copy unsupported
 ```
 
-If you genuinely need to move data across backends, route it through NumPy (or DLPack/Torch): `a.from_numpy(b.to_numpy())`.
+If you genuinely need to move data across backends, route it through Torch: `a.from_torch(b.to_torch())`.
 
 ## Known asymmetry: real-dtype `.grad` stub on the field backend
 

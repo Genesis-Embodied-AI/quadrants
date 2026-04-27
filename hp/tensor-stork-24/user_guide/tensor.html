@@ -602,7 +602,7 @@
 <span class="n">a</span><span class="o">.</span><span class="n">copy_from</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># raises: cross-backend copy unsupported</span>
 </pre></div>
 </div>
-<p>If you genuinely need to move data across backends, route it through NumPy (or DLPack/Torch): <code class="docutils literal notranslate"><span class="pre">a.from_numpy(b.to_numpy())</span></code>.</p>
+<p>If you genuinely need to move data across backends, route it through Torch: <code class="docutils literal notranslate"><span class="pre">a.from_torch(b.to_torch())</span></code>.</p>
 </section>
 <section id="known-asymmetry-real-dtype-grad-stub-on-the-field-backend">
 <h2>Known asymmetry: real-dtype <code class="docutils literal notranslate"><span class="pre">.grad</span></code> stub on the field backend<a class="headerlink" href="#known-asymmetry-real-dtype-grad-stub-on-the-field-backend" title="Link to this heading">#</a></h2>
