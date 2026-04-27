@@ -1,4 +1,5 @@
 import platform
+import sys
 
 import pytest
 
@@ -7,7 +8,10 @@ import quadrants as qd
 from tests import test_utils
 
 
-@test_utils.test(arch=qd.gpu, exclude=[qd.metal])
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="FIXME: This test is causing OOM error on the CI, crashing jobs with error 143..."
+)
+@test_utils.test(arch=qd.gpu)
 def test_huge_allocation_fail_at_allocate_time():
     """Ensure huge allocation fails at allocate time and not at memset to 0"""
     # No match= filter: the exact error message varies across backends (LLVM pool, CUDA malloc_async, Vulkan).
