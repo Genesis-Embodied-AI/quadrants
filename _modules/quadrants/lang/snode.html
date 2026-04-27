@@ -847,6 +847,15 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        qd.u64: The memory address of `f[indices]`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Layout-tagged fields: permute canonical user-supplied indices into physical storage order before passing to</span>
+    <span class="c1"># the SNode layer, matching the canonical-&gt;physical rewrite applied to regular subscripts in</span>
+    <span class="c1"># ``build_Subscript``. Without this, ``get_addr(f, [i, j, k])`` would be the only access path that treats</span>
+    <span class="c1"># its arguments as already-physical and would return addresses inconsistent with ``f[i, j, k]``.</span>
+    <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layout_t</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">):</span>
+            <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="n">layout_t</span><span class="p">[</span><span class="n">p</span><span class="p">]]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">))]</span>
     <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
         <span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
