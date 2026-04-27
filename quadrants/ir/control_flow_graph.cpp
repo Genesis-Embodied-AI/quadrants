@@ -1354,26 +1354,71 @@ void ControlFlowGraph::determine_ad_stack_size() {
     }
   }
 
-  // BF scratch reused across stacks to avoid reallocating per iteration.
+  // Group stacks whose per-node (increased_size, max_increased_size) rows are bit-identical, so
+  // that BF runs once per equivalence class instead of once per stack. In practice many AD-stacks
+  // in the same kernel share their push/pop schedule (one alloca per autodiff variable in the
+  // same loop body), and BF on a large CFG dwarfs the dedup cost. We hash a sparse fingerprint
+  // (only nodes where the stack actually has push/pop activity) and group by it. Worst case (no
+  // duplicates): one BF run per stack, equivalent to running BF directly per stack.
+  using Fingerprint = std::vector<std::tuple<int, int, int>>;  // (node_id, is, mis), sorted by node_id
+  struct FingerprintHash {
+    std::size_t operator()(const Fingerprint &f) const noexcept {
+      std::size_t h = 1469598103934665603ULL;
+      for (auto &[n, i, m] : f) {
+        auto mix = [&](std::size_t x) {
+          h ^= x;
+          h *= 1099511628211ULL;
+        };
+        mix(static_cast<std::size_t>(n));
+        mix(static_cast<std::size_t>(static_cast<unsigned>(i)));
+        mix(static_cast<std::size_t>(static_cast<unsigned>(m)));
+      }
+      return h;
+    }
+  };
+  std::unordered_map<Fingerprint, int, FingerprintHash> fp_to_rep;  // fingerprint -> representative stack id
+  std::vector<int> stack_to_rep(num_stacks, -1);
+  std::vector<int> rep_stack_ids;  // stack ids that actually run BF
+  for (int sid = 0; sid < num_stacks; sid++) {
+    if (!stack_active[sid]) {
+      continue;
+    }
+    Fingerprint fp;
+    const auto &is_row = increased_size[sid];
+    const auto &mis_row = max_increased_size[sid];
+    for (int n = 0; n < num_nodes; n++) {
+      if (is_row[n] != 0 || mis_row[n] != 0) {
+        fp.emplace_back(n, is_row[n], mis_row[n]);
+      }
+    }
+    auto [it, inserted] = fp_to_rep.emplace(std::move(fp), sid);
+    stack_to_rep[sid] = it->second;
+    if (inserted) {
+      rep_stack_ids.push_back(sid);
+    }
+  }
+
+  // BF scratch reused across representatives to avoid reallocating per iteration.
   std::vector<int> max_size_at_node_begin(num_nodes);
   std::vector<char> in_queue(num_nodes);
   std::vector<int> times_pushed_in_queue(num_nodes);
   std::queue<int> to_visit;
 
-  // The maximum stack size determining algorithm -- run the Bellman-Ford algorithm on each
-  // AD-stack separately.
-  for (int sid = 0; sid < num_stacks; sid++) {
-    AdStackAllocaStmt *stack = stacks[sid];
-    if (!stack_active[sid]) {
-      // No push/pop in the CFG: BF would visit reachable nodes with all-zero edge weights and
-      // settle with `max_size = 0`, no positive loop. Reproduce the post-BF result directly.
-      QD_WARN("Unused autodiff stack {} should have been eliminated.", stack->name());
-      continue;
-    }
+  // BF results keyed by representative stack id, broadcast below to every stack that hashed to
+  // this representative.
+  struct BFResult {
+    int max_size;
+    bool has_positive_loop;
+  };
+  std::unordered_map<int, BFResult> rep_results;
+  rep_results.reserve(rep_stack_ids.size());
 
+  // The maximum stack size determining algorithm -- run the Bellman-Ford algorithm on each
+  // distinct (increased_size, max_increased_size) row pair.
+  for (int rep_sid : rep_stack_ids) {
     // Hoist references to the per-stack vectors out of the BF visit loop.
-    const std::vector<int> &mis_for_stack = max_increased_size[sid];
-    const std::vector<int> &is_for_stack = increased_size[sid];
+    const std::vector<int> &mis_for_stack = max_increased_size[rep_sid];
+    const std::vector<int> &is_for_stack = increased_size[rep_sid];
 
     // Reset BF scratch. `max_size_at_node_begin` starts at -1 to force the first relaxation to
     // overwrite, matching the original behaviour.
@@ -1426,7 +1471,20 @@ void ControlFlowGraph::determine_ad_stack_size() {
       }
     }
 
-    if (has_positive_loop) {
+    rep_results[rep_sid] = {max_size, has_positive_loop};
+  }
+
+  // Broadcast representative BF results to every active stack.
+  for (int sid = 0; sid < num_stacks; sid++) {
+    AdStackAllocaStmt *stack = stacks[sid];
+    if (!stack_active[sid]) {
+      // No push/pop in the CFG: BF would visit reachable nodes with all-zero edge weights and
+      // settle with `max_size = 0`, no positive loop. Reproduce the post-BF result directly.
+      QD_WARN("Unused autodiff stack {} should have been eliminated.", stack->name());
+      continue;
+    }
+    const BFResult &res = rep_results[stack_to_rep[sid]];
+    if (res.has_positive_loop) {
       // Leave `max_size = 0` so the structural bounded-loop pre-pass in
       // `irpass::determine_ad_stack_size` gets a chance to derive a symbolic bound (a
       // statically-bounded inner loop whose push-only body defeats Bellman-Ford, resolved from
@@ -1435,8 +1493,8 @@ void ControlFlowGraph::determine_ad_stack_size() {
     } else {
       // Since we use |max_size| == 0 for adaptive sizes, we do not want stacks with maximum
       // capacity indeed equal to 0.
-      QD_WARN_IF(max_size == 0, "Unused autodiff stack {} should have been eliminated.", stack->name());
-      stack->max_size = max_size;
+      QD_WARN_IF(res.max_size == 0, "Unused autodiff stack {} should have been eliminated.", stack->name());
+      stack->max_size = res.max_size;
     }
   }
 }
