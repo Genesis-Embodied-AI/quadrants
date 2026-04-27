@@ -196,7 +196,7 @@ assert restored.layout == (1, 0)
 assert (restored.to_numpy() == a.to_numpy()).all()
 ```
 
-Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips through `to_numpy()` plus a `qd.tensor(...)` reallocation on load). The bare `qd.field` type does not support pickle directly — `qd.Tensor` is the unit of serialization.
+Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips through `to_numpy()` plus a `qd.tensor(...)` reallocation on load).
 
 ## Wrapping a bare tensor: `qd.wrap`
 
