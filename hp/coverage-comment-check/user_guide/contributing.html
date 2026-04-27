@@ -516,7 +516,11 @@
 <li><p><strong>Markdown files (<code class="docutils literal notranslate"><span class="pre">.md</span></code>)</strong>: lines should not be hard-wrapped. Each paragraph should be a single long line.</p></li>
 <li><p><strong>Code comments and docstrings</strong>: lines should be wrapped at 120 characters, not at 80.</p></li>
 </ul>
-<p>The check runs only on files changed in the PR and reports up to 3 violations.</p>
+<p>The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="deleted-comments-check-check-deleted-comments-yml">
+<h3>Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)<a class="headerlink" href="#deleted-comments-check-check-deleted-comments-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 </section>
 </section>
@@ -581,6 +585,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 </ul>
 </li>
 </ul>

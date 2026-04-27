@@ -479,6 +479,7 @@ coverage<span class="w"> </span>html
 <section id="ci-integration">
 <h2>CI integration<a class="headerlink" href="#ci-integration" title="Link to this heading">#</a></h2>
 <p>The CI workflow posts a compact coverage summary as a PR comment on each push, showing per-file coverage percentages and missing line ranges. The full annotated report (with per-line hit/miss markers) is published as a GitHub Check — the PR comment includes a link to it. A <strong>new comment</strong> is created each time (rather than editing the previous one) so that the PR timeline shows a clear chronological sequence of commits and their corresponding coverage results.</p>
+<p>The report covers only Python files (<code class="docutils literal notranslate"><span class="pre">.py</span></code>) and only lines added or modified in the PR diff — unchanged lines are not reported. C++ files are not included in the coverage report.</p>
 </section>
 <section id="under-the-hood">
 <h2>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h2>
