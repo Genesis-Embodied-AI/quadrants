@@ -30,24 +30,28 @@ view = qd.BufferView(data, offset=16, size=32)
 
 ## Kernel type annotation
 
-Use `BufferView[dtype]` as the parameter annotation. The dtype can be omitted to let Quadrants infer it from the passed argument:
+Use `BufferView` as a parameter annotation on `@qd.kernel`. The element dtype can be specified explicitly or omitted:
 
 ```python
 from quadrants import BufferView
 
+# Explicit dtype — the annotation declares the expected element type:
 @qd.kernel
 def scale(v: BufferView[qd.f32], factor: qd.f32):
     for i in range(v.size):
         v[i] = v[i] * factor
 
+# No dtype — Quadrants infers it from the ndarray passed at call time:
 @qd.kernel
-def scale_any(v: BufferView):  # dtype inferred at call time
+def scale_any(v: BufferView):
     for i in range(v.size):
         v[i] = v[i] * 2.0
 
 scale(data[:32], 2.0)
-scale_any(data[:32])
+scale_any(data[:32])  # dtype inferred as qd.f32 from data
 ```
+
+Both forms are equivalent at runtime. Use `BufferView[dtype]` when you want the annotation to document the expected type; use plain `BufferView` when the dtype varies or is determined at initialization time.
 
 `v.size` gives the number of elements in the view; `v.shape` gives the equivalent tuple `(size,)`. Subscript `v[i]` transparently accesses `data[offset + i]`.
 
