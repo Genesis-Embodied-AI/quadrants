@@ -196,8 +196,6 @@ assert restored.layout == (1, 0)
 assert (restored.to_numpy() == a.to_numpy()).all()
 ```
 
-Pickle is implemented at the wrapper layer (`Tensor.__reduce__` round-trips through `to_numpy()` plus a `qd.tensor(...)` reallocation on load).
-
 ## Wrapping a bare tensor: `qd.wrap`
 
 If you have a bare `qd.field` / `qd.ndarray` / `qd.Vector.field` / `qd.Matrix.field` / `qd.Vector.ndarray` / `qd.Matrix.ndarray` impl (e.g. from older code or library boundaries) and want the unified `qd.Tensor` surface around it, use `qd.wrap(impl)`. It picks the most specific subclass (`Tensor`, `VectorTensor`, `MatrixTensor`):
