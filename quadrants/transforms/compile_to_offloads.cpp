@@ -73,14 +73,14 @@ void compile_to_offloads(IRNode *ir,
   irpass::eliminate_immutable_local_vars(ir);
 
   irpass::type_check(ir, config);
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   // TODO: strictly enforce bit vectorization for x86 cpu and CUDA now
   //       create a separate CompileConfig flag for the new pass
   if (arch_is_cpu(config.arch) || config.arch == Arch::cuda || config.arch == Arch::amdgpu) {
     irpass::bit_loop_vectorize(ir);
     irpass::type_check(ir, config);
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   // Removes MatrixOfMatrixPtrStmt & MatrixOfGlobalPtrStmt
@@ -95,7 +95,7 @@ void compile_to_offloads(IRNode *ir,
   irpass::full_simplify(
       ir, config,
       {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
   dump_ir("after_simplify_I");
 
   irpass::handle_external_ptr_boundary(ir, config);
@@ -111,7 +111,7 @@ void compile_to_offloads(IRNode *ir,
     // == AutodiffMode::kCheckAutodiffValid
     irpass::demote_atomics(ir, config);
     irpass::differentiation_validation_check(ir, config, kernel->get_name());
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   if (autodiff_mode == AutodiffMode::kReverse || autodiff_mode == AutodiffMode::kForward) {
@@ -123,22 +123,22 @@ void compile_to_offloads(IRNode *ir,
     // TODO: Be carefull with the full_simplify when do high-order autodiff
     irpass::full_simplify(ir, config,
                           {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   if (config.check_out_of_bound) {
     irpass::check_out_of_bound(ir, config, {kernel->get_name()});
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   irpass::flag_access(ir);
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_II"});
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   irpass::offload(ir, config);
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_offload");
   // NOTE: There was an additional CFG pass here, removed in
@@ -146,7 +146,7 @@ void compile_to_offloads(IRNode *ir,
   irpass::flag_access(ir);
 
   irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_III"});
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_simplify_III");
 
@@ -183,7 +183,7 @@ void offload_to_executable(IRNode *ir,
   auto amgr = std::make_unique<AnalysisManager>();
 
   print("Start offload_to_executable");
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   if (config.detect_read_only) {
     irpass::detect_read_only(ir);
@@ -192,7 +192,7 @@ void offload_to_executable(IRNode *ir,
 
   irpass::demote_atomics(ir, config);
   print("Atomics demoted I");
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   if (config.cache_loop_invariant_global_vars) {
     irpass::cache_loop_invariant_global_vars(ir, config);
@@ -203,21 +203,21 @@ void offload_to_executable(IRNode *ir,
     irpass::demote_dense_struct_fors(ir);
     irpass::type_check(ir, config);
     print("Dense struct-for demoted");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   if (config.make_cpu_multithreading_loop && arch_is_cpu(config.arch)) {
     irpass::make_cpu_multithreaded_range_for(ir, config);
     irpass::type_check(ir, config);
     print("Make CPU multithreaded range-for");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   if (is_extension_supported(config.arch, Extension::mesh) && config.demote_no_access_mesh_fors) {
     irpass::demote_no_access_mesh_fors(ir);
     irpass::type_check(ir, config);
     print("No-access mesh-for demoted");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   if (make_thread_local) {
@@ -248,7 +248,7 @@ void offload_to_executable(IRNode *ir,
 
   irpass::demote_atomics(ir, config);
   print("Atomics demoted II");
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   if (is_extension_supported(config.arch, Extension::quant) && config.quant_opt_atomic_demotion) {
     irpass::analysis::gather_uniquely_accessed_bit_structs(ir, amgr.get());
@@ -259,7 +259,7 @@ void offload_to_executable(IRNode *ir,
 
   irpass::remove_loop_unique(ir);
   print("Remove loop_unique");
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 
   if (lower_global_access) {
     irpass::full_simplify(ir, config,
@@ -267,15 +267,15 @@ void offload_to_executable(IRNode *ir,
     print("Simplified before lower access");
     irpass::lower_access(ir, config, {kernel->no_activate, true});
     print("Access lowered");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
 
     irpass::die(ir);
     print("DIE");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
 
     irpass::flag_access(ir);
     print("Access flagged III");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
   }
 
   irpass::demote_operations(ir, config);
@@ -311,7 +311,7 @@ void offload_to_executable(IRNode *ir,
 
   // Final field registration correctness & type checking
   irpass::type_check(ir, config);
-  irpass::analysis::verify(ir);
+  irpass::analysis::verify_if_debug(ir, config);
 }
 
 void compile_to_executable(IRNode *ir,
@@ -375,15 +375,15 @@ void compile_function(IRNode *ir,
   if (target_stage >= Function::IRStage::OptimizedIR && current_stage < Function::IRStage::OptimizedIR) {
     irpass::lower_access(ir, config, {{}, true});
     print("Access lowered");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
 
     irpass::die(ir);
     print("DIE");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
 
     irpass::flag_access(ir);
     print("Access flagged III");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
 
     irpass::type_check(ir, config);
     print("Typechecked");
@@ -401,7 +401,7 @@ void compile_function(IRNode *ir,
 
     irpass::full_simplify(ir, config, {true, autodiff_mode != AutodiffMode::kNone, func->get_name(), verbose, "final"});
     print("Simplified");
-    irpass::analysis::verify(ir);
+    irpass::analysis::verify_if_debug(ir, config);
     func->set_ir_stage(Function::IRStage::OptimizedIR);
   }
 }
