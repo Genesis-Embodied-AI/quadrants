@@ -55,23 +55,6 @@ Both forms are equivalent at runtime. Use `BufferView[dtype]` when you want the 
 
 `v.size` gives the number of elements in the view; `v.shape` gives the equivalent tuple `(size,)`. Subscript `v[i]` transparently accesses `data[offset + i]`.
 
-## Using BufferView in `@qd.func`
-
-A `BufferView` can be passed to a `@qd.func` either with or without a type annotation:
-
-```python
-@qd.func
-def fill_view(v: BufferView[qd.f32], val: qd.f32):  # annotation is optional
-    for i in range(v.size):
-        v[i] = val
-
-@qd.kernel
-def kernel(v: BufferView[qd.f32]):
-    fill_view(v, 0.0)
-
-kernel(data[16:48])
-```
-
 ## Debug mode: bounds checking and callstack diagnostics
 
 With `debug=True`, every subscript on a `BufferView` is bounds-checked against `[0, size)`. An out-of-bounds access raises `QuadrantsAssertionError` with a message that includes the kernel name, thread ID, the index, the view's offset and size, and the full compilation-time callstack:

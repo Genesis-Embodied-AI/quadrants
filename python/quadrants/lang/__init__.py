@@ -29,6 +29,7 @@ __all__ = [
     not in [
         "any_array",
         "ast",
+        "buffer_view",
         "common_ops",
         "enums",
         "exception",

@@ -55,6 +55,7 @@ def _get_expected_matrix_apis():
 user_api = {}
 user_api[qd] = [
     "BitpackedFields",
+    "BufferView",
     "CRITICAL",
     "DEBUG",
     "DeviceCapability",
