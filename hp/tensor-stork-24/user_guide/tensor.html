@@ -393,7 +393,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="tensors">
 <h1>Tensors<a class="headerlink" href="#tensors" title="Link to this heading">#</a></h1>
-<p>Quadrants offers two underlying tensor implementations, <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.</p>
+<p>Quadrants offers two underlying tensor implementations, <a class="reference internal" href="tensor_types.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></span></a>. They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.</p>
 <p>The tensor API lets you pick both the <strong>backend</strong> and the <strong>physical memory layout</strong> on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.</p>
 <p>See <a class="reference internal" href="tensor_types.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">tensor_types</span></code></span></a>, <a class="reference internal" href="scalar_tensors.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">scalar_tensors</span></code></span></a>, and <a class="reference internal" href="matrix_vector.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">matrix_vector</span></code></span></a> for the underlying tensor primitives.</p>
 <section id="choosing-a-backend-qd-backend">
@@ -413,7 +413,7 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Backend.NDARRAY</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code></p></td>
-<td><p>Slightly slower at runtime but avoids recompilation when sizes change.</p></td>
+<td><p>Slower at runtime but avoids recompilation when sizes change.</p></td>
 </tr>
 </tbody>
 </table>
@@ -484,6 +484,7 @@
 </section>
 <section id="controlling-physical-layout">
 <h2>Controlling physical layout<a class="headerlink" href="#controlling-physical-layout" title="Link to this heading">#</a></h2>
+<p>Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (<code class="docutils literal notranslate"><span class="pre">qd.root</span></code>).</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">layout=</span></code> keyword lets you pick per-tensor:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
@@ -561,7 +562,7 @@
 </section>
 <section id="pickle">
 <h2>Pickle<a class="headerlink" href="#pickle" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> objects are picklable on <strong>both</strong> backends, including under non-identity layouts. Round-trip preserves the canonical data, the dtype, the shape, and the layout:</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> objects are picklable on <strong>both</strong> backends, including under non-identity layouts. Round-trip (pickle then unpickle) preserves the canonical data, the dtype, the shape, and the layout:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pickle</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
@@ -577,7 +578,6 @@
 <span class="k">assert</span> <span class="p">(</span><span class="n">restored</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="o">==</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Pickle is implemented at the wrapper layer (<code class="docutils literal notranslate"><span class="pre">Tensor.__reduce__</span></code> round-trips through <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> plus a <code class="docutils literal notranslate"><span class="pre">qd.tensor(...)</span></code> reallocation on load). The bare <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> type does not support pickle directly — <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> is the unit of serialization.</p>
 </section>
 <section id="wrapping-a-bare-tensor-qd-wrap">
 <h2>Wrapping a bare tensor: <code class="docutils literal notranslate"><span class="pre">qd.wrap</span></code><a class="headerlink" href="#wrapping-a-bare-tensor-qd-wrap" title="Link to this heading">#</a></h2>
@@ -596,7 +596,7 @@
 </section>
 <section id="cross-backend-copy-from-is-not-supported">
 <h2>Cross-backend <code class="docutils literal notranslate"><span class="pre">copy_from</span></code> is not supported<a class="headerlink" href="#cross-backend-copy-from-is-not-supported" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">tensor.copy_from(other)</span></code> requires both tensors to share the same backend. Mixed-backend copies are deliberately unsupported because the intended deployment model is process-wide, homogeneous backend selection (e.g. via a <code class="docutils literal notranslate"><span class="pre">GS_ENABLE_NDARRAY</span></code> env var):</p>
+<p><code class="docutils literal notranslate"><span class="pre">tensor.copy_from(other)</span></code> requires both tensors to share the same backend. Mixed-backend copies are not supported:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">FIELD</span><span class="p">)</span>
 <span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,),</span> <span class="n">backend</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Backend</span><span class="o">.</span><span class="n">NDARRAY</span><span class="p">)</span>
 <span class="n">a</span><span class="o">.</span><span class="n">copy_from</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>   <span class="c1"># raises: cross-backend copy unsupported</span>
@@ -614,7 +614,7 @@
 <span class="n">t_nd</span><span class="o">.</span><span class="n">grad</span>      <span class="c1"># None</span>
 </pre></div>
 </div>
-<p>Use <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> if you intend to read <code class="docutils literal notranslate"><span class="pre">.grad</span></code>. Integer dtypes are symmetric (<code class="docutils literal notranslate"><span class="pre">grad</span> <span class="pre">is</span> <span class="pre">None</span></code> on both backends regardless of <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code>). This asymmetry is tracked as a follow-up; it does not affect kernels that opt in to autograd via <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code>.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">needs_grad=True</span></code> if you intend to read <code class="docutils literal notranslate"><span class="pre">.grad</span></code>. Integer dtypes are symmetric (<code class="docutils literal notranslate"><span class="pre">grad</span> <span class="pre">is</span> <span class="pre">None</span></code> on both backends regardless of <code class="docutils literal notranslate"><span class="pre">needs_grad</span></code>).</p>
 </section>
 </section>
 
