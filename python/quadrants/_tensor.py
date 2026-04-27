@@ -186,7 +186,9 @@ def tensor(dtype, shape, *, backend=Backend.NDARRAY, layout=None, **kwargs):
             ``range(len(shape))``.
         TypeError: If any keyword argument outside the accepted set is passed (see ``_SCALAR_ACCEPTED_KWARGS``).
     """
-    from quadrants.lang._ndarray import Ndarray  # pylint: disable=import-outside-toplevel
+    from quadrants.lang._ndarray import (
+        Ndarray,  # pylint: disable=import-outside-toplevel
+    )
     from quadrants.lang.field import Field  # pylint: disable=import-outside-toplevel
 
     if isinstance(dtype, (Ndarray, Field, Tensor)):
